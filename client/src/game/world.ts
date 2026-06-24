@@ -1,39 +1,383 @@
 import Phaser from "phaser";
-import { CHAR_VARIANTS, CHUNK_SIZE, TILE } from "../../../shared/types";
+import { CHUNK_SIZE, TILE } from "../../../shared/types";
 import type { FiredAgent } from "../../../shared/types";
 import type { Store } from "../store";
 import type { Net } from "../net";
 import { TILE_PX, type Dir } from "./agent";
-import { generateChunk, isWalkable, type Chunk, type Biome } from "./worldgen";
+import { Grid } from "./path";
+import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, type Biome, hostilityAt } from "./worldgen";
 
-const PLAYER_SPEED = 280;
-const LOAD_RADIUS = 2; // chunks to load around player
-const UNLOAD_RADIUS = 3; // chunks to unload beyond this
+/**
+ * World offset: the world tile grid starts at the bottom-left corner of the
+ * office map. The office occupies pixels (0,0) to (mapW, mapH). World tiles
+ * begin at (0, mapH) so the player walks south through the door into the world.
+ */
+export interface WorldOffset {
+  x: number;
+  y: number;
+}
 
-/** Color palettes per biome. [floor, wall, accent, bg] */
-const BIOME_COLORS: Record<Biome, { floor: number; wall: number; accent: number; bg: number }> = {
-  office:    { floor: 0x8a8a99, wall: 0x4a4a55, accent: 0x6a6a7a, bg: 0x3a3a44 },
-  ruins:     { floor: 0x7a7a78, wall: 0x3a3a38, accent: 0x5a5a55, bg: 0x2a2a28 },
-  overgrown: { floor: 0x5a7a55, wall: 0x2a4a28, accent: 0x3a6a38, bg: 0x1a3a18 },
-  void:      { floor: 0x2a2a3a, wall: 0x0a0a12, accent: 0x1a1a2a, bg: 0x050508 },
+/** Color palettes per biome. */
+const BIOME_FLOOR: Record<Biome, number> = {
+  meadow: 0x4a8a3a,
+  forest: 0x2a6a2a,
+  ruins: 0x8a7a6a,
+  wasteland: 0xc4a84a,
+  void: 0x1a1a2a,
+  infernal: 0x4a1a0a,
 };
 
 const TILE_COLORS: Record<number, number> = {
-  [TILE.FLOOR]: 0x0, // overridden by biome
-  [TILE.WALL]: 0x0,
-  [TILE.RUBBLE]: 0x8a7a5a,
-  [TILE.PILLAR]: 0x9a9a9a,
-  [TILE.VINES]: 0x4a8a4a,
-  [TILE.VOID]: 0x050508,
+  [TILE.GRASS]: 0x4a8a3a,
+  [TILE.WALL]: 0x555560,
+  [TILE.TREE]: 0x2a5a1a,
+  [TILE.ROCK]: 0x888890,
+  [TILE.FLOWER]: 0xe8c84a,
+  [TILE.ACID]: 0x6aCC2a,
+  [TILE.PATH]: 0xa89a7a,
+  [TILE.SAND]: 0xd4b87a,
+  [TILE.SNOW]: 0xeef0f5,
+  [TILE.LAVA]: 0xd44a1a,
+  [TILE.CRYSTAL]: 0x6a4aca,
+  [TILE.VOID]: 0x0a0a14,
+  [TILE.RUIN]: 0x6a5a4a,
+  [TILE.CASTLE]: 0x9a9aa5,
+  [TILE.FAIRWAY]: 0x5aa84a,
+  [TILE.GOLF_FLAG]: 0xe8e8e8,
+  [TILE.SAND_TRAP]: 0xd4c89a,
+  [TILE.POND]: 0x3a7aaa,
+  [TILE.BENCH]: 0x8a6a3a,
+  [TILE.HEDGE]: 0x2a5a2a,
+  [TILE.BUSH]: 0x3a7a3a,
+  [TILE.WATER]: 0x2a5a8a,
 };
 
-/** A fired agent wandering the Labyrinth. */
+const LOAD_RADIUS = 2;
+const UNLOAD_RADIUS = 3;
+const MAX_HP = 100;
+const CREATURE_CAP = 20;
+const STONE_INTERVAL = 2500;
+const BEAST_SPAWN_INTERVAL = 15000; // check for legendary beast spawns
+
+/** Legendary beast definitions — rare, powerful, unique. */
+interface BeastDef {
+  name: string;
+  rarity: number; // 0–1, chance to spawn when rolling
+  minHostility: number;
+  hp: number;
+  speed: number;
+  damage: number;
+  radius: number;
+  color: number;
+  eyeColor: number;
+  aggroRange: number;
+  attackCd: number;
+}
+
+const BEASTS: BeastDef[] = [
+  {
+    name: "Groveheart",
+    rarity: 0.3,
+    minHostility: 1,
+    hp: 200,
+    speed: 90,
+    damage: 18,
+    radius: 28,
+    color: 0x2a6a2a,
+    eyeColor: 0x88ff88,
+    aggroRange: 400,
+    attackCd: 1200,
+  },
+  {
+    name: "Stone Colossus",
+    rarity: 0.2,
+    minHostility: 2,
+    hp: 400,
+    speed: 50,
+    damage: 25,
+    radius: 36,
+    color: 0x6a6a72,
+    eyeColor: 0xffaa00,
+    aggroRange: 350,
+    attackCd: 1500,
+  },
+  {
+    name: "Ash Wyrm",
+    rarity: 0.12,
+    minHostility: 3,
+    hp: 500,
+    speed: 120,
+    damage: 30,
+    radius: 30,
+    color: 0x8a4a2a,
+    eyeColor: 0xff4400,
+    aggroRange: 500,
+    attackCd: 800,
+  },
+  {
+    name: "Void Leviathan",
+    rarity: 0.06,
+    minHostility: 4,
+    hp: 800,
+    speed: 100,
+    damage: 40,
+    radius: 42,
+    color: 0x1a0a2a,
+    eyeColor: 0xaa00ff,
+    aggroRange: 600,
+    attackCd: 1000,
+  },
+  {
+    name: "Infernal Sovereign",
+    rarity: 0.03,
+    minHostility: 5,
+    hp: 1200,
+    speed: 110,
+    damage: 55,
+    radius: 48,
+    color: 0x2a0a0a,
+    eyeColor: 0xffff00,
+    aggroRange: 700,
+    attackCd: 900,
+  },
+];
+
+/** A legendary beast — rare, powerful, with a boss bar. */
+class LegendaryBeast {
+  container: Phaser.GameObjects.Container;
+  private body: Phaser.GameObjects.Arc;
+  private eyeL: Phaser.GameObjects.Arc;
+  private eyeR: Phaser.GameObjects.Arc;
+  private crown: Phaser.GameObjects.Triangle;
+  private hpBar: Phaser.GameObjects.Graphics;
+  private hp: number;
+  private maxHp: number;
+  private speed: number;
+  private damage: number;
+  private attackCd = 0;
+  private attackCdMax: number;
+  private aggroRange: number;
+  private alive = true;
+  private world: WorldLayer;
+  name: string;
+
+  constructor(world: WorldLayer, def: BeastDef, x: number, y: number) {
+    this.world = world;
+    this.name = def.name;
+    this.maxHp = def.hp;
+    this.hp = def.hp;
+    this.speed = def.speed;
+    this.damage = def.damage;
+    this.aggroRange = def.aggroRange;
+    this.attackCdMax = def.attackCd;
+    const scene = world.scene;
+
+    this.body = scene.add.circle(0, 0, def.radius, def.color, 1)
+      .setStrokeStyle(3, 0x000000, 0.6);
+    this.eyeL = scene.add.circle(-def.radius * 0.35, -def.radius * 0.25, 5, def.eyeColor, 1);
+    this.eyeR = scene.add.circle(def.radius * 0.35, -def.radius * 0.25, 5, def.eyeColor, 1);
+    // crown above head
+    this.crown = scene.add.triangle(0, -def.radius - 8, -8, 6, 0, -6, 8, 6, 0xffdd44, 1)
+      .setStrokeStyle(1, 0x886600, 1);
+    this.hpBar = scene.add.graphics().setDepth(30);
+
+    this.container = scene.add.container(x, y, [this.body, this.eyeL, this.eyeR, this.crown])
+      .setDepth(25 + y);
+  }
+
+  get alive_(): boolean { return this.alive; }
+
+  update(dt: number, playerX: number, playerY: number): { hit: boolean; damage: number } | null {
+    if (!this.alive) return null;
+    const dx = playerX - this.container.x;
+    const dy = playerY - this.container.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < this.aggroRange && dist > 40) {
+      const step = this.speed * (dt / 1000);
+      const nx = this.container.x + (dx / dist) * step;
+      const ny = this.container.y + (dy / dist) * step;
+      const { tx, ty } = this.world.pixelToTile(nx, ny);
+      if (this.world.isTileWalkable(tx, ty)) {
+        this.container.setPosition(nx, ny);
+        this.container.setDepth(25 + ny);
+      }
+    }
+
+    this.attackCd -= dt;
+    if (dist < 50 && this.attackCd <= 0) {
+      this.attackCd = this.attackCdMax;
+      return { hit: true, damage: this.damage };
+    }
+
+    // draw hp bar above beast
+    this.drawHpBar();
+    return null;
+  }
+
+  private drawHpBar(): void {
+    const g = this.hpBar;
+    g.clear();
+    const w = 60;
+    const h = 6;
+    const x = this.container.x - w / 2;
+    const y = this.container.y - this.body.radius - 20;
+    const pct = Math.max(0, this.hp / this.maxHp);
+    g.fillStyle(0x000000, 0.7);
+    g.fillRect(x - 2, y - 2, w + 4, h + 4);
+    g.fillStyle(0x330000, 1);
+    g.fillRect(x, y, w, h);
+    g.fillStyle(0xff3333, 1);
+    g.fillRect(x, y, w * pct, h);
+  }
+
+  takeDamage(amount: number): void {
+    this.hp -= amount;
+    this.body.setFillStyle(0xffffff, 1);
+    this.world.scene.time.delayedCall(80, () => {
+      if (this.alive) this.body.setFillStyle(0x2a0a0a, 1);
+    });
+    if (this.hp <= 0) {
+      this.alive = false;
+      this.hpBar.clear();
+      this.container.destroy();
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.hpBar.clear();
+    this.container.destroy();
+  }
+}
+
+/** A hostile creature that chases the player. */
+class Creature {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Arc;
+  private eyeL: Phaser.GameObjects.Arc;
+  private eyeR: Phaser.GameObjects.Arc;
+  private hp: number;
+  maxHp: number;
+  private speed: number;
+  private damage: number;
+  private attackCd = 0;
+  private alive = true;
+  private world: WorldLayer;
+
+  constructor(world: WorldLayer, x: number, y: number, hostility: number) {
+    this.world = world;
+    this.maxHp = 30 + hostility * 30;
+    this.hp = this.maxHp;
+    this.speed = 70 + hostility * 25;
+    this.damage = 10 + hostility * 6;
+    const scene = world.scene;
+    const radius = 14 + hostility * 2;
+    const colors = [0x4a6a3a, 0x6a4a3a, 0x8a3a3a, 0x6a2a2a, 0x4a1a4a, 0x2a0a0a];
+    const color = colors[Math.min(hostility, 5)];
+
+    this.sprite = scene.add.circle(0, 0, radius, color, 1).setStrokeStyle(2, 0x000000, 0.4);
+    this.eyeL = scene.add.circle(-radius * 0.3, -radius * 0.2, 3, 0xff3333, 1);
+    this.eyeR = scene.add.circle(radius * 0.3, -radius * 0.2, 3, 0xff3333, 1);
+    this.container = scene.add.container(x, y, [this.sprite, this.eyeL, this.eyeR]).setDepth(20 + y);
+  }
+
+  get alive_(): boolean { return this.alive; }
+
+  update(dt: number, playerX: number, playerY: number): { hit: boolean; damage: number } | null {
+    if (!this.alive) return null;
+    const dx = playerX - this.container.x;
+    const dy = playerY - this.container.y;
+    const dist = Math.hypot(dx, dy);
+
+    // chase player if within aggro range
+    const aggroRange = 300;
+    if (dist < aggroRange && dist > 30) {
+      const step = this.speed * (dt / 1000);
+      const nx = this.container.x + (dx / dist) * step;
+      const ny = this.container.y + (dy / dist) * step;
+      // simple collision: only move if target tile is walkable
+      const { tx, ty } = this.world.pixelToTile(nx, ny);
+      if (this.world.isTileWalkable(tx, ty)) {
+        this.container.setPosition(nx, ny);
+        this.container.setDepth(20 + ny);
+      }
+    }
+
+    // attack cooldown
+    this.attackCd -= dt;
+    if (dist < 40 && this.attackCd <= 0) {
+      this.attackCd = 1000;
+      return { hit: true, damage: this.damage };
+    }
+    return null;
+  }
+
+  takeDamage(amount: number): void {
+    this.hp -= amount;
+    this.sprite.setFillStyle(0xffffff, 1);
+    this.world.scene.time.delayedCall(80, () => {
+      if (this.alive) this.sprite.setFillStyle(0x6a4a3a, 1);
+    });
+    if (this.hp <= 0) {
+      this.alive = false;
+      this.container.destroy();
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.container.destroy();
+  }
+}
+
+/** A flying stone projectile. */
+class Stone {
+  sprite: Phaser.GameObjects.Arc;
+  private vx: number;
+  private vy: number;
+  private life: number;
+  private damage: number;
+  private alive = true;
+  constructor(scene: Phaser.Scene, x: number, y: number, vx: number, vy: number, damage: number) {
+    this.vx = vx;
+    this.vy = vy;
+    this.life = 3000; // 3 seconds
+    this.damage = damage;
+    this.sprite = scene.add.circle(x, y, 8, 0x888890, 1).setStrokeStyle(2, 0x444450, 1).setDepth(50);
+  }
+
+  get alive_(): boolean { return this.alive; }
+
+  update(dt: number, playerX: number, playerY: number): { hit: boolean; damage: number } | null {
+    if (!this.alive) return null;
+    this.life -= dt;
+    if (this.life <= 0) {
+      this.destroy();
+      return null;
+    }
+    this.sprite.x += this.vx * (dt / 1000);
+    this.sprite.y += this.vy * (dt / 1000);
+    const dist = Math.hypot(this.sprite.x - playerX, this.sprite.y - playerY);
+    if (dist < 30) {
+      this.destroy();
+      return { hit: true, damage: this.damage };
+    }
+    return null;
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.sprite.destroy();
+  }
+}
+
+/** A fired agent wandering the world. */
 class GhostNPC {
   container: Phaser.GameObjects.Container;
   sprite: Phaser.GameObjects.Sprite;
   private label: Phaser.GameObjects.Text;
   private shadow: Phaser.GameObjects.Ellipse;
-  private hint: Phaser.GameObjects.Text;
 
   info: FiredAgent;
   private dir: Dir = "down";
@@ -41,17 +385,18 @@ class GhostNPC {
   private targetX: number;
   private targetY: number;
   private moving = false;
-  private scene: WorldScene;
+  private world: WorldLayer;
 
-  constructor(scene: WorldScene, info: FiredAgent) {
-    this.scene = scene;
+  constructor(world: WorldLayer, info: FiredAgent) {
+    this.world = world;
     this.info = info;
-    const px = info.worldX * TILE_PX + TILE_PX / 2;
-    const py = info.worldY * TILE_PX + TILE_PX / 2;
+    const scene = world.scene;
+    const px = info.worldX * TILE_PX + TILE_PX / 2 + world.offset.x;
+    const py = info.worldY * TILE_PX + TILE_PX / 2 + world.offset.y;
 
-    this.shadow = scene.add.ellipse(0, 0, 44, 16, 0x000000, 0.3);
-    this.sprite = scene.add.sprite(0, 0, `char-${info.sprite}`, 0).setOrigin(0.5, 1);
-    this.sprite.setTint(0x8888aa); // ghostly tint
+    this.shadow = scene.add.ellipse(0, 0, 44, 16, 0x000000, 0.3).setDepth(0);
+    this.sprite = scene.add.sprite(0, 0, `char-${info.sprite}`, 0).setOrigin(0.5, 1).setDepth(5);
+    this.sprite.setTint(0x8888aa);
 
     this.label = scene.add
       .text(0, -108, info.name, {
@@ -63,65 +408,29 @@ class GhostNPC {
       })
       .setResolution(4)
       .setOrigin(0.5, 1)
-      .setScale(0.7);
-
-    this.hint = scene.add
-      .text(0, -130, "", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#ddddee",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
       .setScale(0.7)
-      .setVisible(false);
+      .setDepth(5);
 
-    this.container = scene.add.container(px, py, [
-      this.shadow,
-      this.sprite,
-      this.label,
-      this.hint,
-    ]);
-
+    this.container = scene.add.container(px, py, [this.shadow, this.sprite, this.label]);
     this.targetX = px;
     this.targetY = py;
     this.sprite.setInteractive({ useHandCursor: true });
-    this.sprite.on("pointerdown", () => scene.onGhostClick(this.info.id));
+    this.sprite.on("pointerdown", () => world.onGhostClick(this.info.id));
   }
 
-  update(time: number, _dt: number, playerX: number, playerY: number): void {
+  update(time: number, dt: number): void {
     const c = `char-${this.info.sprite}`;
-    const dist = Math.hypot(playerX - this.container.x, playerY - this.container.y);
 
-    // show hint when player is near
-    if (dist < 120) {
-      const moodLabel: Record<string, string> = {
-        melancholy: "...",
-        hostile: "!!!",
-        wandering: "???",
-        dormant: "zzz",
-      };
-      this.hint
-        .setText(`E: ${moodLabel[this.info.mood] ?? "talk"}`)
-        .setVisible(true);
-    } else {
-      this.hint.setVisible(false);
-    }
-
-    // wandering AI
     if (!this.moving && time > this.wanderAt) {
-      // pick a nearby walkable tile
       const range = 6;
       for (let tries = 0; tries < 10; tries++) {
         const dx = Math.floor((Math.random() - 0.5) * range * 2);
         const dy = Math.floor((Math.random() - 0.5) * range * 2);
-        const tx = Math.floor(this.container.x / TILE_PX) + dx;
-        const ty = Math.floor(this.container.y / TILE_PX) + dy;
-        if (this.scene.isTileWalkable(tx, ty)) {
-          this.targetX = tx * TILE_PX + TILE_PX / 2;
-          this.targetY = ty * TILE_PX + TILE_PX / 2;
+        const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + dx;
+        const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + dy;
+        if (this.world.isTileWalkable(tx, ty)) {
+          this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
+          this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
           this.moving = true;
           break;
         }
@@ -134,7 +443,7 @@ class GhostNPC {
       const dy = this.targetY - this.container.y;
       const d = Math.hypot(dx, dy);
       const speed = 80;
-      const step = speed * (_dt / 1000);
+      const step = speed * (dt / 1000);
       if (d <= step) {
         this.container.setPosition(this.targetX, this.targetY);
         this.moving = false;
@@ -163,120 +472,81 @@ class GhostNPC {
   }
 }
 
-export class WorldScene extends Phaser.Scene {
-  private store!: Store;
-  private net!: Net;
+/**
+ * Manages the infinite procedural world outside the office.
+ * Renders chunks, handles world-tile collision, and spawns fired agent ghosts.
+ * Integrated into OfficeScene — no scene transition needed.
+ */
+export class WorldLayer {
+  scene: Phaser.Scene;
+  private store: Store;
+  private net: Net;
+  offset: WorldOffset;
+  private officeW: number;
+  private officeH: number;
+
   private chunks = new Map<string, Chunk>();
   private chunkGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private ghosts = new Map<string, GhostNPC>();
-  private player!: Phaser.GameObjects.Sprite;
-  private playerLabel!: Phaser.GameObjects.Text;
-  private playerDir: Dir = "down";
-  private keys!: Record<"W" | "A" | "S" | "D" | "E", Phaser.Input.Keyboard.Key>;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private returnHint!: Phaser.GameObjects.Text;
+
+  private compass!: Phaser.GameObjects.Text;
+  private ghostDialog!: Phaser.GameObjects.Text;
   private recruitedHint!: Phaser.GameObjects.Text;
-  private wired = false;
+  private healthBar!: Phaser.GameObjects.Graphics;
+  private damageFlash!: Phaser.GameObjects.Rectangle;
+  private creatures: Creature[] = [];
+  private beasts: LegendaryBeast[] = [];
+  private stones: Stone[] = [];
+  private hp = MAX_HP;
+  private lastStoneTime = 0;
+  private lastSpawnTime = 0;
+  private lastBeastTime = 0;
+  private officeGrid: Grid | null = null;
+  private invulnUntil = 0;
+  private beastBanner!: Phaser.GameObjects.Text;
 
-  constructor() {
-    super("world");
-  }
+  constructor(scene: Phaser.Scene, store: Store, net: Net, officeW: number, officeH: number) {
+    this.scene = scene;
+    this.store = store;
+    this.net = net;
+    this.officeW = officeW;
+    this.officeH = officeH;
+    // world tiles start just below the office
+    this.offset = { x: 0, y: officeH };
 
-  preload(): void {
-    for (let i = 0; i < CHAR_VARIANTS; i++) {
-      this.load.spritesheet(`char-${i}`, `assets/characters/char-${i}.png`, {
-        frameWidth: 64,
-        frameHeight: 96,
-      });
-    }
-    this.load.spritesheet("boss", "assets/characters/boss.png", {
-      frameWidth: 64,
-      frameHeight: 96,
-    });
-  }
-
-  create(): void {
-    this.store = this.game.registry.get("store") as Store;
-    this.net = this.game.registry.get("net") as Net;
-    this.chunks.clear();
-    this.chunkGraphics.clear();
-    this.ghosts.clear();
-
-    // background — dark
-    this.cameras.main.setBackgroundColor("#1a1a22");
-
-    // character animations (same as office)
-    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss"];
-    const dirs: Dir[] = ["down", "left", "right", "up"];
-    for (const key of sheets) {
-      if (this.anims.exists(`${key}-work`)) continue;
-      dirs.forEach((dir, row) => {
-        this.anims.create({
-          key: `${key}-walk-${dir}`,
-          frames: this.anims.generateFrameNumbers(key, {
-            frames: [row * 4, row * 4 + 1, row * 4 + 2, row * 4 + 3],
-          }),
-          frameRate: 8,
-          repeat: -1,
-        });
-        this.anims.create({
-          key: `${key}-idle-${dir}`,
-          frames: [{ key, frame: row * 4 }],
-          frameRate: 1,
-        });
-      });
-      this.anims.create({
-        key: `${key}-work`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [12, 13] }),
-        frameRate: 2.5,
-        repeat: -1,
-      });
-    }
-
-    // spawn player at the door (top-center of origin chunk)
-    const spawnX = Math.floor(CHUNK_SIZE / 2) * TILE_PX + TILE_PX / 2;
-    const spawnY = 3 * TILE_PX + TILE_PX / 2;
-    this.player = this.add.sprite(spawnX, spawnY, "boss", 0).setOrigin(0.5, 1);
-    this.playerDir = "down";
-
-    this.playerLabel = this.add
-      .text(0, 0, "BOSS", {
-        fontFamily: "monospace",
-        fontSize: "16px",
-        color: "#ddddee",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7);
-
-    // camera — no bounds, follows player
-    const cam = this.cameras.main;
-    cam.startFollow(this.player, true);
-    cam.setZoom(1.5);
-
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,E") as WorldScene["keys"];
-    this.input.keyboard!.on("keydown-ESC", () => this.returnToOffice());
-    this.input.keyboard!.disableGlobalCapture();
-
-    // hints
-    this.returnHint = this.add
-      .text(0, 0, "E: RETURN TO OFFICE", {
+    // compass — fixed to screen
+    this.compass = scene.add
+      .text(16, 16, "", {
         fontFamily: "monospace",
         fontSize: "14px",
-        color: "#ddddee",
+        color: "#aaaacc",
         stroke: "#1a1a22",
         strokeThickness: 3,
       })
       .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7)
-      .setDepth(100)
+      .setOrigin(0, 0)
+      .setScale(0.8)
+      .setDepth(500)
+      .setScrollFactor(0)
       .setVisible(false);
 
-    this.recruitedHint = this.add
+    this.ghostDialog = scene.add
+      .text(0, 0, "", {
+        fontFamily: "monospace",
+        fontSize: "14px",
+        color: "#ccccdd",
+        stroke: "#1a1a22",
+        strokeThickness: 3,
+        backgroundColor: "#1a1a22",
+        padding: { x: 8, y: 6 },
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.8)
+      .setDepth(400)
+      .setVisible(false);
+
+    this.recruitedHint = scene.add
       .text(0, 0, "", {
         fontFamily: "monospace",
         fontSize: "16px",
@@ -287,99 +557,71 @@ export class WorldScene extends Phaser.Scene {
       .setResolution(4)
       .setOrigin(0.5, 1)
       .setScale(0.8)
-      .setDepth(200)
+      .setDepth(450)
       .setVisible(false);
 
-    // initial chunk load
-    this.updateChunks();
+    // health bar — fixed to screen top-right
+    this.healthBar = scene.add.graphics().setDepth(500).setScrollFactor(0);
 
-    // spawn fired agent ghosts
-    if (!this.wired) {
-      this.wired = true;
-      this.store.subscribe(() => this.syncGhosts());
-    }
-    this.syncGhosts();
+    // beast banner — shows legendary beast name when one is near
+    this.beastBanner = scene.add
+      .text(scene.scale.width / 2, 60, "", {
+        fontFamily: "monospace",
+        fontSize: "20px",
+        color: "#ffcc44",
+        stroke: "#1a0a00",
+        strokeThickness: 4,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 0)
+      .setScale(0.8)
+      .setDepth(550)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    // damage flash overlay — red tint on hit
+    this.damageFlash = scene.add
+      .rectangle(0, 0, scene.scale.width, scene.scale.height, 0xff0000, 0)
+      .setOrigin(0, 0)
+      .setDepth(600)
+      .setScrollFactor(0);
+
+    this.drawHealthBar();
   }
 
-  /** Load/unload chunks around the player. */
-  private updateChunks(): void {
-    const pcx = Math.floor(this.player.x / (CHUNK_SIZE * TILE_PX));
-    const pcy = Math.floor(this.player.y / (CHUNK_SIZE * TILE_PX));
-
-    // load
-    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
-      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
-        this.loadChunk(pcx + dx, pcy + dy);
-      }
-    }
-
-    // unload distant chunks
-    for (const [key, chunk] of this.chunks) {
-      if (Math.abs(chunk.cx - pcx) > UNLOAD_RADIUS || Math.abs(chunk.cy - pcy) > UNLOAD_RADIUS) {
-        this.chunkGraphics.get(key)?.destroy();
-        this.chunkGraphics.delete(key);
-        this.chunks.delete(key);
-      }
-    }
+  /** Whether the player is outside the office map bounds (in the world). */
+  isOutside(playerX: number, playerY: number): boolean {
+    return playerY >= this.officeH || playerX < 0 || playerX > this.officeW;
   }
 
-  private loadChunk(cx: number, cy: number): void {
+  /** Convert world pixels to world tile coordinates. */
+  pixelToTile(px: number, py: number): { tx: number; ty: number } {
+    return {
+      tx: Math.floor((px - this.offset.x) / TILE_PX),
+      ty: Math.floor((py - this.offset.y) / TILE_PX),
+    };
+  }
+
+  /** Get the tile type at world tile coordinates. */
+  private getTileAt(worldTileX: number, worldTileY: number): number {
+    if (worldTileY < 0) return TILE.WALL;
+    const cx = Math.floor(worldTileX / CHUNK_SIZE);
+    const cy = Math.floor(worldTileY / CHUNK_SIZE);
     const key = `${cx},${cy}`;
-    if (this.chunks.has(key)) return;
-
-    const chunk = generateChunk(this.store.worldSeed, cx, cy);
-    this.chunks.set(key, chunk);
-    this.renderChunk(chunk);
-  }
-
-  private renderChunk(chunk: Chunk): void {
-    const key = `${chunk.cx},${chunk.cy}`;
-    const g = this.add.graphics().setDepth(0);
-    const palette = BIOME_COLORS[chunk.biome];
-    const ox = chunk.cx * CHUNK_SIZE * TILE_PX;
-    const oy = chunk.cy * CHUNK_SIZE * TILE_PX;
-
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-      for (let x = 0; x < CHUNK_SIZE; x++) {
-        const tile = chunk.tiles[y * CHUNK_SIZE + x];
-        const px = ox + x * TILE_PX;
-        const py = oy + y * TILE_PX;
-
-        let color: number;
-        if (tile === TILE.FLOOR) color = palette.floor;
-        else if (tile === TILE.WALL) color = palette.wall;
-        else if (tile === TILE.VOID) color = TILE_COLORS[TILE.VOID];
-        else color = TILE_COLORS[tile] ?? palette.floor;
-
-        g.fillStyle(color, 1);
-        g.fillRect(px, py, TILE_PX, TILE_PX);
-
-        // walls get a top edge highlight
-        if (tile === TILE.WALL) {
-          g.fillStyle(palette.accent, 0.3);
-          g.fillRect(px, py, TILE_PX, 4);
-        }
-
-        // pillars and rubble get a small shape
-        if (tile === TILE.PILLAR) {
-          g.fillStyle(0xaaaaaa, 1);
-          g.fillRect(px + 12, py + 12, TILE_PX - 24, TILE_PX - 24);
-        } else if (tile === TILE.RUBBLE) {
-          g.fillStyle(0x6a5a3a, 1);
-          g.fillRect(px + 8, py + 8, TILE_PX - 16, TILE_PX - 16);
-        } else if (tile === TILE.VINES) {
-          g.fillStyle(0x3a7a3a, 0.6);
-          g.fillRect(px + 4, py + 4, TILE_PX - 8, 8);
-          g.fillRect(px + 4, py + TILE_PX - 12, TILE_PX - 8, 8);
-        }
-      }
+    let chunk = this.chunks.get(key);
+    if (!chunk) {
+      chunk = generateChunk(this.store.worldSeed, cx, cy);
+      this.chunks.set(key, chunk);
+      this.renderChunk(chunk);
     }
-
-    this.chunkGraphics.set(key, g);
+    const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    return chunk.tiles[localY * CHUNK_SIZE + localX];
   }
 
-  /** Check if a world tile is walkable (checks loaded chunks, generates if needed). */
+  /** Check if a world tile is walkable. Generates the chunk if needed. */
   isTileWalkable(worldTileX: number, worldTileY: number): boolean {
+    if (worldTileY < 0) return false;
     const cx = Math.floor(worldTileX / CHUNK_SIZE);
     const cy = Math.floor(worldTileY / CHUNK_SIZE);
     const key = `${cx},${cy}`;
@@ -394,14 +636,274 @@ export class WorldScene extends Phaser.Scene {
     return isWalkable(chunk.tiles[localY * CHUNK_SIZE + localX]);
   }
 
-  private syncGhosts(): void {
-    // add new ghosts
+  /** Set the office walkability grid so world collision can check office tiles. */
+  setOfficeGrid(grid: Grid): void {
+    this.officeGrid = grid;
+  }
+
+  /** Get speed multiplier at a pixel position (1 = normal, <1 = slow). */
+  getTileSpeedAt(px: number, py: number): number {
+    if (!this.isOutside(px, py)) return 1;
+    const { tx, ty } = this.pixelToTile(px, py);
+    if (ty < 0) return 1;
+    return tileSpeed(this.getTileAt(tx, ty));
+  }
+
+  /** Check if the player can walk to a pixel position (world collision). */
+  canWalk(px: number, py: number): boolean {
+    const halfW = 12;
+    const checks = [
+      { x: px - halfW, y: py - 2 },
+      { x: px + halfW, y: py - 2 },
+      { x: px, y: py - 10 },
+    ];
+    for (const p of checks) {
+      const { tx, ty } = this.pixelToTile(p.x, p.y);
+      if (ty < 0) {
+        const otx = Math.floor(p.x / TILE_PX);
+        const oty = Math.floor(p.y / TILE_PX);
+        if (this.officeGrid?.ok(otx, oty)) continue;
+        return false;
+      }
+      if (!this.isTileWalkable(tx, ty)) return false;
+    }
+    return true;
+  }
+
+  /** Load/unload chunks around the player. */
+  updateChunks(playerX: number, playerY: number): void {
+    const { tx, ty } = this.pixelToTile(playerX, playerY);
+    const pcx = Math.floor(tx / CHUNK_SIZE);
+    const pcy = Math.floor(ty / CHUNK_SIZE);
+
+    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+        const ncy = pcy + dy;
+        if (ncy < 0) continue;
+        this.loadChunk(pcx + dx, ncy);
+      }
+    }
+
+    for (const [key, chunk] of this.chunks) {
+      if (Math.abs(chunk.cx - pcx) > UNLOAD_RADIUS || Math.abs(chunk.cy - pcy) > UNLOAD_RADIUS) {
+        this.chunkGraphics.get(key)?.destroy();
+        this.chunkGraphics.delete(key);
+        this.chunks.delete(key);
+      }
+    }
+  }
+
+  private loadChunk(cx: number, cy: number): void {
+    // never generate chunks above the office (cy < 0)
+    if (cy < 0) return;
+    const key = `${cx},${cy}`;
+    if (this.chunks.has(key)) return;
+    const chunk = generateChunk(this.store.worldSeed, cx, cy);
+    this.chunks.set(key, chunk);
+    this.renderChunk(chunk);
+  }
+
+  private renderChunk(chunk: Chunk): void {
+    const key = `${chunk.cx},${chunk.cy}`;
+    const g = this.scene.add.graphics().setDepth(-1);
+    const ox = chunk.cx * CHUNK_SIZE * TILE_PX + this.offset.x;
+    const oy = chunk.cy * CHUNK_SIZE * TILE_PX + this.offset.y;
+
+    // deterministic per-tile noise for color variation
+    const noise = (x: number, y: number) => {
+      let h = (chunk.cx * 31 + x) * 73856093 ^ (chunk.cy * 31 + y) * 19349663;
+      h = (h ^ (h >>> 13)) >>> 0;
+      return (h % 1000) / 1000;
+    };
+
+    for (let y = 0; y < CHUNK_SIZE; y++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const tile = chunk.tiles[y * CHUNK_SIZE + x];
+        const px = ox + x * TILE_PX;
+        const py = oy + y * TILE_PX;
+        const baseColor = TILE_COLORS[tile] ?? BIOME_FLOOR[chunk.biome];
+
+        // subtle per-tile brightness variation for natural texture
+        const n = noise(x, y);
+        const variation = Math.floor((n - 0.5) * 16);
+        const color = this.adjustBrightness(baseColor, variation);
+
+        g.fillStyle(color, 1);
+        g.fillRect(px, py, TILE_PX, TILE_PX);
+
+        if (tile === TILE.TREE) {
+          g.fillStyle(0x1a3a0a, 1);
+          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, TILE_PX * 0.35);
+          g.fillStyle(0x2a5a1a, 1);
+          g.fillCircle(px + TILE_PX / 2 - 4, py + TILE_PX / 2 - 4, TILE_PX * 0.25);
+          g.fillStyle(0x3a7a2a, 1);
+          g.fillCircle(px + TILE_PX / 2 + 6, py + TILE_PX / 2 - 6, TILE_PX * 0.15);
+        } else if (tile === TILE.ROCK) {
+          g.fillStyle(0x6a6a72, 1);
+          g.fillRect(px + 10, py + 10, TILE_PX - 20, TILE_PX - 20);
+          g.fillStyle(0x8a8a92, 1);
+          g.fillRect(px + 10, py + 10, TILE_PX - 20, 4);
+        } else if (tile === TILE.FLOWER) {
+          g.fillStyle(0xe8c84a, 1);
+          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 6);
+          g.fillStyle(0xff8a4a, 1);
+          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 3);
+        } else if (tile === TILE.ACID) {
+          // acid vat — sickly green pool with bubbling rim
+          g.fillStyle(0x2a3a0a, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+          g.fillStyle(0x4aCC1a, 1);
+          g.fillRoundedRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4, 4);
+          g.fillStyle(0x8aFF4a, 0.5);
+          g.fillCircle(px + 10, py + 10, 4);
+          g.fillCircle(px + TILE_PX - 12, py + TILE_PX - 14, 3);
+          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 5);
+          // toxic rim
+          g.lineStyle(2, 0x6aCC2a, 1);
+          g.strokeRoundedRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4, 4);
+        } else if (tile === TILE.CRYSTAL) {
+          g.fillStyle(0x8a6ada, 1);
+          g.fillTriangle(
+            px + TILE_PX / 2, py + 6,
+            px + 8, py + TILE_PX - 8,
+            px + TILE_PX - 8, py + TILE_PX - 8,
+          );
+          g.fillStyle(0xaa8aea, 0.5);
+          g.fillTriangle(
+            px + TILE_PX / 2, py + 10,
+            px + 12, py + TILE_PX - 12,
+            px + TILE_PX - 12, py + TILE_PX - 12,
+          );
+        } else if (tile === TILE.LAVA) {
+          g.fillStyle(0xd44a1a, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+          g.fillStyle(0xff8a3a, 0.6);
+          g.fillCircle(px + 16, py + 16, 6);
+          g.fillCircle(px + TILE_PX - 14, py + TILE_PX - 14, 5);
+        } else if (tile === TILE.VOID) {
+          g.fillStyle(0x050508, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+        } else if (tile === TILE.CASTLE || tile === TILE.RUIN) {
+          g.fillStyle(0x6a6a75, 1);
+          g.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
+          g.fillStyle(0x8a8a95, 1);
+          g.fillRect(px + 6, py + 6, TILE_PX - 12, 4);
+        } else if (tile === TILE.FAIRWAY) {
+          g.fillStyle(0x5aa84a, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+          g.fillStyle(0x6ab85a, 0.4);
+          g.fillRect(px + 4, py + 4, TILE_PX - 8, 2);
+          g.fillRect(px + 4, py + TILE_PX - 6, TILE_PX - 8, 2);
+        } else if (tile === TILE.GOLF_FLAG) {
+          g.fillStyle(0x5aa84a, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+          // pole
+          g.fillStyle(0xaaaaaa, 1);
+          g.fillRect(px + TILE_PX / 2 - 1, py + 4, 2, TILE_PX - 8);
+          // flag
+          g.fillStyle(0xff3333, 1);
+          g.fillTriangle(
+            px + TILE_PX / 2 + 1, py + 4,
+            px + TILE_PX / 2 + 14, py + 8,
+            px + TILE_PX / 2 + 1, py + 12,
+          );
+        } else if (tile === TILE.SAND_TRAP) {
+          g.fillStyle(0xd4c89a, 1);
+          g.fillRoundedRect(px, py, TILE_PX, TILE_PX, 6);
+          g.fillStyle(0xc4b88a, 0.5);
+          g.fillCircle(px + 8, py + 10, 3);
+          g.fillCircle(px + TILE_PX - 10, py + TILE_PX - 12, 4);
+          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 3);
+        } else if (tile === TILE.POND) {
+          g.fillStyle(0x2a5a8a, 1);
+          g.fillRoundedRect(px, py, TILE_PX, TILE_PX, 8);
+          g.fillStyle(0x4a8aca, 0.6);
+          g.fillRoundedRect(px + 3, py + 3, TILE_PX - 6, TILE_PX - 6, 6);
+          g.fillStyle(0x6aacea, 0.4);
+          g.fillEllipse(px + TILE_PX / 2, py + TILE_PX / 2, TILE_PX - 12, 6);
+        } else if (tile === TILE.BENCH) {
+          g.fillStyle(0x4a8a3a, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+          // bench seat
+          g.fillStyle(0x8a6a3a, 1);
+          g.fillRect(px + 6, py + 10, TILE_PX - 12, 6);
+          g.fillStyle(0x6a4a2a, 1);
+          g.fillRect(px + 8, py + 16, 4, 8);
+          g.fillRect(px + TILE_PX - 12, py + 16, 4, 8);
+        } else if (tile === TILE.HEDGE) {
+          g.fillStyle(0x1a4a1a, 1);
+          g.fillRoundedRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4, 6);
+          g.fillStyle(0x2a6a2a, 1);
+          g.fillRoundedRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8, 4);
+          g.fillStyle(0x3a7a3a, 0.5);
+          g.fillCircle(px + 10, py + 10, 4);
+          g.fillCircle(px + TILE_PX - 12, py + TILE_PX - 12, 3);
+        } else if (tile === TILE.BUSH) {
+          g.fillStyle(0x4a8a3a, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+          g.fillStyle(0x2a6a2a, 1);
+          g.fillCircle(px + 10, py + 12, 8);
+          g.fillCircle(px + TILE_PX - 12, py + 10, 7);
+          g.fillCircle(px + TILE_PX / 2, py + TILE_PX - 10, 9);
+          g.fillStyle(0x3a7a3a, 0.7);
+          g.fillCircle(px + 12, py + 14, 4);
+          g.fillCircle(px + TILE_PX - 14, py + 12, 3);
+        } else if (tile === TILE.WATER) {
+          // deep water base
+          g.fillStyle(0x1a3a6a, 1);
+          g.fillRect(px, py, TILE_PX, TILE_PX);
+          // water body with slight gradient — darker at edges
+          g.fillStyle(0x2a5a9a, 1);
+          g.fillRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4);
+          // wave streaks — horizontal organic lines
+          g.lineStyle(2, 0x4a8aca, 0.6);
+          g.beginPath();
+          g.moveTo(px + 4, py + 8);
+          g.lineTo(px + 12, py + 6);
+          g.lineTo(px + 20, py + 9);
+          g.lineTo(px + TILE_PX - 6, py + 7);
+          g.strokePath();
+          g.lineStyle(2, 0x5a9ada, 0.5);
+          g.beginPath();
+          g.moveTo(px + 6, py + 18);
+          g.lineTo(px + 14, py + 16);
+          g.lineTo(px + 22, py + 19);
+          g.lineTo(px + TILE_PX - 8, py + 17);
+          g.strokePath();
+          g.lineStyle(1, 0x6aacee, 0.4);
+          g.beginPath();
+          g.moveTo(px + 4, py + TILE_PX - 10);
+          g.lineTo(px + 16, py + TILE_PX - 12);
+          g.lineTo(px + 24, py + TILE_PX - 9);
+          g.lineTo(px + TILE_PX - 6, py + TILE_PX - 11);
+          g.strokePath();
+          // shimmer dots
+          g.fillStyle(0x8aceee, 0.4);
+          g.fillCircle(px + 10, py + 6, 1.5);
+          g.fillCircle(px + 22, py + 16, 1);
+          g.fillCircle(px + TILE_PX - 12, py + TILE_PX - 12, 1.5);
+        }
+      }
+    }
+
+    this.chunkGraphics.set(key, g);
+  }
+
+  /** Adjust hex color brightness by a small delta. */
+  private adjustBrightness(hex: number, delta: number): number {
+    const r = Math.max(0, Math.min(255, ((hex >> 16) & 0xff) + delta));
+    const g = Math.max(0, Math.min(255, ((hex >> 8) & 0xff) + delta));
+    const b = Math.max(0, Math.min(255, (hex & 0xff) + delta));
+    return (r << 16) | (g << 8) | b;
+  }
+
+  /** Sync ghost NPCs with the store's fired agents. */
+  syncGhosts(): void {
     for (const [id, fa] of this.store.firedAgents) {
       if (!this.ghosts.has(id)) {
         this.ghosts.set(id, new GhostNPC(this, fa));
       }
     }
-    // remove recruited ghosts
     for (const [id, ghost] of this.ghosts) {
       if (!this.store.firedAgents.has(id)) {
         ghost.destroy();
@@ -417,134 +919,313 @@ export class WorldScene extends Phaser.Scene {
   private tryRecruit(firedAgentId: string): void {
     const ghost = this.ghosts.get(firedAgentId);
     if (!ghost) return;
-    const dist = Math.hypot(this.player.x - ghost.container.x, this.player.y - ghost.container.y);
-    if (dist > 120) return;
+    const px = this.scene.cameras.main.scrollX + this.scene.cameras.main.width / 2;
+    const py = this.scene.cameras.main.scrollY + this.scene.cameras.main.height / 2;
+    // use player position from the scene registry
+    const playerPos = this.scene.registry.get("playerPos") as { x: number; y: number } | undefined;
+    const cx = playerPos?.x ?? px;
+    const cy = playerPos?.y ?? py;
+    const dist = Math.hypot(cx - ghost.container.x, cy - ghost.container.y);
+    if (dist > 140) return;
 
     this.net.send({ type: "recruit", firedAgentId });
-    this.showRecruitedHint(ghost.info.name);
+    this.showRecruitedHint(ghost.info.name, cx, cy);
   }
 
-  private showRecruitedHint(name: string): void {
+  private showRecruitedHint(name: string, px: number, py: number): void {
     this.recruitedHint
       .setText(`${name} is coming back to the office!`)
-      .setPosition(this.player.x, this.player.y - 120)
+      .setPosition(px, py - 120)
       .setVisible(true);
-    this.time.delayedCall(3000, () => this.recruitedHint.setVisible(false));
+    this.scene.time.delayedCall(3000, () => this.recruitedHint.setVisible(false));
   }
 
-  private returnToOffice(): void {
-    this.scene.switch("world", "office");
-    this.scene.stop("world");
-  }
+  /** Called every frame. Manages chunks, ghosts, compass, hazards, and interaction. */
+  update(time: number, dt: number, playerX: number, playerY: number, ePressed: boolean): void {
+    const outside = this.isOutside(playerX, playerY);
 
-  update(time: number, dt: number): void {
-    const active = document.activeElement?.tagName;
-    const typing = active === "INPUT" || active === "TEXTAREA" || active === "SELECT";
-    if (typing) {
-      this.player.play(`boss-idle-${this.playerDir}`, true);
-      return;
-    }
+    // show compass + health bar when outside
+    if (outside) {
+      this.compass.setVisible(true);
+      const doorX = this.officeW / 2;
+      const doorY = this.officeH;
+      const dx = doorX - playerX;
+      const dy = doorY - playerY;
+      const distTiles = Math.round(Math.hypot(dx, dy) / TILE_PX);
+      const arrow = this.compassArrow(dx, dy);
+      const { tx, ty } = this.pixelToTile(playerX, playerY);
+      const cx = Math.floor(tx / CHUNK_SIZE);
+      const cy = Math.floor(ty / CHUNK_SIZE);
+      const hostility = hostilityAt(cx, cy);
+      const biomeName = ["MEADOW", "FOREST", "RUINS", "WASTELAND", "VOID", "INFERNAL"][hostility];
+      this.compass.setText(`${arrow} OFFICE: ${distTiles}  |  ${biomeName}\nQ: TELEPORT HOME`);
+      this.healthBar.setVisible(true);
 
-    // --- player movement with tile collision ---
-    const left = this.cursors.left.isDown || this.keys.A.isDown;
-    const right = this.cursors.right.isDown || this.keys.D.isDown;
-    const up = this.cursors.up.isDown || this.keys.W.isDown;
-    const down = this.cursors.down.isDown || this.keys.S.isDown;
-    let vx = (right ? 1 : 0) - (left ? 1 : 0);
-    let vy = (down ? 1 : 0) - (up ? 1 : 0);
-    if (vx !== 0 && vy !== 0) {
-      vx *= 0.7071;
-      vy *= 0.7071;
-    }
-
-    const speed = PLAYER_SPEED;
-    const stepX = vx * speed * (dt / 1000);
-    const stepY = vy * speed * (dt / 1000);
-
-    // try X movement
-    if (stepX !== 0) {
-      const nextX = this.player.x + stepX;
-      if (this.canWalk(nextX, this.player.y)) {
-        this.player.x = nextX;
+      // --- spawn creatures based on hostility ---
+      if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 800 + Math.random() * 1500) {
+        this.lastSpawnTime = time;
+        if (hostility >= 1) {
+          const spawnCount = 1 + Math.floor(hostility / 2);
+          for (let s = 0; s < spawnCount; s++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 300 + Math.random() * 250;
+            const sx = playerX + Math.cos(angle) * dist;
+            const sy = playerY + Math.sin(angle) * dist;
+            const { tx, ty } = this.pixelToTile(sx, sy);
+            if (this.isTileWalkable(tx, ty)) {
+              this.creatures.push(new Creature(this, sx, sy, hostility));
+            }
+          }
+        }
       }
-    }
-    // try Y movement
-    if (stepY !== 0) {
-      const nextY = this.player.y + stepY;
-      if (this.canWalk(this.player.x, nextY)) {
-        this.player.y = nextY;
-      }
-    }
 
-    if (vx !== 0 || vy !== 0) {
-      this.playerDir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
-      this.player.play(`boss-walk-${this.playerDir}`, true);
+      // --- throw stones at player from random directions ---
+      if (hostility >= 2 && time - this.lastStoneTime > STONE_INTERVAL - hostility * 500) {
+        this.lastStoneTime = time;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 350;
+        const ox = playerX + Math.cos(angle) * dist;
+        const oy = playerY + Math.sin(angle) * dist;
+        // velocity toward player with slight inaccuracy
+        const targetAngle = Math.atan2(playerY - oy, playerX - ox) + (Math.random() - 0.5) * 0.3;
+        const stoneSpeed = 200 + hostility * 30;
+        const damage = 5 + hostility * 3;
+        this.stones.push(new Stone(this.scene, ox, oy, Math.cos(targetAngle) * stoneSpeed, Math.sin(targetAngle) * stoneSpeed, damage));
+      }
+
+      // --- roll for legendary beast spawn ---
+      if (this.beasts.length < 3 && time - this.lastBeastTime > BEAST_SPAWN_INTERVAL) {
+        this.lastBeastTime = time;
+        // pick a beast that matches current hostility
+        const candidates = BEASTS.filter((b) => hostility >= b.minHostility);
+        if (candidates.length > 0) {
+          // weighted random by rarity (rarer = less likely)
+          const roll = Math.random();
+          let chosen = candidates[0];
+          for (const b of candidates) {
+            if (roll < b.rarity) {
+              chosen = b;
+              break;
+            }
+          }
+          // spawn at distance
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 500 + Math.random() * 200;
+          const sx = playerX + Math.cos(angle) * dist;
+          const sy = playerY + Math.sin(angle) * dist;
+          const { tx, ty } = this.pixelToTile(sx, sy);
+          if (this.isTileWalkable(tx, ty)) {
+            this.beasts.push(new LegendaryBeast(this, chosen, sx, sy));
+            this.beastBanner.setText(`⚠ ${chosen.name} APPROACHES ⚠`).setVisible(true);
+            this.scene.time.delayedCall(4000, () => this.beastBanner.setVisible(false));
+          }
+        }
+      }
     } else {
-      this.player.play(`boss-idle-${this.playerDir}`, true);
+      this.compass.setVisible(false);
+      this.healthBar.setVisible(false);
+      // clear creatures and beasts when back in office
+      for (const c of this.creatures) c.destroy();
+      this.creatures = [];
+      for (const b of this.beasts) b.destroy();
+      this.beasts = [];
+      for (const s of this.stones) s.destroy();
+      this.stones = [];
+      this.beastBanner.setVisible(false);
+      // heal in office
+      if (this.hp < MAX_HP) {
+        this.hp = Math.min(MAX_HP, this.hp + 20 * (dt / 1000));
+        this.drawHealthBar();
+      }
     }
-    this.player.setDepth(10 + this.player.y);
-    this.playerLabel
-      .setPosition(this.player.x, this.player.y - 108)
-      .setDepth(10 + this.player.y)
-      .setText((this.store.player?.name ?? "BOSS").toUpperCase());
 
-    // load/unload chunks as player moves
-    this.updateChunks();
+    // load/unload chunks
+    this.updateChunks(playerX, playerY);
 
     // update ghosts
     for (const ghost of this.ghosts.values()) {
-      ghost.update(time, dt, this.player.x, this.player.y);
+      ghost.update(time, dt);
     }
 
-    // E: return to office (near origin door) or recruit nearby ghost
-    if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
-      // check return door — top-center of origin chunk
-      const doorX = Math.floor(CHUNK_SIZE / 2) * TILE_PX + TILE_PX / 2;
-      const doorY = 0;
-      const doorDist = Math.hypot(this.player.x - doorX, this.player.y - doorY);
-      if (doorDist < 100) {
-        this.returnToOffice();
-        return;
+    // --- update creatures ---
+    for (const c of this.creatures) {
+      const hit = c.update(dt, playerX, playerY);
+      if (hit && time > this.invulnUntil) {
+        this.takeDamage(hit.damage, playerX, playerY, time);
       }
+    }
+    this.creatures = this.creatures.filter((c) => c.alive_);
 
-      // check nearby ghosts
-      let nearest: { id: string; d: number } | null = null;
-      for (const [id, ghost] of this.ghosts) {
-        const d = Math.hypot(this.player.x - ghost.container.x, this.player.y - ghost.container.y);
-        if (d < 120 && (!nearest || d < nearest.d)) nearest = { id, d };
+    // --- update legendary beasts ---
+    let nearestBeast: LegendaryBeast | null = null;
+    let nearestBeastDist = Infinity;
+    for (const b of this.beasts) {
+      const hit = b.update(dt, playerX, playerY);
+      if (hit && time > this.invulnUntil) {
+        this.takeDamage(hit.damage, playerX, playerY, time);
       }
-      if (nearest) this.tryRecruit(nearest.id);
+      const bd = Math.hypot(playerX - b.container.x, playerY - b.container.y);
+      if (bd < nearestBeastDist) {
+        nearestBeastDist = bd;
+        nearestBeast = b;
+      }
+    }
+    this.beasts = this.beasts.filter((b) => b.alive_);
+
+    // show beast banner when one is near
+    if (nearestBeast && nearestBeastDist < 600) {
+      this.beastBanner.setText(`⚠ ${nearestBeast.name} — ${Math.round(nearestBeastDist / TILE_PX)} tiles`).setVisible(true);
+    } else if (this.beasts.length === 0) {
+      this.beastBanner.setVisible(false);
     }
 
-    // return door hint
-    const doorX = Math.floor(CHUNK_SIZE / 2) * TILE_PX + TILE_PX / 2;
-    const doorY = 2 * TILE_PX;
-    const doorDist = Math.hypot(this.player.x - doorX, this.player.y - doorY);
-    if (doorDist < 120) {
-      this.returnHint.setPosition(doorX, doorY - 20).setVisible(true);
+    // --- update stones ---
+    for (const s of this.stones) {
+      const hit = s.update(dt, playerX, playerY);
+      if (hit && time > this.invulnUntil) {
+        this.takeDamage(hit.damage, playerX, playerY, time);
+      }
+    }
+    this.stones = this.stones.filter((s) => s.alive_);
+
+    // --- tile hazard damage (water, lava, void) ---
+    if (outside) {
+      const { tx, ty } = this.pixelToTile(playerX, playerY);
+      const tile = this.getTileAt(tx, ty);
+      const dmg = tileDamage(tile) * (dt / 1000);
+      if (dmg > 0 && time > this.invulnUntil) {
+        this.takeDamage(dmg, playerX, playerY, time);
+      }
+    }
+
+    // find nearest ghost for dialogue
+    let nearestGhost: { id: string; d: number; ghost: GhostNPC } | null = null;
+    for (const [id, ghost] of this.ghosts) {
+      const d = Math.hypot(playerX - ghost.container.x, playerY - ghost.container.y);
+      if (d < 140 && (!nearestGhost || d < nearestGhost.d)) {
+        nearestGhost = { id, d, ghost };
+      }
+    }
+
+    if (nearestGhost && nearestGhost.d < 140) {
+      const fa = nearestGhost.ghost.info;
+      const line = this.ghostLine(fa);
+      this.ghostDialog
+        .setText(`${fa.name}: "${line}"\nE: recruit back to office`)
+        .setPosition(nearestGhost.ghost.container.x, nearestGhost.ghost.container.y - 130)
+        .setVisible(true);
     } else {
-      this.returnHint.setVisible(false);
+      this.ghostDialog.setVisible(false);
+    }
+
+    // E: recruit nearest ghost
+    if (ePressed && nearestGhost && nearestGhost.d < 140) {
+      this.tryRecruit(nearestGhost.id);
     }
   }
 
-  /** Check if the player's bounding box can occupy a pixel position. */
-  private canWalk(px: number, py: number): boolean {
-    // player body is roughly 40px wide, 28px tall, offset from sprite origin (0.5, 1)
-    // sprite is 64x96, origin at bottom-center, so feet are at (px, py)
-    const halfW = 20;
-    const footH = 28;
-    const checkPoints = [
-      { x: px - halfW, y: py - 4 },
-      { x: px + halfW, y: py - 4 },
-      { x: px - halfW, y: py - footH },
-      { x: px + halfW, y: py - footH },
-      { x: px, y: py - footH / 2 },
-    ];
-    for (const p of checkPoints) {
-      const tx = Math.floor(p.x / TILE_PX);
-      const ty = Math.floor(p.y / TILE_PX);
-      if (!this.isTileWalkable(tx, ty)) return false;
+  /** Player takes damage — flash red, update health bar, maybe teleport home. */
+  private takeDamage(amount: number, playerX: number, playerY: number, time: number): void {
+    this.hp -= amount;
+    this.invulnUntil = time + 500; // 0.5s invulnerability
+    this.damageFlash.setFillStyle(0xff0000, 0.4);
+    this.scene.tweens.add({
+      targets: this.damageFlash,
+      fillAlpha: 0,
+      duration: 300,
+    });
+    this.drawHealthBar();
+
+    if (this.hp <= 0) {
+      // knocked out — teleport back to office with partial health
+      this.hp = MAX_HP * 0.5;
+      this.drawHealthBar();
+      // clear all threats
+      for (const c of this.creatures) c.destroy();
+      this.creatures = [];
+      for (const s of this.stones) s.destroy();
+      this.stones = [];
+      // teleport via the scene registry
+      const scene = this.scene as Phaser.Scene;
+      const spawn = scene.registry.get("spawnTile") as { x: number; y: number } | undefined;
+      if (spawn) {
+        const px = spawn.x * TILE_PX + TILE_PX / 2;
+        const py = spawn.y * TILE_PX + TILE_PX / 2;
+        scene.registry.set("teleportTo", { x: px, y: py });
+      }
     }
-    return true;
+  }
+
+  /** Draw the health bar in the top-right corner. */
+  private drawHealthBar(): void {
+    const g = this.healthBar;
+    g.clear();
+    const w = 120;
+    const h = 16;
+    const x = this.scene.scale.width - w - 16;
+    const y = 16;
+    const pct = Math.max(0, this.hp / MAX_HP);
+
+    // background
+    g.fillStyle(0x000000, 0.6);
+    g.fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 4);
+    g.fillStyle(0x333333, 1);
+    g.fillRoundedRect(x, y, w, h, 3);
+
+    // fill — color shifts from green to red
+    const r = Math.floor(255 * (1 - pct));
+    const gr = Math.floor(200 * pct);
+    g.fillStyle((r << 16) | (gr << 8), 1);
+    g.fillRoundedRect(x, y, w * pct, h, 3);
+  }
+
+  private compassArrow(dx: number, dy: number): string {
+    if (Math.abs(dx) < 32 && Math.abs(dy) < 32) return "*";
+    const angle = Math.atan2(dy, dx);
+    const dirs = ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"];
+    const i = Math.round(((angle + Math.PI) / (Math.PI * 2)) * 8) % 8;
+    return dirs[i];
+  }
+
+  private ghostLine(fa: FiredAgent): string {
+    const task = fa.lastTask ? fa.lastTask.slice(0, 40) : "nothing";
+    const lines: Record<string, string[]> = {
+      melancholy: [
+        `I remember when I used to work on ${task}...`,
+        "Nobody even said goodbye.",
+        "The office lights were warmer.",
+        "I just wanted to finish my task...",
+      ],
+      hostile: [
+        `You fired me. Over ${task}. Really?`,
+        "Don't come near me.",
+        "I was good at my job and you know it.",
+        "Get lost, boss.",
+      ],
+      wandering: [
+        "Which way is the office...? I forgot.",
+        "These fields all look the same.",
+        "I think I was working on something...",
+        "Have you seen my desk?",
+      ],
+      dormant: [
+        "...zzz... just five more minutes...",
+        "...the build is still running...",
+        "...pushing to main...",
+        "...one more turn...",
+      ],
+    };
+    const pool = lines[fa.mood] ?? lines.wandering;
+    const bucket = Math.floor(this.scene.time.now / 4000);
+    const seed = (fa.id.charCodeAt(0) + bucket) % pool.length;
+    return pool[seed];
+  }
+
+  destroy(): void {
+    for (const g of this.chunkGraphics.values()) g.destroy();
+    for (const g of this.ghosts.values()) g.destroy();
+    this.chunks.clear();
+    this.chunkGraphics.clear();
+    this.ghosts.clear();
   }
 }

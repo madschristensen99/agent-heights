@@ -74,12 +74,28 @@ export const CHUNK_SIZE = 32;
 
 /** Tile types used by the world generator. */
 export const TILE = {
-  FLOOR: 0,
+  GRASS: 0,
   WALL: 1,
-  RUBBLE: 2,
-  PILLAR: 3,
-  VINES: 4,
-  VOID: 5,
+  TREE: 2,
+  ROCK: 3,
+  FLOWER: 4,
+  ACID: 5,
+  PATH: 6,
+  SAND: 7,
+  SNOW: 8,
+  LAVA: 9,
+  CRYSTAL: 10,
+  VOID: 11,
+  RUIN: 12,
+  CASTLE: 13,
+  FAIRWAY: 14,
+  GOLF_FLAG: 15,
+  SAND_TRAP: 16,
+  POND: 17,
+  BENCH: 18,
+  HEDGE: 19,
+  BUSH: 20,
+  WATER: 21,
 } as const;
 
 export type CardStatus = "backlog" | "in_progress" | "done";

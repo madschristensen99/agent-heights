@@ -3,6 +3,7 @@ import { CHAR_VARIANTS } from "../../../shared/types";
 import type { Store } from "../store";
 import { AgentNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, type Dir } from "./agent";
 import { Grid, type Tile } from "./path";
+import { WorldLayer } from "./world";
 
 const PLAYER_SPEED = 380;
 
@@ -20,17 +21,17 @@ export class OfficeScene extends Phaser.Scene {
   private coffeeTile: Tile = { x: 23, y: 2 };
   private coffeeUntil = 0;
   private coffeeHint!: Phaser.GameObjects.Text;
-  private doorHint!: Phaser.GameObjects.Text;
+  private world!: WorldLayer;
   private theme: "classic" | "lumon" = "classic";
   /** Store listeners are registered once; they survive scene restarts. */
   private wired = false;
   private ready = false;
 
   private mapPx = { w: 960, h: 640 };
-  private player!: Phaser.Physics.Arcade.Sprite;
+  private player!: Phaser.GameObjects.Sprite;
   private playerLabel!: Phaser.GameObjects.Text;
   private playerDir: Dir = "down";
-  private keys!: Record<"W" | "A" | "S" | "D" | "E", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
 
@@ -78,6 +79,24 @@ export class OfficeScene extends Phaser.Scene {
       this.theme === "lumon" ? "lumon" : "office",
       `tiles-${this.theme}`,
     )!;
+
+    // draw a floor-colored backdrop so empty map tiles aren't white
+    const floorColor = this.theme === "lumon" ? 0xe8e8ec : 0xd4d0c8;
+    const bg = this.add.graphics().setDepth(-1);
+    bg.fillStyle(floorColor, 1);
+    bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
+    // subtle grid lines for texture
+    bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0xd8d8dc, 0.3);
+    for (let x = 0; x <= map.width; x++) {
+      bg.moveTo(x * TILE_PX, 0);
+      bg.lineTo(x * TILE_PX, map.heightInPixels);
+    }
+    for (let y = 0; y <= map.height; y++) {
+      bg.moveTo(0, y * TILE_PX);
+      bg.lineTo(map.widthInPixels, y * TILE_PX);
+    }
+    bg.strokePath();
+
     map.createLayer("Ground", tiles)!.setDepth(0);
     const walls = map.createLayer("Walls", tiles)!.setDepth(1);
     const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
@@ -115,6 +134,20 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     this.doorTile = { x: this.spawnTile.x, y: this.spawnTile.y + 2 };
+    this.registry.set("spawnTile", this.spawnTile);
+
+    // carve a door gap — make the bottom wall tiles walkable at the door column
+    // so the player can walk straight out into the world
+    const doorX = this.spawnTile.x;
+    for (let dy = 0; dy <= 3; dy++) {
+      const ty = this.spawnTile.y + dy;
+      if (ty < map.height) {
+        walkable[ty][doorX] = true;
+        if (doorX > 0) walkable[ty][doorX - 1] = true;
+        if (doorX < map.width - 1) walkable[ty][doorX + 1] = true;
+      }
+    }
+    this.grid = new Grid(map.width, map.height, walkable);
 
     // standing spots for agents hired beyond the 8 desks — stable order so
     // every client agrees on who stands where
@@ -156,13 +189,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // the boss (you)
     const feet = feetOf(this.spawnTile);
-    this.player = this.physics.add.sprite(feet.x, feet.y, "boss", 0)
+    this.player = this.add.sprite(feet.x, feet.y, "boss", 0)
       .setOrigin(0.5, 1);
-    this.player.body!.setSize(40, 28).setOffset(12, 68);
-    this.player.setCollideWorldBounds(true);
-    this.physics.add.collider(this.player, walls);
-    this.physics.add.collider(this.player, furniture);
-    this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
+    // no physics body — we do manual movement for smoothness
 
     this.playerLabel = this.add
       .text(0, 0, "BOSS", {
@@ -213,23 +242,32 @@ export class OfficeScene extends Phaser.Scene {
       .setDepth(100)
       .setVisible(false);
 
-    this.doorHint = this.add
-      .text(0, 0, "", {
-        fontFamily: "monospace",
-        fontSize: "16px",
-        color: "#1d2126",
-        stroke: "#f4f6f8",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7)
-      .setDepth(100)
-      .setVisible(false);
-
     this.mapPx = { w: map.widthInPixels, h: map.heightInPixels };
+    // world layer — infinite procedural world outside the office
+    this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
+    this.world.setOfficeGrid(this.grid);
+
+    // flower beds flanking the front door
+    const doorPxX = this.spawnTile.x * TILE_PX + TILE_PX / 2;
+    const doorPxY = map.heightInPixels;
+    const flowerG = this.add.graphics().setDepth(3);
+    const flowerColors = [0xe8c84a, 0xe84a8a, 0x8a4ae8, 0xff6a4a, 0x4ae8ca];
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 6; i++) {
+        const fx = doorPxX + side * (TILE_PX * 1.5 + i * 14);
+        const fy = doorPxY + 10 + Math.sin(i * 1.7) * 8;
+        const color = flowerColors[(i + (side > 0 ? 2 : 0)) % flowerColors.length];
+        flowerG.fillStyle(0x2a6a2a, 1);
+        flowerG.fillCircle(fx, fy + 5, 3);
+        flowerG.fillStyle(color, 1);
+        flowerG.fillCircle(fx, fy, 5);
+        flowerG.fillStyle(0xffdd44, 1);
+        flowerG.fillCircle(fx, fy, 2);
+      }
+    }
+
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
+    // no camera bounds — the world is infinite
     cam.startFollow(this.player, true);
     cam.setZoom(this.bestZoom());
     const onResize = () => cam.setZoom(this.bestZoom());
@@ -237,7 +275,7 @@ export class OfficeScene extends Phaser.Scene {
     this.events.once("shutdown", () => this.scale.off("resize", onResize));
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,E") as OfficeScene["keys"];
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q") as OfficeScene["keys"];
     this.input.keyboard!.on("keydown-ESC", () => {
       this.store.select(null);
       this.store.toggleBoard(false);
@@ -256,6 +294,7 @@ export class OfficeScene extends Phaser.Scene {
           return;
         }
         this.syncAgents();
+        this.world.syncGhosts();
       });
       this.store.onHuddle((agentIds) => {
         if (this.ready) this.startHuddle(agentIds);
@@ -263,6 +302,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.ready = true;
     this.syncAgents();
+    this.world.syncGhosts();
   }
 
   /** Everyone called to ASSIGN-TO-ALL gathers in a ring around the boss. */
@@ -291,6 +331,30 @@ export class OfficeScene extends Phaser.Scene {
     // follows the boss, so overflow just means you walk to see the rest
     const z = Math.max(this.scale.width / this.mapPx.w, this.scale.height / this.mapPx.h);
     return Math.max(1, Math.ceil(z));
+  }
+
+  /** Check if the player can walk to a pixel position inside the office. */
+  private canWalkOffice(px: number, py: number): boolean {
+    const halfW = 12;
+    const checks = [
+      { x: px - halfW, y: py - 2 },
+      { x: px + halfW, y: py - 2 },
+      { x: px, y: py - 10 },
+    ];
+    for (const p of checks) {
+      const tx = Math.floor(p.x / TILE_PX);
+      const ty = Math.floor(p.y / TILE_PX);
+      if (this.grid.ok(tx, ty)) continue;
+      // outside grid bounds — check world collision instead
+      if (tx < 0 || ty < 0 || tx >= this.grid.width || ty >= this.grid.height) {
+        const wtx = Math.floor((p.x - this.world.offset.x) / TILE_PX);
+        const wty = Math.floor((p.y - this.world.offset.y) / TILE_PX);
+        if (!this.world.isTileWalkable(wtx, wty)) return false;
+        continue;
+      }
+      return false;
+    }
+    return true;
   }
 
   /** Draw a kanban-style task board on the front wall of the office. */
@@ -363,7 +427,6 @@ export class OfficeScene extends Phaser.Scene {
     const active = document.activeElement?.tagName;
     const typing = active === "INPUT" || active === "TEXTAREA" || active === "SELECT";
     if (typing) {
-      this.player.setVelocity(0, 0);
       this.player.play(`boss-idle-${this.playerDir}`, true);
       for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
@@ -383,7 +446,32 @@ export class OfficeScene extends Phaser.Scene {
       vx *= 0.7071;
       vy *= 0.7071;
     }
-    this.player.setVelocity(vx * (time < this.coffeeUntil ? PLAYER_SPEED * 2 : PLAYER_SPEED), vy * (time < this.coffeeUntil ? PLAYER_SPEED * 2 : PLAYER_SPEED));
+
+    const outside = this.world.isOutside(this.player.x, this.player.y);
+    const tileSpeedMult = outside ? this.world.getTileSpeedAt(this.player.x, this.player.y) : 1;
+    const speed = (time < this.coffeeUntil ? PLAYER_SPEED * 2 : PLAYER_SPEED) * tileSpeedMult;
+
+    // always use manual movement for consistent feel
+    const stepX = vx * speed * (dt / 1000);
+    const stepY = vy * speed * (dt / 1000);
+
+    if (outside) {
+      // world tile collision
+      if (stepX !== 0 && this.world.canWalk(this.player.x + stepX, this.player.y)) {
+        this.player.x += stepX;
+      }
+      if (stepY !== 0 && this.world.canWalk(this.player.x, this.player.y + stepY)) {
+        this.player.y += stepY;
+      }
+    } else {
+      // office collision via the walkability grid
+      if (stepX !== 0 && this.canWalkOffice(this.player.x + stepX, this.player.y)) {
+        this.player.x += stepX;
+      }
+      if (stepY !== 0 && this.canWalkOffice(this.player.x, this.player.y + stepY)) {
+        this.player.y += stepY;
+      }
+    }
 
     if (vx !== 0 || vy !== 0) {
       this.playerDir =
@@ -399,16 +487,9 @@ export class OfficeScene extends Phaser.Scene {
       .setText((this.store.player?.name ?? "BOSS").toUpperCase());
     this.playerLabel.setColor(time < this.coffeeUntil ? "#b0741f" : "#1d2126");
 
-    // E: go through the door, grab coffee, talk to the nearest agent, or open the task board
-    if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
-      // check the door first — it leads to the Labyrinth
-      const doorPx = { x: this.doorTile.x * TILE_PX + 32, y: this.doorTile.y * TILE_PX + 32 };
-      const doorDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, doorPx.x, doorPx.y);
-      if (doorDist < 100) {
-        this.scene.switch("office", "world");
-        this.scene.stop("office");
-        return;
-      }
+    // E: grab coffee, talk to the nearest agent, open the task board, or recruit a ghost
+    const ePressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
+    if (ePressed) {
       // check the coffee machine
       const coffeePx = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
       const coffeeDist = Phaser.Math.Distance.Between(
@@ -461,6 +542,24 @@ export class OfficeScene extends Phaser.Scene {
     this.selectRing.setVisible(!!sel);
     if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
 
+    // --- world layer: chunks, ghosts, compass, recruit ---
+    this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
+    this.world.update(time, dt, this.player.x, this.player.y, ePressed);
+
+    // Q: teleport back to office when outside
+    if (outside && Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
+      const spawn = feetOf(this.spawnTile);
+      this.player.setPosition(spawn.x, spawn.y);
+    }
+
+    // check for death teleport from world layer
+    const teleportTo = this.registry.get("teleportTo") as { x: number; y: number } | undefined;
+    if (teleportTo) {
+      this.player.setPosition(teleportTo.x, teleportTo.y);
+      this.registry.remove("teleportTo");
+      this.store.toast("You were knocked out and dragged back to the office!");
+    }
+
     // board proximity hint
     const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
     const boardDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boardPx.x, boardPx.y);
@@ -483,18 +582,6 @@ export class OfficeScene extends Phaser.Scene {
         .setVisible(true);
     } else {
       this.coffeeHint.setVisible(false);
-    }
-
-    // door proximity hint
-    const doorPx = { x: this.doorTile.x * TILE_PX + 32, y: this.doorTile.y * TILE_PX + 32 };
-    const doorDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, doorPx.x, doorPx.y);
-    if (doorDist < 100) {
-      this.doorHint
-        .setPosition(doorPx.x, doorPx.y + 64)
-        .setText("E: ENTER LABYRINTH")
-        .setVisible(true);
-    } else {
-      this.doorHint.setVisible(false);
     }
   }
 }
