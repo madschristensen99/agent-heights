@@ -23,6 +23,8 @@ const ASSETS = join(ROOT, "client", "public", "assets");
 
 class Sheet {
   png: PNG;
+  /** Optional clip region — drawing outside this rect is discarded. */
+  clip: { x: number; y: number; w: number; h: number } | null = null;
   constructor(
     public w: number,
     public h: number,
@@ -30,10 +32,17 @@ class Sheet {
     this.png = new PNG({ width: w, height: h });
   }
 
+  private inClip(x: number, y: number): boolean {
+    if (!this.clip) return true;
+    return x >= this.clip.x && x < this.clip.x + this.clip.w &&
+           y >= this.clip.y && y < this.clip.y + this.clip.h;
+  }
+
   set(x: number, y: number, hex: string): void {
     x = Math.round(x);
     y = Math.round(y);
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    if (!this.inClip(x, y)) return;
     const i = (y * this.w + x) * 4;
     const d = this.png.data;
     d[i] = parseInt(hex.slice(1, 3), 16);
@@ -72,6 +81,7 @@ class Sheet {
     x = Math.round(x);
     y = Math.round(y);
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    if (!this.inClip(x, y)) return;
     const i = (y * this.w + x) * 4;
     const d = this.png.data;
     const r = parseInt(hex.slice(1, 3), 16);
@@ -249,6 +259,7 @@ export const TILE = {
   WALL_TOP: 8, WALL_FACE: 9, WINDOW: 10, WB_L: 11, WB_R: 12, DOOR: 13, POSTER: 14, CLOCK: 15,
   DESK_L: 16, DESK_R: 17, CHAIR: 18, FILING: 19, TRASH: 20, PLANT: 21, SHELF_T: 22, SHELF_B: 23,
   COUNTER: 24, FRIDGE: 25, COFFEE: 26, COOLER: 27, SOFA_L: 28, SOFA_R: 29, PAPERS: 30, VENDING: 31,
+  CHAIR_LEFT: 32,
 } as const;
 
 const SOLID_TILES = [
@@ -744,6 +755,30 @@ const drawers: Record<number, TileDrawer> = {
     // castor wheels
     s.fillCircle(ox + 16, oy + 56, 2, sp.dk);
     s.fillCircle(ox + 48, oy + 56, 2, sp.dk);
+  },
+  [TILE.CHAIR_LEFT]: (s, ox, oy) => {
+    const bp = shade5("#3c4458");
+    const sp = shade5("#2e3547");
+    // backrest on the right side (facing left) with 5-tone
+    vGrad(s, ox + 28, oy + 8, 28, 36, bp.hi, bp.dk);
+    s.rect(ox + 28, oy + 8, 28, 2, bp.hi);
+    s.rect(ox + 28, oy + 8, 2, 36, bp.li);
+    s.rect(ox + 54, oy + 8, 2, 36, bp.dk);
+    s.rect(ox + 28, oy + 42, 28, 2, bp.sh);
+    // backrest detail — padded seam (vertical)
+    s.rect(ox + 40, oy + 12, 2, 28, bp.dk);
+    s.rect(ox + 42, oy + 12, 1, 28, bp.sh);
+    // seat with bevel
+    vGrad(s, ox + 8, oy + 26, 28, 44, sp.li, sp.dk);
+    s.rect(ox + 8, oy + 26, 28, 2, sp.hi);
+    s.rect(ox + 8, oy + 68, 28, 2, sp.sh);
+    // legs
+    s.rect(ox + 8, oy + 26, 8, 4, sp.sh);
+    s.rect(ox + 8, oy + 38, 8, 6, sp.sh);
+    s.rect(ox + 8, oy + 52, 8, 6, sp.sh);
+    // castor wheels
+    s.fillCircle(ox + 10, oy + 28, 2, sp.dk);
+    s.fillCircle(ox + 10, oy + 56, 2, sp.dk);
   },
   [TILE.FILING]: (s, ox, oy) => {
     const p = shade5("#7a8498");
@@ -1256,9 +1291,9 @@ const lumonDrawers: Record<number, TileDrawer> = {
 
 function buildTileset(set: Record<number, TileDrawer>): Sheet {
   const cols = 8;
-  const rows = 4;
+  const rows = 5;
   const s = new Sheet(cols * T, rows * T);
-  for (let id = 0; id < 32; id++) {
+  for (let id = 0; id < 40; id++) {
     const drawer = set[id];
     if (drawer) drawer(s, (id % cols) * T, Math.floor(id / cols) * T);
   }
@@ -1274,6 +1309,7 @@ interface CharPalette {
   shirtShade: string;
   pants: string;
   tie?: string;
+  eyeColor?: string;
 }
 
 function mix(hex1: string, hex2: string, t: number): string {
@@ -1303,6 +1339,15 @@ const BOSS_PALETTE: CharPalette = {
   tie: "#9e2b2b",
 };
 
+const YUKI_PALETTE: CharPalette = {
+  skin: "#f2c39b",
+  hair: "#1a1a2a",
+  shirt: "#c44a4a",
+  shirtShade: "#a83a3a",
+  pants: "#c44a4a",
+  eyeColor: "#3a9a4e",
+};
+
 const CW = 64;
 const CH = 96;
 const SHOE = "#3a3548";
@@ -1315,356 +1360,387 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
   const mirror = dir === "left";
   const d: Dir = mirror ? "right" : dir;
 
-  // Per-pose animation: head bob, body sway, arm swing, hair bounce
-  // Poses 0-5: walk cycle (6 frames), Pose 6: idle breathing, Pose 7: idle blink
   const isIdle = pose === 6;
   const isBlink = pose === 7;
   const stepping = pose === 1 || pose === 3 || pose === 5;
   const bodyBob = isIdle ? -1 : (stepping ? 1 : 0);
-  const headBob = isIdle ? -1 : (stepping ? 3 : (pose === 2 || pose === 4 ? 1 : 0));
+  const headBob = isIdle ? -1 : (stepping ? 2 : (pose === 2 || pose === 4 ? 1 : 0));
   const headSway = pose === 1 ? -1 : pose === 3 ? 1 : pose === 4 ? -1 : 0;
   const armSwingL = pose === 1 ? -1 : pose === 3 ? 1 : pose === 4 ? -1 : 0;
   const armSwingR = pose === 1 ? 1 : pose === 3 ? -1 : pose === 4 ? 1 : 0;
   const armSwing = pose === 1 ? 2 : pose === 3 ? -2 : pose === 4 ? 2 : 0;
   const hairBounce = stepping ? 1 : 0;
-  const breathing = isIdle; // subtle chest expansion
+  const breathing = isIdle;
   const eyesClosed = isBlink;
+  const eyeColor = pal.eyeColor ?? "#2a2040";
 
-  const skinLi = mix(pal.skin, "#ffffff", 0.22);
-  const skinDk = mix(pal.skin, "#000000", 0.12);
-  const hairLi = mix(pal.hair, "#ffffff", 0.20);
-  const hairDk = mix(pal.hair, "#000000", 0.18);
-  const shirtLi = mix(pal.shirt, "#ffffff", 0.15);
-  const pantsLi = mix(pal.pants, "#ffffff", 0.08);
+  const skinLi = mix(pal.skin, "#ffffff", 0.30);
+  const skinMid = mix(pal.skin, "#ffffff", 0.10);
+  const skinDk = mix(pal.skin, "#000000", 0.20);
+  const skinRim = mix(pal.skin, "#ffffff", 0.45);
+  const hairLi = mix(pal.hair, "#ffffff", 0.28);
+  const hairMid = mix(pal.hair, "#ffffff", 0.10);
+  const hairDk = mix(pal.hair, "#000000", 0.25);
+  const hairRim = mix(pal.hair, "#ffffff", 0.50);
+  const shirtLi = mix(pal.shirt, "#ffffff", 0.22);
+  const shirtMid = mix(pal.shirt, "#ffffff", 0.08);
+  const shirtDk = pal.shirtShade;
+  const pantsLi = mix(pal.pants, "#ffffff", 0.15);
+  const pantsMid = mix(pal.pants, "#ffffff", 0.05);
+  const pantsDk = mix(pal.pants, "#000000", 0.22);
+  const blush = mix(pal.skin, "#ff88aa", 0.35);
+  const shoeLi = mix(SHOE, "#ffffff", 0.18);
+  const shoeMid = mix(SHOE, "#ffffff", 0.06);
+  const shoeDk = mix(SHOE, "#000000", 0.25);
 
-  // Head — bobs independently, sways side to side
-  const hp = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x + headSway, oy + y + headBob, w, h, c);
-  const hpx = (x: number, y: number, c: string) => s.set(ox + x + headSway, oy + y + headBob, c);
-  // Hair sides — extra bounce on top of head bob
-  const fp = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x + headSway, oy + y + headBob + hairBounce, w, h, c);
-  // Body — subtle bob
-  const bp = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x, oy + y + bodyBob, w, h, c);
-  const bpx = (x: number, y: number, c: string) => s.set(ox + x, oy + y + bodyBob, c);
-  // Arms — body bob + swing (separate left/right for front/back views)
-  const alp = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x + armSwingL, oy + y + bodyBob, w, h, c);
-  const arp = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x + armSwingR, oy + y + bodyBob, w, h, c);
-  // Profile arm — bigger swing
-  const pap = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x + armSwing, oy + y + bodyBob, w, h, c);
-  // Legs — planted on ground, no bob
-  const lp = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x, oy + y, w, h, c);
-  const lpx = (x: number, y: number, c: string) => s.set(ox + x, oy + y, c);
+  // Offset helpers
+  const hx = (x: number) => ox + x + headSway;
+  const hy = (y: number) => oy + y + headBob;
+  const bx = (x: number) => ox + x;
+  const by = (y: number) => oy + y + bodyBob;
+  const lx = (x: number) => ox + x;
+  const ly = (y: number) => oy + y;
 
-  // ===== CUTE CHIBI (64x96) =====
-  // Head: y 2-36 (36px tall), x 14-50 (36px wide) — huge, round
-  // Torso: y 38-60 (22px), x 20-42
-  // Legs: y 62-76 (14px), stubby
-  // Shoes: y 78-88 (10px), rounded
+  // Solid shape helpers — no alpha, crisp edges
+  const el = (cx: number, cy: number, rx: number, ry: number, c: string) => s.fillEllipse(cx, cy, rx, ry, c);
+  const ci = (cx: number, cy: number, r: number, c: string) => s.fillCircle(cx, cy, r, c);
+  const rr = (x: number, y: number, w: number, h: number, r: number, c: string) => s.fillRoundedRect(x, y, w, h, r, c);
+  // Outlined circle: solid outline ring + fill on top
+  const ciO = (cx: number, cy: number, r: number, fill: string) => {
+    s.fillCircle(cx, cy, r + 1, OUTLINE);
+    s.fillCircle(cx, cy, r, fill);
+  };
+  // Outlined ellipse
+  const elO = (cx: number, cy: number, rx: number, ry: number, fill: string) => {
+    s.fillEllipse(cx, cy, rx + 1, ry + 1, OUTLINE);
+    s.fillEllipse(cx, cy, rx, ry, fill);
+  };
+  // Outlined rounded rect
+  const rrO = (x: number, y: number, w: number, h: number, r: number, fill: string) => {
+    s.fillRoundedRect(x - 1, y - 1, w + 2, h + 2, r + 1, OUTLINE);
+    s.fillRoundedRect(x, y, w, h, r, fill);
+  };
+
+  // ===== ROUNDED CHIBI (64x96) — detailed, crisp edges =====
 
   if (d === "down") {
-    // ---- HEAD: big round dome (bobs + sways) ----
-    // Hair top — rounded
-    hp(24, 2, 16, 2, pal.hair);
-    hp(20, 4, 24, 2, pal.hair);
-    hp(18, 6, 28, 2, pal.hair);
-    hp(16, 8, 32, 4, pal.hair);
-    // Hair sides (bounce)
-    fp(16, 12, 4, 10, pal.hair);
-    fp(44, 12, 4, 10, pal.hair);
-    // Face area
-    hp(20, 12, 24, 20, pal.skin);
-    hp(20, 32, 24, 4, pal.skin);
-    // Hair bangs — soft fringe
-    hp(20, 12, 24, 4, pal.hair);
-    hp(20, 16, 4, 2, pal.hair);
-    hp(40, 16, 4, 2, pal.hair);
-    hp(28, 16, 2, 2, pal.hair);
-    hp(34, 16, 2, 2, pal.hair);
-    // Soft outline (only key edges)
-    hp(22, 0, 20, 2, OUTLINE);
-    hp(18, 2, 4, 2, OUTLINE);
-    hp(42, 2, 4, 2, OUTLINE);
-    hp(14, 6, 2, 6, OUTLINE);
-    hp(48, 6, 2, 6, OUTLINE);
-    hp(16, 12, 2, 10, OUTLINE);
-    hp(46, 12, 2, 10, OUTLINE);
-    hp(18, 22, 2, 4, OUTLINE);
-    hp(44, 22, 2, 4, OUTLINE);
-    hp(20, 26, 2, 6, OUTLINE);
-    hp(42, 26, 2, 6, OUTLINE);
-    hp(22, 32, 20, 2, OUTLINE);
-    hp(20, 34, 2, 2, OUTLINE);
-    hp(42, 34, 2, 2, OUTLINE);
-    // Hair shine
-    hp(22, 6, 10, 2, hairLi);
-    hp(18, 8, 2, 4, hairLi);
-    fp(44, 12, 2, 8, hairDk);
-    // Face soft shading
-    hp(20, 18, 2, 14, skinLi);
-    hp(42, 18, 2, 14, skinDk);
-    // Eyes — big cute 6x4 ovals with shine, or closed lines when blinking
+    // ---- HEAD: round dome with solid outline ----
+    ci(hx(32), hy(18), 17, OUTLINE);
+    // Hair top — base
+    el(hx(32), hy(13), 16, 13, pal.hair);
+    // Hair sides
+    el(hx(17), hy(18), 4, 7 + hairBounce, pal.hair);
+    el(hx(47), hy(18), 4, 7 + hairBounce, pal.hair);
+    // Face
+    el(hx(32), hy(22), 13, 12, pal.skin);
+    // Bangs
+    el(hx(32), hy(14), 15, 7, pal.hair);
+    rr(hx(21), hy(16), 22, 4, 3, pal.hair);
+    // Hair 3-tone: highlight band
+    el(hx(28), hy(9), 7, 3, hairLi);
+    el(hx(26), hy(10), 4, 2, hairRim);
+    // Hair mid-tone gradient
+    el(hx(34), hy(11), 8, 4, hairMid);
+    // Hair shadow
+    el(hx(43), hy(16), 4, 7, hairDk);
+    s.set(hx(44), hy(14), hairDk);
+    s.set(hx(45), hy(18), hairDk);
+    // Face 3-tone: rim light on left, mid on right, shadow on far right
+    el(hx(26), hy(20), 3, 8, skinLi);
+    el(hx(27), hy(19), 2, 3, skinRim);
+    el(hx(38), hy(22), 3, 8, skinMid);
+    el(hx(40), hy(24), 3, 6, skinDk);
+    // Chin shadow
+    el(hx(32), hy(32), 10, 2, skinDk);
+    // Eyebrows
+    s.set(hx(26), hy(19), hairDk);
+    s.set(hx(27), hy(19), hairDk);
+    s.set(hx(36), hy(19), hairDk);
+    s.set(hx(37), hy(19), hairDk);
+    // Eyes — small, not starry
     if (eyesClosed) {
-      hp(24, 22, 6, 1, "#2a2040");
-      hp(34, 22, 6, 1, "#2a2040");
+      rr(hx(26), hy(23), 4, 2, 2, eyeColor);
+      rr(hx(34), hy(23), 4, 2, 2, eyeColor);
     } else {
-      hp(24, 20, 6, 4, "#2a2040");
-      hp(34, 20, 6, 4, "#2a2040");
-      // Eye shine (white sparkle)
-      hpx(26, 20, "#ffffff");
-      hpx(36, 20, "#ffffff");
-      hpx(28, 22, mix("#ffffff", "#aaccff", 0.3));
-      hpx(38, 22, mix("#ffffff", "#aaccff", 0.3));
+      el(hx(28), hy(23), 2, 4, eyeColor);
+      el(hx(36), hy(23), 2, 4, eyeColor);
+      s.set(hx(27), hy(22), "#ffffff");
+      s.set(hx(35), hy(22), "#ffffff");
     }
-    // Mouth — tiny cute smile
-    hp(30, 28, 4, 2, skinDk);
-    hpx(28, 28, skinDk);
-    hpx(34, 28, skinDk);
-    // Cheek blush
-    hp(22, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
-    hp(40, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
+    // Mouth
+    s.set(hx(31), hy(29), skinDk);
+    s.set(hx(32), hy(30), skinDk);
+    s.set(hx(33), hy(30), skinDk);
+    s.set(hx(34), hy(29), skinDk);
+    // Blush
+    ci(hx(24), hy(27), 2, blush);
+    ci(hx(40), hy(27), 2, blush);
 
-    // ---- NECK (tiny) ----
-    bp(28, 36, 8, 2, skinDk);
+    // ---- NECK ----
+    rr(bx(29), by(34), 6, 4, 2, skinDk);
+    s.set(bx(29), by(34), OUTLINE);
+    s.set(bx(34), by(34), OUTLINE);
+    // Neck shadow
+    s.set(bx(30), by(36), skinDk);
+    s.set(bx(31), by(36), skinDk);
+    s.set(bx(32), by(36), skinDk);
+    s.set(bx(33), by(36), skinDk);
 
-    // ---- TORSO (small, rounded) ----
-    const tw = breathing ? 26 : 24;
-    const tx = breathing ? 19 : 20;
-    bp(tx, 38, tw, 20, pal.shirt);
-    bp(tx + 2, 38, tw - 4, 2, shirtLi);
-    bp(tx, 38, 2, 20, shirtLi);
-    bp(tx + tw - 2, 38, 2, 20, pal.shirtShade);
-    bp(tx, 54, tw, 4, pal.shirtShade);
-    // Soft outline
-    bp(tx - 2, 38, 2, 20, OUTLINE);
-    bp(tx + tw, 38, 2, 20, OUTLINE);
-    bp(tx, 58, tw, 2, OUTLINE);
-    bp(tx, 38, 2, 2, OUTLINE);
-    bp(tx + tw - 2, 38, 2, 2, OUTLINE);
+    // ---- TORSO: compact with 3D shading ----
+    const tw = breathing ? 24 : 22;
+    const tx = breathing ? 20 : 21;
+    rrO(bx(tx), by(38), tw, 18, 5, pal.shirt);
+    // 3-tone shirt: highlight, mid, shadow
+    rr(bx(tx + 2), by(38), tw - 4, 3, 3, shirtLi);
+    rr(bx(tx + 4), by(38), tw - 8, 2, 2, shirtMid);
+    rr(bx(tx), by(38), 2, 18, 2, shirtLi);
+    rr(bx(tx + 3), by(38), 2, 18, 2, shirtMid);
+    rr(bx(tx + tw - 2), by(38), 2, 18, 2, shirtDk);
+    rr(bx(tx), by(52), tw, 4, 3, shirtDk);
+    // Collar
+    rr(bx(tx + 4), by(38), tw - 8, 2, 1, shirtLi);
+    s.set(bx(tx + 5), by(40), shirtDk);
+    s.set(bx(tx + tw - 6), by(40), shirtDk);
     if (pal.tie) {
-      bp(30, 40, 4, 8, pal.tie);
-      bp(28, 46, 8, 2, pal.tie);
-      bp(30, 48, 4, 2, pal.tie);
+      rr(bx(30), by(40), 4, 7, 2, pal.tie);
+      rr(bx(28), by(45), 8, 2, 1, pal.tie);
+      rr(bx(30), by(47), 4, 2, 1, pal.tie);
     }
 
-    // ---- ARMS (stubby, swing while walking) ----
-    alp(16, 40, 4, 12, pal.shirt);
-    arp(44, 40, 4, 12, pal.shirt);
-    alp(16, 40, 2, 12, shirtLi);
-    arp(46, 40, 2, 12, pal.shirtShade);
-    alp(14, 40, 2, 12, OUTLINE);
-    arp(48, 40, 2, 12, OUTLINE);
+    // ---- ARMS: stubby with 3D shading ----
+    elO(bx(17 + armSwingL), by(45), 4, 7, pal.shirt);
+    el(bx(16 + armSwingL), by(43), 2, 3, shirtLi);
+    el(bx(17 + armSwingL), by(44), 2, 4, shirtMid);
+    elO(bx(45 + armSwingR), by(45), 4, 7, pal.shirt);
+    el(bx(46 + armSwingR), by(48), 2, 3, shirtDk);
     // Hands
-    alp(16, 52, 4, 4, pal.skin);
-    arp(44, 52, 4, 4, pal.skin);
-    alp(16, 52, 2, 2, skinLi);
+    ciO(bx(17 + armSwingL), by(53), 3, pal.skin);
+    s.set(bx(16 + armSwingL), by(52), skinLi);
+    ciO(bx(45 + armSwingR), by(53), 3, pal.skin);
+    s.set(bx(46 + armSwingR), by(54), skinDk);
 
-    // ---- LEGS & SHOES (stubby, planted) ----
+    // ---- LEGS & SHOES with 3D shading ----
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
-      const lx = leftUp ? 22 : 34;
-      const sx = leftUp ? 34 : 22;
-      // lifted leg (shorter)
-      lp(lx, 62, 8, 10, pal.pants);
-      lp(lx, 72, 10, 6, SHOE);
-      lp(lx, 72, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(lx - 2, 62, 2, 10, OUTLINE);
-      lp(lx, 62, 2, 10, pantsLi);
-      // planted leg
-      lp(sx, 62, 8, 14, pal.pants);
-      lp(sx, 76, 10, 6, SHOE);
-      lp(sx, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(sx - 2, 62, 2, 14, OUTLINE);
-      lp(sx, 62, 2, 14, pantsLi);
+      const fx = leftUp ? 33 : 23;
+      const rx2 = leftUp ? 23 : 33;
+      rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
+      rr(lx(fx), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(fx + 3), ly(58), 2, 14, 2, pantsMid);
+      // Shoe — 3-tone
+      elO(lx(fx + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(fx + 2), ly(73), shoeLi);
+      s.set(lx(fx + 3), ly(73), shoeMid);
+      s.set(lx(fx + 6), ly(76), shoeDk);
+      // Lifted leg
+      rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
+      elO(lx(rx2 + 4), ly(72), 6, 4, SHOE);
+      s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
-      lp(22, 62, 8, 14, pal.pants);
-      lp(34, 62, 8, 14, pal.pants);
-      lp(22, 76, 10, 6, SHOE);
-      lp(32, 76, 10, 6, SHOE);
-      lp(20, 62, 2, 14, OUTLINE);
-      lp(30, 62, 2, 14, OUTLINE);
-      lp(42, 62, 2, 14, OUTLINE);
-      lp(22, 62, 2, 14, pantsLi);
-      lp(34, 62, 2, 14, pantsLi);
-      lp(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(32, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
+      rrO(lx(33), ly(58), 8, 14, 3, pal.pants);
+      rr(lx(23), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(23) + 3, ly(58), 2, 14, 2, pantsMid);
+      rr(lx(33), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(33) + 3, ly(58), 2, 14, 2, pantsMid);
+      // Shoes — 3-tone
+      elO(lx(27), ly(74), 6, 4, SHOE);
+      elO(lx(37), ly(74), 6, 4, SHOE);
+      s.set(lx(25), ly(73), shoeLi);
+      s.set(lx(26), ly(73), shoeMid);
+      s.set(lx(35), ly(73), shoeLi);
+      s.set(lx(36), ly(73), shoeMid);
+      s.set(lx(29), ly(76), shoeDk);
+      s.set(lx(39), ly(76), shoeDk);
     }
 
   } else if (d === "up") {
-    // ---- HEAD: all hair (back of head, bobs + sways) ----
-    hp(24, 2, 16, 2, pal.hair);
-    hp(20, 4, 24, 2, pal.hair);
-    hp(18, 6, 28, 2, pal.hair);
-    hp(16, 8, 32, 24, pal.hair);
-    fp(20, 32, 24, 4, pal.hair);
-    // Soft outline
-    hp(22, 0, 20, 2, OUTLINE);
-    hp(18, 2, 4, 2, OUTLINE);
-    hp(42, 2, 4, 2, OUTLINE);
-    hp(14, 6, 2, 6, OUTLINE);
-    hp(48, 6, 2, 6, OUTLINE);
-    hp(16, 12, 2, 20, OUTLINE);
-    hp(46, 12, 2, 20, OUTLINE);
-    hp(18, 32, 2, 4, OUTLINE);
-    hp(44, 32, 2, 4, OUTLINE);
-    hp(22, 34, 20, 2, OUTLINE);
-    hp(20, 36, 2, 2, OUTLINE);
-    hp(42, 36, 2, 2, OUTLINE);
-    // Hair shine
-    hp(22, 6, 12, 2, hairLi);
-    hp(18, 8, 2, 12, hairLi);
-    hp(44, 8, 2, 24, hairDk);
-    hp(20, 30, 24, 2, hairDk);
+    // ---- HEAD: all hair, solid outline ----
+    ci(hx(32), hy(18), 17, OUTLINE);
+    el(hx(32), hy(17), 16, 14, pal.hair);
+    el(hx(32), hy(27), 14, 7, pal.hair);
+    // Hair 3-tone: highlight, rim, mid, shadow
+    el(hx(28), hy(11), 7, 3, hairLi);
+    el(hx(26), hy(12), 3, 2, hairRim);
+    el(hx(34), hy(13), 8, 4, hairMid);
+    // Hair shadow
+    el(hx(40), hy(20), 5, 9, hairDk);
+    rr(hx(23), hy(29), 18, 4, 3, hairDk);
+    s.set(hx(42), hy(18), hairDk);
+    s.set(hx(43), hy(22), hairDk);
+    s.set(hx(44), hy(25), hairDk);
 
     // ---- NECK ----
-    bp(28, 36, 8, 2, skinDk);
+    rr(bx(29), by(34), 6, 4, 2, skinDk);
+    s.set(bx(29), by(34), OUTLINE);
+    s.set(bx(34), by(34), OUTLINE);
+    s.set(bx(30), by(36), skinDk);
+    s.set(bx(31), by(36), skinDk);
+    s.set(bx(32), by(36), skinDk);
+    s.set(bx(33), by(36), skinDk);
 
-    // ---- TORSO (back) ----
-    bp(20, 38, 24, 20, pal.shirt);
-    bp(22, 38, 20, 2, shirtLi);
-    bp(20, 38, 2, 20, shirtLi);
-    bp(42, 38, 2, 20, pal.shirtShade);
-    bp(20, 54, 24, 4, pal.shirtShade);
-    bp(18, 38, 2, 20, OUTLINE);
-    bp(44, 38, 2, 20, OUTLINE);
-    bp(20, 58, 24, 2, OUTLINE);
+    // ---- TORSO (back) — 3-tone ----
+    rrO(bx(21), by(38), 22, 18, 5, pal.shirt);
+    rr(bx(23), by(38), 18, 3, 3, shirtLi);
+    rr(bx(25), by(38), 14, 2, 2, shirtMid);
+    rr(bx(21), by(38), 2, 18, 2, shirtLi);
+    rr(bx(23), by(38), 2, 18, 2, shirtMid);
+    rr(bx(40), by(38), 2, 18, 2, shirtDk);
+    rr(bx(21), by(52), 22, 4, 3, shirtDk);
+    // Back seam
+    s.set(bx(31), by(40), shirtDk);
+    s.set(bx(32), by(42), shirtDk);
+    s.set(bx(31), by(44), shirtDk);
 
-    // ---- ARMS (swing) ----
-    alp(16, 40, 4, 12, pal.shirt);
-    arp(44, 40, 4, 12, pal.shirt);
-    alp(16, 40, 2, 12, shirtLi);
-    arp(46, 40, 2, 12, pal.shirtShade);
-    alp(14, 40, 2, 12, OUTLINE);
-    arp(48, 40, 2, 12, OUTLINE);
-    alp(16, 52, 4, 4, pal.skin);
-    arp(44, 52, 4, 4, pal.skin);
+    // ---- ARMS — 3-tone ----
+    elO(bx(17 + armSwingL), by(45), 4, 7, pal.shirt);
+    elO(bx(45 + armSwingR), by(45), 4, 7, pal.shirt);
+    el(bx(16 + armSwingL), by(43), 2, 3, shirtLi);
+    el(bx(17 + armSwingL), by(44), 2, 4, shirtMid);
+    el(bx(46 + armSwingR), by(48), 2, 3, shirtDk);
+    ciO(bx(17 + armSwingL), by(53), 3, pal.skin);
+    ciO(bx(45 + armSwingR), by(53), 3, pal.skin);
+    s.set(bx(46 + armSwingR), by(54), skinDk);
 
-    // ---- LEGS & SHOES (planted) ----
+    // ---- LEGS & SHOES — 3-tone ----
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
-      const lx = leftUp ? 22 : 34;
-      const sx = leftUp ? 34 : 22;
-      lp(lx, 62, 8, 10, pal.pants);
-      lp(lx, 72, 10, 6, SHOE);
-      lp(lx, 72, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(lx - 2, 62, 2, 10, OUTLINE);
-      lp(lx, 62, 2, 10, pantsLi);
-      lp(sx, 62, 8, 14, pal.pants);
-      lp(sx, 76, 10, 6, SHOE);
-      lp(sx, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(sx - 2, 62, 2, 14, OUTLINE);
-      lp(sx, 62, 2, 14, pantsLi);
+      const fx = leftUp ? 33 : 23;
+      const rx2 = leftUp ? 23 : 33;
+      rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
+      rr(lx(fx), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(fx + 3), ly(58), 2, 14, 2, pantsMid);
+      elO(lx(fx + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(fx + 2), ly(73), shoeLi);
+      s.set(lx(fx + 3), ly(73), shoeMid);
+      s.set(lx(fx + 6), ly(76), shoeDk);
+      rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
+      elO(lx(rx2 + 4), ly(72), 6, 4, SHOE);
+      s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
-      lp(22, 62, 8, 14, pal.pants);
-      lp(34, 62, 8, 14, pal.pants);
-      lp(22, 76, 10, 6, SHOE);
-      lp(32, 76, 10, 6, SHOE);
-      lp(20, 62, 2, 14, OUTLINE);
-      lp(30, 62, 2, 14, OUTLINE);
-      lp(42, 62, 2, 14, OUTLINE);
-      lp(22, 62, 2, 14, pantsLi);
-      lp(34, 62, 2, 14, pantsLi);
-      lp(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(32, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
+      rrO(lx(33), ly(58), 8, 14, 3, pal.pants);
+      rr(lx(23), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(23) + 3, ly(58), 2, 14, 2, pantsMid);
+      rr(lx(33), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(33) + 3, ly(58), 2, 14, 2, pantsMid);
+      elO(lx(27), ly(74), 6, 4, SHOE);
+      elO(lx(37), ly(74), 6, 4, SHOE);
+      s.set(lx(25), ly(73), shoeLi);
+      s.set(lx(26), ly(73), shoeMid);
+      s.set(lx(35), ly(73), shoeLi);
+      s.set(lx(36), ly(73), shoeMid);
+      s.set(lx(29), ly(76), shoeDk);
+      s.set(lx(39), ly(76), shoeDk);
     }
 
   } else {
-    // ---- RIGHT PROFILE (head bobs + sways) ----
+    // ---- RIGHT PROFILE ----
+    ci(hx(32), hy(18), 17, OUTLINE);
     // Hair dome
-    hp(24, 2, 16, 2, pal.hair);
-    hp(20, 4, 24, 2, pal.hair);
-    hp(18, 6, 28, 2, pal.hair);
-    hp(16, 8, 32, 6, pal.hair);
-    // Back of head hair (bounces)
-    fp(16, 14, 8, 18, pal.hair);
+    el(hx(30), hy(13), 16, 13, pal.hair);
+    // Back of head hair
+    el(hx(19), hy(21), 5, 9 + hairBounce, pal.hair);
     // Face
-    hp(24, 14, 24, 18, pal.skin);
-    hp(24, 32, 20, 4, pal.skin);
-    // Soft outline
-    hp(22, 0, 20, 2, OUTLINE);
-    hp(18, 2, 4, 2, OUTLINE);
-    hp(42, 2, 4, 2, OUTLINE);
-    hp(14, 6, 2, 6, OUTLINE);
-    hp(48, 6, 2, 6, OUTLINE);
-    hp(16, 12, 2, 20, OUTLINE);
-    hp(46, 12, 2, 12, OUTLINE);
-    hp(42, 24, 2, 4, OUTLINE);
-    hp(24, 32, 20, 2, OUTLINE);
-    hp(22, 34, 2, 2, OUTLINE);
-    hp(42, 34, 2, 2, OUTLINE);
-    // Hair shine
-    hp(22, 6, 10, 2, hairLi);
-    hp(18, 8, 2, 6, hairLi);
-    fp(44, 8, 2, 12, hairDk);
-    // Face shading
-    hp(24, 16, 2, 16, skinLi);
-    hp(42, 16, 2, 16, skinDk);
-    // Eye — big cute 6x4, or closed line when blinking
+    el(hx(35), hy(24), 11, 9, pal.skin);
+    // Hair fringe over forehead
+    el(hx(32), hy(16), 13, 5, pal.hair);
+    rr(hx(25), hy(16), 18, 4, 3, pal.hair);
+    // Hair 3-tone: highlight, rim, mid
+    el(hx(26), hy(9), 5, 2, hairLi);
+    el(hx(24), hy(10), 3, 2, hairRim);
+    el(hx(32), hy(11), 6, 3, hairMid);
+    // Hair shadow
+    el(hx(21), hy(19), 4, 9, hairDk);
+    s.set(hx(22), hy(17), hairDk);
+    s.set(hx(23), hy(15), hairDk);
+    // Ear
+    s.set(hx(28), hy(24), skinDk);
+    s.set(hx(28), hy(25), pal.skin);
+    s.set(hx(28), hy(26), skinDk);
+    // Face 3-tone: rim light, mid, shadow
+    el(hx(31), hy(22), 3, 6, skinLi);
+    el(hx(30), hy(21), 2, 3, skinRim);
+    el(hx(38), hy(24), 3, 5, skinMid);
+    el(hx(41), hy(26), 2, 4, skinDk);
+    // Chin/jaw shadow
+    el(hx(36), hy(31), 8, 2, skinDk);
+    // Eyebrow
+    s.set(hx(37), hy(19), hairDk);
+    s.set(hx(38), hy(19), hairDk);
+    // Eye — small
     if (eyesClosed) {
-      hp(34, 22, 6, 1, "#2a2040");
+      rr(hx(36), hy(23), 4, 2, 2, eyeColor);
     } else {
-      hp(34, 20, 6, 4, "#2a2040");
-      hpx(36, 20, "#ffffff");
-      hpx(38, 22, mix("#ffffff", "#aaccff", 0.3));
+      el(hx(38), hy(23), 2, 4, eyeColor);
+      s.set(hx(37), hy(22), "#ffffff");
     }
     // Nose
-    hp(46, 24, 2, 2, skinDk);
-    // Mouth — tiny smile
-    hp(38, 28, 4, 2, skinDk);
-    hpx(36, 28, skinDk);
-    // Cheek blush
-    hp(30, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
+    s.set(hx(45), hy(25), skinDk);
+    s.set(hx(46), hy(25), skinDk);
+    s.set(hx(46), hy(24), skinLi);
+    // Mouth
+    s.set(hx(40), hy(29), skinDk);
+    s.set(hx(41), hy(30), skinDk);
+    s.set(hx(42), hy(30), skinDk);
+    s.set(hx(43), hy(29), skinDk);
+    // Blush
+    ci(hx(32), hy(27), 2, blush);
 
     // ---- NECK ----
-    bp(28, 36, 8, 2, skinDk);
+    rr(bx(29), by(34), 6, 4, 2, skinDk);
+    s.set(bx(29), by(34), OUTLINE);
+    s.set(bx(34), by(34), OUTLINE);
+    s.set(bx(30), by(36), skinDk);
+    s.set(bx(31), by(36), skinDk);
+    s.set(bx(32), by(36), skinDk);
+    s.set(bx(33), by(36), skinDk);
 
-    // ---- TORSO (profile) ----
-    bp(22, 38, 20, 20, pal.shirt);
-    bp(22, 38, 20, 2, shirtLi);
-    bp(22, 38, 2, 20, shirtLi);
-    bp(40, 38, 2, 20, pal.shirtShade);
-    bp(22, 54, 20, 4, pal.shirtShade);
-    bp(20, 38, 2, 20, OUTLINE);
-    bp(42, 38, 2, 20, OUTLINE);
-    bp(22, 58, 20, 2, OUTLINE);
+    // ---- TORSO (profile) — 3-tone ----
+    rrO(bx(23), by(38), 18, 18, 5, pal.shirt);
+    rr(bx(25), by(38), 14, 3, 3, shirtLi);
+    rr(bx(27), by(38), 10, 2, 2, shirtMid);
+    rr(bx(23), by(38), 2, 18, 2, shirtLi);
+    rr(bx(25), by(38), 2, 18, 2, shirtMid);
+    rr(bx(37), by(38), 2, 18, 2, shirtDk);
+    rr(bx(23), by(52), 18, 4, 3, shirtDk);
+    // Collar
+    s.set(bx(25), by(40), shirtDk);
+    s.set(bx(26), by(41), shirtDk);
 
-    // ---- ARM (one visible, stubby, swings) ----
-    pap(36, 40, 6, 12, pal.shirt);
-    pap(36, 40, 2, 12, shirtLi);
-    pap(42, 40, 2, 12, OUTLINE);
-    pap(36, 52, 6, 4, pal.skin);
-    pap(36, 52, 2, 2, skinLi);
+    // ---- ARM — 3-tone ----
+    elO(bx(37 + armSwing), by(45), 4, 8, pal.shirt);
+    el(bx(36 + armSwing), by(43), 2, 3, shirtLi);
+    el(bx(37 + armSwing), by(44), 2, 4, shirtMid);
+    ciO(bx(37 + armSwing), by(54), 3, pal.skin);
+    s.set(bx(36 + armSwing), by(53), skinLi);
+    s.set(bx(38 + armSwing), by(55), skinDk);
 
-    // ---- LEGS (profile, planted) ----
+    // ---- LEGS (profile) — 3-tone ----
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
-      const frontX = leftUp ? 28 : 22;
-      const backX = leftUp ? 22 : 28;
-      lp(frontX, 62, 8, 10, pal.pants);
-      lp(frontX, 72, 10, 6, SHOE);
-      lp(frontX, 72, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(frontX - 2, 62, 2, 10, OUTLINE);
-      lp(frontX, 62, 2, 10, pantsLi);
-      lp(backX, 62, 8, 14, pal.pants);
-      lp(backX, 76, 10, 6, SHOE);
-      lp(backX, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(backX - 2, 62, 2, 14, OUTLINE);
-      lp(backX, 62, 2, 14, pantsLi);
+      const frontX = leftUp ? 29 : 25;
+      const backX = leftUp ? 25 : 29;
+      rrO(lx(frontX), ly(58), 8, 14, 3, pal.pants);
+      rr(lx(frontX), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(frontX) + 3, ly(58), 2, 14, 2, pantsMid);
+      elO(lx(frontX + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(frontX + 2), ly(73), shoeLi);
+      s.set(lx(frontX + 3), ly(73), shoeMid);
+      s.set(lx(frontX + 6), ly(76), shoeDk);
+      // Back leg darker
+      rrO(lx(backX), ly(60), 8, 10, 3, pantsDk);
+      elO(lx(backX + 4), ly(72), 6, 4, shoeDk);
     } else {
-      lp(22, 62, 8, 14, pal.pants);
-      lp(30, 62, 8, 14, pal.pants);
-      lp(22, 76, 10, 6, SHOE);
-      lp(30, 76, 10, 6, SHOE);
-      lp(20, 62, 2, 14, OUTLINE);
-      lp(38, 62, 2, 14, OUTLINE);
-      lp(22, 62, 2, 14, pantsLi);
-      lp(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      lp(30, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      rrO(lx(25), ly(58), 8, 14, 3, pal.pants);
+      rrO(lx(33), ly(58), 8, 14, 3, pantsDk);
+      rr(lx(25), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(25) + 3, ly(58), 2, 14, 2, pantsMid);
+      elO(lx(29), ly(74), 6, 4, SHOE);
+      elO(lx(37), ly(74), 6, 4, shoeDk);
+      s.set(lx(27), ly(73), shoeLi);
+      s.set(lx(28), ly(73), shoeMid);
+      s.set(lx(31), ly(76), shoeDk);
     }
   }
 
@@ -1736,6 +1812,8 @@ interface MapTheme {
   tileset: string;
   /** Desk top-left tiles; index order == deskIndex assigned by the server. */
   desks: Array<[number, number]>;
+  /** Yuki's desk top-left tile (placed separately from regular desks). */
+  yukiDesk?: [number, number];
   /** Floors, walls and decor — desks, chairs and points are common. */
   paint(G: Plot, W: Plot, F: Plot): void;
 }
@@ -1746,6 +1824,7 @@ const CLASSIC: MapTheme = {
     [3, 4], [8, 4], [13, 4], [18, 4],
     [3, 10], [8, 10], [13, 10], [18, 10],
   ],
+  yukiDesk: [24, 9],
   paint(G, W, F) {
     // --- floors with distinct zones ---
     // Main work area: wood floor
@@ -1802,13 +1881,30 @@ const CLASSIC: MapTheme = {
     // Door in the south wall
     W(14, MAP_H - 1, TILE.DOOR);
     W(15, MAP_H - 1, TILE.DOOR);
-    // Break room divider wall (partial — leaves an opening)
+    // Break room divider wall (partial — leaves an opening at y=5)
     for (let y = 2; y <= 3; y++) W(21, y, TILE.WALL_TOP);
     W(21, 4, TILE.WALL_FACE);
-    W(21, 5, TILE.WALL_FACE);
+    G(21, 5, (21 + 5) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
     // Meeting corner partial wall
     W(21, 14, TILE.WALL_TOP);
     W(21, 15, TILE.WALL_FACE);
+
+    // --- Yuki's office (right side, between break room and meeting corner) ---
+    // Floor
+    for (let y = 8; y <= 11; y++) {
+      for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
+    }
+    // Entrance floor (3-tile opening at y=8,9,10)
+    for (let y = 8; y <= 10; y++) G(21, y, (21 + y) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
+    // North wall
+    for (let x = 22; x <= 27; x++) W(x, 7, TILE.WALL_TOP);
+    // South wall
+    for (let x = 22; x <= 27; x++) W(x, 12, TILE.WALL_TOP);
+    // West wall with 3-tile opening at y=8,9,10
+    for (let y = 6; y <= 7; y++) W(21, y, TILE.WALL_TOP);
+    W(21, 11, TILE.WALL_FACE);
+    W(21, 12, TILE.WALL_FACE);
+    W(21, 13, TILE.WALL_TOP);
 
     // --- furniture ---
     // Bookshelves along the west wall
@@ -1827,7 +1923,6 @@ const CLASSIC: MapTheme = {
     F(28, 7, TILE.PLANT);
     F(27, 13, TILE.PLANT);
     F(11, 8, TILE.PLANT);
-    F(22, 12, TILE.PLANT);
     // Break room
     F(22, 2, TILE.COUNTER);
     F(23, 2, TILE.COFFEE);
@@ -1844,6 +1939,9 @@ const CLASSIC: MapTheme = {
     F(2, 15, TILE.PAPERS);
     F(19, 17, TILE.TRASH);
     F(5, 17, TILE.PLANT);
+    // Yuki's office decor
+    F(27, 11, TILE.PLANT);
+    F(22, 11, TILE.FILING);
   },
 };
 
@@ -1855,6 +1953,7 @@ const LUMON: MapTheme = {
     [11, 7], [13, 7], [15, 7], [17, 7],
     [11, 11], [13, 11], [15, 11], [17, 11],
   ],
+  yukiDesk: [24, 9],
   paint(G, W, F) {
     // --- distinct floor zones ---
     // Work area: green carpet
@@ -1902,13 +2001,31 @@ const LUMON: MapTheme = {
     // Door in the south wall
     W(14, MAP_H - 1, TILE.DOOR);
     W(15, MAP_H - 1, TILE.DOOR);
-    // Break room divider (partial)
+    // Break room divider (partial — leaves an opening at y=5)
     for (let y = 2; y <= 3; y++) W(21, y, TILE.WALL_TOP);
     W(21, 4, TILE.WALL_FACE);
-    W(21, 5, TILE.WALL_FACE);
+    G(21, 5, (21 + 5) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
     // Meeting corner partial wall
     W(21, 15, TILE.WALL_TOP);
     W(21, 16, TILE.WALL_FACE);
+
+    // --- Yuki's office (right side, between break room and meeting corner) ---
+    // Floor
+    for (let y = 8; y <= 11; y++) {
+      for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    }
+    // Entrance floor (3-tile opening at y=8,9,10)
+    for (let y = 8; y <= 10; y++) G(21, y, (21 + y) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    // North wall
+    for (let x = 22; x <= 27; x++) W(x, 7, TILE.WALL_TOP);
+    // South wall
+    for (let x = 22; x <= 27; x++) W(x, 12, TILE.WALL_TOP);
+    // West wall with 3-tile opening at y=8,9,10
+    for (let y = 6; y <= 7; y++) W(21, y, TILE.WALL_TOP);
+    W(21, 11, TILE.WALL_FACE);
+    W(21, 12, TILE.WALL_FACE);
+    W(21, 13, TILE.WALL_FACE);
+    W(21, 14, TILE.WALL_TOP);
 
     // --- break room gear ---
     F(22, 2, TILE.COUNTER);
@@ -1931,9 +2048,11 @@ const LUMON: MapTheme = {
     F(1, 17, TILE.TRASH);
     F(20, 17, TILE.PLANT);
     F(5, 17, TILE.PLANT);
-    F(22, 12, TILE.PLANT);
     F(11, 9, TILE.PLANT);
     F(26, 16, TILE.PLANT);
+    // Yuki's office decor
+    F(27, 11, TILE.PLANT);
+    F(22, 11, TILE.FILING);
   },
 };
 
@@ -1955,6 +2074,14 @@ function buildMap(theme: MapTheme): object {
     F(dx, dy + 1, TILE.CHAIR);
   }
 
+  // Yuki's desk + left-facing chair
+  if (theme.yukiDesk) {
+    const [ydx, ydy] = theme.yukiDesk;
+    F(ydx, ydy, TILE.DESK_L);
+    F(ydx + 1, ydy, TILE.DESK_R);
+    F(ydx + 2, ydy, TILE.CHAIR_LEFT);
+  }
+
   // --- object layer ---
   const objects: object[] = [];
   let oid = 1;
@@ -1973,6 +2100,12 @@ function buildMap(theme: MapTheme): object {
     objects.push(point(`seat-${i}`, dx, dy + 1));
     objects.push(point(`monitor-${i}`, dx, dy));
   });
+  if (theme.yukiDesk) {
+    const [ydx, ydy] = theme.yukiDesk;
+    objects.push(point("yuki-seat", ydx + 2, ydy));
+    objects.push(point("yuki-desk", ydx, ydy));
+    objects.push(point("yuki-monitor", ydx, ydy));
+  }
 
   const tileLayer = (id: number, name: string, data: number[]) => ({
     id,
@@ -2023,10 +2156,10 @@ function buildMap(theme: MapTheme): object {
         name: theme.tileset,
         image: `../tilesets/${theme.tileset}.png`,
         imagewidth: 512,
-        imageheight: 256,
+        imageheight: 320,
         tilewidth: T,
         tileheight: T,
-        tilecount: 32,
+        tilecount: 40,
         columns: 8,
         margin: 0,
         spacing: 0,
@@ -2209,25 +2342,33 @@ function worldSnow(s: Sheet, ox: number, oy: number, seed: number): void {
 }
 
 function worldLava(s: Sheet, ox: number, oy: number, seed: number): void {
-  const p = shade5("#e84820");
-  s.rect(ox, oy, WT, WT, p.base);
-  vGrad(s, ox, oy, WT, WT, p.hi, p.dk);
-  // glowing cracks
+  // dark scorched border
+  s.rect(ox, oy, WT, WT, "#1a0202");
+  // bright lava body — glowing red-orange
+  rGrad(s, ox + 32, oy + 32, 30, "#ff6010", "#c01800");
+  rGrad(s, ox + 32, oy + 32, 20, "#ff9020", "#e83800");
+  rGrad(s, ox + 32, oy + 32, 10, "#ffc040", "#ff6010");
+  // dark crust around edges
   let st = seed;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 16; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const cx = (st >> 8) % WT;
+    const cy = (st >> 16) % WT;
+    if (Math.hypot(cx - 32, cy - 32) > 18) {
+      s.fillCircleAlpha(ox + cx, oy + cy, 2 + (st % 3), "#1a0202", 0.6);
+    }
+  }
+  // a few bright glowing cracks
+  st = seed;
+  for (let i = 0; i < 5; i++) {
     st = (st * 1103515245 + 12345) & 0x7fffffff;
     const x0 = (st >> 8) % WT;
     const y0 = (st >> 16) % WT;
     const x1 = x0 + ((st >> 4) % 20) - 10;
     const y1 = y0 + ((st >> 12) % 20) - 10;
-    s.lineThick(ox + x0, oy + y0, ox + x1, oy + y1, p.hi, 2);
-    s.line(ox + x0, oy + y0, ox + x1, oy + y1, "#ffe880");
+    s.lineThick(ox + x0, oy + y0, ox + x1, oy + y1, "#ffb030", 2);
+    s.line(ox + x0, oy + y0, ox + x1, oy + y1, "#ffe060");
   }
-  // bubbles
-  s.fillCircle(ox + 20, oy + 30, 3, p.hi);
-  s.set(ox + 20, oy + 29, "#ffe880");
-  s.fillCircle(ox + 44, oy + 42, 2, p.hi);
-  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
 }
 
 function worldCrystal(s: Sheet, ox: number, oy: number, seed: number): void {
@@ -2248,22 +2389,52 @@ function worldCrystal(s: Sheet, ox: number, oy: number, seed: number): void {
 }
 
 function worldVoid(s: Sheet, ox: number, oy: number, seed: number): void {
-  s.rect(ox, oy, WT, WT, "#0a0a14");
-  // swirling purple
+  // pure void — consuming darkness
+  s.rect(ox, oy, WT, WT, "#000000");
+  // deep purple-black gradient from center
+  rGrad(s, ox + 32, oy + 32, 30, "#0a0218", "#000000");
+  rGrad(s, ox + 32, oy + 32, 20, "#1a0428", "#000000");
+  // swirling tentacle-like wisps
   let st = seed;
+  for (let i = 0; i < 6; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const angle = (i / 6) * Math.PI * 2 + (st % 100) / 100 * 0.5;
+    const len = 16 + (st % 12);
+    for (let r = 0; r < len; r++) {
+      const spiral = angle + r * 0.15;
+      const px = 32 + Math.cos(spiral) * r;
+      const py = 32 + Math.sin(spiral) * r;
+      const alpha = 0.4 * (1 - r / len);
+      s.setAlpha(ox + Math.round(px), oy + Math.round(py), "#4a1a6a", alpha);
+    }
+  }
+  // eerie glowing eyes in the darkness
+  st = seed;
+  for (let i = 0; i < 3; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const ex = 10 + (st >> 8) % 44;
+    const ey = 10 + (st >> 16) % 44;
+    // eye glow
+    s.fillCircleAlpha(ox + ex, oy + ey, 3, "#aa44ff", 0.3);
+    s.fillCircle(ox + ex, oy + ey, 1, "#dd88ff");
+    s.set(ox + ex, oy + ey, "#ffffff");
+  }
+  // central maw — a consuming purple-black hole
+  s.fillCircleAlpha(ox + 32, oy + 32, 10, "#2a0a4a", 0.5);
+  s.fillCircleAlpha(ox + 32, oy + 32, 6, "#000000", 0.8);
+  // faint purple stars
+  st = seed;
   for (let i = 0; i < 8; i++) {
     st = (st * 1103515245 + 12345) & 0x7fffffff;
-    const vx = (st >> 8) % WT;
-    const vy = (st >> 16) % WT;
-    s.fillCircleAlpha(ox + vx, oy + vy, 4 + (st % 6), "#3a1a5a", 0.3);
+    const sx = (st >> 8) % WT;
+    const sy = (st >> 16) % WT;
+    const distFromCenter = Math.hypot(sx - 32, sy - 32);
+    if (distFromCenter > 14) {
+      s.setAlpha(ox + sx, oy + sy, "#8844cc", 0.6);
+    }
   }
-  s.fillCircleAlpha(ox + 32, oy + 32, 12, "#5a2a8a", 0.2);
-  // stars
-  st = seed;
-  for (let i = 0; i < 10; i++) {
-    st = (st * 1103515245 + 12345) & 0x7fffffff;
-    s.set(ox + (st >> 8) % WT, oy + (st >> 16) % WT, "#ffffff");
-  }
+  // dark consuming edges
+  s.blurEdges(ox, oy, WT, WT, "#000000", 0.2);
 }
 
 function worldRuin(s: Sheet, ox: number, oy: number, seed: number): void {
@@ -2516,7 +2687,9 @@ function buildWorldTileset(): Sheet {
     const drawer = worldDrawers[i];
     const ox = (i % cols) * WT;
     const oy = Math.floor(i / cols) * WT;
+    s.clip = { x: ox, y: oy, w: WT, h: WT };
     drawer(s, ox, oy, i * 137 + 42);
+    s.clip = null;
   }
   return s;
 }
@@ -2539,6 +2712,7 @@ CHAR_PALETTES.forEach((pal, i) => {
   if (i === 0) sheet.preview(join(PREVIEWS, "char-0.png"), 6);
 });
 buildCharSheet(BOSS_PALETTE).save(join(ASSETS, "characters", "boss.png"));
+buildCharSheet(YUKI_PALETTE).save(join(ASSETS, "characters", "char-yuki.png"));
 
 const worldTileset = buildWorldTileset();
 worldTileset.save(join(ASSETS, "tilesets", "world.png"));

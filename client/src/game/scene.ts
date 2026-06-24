@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { CHAR_VARIANTS } from "../../../shared/types";
 import type { Store } from "../store";
-import { AgentNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, type Dir } from "./agent";
+import { AgentNPC, YukiNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, type Dir } from "./agent";
 import { Grid, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { CRTWarmthPipeline } from "./shaders";
@@ -12,6 +12,8 @@ export class OfficeScene extends Phaser.Scene {
   private store!: Store;
   private grid!: Grid;
   private npcs = new Map<string, AgentNPC>();
+  private yuki: YukiNPC | null = null;
+  private yukiSeat: Tile | null = null;
   private seats: Tile[] = [];
   private extraSpots: Tile[] = [];
   private monitors: Phaser.GameObjects.Sprite[] = [];
@@ -59,6 +61,10 @@ export class OfficeScene extends Phaser.Scene {
       frameWidth: 64,
       frameHeight: 96,
     });
+    this.load.spritesheet("char-yuki", "assets/characters/char-yuki.png", {
+      frameWidth: 64,
+      frameHeight: 96,
+    });
     this.load.spritesheet("monitor", "assets/sprites/monitor.png", {
       frameWidth: 64,
       frameHeight: 64,
@@ -89,6 +95,8 @@ export class OfficeScene extends Phaser.Scene {
 
     // a theme change restarts the scene — drop everything the last run built
     this.npcs.clear();
+    this.yuki = null;
+    this.yukiSeat = null;
     this.seats = [];
     this.extraSpots = [];
     this.monitors = [];
@@ -143,6 +151,18 @@ export class OfficeScene extends Phaser.Scene {
         this.spawnTile = { x: tx, y: ty };
       } else if (obj.name === "coffee") {
         this.coffeeTile = { x: tx, y: ty };
+      } else if (obj.name === "yuki-seat") {
+        this.yukiSeat = { x: tx, y: ty };
+      } else if (obj.name === "yuki-monitor") {
+        // Side view of monitor — thin dark rectangle (back of monitor facing left toward entrance)
+        const mx = obj.x ?? 0;
+        const my = (obj.y ?? 0) - 4;
+        const g = this.add.graphics();
+        g.fillStyle(0x2a2a2e, 1);
+        g.fillRoundedRect(mx - 4, my - 28, 8, 48, 2);
+        g.fillStyle(0x1a1a1e, 1);
+        g.fillRect(mx - 2, my + 18, 4, 8);
+        g.setDepth(10 + (obj.y ?? 0) - 10);
       } else if (obj.name.startsWith("seat-")) {
         this.seats[Number(obj.name.slice(5))] = { x: tx, y: ty };
       } else if (obj.name.startsWith("monitor-")) {
@@ -156,18 +176,23 @@ export class OfficeScene extends Phaser.Scene {
     this.doorTile = { x: this.spawnTile.x, y: this.spawnTile.y + 2 };
     this.registry.set("spawnTile", this.spawnTile);
 
-    // carve a door gap — make the bottom wall tiles walkable at the door column
-    // so the player can walk straight out into the world
+    // carve a door gap — make the bottom wall tiles walkable at the door columns
+    // so the player can walk straight out into the world.
+    // The door is 2 tiles wide at spawnTile.x and spawnTile.x+1.
     const doorX = this.spawnTile.x;
     for (let dy = 0; dy <= 3; dy++) {
       const ty = this.spawnTile.y + dy;
       if (ty < map.height) {
         walkable[ty][doorX] = true;
-        if (doorX > 0) walkable[ty][doorX - 1] = true;
-        if (doorX < map.width - 1) walkable[ty][doorX + 1] = true;
+        if (doorX + 1 < map.width) walkable[ty][doorX + 1] = true;
       }
     }
     this.grid = new Grid(map.width, map.height, walkable);
+
+    // Yuki — the office manager NPC
+    if (this.yukiSeat) {
+      this.yuki = new YukiNPC(this, this.grid, this.yukiSeat);
+    }
 
     // standing spots for agents hired beyond the 8 desks — stable order so
     // every client agrees on who stands where
@@ -175,12 +200,13 @@ export class OfficeScene extends Phaser.Scene {
       for (let x = 2; x < map.width - 2; x++) {
         if (!walkable[y][x] || (x + y) % 3 !== 0) continue;
         if (this.seats.some((s) => s && s.x === x && s.y === y)) continue;
+        if (this.yukiSeat && this.yukiSeat.x === x && this.yukiSeat.y === y) continue;
         this.extraSpots.push({ x, y });
       }
     }
 
     // animations for every character sheet
-    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss"];
+    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss", "char-yuki"];
     const dirs: Dir[] = ["down", "left", "right", "up"];
     const FRAMES_PER_ROW = 8;
     for (const key of sheets) {
@@ -195,14 +221,20 @@ export class OfficeScene extends Phaser.Scene {
           frameRate: 10,
           repeat: -1,
         });
+        // idle: mostly breathing (frame 6) with a quick blink (frame 7)
+        // We duplicate frame 6 many times then show frame 7 once, so the
+        // blink is a brief single-frame flash among long breathing stretches.
+        const breathFrames = Array(24).fill(base + 6);
+        breathFrames.push(base + 7); // quick blink
+        breathFrames.push(base + 6); // back to breathing
         this.anims.create({
           key: `${key}-idle-${dir}`,
           frames: this.anims.generateFrameNumbers(key, {
-            frames: [base + 6, base + 7],
+            frames: breathFrames,
           }),
-          frameRate: 2,
+          frameRate: 10,
           repeat: -1,
-          repeatDelay: 3,
+          repeatDelay: Math.random() * 2,
         });
       });
       // work animation — uses down-facing idle/breathing frames (row 0)
@@ -582,6 +614,7 @@ export class OfficeScene extends Phaser.Scene {
     if (typing) {
       this.player.play(`boss-idle-${this.playerDir}`, true);
       for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
+      this.yuki?.update(time, dt, false, this.player.x, this.player.y);
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
       this.selectRing.setVisible(!!sel);
       if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
@@ -709,6 +742,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
+    this.yuki?.update(time, dt, false, this.player.x, this.player.y);
 
     // selection ring
     const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;

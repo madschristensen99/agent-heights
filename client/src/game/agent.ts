@@ -389,3 +389,162 @@ export class AgentNPC {
     this.container.destroy();
   }
 }
+
+// --- Yuki's office geometry (must match generate-assets.ts) ---
+const YUKI_OFFICE = { x0: 22, y0: 8, x1: 27, y1: 11 };
+const YUKI_GREET_TILE: Tile = { x: 23, y: 10 };
+
+type YukiState = "sitting" | "greeting" | "returning";
+
+/** Yuki — the office manager. Sits at her desk; stands up to greet visitors. */
+export class YukiNPC {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private label: Phaser.GameObjects.Text;
+  private nameBg: Phaser.GameObjects.Graphics;
+  private shadow: Phaser.GameObjects.Ellipse;
+
+  private seat: Tile;
+  private path: Tile[] = [];
+  private dir: Dir = "down";
+  private state: YukiState = "sitting";
+  private greetUntil = 0;
+  private wasPlayerInside = false;
+
+  constructor(scene: Phaser.Scene, private grid: Grid, seat: Tile) {
+    this.seat = seat;
+    const c = "char-yuki";
+
+    const feet = feetOf(seat);
+    this.shadow = scene.add.ellipse(0, 0, 44, 16, 0x000000, 0.22);
+    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1);
+    this.nameBg = scene.add.graphics();
+    this.label = scene.add
+      .text(0, -108, "Yuki", {
+        fontFamily: "monospace",
+        fontSize: "16px",
+        color: "#1d2126",
+        stroke: "#f4f6f8",
+        strokeThickness: 3,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.7);
+    this.drawNameBg();
+
+    this.container = scene.add.container(feet.x, feet.y, [
+      this.shadow,
+      this.sprite,
+      this.nameBg,
+      this.label,
+    ]);
+    this.container.setDepth(10 + this.container.y);
+    // start sitting at desk, facing left toward the entrance
+    this.dir = "left";
+    this.play(`${c}-idle-left`);
+  }
+
+  private drawNameBg(): void {
+    const g = this.nameBg;
+    g.clear();
+    const w = this.label.displayWidth + 16;
+    const h = 18;
+    const x = -w / 2;
+    const y = -122;
+    const r = 4;
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(x, y, w, h, r);
+    g.lineStyle(1, 0xffffff, 0.15);
+    g.strokeRoundedRect(x, y, w, h, r);
+  }
+
+  private play(key: string): void {
+    if (this.sprite.anims.currentAnim?.key !== key || !this.sprite.anims.isPlaying) {
+      this.sprite.play(key, true);
+    }
+  }
+
+  private tile(): Tile {
+    return tileOf(this.container.x, this.container.y);
+  }
+
+  update(time: number, _dt: number, _wander: boolean, playerX: number, playerY: number): void {
+    const c = "char-yuki";
+    const pt = tileOf(playerX, playerY);
+    const playerInside =
+      pt.x >= YUKI_OFFICE.x0 && pt.x <= YUKI_OFFICE.x1 &&
+      pt.y >= YUKI_OFFICE.y0 && pt.y <= YUKI_OFFICE.y1;
+
+    // detect player entering the office
+    if (playerInside && !this.wasPlayerInside && this.state === "sitting") {
+      this.state = "greeting";
+      const path = findPath(this.grid, this.tile(), YUKI_GREET_TILE);
+      this.path = path;
+      this.greetUntil = 0;
+    }
+    this.wasPlayerInside = playerInside;
+
+    // --- follow path ---
+    if (this.path.length > 0) {
+      const next = feetOf(this.path[0]);
+      const dx = next.x - this.container.x;
+      const dy = next.y - this.container.y;
+      const dist = Math.hypot(dx, dy);
+      const step = (WALK_SPEED * Math.min(_dt, 100)) / 1000;
+      if (dist <= step) {
+        this.container.setPosition(next.x, next.y);
+        this.path.shift();
+      } else {
+        this.container.x += (dx / dist) * step;
+        this.container.y += (dy / dist) * step;
+        this.dir =
+          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+      }
+      this.play(`${c}-walk-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+      return;
+    }
+
+    // --- state-specific idle behaviour ---
+    if (this.state === "greeting") {
+      // face the player
+      const pdx = playerX - this.container.x;
+      const pdy = playerY - this.container.y;
+      this.dir =
+        Math.abs(pdx) > Math.abs(pdy) ? (pdx > 0 ? "right" : "left") : pdy > 0 ? "down" : "up";
+      this.play(`${c}-idle-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+
+      // start a timer once we've arrived and are facing the player
+      if (this.greetUntil === 0) this.greetUntil = time + 3500;
+      // after greeting (or if the player leaves), head back to the desk
+      if (this.greetUntil > 0 && (time >= this.greetUntil || !playerInside)) {
+        this.state = "returning";
+        this.path = findPath(this.grid, this.tile(), this.seat);
+        this.greetUntil = 0;
+      }
+      return;
+    }
+
+    if (this.state === "returning") {
+      // arrived back at the seat
+      const at = this.tile();
+      if (at.x === this.seat.x && at.y === this.seat.y) {
+        this.state = "sitting";
+        this.dir = "left";
+      }
+      this.play(`${c}-idle-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+      return;
+    }
+
+    // sitting at desk — face left toward the entrance
+    this.dir = "left";
+    this.play(`${c}-idle-left`);
+    this.container.setDepth(10 + this.container.y);
+  }
+
+  destroy(): void {
+    this.container.destroy();
+  }
+}

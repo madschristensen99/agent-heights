@@ -400,9 +400,9 @@ export function tileSpeed(tile: number): number {
 export function tileDamage(tile: number): number {
   switch (tile) {
     case TILE.VOID:
-      return 999; // near-instant death but technically survivable for a frame
+      return Infinity; // instant death — the void consumes you
     case TILE.LAVA:
-      return 25;
+      return 40;
     default:
       return 0;
   }

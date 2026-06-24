@@ -704,7 +704,7 @@ input.invalid {
 .sprite-preview {
   width: 96px;
   height: 144px;
-  background-size: 384px 576px;
+  background-size: 768px 576px;
   background-position: 0 0;
   background-repeat: no-repeat;
   image-rendering: pixelated;
@@ -753,9 +753,9 @@ input.invalid {
 }
 
 .sprite-thumb .sprite-img {
-  width: 32px;
-  height: 48px;
-  background-size: 128px 192px;
+  width: 48px;
+  height: 72px;
+  background-size: 384px 288px;
   background-position: 0 0;
   background-repeat: no-repeat;
   image-rendering: pixelated;

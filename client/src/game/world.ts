@@ -498,7 +498,7 @@ export class WorldLayer {
       .setResolution(4)
       .setOrigin(0, 0)
       .setScale(0.8)
-      .setDepth(500)
+      .setDepth(950)
       .setScrollFactor(0)
       .setVisible(false);
 
@@ -529,11 +529,11 @@ export class WorldLayer {
       .setResolution(4)
       .setOrigin(0.5, 1)
       .setScale(0.8)
-      .setDepth(450)
+      .setDepth(950)
       .setVisible(false);
 
-    // health bar — fixed to screen top-right
-    this.healthBar = scene.add.graphics().setDepth(500).setScrollFactor(0);
+    // health bar — fixed to screen top-right, above lighting overlays
+    this.healthBar = scene.add.graphics().setDepth(950).setScrollFactor(0).setVisible(false);
 
     // beast banner — shows legendary beast name when one is near
     this.beastBanner = scene.add
@@ -547,7 +547,7 @@ export class WorldLayer {
       .setResolution(4)
       .setOrigin(0.5, 0)
       .setScale(0.8)
-      .setDepth(550)
+      .setDepth(950)
       .setScrollFactor(0)
       .setVisible(false);
 
@@ -555,7 +555,7 @@ export class WorldLayer {
     this.damageFlash = scene.add
       .rectangle(0, 0, scene.scale.width, scene.scale.height, 0xff0000, 0)
       .setOrigin(0, 0)
-      .setDepth(600)
+      .setDepth(950)
       .setScrollFactor(0);
 
     this.drawHealthBar();
@@ -928,8 +928,18 @@ export class WorldLayer {
       const { tx, ty } = this.pixelToTile(playerX, playerY);
       const tile = this.getTileAt(tx, ty);
       const dmg = tileDamage(tile) * (dt / 1000);
-      if (dmg > 0 && time > this.invulnUntil) {
-        this.takeDamage(dmg, playerX, playerY, time);
+      if (dmg > 0 && (dmg === Infinity || time > this.invulnUntil)) {
+        const isVoid = dmg === Infinity;
+        this.takeDamage(isVoid ? MAX_HP : dmg, playerX, playerY, time);
+        // void implosion — purple particles sucked inward
+        if (isVoid) {
+          this.particleBurst(playerX, playerY, 0xaa44ff, 20, 100);
+          this.particleBurst(playerX, playerY, 0x000000, 12, 60);
+          this.scene.cameras.main.shake(500, 0.02);
+        } else if (tile === TILE.LAVA) {
+          // lava burn — orange sparks
+          this.particleBurst(playerX, playerY, 0xff6020, 8, 50);
+        }
       }
     }
 
