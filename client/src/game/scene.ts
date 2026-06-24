@@ -20,6 +20,7 @@ export class OfficeScene extends Phaser.Scene {
   private coffeeTile: Tile = { x: 23, y: 2 };
   private coffeeUntil = 0;
   private coffeeHint!: Phaser.GameObjects.Text;
+  private doorHint!: Phaser.GameObjects.Text;
   private theme: "classic" | "lumon" = "classic";
   /** Store listeners are registered once; they survive scene restarts. */
   private wired = false;
@@ -212,6 +213,20 @@ export class OfficeScene extends Phaser.Scene {
       .setDepth(100)
       .setVisible(false);
 
+    this.doorHint = this.add
+      .text(0, 0, "", {
+        fontFamily: "monospace",
+        fontSize: "16px",
+        color: "#1d2126",
+        stroke: "#f4f6f8",
+        strokeThickness: 3,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.7)
+      .setDepth(100)
+      .setVisible(false);
+
     this.mapPx = { w: map.widthInPixels, h: map.heightInPixels };
     const cam = this.cameras.main;
     cam.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
@@ -384,9 +399,17 @@ export class OfficeScene extends Phaser.Scene {
       .setText((this.store.player?.name ?? "BOSS").toUpperCase());
     this.playerLabel.setColor(time < this.coffeeUntil ? "#b0741f" : "#1d2126");
 
-    // E: grab coffee, talk to the nearest agent, or open the task board
+    // E: go through the door, grab coffee, talk to the nearest agent, or open the task board
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
-      // check the coffee machine first
+      // check the door first — it leads to the Labyrinth
+      const doorPx = { x: this.doorTile.x * TILE_PX + 32, y: this.doorTile.y * TILE_PX + 32 };
+      const doorDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, doorPx.x, doorPx.y);
+      if (doorDist < 100) {
+        this.scene.switch("office", "world");
+        this.scene.stop("office");
+        return;
+      }
+      // check the coffee machine
       const coffeePx = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
       const coffeeDist = Phaser.Math.Distance.Between(
         this.player.x,
@@ -460,6 +483,18 @@ export class OfficeScene extends Phaser.Scene {
         .setVisible(true);
     } else {
       this.coffeeHint.setVisible(false);
+    }
+
+    // door proximity hint
+    const doorPx = { x: this.doorTile.x * TILE_PX + 32, y: this.doorTile.y * TILE_PX + 32 };
+    const doorDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, doorPx.x, doorPx.y);
+    if (doorDist < 100) {
+      this.doorHint
+        .setPosition(doorPx.x, doorPx.y + 64)
+        .setText("E: ENTER LABYRINTH")
+        .setVisible(true);
+    } else {
+      this.doorHint.setVisible(false);
     }
   }
 }

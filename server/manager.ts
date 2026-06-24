@@ -6,11 +6,14 @@ import type {
   AgentRole,
   AgentStatus,
   CardStatus,
+  FiredAgent,
+  FiredAgentMood,
   GameSettings,
   LogEntry,
   Provider,
   ServerMsg,
   TaskCard,
+  WorldState,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
@@ -79,6 +82,8 @@ interface AgentRuntime {
 export class AgentManager {
   private agents = new Map<string, AgentRuntime>();
   private board = new Map<string, TaskCard>();
+  private firedAgents = new Map<string, FiredAgent>();
+  private worldSeed = 0;
   private workspaceRoot: string;
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   bossName = "the boss";
@@ -111,6 +116,18 @@ export class AgentManager {
     }
     if (this.agents.size > 0) {
       console.log(`[agent-hq] restored ${this.agents.size} agent(s) from save`);
+    }
+    // reload the world state (seed + fired agents) from the save file
+    const world = this.save.getWorld();
+    this.worldSeed = world.seed || Math.floor(Math.random() * 0xffffffff);
+    if (!world.seed) {
+      this.save.setWorld({ seed: this.worldSeed, firedAgents: [] });
+    }
+    for (const fa of world.firedAgents) {
+      this.firedAgents.set(fa.id, fa);
+    }
+    if (this.firedAgents.size > 0) {
+      console.log(`[agent-hq] restored ${this.firedAgents.size} fired agent(s) in the Labyrinth`);
     }
     // reload the task board from the save file
     for (const card of saved?.board ?? []) {
@@ -169,6 +186,14 @@ export class AgentManager {
     for (const a of this.agents.values()) logs[a.info.id] = a.logs;
     const board = [...this.board.values()];
     return { agents, logs, board };
+  }
+
+  worldState(): WorldState {
+    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()] };
+  }
+
+  private persistWorld(): void {
+    this.save.setWorld(this.worldState());
   }
 
   hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number): void {
@@ -343,11 +368,79 @@ export class AgentManager {
       this.revertCard(rt.cardId);
       rt.cardId = null;
     }
+
+    // save the agent as a wandering ghost in the Labyrinth
+    const moods: FiredAgentMood[] = ["melancholy", "hostile", "wandering", "dormant"];
+    const fired: FiredAgent = {
+      id: rt.info.id,
+      name: rt.info.name,
+      title: rt.info.title,
+      sprite: rt.info.sprite,
+      accent: rt.info.accent,
+      provider: rt.info.provider,
+      model: rt.info.model,
+      systemPrompt: rt.info.systemPrompt,
+      role: rt.info.role,
+      sessionId: rt.info.sessionId,
+      tasksDone: rt.info.tasksDone,
+      firedAt: Date.now(),
+      lastTask: rt.info.task,
+      // spawn somewhere in the world, not right at the door
+      worldX: 32 + Math.floor(Math.random() * 128),
+      worldY: 32 + Math.floor(Math.random() * 128),
+      mood: moods[Math.floor(Math.random() * moods.length)],
+    };
+    this.firedAgents.set(fired.id, fired);
+    this.persistWorld();
+
     this.agents.delete(agentId);
     this.session.record("fire", { agentId, agentName: rt.info.name });
     this.persist();
     this.broadcast({ type: "agent_removed", agentId });
-    this.broadcast({ type: "toast", text: `${rt.info.name} cleaned out their desk.` });
+    this.broadcast({ type: "fired_agent", agent: fired });
+    this.broadcast({ type: "toast", text: `${rt.info.name} cleaned out their desk and wandered into the Labyrinth.` });
+  }
+
+  /** Re-hire a fired agent from the Labyrinth — memory intact. */
+  recruit(firedAgentId: string): void {
+    const fa = this.firedAgents.get(firedAgentId);
+    if (!fa) return;
+    this.firedAgents.delete(firedAgentId);
+    this.persistWorld();
+
+    // re-hire with the same identity and preserved session
+    const usedDesks = new Set([...this.agents.values()].map((a) => a.info.deskIndex));
+    let deskIndex = 0;
+    while (usedDesks.has(deskIndex)) deskIndex++;
+
+    const info: AgentInfo = {
+      id: fa.id,
+      name: fa.name,
+      title: fa.title,
+      provider: fa.provider,
+      model: fa.model,
+      status: "idle",
+      task: null,
+      deskIndex,
+      sprite: fa.sprite,
+      accent: fa.accent,
+      systemPrompt: fa.systemPrompt,
+      role: fa.role,
+      sessionId: fa.sessionId,
+      tasksDone: fa.tasksDone,
+    };
+
+    const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
+    mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
+
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
+    this.agents.set(info.id, rt);
+    this.session.record("recruit", { agentId: info.id, agentName: info.name });
+    this.persist();
+    this.broadcast({ type: "agent", agent: info });
+    this.broadcast({ type: "fired_agent_removed", agentId: fa.id });
+    this.log(rt, "status", `${info.name} came back from the Labyrinth and rejoined the office.`);
+    this.broadcast({ type: "toast", text: `${info.name} returned from the Labyrinth!` });
   }
 
   // ----------------------------------------------------------- task board ---

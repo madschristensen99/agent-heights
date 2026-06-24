@@ -1,4 +1,4 @@
-import type { AgentInfo, GameSettings, LogEntry, PlayerInfo, ServerMsg, TaskCard } from "../../shared/types";
+import type { AgentInfo, FiredAgent, GameSettings, LogEntry, PlayerInfo, ServerMsg, TaskCard } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 
 type Listener = () => void;
@@ -19,6 +19,8 @@ export class Store {
   agents = new Map<string, AgentInfo>();
   logs = new Map<string, LogEntry[]>();
   board = new Map<string, TaskCard>();
+  firedAgents = new Map<string, FiredAgent>();
+  worldSeed = 0;
   /** Every agent's messages merged chronologically, for the office feed. */
   feed: FeedItem[] = [];
   /** Bumped when the feed is rebuilt or items vanish mid-list (not appended). */
@@ -81,6 +83,10 @@ export class Store {
         this.board = new Map(msg.board.map((c) => [c.id, c]));
         this.player = msg.player;
         this.settings = msg.settings;
+        if (msg.world) {
+          this.worldSeed = msg.world.seed;
+          this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
+        }
         if (this.selectedId && !this.agents.has(this.selectedId)) this.selectedId = null;
         // rebuild the feed from the per-agent logs
         this.feed = [];
@@ -145,6 +151,16 @@ export class Store {
         break;
       case "card_removed":
         this.board.delete(msg.cardId);
+        break;
+      case "world":
+        this.worldSeed = msg.world.seed;
+        this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
+        break;
+      case "fired_agent":
+        this.firedAgents.set(msg.agent.id, msg.agent);
+        break;
+      case "fired_agent_removed":
+        this.firedAgents.delete(msg.agentId);
         break;
       case "huddle":
         for (const fn of this.huddleListeners) fn(msg.agentIds);

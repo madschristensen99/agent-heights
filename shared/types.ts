@@ -37,6 +37,51 @@ export interface AgentInfo {
   tasksDone: number;
 }
 
+// ----------------------------------------------------------- Labyrinth ---
+
+/** Mood of a fired agent wandering the Labyrinth. */
+export type FiredAgentMood = "melancholy" | "hostile" | "wandering" | "dormant";
+
+/** A fired agent that now haunts the Labyrinth. Memory is preserved. */
+export interface FiredAgent {
+  id: string;
+  name: string;
+  title: string;
+  sprite: number;
+  accent: string;
+  provider: Provider;
+  model: string;
+  systemPrompt: string;
+  role: AgentRole;
+  sessionId: string | null;
+  tasksDone: number;
+  firedAt: number;
+  lastTask: string | null;
+  /** Position in world tile coordinates (absolute, not chunk-relative). */
+  worldX: number;
+  worldY: number;
+  mood: FiredAgentMood;
+}
+
+/** Persisted world state — seed + fired agents + visited chunk data. */
+export interface WorldState {
+  seed: number;
+  firedAgents: FiredAgent[];
+}
+
+/** Chunk side length in tiles. */
+export const CHUNK_SIZE = 32;
+
+/** Tile types used by the world generator. */
+export const TILE = {
+  FLOOR: 0,
+  WALL: 1,
+  RUBBLE: 2,
+  PILLAR: 3,
+  VINES: 4,
+  VOID: 5,
+} as const;
+
 export type CardStatus = "backlog" | "in_progress" | "done";
 
 export interface TaskCard {
@@ -104,7 +149,8 @@ export type ClientMsg =
   | { type: "create_card"; title: string; description?: string }
   | { type: "assign_card"; cardId: string; agentId: string }
   | { type: "move_card"; cardId: string; status: CardStatus }
-  | { type: "delete_card"; cardId: string };
+  | { type: "delete_card"; cardId: string }
+  | { type: "recruit"; firedAgentId: string };
 
 export type ServerMsg =
   | {
@@ -114,6 +160,7 @@ export type ServerMsg =
       player: PlayerInfo | null;
       settings: GameSettings;
       board: TaskCard[];
+      world: WorldState | null;
     }
   | { type: "player"; player: PlayerInfo }
   | { type: "settings"; settings: GameSettings }
@@ -124,7 +171,10 @@ export type ServerMsg =
   | { type: "log"; agentId: string; entry: LogEntry }
   | { type: "toast"; text: string }
   | { type: "card"; card: TaskCard }
-  | { type: "card_removed"; cardId: string };
+  | { type: "card_removed"; cardId: string }
+  | { type: "world"; world: WorldState }
+  | { type: "fired_agent"; agent: FiredAgent }
+  | { type: "fired_agent_removed"; agentId: string };
 
 export const CLAUDE_MODELS = [
   { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (balanced)" },

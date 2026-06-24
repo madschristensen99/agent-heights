@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentInfo, GameSettings, LogEntry, PlayerInfo, TaskCard } from "../shared/types.js";
+import type { AgentInfo, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState } from "../shared/types.js";
 
 export interface SaveState {
   player: PlayerInfo | null;
@@ -8,6 +8,7 @@ export interface SaveState {
   logs: Record<string, LogEntry[]>;
   settings?: GameSettings;
   board?: TaskCard[];
+  world?: WorldState;
 }
 
 /**
@@ -17,7 +18,7 @@ export interface SaveState {
  */
 export class SaveFile {
   readonly path: string;
-  private state: SaveState = { player: null, agents: [], logs: {}, board: [] };
+  private state: SaveState = { player: null, agents: [], logs: {}, board: [], world: { seed: 0, firedAgents: [] } };
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(rootDir: string) {
@@ -36,6 +37,7 @@ export class SaveFile {
         logs: parsed.logs ?? {},
         settings: parsed.settings,
         board: parsed.board ?? [],
+        world: parsed.world ?? { seed: 0, firedAgents: [] },
       };
       return this.state;
     } catch {
@@ -62,6 +64,15 @@ export class SaveFile {
   setBoard(board: TaskCard[]): void {
     this.state.board = board;
     this.schedule();
+  }
+
+  setWorld(world: WorldState): void {
+    this.state.world = world;
+    this.schedule();
+  }
+
+  getWorld(): WorldState {
+    return this.state.world ?? { seed: 0, firedAgents: [] };
   }
 
   private schedule(): void {

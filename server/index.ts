@@ -36,6 +36,7 @@ wss.on("connection", (ws) => {
       ...snap,
       player,
       settings: manager.settings,
+      world: manager.worldState(),
     } satisfies ServerMsg),
   );
 
@@ -101,6 +102,9 @@ wss.on("connection", (ws) => {
           break;
         case "delete_card":
           manager.deleteCard(msg.cardId);
+          break;
+        case "recruit":
+          manager.recruit(msg.firedAgentId);
           break;
       }
     } catch (err) {
