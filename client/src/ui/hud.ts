@@ -1,7 +1,7 @@
 import type { Net } from "../net";
 import type { FeedItem, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard } from "../../../shared/types";
-import { ACCENTS, CHAR_VARIANTS, CLAUDE_MODELS, CODEX_MODELS, OFFICE_THEMES } from "../../../shared/types";
+import { ACCENTS, CHAR_VARIANTS, CLAUDE_MODELS, CODEX_MODELS, OFFICE_THEMES, YUKI_ID } from "../../../shared/types";
 import { md } from "./md";
 
 const NAME_POOL = [
@@ -741,7 +741,11 @@ export class Hud {
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
       ${agent.role === "manager" ? "· 👔 MANAGER " : ""}· ${agent.provider} / ${esc(agent.model)}
-      · desk ${agent.deskIndex + 1} · ${agent.tasksDone} done`;
+      · ${agent.id === YUKI_ID ? "own office" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
+
+    // Yuki can't be fired
+    const fireBtn = document.getElementById("d-fire") as HTMLButtonElement | null;
+    if (fireBtn) fireBtn.hidden = agent.id === YUKI_ID;
 
     const handoffSel = document.getElementById("d-handoff") as HTMLSelectElement;
     const others = [...this.store.agents.values()].filter((a) => a.id !== agent.id);

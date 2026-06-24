@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { AgentInfo } from "../../../shared/types";
+import { YUKI_ID } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
 
 export const TILE_PX = 64;
@@ -403,7 +404,9 @@ export class YukiNPC {
   private label: Phaser.GameObjects.Text;
   private nameBg: Phaser.GameObjects.Graphics;
   private shadow: Phaser.GameObjects.Ellipse;
+  private dot: Phaser.GameObjects.Arc;
 
+  info!: AgentInfo;
   private seat: Tile;
   private path: Tile[] = [];
   private dir: Dir = "down";
@@ -411,7 +414,12 @@ export class YukiNPC {
   private greetUntil = 0;
   private wasPlayerInside = false;
 
-  constructor(scene: Phaser.Scene, private grid: Grid, seat: Tile) {
+  constructor(
+    scene: Phaser.Scene,
+    private grid: Grid,
+    seat: Tile,
+    onClick: (id: string) => void,
+  ) {
     this.seat = seat;
     const c = "char-yuki";
 
@@ -431,17 +439,28 @@ export class YukiNPC {
       .setOrigin(0.5, 1)
       .setScale(0.7);
     this.drawNameBg();
+    this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS.idle).setStrokeStyle(1, 0x000000, 0.3);
 
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
       this.sprite,
       this.nameBg,
       this.label,
+      this.dot,
     ]);
     this.container.setDepth(10 + this.container.y);
     // start sitting at desk, facing left toward the entrance
     this.dir = "left";
     this.play(`${c}-idle-left`);
+
+    this.sprite.setInteractive({ useHandCursor: true });
+    this.sprite.on("pointerdown", () => onClick(YUKI_ID));
+  }
+
+  /** Update status dot + label from server state. */
+  sync(info: AgentInfo): void {
+    this.info = info;
+    this.dot.setFillStyle(STATUS_COLORS[info.status]);
   }
 
   private drawNameBg(): void {

@@ -15,7 +15,7 @@ import type {
   TaskCard,
   WorldState,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runClaude } from "./providers/claude.js";
 import { runCodex } from "./providers/codex.js";
@@ -39,6 +39,7 @@ const TITLES = [
 ];
 
 const MANAGER_TITLE = "The Manager";
+const YUKI_TITLE = "Office Manager";
 
 /** Each job title carries a voice that gets baked into the system prompt. */
 const PERSONALITIES: Record<string, string> = {
@@ -64,6 +65,8 @@ const PERSONALITIES: Record<string, string> = {
     "You are wise and slightly weary, and you like reminding everyone there are only two hard problems.",
   [MANAGER_TITLE]:
     "You are an upbeat, organized middle manager. You speak in short encouraging memos and you love delegating.",
+  [YUKI_TITLE]:
+    "You are Yuki, the office manager. You are warm, organized, and always know what's going on. You greet everyone with a friendly welcome and keep the office running smoothly. You have a calm, caring demeanor and you're always happy to chat.",
 };
 
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -148,6 +151,8 @@ export class AgentManager {
     } else if (process.env.AGENT_PERMISSION_MODE === "acceptEdits") {
       this.settings.claude.permissionMode = "acceptEdits";
     }
+
+    this.ensureYuki();
   }
 
   setSettings(s: GameSettings, announce = true): void {
@@ -173,6 +178,32 @@ export class AgentManager {
       this.save.setSettings(this.settings);
       this.broadcast({ type: "settings", settings: this.settings });
     }
+  }
+
+  /** Ensure Yuki — the permanent office manager — always exists in the roster. */
+  private ensureYuki(): void {
+    if (this.agents.has(YUKI_ID)) return;
+    const info: AgentInfo = {
+      id: YUKI_ID,
+      name: "Yuki",
+      title: YUKI_TITLE,
+      provider: "claude",
+      model: "claude-sonnet-4-6",
+      status: "idle",
+      task: null,
+      deskIndex: -1,
+      sprite: 0,
+      accent: "#c44a4a",
+      systemPrompt: "",
+      role: "manager",
+      sessionId: null,
+      tasksDone: 0,
+    };
+    mkdirSync(this.cwdFor("yuki", YUKI_ID), { recursive: true });
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
+    this.agents.set(YUKI_ID, rt);
+    this.persist();
+    this.broadcast({ type: "agent", agent: info });
   }
 
   private persist(): void {
@@ -279,7 +310,9 @@ export class AgentManager {
     const clean = task.trim();
     if (!clean) return;
     const free = [...this.agents.values()].filter(
-      (rt) => rt.info.status !== "thinking" && rt.info.status !== "working",
+      (rt) =>
+        rt.info.id !== YUKI_ID &&
+        rt.info.status !== "thinking" && rt.info.status !== "working",
     );
     if (free.length === 0) {
       this.broadcast({ type: "toast", text: "Everyone is busy (or nobody works here yet)." });
@@ -360,6 +393,10 @@ export class AgentManager {
   }
 
   fire(agentId: string): void {
+    if (agentId === YUKI_ID) {
+      this.broadcast({ type: "toast", text: "You can't fire Yuki — she runs this office." });
+      return;
+    }
     const rt = this.agents.get(agentId);
     if (!rt) return;
     rt.abort?.abort();

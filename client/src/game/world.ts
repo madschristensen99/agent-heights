@@ -6,6 +6,11 @@ import type { Net } from "../net";
 import { TILE_PX, type Dir } from "./agent";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
+import { creatureKey, beastKey, beastDesignName } from "./textures";
+import { VFXManager } from "./effects";
+import { LightingSystem } from "./lighting";
+import { AudioSystem } from "./audio";
+import { HUDSystem } from "./hud";
 
 /**
  * World offset: the world tile grid starts at the bottom-left corner of the
@@ -107,13 +112,12 @@ const BEASTS: BeastDef[] = [
   },
 ];
 
-/** A legendary beast — rare, powerful, with a boss bar. */
+/** A legendary beast — rare, powerful, with a boss bar. Sprite-based. */
 class LegendaryBeast {
   container: Phaser.GameObjects.Container;
-  private body: Phaser.GameObjects.Arc;
-  private eyeL: Phaser.GameObjects.Arc;
-  private eyeR: Phaser.GameObjects.Arc;
-  private crown: Phaser.GameObjects.Triangle;
+  private sprite: Phaser.GameObjects.Sprite;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private aura: Phaser.GameObjects.Image;
   private hpBar: Phaser.GameObjects.Graphics;
   private hp: number;
   private maxHp: number;
@@ -125,6 +129,9 @@ class LegendaryBeast {
   private alive = true;
   private world: WorldLayer;
   name: string;
+  private animKey: string;
+  private moveTimer = 0;
+  private scale: number;
 
   constructor(world: WorldLayer, def: BeastDef, x: number, y: number) {
     this.world = world;
@@ -137,17 +144,31 @@ class LegendaryBeast {
     this.attackCdMax = def.attackCd;
     const scene = world.scene;
 
-    this.body = scene.add.circle(0, 0, def.radius, def.color, 1)
-      .setStrokeStyle(3, 0x000000, 0.6);
-    this.eyeL = scene.add.circle(-def.radius * 0.35, -def.radius * 0.25, 5, def.eyeColor, 1);
-    this.eyeR = scene.add.circle(def.radius * 0.35, -def.radius * 0.25, 5, def.eyeColor, 1);
-    // crown above head
-    this.crown = scene.add.triangle(0, -def.radius - 8, -8, 6, 0, -6, 8, 6, 0xffdd44, 1)
-      .setStrokeStyle(1, 0x886600, 1);
+    const designName = beastDesignName(def.name);
+    this.animKey = beastKey(designName);
+    this.scale = 1.5 + (def.radius - 28) / 20;
+
+    // shadow
+    this.shadow = scene.add.ellipse(0, 0, def.radius * 3, def.radius * 1.2, 0x000000, 0.4);
+
+    // aura — large colored glow
+    this.aura = scene.add
+      .image(0, 0, "soft-glow")
+      .setDisplaySize(def.radius * 6, def.radius * 6)
+      .setTint(def.eyeColor)
+      .setAlpha(0.2)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(24);
+
+    // sprite
+    this.sprite = scene.add
+      .sprite(0, 0, this.animKey, 0)
+      .setOrigin(0.5, 0.75)
+      .setScale(this.scale);
+
     this.hpBar = scene.add.graphics().setDepth(30);
 
-    this.container = scene.add.container(x, y, [this.body, this.eyeL, this.eyeR, this.crown])
-      .setDepth(25 + y);
+    this.container = scene.add.container(x, y, [this.aura, this.shadow, this.sprite]).setDepth(25 + y);
   }
 
   get alive_(): boolean { return this.alive; }
@@ -158,6 +179,7 @@ class LegendaryBeast {
     const dy = playerY - this.container.y;
     const dist = Math.hypot(dx, dy);
 
+    let moving = false;
     if (dist < this.aggroRange && dist > 40) {
       const step = this.speed * (dt / 1000);
       const nx = this.container.x + (dx / dist) * step;
@@ -166,12 +188,32 @@ class LegendaryBeast {
       if (this.world.isTileWalkable(tx, ty)) {
         this.container.setPosition(nx, ny);
         this.container.setDepth(25 + ny);
+        moving = true;
+        this.sprite.setFlipX(dx < 0);
       }
     }
+
+    // animate
+    if (moving) {
+      this.moveTimer += dt;
+      const frame = Math.floor(this.moveTimer / 250) % 2 + 1; // frames 1,2
+      this.sprite.setFrame(frame);
+    } else {
+      this.sprite.setFrame(0);
+    }
+
+    // pulse aura
+    const pulse = 0.15 + Math.sin(this.moveTimer * 0.005) * 0.05;
+    this.aura.setAlpha(pulse);
 
     this.attackCd -= dt;
     if (dist < 50 && this.attackCd <= 0) {
       this.attackCd = this.attackCdMax;
+      // attack frame
+      this.sprite.setFrame(3);
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff4444, 12, 100);
+      this.world.vfx?.shake("medium");
+      this.world.audio?.beastRoar();
       return { hit: true, damage: this.damage };
     }
 
@@ -183,31 +225,42 @@ class LegendaryBeast {
   private drawHpBar(): void {
     const g = this.hpBar;
     g.clear();
-    const w = 60;
-    const h = 6;
+    const w = 80;
+    const h = 8;
     const x = this.container.x - w / 2;
-    const y = this.container.y - this.body.radius - 20;
+    const y = this.container.y - this.sprite.displayHeight * 0.7 - 20;
     const pct = Math.max(0, this.hp / this.maxHp);
-    g.fillStyle(0x000000, 0.7);
-    g.fillRect(x - 2, y - 2, w + 4, h + 4);
+
+    // frame
+    g.fillStyle(0x000000, 0.8);
+    g.fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 4);
     g.fillStyle(0x330000, 1);
-    g.fillRect(x, y, w, h);
+    g.fillRoundedRect(x, y, w, h, 3);
+
+    // fill — gradient red
     g.fillStyle(0xff3333, 1);
-    g.fillRect(x, y, w * pct, h);
+    g.fillRoundedRect(x, y, w * pct, h, 3);
+    g.fillStyle(0xff6666, 0.4);
+    g.fillRoundedRect(x, y, w * pct, 3, 3);
+
+    // name text
+    g.fillStyle(0xffffff, 0.9);
+    // simple text positioning via the fillStyle — actual text handled by the banner
   }
 
   takeDamage(amount: number): void {
     this.hp -= amount;
-    this.body.setFillStyle(0xffffff, 1);
-    this.world.scene.time.delayedCall(80, () => {
-      if (this.alive) this.body.setFillStyle(0x2a0a0a, 1);
-    });
+    this.world.vfx?.hitFlash(this.sprite);
+    this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff4444, 10, 90);
+    this.world.vfx?.damageNumber(this.container.x, this.container.y - 30, amount);
     if (this.hp <= 0) {
       this.alive = false;
       this.hpBar.clear();
-      this.world.particleBurst(this.container.x, this.container.y, 0xffdd44, 24, 120);
-      this.world.particleBurst(this.container.x, this.container.y, 0xff4444, 16, 80);
-      this.world.scene.cameras.main.shake(400, 0.015);
+      this.world.vfx?.deathDissolve(this.container.x, this.container.y, 0xffdd44, 2);
+      this.world.vfx?.shockwave(this.container.x, this.container.y, 0xffdd44, 5);
+      this.world.vfx?.shake("large");
+      this.world.vfx?.hitStop(120);
+      this.world.audio?.death();
       this.container.destroy();
     }
   }
@@ -219,12 +272,11 @@ class LegendaryBeast {
   }
 }
 
-/** A hostile creature that chases the player. */
+/** A hostile creature that chases the player — sprite-based with animations. */
 class Creature {
   container: Phaser.GameObjects.Container;
-  private sprite: Phaser.GameObjects.Arc;
-  private eyeL: Phaser.GameObjects.Arc;
-  private eyeR: Phaser.GameObjects.Arc;
+  private sprite: Phaser.GameObjects.Sprite;
+  private shadow: Phaser.GameObjects.Ellipse;
   private hp: number;
   maxHp: number;
   private speed: number;
@@ -232,6 +284,9 @@ class Creature {
   private attackCd = 0;
   private alive = true;
   private world: WorldLayer;
+  private animKey: string;
+  private lightGlow: Phaser.GameObjects.Image;
+  private walkTimer = 0;
 
   constructor(world: WorldLayer, x: number, y: number, hostility: number) {
     this.world = world;
@@ -241,13 +296,26 @@ class Creature {
     this.damage = 10 + hostility * 6;
     const scene = world.scene;
     const radius = 14 + hostility * 2;
-    const colors = [0x4a6a3a, 0x6a4a3a, 0x8a3a3a, 0x6a2a2a, 0x4a1a4a, 0x2a0a0a];
-    const color = colors[Math.min(hostility, 5)];
 
-    this.sprite = scene.add.circle(0, 0, radius, color, 1).setStrokeStyle(2, 0x000000, 0.4);
-    this.eyeL = scene.add.circle(-radius * 0.3, -radius * 0.2, 3, 0xff3333, 1);
-    this.eyeR = scene.add.circle(radius * 0.3, -radius * 0.2, 3, 0xff3333, 1);
-    this.container = scene.add.container(x, y, [this.sprite, this.eyeL, this.eyeR]).setDepth(20 + y);
+    this.animKey = creatureKey(hostility);
+
+    // shadow
+    this.shadow = scene.add.ellipse(0, 0, radius * 2.5, radius * 0.8, 0x000000, 0.35);
+
+    // sprite
+    this.sprite = scene.add.sprite(0, 0, this.animKey, 0).setOrigin(0.5, 0.7).setScale(1.2);
+
+    // glow aura for hostile creatures
+    const glowColor = hostility >= 4 ? 0xaa00ff : hostility >= 2 ? 0xff4400 : 0xff3333;
+    this.lightGlow = scene.add
+      .image(0, 0, "soft-glow")
+      .setDisplaySize(radius * 4, radius * 4)
+      .setTint(glowColor)
+      .setAlpha(0.15)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(19);
+
+    this.container = scene.add.container(x, y, [this.lightGlow, this.shadow, this.sprite]).setDepth(20 + y);
   }
 
   get alive_(): boolean { return this.alive; }
@@ -260,6 +328,7 @@ class Creature {
 
     // chase player if within aggro range
     const aggroRange = 300;
+    let moving = false;
     if (dist < aggroRange && dist > 30) {
       const step = this.speed * (dt / 1000);
       const nx = this.container.x + (dx / dist) * step;
@@ -269,13 +338,29 @@ class Creature {
       if (this.world.isTileWalkable(tx, ty)) {
         this.container.setPosition(nx, ny);
         this.container.setDepth(20 + ny);
+        moving = true;
+        // face direction
+        this.sprite.setFlipX(dx < 0);
       }
+    }
+
+    // animation: walk vs idle
+    if (moving) {
+      this.walkTimer += dt;
+      const frame = Math.floor(this.walkTimer / 200) % 2 + 1; // frames 1,2
+      this.sprite.setFrame(frame);
+    } else {
+      this.sprite.setFrame(0);
     }
 
     // attack cooldown
     this.attackCd -= dt;
     if (dist < 40 && this.attackCd <= 0) {
       this.attackCd = 1000;
+      // attack animation — frame 3
+      this.sprite.setFrame(3);
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff3333, 6, 60);
+      this.world.audio?.creatureGrowl();
       return { hit: true, damage: this.damage };
     }
     return null;
@@ -283,13 +368,12 @@ class Creature {
 
   takeDamage(amount: number): void {
     this.hp -= amount;
-    this.sprite.setFillStyle(0xffffff, 1);
-    this.world.scene.time.delayedCall(80, () => {
-      if (this.alive) this.sprite.setFillStyle(0x6a4a3a, 1);
-    });
+    this.world.vfx?.hitFlash(this.sprite);
+    this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff4444, 8, 80);
     if (this.hp <= 0) {
       this.alive = false;
-      this.world.particleBurst(this.container.x, this.container.y, 0x8a3a3a, 12, 80);
+      this.world.vfx?.deathDissolve(this.container.x, this.container.y, 0x8a3a3a, 1);
+      this.world.audio?.death();
       this.container.destroy();
     }
   }
@@ -300,9 +384,10 @@ class Creature {
   }
 }
 
-/** A flying stone projectile. */
+/** A flying stone projectile — sprite-based with rotation. */
 class Stone {
-  sprite: Phaser.GameObjects.Arc;
+  sprite: Phaser.GameObjects.Sprite;
+  private trail: Phaser.GameObjects.Image;
   private vx: number;
   private vy: number;
   private life: number;
@@ -315,7 +400,14 @@ class Stone {
     this.vy = vy;
     this.life = 3000; // 3 seconds
     this.damage = damage;
-    this.sprite = world.scene.add.circle(x, y, 8, 0x888890, 1).setStrokeStyle(2, 0x444450, 1).setDepth(50);
+    this.trail = world.scene.add
+      .image(x, y, "soft-glow")
+      .setDisplaySize(20, 20)
+      .setTint(0x888890)
+      .setAlpha(0.3)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(49);
+    this.sprite = world.scene.add.sprite(x, y, "stone-proj", 0).setDepth(50).setScale(0.8);
   }
 
   get alive_(): boolean { return this.alive; }
@@ -329,9 +421,15 @@ class Stone {
     }
     this.sprite.x += this.vx * (dt / 1000);
     this.sprite.y += this.vy * (dt / 1000);
+    // rotate based on velocity
+    this.sprite.rotation = Math.atan2(this.vy, this.vx);
+    // trail follows
+    this.trail.setPosition(this.sprite.x, this.sprite.y);
+
     const dist = Math.hypot(this.sprite.x - playerX, this.sprite.y - playerY);
     if (dist < 30) {
-      this.world.particleBurst(this.sprite.x, this.sprite.y, 0xaaaaaa, 8, 60);
+      this.world.vfx?.sparkBurst(this.sprite.x, this.sprite.y, 0xaaaaaa, 8, 60);
+      this.world.audio?.stoneImpact();
       this.destroy();
       return { hit: true, damage: this.damage };
     }
@@ -341,6 +439,7 @@ class Stone {
   destroy(): void {
     this.alive = false;
     this.sprite.destroy();
+    this.trail.destroy();
   }
 }
 
@@ -457,14 +556,17 @@ export class WorldLayer {
   private officeW: number;
   private officeH: number;
 
+  vfx: VFXManager;
+  audio: AudioSystem;
+  lighting: LightingSystem;
+  hud: HUDSystem;
+
   private chunks = new Map<string, Chunk>();
   private chunkGraphics = new Map<string, Phaser.GameObjects.Container>();
   private ghosts = new Map<string, GhostNPC>();
 
-  private compass!: Phaser.GameObjects.Text;
   private ghostDialog!: Phaser.GameObjects.Text;
   private recruitedHint!: Phaser.GameObjects.Text;
-  private healthBar!: Phaser.GameObjects.Graphics;
   private damageFlash!: Phaser.GameObjects.Rectangle;
   private creatures: Creature[] = [];
   private beasts: LegendaryBeast[] = [];
@@ -475,7 +577,6 @@ export class WorldLayer {
   private lastBeastTime = 0;
   private officeGrid: Grid | null = null;
   private invulnUntil = 0;
-  private beastBanner!: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, store: Store, net: Net, officeW: number, officeH: number) {
     this.scene = scene;
@@ -486,21 +587,11 @@ export class WorldLayer {
     // world tiles start just below the office
     this.offset = { x: 0, y: officeH };
 
-    // compass — fixed to screen
-    this.compass = scene.add
-      .text(16, 16, "", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#aaaacc",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0, 0)
-      .setScale(0.8)
-      .setDepth(950)
-      .setScrollFactor(0)
-      .setVisible(false);
+    // Initialize visual upgrade systems
+    this.vfx = new VFXManager(scene);
+    this.audio = new AudioSystem();
+    this.lighting = new LightingSystem(scene);
+    this.hud = new HUDSystem(scene);
 
     this.ghostDialog = scene.add
       .text(0, 0, "", {
@@ -532,38 +623,29 @@ export class WorldLayer {
       .setDepth(950)
       .setVisible(false);
 
-    // health bar — fixed to screen top-right, above lighting overlays
-    this.healthBar = scene.add.graphics().setDepth(950).setScrollFactor(0).setVisible(false);
-
-    // beast banner — shows legendary beast name when one is near
-    this.beastBanner = scene.add
-      .text(scene.scale.width / 2, 60, "", {
-        fontFamily: "monospace",
-        fontSize: "20px",
-        color: "#ffcc44",
-        stroke: "#1a0a00",
-        strokeThickness: 4,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 0)
-      .setScale(0.8)
-      .setDepth(950)
-      .setScrollFactor(0)
-      .setVisible(false);
-
     // damage flash overlay — red tint on hit
     this.damageFlash = scene.add
       .rectangle(0, 0, scene.scale.width, scene.scale.height, 0xff0000, 0)
       .setOrigin(0, 0)
       .setDepth(950)
       .setScrollFactor(0);
-
-    this.drawHealthBar();
   }
 
   /** Whether the player is outside the office map bounds (in the world). */
   isOutside(playerX: number, playerY: number): boolean {
     return playerY >= this.officeH || playerX < 0 || playerX > this.officeW;
+  }
+
+  /** Gradual darkness factor (0 = inside office, 1 = full darkness).
+   *  Ramps up over ~25 tiles from the office edge so night fades in smoothly.
+   *  Uses rectangular distance so the factor starts as soon as the player
+   *  crosses any boundary (not a circular approximation). */
+  distanceFactor(playerX: number, playerY: number): number {
+    const dx = playerX < 0 ? -playerX : playerX > this.officeW ? playerX - this.officeW : 0;
+    const dy = playerY < 0 ? -playerY : playerY > this.officeH ? playerY - this.officeH : 0;
+    const distOutside = Math.hypot(dx, dy);
+    const rampPx = 250 * TILE_PX;
+    return Math.min(1, distOutside / rampPx);
   }
 
   /** Convert world pixels to world tile coordinates. */
@@ -611,6 +693,12 @@ export class WorldLayer {
   /** Set the office walkability grid so world collision can check office tiles. */
   setOfficeGrid(grid: Grid): void {
     this.officeGrid = grid;
+  }
+
+  /** Instantly restore player HP to full (fridge snack break). */
+  healFull(): void {
+    this.hp = MAX_HP;
+    this.hud.setHealth(this.hp, MAX_HP);
   }
 
   /** Get speed multiplier at a pixel position (1 = normal, <1 = slow). */
@@ -705,6 +793,15 @@ export class WorldLayer {
           sprite.play({ key: "water-anim", repeat: -1 }, true);
         }
 
+        // Add tile-based light sources for special tiles
+        if (tile === TILE.LAVA) {
+          this.lighting.addLight(px + TILE_PX / 2, py + TILE_PX / 2, 80, 0xff6600, 0.4, 0.1, 0.005);
+        } else if (tile === TILE.CRYSTAL) {
+          this.lighting.addLight(px + TILE_PX / 2, py + TILE_PX / 2, 60, 0x44aaff, 0.3, 0.05, 0.003);
+        } else if (tile === TILE.VOID) {
+          this.lighting.addLight(px + TILE_PX / 2, py + TILE_PX / 2, 70, 0xaa00ff, 0.25, 0.08, 0.004);
+        }
+
         container.add(sprite);
       }
     }
@@ -733,21 +830,7 @@ export class WorldLayer {
 
   /** Spawn a brief particle burst at a world position. */
   particleBurst(x: number, y: number, color: number, count: number, speed: number): void {
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
-      const vx = Math.cos(angle) * speed;
-      const vy = Math.sin(angle) * speed;
-      const p = this.scene.add.circle(x, y, 2 + Math.random() * 2, color, 0.9).setDepth(40);
-      this.scene.tweens.add({
-        targets: p,
-        x: x + vx,
-        y: y + vy,
-        alpha: 0,
-        scale: 0.2,
-        duration: 400 + Math.random() * 200,
-        onComplete: () => p.destroy(),
-      });
-    }
+    this.vfx.sparkBurst(x, y, color, count, speed);
   }
 
   private tryRecruit(firedAgentId: string): void {
@@ -763,7 +846,8 @@ export class WorldLayer {
     if (dist > 140) return;
 
     this.net.send({ type: "recruit", firedAgentId });
-    this.particleBurst(ghost.container.x, ghost.container.y, 0x4cb866, 16, 70);
+    this.vfx.recruitBeam(ghost.container.x, ghost.container.y);
+    this.audio.recruit();
     this.showRecruitedHint(ghost.info.name, cx, cy);
   }
 
@@ -781,20 +865,28 @@ export class WorldLayer {
 
     // show compass + health bar when outside
     if (outside) {
-      this.compass.setVisible(true);
       const doorX = this.officeW / 2;
       const doorY = this.officeH;
       const dx = doorX - playerX;
       const dy = doorY - playerY;
       const distTiles = Math.round(Math.hypot(dx, dy) / TILE_PX);
-      const arrow = this.compassArrow(dx, dy);
       const { tx, ty } = this.pixelToTile(playerX, playerY);
       const cx = Math.floor(tx / CHUNK_SIZE);
       const cy = Math.floor(ty / CHUNK_SIZE);
       const hostility = hostilityAt(cx, cy);
-      const biomeName = ["MEADOW", "FOREST", "RUINS", "WASTELAND", "VOID", "INFERNAL"][hostility];
-      this.compass.setText(`${arrow} OFFICE: ${distTiles}  |  ${biomeName}\nQ: TELEPORT HOME`);
-      this.healthBar.setVisible(true);
+      const biomeName = ["meadow", "forest", "ruins", "wasteland", "void", "infernal"][hostility];
+      const biomeDisplay = biomeName.toUpperCase();
+
+      // HUD compass
+      this.hud.updateCompass(true, dx, dy, distTiles, biomeDisplay);
+      this.hud.setHealth(this.hp, MAX_HP);
+      this.hud.showHealthBar();
+
+      // Audio: play biome music
+      this.audio.playMusic(biomeName);
+
+      // Ambient particles for biome
+      this.vfx.startAmbient(biomeName as any);
 
       // --- spawn creatures based on hostility ---
       if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 800 + Math.random() * 1500) {
@@ -851,14 +943,19 @@ export class WorldLayer {
           const { tx, ty } = this.pixelToTile(sx, sy);
           if (this.isTileWalkable(tx, ty)) {
             this.beasts.push(new LegendaryBeast(this, chosen, sx, sy));
-            this.beastBanner.setText(`⚠ ${chosen.name} APPROACHES ⚠`).setVisible(true);
-            this.scene.time.delayedCall(4000, () => this.beastBanner.setVisible(false));
+            this.hud.showBeastBanner(chosen.name, Math.round(dist / TILE_PX));
+            this.audio.beastRoar();
+            this.vfx.shockwave(sx, sy, 0xff4444, 3);
+            this.scene.time.delayedCall(4000, () => this.hud.hideBeastBanner());
           }
         }
       }
     } else {
-      this.compass.setVisible(false);
-      this.healthBar.setVisible(false);
+      this.hud.updateCompass(false, 0, 0, 0, "");
+      this.hud.hideHealthBar();
+      this.hud.hideBeastBanner();
+      this.vfx.stopAmbient();
+      this.audio.stopMusic();
       // clear creatures and beasts when back in office
       for (const c of this.creatures) c.destroy();
       this.creatures = [];
@@ -866,11 +963,9 @@ export class WorldLayer {
       this.beasts = [];
       for (const s of this.stones) s.destroy();
       this.stones = [];
-      this.beastBanner.setVisible(false);
       // heal in office
       if (this.hp < MAX_HP) {
         this.hp = Math.min(MAX_HP, this.hp + 20 * (dt / 1000));
-        this.drawHealthBar();
       }
     }
 
@@ -909,9 +1004,9 @@ export class WorldLayer {
 
     // show beast banner when one is near
     if (nearestBeast && nearestBeastDist < 600) {
-      this.beastBanner.setText(`⚠ ${nearestBeast.name} — ${Math.round(nearestBeastDist / TILE_PX)} tiles`).setVisible(true);
+      this.hud.showBeastBanner(nearestBeast.name, Math.round(nearestBeastDist / TILE_PX));
     } else if (this.beasts.length === 0) {
-      this.beastBanner.setVisible(false);
+      this.hud.hideBeastBanner();
     }
 
     // --- update stones ---
@@ -931,16 +1026,43 @@ export class WorldLayer {
       if (dmg > 0 && (dmg === Infinity || time > this.invulnUntil)) {
         const isVoid = dmg === Infinity;
         this.takeDamage(isVoid ? MAX_HP : dmg, playerX, playerY, time);
-        // void implosion — purple particles sucked inward
         if (isVoid) {
-          this.particleBurst(playerX, playerY, 0xaa44ff, 20, 100);
-          this.particleBurst(playerX, playerY, 0x000000, 12, 60);
-          this.scene.cameras.main.shake(500, 0.02);
+          this.vfx.sparkBurst(playerX, playerY, 0xaa44ff, 20, 100);
+          this.vfx.sparkBurst(playerX, playerY, 0x000000, 12, 60);
+          this.vfx.shake("large");
+          this.audio.voidDeath();
         } else if (tile === TILE.LAVA) {
-          // lava burn — orange sparks
-          this.particleBurst(playerX, playerY, 0xff6020, 8, 50);
+          this.vfx.sparkBurst(playerX, playerY, 0xff6020, 8, 50);
+          this.audio.hit();
         }
       }
+    }
+
+    // --- update lighting ---
+    const distFactor = this.distanceFactor(playerX, playerY);
+    this.lighting.update(time, playerX, playerY, distFactor);
+
+    // Update CRT pipeline night factor — gradual like the overlays
+    const renderer = this.scene.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    const crtPipeline = renderer?.pipelines.get("CRTWarmth") as unknown as { setNightFactor?: (f: number) => void } | undefined;
+    const delayedDarkness = Math.max(0, (distFactor - 0.1) / 0.9);
+    const nightFactor = this.lighting.getNightFactor(time);
+    crtPipeline?.setNightFactor?.(nightFactor * delayedDarkness);
+
+    // --- update minimap when outside ---
+    if (outside) {
+      const entities = this.creatures.map((c) => ({
+        x: c.container.x, y: c.container.y, color: 0xff4444, size: 2,
+      }));
+      this.beasts.forEach((b) => entities.push({
+        x: b.container.x, y: b.container.y, color: 0xffdd44, size: 4,
+      }));
+      this.ghosts.forEach((g) => entities.push({
+        x: g.container.x, y: g.container.y, color: 0x4cb866, size: 3,
+      }));
+      this.hud.updateMinimap(true, playerX, playerY, entities, this.officeW / 2, this.officeH);
+    } else {
+      this.hud.updateMinimap(false, 0, 0, [], 0, 0);
     }
 
     // find nearest ghost for dialogue
@@ -979,20 +1101,18 @@ export class WorldLayer {
       fillAlpha: 0,
       duration: 300,
     });
-    // screen shake
-    this.scene.cameras.main.shake(200, 0.008);
-    this.drawHealthBar();
+    this.vfx.shake("small");
+    this.vfx.damageNumber(playerX, playerY - 40, amount);
+    this.audio.hit();
+    this.hud.setHealth(this.hp, MAX_HP);
 
     if (this.hp <= 0) {
-      // knocked out — teleport back to office with partial health
       this.hp = MAX_HP * 0.5;
-      this.drawHealthBar();
-      // clear all threats
+      this.hud.setHealth(this.hp, MAX_HP);
       for (const c of this.creatures) c.destroy();
       this.creatures = [];
       for (const s of this.stones) s.destroy();
       this.stones = [];
-      // teleport via the scene registry
       const scene = this.scene as Phaser.Scene;
       const spawn = scene.registry.get("spawnTile") as { x: number; y: number } | undefined;
       if (spawn) {
@@ -1001,43 +1121,6 @@ export class WorldLayer {
         scene.registry.set("teleportTo", { x: px, y: py });
       }
     }
-  }
-
-  /** Draw the health bar in the top-right corner. */
-  private drawHealthBar(): void {
-    const g = this.healthBar;
-    g.clear();
-    const w = 120;
-    const h = 16;
-    const x = this.scene.scale.width - w - 16;
-    const y = 16;
-    const pct = Math.max(0, this.hp / MAX_HP);
-
-    // outer frame
-    g.fillStyle(0x000000, 0.7);
-    g.fillRoundedRect(x - 4, y - 4, w + 8, h + 8, 5);
-    g.lineStyle(1, 0xffffff, 0.12);
-    g.strokeRoundedRect(x - 4, y - 4, w + 8, h + 8, 5);
-    // background
-    g.fillStyle(0x2a2a2a, 1);
-    g.fillRoundedRect(x, y, w, h, 3);
-
-    // fill — color shifts from green to red
-    const r = Math.floor(255 * (1 - pct));
-    const gr = Math.floor(200 * pct);
-    g.fillStyle((r << 16) | (gr << 8), 1);
-    g.fillRoundedRect(x, y, w * pct, h, 3);
-    // top highlight on fill
-    g.fillStyle(0xffffff, 0.15);
-    g.fillRoundedRect(x, y, w * pct, 4, 3);
-  }
-
-  private compassArrow(dx: number, dy: number): string {
-    if (Math.abs(dx) < 32 && Math.abs(dy) < 32) return "*";
-    const angle = Math.atan2(dy, dx);
-    const dirs = ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"];
-    const i = Math.round(((angle + Math.PI) / (Math.PI * 2)) * 8) % 8;
-    return dirs[i];
   }
 
   private ghostLine(fa: FiredAgent): string {
@@ -1080,5 +1163,9 @@ export class WorldLayer {
     this.chunks.clear();
     this.chunkGraphics.clear();
     this.ghosts.clear();
+    this.vfx.destroy();
+    this.lighting.destroy();
+    this.hud.destroy();
+    this.audio.destroy();
   }
 }

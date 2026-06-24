@@ -204,3 +204,6 @@ export const CODEX_MODELS = [
 ] as const;
 
 export const SERVER_PORT = 3001;
+
+/** Fixed agent id for Yuki, the office manager NPC. */
+export const YUKI_ID = "yuki";
