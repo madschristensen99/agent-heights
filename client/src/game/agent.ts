@@ -27,7 +27,7 @@ const WALK_SPEED = 220;
 /** Where agents celebrate a finished task: coffee machine, cooler, sofa. */
 const BREAK_SPOTS: Array<{ tile: Tile; face: Dir }> = [
   { tile: { x: 23, y: 3 }, face: "up" }, // coffee machine
-  { tile: { x: 28, y: 5 }, face: "up" }, // water cooler
+  { tile: { x: 28, y: 5 }, face: "up" }, // water cooler  Dogfood the product by building the product
   { tile: { x: 23, y: 14 }, face: "up" }, // sofa, left cushion
   { tile: { x: 24, y: 14 }, face: "up" }, // sofa, right cushion
 ];
@@ -53,7 +53,8 @@ export class AgentNPC {
   container: Phaser.GameObjects.Container;
   sprite: Phaser.GameObjects.Sprite;
   private label: Phaser.GameObjects.Text;
-  private dot: Phaser.GameObjects.Rectangle;
+  private nameBg: Phaser.GameObjects.Graphics;
+  private dot: Phaser.GameObjects.Arc;
   private bubble: Phaser.GameObjects.Sprite;
   private shadow: Phaser.GameObjects.Ellipse;
 
@@ -87,6 +88,7 @@ export class AgentNPC {
     this.shadow = scene.add.ellipse(0, 0, 44, 16, 0x000000, 0.22);
     this.sprite = scene.add.sprite(0, 0, `char-${info.sprite}`, 0)
       .setOrigin(0.5, 1);
+    this.nameBg = scene.add.graphics();
     this.label = scene.add
       .text(0, -108, info.name, {
         fontFamily: "monospace",
@@ -98,12 +100,14 @@ export class AgentNPC {
       .setResolution(4)
       .setOrigin(0.5, 1)
       .setScale(0.7);
-    this.dot = scene.add.rectangle(0, 0, 10, 10, STATUS_COLORS[info.status]);
+    this.drawNameBg();
+    this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS[info.status]).setStrokeStyle(1, 0x000000, 0.3);
     this.bubble = scene.add.sprite(32, -104, "bubble", 0).setVisible(false);
 
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
       this.sprite,
+      this.nameBg,
       this.label,
       this.dot,
       this.bubble,
@@ -121,7 +125,22 @@ export class AgentNPC {
   }
 
   private positionDot(): void {
-    this.dot.setPosition(0 - this.label.displayWidth / 2 - 12, -120);
+    this.dot.setPosition(0 - this.label.displayWidth / 2 - 10, -120);
+  }
+
+  /** Draw a rounded background behind the nameplate label. */
+  private drawNameBg(): void {
+    const g = this.nameBg;
+    g.clear();
+    const w = this.label.displayWidth + 16;
+    const h = 18;
+    const x = -w / 2;
+    const y = -122;
+    const r = 4;
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(x, y, w, h, r);
+    g.lineStyle(1, 0xffffff, 0.15);
+    g.strokeRoundedRect(x, y, w, h, r);
   }
 
   private get busy(): boolean {
@@ -136,6 +155,7 @@ export class AgentNPC {
     if (this.label.text !== info.name) {
       this.label.setText(info.name);
       this.positionDot();
+      this.drawNameBg();
     }
     if (this.busy && !wasBusy) {
       // a new task trumps the coffee run

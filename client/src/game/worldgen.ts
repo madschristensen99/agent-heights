@@ -33,15 +33,15 @@ function chunkSeed(worldSeed: number, cx: number, cy: number): number {
  */
 export type Biome = "meadow" | "forest" | "ruins" | "wasteland" | "void" | "infernal";
 
-/** Hostility level 0–5, scales with distance from origin. */
+/** Hostility level 0–5+, scales with distance from origin. Never hits a wall — always playable. */
 export function hostilityAt(cx: number, cy: number): number {
   const dist = Math.hypot(cx, cy);
   if (dist < 2) return 0; // meadow — safe zone near office
   if (dist < 4) return 1; // forest
   if (dist < 7) return 2; // ruins
   if (dist < 11) return 3; // wasteland
-  if (dist < 16) return 4; // void
-  return 5; // infernal
+  if (dist < 18) return 4; // void
+  return 5; // infernal — keeps scaling difficulty but always passable
 }
 
 export function biomeAt(_worldSeed: number, cx: number, cy: number): Biome {
@@ -79,9 +79,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
       const i = idx(x, y);
       const r = rng();
 
-      // obstacle density increases with hostility
-      const obstacleChance = 0.02 + hostility * 0.05;
-      const hostileChance = hostility >= 2 ? (hostility - 1) * 0.05 : 0;
+      // obstacle density increases with hostility but capped so terrain is always passable
+      const obstacleChance = Math.min(0.25, 0.02 + hostility * 0.04);
+      const hostileChance = hostility >= 2 ? Math.min(0.30, (hostility - 1) * 0.06) : 0;
 
       if (r < obstacleChance) {
         tiles[i] = pickObstacle(biome, rng);
@@ -139,8 +139,8 @@ function baseGround(biome: Biome): number {
     case "forest": return TILE.GRASS;
     case "ruins": return TILE.PATH;
     case "wasteland": return TILE.SAND;
-    case "void": return TILE.VOID;
-    case "infernal": return TILE.LAVA;
+    case "void": return TILE.GRASS; // walkable ground, void tiles are scattered hazards
+    case "infernal": return TILE.SAND; // walkable ground, lava is scattered
   }
 }
 
@@ -164,9 +164,9 @@ function pickObstacle(biome: Biome, rng: () => number): number {
 function pickHostile(biome: Biome, rng: () => number): number {
   switch (biome) {
     case "void":
-      return TILE.VOID;
+      return rng() < 0.7 ? TILE.VOID : TILE.LAVA;
     case "infernal":
-      return TILE.LAVA;
+      return rng() < 0.7 ? TILE.LAVA : TILE.VOID;
     case "wasteland":
       return rng() < 0.4 ? TILE.VOID : TILE.LAVA;
     case "ruins":
@@ -200,30 +200,19 @@ function decorationChance(biome: Biome): number {
   }
 }
 
-/** Place a water cluster — minimum 6 tiles grouped together. */
+/** Place a water cluster — large organic body, 20-100 tiles. */
 function placeWaterCluster(tiles: number[], rng: () => number): void {
-  const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
-  const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
-  const r = 2 + Math.floor(rng() * 2); // radius 2-3 → 12-28 tiles
-  let count = 0;
-  for (let y = cy - r; y <= cy + r; y++) {
-    for (let x = cx - r; x <= cx + r; x++) {
-      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
-        const d = Math.hypot(x - cx, y - cy);
-        if (d <= r + rng() * 0.5) {
-          tiles[idx(x, y)] = TILE.WATER;
-          count++;
-        }
-      }
-    }
-  }
-  // ensure minimum 6 tiles
-  if (count < 6) {
-    for (let y = cy - 1; y <= cy + 1; y++) {
-      for (let x = cx - 1; x <= cx + 1; x++) {
-        if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
-          tiles[idx(x, y)] = TILE.WATER;
-        }
+  const cx = 6 + Math.floor(rng() * (CHUNK_SIZE - 12));
+  const cy = 6 + Math.floor(rng() * (CHUNK_SIZE - 12));
+  const r = 3 + Math.floor(rng() * 4); // radius 3-6
+  for (let y = cy - r - 1; y <= cy + r + 1; y++) {
+    for (let x = cx - r - 1; x <= cx + r + 1; x++) {
+      if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE) continue;
+      const d = Math.hypot(x - cx, y - cy);
+      // organic irregular edge — noise-based threshold
+      const edgeNoise = (Math.sin(x * 2.3) + Math.cos(y * 1.7) + rng() * 1.5) * 0.8;
+      if (d <= r + edgeNoise) {
+        tiles[idx(x, y)] = TILE.WATER;
       }
     }
   }
@@ -382,6 +371,7 @@ export function isWalkable(tile: number): boolean {
     case TILE.SAND:
     case TILE.SNOW:
     case TILE.LAVA:
+    case TILE.VOID:
     case TILE.FAIRWAY:
     case TILE.SAND_TRAP:
     case TILE.POND:
@@ -410,9 +400,9 @@ export function tileSpeed(tile: number): number {
 export function tileDamage(tile: number): number {
   switch (tile) {
     case TILE.VOID:
-      return Infinity;
+      return 999; // near-instant death but technically survivable for a frame
     case TILE.LAVA:
-      return 20;
+      return 25;
     default:
       return 0;
   }

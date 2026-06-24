@@ -4,6 +4,7 @@ import type { Store } from "../store";
 import { AgentNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, type Dir } from "./agent";
 import { Grid, type Tile } from "./path";
 import { WorldLayer } from "./world";
+import { CRTWarmthPipeline } from "./shaders";
 
 const PLAYER_SPEED = 380;
 
@@ -30,10 +31,14 @@ export class OfficeScene extends Phaser.Scene {
   private mapPx = { w: 960, h: 640 };
   private player!: Phaser.GameObjects.Sprite;
   private playerLabel!: Phaser.GameObjects.Text;
+  private playerNameBg!: Phaser.GameObjects.Graphics;
   private playerDir: Dir = "down";
   private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
+  private lightingOverlay!: Phaser.GameObjects.Graphics;
+  private monitorGlows: Phaser.GameObjects.Arc[] = [];
+  private dayNightTint!: Phaser.GameObjects.Rectangle;
 
   constructor() {
     super("office");
@@ -62,11 +67,26 @@ export class OfficeScene extends Phaser.Scene {
       frameWidth: 64,
       frameHeight: 64,
     });
+    this.load.spritesheet("world-tiles", "assets/tilesets/world.png", {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
   }
 
   create(): void {
     this.store = this.game.registry.get("store") as Store;
     this.theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
+
+    // register CRT warmth post-processing pipeline (once)
+    const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    if (renderer && !renderer.pipelines.has("CRTWarmth")) {
+      renderer.pipelines.add("CRTWarmth", new CRTWarmthPipeline(this.game));
+    }
+    // apply to camera
+    if (renderer) {
+      this.cameras.main.setPostPipeline("CRTWarmth");
+    }
+
     // a theme change restarts the scene — drop everything the last run built
     this.npcs.clear();
     this.seats = [];
@@ -162,27 +182,44 @@ export class OfficeScene extends Phaser.Scene {
     // animations for every character sheet
     const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss"];
     const dirs: Dir[] = ["down", "left", "right", "up"];
+    const FRAMES_PER_ROW = 8;
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue; // already built before a restart
       dirs.forEach((dir, row) => {
+        const base = row * FRAMES_PER_ROW;
         this.anims.create({
           key: `${key}-walk-${dir}`,
           frames: this.anims.generateFrameNumbers(key, {
-            frames: [row * 4, row * 4 + 1, row * 4 + 2, row * 4 + 3],
+            frames: [base, base + 1, base + 2, base + 3, base + 4, base + 5],
           }),
-          frameRate: 8,
+          frameRate: 10,
           repeat: -1,
         });
         this.anims.create({
           key: `${key}-idle-${dir}`,
-          frames: [{ key, frame: row * 4 }],
-          frameRate: 1,
+          frames: this.anims.generateFrameNumbers(key, {
+            frames: [base + 6, base + 7],
+          }),
+          frameRate: 2,
+          repeat: -1,
+          repeatDelay: 3,
         });
       });
+      // work animation — uses down-facing idle/breathing frames (row 0)
       this.anims.create({
         key: `${key}-work`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [12, 13] }),
+        frames: this.anims.generateFrameNumbers(key, { frames: [6, 7] }),
         frameRate: 2.5,
+        repeat: -1,
+      });
+    }
+
+    // water animation — cycles through 3 frames in the world tileset
+    if (!this.anims.exists("water-anim")) {
+      this.anims.create({
+        key: "water-anim",
+        frames: this.anims.generateFrameNumbers("world-tiles", { frames: [21, 22, 23] }),
+        frameRate: 4,
         repeat: -1,
       });
     }
@@ -193,6 +230,7 @@ export class OfficeScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
     // no physics body — we do manual movement for smoothness
 
+    this.playerNameBg = this.add.graphics();
     this.playerLabel = this.add
       .text(0, 0, "BOSS", {
         fontFamily: "monospace",
@@ -204,6 +242,7 @@ export class OfficeScene extends Phaser.Scene {
       .setResolution(4)
       .setOrigin(0.5, 1)
       .setScale(0.7);
+    this.drawPlayerNameBg();
 
     this.selectRing = this.add
       .ellipse(0, 0, 56, 24)
@@ -270,9 +309,31 @@ export class OfficeScene extends Phaser.Scene {
     // no camera bounds — the world is infinite
     cam.startFollow(this.player, true);
     cam.setZoom(this.bestZoom());
-    const onResize = () => cam.setZoom(this.bestZoom());
+    const onResize = () => {
+      cam.setZoom(this.bestZoom());
+      this.drawVignette();
+      this.dayNightTint.setSize(this.scale.width, this.scale.height);
+    };
     this.scale.on("resize", onResize);
     this.events.once("shutdown", () => this.scale.off("resize", onResize));
+
+    // --- lighting system ---
+    // vignette: darkened edges fixed to screen
+    this.lightingOverlay = this.add.graphics().setDepth(900).setScrollFactor(0);
+    this.drawVignette();
+
+    // day/night tint: subtle color overlay that shifts over time
+    this.dayNightTint = this.add
+      .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
+      .setOrigin(0, 0)
+      .setDepth(890)
+      .setScrollFactor(0);
+
+    // monitor glow pool — one per monitor slot
+    this.monitors.forEach(() => {
+      const glow = this.add.circle(0, 0, 48, 0x4affa8, 0).setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
+      this.monitorGlows.push(glow);
+    });
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q") as OfficeScene["keys"];
@@ -303,6 +364,75 @@ export class OfficeScene extends Phaser.Scene {
     this.ready = true;
     this.syncAgents();
     this.world.syncGhosts();
+  }
+
+  /** Draw rounded background behind player nameplate. */
+  private drawPlayerNameBg(): void {
+    const g = this.playerNameBg;
+    g.clear();
+    const w = this.playerLabel.displayWidth + 16;
+    const h = 18;
+    const r = 4;
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(-w / 2, -14, w, h, r);
+    g.lineStyle(1, 0xffffff, 0.15);
+    g.strokeRoundedRect(-w / 2, -14, w, h, r);
+  }
+
+  /** Draw the vignette overlay — darkened edges with radial gradient. */
+  private drawVignette(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const g = this.lightingOverlay;
+    g.clear();
+    const cx = w / 2;
+    const cy = h / 2;
+    const maxR = Math.hypot(cx, cy);
+    const steps = 20;
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const ringW = Math.max(2, (maxR * 0.4) * (1 - t));
+      const alpha = Math.pow(t, 2) * 0.4;
+      g.fillStyle(0x000000, alpha);
+      // top bar
+      g.fillRect(0, 0, w, Math.ceil(ringW * 0.5));
+      // bottom bar
+      g.fillRect(0, h - Math.ceil(ringW * 0.5), w, Math.ceil(ringW * 0.5));
+      // left bar
+      g.fillRect(0, 0, Math.ceil(ringW * 0.5), h);
+      // right bar
+      g.fillRect(w - Math.ceil(ringW * 0.5), 0, Math.ceil(ringW * 0.5), h);
+    }
+  }
+
+  /** Update lighting: monitor glows, day/night cycle, vignette refresh. */
+  private updateLighting(time: number): void {
+    // day/night cycle: 120s full cycle, shifts between day (0 alpha) and night (0.25 alpha blue)
+    const cycle = (time / 120000) % 1;
+    const nightFactor = (Math.sin(cycle * Math.PI * 2 - Math.PI / 2) + 1) / 2; // 0 = day, 1 = night
+    const outside = this.world.isOutside(this.player.x, this.player.y);
+    // only apply day/night tint when outside the office
+    if (outside) {
+      this.dayNightTint.setFillStyle(0x0a0a30, nightFactor * 0.3);
+    } else {
+      this.dayNightTint.setFillStyle(0x000000, 0);
+    }
+
+    // monitor glows: pulse for working agents
+    const pulse = 0.15 + Math.sin(time * 0.003) * 0.05;
+    this.monitors.forEach((m, i) => {
+      const glow = this.monitorGlows[i];
+      if (!glow) return;
+      const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
+      if (agent && agent.status !== "idle") {
+        const color = STATUS_COLORS[agent.status];
+        glow.setPosition(m.x, m.y + 4);
+        glow.setFillStyle(color, pulse);
+        glow.setVisible(true);
+      } else {
+        glow.setVisible(false);
+      }
+    });
   }
 
   /** Everyone called to ASSIGN-TO-ALL gathers in a ring around the boss. */
@@ -365,25 +495,48 @@ export class OfficeScene extends Phaser.Scene {
     const bh = 88;
 
     const g = this.add.graphics().setDepth(3);
+    // outer frame with bevel
+    g.fillStyle(0x1a2838, 1);
+    g.fillRoundedRect(bx - bw / 2 - 6, by - 6, bw + 12, bh + 12, 6);
     g.fillStyle(0x2a3848, 1);
-    g.fillRect(bx - bw / 2 - 4, by - 4, bw + 8, bh + 8);
+    g.fillRoundedRect(bx - bw / 2 - 4, by - 4, bw + 8, bh + 8, 5);
+    // inner board
     g.fillStyle(0xf0f5fa, 1);
-    g.fillRect(bx - bw / 2, by, bw, bh);
+    g.fillRoundedRect(bx - bw / 2, by, bw, bh, 4);
+    // top highlight
+    g.fillStyle(0xffffff, 0.15);
+    g.fillRoundedRect(bx - bw / 2, by, bw, 4, 4);
 
+    // column headers with rounded tabs
     const colW = (bw - 24) / 3;
     const cols = [0xe8a838, 0x4cb866, 0x4a9cd8];
     for (let i = 0; i < 3; i++) {
-      g.fillStyle(cols[i], 0.7);
-      g.fillRect(bx - bw / 2 + 8 + i * (colW + 4), by + 8, colW, 16);
+      const cx = bx - bw / 2 + 8 + i * (colW + 4);
+      g.fillStyle(cols[i], 0.8);
+      g.fillRoundedRect(cx, by + 8, colW, 16, 3);
+      g.fillStyle(0xffffff, 0.2);
+      g.fillRoundedRect(cx, by + 8, colW, 4, 3);
     }
 
-    g.fillStyle(0xffe69e, 1);
-    g.fillRect(bx - bw / 2 + 16, by + 32, 24, 24);
-    g.fillRect(bx - bw / 2 + 20, by + 60, 24, 24);
-    g.fillStyle(0xc4e8c4, 1);
-    g.fillRect(bx - bw / 2 + 16 + colW + 4, by + 32, 24, 24);
-    g.fillStyle(0xc4d8f0, 1);
-    g.fillRect(bx - bw / 2 + 16 + 2 * (colW + 4), by + 32, 24, 24);
+    // sticky notes with shadows
+    const notes: { col: number; y: number; color: number }[] = [
+      { col: 0, y: 32, color: 0xffe69e },
+      { col: 0, y: 60, color: 0xffe69e },
+      { col: 1, y: 32, color: 0xc4e8c4 },
+      { col: 2, y: 32, color: 0xc4d8f0 },
+    ];
+    for (const n of notes) {
+      const nx = bx - bw / 2 + 16 + n.col * (colW + 4);
+      // shadow
+      g.fillStyle(0x000000, 0.12);
+      g.fillRoundedRect(nx + 2, n.y + 2, 24, 24, 2);
+      // note
+      g.fillStyle(n.color, 1);
+      g.fillRoundedRect(nx, n.y, 24, 24, 2);
+      // highlight
+      g.fillStyle(0xffffff, 0.15);
+      g.fillRoundedRect(nx, n.y, 24, 4, 2);
+    }
   }
 
   private syncAgents(): void {
@@ -481,10 +634,17 @@ export class OfficeScene extends Phaser.Scene {
       this.player.play(`boss-idle-${this.playerDir}`, true);
     }
     this.player.setDepth(10 + this.player.y);
+    const playerName = (this.store.player?.name ?? "BOSS").toUpperCase();
+    if (this.playerLabel.text !== playerName) {
+      this.playerLabel.setText(playerName);
+      this.drawPlayerNameBg();
+    }
     this.playerLabel
       .setPosition(this.player.x, this.player.y - 108)
-      .setDepth(10 + this.player.y)
-      .setText((this.store.player?.name ?? "BOSS").toUpperCase());
+      .setDepth(10 + this.player.y);
+    this.playerNameBg
+      .setPosition(this.player.x, this.player.y - 108)
+      .setDepth(10 + this.player.y - 0.1);
     this.playerLabel.setColor(time < this.coffeeUntil ? "#b0741f" : "#1d2126");
 
     // E: grab coffee, talk to the nearest agent, open the task board, or recruit a ghost
@@ -501,6 +661,19 @@ export class OfficeScene extends Phaser.Scene {
       if (coffeeDist < 144) {
         this.coffeeUntil = time + 15000;
         this.store.toast("Coffee boost! 2x speed for 15s.");
+        // coffee particle burst
+        for (let i = 0; i < 10; i++) {
+          const angle = (i / 10) * Math.PI * 2;
+          const p = this.add.circle(coffeePx.x, coffeePx.y, 2, 0xb0741f, 0.9).setDepth(50);
+          this.tweens.add({
+            targets: p,
+            x: coffeePx.x + Math.cos(angle) * 30,
+            y: coffeePx.y + Math.sin(angle) * 30 - 20,
+            alpha: 0,
+            duration: 600,
+            onComplete: () => p.destroy(),
+          });
+        }
       } else {
         // check the board — it's a big target on the wall
         const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
@@ -542,6 +715,9 @@ export class OfficeScene extends Phaser.Scene {
     this.selectRing.setVisible(!!sel);
     if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
 
+    // --- lighting ---
+    this.updateLighting(time);
+
     // --- world layer: chunks, ghosts, compass, recruit ---
     this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
     this.world.update(time, dt, this.player.x, this.player.y, ePressed);
@@ -549,13 +725,21 @@ export class OfficeScene extends Phaser.Scene {
     // Q: teleport back to office when outside
     if (outside && Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
       const spawn = feetOf(this.spawnTile);
-      this.player.setPosition(spawn.x, spawn.y);
+      this.cameras.main.fadeOut(200, 10, 10, 30);
+      this.cameras.main.once("camerafadeoutcomplete", () => {
+        this.player.setPosition(spawn.x, spawn.y);
+        this.cameras.main.fadeIn(300, 10, 10, 30);
+      });
     }
 
     // check for death teleport from world layer
     const teleportTo = this.registry.get("teleportTo") as { x: number; y: number } | undefined;
     if (teleportTo) {
-      this.player.setPosition(teleportTo.x, teleportTo.y);
+      this.cameras.main.fadeOut(300, 10, 10, 30);
+      this.cameras.main.once("camerafadeoutcomplete", () => {
+        this.player.setPosition(teleportTo.x, teleportTo.y);
+        this.cameras.main.fadeIn(400, 10, 10, 30);
+      });
       this.registry.remove("teleportTo");
       this.store.toast("You were knocked out and dragged back to the office!");
     }

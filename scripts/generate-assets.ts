@@ -67,6 +67,146 @@ class Sheet {
     writeFileSync(path, PNG.sync.write(this.png));
   }
 
+  /** Set a pixel with alpha blending over the existing color. */
+  setAlpha(x: number, y: number, hex: string, a: number): void {
+    x = Math.round(x);
+    y = Math.round(y);
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    const i = (y * this.w + x) * 4;
+    const d = this.png.data;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    d[i] = Math.round(d[i] * (1 - a) + r * a);
+    d[i + 1] = Math.round(d[i + 1] * (1 - a) + g * a);
+    d[i + 2] = Math.round(d[i + 2] * (1 - a) + b * a);
+    // alpha channel stays 255 (opaque) since background is always filled
+  }
+
+  /** Filled circle using midpoint algorithm. */
+  fillCircle(cx: number, cy: number, r: number, hex: string): void {
+    cx = Math.round(cx);
+    cy = Math.round(cy);
+    r = Math.round(r);
+    if (r <= 0) { this.set(cx, cy, hex); return; }
+    for (let y = -r; y <= r; y++) {
+      const w = Math.floor(Math.sqrt(r * r - y * y));
+      this.rect(cx - w, cy + y, w * 2 + 1, 1, hex);
+    }
+  }
+
+  /** Filled circle with alpha blending. */
+  fillCircleAlpha(cx: number, cy: number, r: number, hex: string, a: number): void {
+    cx = Math.round(cx);
+    cy = Math.round(cy);
+    r = Math.round(r);
+    if (r <= 0) { this.setAlpha(cx, cy, hex, a); return; }
+    for (let y = -r; y <= r; y++) {
+      const w = Math.floor(Math.sqrt(r * r - y * y));
+      for (let x = -w; x <= w; x++) this.setAlpha(cx + x, cy + y, hex, a);
+    }
+  }
+
+  /** Filled ellipse. */
+  fillEllipse(cx: number, cy: number, rx: number, ry: number, hex: string): void {
+    cx = Math.round(cx);
+    cy = Math.round(cy);
+    rx = Math.round(rx);
+    ry = Math.round(ry);
+    if (rx <= 0 || ry <= 0) { this.set(cx, cy, hex); return; }
+    for (let y = -ry; y <= ry; y++) {
+      const w = Math.floor(rx * Math.sqrt(1 - (y * y) / (ry * ry)));
+      this.rect(cx - w, cy + y, w * 2 + 1, 1, hex);
+    }
+  }
+
+  /** Bresenham line. */
+  line(x0: number, y0: number, x1: number, y1: number, hex: string): void {
+    x0 = Math.round(x0); y0 = Math.round(y0);
+    x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    while (true) {
+      this.set(x0, y0, hex);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+  }
+
+  /** Thick Bresenham line. */
+  lineThick(x0: number, y0: number, x1: number, y1: number, hex: string, thick: number): void {
+    const half = Math.floor(thick / 2);
+    x0 = Math.round(x0); y0 = Math.round(y0);
+    x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    while (true) {
+      this.rect(x0 - half, y0 - half, thick, thick, hex);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+  }
+
+  /** Filled triangle. */
+  fillTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, hex: string): void {
+    // Sort vertices by y
+    const pts = [[x0, y0], [x1, y1], [x2, y2]].sort((a, b) => a[1] - b[1]);
+    const [ax, ay] = pts[0], [bx, by] = pts[1], [cx, cy] = pts[2];
+    const totalH = cy - ay;
+    if (totalH === 0) { this.set(ax, ay, hex); return; }
+    for (let y = ay; y <= cy; y++) {
+      const segH = y < by ? by - ay : cy - by;
+      if (segH === 0) continue;
+      let t1 = (y - ay) / totalH;
+      let t2: number;
+      if (y < by) {
+        t2 = (y - ay) / (by - ay || 1);
+      } else {
+        t2 = (y - by) / (cy - by || 1);
+      }
+      const lx = Math.round(ax + (cx - ax) * t1);
+      const rx2 = y < by
+        ? Math.round(ax + (bx - ax) * t2)
+        : Math.round(bx + (cx - bx) * t2);
+      const lo = Math.min(lx, rx2);
+      const hi = Math.max(lx, rx2);
+      this.rect(lo, y, hi - lo + 1, 1, hex);
+    }
+  }
+
+  /** Rounded rectangle. */
+  fillRoundedRect(x: number, y: number, w: number, h: number, r: number, hex: string): void {
+    r = Math.min(r, Math.floor(w / 2), Math.floor(h / 2));
+    this.rect(x + r, y, w - 2 * r, h, hex);
+    this.rect(x, y + r, w, h - 2 * r, hex);
+    this.fillCircle(x + r, y + r, r, hex);
+    this.fillCircle(x + w - r - 1, y + r, r, hex);
+    this.fillCircle(x + r, y + h - r - 1, r, hex);
+    this.fillCircle(x + w - r - 1, y + h - r - 1, r, hex);
+  }
+
+  /** 1px alpha feather on the edges of a rectangular region (softens hard edges). */
+  blurEdges(x: number, y: number, w: number, h: number, hex: string, a: number): void {
+    for (let xx = x; xx < x + w; xx++) {
+      this.setAlpha(xx, y, hex, a);
+      this.setAlpha(xx, y + h - 1, hex, a);
+    }
+    for (let yy = y; yy < y + h; yy++) {
+      this.setAlpha(x, yy, hex, a);
+      this.setAlpha(x + w - 1, yy, hex, a);
+    }
+  }
+
   /** Nearest-neighbor 2x upscale, returns a new Sheet. */
   upscale2x(): Sheet {
     const out = new Sheet(this.w * 2, this.h * 2);
@@ -139,67 +279,132 @@ function noise(s: Sheet, ox: number, oy: number, w: number, h: number, color: st
   }
 }
 
+/** 5-tone shading palette: highlight, light, base, dark, shadow */
+interface Shade5 { hi: string; li: string; base: string; dk: string; sh: string; }
+
+function shade5(base: string): Shade5 {
+  return {
+    hi: mix(base, "#ffffff", 0.25),
+    li: mix(base, "#ffffff", 0.10),
+    base,
+    dk: mix(base, "#000000", 0.12),
+    sh: mix(base, "#000000", 0.25),
+  };
+}
+
+/** Horizontal gradient. */
+function hGrad(s: Sheet, ox: number, oy: number, w: number, h: number, left: string, right: string): void {
+  for (let x = 0; x < w; x++) {
+    const c = mix(left, right, x / (w - 1));
+    s.rect(ox + x, oy, 1, h, c);
+  }
+}
+
+/** Radial gradient (approximate — concentric rings). */
+function rGrad(s: Sheet, cx: number, cy: number, r: number, inner: string, outer: string): void {
+  for (let rr = r; rr >= 0; rr--) {
+    const c = mix(inner, outer, 1 - rr / r);
+    s.fillCircleAlpha(cx, cy, rr, c, 1);
+  }
+}
+
+/** Noise with alpha blending (softer texture). */
+function noiseAlpha(s: Sheet, ox: number, oy: number, w: number, h: number, color: string, density: number, a: number): void {
+  let seed = ox * 73 + oy * 31;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      if ((seed & 0xffff) / 0xffff < density) s.setAlpha(ox + x, oy + y, color, a);
+    }
+  }
+}
+
 function woodTile(shade: string, line: string): TileDrawer {
   return (s, ox, oy) => {
-    const li = mix(shade, "#ffffff", 0.08);
-    const dk = mix(shade, "#000000", 0.10);
-    vGrad(s, ox, oy, T, T, li, dk);
-    // plank seams
+    const p = shade5(shade);
+    vGrad(s, ox, oy, T, T, p.hi, p.dk);
+    // plank seams with bevel
     for (const y of [16, 32, 48]) {
-      s.rect(ox, oy + y, T, 2, mix(line, "#000", 0.15));
-      s.rect(ox, oy + y + 2, T, 1, mix(li, "#ffffff", 0.15));
+      s.rect(ox, oy + y, T, 2, p.sh);
+      s.rect(ox, oy + y + 2, T, 1, p.hi);
+      s.rect(ox, oy + y - 1, T, 1, p.li);
     }
-    // wood grain streaks
+    // wood grain streaks — longer, with slight curve
     let seed = ox * 17;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 50; i++) {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       const gx = (seed >> 8) % T;
       const gy = (seed >> 16) % T;
-      const len = 2 + (seed % 5);
-      s.rect(ox + gx, oy + gy, len, 1, mix(shade, "#000", 0.04));
+      const len = 3 + (seed % 8);
+      s.rect(ox + gx, oy + gy, len, 1, mix(shade, "#000", 0.05));
+      if ((seed & 3) === 0) s.set(ox + gx + len, oy + gy, p.dk);
+    }
+    // occasional grain knot — small dark circle
+    seed = (ox * 31 + 7) & 0x7fffffff;
+    if ((seed & 7) < 3) {
+      const kx = 10 + (seed >> 4) % 44;
+      const ky = 4 + (seed >> 12) % 56;
+      s.fillCircle(ox + kx, oy + ky, 2, p.dk);
+      s.set(ox + kx, oy + ky, p.sh);
     }
     // seam highlights
-    for (const y of [18, 34, 50]) s.rect(ox, oy + y, T, 1, mix(li, shade, 0.4));
+    for (const y of [18, 34, 50]) s.rect(ox, oy + y, T, 1, mix(p.li, shade, 0.5));
+    // soft edge feather
+    s.blurEdges(ox, oy, T, T, p.dk, 0.15);
   };
 }
 
 function carpetTile(base: string, dot: string): TileDrawer {
   return (s, ox, oy) => {
-    const li = mix(base, "#ffffff", 0.04);
-    const dk = mix(base, "#000000", 0.04);
-    s.rect(ox, oy, T, T, base);
-    // subtle gradient
-    vGrad(s, ox, oy, T, T, li, dk);
-    // diamond pattern
+    const p = shade5(base);
+    s.rect(ox, oy, T, T, p.base);
+    vGrad(s, ox, oy, T, T, p.li, p.dk);
+    // diamond pattern with highlight + shadow
     for (let y = 2; y < T; y += 8) {
       for (let x = ((y / 8) % 2) * 4 + 2; x < T; x += 8) {
         s.set(ox + x, oy + y, dot);
         s.set(ox + x + 1, oy + y, dot);
         s.set(ox + x, oy + y + 1, dot);
+        s.set(ox + x, oy + y - 1, p.dk);
+        s.set(ox + x + 2, oy + y, p.li);
       }
     }
-    // fiber texture
-    noise(s, ox, oy, T, T, mix(base, "#000", 0.06), 0.08);
+    // fiber texture — denser, with alpha for softer look
+    noiseAlpha(s, ox, oy, T, T, p.dk, 0.12, 0.4);
+    noiseAlpha(s, ox, oy, T, T, p.hi, 0.06, 0.3);
+    // soft edge feather
+    s.blurEdges(ox, oy, T, T, p.dk, 0.1);
   };
 }
 
 function kitchenTile(base: string, grout: string): TileDrawer {
   return (s, ox, oy) => {
-    const li = mix(base, "#ffffff", 0.06);
-    const dk = mix(base, "#000000", 0.06);
-    s.rect(ox, oy, T, T, base);
-    // 2x2 sub-tiles with soft shading
+    const p = shade5(base);
+    const gp = shade5(grout);
+    s.rect(ox, oy, T, T, p.base);
+    // 2x2 sub-tiles with 5-tone shading
     for (const [sx, sy] of [[0, 0], [32, 0], [0, 32], [32, 32]]) {
-      vGrad(s, ox + sx + 1, oy + sy + 1, 30, 30, li, dk);
+      vGrad(s, ox + sx + 1, oy + sy + 1, 30, 30, p.hi, p.dk);
+      // beveled edge
+      s.rect(ox + sx + 1, oy + sy + 1, 30, 1, p.hi);
+      s.rect(ox + sx + 1, oy + sy + 1, 1, 30, p.li);
+      s.rect(ox + sx + 30, oy + sy + 1, 1, 30, p.dk);
+      s.rect(ox + sx + 1, oy + sy + 30, 30, 1, p.sh);
     }
-    // grout lines
-    s.rect(ox, oy + 30, T, 4, grout);
-    s.rect(ox + 30, oy, 4, T, grout);
-    // glossy highlights
+    // grout lines with depth
+    s.rect(ox, oy + 30, T, 4, gp.base);
+    s.rect(ox, oy + 30, T, 1, gp.dk);
+    s.rect(ox, oy + 33, T, 1, gp.li);
+    s.rect(ox + 30, oy, 4, T, gp.base);
+    s.rect(ox + 30, oy, 1, T, gp.dk);
+    s.rect(ox + 33, oy, 1, T, gp.li);
+    // glossy diagonal highlights
     for (const [sx, sy] of [[4, 4], [36, 4], [4, 36], [36, 36]]) {
-      s.rect(ox + sx, oy + sy, 6, 2, mix(li, "#ffffff", 0.3));
-      s.set(ox + sx, oy + sy + 2, mix(li, "#ffffff", 0.2));
+      s.line(ox + sx, oy + sy, ox + sx + 8, oy + sy + 4, mix(p.hi, "#ffffff", 0.4));
+      s.line(ox + sx + 1, oy + sy + 1, ox + sx + 6, oy + sy + 3, "#ffffff");
     }
+    // soft edge feather
+    s.blurEdges(ox, oy, T, T, p.dk, 0.1);
   };
 }
 
@@ -209,90 +414,134 @@ const drawers: Record<number, TileDrawer> = {
   [TILE.CARPET_A]: carpetTile("#909caa", "#7a8694"),
   [TILE.CARPET_B]: carpetTile("#8a96a2", "#74808e"),
   [TILE.RUG]: (s, ox, oy) => {
-    const base = "#8e4242";
-    const border = "#6a3030";
-    const inner = "#b85a5a";
-    const li = mix(inner, "#ffffff", 0.10);
-    s.rect(ox, oy, T, T, base);
-    // border
-    s.rect(ox, oy, T, 4, border);
-    s.rect(ox, oy + 60, T, 4, border);
-    s.rect(ox, oy, 4, T, border);
-    s.rect(ox + 60, oy, 4, T, border);
-    // inner panel
-    vGrad(s, ox + 8, oy + 8, 48, 48, li, mix(inner, "#000", 0.10));
-    // diamond medallion
-    for (let y = 0; y < 12; y++) {
-      const w = y < 6 ? y * 2 + 2 : (12 - y) * 2;
-      s.rect(ox + 32 - w / 2, oy + 26 + y, w, 1, inner);
+    const p = shade5("#8e4242");
+    const bp = shade5("#6a3030");
+    const ip = shade5("#b85a5a");
+    s.rect(ox, oy, T, T, p.base);
+    // border with bevel
+    s.rect(ox, oy, T, 4, bp.base);
+    s.rect(ox, oy, T, 1, bp.hi);
+    s.rect(ox, oy + 3, T, 1, bp.sh);
+    s.rect(ox, oy + 60, T, 4, bp.base);
+    s.rect(ox, oy + 60, T, 1, bp.li);
+    s.rect(ox, oy + 63, T, 1, bp.sh);
+    s.rect(ox, oy, 4, T, bp.base);
+    s.rect(ox, oy, 1, T, bp.hi);
+    s.rect(ox + 3, oy, 1, T, bp.sh);
+    s.rect(ox + 60, oy, 4, T, bp.base);
+    s.rect(ox + 60, oy, 1, T, bp.li);
+    s.rect(ox + 63, oy, 1, T, bp.sh);
+    // inner panel with radial gradient
+    vGrad(s, ox + 8, oy + 8, 48, 48, ip.hi, ip.dk);
+    s.rect(ox + 8, oy + 8, 48, 1, ip.hi);
+    s.rect(ox + 8, oy + 8, 1, 48, ip.li);
+    // diamond medallion with highlight
+    for (let y = 0; y < 14; y++) {
+      const w = y < 7 ? y * 2 + 2 : (14 - y) * 2;
+      s.rect(ox + 32 - w / 2, oy + 25 + y, w, 1, ip.base);
     }
-    s.rect(ox + 30, oy + 31, 4, 2, base);
+    for (let y = 0; y < 10; y++) {
+      const w = y < 5 ? y * 2 : (10 - y) * 2;
+      s.rect(ox + 32 - w / 2, oy + 27 + y, w, 1, ip.li);
+    }
+    s.fillCircle(ox + 32, oy + 32, 2, p.dk);
+    s.set(ox + 31, oy + 31, p.sh);
     // border texture
-    noise(s, ox, oy, T, 4, mix(border, "#000", 0.15), 0.15);
-    noise(s, ox, oy + 60, T, 4, mix(border, "#000", 0.15), 0.15);
+    noiseAlpha(s, ox, oy, T, 4, bp.sh, 0.15, 0.5);
+    noiseAlpha(s, ox, oy + 60, T, 4, bp.sh, 0.15, 0.5);
+    // fringe tassels
+    for (let i = 0; i < 6; i++) {
+      s.set(ox + 6 + i * 10, oy + 1, bp.hi);
+      s.set(ox + 6 + i * 10, oy + 62, bp.dk);
+    }
   },
   [TILE.TILE_A]: kitchenTile("#dae0d8", "#b0b8b0"),
   [TILE.TILE_B]: kitchenTile("#ced4cc", "#a4aca4"),
   [TILE.DOORMAT]: (s, ox, oy) => {
-    const base = "#7a6a42";
-    const line = "#928050";
-    const dk = "#5e5030";
-    s.rect(ox, oy, T, T, base);
-    // border
-    s.rect(ox, oy, T, 3, dk);
-    s.rect(ox, oy + 61, T, 3, dk);
-    s.rect(ox, oy, 3, T, dk);
-    s.rect(ox + 61, oy, 3, T, dk);
-    // ridge texture
+    const p = shade5("#7a6a42");
+    const lp = shade5("#928050");
+    s.rect(ox, oy, T, T, p.base);
+    // border with bevel
+    s.rect(ox, oy, T, 3, p.sh);
+    s.rect(ox, oy, T, 1, p.dk);
+    s.rect(ox, oy + 61, T, 3, p.sh);
+    s.rect(ox, oy + 63, T, 1, p.dk);
+    s.rect(ox, oy, 3, T, p.sh);
+    s.rect(ox, oy, 1, T, p.dk);
+    s.rect(ox + 61, oy, 3, T, p.sh);
+    s.rect(ox + 63, oy, 1, T, p.dk);
+    // ridge texture with highlight + shadow
     for (let y = 6; y < 58; y += 5) {
-      s.rect(ox + 4, oy + y, 56, 2, line);
-      s.rect(ox + 4, oy + y + 2, 56, 1, mix(base, "#000", 0.08));
+      s.rect(ox + 4, oy + y, 56, 2, lp.base);
+      s.rect(ox + 4, oy + y, 56, 1, lp.li);
+      s.rect(ox + 4, oy + y + 2, 56, 1, p.dk);
     }
-    noise(s, ox + 4, oy + 4, 56, 56, mix(base, "#000", 0.10), 0.12);
+    noiseAlpha(s, ox + 4, oy + 4, 56, 56, p.sh, 0.12, 0.4);
+    noiseAlpha(s, ox + 4, oy + 4, 56, 56, p.hi, 0.06, 0.3);
   },
   [TILE.WALL_TOP]: (s, ox, oy) => {
-    vGrad(s, ox, oy, T, T, "#5a5f67", "#3a3f47");
+    const p = shade5("#4a4f57");
+    vGrad(s, ox, oy, T, T, p.li, p.dk);
     // subtle texture
-    noise(s, ox, oy, T, T, "#4a4f57", 0.06);
-    // bottom shadow
-    s.rect(ox, oy + 58, T, 6, mix("#3a3f47", "#000", 0.15));
+    noiseAlpha(s, ox, oy, T, T, p.dk, 0.06, 0.4);
+    // top highlight
+    s.rect(ox, oy, T, 2, p.hi);
+    // bottom shadow with gradient
+    vGrad(s, ox, oy + 54, T, 10, p.dk, p.sh);
+    s.rect(ox, oy + 58, T, 6, p.sh);
+    // brick texture — subtle horizontal lines
+    for (const y of [20, 40]) {
+      s.rect(ox, oy + y, T, 1, p.dk);
+      s.set(ox + 16, oy + y, p.sh);
+      s.set(ox + 48, oy + y, p.sh);
+    }
   },
   [TILE.WALL_FACE]: (s, ox, oy) => {
-    const base = "#c8cdd3";
-    const top = "#b4bac2";
-    const bot = "#949aa4";
-    vGrad(s, ox, oy, T, T, top, bot);
-    // panel seam
-    s.rect(ox + 31, oy + 4, 1, 56, mix(base, "#000", 0.06));
-    s.rect(ox + 32, oy + 4, 1, 56, mix(base, "#fff", 0.04));
+    const p = shade5("#c8cdd3");
+    vGrad(s, ox, oy, T, T, p.li, p.dk);
+    // panel seam with bevel
+    s.rect(ox + 31, oy + 4, 1, 52, p.dk);
+    s.rect(ox + 32, oy + 4, 1, 52, p.li);
     // top edge highlight
-    s.rect(ox, oy, T, 3, mix(top, "#fff", 0.08));
-    // bottom baseboard
-    s.rect(ox, oy + 52, T, 12, mix(bot, "#000", 0.08));
-    s.rect(ox, oy + 52, T, 2, mix(bot, "#000", 0.15));
-    s.rect(ox, oy + 62, T, 2, mix(bot, "#fff", 0.05));
+    s.rect(ox, oy, T, 3, p.hi);
+    s.rect(ox, oy, T, 1, mix(p.hi, "#fff", 0.3));
+    // bottom baseboard with 5-tone bevel
+    s.rect(ox, oy + 50, T, 14, p.dk);
+    s.rect(ox, oy + 50, T, 2, p.sh);
+    s.rect(ox, oy + 52, T, 1, p.hi);
+    s.rect(ox, oy + 62, T, 2, p.li);
+    // baseboard texture
+    noiseAlpha(s, ox, oy + 52, T, 10, p.sh, 0.08, 0.3);
   },
   [TILE.WINDOW]: (s, ox, oy) => {
     drawers[TILE.WALL_FACE]!(s, ox, oy);
-    const frame = "#6a7280";
-    const frameLi = mix(frame, "#fff", 0.12);
-    // frame
-    s.rect(ox + 4, oy + 6, 56, 40, frame);
-    s.rect(ox + 4, oy + 6, 56, 2, frameLi);
-    s.rect(ox + 4, oy + 6, 2, 40, frameLi);
-    // sky gradient
-    vGrad(s, ox + 8, oy + 10, 48, 32, "#b8d8f0", "#6a9fc8");
-    // clouds
-    s.rect(ox + 12, oy + 14, 8, 3, "#ffffff");
-    s.rect(ox + 14, oy + 13, 4, 1, "#ffffff");
-    s.rect(ox + 36, oy + 18, 6, 2, "#e8f0f8");
-    s.rect(ox + 38, oy + 17, 2, 1, "#e8f0f8");
-    // cross frame
-    s.rect(ox + 8, oy + 25, 48, 2, frame);
-    s.rect(ox + 30, oy + 10, 2, 32, frame);
-    // frame highlights
-    s.rect(ox + 4, oy + 6, 56, 1, frameLi);
-    s.rect(ox + 4, oy + 6, 1, 40, frameLi);
+    const fp = shade5("#6a7280");
+    // frame with bevel
+    s.rect(ox + 4, oy + 6, 56, 40, fp.base);
+    s.rect(ox + 4, oy + 6, 56, 2, fp.hi);
+    s.rect(ox + 4, oy + 6, 2, 40, fp.li);
+    s.rect(ox + 58, oy + 6, 2, 40, fp.dk);
+    s.rect(ox + 4, oy + 44, 56, 2, fp.sh);
+    // sky gradient — richer with horizon glow
+    vGrad(s, ox + 8, oy + 10, 48, 32, "#c8e4f8", "#5a8fb8");
+    // distant hills
+    s.fillCircle(ox + 16, oy + 38, 10, mix("#5a8fb8", "#3a6a98", 0.5));
+    s.fillCircle(ox + 40, oy + 38, 12, mix("#5a8fb8", "#3a6a98", 0.4));
+    // clouds — softer with alpha
+    s.fillCircleAlpha(ox + 14, oy + 15, 5, "#ffffff", 0.9);
+    s.fillCircleAlpha(ox + 18, oy + 15, 4, "#ffffff", 0.8);
+    s.fillCircleAlpha(ox + 38, oy + 19, 4, "#e8f0f8", 0.7);
+    s.fillCircleAlpha(ox + 42, oy + 18, 3, "#e8f0f8", 0.6);
+    // cross frame with bevel
+    s.rect(ox + 8, oy + 25, 48, 3, fp.base);
+    s.rect(ox + 8, oy + 25, 48, 1, fp.li);
+    s.rect(ox + 8, oy + 27, 48, 1, fp.dk);
+    s.rect(ox + 30, oy + 10, 3, 32, fp.base);
+    s.rect(ox + 30, oy + 10, 1, 32, fp.li);
+    s.rect(ox + 32, oy + 10, 1, 32, fp.dk);
+    // glass reflection — diagonal streak
+    s.line(ox + 10, oy + 12, ox + 22, oy + 24, mix("#ffffff", "#b8d8f0", 0.3));
+    s.line(ox + 11, oy + 12, ox + 20, oy + 21, mix("#ffffff", "#b8d8f0", 0.2));
   },
   [TILE.WB_L]: (s, ox, oy) => {
     drawers[TILE.WALL_FACE]!(s, ox, oy);
@@ -327,452 +576,532 @@ const drawers: Record<number, TileDrawer> = {
     s.rect(ox + 4, oy + 8, 1, 36, "#ffffff");
   },
   [TILE.DOOR]: (s, ox, oy) => {
-    const frame = "#4a4f57";
-    const door = "#7a5230";
-    const doorLi = mix(door, "#fff", 0.08);
-    const doorDk = mix(door, "#000", 0.15);
-    const panel = "#6a4220";
-    s.rect(ox, oy, T, T, frame);
+    const fp = shade5("#4a4f57");
+    const dp = shade5("#7a5230");
+    const pp = shade5("#6a4220");
+    s.rect(ox, oy, T, T, fp.base);
+    // frame bevel
+    s.rect(ox, oy, T, 2, fp.hi);
+    s.rect(ox, oy + 62, T, 2, fp.sh);
     // door body with gradient
-    vGrad(s, ox + 6, oy + 4, 52, 58, doorLi, doorDk);
-    // door edge
-    s.rect(ox + 6, oy + 4, 2, 58, doorLi);
-    s.rect(ox + 56, oy + 4, 2, 58, doorDk);
-    // panels
-    s.rect(ox + 12, oy + 10, 40, 20, panel);
-    s.rect(ox + 12, oy + 10, 40, 2, mix(panel, "#fff", 0.08));
-    s.rect(ox + 12, oy + 10, 2, 20, mix(panel, "#fff", 0.06));
-    s.rect(ox + 12, oy + 34, 40, 18, panel);
-    s.rect(ox + 12, oy + 34, 40, 2, mix(panel, "#fff", 0.08));
-    s.rect(ox + 12, oy + 34, 2, 18, mix(panel, "#fff", 0.06));
-    // doorknob
-    s.rect(ox + 50, oy + 32, 4, 4, "#e0b84a");
-    s.rect(ox + 50, oy + 32, 4, 1, "#f0d060");
-    s.set(ox + 51, oy + 33, "#c8a030");
+    vGrad(s, ox + 6, oy + 4, 52, 58, dp.hi, dp.dk);
+    // door edge bevel
+    s.rect(ox + 6, oy + 4, 2, 58, dp.li);
+    s.rect(ox + 56, oy + 4, 2, 58, dp.dk);
+    s.rect(ox + 6, oy + 4, 52, 1, dp.hi);
+    s.rect(ox + 6, oy + 61, 52, 1, dp.sh);
+    // panels with beveled insets
+    s.rect(ox + 12, oy + 10, 40, 20, pp.base);
+    s.rect(ox + 12, oy + 10, 40, 2, pp.hi);
+    s.rect(ox + 12, oy + 10, 2, 20, pp.li);
+    s.rect(ox + 50, oy + 10, 2, 20, pp.dk);
+    s.rect(ox + 12, oy + 28, 40, 2, pp.sh);
+    s.rect(ox + 12, oy + 34, 40, 18, pp.base);
+    s.rect(ox + 12, oy + 34, 40, 2, pp.hi);
+    s.rect(ox + 12, oy + 34, 2, 18, pp.li);
+    s.rect(ox + 50, oy + 34, 2, 18, pp.dk);
+    s.rect(ox + 12, oy + 50, 40, 2, pp.sh);
+    // doorknob — circular with shine
+    s.fillCircle(ox + 52, oy + 34, 3, "#e0b84a");
+    s.fillCircle(ox + 51, oy + 33, 2, "#f0d060");
+    s.set(ox + 51, oy + 33, "#fff8d0");
+    s.set(ox + 53, oy + 35, "#c8a030");
+    // wood grain on door
+    noiseAlpha(s, ox + 8, oy + 6, 48, 56, dp.sh, 0.04, 0.3);
   },
   [TILE.POSTER]: (s, ox, oy) => {
     drawers[TILE.WALL_FACE]!(s, ox, oy);
-    s.rect(ox + 10, oy + 6, 44, 44, "#e8e2c8");
-    s.rect(ox + 10, oy + 6, 44, 2, mix("#e8e2c8", "#fff", 0.15));
-    // poster content
-    vGrad(s, ox + 14, oy + 10, 36, 16, "#4f9dde", "#3a7cb5");
-    s.rect(ox + 18, oy + 14, 8, 4, "#ffffff");
-    s.rect(ox + 30, oy + 16, 6, 2, "#e8f0f8");
+    const pp = shade5("#e8e2c8");
+    s.rect(ox + 10, oy + 6, 44, 44, pp.base);
+    s.rect(ox + 10, oy + 6, 44, 2, pp.hi);
+    s.rect(ox + 10, oy + 6, 2, 44, pp.li);
+    s.rect(ox + 52, oy + 6, 2, 44, pp.dk);
+    s.rect(ox + 10, oy + 48, 44, 2, pp.sh);
+    // poster content — sky scene
+    vGrad(s, ox + 14, oy + 10, 36, 16, "#5aadde", "#3a7cb5");
+    // sun
+    s.fillCircle(ox + 40, oy + 16, 4, "#ffe880");
+    s.fillCircleAlpha(ox + 40, oy + 16, 5, "#ffe880", 0.3);
+    // mountains
+    s.fillTriangle(ox + 14, oy + 26, ox + 26, oy + 14, ox + 38, oy + 26, "#2a5a8a");
+    s.fillTriangle(ox + 28, oy + 26, ox + 38, oy + 16, ox + 50, oy + 26, "#3a6a9a");
     // text lines
     s.rect(ox + 14, oy + 30, 28, 2, "#33373d");
     s.rect(ox + 14, oy + 35, 22, 2, "#33373d");
     s.rect(ox + 14, oy + 40, 32, 2, "#33373d");
-    // frame edge
-    s.rect(ox + 10, oy + 6, 44, 1, "#d0c8a8");
-    s.rect(ox + 10, oy + 6, 1, 44, "#d0c8a8");
-    s.rect(ox + 53, oy + 7, 1, 43, "#b8b098");
-    s.rect(ox + 11, oy + 49, 42, 1, "#b8b098");
+    // frame edge with bevel
+    s.rect(ox + 10, oy + 6, 44, 1, pp.li);
+    s.rect(ox + 10, oy + 6, 1, 44, pp.li);
+    s.rect(ox + 53, oy + 7, 1, 43, pp.dk);
+    s.rect(ox + 11, oy + 49, 42, 1, pp.dk);
   },
   [TILE.CLOCK]: (s, ox, oy) => {
     drawers[TILE.WALL_FACE]!(s, ox, oy);
-    // frame
-    s.rect(ox + 18, oy + 8, 28, 28, "#2a2e38");
-    s.rect(ox + 18, oy + 8, 28, 2, "#3a3e48");
-    s.rect(ox + 18, oy + 8, 2, 28, "#3a3e48");
-    // face
-    vGrad(s, ox + 20, oy + 10, 24, 24, "#f8f8fc", "#e0e0e8");
-    // tick marks
+    const fp = shade5("#2a2e38");
+    // frame — circular with bevel
+    s.fillCircle(ox + 32, oy + 22, 15, fp.base);
+    s.fillCircle(ox + 32, oy + 22, 15, fp.dk);
+    s.fillCircle(ox + 31, oy + 21, 14, fp.li);
+    // face with radial gradient
+    s.fillCircle(ox + 32, oy + 22, 12, "#f8f8fc");
+    rGrad(s, ox + 32, oy + 22, 12, "#ffffff", "#e0e0e8");
+    // tick marks — thicker at 12/3/6/9
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-      const x1 = 32 + Math.cos(a) * 10;
-      const y1 = 22 + Math.sin(a) * 10;
-      const x2 = 32 + Math.cos(a) * 11;
-      const y2 = 22 + Math.sin(a) * 11;
-      s.set(ox + Math.round(x1), oy + Math.round(y1), "#888");
-      s.set(ox + Math.round(x2), oy + Math.round(y2), "#888");
+      const r1 = i % 3 === 0 ? 9 : 10;
+      const r2 = 11;
+      const x1 = 32 + Math.cos(a) * r1;
+      const y1 = 22 + Math.sin(a) * r1;
+      const x2 = 32 + Math.cos(a) * r2;
+      const y2 = 22 + Math.sin(a) * r2;
+      const col = i % 3 === 0 ? "#555" : "#888";
+      s.lineThick(ox + x1, oy + y1, ox + x2, oy + y2, col, i % 3 === 0 ? 2 : 1);
     }
     // hands
-    s.rect(ox + 31, oy + 14, 2, 8, "#2a2e38");
-    s.rect(ox + 32, oy + 22, 8, 2, "#d65d5d");
+    s.lineThick(ox + 32, oy + 22, ox + 32, oy + 14, "#2a2e38", 2);
+    s.lineThick(ox + 32, oy + 22, ox + 40, oy + 22, "#d65d5d", 2);
     // center dot
-    s.set(ox + 31, oy + 21, "#2a2e38");
-    s.set(ox + 32, oy + 22, "#2a2e38");
-    // glass highlight
-    s.rect(ox + 22, oy + 12, 6, 2, "#ffffff");
+    s.fillCircle(ox + 32, oy + 22, 2, "#2a2e38");
+    s.set(ox + 31, oy + 21, "#4a4e58");
+    // glass highlight — curved
+    s.line(ox + 24, oy + 14, ox + 28, oy + 12, "#ffffff");
+    s.line(ox + 25, oy + 16, ox + 27, oy + 14, mix("#ffffff", "#e0e0e8", 0.4));
   },
   [TILE.DESK_L]: (s, ox, oy) => {
-    const top = "#a87242";
-    const topLi = mix(top, "#fff", 0.10);
-    const topDk = mix(top, "#000", 0.10);
-    const side = "#7c5230";
-    const sideDk = "#5c3a20";
-    // desk surface
-    vGrad(s, ox + 2, oy, 60, 44, topLi, topDk);
-    // surface highlight
-    s.rect(ox + 2, oy, 60, 2, mix(topLi, "#fff", 0.15));
+    const tp = shade5("#a87242");
+    const sp = shade5("#7c5230");
+    // desk surface with 5-tone
+    vGrad(s, ox + 2, oy, 60, 44, tp.hi, tp.dk);
+    s.rect(ox + 2, oy, 60, 2, tp.hi);
+    s.rect(ox + 2, oy, 60, 1, mix(tp.hi, "#fff", 0.2));
     // side panel
-    vGrad(s, ox + 2, oy + 44, 60, 16, side, sideDk);
-    s.rect(ox + 2, oy + 44, 60, 2, sideDk);
-    // left edge
-    s.rect(ox + 2, oy, 2, 60, sideDk);
-    // drawer
-    s.rect(ox + 8, oy + 22, 48, 16, mix(top, "#000", 0.08));
-    s.rect(ox + 8, oy + 22, 48, 2, sideDk);
-    s.rect(ox + 24, oy + 30, 16, 2, sideDk);
-    // drawer handle
-    s.rect(ox + 28, oy + 26, 8, 3, "#5a3a20");
-    s.rect(ox + 28, oy + 26, 8, 1, "#7a5a40");
+    vGrad(s, ox + 2, oy + 44, 60, 16, sp.base, sp.sh);
+    s.rect(ox + 2, oy + 44, 60, 2, sp.dk);
+    s.rect(ox + 2, oy + 58, 60, 2, sp.sh);
+    // left edge bevel
+    s.rect(ox + 2, oy, 2, 60, sp.sh);
+    s.rect(ox + 4, oy, 1, 44, tp.li);
+    // drawer with beveled inset
+    s.rect(ox + 8, oy + 22, 48, 16, tp.dk);
+    s.rect(ox + 8, oy + 22, 48, 1, tp.sh);
+    s.rect(ox + 8, oy + 22, 1, 16, tp.sh);
+    s.rect(ox + 55, oy + 22, 1, 16, tp.li);
+    s.rect(ox + 8, oy + 37, 48, 1, tp.li);
+    s.rect(ox + 24, oy + 30, 16, 2, sp.sh);
+    // drawer handle — rounded with shine
+    s.fillRoundedRect(ox + 28, oy + 26, 8, 3, 1, sp.sh);
+    s.rect(ox + 28, oy + 26, 8, 1, sp.li);
     // wood grain
-    noise(s, ox + 4, oy + 2, 56, 40, mix(top, "#000", 0.04), 0.06);
+    noiseAlpha(s, ox + 4, oy + 2, 56, 40, tp.sh, 0.04, 0.3);
   },
   [TILE.DESK_R]: (s, ox, oy) => {
-    const top = "#a87242";
-    const topLi = mix(top, "#fff", 0.10);
-    const topDk = mix(top, "#000", 0.10);
-    const side = "#7c5230";
-    const sideDk = "#5c3a20";
-    vGrad(s, ox, oy, 60, 44, topLi, topDk);
-    s.rect(ox, oy, 60, 2, mix(topLi, "#fff", 0.15));
-    vGrad(s, ox, oy + 44, 60, 16, side, sideDk);
-    s.rect(ox, oy + 44, 60, 2, sideDk);
-    s.rect(ox + 58, oy, 2, 60, sideDk);
-    // papers
+    const tp = shade5("#a87242");
+    const sp = shade5("#7c5230");
+    vGrad(s, ox, oy, 60, 44, tp.hi, tp.dk);
+    s.rect(ox, oy, 60, 2, tp.hi);
+    s.rect(ox, oy, 60, 1, mix(tp.hi, "#fff", 0.2));
+    vGrad(s, ox, oy + 44, 60, 16, sp.base, sp.sh);
+    s.rect(ox, oy + 44, 60, 2, sp.dk);
+    s.rect(ox, oy + 58, 60, 2, sp.sh);
+    s.rect(ox + 58, oy, 2, 60, sp.sh);
+    s.rect(ox + 57, oy, 1, 44, tp.dk);
+    // papers with shadow
+    s.rect(ox + 5, oy + 11, 20, 24, mix("#f0ece0", "#000", 0.08));
     s.rect(ox + 6, oy + 10, 20, 24, "#f0ece0");
     s.rect(ox + 6, oy + 10, 20, 2, "#ffffff");
     s.rect(ox + 10, oy + 16, 12, 1, "#a8a090");
     s.rect(ox + 10, oy + 20, 10, 1, "#a8a090");
     s.rect(ox + 10, oy + 24, 12, 1, "#a8a090");
-    // mug
-    s.rect(ox + 36, oy + 14, 12, 16, "#d65d5d");
+    // mug — rounded with shine
+    s.fillRoundedRect(ox + 36, oy + 14, 12, 16, 2, "#d65d5d");
     s.rect(ox + 36, oy + 14, 12, 2, "#e87878");
+    s.rect(ox + 37, oy + 15, 3, 8, mix("#e87878", "#fff", 0.3));
     s.rect(ox + 48, oy + 18, 4, 8, "#d65d5d");
     s.rect(ox + 40, oy + 18, 4, 8, "#b84444");
     // wood grain
-    noise(s, ox + 2, oy + 2, 56, 40, mix(top, "#000", 0.04), 0.06);
+    noiseAlpha(s, ox + 2, oy + 2, 56, 40, tp.sh, 0.04, 0.3);
   },
   [TILE.CHAIR]: (s, ox, oy) => {
-    const back = "#3c4458";
-    const backLi = mix(back, "#fff", 0.10);
-    const backDk = mix(back, "#000", 0.15);
-    const seat = "#2e3547";
-    const seatDk = "#23283a";
-    // backrest
-    vGrad(s, ox + 14, oy + 8, 36, 28, backLi, backDk);
-    s.rect(ox + 14, oy + 8, 36, 2, mix(backLi, "#fff", 0.08));
-    s.rect(ox + 14, oy + 8, 2, 28, mix(backLi, "#fff", 0.06));
-    // backrest detail
-    s.rect(ox + 18, oy + 20, 28, 2, backDk);
-    // seat
-    vGrad(s, ox + 10, oy + 36, 44, 12, seat, seatDk);
-    s.rect(ox + 10, oy + 36, 44, 2, mix(seat, "#fff", 0.06));
+    const bp = shade5("#3c4458");
+    const sp = shade5("#2e3547");
+    // backrest with 5-tone
+    vGrad(s, ox + 14, oy + 8, 36, 28, bp.hi, bp.dk);
+    s.rect(ox + 14, oy + 8, 36, 2, bp.hi);
+    s.rect(ox + 14, oy + 8, 2, 28, bp.li);
+    s.rect(ox + 48, oy + 8, 2, 28, bp.dk);
+    s.rect(ox + 14, oy + 34, 36, 2, bp.sh);
+    // backrest detail — padded seam
+    s.rect(ox + 18, oy + 20, 28, 2, bp.dk);
+    s.rect(ox + 18, oy + 22, 28, 1, bp.sh);
+    // seat with bevel
+    vGrad(s, ox + 10, oy + 36, 44, 12, sp.li, sp.dk);
+    s.rect(ox + 10, oy + 36, 44, 2, sp.hi);
+    s.rect(ox + 10, oy + 46, 44, 2, sp.sh);
     // legs
-    s.rect(ox + 26, oy + 48, 4, 8, seatDk);
-    s.rect(ox + 14, oy + 48, 4, 6, seatDk);
-    s.rect(ox + 46, oy + 48, 4, 6, seatDk);
+    s.rect(ox + 26, oy + 48, 4, 8, sp.sh);
+    s.rect(ox + 14, oy + 48, 4, 6, sp.sh);
+    s.rect(ox + 46, oy + 48, 4, 6, sp.sh);
+    // castor wheels
+    s.fillCircle(ox + 16, oy + 56, 2, sp.dk);
+    s.fillCircle(ox + 48, oy + 56, 2, sp.dk);
   },
   [TILE.FILING]: (s, ox, oy) => {
-    const body = "#7a8498";
-    const bodyLi = mix(body, "#fff", 0.10);
-    const bodyDk = mix(body, "#000", 0.12);
-    // body
-    vGrad(s, ox + 6, oy + 4, 52, 56, bodyLi, bodyDk);
-    s.rect(ox + 6, oy + 4, 52, 2, mix(bodyLi, "#fff", 0.08));
-    s.rect(ox + 6, oy + 4, 2, 56, mix(bodyLi, "#fff", 0.06));
-    // drawer divisions
-    s.rect(ox + 8, oy + 22, 48, 2, bodyDk);
-    s.rect(ox + 8, oy + 44, 48, 2, bodyDk);
-    // drawer insets
-    vGrad(s, ox + 10, oy + 8, 44, 12, mix(body, "#fff", 0.04), mix(body, "#000", 0.04));
-    vGrad(s, ox + 10, oy + 26, 44, 16, mix(body, "#000", 0.04), mix(body, "#fff", 0.04));
-    vGrad(s, ox + 10, oy + 48, 44, 10, mix(body, "#fff", 0.04), mix(body, "#000", 0.04));
-    // handles
-    s.rect(ox + 24, oy + 18, 16, 3, "#4a5468");
-    s.rect(ox + 24, oy + 18, 16, 1, "#5a6478");
-    s.rect(ox + 24, oy + 40, 16, 3, "#4a5468");
-    s.rect(ox + 24, oy + 40, 16, 1, "#5a6478");
-    // label tabs
+    const p = shade5("#7a8498");
+    // body with 5-tone
+    vGrad(s, ox + 6, oy + 4, 52, 56, p.hi, p.dk);
+    s.rect(ox + 6, oy + 4, 52, 2, p.hi);
+    s.rect(ox + 6, oy + 4, 2, 56, p.li);
+    s.rect(ox + 56, oy + 4, 2, 56, p.dk);
+    s.rect(ox + 6, oy + 58, 52, 2, p.sh);
+    // drawer divisions with bevel
+    s.rect(ox + 8, oy + 22, 48, 2, p.dk);
+    s.rect(ox + 8, oy + 24, 48, 1, p.li);
+    s.rect(ox + 8, oy + 44, 48, 2, p.dk);
+    s.rect(ox + 8, oy + 46, 48, 1, p.li);
+    // drawer insets with 5-tone
+    vGrad(s, ox + 10, oy + 8, 44, 12, p.li, p.dk);
+    vGrad(s, ox + 10, oy + 26, 44, 16, p.dk, p.li);
+    vGrad(s, ox + 10, oy + 48, 44, 10, p.li, p.dk);
+    // handles — rounded with shine
+    s.fillRoundedRect(ox + 24, oy + 18, 16, 3, 1, p.sh);
+    s.rect(ox + 24, oy + 18, 16, 1, p.dk);
+    s.fillRoundedRect(ox + 24, oy + 40, 16, 3, 1, p.sh);
+    s.rect(ox + 24, oy + 40, 16, 1, p.dk);
+    // label tabs with bevel
     s.rect(ox + 12, oy + 10, 8, 4, "#e8e4d0");
+    s.rect(ox + 12, oy + 10, 8, 1, "#ffffff");
     s.rect(ox + 12, oy + 32, 8, 4, "#e8e4d0");
+    s.rect(ox + 12, oy + 32, 8, 1, "#ffffff");
     s.rect(ox + 12, oy + 52, 8, 4, "#e8e4d0");
+    s.rect(ox + 12, oy + 52, 8, 1, "#ffffff");
   },
   [TILE.TRASH]: (s, ox, oy) => {
-    const body = "#4a5260";
-    const bodyLi = mix(body, "#fff", 0.08);
-    const bodyDk = mix(body, "#000", 0.12);
-    // body
-    vGrad(s, ox + 16, oy + 20, 32, 40, bodyLi, bodyDk);
-    // rim
-    s.rect(ox + 14, oy + 16, 36, 4, mix(bodyLi, "#fff", 0.06));
-    s.rect(ox + 14, oy + 16, 36, 2, mix(bodyLi, "#fff", 0.12));
-    // paper sticking out
+    const p = shade5("#4a5260");
+    // body — tapered with 5-tone
+    vGrad(s, ox + 16, oy + 20, 32, 40, p.hi, p.dk);
+    // rim with bevel
+    s.rect(ox + 14, oy + 16, 36, 4, p.li);
+    s.rect(ox + 14, oy + 16, 36, 2, p.hi);
+    s.rect(ox + 14, oy + 19, 36, 1, p.dk);
+    // paper sticking out with shadow
+    s.rect(ox + 23, oy + 9, 12, 10, mix("#e8e4d0", "#000", 0.08));
     s.rect(ox + 24, oy + 8, 12, 10, "#e8e4d0");
     s.rect(ox + 26, oy + 6, 8, 6, "#f0ece0");
-    // ridges
-    for (const x of [22, 30, 38, 44]) s.rect(ox + x, oy + 24, 2, 32, bodyDk);
+    s.rect(ox + 26, oy + 6, 8, 1, "#ffffff");
+    // ridges with highlight
+    for (const x of [22, 30, 38, 44]) {
+      s.rect(ox + x, oy + 24, 2, 32, p.dk);
+      s.rect(ox + x + 2, oy + 24, 1, 32, p.li);
+    }
     // floor shadow
-    s.rect(ox + 14, oy + 58, 36, 3, mix(bodyDk, "#000", 0.20));
+    s.fillEllipse(ox + 32, oy + 61, 20, 3, mix(p.sh, "#000", 0.2));
   },
   [TILE.PLANT]: (s, ox, oy) => {
-    const pot = "#8a4b2d";
-    const potLi = mix(pot, "#fff", 0.10);
-    const potDk = mix(pot, "#000", 0.15);
+    const pp = shade5("#8a4b2d");
     const leaf1 = "#2f7d3f";
     const leaf2 = "#3a9a4e";
     const leaf3 = "#49b85f";
     const leafHi = "#5dca70";
-    // pot
-    vGrad(s, ox + 20, oy + 40, 24, 20, potLi, potDk);
-    s.rect(ox + 18, oy + 40, 28, 4, mix(potLi, "#fff", 0.08));
-    s.rect(ox + 18, oy + 40, 28, 2, mix(potLi, "#fff", 0.12));
-    // leaves — layered clusters
-    s.rect(ox + 24, oy + 16, 16, 24, leaf1);
-    s.rect(ox + 16, oy + 20, 12, 16, leaf2);
-    s.rect(ox + 36, oy + 20, 12, 16, leaf2);
-    s.rect(ox + 28, oy + 4, 8, 16, leaf3);
-    s.rect(ox + 20, oy + 16, 6, 12, leaf3);
-    s.rect(ox + 42, oy + 16, 6, 12, leaf3);
+    // pot with 5-tone bevel
+    vGrad(s, ox + 20, oy + 40, 24, 20, pp.hi, pp.dk);
+    s.rect(ox + 18, oy + 40, 28, 4, pp.li);
+    s.rect(ox + 18, oy + 40, 28, 2, pp.hi);
+    s.rect(ox + 18, oy + 43, 28, 1, pp.dk);
+    s.rect(ox + 20, oy + 58, 24, 2, pp.sh);
+    // leaves — circular clusters for organic look
+    s.fillCircle(ox + 32, oy + 28, 12, leaf1);
+    s.fillCircle(ox + 22, oy + 28, 8, leaf2);
+    s.fillCircle(ox + 42, oy + 28, 8, leaf2);
+    s.fillCircle(ox + 32, oy + 14, 8, leaf3);
+    s.fillCircle(ox + 24, oy + 20, 6, leaf3);
+    s.fillCircle(ox + 42, oy + 20, 6, leaf3);
     // leaf highlights
-    s.rect(ox + 28, oy + 6, 4, 8, leafHi);
-    s.rect(ox + 24, oy + 18, 4, 6, leaf3);
-    s.rect(ox + 38, oy + 22, 4, 4, leaf3);
+    s.fillCircle(ox + 30, oy + 12, 3, leafHi);
+    s.fillCircle(ox + 22, oy + 26, 3, leaf3);
+    s.fillCircle(ox + 40, oy + 26, 3, leaf3);
     // leaf shadows
-    s.rect(ox + 32, oy + 28, 4, 8, mix(leaf1, "#000", 0.10));
-    s.rect(ox + 18, oy + 28, 4, 6, mix(leaf2, "#000", 0.10));
+    s.fillCircleAlpha(ox + 36, oy + 32, 5, mix(leaf1, "#000", 0.15), 0.6);
+    s.fillCircleAlpha(ox + 24, oy + 34, 4, mix(leaf1, "#000", 0.12), 0.5);
+    // pot shadow on floor
+    s.fillEllipse(ox + 32, oy + 61, 16, 3, mix(pp.sh, "#000", 0.15));
   },
   [TILE.SHELF_T]: (s, ox, oy) => {
-    const wood = "#6e4a2c";
-    const woodLi = mix(wood, "#fff", 0.08);
-    const woodDk = mix(wood, "#000", 0.15);
-    // frame
-    vGrad(s, ox + 2, oy, 60, 64, woodLi, woodDk);
-    s.rect(ox + 2, oy, 60, 2, mix(woodLi, "#fff", 0.08));
-    s.rect(ox + 2, oy, 2, 64, mix(woodLi, "#fff", 0.06));
-    s.rect(ox + 60, oy, 2, 64, woodDk);
-    // shelf interiors
-    s.rect(ox + 6, oy + 6, 52, 20, mix(wood, "#000", 0.25));
-    s.rect(ox + 6, oy + 34, 52, 20, mix(wood, "#000", 0.25));
-    // books row 1
+    const p = shade5("#6e4a2c");
+    // frame with 5-tone
+    vGrad(s, ox + 2, oy, 60, 64, p.hi, p.dk);
+    s.rect(ox + 2, oy, 60, 2, p.hi);
+    s.rect(ox + 2, oy, 2, 64, p.li);
+    s.rect(ox + 60, oy, 2, 64, p.dk);
+    // shelf interiors with shadow
+    s.rect(ox + 6, oy + 6, 52, 20, p.sh);
+    s.rect(ox + 6, oy + 34, 52, 20, p.sh);
+    s.rect(ox + 6, oy + 6, 52, 1, p.dk);
+    s.rect(ox + 6, oy + 34, 52, 1, p.dk);
+    // books row 1 with bevel + shine
     const books1 = ["#d65d5d", "#4f9dde", "#3a9a4e", "#c9852c", "#5b7d9e", "#d65db1", "#36b5b0"];
     books1.forEach((c, i) => {
       const bx = ox + 8 + i * 7;
       s.rect(bx, oy + 10, 6, 14, c);
-      s.rect(bx, oy + 10, 6, 2, mix(c, "#fff", 0.20));
-      s.rect(bx, oy + 10, 1, 14, mix(c, "#fff", 0.10));
+      s.rect(bx, oy + 10, 6, 2, mix(c, "#fff", 0.25));
+      s.rect(bx, oy + 10, 1, 14, mix(c, "#fff", 0.12));
+      s.rect(bx + 5, oy + 10, 1, 14, mix(c, "#000", 0.15));
     });
     // books row 2
     const books2 = ["#36b5b0", "#c9852c", "#d65db1", "#4f6b8f", "#d65d5d", "#3a9a4e", "#5b7d9e"];
     books2.forEach((c, i) => {
       const bx = ox + 8 + i * 7;
       s.rect(bx, oy + 38, 6, 14, c);
-      s.rect(bx, oy + 38, 6, 2, mix(c, "#fff", 0.20));
-      s.rect(bx, oy + 38, 1, 14, mix(c, "#fff", 0.10));
+      s.rect(bx, oy + 38, 6, 2, mix(c, "#fff", 0.25));
+      s.rect(bx, oy + 38, 1, 14, mix(c, "#fff", 0.12));
+      s.rect(bx + 5, oy + 38, 1, 14, mix(c, "#000", 0.15));
     });
-    // shelf divider
-    s.rect(ox + 6, oy + 28, 52, 6, wood);
-    s.rect(ox + 6, oy + 28, 52, 2, mix(woodLi, "#fff", 0.06));
+    // shelf divider with bevel
+    s.rect(ox + 6, oy + 28, 52, 6, p.base);
+    s.rect(ox + 6, oy + 28, 52, 1, p.hi);
+    s.rect(ox + 6, oy + 33, 52, 1, p.sh);
   },
   [TILE.SHELF_B]: (s, ox, oy) => {
-    const wood = "#6e4a2c";
-    const woodLi = mix(wood, "#fff", 0.08);
-    const woodDk = mix(wood, "#000", 0.15);
-    vGrad(s, ox + 2, oy, 60, 56, woodLi, woodDk);
-    s.rect(ox + 2, oy, 60, 2, mix(woodLi, "#fff", 0.08));
-    s.rect(ox + 2, oy, 2, 56, mix(woodLi, "#fff", 0.06));
-    s.rect(ox + 60, oy, 2, 56, woodDk);
+    const p = shade5("#6e4a2c");
+    vGrad(s, ox + 2, oy, 60, 56, p.hi, p.dk);
+    s.rect(ox + 2, oy, 60, 2, p.hi);
+    s.rect(ox + 2, oy, 2, 56, p.li);
+    s.rect(ox + 60, oy, 2, 56, p.dk);
     // top shelf interior
-    s.rect(ox + 6, oy + 4, 52, 20, mix(wood, "#000", 0.25));
-    // books
+    s.rect(ox + 6, oy + 4, 52, 20, p.sh);
+    s.rect(ox + 6, oy + 4, 52, 1, p.dk);
+    // books with bevel
     const books = ["#4f9dde", "#d65d5d", "#e8e4d0", "#3a9a4e", "#7d8597", "#c9852c", "#d65db1"];
     books.forEach((c, i) => {
       const bx = ox + 8 + i * 7;
       s.rect(bx, oy + 8, 6, 14, c);
-      s.rect(bx, oy + 8, 6, 2, mix(c, "#fff", 0.20));
-      s.rect(bx, oy + 8, 1, 14, mix(c, "#fff", 0.10));
+      s.rect(bx, oy + 8, 6, 2, mix(c, "#fff", 0.25));
+      s.rect(bx, oy + 8, 1, 14, mix(c, "#fff", 0.12));
+      s.rect(bx + 5, oy + 8, 1, 14, mix(c, "#000", 0.15));
     });
     // bottom panel
-    vGrad(s, ox + 2, oy + 28, 60, 28, mix(wood, "#000", 0.10), woodDk);
-    s.rect(ox + 2, oy + 28, 60, 2, woodDk);
-    // items on bottom shelf
-    s.rect(ox + 10, oy + 34, 12, 12, "#d65d5d");
+    vGrad(s, ox + 2, oy + 28, 60, 28, p.dk, p.sh);
+    s.rect(ox + 2, oy + 28, 60, 2, p.dk);
+    s.rect(ox + 2, oy + 28, 60, 1, p.sh);
+    // items on bottom shelf with bevel
+    s.fillRoundedRect(ox + 10, oy + 34, 12, 12, 1, "#d65d5d");
     s.rect(ox + 10, oy + 34, 12, 2, "#e87878");
-    s.rect(ox + 26, oy + 36, 8, 10, "#4f9dde");
+    s.fillRoundedRect(ox + 26, oy + 36, 8, 10, 1, "#4f9dde");
+    s.rect(ox + 26, oy + 36, 8, 2, mix("#4f9dde", "#fff", 0.2));
     s.rect(ox + 38, oy + 34, 16, 12, "#e8e4d0");
     s.rect(ox + 38, oy + 34, 16, 2, "#ffffff");
+    s.rect(ox + 38, oy + 34, 1, 12, mix("#e8e4d0", "#fff", 0.2));
   },
   [TILE.COUNTER]: (s, ox, oy) => {
-    const top = "#d4dad8";
-    const topLi = mix(top, "#fff", 0.08);
-    const cab = "#6a4828";
-    const cabLi = mix(cab, "#fff", 0.06);
-    const cabDk = mix(cab, "#000", 0.12);
-    // countertop
-    vGrad(s, ox, oy, T, 24, topLi, mix(top, "#000", 0.06));
-    s.rect(ox, oy, T, 3, mix(topLi, "#fff", 0.12));
-    // cabinet
-    vGrad(s, ox, oy + 24, T, 36, cabLi, cabDk);
-    s.rect(ox, oy + 24, T, 2, cabDk);
-    // cabinet door
-    s.rect(ox + 28, oy + 32, 2, 24, cabDk);
-    s.rect(ox + 18, oy + 40, 8, 2, cabDk);
-    s.rect(ox + 34, oy + 40, 8, 2, cabDk);
-    // handles
-    s.rect(ox + 22, oy + 38, 4, 2, "#4e3414");
-    s.rect(ox + 38, oy + 38, 4, 2, "#4e3414");
+    const tp = shade5("#d4dad8");
+    const cp = shade5("#6a4828");
+    // countertop with 5-tone
+    vGrad(s, ox, oy, T, 24, tp.hi, tp.dk);
+    s.rect(ox, oy, T, 3, tp.hi);
+    s.rect(ox, oy, T, 1, mix(tp.hi, "#fff", 0.2));
+    s.rect(ox, oy + 22, T, 2, tp.sh);
+    // cabinet with 5-tone
+    vGrad(s, ox, oy + 24, T, 36, cp.li, cp.sh);
+    s.rect(ox, oy + 24, T, 2, cp.dk);
+    s.rect(ox, oy + 58, T, 2, cp.sh);
+    // cabinet door bevel
+    s.rect(ox + 28, oy + 32, 2, 24, cp.dk);
+    s.rect(ox + 28, oy + 32, 1, 24, cp.sh);
+    s.rect(ox + 30, oy + 32, 1, 24, cp.li);
+    s.rect(ox + 18, oy + 40, 8, 2, cp.dk);
+    s.rect(ox + 34, oy + 40, 8, 2, cp.dk);
+    // handles — rounded
+    s.fillRoundedRect(ox + 22, oy + 38, 4, 2, 1, cp.sh);
+    s.fillRoundedRect(ox + 38, oy + 38, 4, 2, 1, cp.sh);
   },
   [TILE.FRIDGE]: (s, ox, oy) => {
-    const body = "#c4cdd4";
-    const bodyLi = mix(body, "#fff", 0.10);
-    const bodyDk = mix(body, "#000", 0.10);
-    vGrad(s, ox + 6, oy, 52, 60, bodyLi, bodyDk);
-    s.rect(ox + 6, oy, 52, 2, mix(bodyLi, "#fff", 0.12));
-    s.rect(ox + 6, oy, 2, 60, mix(bodyLi, "#fff", 0.08));
-    s.rect(ox + 56, oy, 2, 60, bodyDk);
-    // door seam
-    s.rect(ox + 8, oy + 24, 48, 1, mix(body, "#000", 0.12));
-    // handles
-    s.rect(ox + 48, oy + 6, 3, 10, "#5a626e");
-    s.rect(ox + 48, oy + 6, 3, 2, "#6a727e");
-    s.rect(ox + 48, oy + 30, 3, 16, "#5a626e");
-    s.rect(ox + 48, oy + 30, 3, 2, "#6a727e");
-    // glossy highlight
-    s.rect(ox + 10, oy + 4, 4, 52, mix(bodyLi, "#fff", 0.12));
+    const p = shade5("#c4cdd4");
+    vGrad(s, ox + 6, oy, 52, 60, p.hi, p.dk);
+    s.rect(ox + 6, oy, 52, 2, p.hi);
+    s.rect(ox + 6, oy, 2, 60, p.li);
+    s.rect(ox + 56, oy, 2, 60, p.dk);
+    s.rect(ox + 6, oy + 58, 52, 2, p.sh);
+    // door seam with bevel
+    s.rect(ox + 8, oy + 24, 48, 1, p.dk);
+    s.rect(ox + 8, oy + 25, 48, 1, p.li);
+    // handles — rounded with shine
+    s.fillRoundedRect(ox + 48, oy + 6, 3, 10, 1, p.sh);
+    s.rect(ox + 48, oy + 6, 3, 1, p.dk);
+    s.fillRoundedRect(ox + 48, oy + 30, 3, 16, 1, p.sh);
+    s.rect(ox + 48, oy + 30, 3, 1, p.dk);
+    // glossy highlight streak
+    s.rect(ox + 10, oy + 4, 3, 52, mix(p.hi, "#fff", 0.15));
+    s.rect(ox + 11, oy + 4, 1, 52, mix(p.hi, "#fff", 0.25));
   },
   [TILE.COFFEE]: (s, ox, oy) => {
     drawers[TILE.COUNTER]!(s, ox, oy);
-    const body = "#8e2828";
-    const bodyLi = mix(body, "#fff", 0.08);
-    const bodyDk = mix(body, "#000", 0.15);
-    vGrad(s, ox + 16, oy, 32, 24, bodyLi, bodyDk);
-    s.rect(ox + 16, oy, 32, 2, mix(bodyLi, "#fff", 0.10));
-    // spout
-    s.rect(ox + 24, oy + 8, 16, 12, "#1a1e28");
+    const p = shade5("#8e2828");
+    vGrad(s, ox + 16, oy, 32, 24, p.hi, p.dk);
+    s.rect(ox + 16, oy, 32, 2, p.hi);
+    s.rect(ox + 16, oy, 2, 24, p.li);
+    s.rect(ox + 46, oy, 2, 24, p.dk);
+    // spout with depth
+    s.fillRoundedRect(ox + 24, oy + 8, 16, 12, 2, "#1a1e28");
+    s.rect(ox + 24, oy + 8, 16, 1, "#2a2e38");
     s.rect(ox + 28, oy + 12, 8, 4, "#0a0e18");
-    s.set(ox + 30, oy + 14, "#e0b84a");
-    // steam
-    s.set(ox + 28, oy - 2, "#e8e8e8");
-    s.set(ox + 30, oy - 4, "#d8d8d8");
-    s.set(ox + 34, oy - 2, "#e0e0e0");
-    s.set(ox + 36, oy - 4, "#d0d0d0");
+    s.fillCircle(ox + 32, oy + 14, 1, "#e0b84a");
+    // steam — softer with alpha
+    s.fillCircleAlpha(ox + 28, oy - 2, 2, "#e8e8e8", 0.6);
+    s.fillCircleAlpha(ox + 32, oy - 4, 2, "#d8d8d8", 0.5);
+    s.fillCircleAlpha(ox + 36, oy - 2, 2, "#e0e0e0", 0.5);
+    s.fillCircleAlpha(ox + 34, oy - 6, 1, "#d0d0d0", 0.4);
   },
   [TILE.COOLER]: (s, ox, oy) => {
-    const body = "#d8dee4";
-    const bodyLi = mix(body, "#fff", 0.08);
-    const bodyDk = mix(body, "#000", 0.10);
-    // base
-    vGrad(s, ox + 16, oy + 28, 32, 32, bodyLi, bodyDk);
-    s.rect(ox + 16, oy + 28, 32, 2, mix(bodyLi, "#fff", 0.10));
-    // water jug
-    vGrad(s, ox + 20, oy + 4, 24, 24, "#a8d2ec", "#5a9cc8");
-    s.rect(ox + 20, oy + 4, 24, 3, mix("#a8d2ec", "#fff", 0.30));
-    s.rect(ox + 24, oy + 8, 6, 12, mix("#a8d2ec", "#fff", 0.20));
-    // spouts
-    s.rect(ox + 24, oy + 36, 8, 8, "#4f9dde");
-    s.rect(ox + 24, oy + 36, 8, 2, mix("#4f9dde", "#fff", 0.20));
-    s.rect(ox + 36, oy + 36, 4, 8, "#d65d5d");
-    s.rect(ox + 36, oy + 36, 4, 2, mix("#d65d5d", "#fff", 0.20));
+    const p = shade5("#d8dee4");
+    // base with 5-tone
+    vGrad(s, ox + 16, oy + 28, 32, 32, p.hi, p.dk);
+    s.rect(ox + 16, oy + 28, 32, 2, p.hi);
+    s.rect(ox + 16, oy + 58, 32, 2, p.sh);
+    // water jug — rounded with radial gradient
+    s.fillRoundedRect(ox + 20, oy + 4, 24, 24, 3, "#a8d2ec");
+    rGrad(s, ox + 32, oy + 16, 12, "#c8e2f8", "#5a9cc8");
+    s.rect(ox + 20, oy + 4, 24, 3, mix("#a8d2ec", "#fff", 0.3));
+    s.rect(ox + 24, oy + 8, 4, 12, mix("#a8d2ec", "#fff", 0.25));
+    // spouts with bevel
+    s.fillRoundedRect(ox + 24, oy + 36, 8, 8, 1, "#4f9dde");
+    s.rect(ox + 24, oy + 36, 8, 2, mix("#4f9dde", "#fff", 0.2));
+    s.fillRoundedRect(ox + 36, oy + 36, 4, 8, 1, "#d65d5d");
+    s.rect(ox + 36, oy + 36, 4, 2, mix("#d65d5d", "#fff", 0.2));
   },
   [TILE.SOFA_L]: (s, ox, oy) => {
-    const body = "#4a6888";
-    const bodyLi = mix(body, "#fff", 0.08);
-    const bodyDk = mix(body, "#000", 0.12);
-    const arm = "#384e6c";
-    // back + seat
-    vGrad(s, ox + 4, oy + 16, 60, 32, bodyLi, bodyDk);
-    s.rect(ox + 4, oy + 16, 60, 3, mix(bodyLi, "#fff", 0.06));
-    // arm
-    vGrad(s, ox + 4, oy + 8, 16, 40, mix(arm, "#fff", 0.06), mix(arm, "#000", 0.10));
-    s.rect(ox + 4, oy + 8, 16, 3, mix(arm, "#fff", 0.10));
+    const p = shade5("#4a6888");
+    const ap = shade5("#384e6c");
+    // back + seat with 5-tone
+    vGrad(s, ox + 4, oy + 16, 60, 32, p.hi, p.dk);
+    s.rect(ox + 4, oy + 16, 60, 3, p.hi);
+    // arm with 5-tone
+    vGrad(s, ox + 4, oy + 8, 16, 40, ap.li, ap.sh);
+    s.rect(ox + 4, oy + 8, 16, 3, ap.hi);
+    s.rect(ox + 4, oy + 8, 2, 40, ap.li);
+    s.rect(ox + 18, oy + 8, 2, 40, ap.dk);
     // base
-    s.rect(ox + 4, oy + 48, 60, 12, mix(body, "#000", 0.15));
-    s.rect(ox + 4, oy + 48, 60, 2, bodyDk);
-    // cushion seam
-    s.rect(ox + 32, oy + 24, 2, 20, bodyDk);
+    s.rect(ox + 4, oy + 48, 60, 12, p.sh);
+    s.rect(ox + 4, oy + 48, 60, 2, p.dk);
+    // cushion seam with bevel
+    s.rect(ox + 32, oy + 24, 2, 20, p.dk);
+    s.rect(ox + 34, oy + 24, 1, 20, p.li);
     // cushion highlights
-    s.rect(ox + 20, oy + 24, 12, 2, mix(bodyLi, "#fff", 0.08));
-    s.rect(ox + 36, oy + 24, 24, 2, mix(bodyLi, "#fff", 0.08));
+    s.rect(ox + 20, oy + 24, 12, 2, p.hi);
+    s.rect(ox + 36, oy + 24, 24, 2, p.hi);
   },
   [TILE.SOFA_R]: (s, ox, oy) => {
-    const body = "#4a6888";
-    const bodyLi = mix(body, "#fff", 0.08);
-    const bodyDk = mix(body, "#000", 0.12);
-    const arm = "#384e6c";
-    vGrad(s, ox, oy + 16, 60, 32, bodyLi, bodyDk);
-    s.rect(ox, oy + 16, 60, 3, mix(bodyLi, "#fff", 0.06));
-    vGrad(s, ox + 44, oy + 8, 16, 40, mix(arm, "#fff", 0.06), mix(arm, "#000", 0.10));
-    s.rect(ox + 44, oy + 8, 16, 3, mix(arm, "#fff", 0.10));
-    s.rect(ox, oy + 48, 60, 12, mix(body, "#000", 0.15));
-    s.rect(ox, oy + 48, 60, 2, bodyDk);
-    s.rect(ox + 30, oy + 24, 2, 20, bodyDk);
-    s.rect(ox + 4, oy + 24, 24, 2, mix(bodyLi, "#fff", 0.08));
-    s.rect(ox + 34, oy + 24, 20, 2, mix(bodyLi, "#fff", 0.08));
+    const p = shade5("#4a6888");
+    const ap = shade5("#384e6c");
+    vGrad(s, ox, oy + 16, 60, 32, p.hi, p.dk);
+    s.rect(ox, oy + 16, 60, 3, p.hi);
+    vGrad(s, ox + 44, oy + 8, 16, 40, ap.li, ap.sh);
+    s.rect(ox + 44, oy + 8, 16, 3, ap.hi);
+    s.rect(ox + 44, oy + 8, 2, 40, ap.li);
+    s.rect(ox + 58, oy + 8, 2, 40, ap.dk);
+    s.rect(ox, oy + 48, 60, 12, p.sh);
+    s.rect(ox, oy + 48, 60, 2, p.dk);
+    s.rect(ox + 30, oy + 24, 2, 20, p.dk);
+    s.rect(ox + 32, oy + 24, 1, 20, p.li);
+    s.rect(ox + 4, oy + 24, 24, 2, p.hi);
+    s.rect(ox + 34, oy + 24, 20, 2, p.hi);
   },
   [TILE.PAPERS]: (s, ox, oy) => {
-    // paper 1
+    // paper 1 with shadow
+    s.rect(ox + 9, oy + 15, 24, 28, mix("#f0ece0", "#000", 0.08));
     s.rect(ox + 10, oy + 14, 24, 28, "#f0ece0");
     s.rect(ox + 10, oy + 14, 24, 3, "#ffffff");
+    s.rect(ox + 10, oy + 14, 1, 28, mix("#f0ece0", "#fff", 0.2));
     s.rect(ox + 14, oy + 22, 16, 1, "#a8a090");
     s.rect(ox + 14, oy + 26, 14, 1, "#a8a090");
     s.rect(ox + 14, oy + 30, 16, 1, "#a8a090");
     s.rect(ox + 14, oy + 34, 12, 1, "#a8a090");
-    // paper 2 (offset)
+    // paper 2 (offset) with shadow
+    s.rect(ox + 29, oy + 23, 24, 28, mix("#e0d8c0", "#000", 0.08));
     s.rect(ox + 30, oy + 22, 24, 28, "#e0d8c0");
     s.rect(ox + 30, oy + 22, 24, 3, "#f0e8d0");
+    s.rect(ox + 30, oy + 22, 1, 28, mix("#e0d8c0", "#fff", 0.15));
     s.rect(ox + 34, oy + 30, 16, 1, "#989080");
     s.rect(ox + 34, oy + 34, 14, 1, "#989080");
     s.rect(ox + 34, oy + 38, 16, 1, "#989080");
-    // shadows
-    s.rect(ox + 10, oy + 40, 24, 2, mix("#f0ece0", "#000", 0.06));
-    s.rect(ox + 30, oy + 48, 24, 2, mix("#e0d8c0", "#000", 0.06));
   },
   [TILE.VENDING]: vendingTile("#8e2828", "#a83838"),
 };
 
 function vendingTile(body: string, bodyLight: string): TileDrawer {
   return (s, ox, oy) => {
-    const bodyDk = mix(body, "#000", 0.18);
-    vGrad(s, ox + 6, oy, 52, 60, mix(body, "#fff", 0.06), bodyDk);
-    s.rect(ox + 6, oy, 52, 2, mix(bodyLight, "#fff", 0.10));
-    s.rect(ox + 6, oy, 2, 60, mix(body, "#fff", 0.06));
-    s.rect(ox + 56, oy, 2, 60, bodyDk);
-    // glass front
+    const p = shade5(body);
+    vGrad(s, ox + 6, oy, 52, 60, p.hi, p.dk);
+    s.rect(ox + 6, oy, 52, 2, p.hi);
+    s.rect(ox + 6, oy, 2, 60, p.li);
+    s.rect(ox + 56, oy, 2, 60, p.dk);
+    s.rect(ox + 6, oy + 58, 52, 2, p.sh);
+    // glass front with depth
     vGrad(s, ox + 10, oy + 8, 28, 32, "#181c24", "#282c34");
     s.rect(ox + 10, oy + 8, 28, 2, "#2a3040");
-    // snacks grid
+    s.rect(ox + 10, oy + 8, 1, 32, "#2a3040");
+    s.rect(ox + 37, oy + 8, 1, 32, "#0a0e14");
+    // snacks grid with bevel
     const snacks = ["#e0b84a", "#d65d5d", "#4f9dde", "#3a9a4e", "#c9852c", "#d65db1"];
     snacks.forEach((c, i) => {
       const sx = ox + 12 + (i % 3) * 8;
       const sy = oy + 12 + Math.floor(i / 3) * 12;
       s.rect(sx, sy, 6, 8, c);
-      s.rect(sx, sy, 6, 2, mix(c, "#fff", 0.20));
-      s.rect(sx, sy + 6, 6, 2, mix(c, "#000", 0.15));
+      s.rect(sx, sy, 6, 2, mix(c, "#fff", 0.25));
+      s.rect(sx, sy, 1, 8, mix(c, "#fff", 0.12));
+      s.rect(sx + 5, sy, 1, 8, mix(c, "#000", 0.15));
+      s.rect(sx, sy + 7, 6, 1, mix(c, "#000", 0.2));
     });
-    // glass reflection
-    s.rect(ox + 12, oy + 10, 4, 28, mix("#ffffff", "#3a4050", 0.15));
-    // coin panel
+    // glass reflection — diagonal
+    s.line(ox + 12, oy + 10, ox + 18, oy + 38, mix("#ffffff", "#3a4050", 0.12));
+    s.line(ox + 13, oy + 10, ox + 19, oy + 38, mix("#ffffff", "#3a4050", 0.08));
+    // coin panel with bevel
     s.rect(ox + 42, oy + 8, 14, 16, "#e8eaec");
     s.rect(ox + 42, oy + 8, 14, 2, "#f4f6f8");
+    s.rect(ox + 42, oy + 8, 1, 16, "#f4f6f8");
+    s.rect(ox + 55, oy + 8, 1, 16, "#c8ccd0");
+    s.rect(ox + 42, oy + 22, 14, 2, "#c8ccd0");
     s.rect(ox + 44, oy + 12, 10, 2, "#33373d");
     s.rect(ox + 44, oy + 16, 10, 2, "#33373d");
     s.rect(ox + 44, oy + 20, 6, 2, "#d65d5d");
-    // dispense slot
-    s.rect(ox + 10, oy + 44, 28, 8, "#181c24");
-    s.rect(ox + 10, oy + 44, 28, 2, "#282c34");
+    // dispense slot with depth
+    s.fillRoundedRect(ox + 10, oy + 44, 28, 8, 1, "#181c24");
+    s.rect(ox + 10, oy + 44, 28, 1, "#282c34");
+    s.rect(ox + 10, oy + 51, 28, 1, "#0a0e14");
   };
 }
 
 // Lumon theme: green carpet, white walls, white desks — the severed floor.
 
 function lumonCounter(s: Sheet, ox: number, oy: number): void {
-  vGrad(s, ox, oy, T, 24, "#f2f4f2", "#d4d8db");
-  s.rect(ox, oy, T, 3, mix("#f2f4f2", "#fff", 0.10));
-  vGrad(s, ox, oy + 24, T, 36, "#d4d8db", "#b3b8bd");
-  s.rect(ox, oy + 24, T, 2, "#b3b8bd");
-  s.rect(ox + 28, oy + 32, 2, 24, "#b3b8bd");
-  s.rect(ox + 20, oy + 40, 8, 2, "#8e949a");
-  s.rect(ox + 36, oy + 40, 8, 2, "#8e949a");
+  const tp = shade5("#f2f4f2");
+  const cp = shade5("#d4d8db");
+  vGrad(s, ox, oy, T, 24, tp.hi, tp.dk);
+  s.rect(ox, oy, T, 3, tp.hi);
+  s.rect(ox, oy, T, 1, mix(tp.hi, "#fff", 0.2));
+  s.rect(ox, oy + 22, T, 2, tp.sh);
+  vGrad(s, ox, oy + 24, T, 36, cp.li, cp.sh);
+  s.rect(ox, oy + 24, T, 2, cp.dk);
+  s.rect(ox, oy + 58, T, 2, cp.sh);
+  s.rect(ox + 28, oy + 32, 2, 24, cp.dk);
+  s.rect(ox + 28, oy + 32, 1, 24, cp.sh);
+  s.rect(ox + 30, oy + 32, 1, 24, cp.li);
+  s.rect(ox + 20, oy + 40, 8, 2, cp.dk);
+  s.rect(ox + 36, oy + 40, 8, 2, cp.dk);
+  s.fillRoundedRect(ox + 24, oy + 38, 4, 2, 1, cp.sh);
+  s.fillRoundedRect(ox + 40, oy + 38, 4, 2, 1, cp.sh);
 }
 
 function lumonWallFace(s: Sheet, ox: number, oy: number): void {
-  vGrad(s, ox, oy, T, T, "#f6f7f4", "#dfe1dd");
-  s.rect(ox, oy, T, 3, mix("#f6f7f4", "#fff", 0.08));
-  s.rect(ox + 31, oy + 4, 1, 52, "#e6e8e4");
-  s.rect(ox, oy + 52, T, 12, "#ced2cf");
-  s.rect(ox, oy + 52, T, 2, "#b8bcb9");
+  const p = shade5("#f6f7f4");
+  vGrad(s, ox, oy, T, T, p.hi, p.dk);
+  s.rect(ox, oy, T, 3, p.hi);
+  s.rect(ox, oy, T, 1, mix(p.hi, "#fff", 0.3));
+  s.rect(ox + 31, oy + 4, 1, 48, p.dk);
+  s.rect(ox + 32, oy + 4, 1, 48, p.li);
+  // baseboard with 5-tone
+  s.rect(ox, oy + 50, T, 14, p.dk);
+  s.rect(ox, oy + 50, T, 2, p.sh);
+  s.rect(ox, oy + 52, T, 1, p.hi);
+  s.rect(ox, oy + 62, T, 2, p.li);
 }
 
 const lumonDrawers: Record<number, TileDrawer> = {
@@ -785,92 +1114,142 @@ const lumonDrawers: Record<number, TileDrawer> = {
   [TILE.COUNTER]: lumonCounter,
   [TILE.COFFEE]: (s, ox, oy) => {
     lumonCounter(s, ox, oy);
-    vGrad(s, ox + 16, oy, 32, 24, "#3a4458", "#1a2030");
-    s.rect(ox + 16, oy, 32, 2, mix("#3a4458", "#fff", 0.08));
-    s.rect(ox + 24, oy + 8, 16, 12, "#10141c");
+    const p = shade5("#3a4458");
+    vGrad(s, ox + 16, oy, 32, 24, p.hi, p.dk);
+    s.rect(ox + 16, oy, 32, 2, p.hi);
+    s.rect(ox + 16, oy, 2, 24, p.li);
+    s.rect(ox + 46, oy, 2, 24, p.dk);
+    s.fillRoundedRect(ox + 24, oy + 8, 16, 12, 2, "#10141c");
+    s.rect(ox + 24, oy + 8, 16, 1, "#1a1e28");
     s.rect(ox + 28, oy + 12, 8, 4, "#080c14");
-    s.set(ox + 30, oy + 14, "#e0b84a");
+    s.fillCircle(ox + 32, oy + 14, 1, "#e0b84a");
   },
   [TILE.WALL_TOP]: (s, ox, oy) => {
-    vGrad(s, ox, oy, T, T, "#c4cacf", "#8e949a");
-    noise(s, ox, oy, T, T, "#aeb4ba", 0.05);
-    s.rect(ox, oy + 58, T, 6, mix("#8e949a", "#000", 0.12));
+    const p = shade5("#aeb4ba");
+    vGrad(s, ox, oy, T, T, p.li, p.dk);
+    noiseAlpha(s, ox, oy, T, T, p.dk, 0.05, 0.4);
+    s.rect(ox, oy, T, 2, p.hi);
+    vGrad(s, ox, oy + 54, T, 10, p.dk, p.sh);
+    s.rect(ox, oy + 58, T, 6, p.sh);
   },
   [TILE.WALL_FACE]: lumonWallFace,
   [TILE.CLOCK]: (s, ox, oy) => {
     lumonWallFace(s, ox, oy);
-    s.rect(ox + 18, oy + 8, 28, 28, "#33373d");
-    s.rect(ox + 18, oy + 8, 28, 2, "#454951");
-    vGrad(s, ox + 20, oy + 10, 24, 24, "#f6f6fa", "#e0e0e4");
-    s.rect(ox + 31, oy + 14, 2, 8, "#33373d");
-    s.rect(ox + 32, oy + 22, 8, 2, "#d65d5d");
-    s.set(ox + 31, oy + 21, "#33373d");
-    s.set(ox + 32, oy + 22, "#33373d");
-    s.rect(ox + 22, oy + 12, 6, 2, "#ffffff");
+    const fp = shade5("#33373d");
+    s.fillCircle(ox + 32, oy + 22, 15, fp.base);
+    s.fillCircle(ox + 32, oy + 22, 15, fp.dk);
+    s.fillCircle(ox + 31, oy + 21, 14, fp.li);
+    s.fillCircle(ox + 32, oy + 22, 12, "#f6f6fa");
+    rGrad(s, ox + 32, oy + 22, 12, "#ffffff", "#e0e0e4");
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      const r1 = i % 3 === 0 ? 9 : 10;
+      const x1 = 32 + Math.cos(a) * r1;
+      const y1 = 22 + Math.sin(a) * r1;
+      const x2 = 32 + Math.cos(a) * 11;
+      const y2 = 22 + Math.sin(a) * 11;
+      s.lineThick(ox + x1, oy + y1, ox + x2, oy + y2, i % 3 === 0 ? "#555" : "#888", i % 3 === 0 ? 2 : 1);
+    }
+    s.lineThick(ox + 32, oy + 22, ox + 32, oy + 14, "#33373d", 2);
+    s.lineThick(ox + 32, oy + 22, ox + 40, oy + 22, "#d65d5d", 2);
+    s.fillCircle(ox + 32, oy + 22, 2, "#33373d");
+    s.line(ox + 24, oy + 14, ox + 28, oy + 12, "#ffffff");
   },
   [TILE.POSTER]: (s, ox, oy) => {
     lumonWallFace(s, ox, oy);
-    s.rect(ox + 10, oy + 6, 44, 44, "#2e3547");
-    s.rect(ox + 10, oy + 6, 44, 2, mix("#2e3547", "#fff", 0.06));
+    const fp = shade5("#2e3547");
+    s.rect(ox + 10, oy + 6, 44, 44, fp.base);
+    s.rect(ox + 10, oy + 6, 44, 2, fp.hi);
+    s.rect(ox + 10, oy + 6, 2, 44, fp.li);
+    s.rect(ox + 52, oy + 6, 2, 44, fp.dk);
+    s.rect(ox + 10, oy + 48, 44, 2, fp.sh);
     vGrad(s, ox + 12, oy + 8, 40, 40, "#d8d2b8", "#c0baa0");
-    // portrait
+    // portrait with 5-tone
     vGrad(s, ox + 22, oy + 14, 20, 16, "#f2c39b", "#d8a87a");
-    s.rect(ox + 22, oy + 14, 20, 3, mix("#f2c39b", "#fff", 0.10));
+    s.rect(ox + 22, oy + 14, 20, 3, mix("#f2c39b", "#fff", 0.12));
+    s.rect(ox + 22, oy + 14, 1, 16, mix("#f2c39b", "#fff", 0.08));
     // suit
     vGrad(s, ox + 18, oy + 30, 28, 16, "#3a4458", "#23283a");
     s.rect(ox + 30, oy + 30, 4, 8, "#f2c39b");
+    s.rect(ox + 18, oy + 30, 28, 2, mix("#3a4458", "#fff", 0.06));
   },
   [TILE.DOOR]: (s, ox, oy) => {
-    s.rect(ox, oy, T, T, "#aeb4ba");
-    vGrad(s, ox + 6, oy + 4, 52, 58, "#f0f2f4", "#d0d4d6");
-    s.rect(ox + 6, oy + 4, 52, 2, mix("#f0f2f4", "#fff", 0.10));
-    s.rect(ox + 6, oy + 4, 2, 58, mix("#f0f2f4", "#fff", 0.06));
-    s.rect(ox + 56, oy + 4, 2, 58, "#c6cbd0");
-    // panels
-    s.rect(ox + 14, oy + 12, 36, 18, "#dde0e3");
-    s.rect(ox + 14, oy + 12, 36, 2, mix("#dde0e3", "#fff", 0.08));
-    s.rect(ox + 14, oy + 36, 36, 18, "#dde0e3");
-    s.rect(ox + 14, oy + 36, 36, 2, mix("#dde0e3", "#fff", 0.08));
+    const fp = shade5("#aeb4ba");
+    const dp = shade5("#f0f2f4");
+    const pp = shade5("#dde0e3");
+    s.rect(ox, oy, T, T, fp.base);
+    s.rect(ox, oy, T, 2, fp.hi);
+    s.rect(ox, oy + 62, T, 2, fp.sh);
+    vGrad(s, ox + 6, oy + 4, 52, 58, dp.hi, dp.dk);
+    s.rect(ox + 6, oy + 4, 52, 2, dp.hi);
+    s.rect(ox + 6, oy + 4, 2, 58, dp.li);
+    s.rect(ox + 56, oy + 4, 2, 58, dp.dk);
+    s.rect(ox + 6, oy + 61, 52, 1, dp.sh);
+    // panels with bevel
+    s.rect(ox + 14, oy + 12, 36, 18, pp.base);
+    s.rect(ox + 14, oy + 12, 36, 2, pp.hi);
+    s.rect(ox + 14, oy + 12, 2, 18, pp.li);
+    s.rect(ox + 48, oy + 12, 2, 18, pp.dk);
+    s.rect(ox + 14, oy + 28, 36, 2, pp.sh);
+    s.rect(ox + 14, oy + 36, 36, 18, pp.base);
+    s.rect(ox + 14, oy + 36, 36, 2, pp.hi);
+    s.rect(ox + 14, oy + 36, 2, 18, pp.li);
+    s.rect(ox + 48, oy + 36, 2, 18, pp.dk);
+    s.rect(ox + 14, oy + 52, 36, 2, pp.sh);
     // handle
-    s.rect(ox + 50, oy + 32, 3, 4, "#5a626e");
-    s.rect(ox + 50, oy + 32, 3, 1, "#6a727e");
+    s.fillCircle(ox + 51, oy + 34, 2, "#5a626e");
+    s.set(ox + 50, oy + 33, "#6a727e");
   },
   [TILE.DOORMAT]: (s, ox, oy) => {
-    const base = "#46683c";
-    const line = "#527a45";
-    const dk = "#395431";
-    s.rect(ox, oy, T, T, base);
-    s.rect(ox, oy, T, 3, dk);
-    s.rect(ox, oy + 61, T, 3, dk);
-    s.rect(ox, oy, 3, T, dk);
-    s.rect(ox + 61, oy, 3, T, dk);
+    const p = shade5("#46683c");
+    const lp = shade5("#527a45");
+    s.rect(ox, oy, T, T, p.base);
+    s.rect(ox, oy, T, 3, p.sh);
+    s.rect(ox, oy, T, 1, p.dk);
+    s.rect(ox, oy + 61, T, 3, p.sh);
+    s.rect(ox, oy + 63, T, 1, p.dk);
+    s.rect(ox, oy, 3, T, p.sh);
+    s.rect(ox, oy, 1, T, p.dk);
+    s.rect(ox + 61, oy, 3, T, p.sh);
+    s.rect(ox + 63, oy, 1, T, p.dk);
     for (let y = 6; y < 58; y += 5) {
-      s.rect(ox + 4, oy + y, 56, 2, line);
-      s.rect(ox + 4, oy + y + 2, 56, 1, mix(base, "#000", 0.08));
+      s.rect(ox + 4, oy + y, 56, 2, lp.base);
+      s.rect(ox + 4, oy + y, 56, 1, lp.li);
+      s.rect(ox + 4, oy + y + 2, 56, 1, p.dk);
     }
-    noise(s, ox + 4, oy + 4, 56, 56, mix(base, "#000", 0.10), 0.12);
+    noiseAlpha(s, ox + 4, oy + 4, 56, 56, p.sh, 0.12, 0.4);
   },
   [TILE.DESK_L]: (s, ox, oy) => {
-    vGrad(s, ox + 2, oy, 60, 44, "#f4f6f8", "#d8dade");
-    s.rect(ox + 2, oy, 60, 3, mix("#f4f6f8", "#fff", 0.10));
-    vGrad(s, ox + 2, oy + 44, 60, 16, "#c3c8cd", "#aab0b6");
-    s.rect(ox + 2, oy + 44, 60, 2, "#aab0b6");
-    s.rect(ox + 2, oy, 2, 60, "#aab0b6");
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    vGrad(s, ox + 2, oy, 60, 44, tp.hi, tp.dk);
+    s.rect(ox + 2, oy, 60, 3, tp.hi);
+    s.rect(ox + 2, oy, 60, 1, mix(tp.hi, "#fff", 0.3));
+    vGrad(s, ox + 2, oy + 44, 60, 16, sp.li, sp.sh);
+    s.rect(ox + 2, oy + 44, 60, 2, sp.dk);
+    s.rect(ox + 2, oy + 58, 60, 2, sp.sh);
+    s.rect(ox + 2, oy, 2, 60, sp.sh);
   },
   [TILE.DESK_R]: (s, ox, oy) => {
-    vGrad(s, ox, oy, 60, 44, "#f4f6f8", "#d8dade");
-    s.rect(ox, oy, 60, 3, mix("#f4f6f8", "#fff", 0.10));
-    vGrad(s, ox, oy + 44, 60, 16, "#c3c8cd", "#aab0b6");
-    s.rect(ox, oy + 44, 60, 2, "#aab0b6");
-    s.rect(ox + 58, oy, 2, 60, "#aab0b6");
-    // papers
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    vGrad(s, ox, oy, 60, 44, tp.hi, tp.dk);
+    s.rect(ox, oy, 60, 3, tp.hi);
+    s.rect(ox, oy, 60, 1, mix(tp.hi, "#fff", 0.3));
+    vGrad(s, ox, oy + 44, 60, 16, sp.li, sp.sh);
+    s.rect(ox, oy + 44, 60, 2, sp.dk);
+    s.rect(ox, oy + 58, 60, 2, sp.sh);
+    s.rect(ox + 58, oy, 2, 60, sp.sh);
+    // papers with shadow
+    s.rect(ox + 5, oy + 11, 20, 24, mix("#f7f8fa", "#000", 0.08));
     s.rect(ox + 6, oy + 10, 20, 24, "#f7f8fa");
     s.rect(ox + 6, oy + 10, 20, 3, "#ffffff");
     s.rect(ox + 10, oy + 18, 12, 1, "#9aa0a8");
     s.rect(ox + 10, oy + 22, 10, 1, "#9aa0a8");
-    // mug
-    s.rect(ox + 36, oy + 14, 12, 12, "#3a6f57");
-    s.rect(ox + 36, oy + 14, 12, 2, mix("#3a6f57", "#fff", 0.10));
+    // mug — rounded with shine
+    s.fillRoundedRect(ox + 36, oy + 14, 12, 12, 2, "#3a6f57");
+    s.rect(ox + 36, oy + 14, 12, 2, mix("#3a6f57", "#fff", 0.15));
+    s.rect(ox + 37, oy + 15, 3, 6, mix("#3a6f57", "#fff", 0.25));
     s.rect(ox + 48, oy + 18, 4, 6, "#3a6f57");
   },
 };
@@ -935,7 +1314,21 @@ const DIRS: Dir[] = ["down", "left", "right", "up"]; // sheet row order
 function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, pose: number): void {
   const mirror = dir === "left";
   const d: Dir = mirror ? "right" : dir;
-  const bob = pose % 2 === 1 ? 2 : 0;
+
+  // Per-pose animation: head bob, body sway, arm swing, hair bounce
+  // Poses 0-5: walk cycle (6 frames), Pose 6: idle breathing, Pose 7: idle blink
+  const isIdle = pose === 6;
+  const isBlink = pose === 7;
+  const stepping = pose === 1 || pose === 3 || pose === 5;
+  const bodyBob = isIdle ? -1 : (stepping ? 1 : 0);
+  const headBob = isIdle ? -1 : (stepping ? 3 : (pose === 2 || pose === 4 ? 1 : 0));
+  const headSway = pose === 1 ? -1 : pose === 3 ? 1 : pose === 4 ? -1 : 0;
+  const armSwingL = pose === 1 ? -1 : pose === 3 ? 1 : pose === 4 ? -1 : 0;
+  const armSwingR = pose === 1 ? 1 : pose === 3 ? -1 : pose === 4 ? 1 : 0;
+  const armSwing = pose === 1 ? 2 : pose === 3 ? -2 : pose === 4 ? 2 : 0;
+  const hairBounce = stepping ? 1 : 0;
+  const breathing = isIdle; // subtle chest expansion
+  const eyesClosed = isBlink;
 
   const skinLi = mix(pal.skin, "#ffffff", 0.22);
   const skinDk = mix(pal.skin, "#000000", 0.12);
@@ -944,9 +1337,29 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
   const shirtLi = mix(pal.shirt, "#ffffff", 0.15);
   const pantsLi = mix(pal.pants, "#ffffff", 0.08);
 
-  const p = (x: number, y: number, w: number, h: number, c: string) =>
-    s.rect(ox + x, oy + y + bob, w, h, c);
-  const px = (x: number, y: number, c: string) => s.set(ox + x, oy + y + bob, c);
+  // Head — bobs independently, sways side to side
+  const hp = (x: number, y: number, w: number, h: number, c: string) =>
+    s.rect(ox + x + headSway, oy + y + headBob, w, h, c);
+  const hpx = (x: number, y: number, c: string) => s.set(ox + x + headSway, oy + y + headBob, c);
+  // Hair sides — extra bounce on top of head bob
+  const fp = (x: number, y: number, w: number, h: number, c: string) =>
+    s.rect(ox + x + headSway, oy + y + headBob + hairBounce, w, h, c);
+  // Body — subtle bob
+  const bp = (x: number, y: number, w: number, h: number, c: string) =>
+    s.rect(ox + x, oy + y + bodyBob, w, h, c);
+  const bpx = (x: number, y: number, c: string) => s.set(ox + x, oy + y + bodyBob, c);
+  // Arms — body bob + swing (separate left/right for front/back views)
+  const alp = (x: number, y: number, w: number, h: number, c: string) =>
+    s.rect(ox + x + armSwingL, oy + y + bodyBob, w, h, c);
+  const arp = (x: number, y: number, w: number, h: number, c: string) =>
+    s.rect(ox + x + armSwingR, oy + y + bodyBob, w, h, c);
+  // Profile arm — bigger swing
+  const pap = (x: number, y: number, w: number, h: number, c: string) =>
+    s.rect(ox + x + armSwing, oy + y + bodyBob, w, h, c);
+  // Legs — planted on ground, no bob
+  const lp = (x: number, y: number, w: number, h: number, c: string) =>
+    s.rect(ox + x, oy + y, w, h, c);
+  const lpx = (x: number, y: number, c: string) => s.set(ox + x, oy + y, c);
 
   // ===== CUTE CHIBI (64x96) =====
   // Head: y 2-36 (36px tall), x 14-50 (36px wide) — huge, round
@@ -955,292 +1368,303 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
   // Shoes: y 78-88 (10px), rounded
 
   if (d === "down") {
-    // ---- HEAD: big round dome ----
+    // ---- HEAD: big round dome (bobs + sways) ----
     // Hair top — rounded
-    p(24, 2, 16, 2, pal.hair);
-    p(20, 4, 24, 2, pal.hair);
-    p(18, 6, 28, 2, pal.hair);
-    p(16, 8, 32, 4, pal.hair);
-    // Hair sides
-    p(16, 12, 4, 10, pal.hair);
-    p(44, 12, 4, 10, pal.hair);
+    hp(24, 2, 16, 2, pal.hair);
+    hp(20, 4, 24, 2, pal.hair);
+    hp(18, 6, 28, 2, pal.hair);
+    hp(16, 8, 32, 4, pal.hair);
+    // Hair sides (bounce)
+    fp(16, 12, 4, 10, pal.hair);
+    fp(44, 12, 4, 10, pal.hair);
     // Face area
-    p(20, 12, 24, 20, pal.skin);
-    p(20, 32, 24, 4, pal.skin);
+    hp(20, 12, 24, 20, pal.skin);
+    hp(20, 32, 24, 4, pal.skin);
     // Hair bangs — soft fringe
-    p(20, 12, 24, 4, pal.hair);
-    p(20, 16, 4, 2, pal.hair);
-    p(40, 16, 4, 2, pal.hair);
-    p(28, 16, 2, 2, pal.hair);
-    p(34, 16, 2, 2, pal.hair);
+    hp(20, 12, 24, 4, pal.hair);
+    hp(20, 16, 4, 2, pal.hair);
+    hp(40, 16, 4, 2, pal.hair);
+    hp(28, 16, 2, 2, pal.hair);
+    hp(34, 16, 2, 2, pal.hair);
     // Soft outline (only key edges)
-    p(22, 0, 20, 2, OUTLINE);
-    p(18, 2, 4, 2, OUTLINE);
-    p(42, 2, 4, 2, OUTLINE);
-    p(14, 6, 2, 6, OUTLINE);
-    p(48, 6, 2, 6, OUTLINE);
-    p(16, 12, 2, 10, OUTLINE);
-    p(46, 12, 2, 10, OUTLINE);
-    p(18, 22, 2, 4, OUTLINE);
-    p(44, 22, 2, 4, OUTLINE);
-    p(20, 26, 2, 6, OUTLINE);
-    p(42, 26, 2, 6, OUTLINE);
-    p(22, 32, 20, 2, OUTLINE);
-    p(20, 34, 2, 2, OUTLINE);
-    p(42, 34, 2, 2, OUTLINE);
+    hp(22, 0, 20, 2, OUTLINE);
+    hp(18, 2, 4, 2, OUTLINE);
+    hp(42, 2, 4, 2, OUTLINE);
+    hp(14, 6, 2, 6, OUTLINE);
+    hp(48, 6, 2, 6, OUTLINE);
+    hp(16, 12, 2, 10, OUTLINE);
+    hp(46, 12, 2, 10, OUTLINE);
+    hp(18, 22, 2, 4, OUTLINE);
+    hp(44, 22, 2, 4, OUTLINE);
+    hp(20, 26, 2, 6, OUTLINE);
+    hp(42, 26, 2, 6, OUTLINE);
+    hp(22, 32, 20, 2, OUTLINE);
+    hp(20, 34, 2, 2, OUTLINE);
+    hp(42, 34, 2, 2, OUTLINE);
     // Hair shine
-    p(22, 6, 10, 2, hairLi);
-    p(18, 8, 2, 4, hairLi);
-    p(44, 12, 2, 8, hairDk);
+    hp(22, 6, 10, 2, hairLi);
+    hp(18, 8, 2, 4, hairLi);
+    fp(44, 12, 2, 8, hairDk);
     // Face soft shading
-    p(20, 18, 2, 14, skinLi);
-    p(42, 18, 2, 14, skinDk);
-    // Eyes — big cute 6x4 ovals with shine
-    p(24, 20, 6, 4, "#2a2040");
-    p(34, 20, 6, 4, "#2a2040");
-    // Eye shine (white sparkle)
-    px(26, 20, "#ffffff");
-    px(36, 20, "#ffffff");
-    px(28, 22, mix("#ffffff", "#aaccff", 0.3));
-    px(38, 22, mix("#ffffff", "#aaccff", 0.3));
+    hp(20, 18, 2, 14, skinLi);
+    hp(42, 18, 2, 14, skinDk);
+    // Eyes — big cute 6x4 ovals with shine, or closed lines when blinking
+    if (eyesClosed) {
+      hp(24, 22, 6, 1, "#2a2040");
+      hp(34, 22, 6, 1, "#2a2040");
+    } else {
+      hp(24, 20, 6, 4, "#2a2040");
+      hp(34, 20, 6, 4, "#2a2040");
+      // Eye shine (white sparkle)
+      hpx(26, 20, "#ffffff");
+      hpx(36, 20, "#ffffff");
+      hpx(28, 22, mix("#ffffff", "#aaccff", 0.3));
+      hpx(38, 22, mix("#ffffff", "#aaccff", 0.3));
+    }
     // Mouth — tiny cute smile
-    p(30, 28, 4, 2, skinDk);
-    px(28, 28, skinDk);
-    px(34, 28, skinDk);
+    hp(30, 28, 4, 2, skinDk);
+    hpx(28, 28, skinDk);
+    hpx(34, 28, skinDk);
     // Cheek blush
-    p(22, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
-    p(40, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
+    hp(22, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
+    hp(40, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
 
     // ---- NECK (tiny) ----
-    p(28, 36, 8, 2, skinDk);
+    bp(28, 36, 8, 2, skinDk);
 
     // ---- TORSO (small, rounded) ----
-    p(20, 38, 24, 20, pal.shirt);
-    p(22, 38, 20, 2, shirtLi);
-    p(20, 38, 2, 20, shirtLi);
-    p(42, 38, 2, 20, pal.shirtShade);
-    p(20, 54, 24, 4, pal.shirtShade);
+    const tw = breathing ? 26 : 24;
+    const tx = breathing ? 19 : 20;
+    bp(tx, 38, tw, 20, pal.shirt);
+    bp(tx + 2, 38, tw - 4, 2, shirtLi);
+    bp(tx, 38, 2, 20, shirtLi);
+    bp(tx + tw - 2, 38, 2, 20, pal.shirtShade);
+    bp(tx, 54, tw, 4, pal.shirtShade);
     // Soft outline
-    p(18, 38, 2, 20, OUTLINE);
-    p(44, 38, 2, 20, OUTLINE);
-    p(20, 58, 24, 2, OUTLINE);
-    p(20, 38, 2, 2, OUTLINE);
-    p(42, 38, 2, 2, OUTLINE);
+    bp(tx - 2, 38, 2, 20, OUTLINE);
+    bp(tx + tw, 38, 2, 20, OUTLINE);
+    bp(tx, 58, tw, 2, OUTLINE);
+    bp(tx, 38, 2, 2, OUTLINE);
+    bp(tx + tw - 2, 38, 2, 2, OUTLINE);
     if (pal.tie) {
-      p(30, 40, 4, 8, pal.tie);
-      p(28, 46, 8, 2, pal.tie);
-      p(30, 48, 4, 2, pal.tie);
+      bp(30, 40, 4, 8, pal.tie);
+      bp(28, 46, 8, 2, pal.tie);
+      bp(30, 48, 4, 2, pal.tie);
     }
 
-    // ---- ARMS (stubby) ----
-    p(16, 40, 4, 12, pal.shirt);
-    p(44, 40, 4, 12, pal.shirt);
-    p(16, 40, 2, 12, shirtLi);
-    p(46, 40, 2, 12, pal.shirtShade);
-    p(14, 40, 2, 12, OUTLINE);
-    p(48, 40, 2, 12, OUTLINE);
+    // ---- ARMS (stubby, swing while walking) ----
+    alp(16, 40, 4, 12, pal.shirt);
+    arp(44, 40, 4, 12, pal.shirt);
+    alp(16, 40, 2, 12, shirtLi);
+    arp(46, 40, 2, 12, pal.shirtShade);
+    alp(14, 40, 2, 12, OUTLINE);
+    arp(48, 40, 2, 12, OUTLINE);
     // Hands
-    p(16, 52, 4, 4, pal.skin);
-    p(44, 52, 4, 4, pal.skin);
-    p(16, 52, 2, 2, skinLi);
+    alp(16, 52, 4, 4, pal.skin);
+    arp(44, 52, 4, 4, pal.skin);
+    alp(16, 52, 2, 2, skinLi);
 
-    // ---- LEGS & SHOES (stubby) ----
-    if (pose === 1 || pose === 3) {
-      const leftUp = pose === 1;
+    // ---- LEGS & SHOES (stubby, planted) ----
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
       const lx = leftUp ? 22 : 34;
       const sx = leftUp ? 34 : 22;
       // lifted leg (shorter)
-      p(lx, 62, 8, 10, pal.pants);
-      p(lx, 72, 10, 6, SHOE);
-      p(lx, 72, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(lx - 2, 62, 2, 10, OUTLINE);
-      p(lx, 62, 2, 10, pantsLi);
+      lp(lx, 62, 8, 10, pal.pants);
+      lp(lx, 72, 10, 6, SHOE);
+      lp(lx, 72, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(lx - 2, 62, 2, 10, OUTLINE);
+      lp(lx, 62, 2, 10, pantsLi);
       // planted leg
-      p(sx, 62, 8, 14, pal.pants);
-      p(sx, 76, 10, 6, SHOE);
-      p(sx, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(sx - 2, 62, 2, 14, OUTLINE);
-      p(sx, 62, 2, 14, pantsLi);
+      lp(sx, 62, 8, 14, pal.pants);
+      lp(sx, 76, 10, 6, SHOE);
+      lp(sx, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(sx - 2, 62, 2, 14, OUTLINE);
+      lp(sx, 62, 2, 14, pantsLi);
     } else {
-      p(22, 62, 8, 14, pal.pants);
-      p(34, 62, 8, 14, pal.pants);
-      p(22, 76, 10, 6, SHOE);
-      p(32, 76, 10, 6, SHOE);
-      p(20, 62, 2, 14, OUTLINE);
-      p(30, 62, 2, 14, OUTLINE);
-      p(42, 62, 2, 14, OUTLINE);
-      p(22, 62, 2, 14, pantsLi);
-      p(34, 62, 2, 14, pantsLi);
-      p(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(32, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(22, 62, 8, 14, pal.pants);
+      lp(34, 62, 8, 14, pal.pants);
+      lp(22, 76, 10, 6, SHOE);
+      lp(32, 76, 10, 6, SHOE);
+      lp(20, 62, 2, 14, OUTLINE);
+      lp(30, 62, 2, 14, OUTLINE);
+      lp(42, 62, 2, 14, OUTLINE);
+      lp(22, 62, 2, 14, pantsLi);
+      lp(34, 62, 2, 14, pantsLi);
+      lp(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(32, 76, 10, 2, mix(SHOE, "#fff", 0.10));
     }
 
   } else if (d === "up") {
-    // ---- HEAD: all hair (back of head) ----
-    p(24, 2, 16, 2, pal.hair);
-    p(20, 4, 24, 2, pal.hair);
-    p(18, 6, 28, 2, pal.hair);
-    p(16, 8, 32, 24, pal.hair);
-    p(20, 32, 24, 4, pal.hair);
+    // ---- HEAD: all hair (back of head, bobs + sways) ----
+    hp(24, 2, 16, 2, pal.hair);
+    hp(20, 4, 24, 2, pal.hair);
+    hp(18, 6, 28, 2, pal.hair);
+    hp(16, 8, 32, 24, pal.hair);
+    fp(20, 32, 24, 4, pal.hair);
     // Soft outline
-    p(22, 0, 20, 2, OUTLINE);
-    p(18, 2, 4, 2, OUTLINE);
-    p(42, 2, 4, 2, OUTLINE);
-    p(14, 6, 2, 6, OUTLINE);
-    p(48, 6, 2, 6, OUTLINE);
-    p(16, 12, 2, 20, OUTLINE);
-    p(46, 12, 2, 20, OUTLINE);
-    p(18, 32, 2, 4, OUTLINE);
-    p(44, 32, 2, 4, OUTLINE);
-    p(22, 34, 20, 2, OUTLINE);
-    p(20, 36, 2, 2, OUTLINE);
-    p(42, 36, 2, 2, OUTLINE);
+    hp(22, 0, 20, 2, OUTLINE);
+    hp(18, 2, 4, 2, OUTLINE);
+    hp(42, 2, 4, 2, OUTLINE);
+    hp(14, 6, 2, 6, OUTLINE);
+    hp(48, 6, 2, 6, OUTLINE);
+    hp(16, 12, 2, 20, OUTLINE);
+    hp(46, 12, 2, 20, OUTLINE);
+    hp(18, 32, 2, 4, OUTLINE);
+    hp(44, 32, 2, 4, OUTLINE);
+    hp(22, 34, 20, 2, OUTLINE);
+    hp(20, 36, 2, 2, OUTLINE);
+    hp(42, 36, 2, 2, OUTLINE);
     // Hair shine
-    p(22, 6, 12, 2, hairLi);
-    p(18, 8, 2, 12, hairLi);
-    p(44, 8, 2, 24, hairDk);
-    p(20, 30, 24, 2, hairDk);
+    hp(22, 6, 12, 2, hairLi);
+    hp(18, 8, 2, 12, hairLi);
+    hp(44, 8, 2, 24, hairDk);
+    hp(20, 30, 24, 2, hairDk);
 
     // ---- NECK ----
-    p(28, 36, 8, 2, skinDk);
+    bp(28, 36, 8, 2, skinDk);
 
     // ---- TORSO (back) ----
-    p(20, 38, 24, 20, pal.shirt);
-    p(22, 38, 20, 2, shirtLi);
-    p(20, 38, 2, 20, shirtLi);
-    p(42, 38, 2, 20, pal.shirtShade);
-    p(20, 54, 24, 4, pal.shirtShade);
-    p(18, 38, 2, 20, OUTLINE);
-    p(44, 38, 2, 20, OUTLINE);
-    p(20, 58, 24, 2, OUTLINE);
+    bp(20, 38, 24, 20, pal.shirt);
+    bp(22, 38, 20, 2, shirtLi);
+    bp(20, 38, 2, 20, shirtLi);
+    bp(42, 38, 2, 20, pal.shirtShade);
+    bp(20, 54, 24, 4, pal.shirtShade);
+    bp(18, 38, 2, 20, OUTLINE);
+    bp(44, 38, 2, 20, OUTLINE);
+    bp(20, 58, 24, 2, OUTLINE);
 
-    // ---- ARMS ----
-    p(16, 40, 4, 12, pal.shirt);
-    p(44, 40, 4, 12, pal.shirt);
-    p(16, 40, 2, 12, shirtLi);
-    p(46, 40, 2, 12, pal.shirtShade);
-    p(14, 40, 2, 12, OUTLINE);
-    p(48, 40, 2, 12, OUTLINE);
-    p(16, 52, 4, 4, pal.skin);
-    p(44, 52, 4, 4, pal.skin);
+    // ---- ARMS (swing) ----
+    alp(16, 40, 4, 12, pal.shirt);
+    arp(44, 40, 4, 12, pal.shirt);
+    alp(16, 40, 2, 12, shirtLi);
+    arp(46, 40, 2, 12, pal.shirtShade);
+    alp(14, 40, 2, 12, OUTLINE);
+    arp(48, 40, 2, 12, OUTLINE);
+    alp(16, 52, 4, 4, pal.skin);
+    arp(44, 52, 4, 4, pal.skin);
 
-    // ---- LEGS & SHOES ----
-    if (pose === 1 || pose === 3) {
-      const leftUp = pose === 1;
+    // ---- LEGS & SHOES (planted) ----
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
       const lx = leftUp ? 22 : 34;
       const sx = leftUp ? 34 : 22;
-      p(lx, 62, 8, 10, pal.pants);
-      p(lx, 72, 10, 6, SHOE);
-      p(lx, 72, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(lx - 2, 62, 2, 10, OUTLINE);
-      p(lx, 62, 2, 10, pantsLi);
-      p(sx, 62, 8, 14, pal.pants);
-      p(sx, 76, 10, 6, SHOE);
-      p(sx, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(sx - 2, 62, 2, 14, OUTLINE);
-      p(sx, 62, 2, 14, pantsLi);
+      lp(lx, 62, 8, 10, pal.pants);
+      lp(lx, 72, 10, 6, SHOE);
+      lp(lx, 72, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(lx - 2, 62, 2, 10, OUTLINE);
+      lp(lx, 62, 2, 10, pantsLi);
+      lp(sx, 62, 8, 14, pal.pants);
+      lp(sx, 76, 10, 6, SHOE);
+      lp(sx, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(sx - 2, 62, 2, 14, OUTLINE);
+      lp(sx, 62, 2, 14, pantsLi);
     } else {
-      p(22, 62, 8, 14, pal.pants);
-      p(34, 62, 8, 14, pal.pants);
-      p(22, 76, 10, 6, SHOE);
-      p(32, 76, 10, 6, SHOE);
-      p(20, 62, 2, 14, OUTLINE);
-      p(30, 62, 2, 14, OUTLINE);
-      p(42, 62, 2, 14, OUTLINE);
-      p(22, 62, 2, 14, pantsLi);
-      p(34, 62, 2, 14, pantsLi);
-      p(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(32, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(22, 62, 8, 14, pal.pants);
+      lp(34, 62, 8, 14, pal.pants);
+      lp(22, 76, 10, 6, SHOE);
+      lp(32, 76, 10, 6, SHOE);
+      lp(20, 62, 2, 14, OUTLINE);
+      lp(30, 62, 2, 14, OUTLINE);
+      lp(42, 62, 2, 14, OUTLINE);
+      lp(22, 62, 2, 14, pantsLi);
+      lp(34, 62, 2, 14, pantsLi);
+      lp(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(32, 76, 10, 2, mix(SHOE, "#fff", 0.10));
     }
 
   } else {
-    // ---- RIGHT PROFILE ----
+    // ---- RIGHT PROFILE (head bobs + sways) ----
     // Hair dome
-    p(24, 2, 16, 2, pal.hair);
-    p(20, 4, 24, 2, pal.hair);
-    p(18, 6, 28, 2, pal.hair);
-    p(16, 8, 32, 6, pal.hair);
-    // Back of head hair
-    p(16, 14, 8, 18, pal.hair);
+    hp(24, 2, 16, 2, pal.hair);
+    hp(20, 4, 24, 2, pal.hair);
+    hp(18, 6, 28, 2, pal.hair);
+    hp(16, 8, 32, 6, pal.hair);
+    // Back of head hair (bounces)
+    fp(16, 14, 8, 18, pal.hair);
     // Face
-    p(24, 14, 24, 18, pal.skin);
-    p(24, 32, 20, 4, pal.skin);
+    hp(24, 14, 24, 18, pal.skin);
+    hp(24, 32, 20, 4, pal.skin);
     // Soft outline
-    p(22, 0, 20, 2, OUTLINE);
-    p(18, 2, 4, 2, OUTLINE);
-    p(42, 2, 4, 2, OUTLINE);
-    p(14, 6, 2, 6, OUTLINE);
-    p(48, 6, 2, 6, OUTLINE);
-    p(16, 12, 2, 20, OUTLINE);
-    p(46, 12, 2, 12, OUTLINE);
-    p(42, 24, 2, 4, OUTLINE);
-    p(24, 32, 20, 2, OUTLINE);
-    p(22, 34, 2, 2, OUTLINE);
-    p(42, 34, 2, 2, OUTLINE);
+    hp(22, 0, 20, 2, OUTLINE);
+    hp(18, 2, 4, 2, OUTLINE);
+    hp(42, 2, 4, 2, OUTLINE);
+    hp(14, 6, 2, 6, OUTLINE);
+    hp(48, 6, 2, 6, OUTLINE);
+    hp(16, 12, 2, 20, OUTLINE);
+    hp(46, 12, 2, 12, OUTLINE);
+    hp(42, 24, 2, 4, OUTLINE);
+    hp(24, 32, 20, 2, OUTLINE);
+    hp(22, 34, 2, 2, OUTLINE);
+    hp(42, 34, 2, 2, OUTLINE);
     // Hair shine
-    p(22, 6, 10, 2, hairLi);
-    p(18, 8, 2, 6, hairLi);
-    p(44, 8, 2, 12, hairDk);
+    hp(22, 6, 10, 2, hairLi);
+    hp(18, 8, 2, 6, hairLi);
+    fp(44, 8, 2, 12, hairDk);
     // Face shading
-    p(24, 16, 2, 16, skinLi);
-    p(42, 16, 2, 16, skinDk);
-    // Eye — big cute 6x4
-    p(34, 20, 6, 4, "#2a2040");
-    px(36, 20, "#ffffff");
-    px(38, 22, mix("#ffffff", "#aaccff", 0.3));
+    hp(24, 16, 2, 16, skinLi);
+    hp(42, 16, 2, 16, skinDk);
+    // Eye — big cute 6x4, or closed line when blinking
+    if (eyesClosed) {
+      hp(34, 22, 6, 1, "#2a2040");
+    } else {
+      hp(34, 20, 6, 4, "#2a2040");
+      hpx(36, 20, "#ffffff");
+      hpx(38, 22, mix("#ffffff", "#aaccff", 0.3));
+    }
     // Nose
-    p(46, 24, 2, 2, skinDk);
+    hp(46, 24, 2, 2, skinDk);
     // Mouth — tiny smile
-    p(38, 28, 4, 2, skinDk);
-    px(36, 28, skinDk);
+    hp(38, 28, 4, 2, skinDk);
+    hpx(36, 28, skinDk);
     // Cheek blush
-    p(30, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
+    hp(30, 26, 4, 2, mix(pal.skin, "#ff88aa", 0.25));
 
     // ---- NECK ----
-    p(28, 36, 8, 2, skinDk);
+    bp(28, 36, 8, 2, skinDk);
 
     // ---- TORSO (profile) ----
-    p(22, 38, 20, 20, pal.shirt);
-    p(22, 38, 20, 2, shirtLi);
-    p(22, 38, 2, 20, shirtLi);
-    p(40, 38, 2, 20, pal.shirtShade);
-    p(22, 54, 20, 4, pal.shirtShade);
-    p(20, 38, 2, 20, OUTLINE);
-    p(42, 38, 2, 20, OUTLINE);
-    p(22, 58, 20, 2, OUTLINE);
+    bp(22, 38, 20, 20, pal.shirt);
+    bp(22, 38, 20, 2, shirtLi);
+    bp(22, 38, 2, 20, shirtLi);
+    bp(40, 38, 2, 20, pal.shirtShade);
+    bp(22, 54, 20, 4, pal.shirtShade);
+    bp(20, 38, 2, 20, OUTLINE);
+    bp(42, 38, 2, 20, OUTLINE);
+    bp(22, 58, 20, 2, OUTLINE);
 
-    // ---- ARM (one visible, stubby) ----
-    p(36, 40, 6, 12, pal.shirt);
-    p(36, 40, 2, 12, shirtLi);
-    p(42, 40, 2, 12, OUTLINE);
-    p(36, 52, 6, 4, pal.skin);
-    p(36, 52, 2, 2, skinLi);
+    // ---- ARM (one visible, stubby, swings) ----
+    pap(36, 40, 6, 12, pal.shirt);
+    pap(36, 40, 2, 12, shirtLi);
+    pap(42, 40, 2, 12, OUTLINE);
+    pap(36, 52, 6, 4, pal.skin);
+    pap(36, 52, 2, 2, skinLi);
 
-    // ---- LEGS (profile) ----
-    if (pose === 1 || pose === 3) {
-      const leftUp = pose === 1;
+    // ---- LEGS (profile, planted) ----
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
       const frontX = leftUp ? 28 : 22;
       const backX = leftUp ? 22 : 28;
-      p(frontX, 62, 8, 10, pal.pants);
-      p(frontX, 72, 10, 6, SHOE);
-      p(frontX, 72, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(frontX - 2, 62, 2, 10, OUTLINE);
-      p(frontX, 62, 2, 10, pantsLi);
-      p(backX, 62, 8, 14, pal.pants);
-      p(backX, 76, 10, 6, SHOE);
-      p(backX, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(backX - 2, 62, 2, 14, OUTLINE);
-      p(backX, 62, 2, 14, pantsLi);
+      lp(frontX, 62, 8, 10, pal.pants);
+      lp(frontX, 72, 10, 6, SHOE);
+      lp(frontX, 72, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(frontX - 2, 62, 2, 10, OUTLINE);
+      lp(frontX, 62, 2, 10, pantsLi);
+      lp(backX, 62, 8, 14, pal.pants);
+      lp(backX, 76, 10, 6, SHOE);
+      lp(backX, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(backX - 2, 62, 2, 14, OUTLINE);
+      lp(backX, 62, 2, 14, pantsLi);
     } else {
-      p(22, 62, 8, 14, pal.pants);
-      p(30, 62, 8, 14, pal.pants);
-      p(22, 76, 10, 6, SHOE);
-      p(30, 76, 10, 6, SHOE);
-      p(20, 62, 2, 14, OUTLINE);
-      p(38, 62, 2, 14, OUTLINE);
-      p(22, 62, 2, 14, pantsLi);
-      p(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
-      p(30, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(22, 62, 8, 14, pal.pants);
+      lp(30, 62, 8, 14, pal.pants);
+      lp(22, 76, 10, 6, SHOE);
+      lp(30, 76, 10, 6, SHOE);
+      lp(20, 62, 2, 14, OUTLINE);
+      lp(38, 62, 2, 14, OUTLINE);
+      lp(22, 62, 2, 14, pantsLi);
+      lp(22, 76, 10, 2, mix(SHOE, "#fff", 0.10));
+      lp(30, 76, 10, 2, mix(SHOE, "#fff", 0.10));
     }
   }
 
@@ -1248,9 +1672,10 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
 }
 
 function buildCharSheet(pal: CharPalette): Sheet {
-  const s = new Sheet(CW * 4, CH * 4);
+  const cols = 8;
+  const s = new Sheet(CW * cols, CH * DIRS.length);
   DIRS.forEach((dir, row) => {
-    for (let pose = 0; pose < 4; pose++) {
+    for (let pose = 0; pose < cols; pose++) {
       drawChar(s, pose * CW, row * CH, pal, dir, pose);
     }
   });
@@ -1614,6 +2039,488 @@ function buildMap(theme: MapTheme): object {
   };
 }
 
+// ------------------------------------------------------------- world tiles
+
+const WT = 64; // world tile size
+const WORLD_COLS = 8;
+
+type WorldTileDrawer = (s: Sheet, ox: number, oy: number, seed: number) => void;
+
+function worldGrass(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#4a8a3a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  // grass blades — small lines
+  let st = seed;
+  for (let i = 0; i < 40; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const gx = (st >> 8) % WT;
+    const gy = (st >> 16) % WT;
+    s.line(ox + gx, oy + gy, ox + gx, oy + gy - 2, p.hi);
+    s.set(ox + gx, oy + gy + 1, p.dk);
+  }
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.08, 0.3);
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+function worldWall(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#6a6a72");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  // brick pattern
+  for (let y = 0; y < WT; y += 16) {
+    s.rect(ox, oy + y, WT, 2, p.dk);
+    s.rect(ox, oy + y + 2, WT, 1, p.li);
+    const offset = (y / 16) % 2 === 0 ? 0 : 16;
+    for (let x = offset; x < WT; x += 32) {
+      s.rect(ox + x, oy + y, 2, 16, p.dk);
+      s.rect(ox + x + 2, oy + y, 1, 16, p.li);
+    }
+  }
+  s.rect(ox, oy, WT, 2, p.hi);
+  s.rect(ox, oy + WT - 2, WT, 2, p.sh);
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.04, 0.3);
+}
+
+function worldTree(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#4a8a3a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.08, 0.3);
+  // trunk
+  const tp = shade5("#5a3a20");
+  s.rect(ox + 28, oy + 36, 8, 20, tp.base);
+  s.rect(ox + 28, oy + 36, 8, 2, tp.hi);
+  s.rect(ox + 28, oy + 36, 1, 20, tp.li);
+  s.rect(ox + 35, oy + 36, 1, 20, tp.dk);
+  // foliage — layered circles
+  s.fillCircle(ox + 32, oy + 22, 16, p.dk);
+  s.fillCircle(ox + 28, oy + 18, 14, p.base);
+  s.fillCircle(ox + 36, oy + 20, 12, p.li);
+  s.fillCircle(ox + 30, oy + 14, 8, p.hi);
+  s.fillCircle(ox + 38, oy + 16, 6, p.hi);
+  // shadow under tree
+  s.fillEllipse(ox + 32, oy + 56, 14, 3, mix(p.sh, "#000", 0.2));
+}
+
+function worldRock(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#7a7a82");
+  s.rect(ox, oy, WT, WT, mix(p.base, "#4a8a3a", 0.3));
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.06, 0.3);
+  // rock body — irregular with circles
+  s.fillCircle(ox + 32, oy + 36, 18, p.dk);
+  s.fillCircle(ox + 28, oy + 32, 16, p.base);
+  s.fillCircle(ox + 34, oy + 30, 12, p.li);
+  s.fillCircle(ox + 26, oy + 28, 6, p.hi);
+  // cracks
+  s.line(ox + 24, oy + 38, ox + 30, oy + 44, p.sh);
+  s.line(ox + 36, oy + 34, ox + 42, oy + 40, p.sh);
+  // ground shadow
+  s.fillEllipse(ox + 32, oy + 56, 16, 3, mix(p.sh, "#000", 0.15));
+}
+
+function worldFlower(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#4a8a3a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.08, 0.3);
+  // stem
+  s.line(ox + 32, oy + 48, ox + 32, oy + 28, "#3a6a2a");
+  // leaf
+  s.fillEllipse(ox + 28, oy + 40, 5, 3, "#3a9a4e");
+  // petals — 5 circles
+  const petalColors = ["#e8c84a", "#ff8a4a", "#e85a8a", "#b04ae8", "#4ab8e8"];
+  const pc = petalColors[seed % petalColors.length];
+  const fp = shade5(pc);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    s.fillCircle(ox + 32 + Math.cos(a) * 6, oy + 24 + Math.sin(a) * 6, 4, fp.base);
+  }
+  s.fillCircle(ox + 32, oy + 24, 3, fp.hi);
+  s.fillCircle(ox + 32, oy + 24, 2, "#ffe880");
+}
+
+function worldAcid(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#8ae83a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.hi, p.dk);
+  // bubbles
+  let st = seed;
+  for (let i = 0; i < 12; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const bx = (st >> 8) % WT;
+    const by = (st >> 16) % WT;
+    const br = 1 + (st % 3);
+    s.fillCircle(ox + bx, oy + by, br, p.hi);
+    s.set(ox + bx, oy + by - 1, "#ffffff");
+  }
+  // toxic swirls
+  s.fillCircleAlpha(ox + 20, oy + 30, 8, mix(p.hi, "#ffffff", 0.3), 0.3);
+  s.fillCircleAlpha(ox + 44, oy + 40, 6, mix(p.hi, "#ffffff", 0.2), 0.25);
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+function worldPath(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#a89060");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  // pebbles
+  let st = seed;
+  for (let i = 0; i < 20; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const px = (st >> 8) % WT;
+    const py = (st >> 16) % WT;
+    s.fillCircle(ox + px, oy + py, 1 + (st % 2), p.dk);
+    s.set(ox + px, oy + py - 1, p.li);
+  }
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.06, 0.3);
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+function worldSand(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#e8d890");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  // dune ripples
+  for (let y = 8; y < WT; y += 12) {
+    s.rect(ox, oy + y, WT, 1, p.li);
+    s.rect(ox, oy + y + 1, WT, 1, p.dk);
+  }
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.08, 0.3);
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+function worldSnow(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#e8e8f0");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.hi, p.li);
+  // sparkles
+  let st = seed;
+  for (let i = 0; i < 15; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const sx = (st >> 8) % WT;
+    const sy = (st >> 16) % WT;
+    s.set(ox + sx, oy + sy, "#ffffff");
+  }
+  // drifts
+  s.fillEllipse(ox + 16, oy + 50, 12, 3, p.li);
+  s.fillEllipse(ox + 44, oy + 54, 10, 2, p.li);
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.08);
+}
+
+function worldLava(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#e84820");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.hi, p.dk);
+  // glowing cracks
+  let st = seed;
+  for (let i = 0; i < 6; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const x0 = (st >> 8) % WT;
+    const y0 = (st >> 16) % WT;
+    const x1 = x0 + ((st >> 4) % 20) - 10;
+    const y1 = y0 + ((st >> 12) % 20) - 10;
+    s.lineThick(ox + x0, oy + y0, ox + x1, oy + y1, p.hi, 2);
+    s.line(ox + x0, oy + y0, ox + x1, oy + y1, "#ffe880");
+  }
+  // bubbles
+  s.fillCircle(ox + 20, oy + 30, 3, p.hi);
+  s.set(ox + 20, oy + 29, "#ffe880");
+  s.fillCircle(ox + 44, oy + 42, 2, p.hi);
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+function worldCrystal(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#8a4ae8");
+  s.rect(ox, oy, WT, WT, mix(p.base, "#1a1a2a", 0.5));
+  // crystal clusters — triangles
+  s.fillTriangle(ox + 24, oy + 50, ox + 20, oy + 30, ox + 28, oy + 30, p.dk);
+  s.fillTriangle(ox + 20, oy + 30, ox + 24, oy + 18, ox + 28, oy + 30, p.base);
+  s.fillTriangle(ox + 22, oy + 28, ox + 24, oy + 22, ox + 26, oy + 28, p.hi);
+  s.fillTriangle(ox + 40, oy + 50, ox + 36, oy + 34, ox + 44, oy + 34, p.dk);
+  s.fillTriangle(ox + 36, oy + 34, ox + 40, oy + 24, ox + 44, oy + 34, p.base);
+  s.fillTriangle(ox + 38, oy + 32, ox + 40, oy + 27, ox + 42, oy + 32, p.hi);
+  // sparkle
+  s.set(ox + 24, oy + 22, "#ffffff");
+  s.set(ox + 40, oy + 27, "#ffffff");
+  // glow
+  s.fillCircleAlpha(ox + 32, oy + 36, 20, mix(p.hi, "#ffffff", 0.2), 0.15);
+}
+
+function worldVoid(s: Sheet, ox: number, oy: number, seed: number): void {
+  s.rect(ox, oy, WT, WT, "#0a0a14");
+  // swirling purple
+  let st = seed;
+  for (let i = 0; i < 8; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const vx = (st >> 8) % WT;
+    const vy = (st >> 16) % WT;
+    s.fillCircleAlpha(ox + vx, oy + vy, 4 + (st % 6), "#3a1a5a", 0.3);
+  }
+  s.fillCircleAlpha(ox + 32, oy + 32, 12, "#5a2a8a", 0.2);
+  // stars
+  st = seed;
+  for (let i = 0; i < 10; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    s.set(ox + (st >> 8) % WT, oy + (st >> 16) % WT, "#ffffff");
+  }
+}
+
+function worldRuin(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#8a8278");
+  s.rect(ox, oy, WT, WT, mix(p.base, "#4a8a3a", 0.3));
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.06, 0.3);
+  // broken pillar
+  s.rect(ox + 24, oy + 20, 16, 36, p.base);
+  s.rect(ox + 24, oy + 20, 16, 2, p.hi);
+  s.rect(ox + 24, oy + 20, 2, 36, p.li);
+  s.rect(ox + 38, oy + 20, 2, 36, p.dk);
+  // cracks
+  s.line(ox + 28, oy + 28, ox + 32, oy + 40, p.sh);
+  s.line(ox + 34, oy + 24, ox + 30, oy + 36, p.sh);
+  // broken top
+  s.fillTriangle(ox + 24, oy + 20, ox + 40, oy + 20, ox + 36, oy + 14, p.dk);
+  // base
+  s.rect(ox + 20, oy + 54, 24, 6, p.dk);
+  s.rect(ox + 20, oy + 54, 24, 1, p.li);
+  // ground shadow
+  s.fillEllipse(ox + 32, oy + 60, 16, 3, mix(p.sh, "#000", 0.15));
+}
+
+function worldCastle(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#9a8a7a");
+  s.rect(ox, oy, WT, WT, mix(p.base, "#4a8a3a", 0.2));
+  // tower
+  s.rect(ox + 20, oy + 8, 24, 48, p.base);
+  vGrad(s, ox + 20, oy + 8, 24, 48, p.li, p.dk);
+  s.rect(ox + 20, oy + 8, 24, 2, p.hi);
+  s.rect(ox + 20, oy + 8, 2, 48, p.li);
+  s.rect(ox + 42, oy + 8, 2, 48, p.dk);
+  // battlements
+  for (let x = 20; x < 44; x += 6) {
+    s.rect(ox + x, oy + 4, 4, 6, p.base);
+    s.rect(ox + x, oy + 4, 4, 1, p.hi);
+  }
+  // door
+  s.fillRoundedRect(ox + 28, oy + 36, 8, 20, 2, p.sh);
+  s.rect(ox + 28, oy + 36, 8, 1, p.dk);
+  // window
+  s.rect(ox + 30, oy + 16, 4, 6, "#1a1a2a");
+  s.rect(ox + 30, oy + 16, 4, 1, p.dk);
+  // flag
+  s.line(ox + 32, oy + 0, ox + 32, oy + 8, p.sh);
+  s.fillTriangle(ox + 32, oy + 0, ox + 40, oy + 2, ox + 32, oy + 4, "#d65d5d");
+}
+
+function worldFairway(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#5aa84a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  // manicured grass — very short blades
+  let st = seed;
+  for (let i = 0; i < 25; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const gx = (st >> 8) % WT;
+    const gy = (st >> 16) % WT;
+    s.set(ox + gx, oy + gy, p.hi);
+    s.set(ox + gx, oy + gy + 1, p.dk);
+  }
+  // mowing stripes
+  for (let y = 0; y < WT; y += 8) {
+    if ((y / 8) % 2 === 0) s.rect(ox, oy + y, WT, 8, mix(p.base, p.li, 0.15));
+  }
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.08);
+}
+
+function worldGolfFlag(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#5aa84a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  // pole
+  s.line(ox + 32, oy + 8, ox + 32, oy + 56, "#e0e0e0");
+  s.set(ox + 31, oy + 8, "#ffffff");
+  // flag
+  s.fillTriangle(ox + 32, oy + 8, ox + 48, oy + 12, ox + 32, oy + 18, "#d65d5d");
+  s.fillTriangle(ox + 32, oy + 8, ox + 46, oy + 11, ox + 32, oy + 16, "#e87878");
+  // hole
+  s.fillCircle(ox + 32, oy + 56, 3, "#0a0a14");
+  s.fillCircle(ox + 32, oy + 55, 2, "#1a1a24");
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.06, 0.3);
+}
+
+function worldSandTrap(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#e8d890");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  // sand ripples — curved
+  for (let y = 12; y < WT; y += 10) {
+    for (let x = 0; x < WT; x += 2) {
+      const wave = Math.sin(x * 0.15 + seed) * 2;
+      s.set(ox + x, oy + y + Math.round(wave), p.li);
+      s.set(ox + x, oy + y + 1 + Math.round(wave), p.dk);
+    }
+  }
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.1, 0.3);
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+function worldPond(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#4a9ab8");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.hi, p.dk);
+  // lily pads
+  s.fillCircle(ox + 16, oy + 20, 5, "#3a8a4a");
+  s.fillCircle(ox + 14, oy + 19, 3, "#4a9a5a");
+  s.fillCircle(ox + 46, oy + 40, 4, "#3a8a4a");
+  // ripples
+  s.fillCircleAlpha(ox + 32, oy + 32, 10, p.hi, 0.2);
+  s.fillCircleAlpha(ox + 32, oy + 32, 14, p.li, 0.15);
+  // shimmer
+  let st = seed;
+  for (let i = 0; i < 8; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    s.set(ox + (st >> 8) % WT, oy + (st >> 16) % WT, p.hi);
+  }
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+function worldBench(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#5a8a3a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.06, 0.3);
+  // bench
+  const wp = shade5("#6a4a2a");
+  // seat
+  s.rect(ox + 12, oy + 30, 40, 6, wp.base);
+  s.rect(ox + 12, oy + 30, 40, 1, wp.hi);
+  s.rect(ox + 12, oy + 35, 40, 1, wp.sh);
+  // back
+  s.rect(ox + 12, oy + 18, 40, 4, wp.base);
+  s.rect(ox + 12, oy + 18, 40, 1, wp.hi);
+  // legs
+  s.rect(ox + 14, oy + 36, 4, 16, wp.dk);
+  s.rect(ox + 46, oy + 36, 4, 16, wp.dk);
+  // shadow
+  s.fillEllipse(ox + 32, oy + 54, 22, 3, mix(p.sh, "#000", 0.15));
+}
+
+function worldHedge(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#3a7a2a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.06, 0.3);
+  // hedge — dense circles
+  s.fillCircle(ox + 16, oy + 32, 12, p.dk);
+  s.fillCircle(ox + 32, oy + 28, 14, p.base);
+  s.fillCircle(ox + 48, oy + 32, 12, p.dk);
+  s.fillCircle(ox + 24, oy + 24, 10, p.li);
+  s.fillCircle(ox + 40, oy + 24, 10, p.li);
+  s.fillCircle(ox + 28, oy + 18, 6, p.hi);
+  s.fillCircle(ox + 38, oy + 18, 6, p.hi);
+  // texture
+  let st = seed;
+  for (let i = 0; i < 30; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const lx = 8 + (st >> 8) % 48;
+    const ly = 16 + (st >> 16) % 32;
+    s.set(ox + lx, oy + ly, p.hi);
+  }
+  // shadow
+  s.fillEllipse(ox + 32, oy + 56, 24, 3, mix(p.sh, "#000", 0.15));
+}
+
+function worldBush(s: Sheet, ox: number, oy: number, seed: number): void {
+  const p = shade5("#4a8a3a");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.li, p.dk);
+  noiseAlpha(s, ox, oy, WT, WT, p.dk, 0.08, 0.3);
+  // bush — organic circles
+  s.fillCircle(ox + 32, oy + 40, 14, p.dk);
+  s.fillCircle(ox + 26, oy + 36, 10, p.base);
+  s.fillCircle(ox + 38, oy + 36, 10, p.base);
+  s.fillCircle(ox + 30, oy + 30, 8, p.li);
+  s.fillCircle(ox + 36, oy + 32, 6, p.li);
+  s.fillCircle(ox + 28, oy + 28, 4, p.hi);
+  // berries
+  s.set(ox + 24, oy + 34, "#d65d5d");
+  s.set(ox + 40, oy + 34, "#d65d5d");
+  s.set(ox + 32, oy + 28, "#e8c84a");
+  // shadow
+  s.fillEllipse(ox + 32, oy + 56, 16, 3, mix(p.sh, "#000", 0.15));
+}
+
+function worldWater(s: Sheet, ox: number, oy: number, seed: number, frame: number): void {
+  const p = shade5("#3a7ab8");
+  s.rect(ox, oy, WT, WT, p.base);
+  vGrad(s, ox, oy, WT, WT, p.hi, p.dk);
+  // wave streaks — animated offset
+  const off = frame * 4;
+  for (let y = 8; y < WT; y += 12) {
+    for (let x = 0; x < WT; x += 2) {
+      const wave = Math.sin((x + off) * 0.2 + seed) * 2;
+      s.set(ox + x, oy + y + Math.round(wave), p.hi);
+    }
+  }
+  // shimmer dots
+  let st = seed + frame * 31;
+  for (let i = 0; i < 6; i++) {
+    st = (st * 1103515245 + 12345) & 0x7fffffff;
+    const sx = (st >> 8) % WT;
+    const sy = (st >> 16) % WT;
+    s.set(ox + sx, oy + sy, "#ffffff");
+    s.set(ox + sx + 1, oy + sy, p.hi);
+  }
+  // deeper waves
+  for (let y = 20; y < WT; y += 16) {
+    for (let x = 0; x < WT; x += 3) {
+      const wave = Math.sin((x + off + 8) * 0.15 + seed) * 3;
+      s.setAlpha(ox + x, oy + y + Math.round(wave), p.dk, 0.4);
+    }
+  }
+  s.blurEdges(ox, oy, WT, WT, p.dk, 0.1);
+}
+
+const worldDrawers: WorldTileDrawer[] = [
+  worldGrass,   // 0 GRASS
+  worldWall,    // 1 WALL
+  worldTree,    // 2 TREE
+  worldRock,    // 3 ROCK
+  worldFlower,  // 4 FLOWER
+  worldAcid,    // 5 ACID
+  worldPath,    // 6 PATH
+  worldSand,    // 7 SAND
+  worldSnow,    // 8 SNOW
+  worldLava,    // 9 LAVA
+  worldCrystal, // 10 CRYSTAL
+  worldVoid,    // 11 VOID
+  worldRuin,    // 12 RUIN
+  worldCastle,  // 13 CASTLE
+  worldFairway, // 14 FAIRWAY
+  worldGolfFlag,// 15 GOLF_FLAG
+  worldSandTrap,// 16 SAND_TRAP
+  worldPond,    // 17 POND
+  worldBench,   // 18 BENCH
+  worldHedge,   // 19 HEDGE
+  worldBush,    // 20 BUSH
+  (s, ox, oy, seed) => worldWater(s, ox, oy, seed, 0), // 21 WATER frame 0
+  (s, ox, oy, seed) => worldWater(s, ox, oy, seed, 1), // 22 WATER frame 1
+  (s, ox, oy, seed) => worldWater(s, ox, oy, seed, 2), // 23 WATER frame 2
+];
+
+function buildWorldTileset(): Sheet {
+  const cols = WORLD_COLS;
+  const rows = Math.ceil(worldDrawers.length / cols);
+  const s = new Sheet(cols * WT, rows * WT);
+  for (let i = 0; i < worldDrawers.length; i++) {
+    const drawer = worldDrawers[i];
+    const ox = (i % cols) * WT;
+    const oy = Math.floor(i / cols) * WT;
+    drawer(s, ox, oy, i * 137 + 42);
+  }
+  return s;
+}
+
 // -------------------------------------------------------------------- main
 
 const PREVIEWS = join(ROOT, "scripts", "previews");
@@ -1632,6 +2539,10 @@ CHAR_PALETTES.forEach((pal, i) => {
   if (i === 0) sheet.preview(join(PREVIEWS, "char-0.png"), 6);
 });
 buildCharSheet(BOSS_PALETTE).save(join(ASSETS, "characters", "boss.png"));
+
+const worldTileset = buildWorldTileset();
+worldTileset.save(join(ASSETS, "tilesets", "world.png"));
+worldTileset.preview(join(PREVIEWS, "tileset-world.png"), 2);
 
 buildMonitor().save(join(ASSETS, "sprites", "monitor.png"));
 buildBubble().save(join(ASSETS, "sprites", "bubble.png"));

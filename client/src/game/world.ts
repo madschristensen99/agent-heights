@@ -5,7 +5,7 @@ import type { Store } from "../store";
 import type { Net } from "../net";
 import { TILE_PX, type Dir } from "./agent";
 import { Grid } from "./path";
-import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, type Biome, hostilityAt } from "./worldgen";
+import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
 
 /**
  * World offset: the world tile grid starts at the bottom-left corner of the
@@ -16,41 +16,6 @@ export interface WorldOffset {
   x: number;
   y: number;
 }
-
-/** Color palettes per biome. */
-const BIOME_FLOOR: Record<Biome, number> = {
-  meadow: 0x4a8a3a,
-  forest: 0x2a6a2a,
-  ruins: 0x8a7a6a,
-  wasteland: 0xc4a84a,
-  void: 0x1a1a2a,
-  infernal: 0x4a1a0a,
-};
-
-const TILE_COLORS: Record<number, number> = {
-  [TILE.GRASS]: 0x4a8a3a,
-  [TILE.WALL]: 0x555560,
-  [TILE.TREE]: 0x2a5a1a,
-  [TILE.ROCK]: 0x888890,
-  [TILE.FLOWER]: 0xe8c84a,
-  [TILE.ACID]: 0x6aCC2a,
-  [TILE.PATH]: 0xa89a7a,
-  [TILE.SAND]: 0xd4b87a,
-  [TILE.SNOW]: 0xeef0f5,
-  [TILE.LAVA]: 0xd44a1a,
-  [TILE.CRYSTAL]: 0x6a4aca,
-  [TILE.VOID]: 0x0a0a14,
-  [TILE.RUIN]: 0x6a5a4a,
-  [TILE.CASTLE]: 0x9a9aa5,
-  [TILE.FAIRWAY]: 0x5aa84a,
-  [TILE.GOLF_FLAG]: 0xe8e8e8,
-  [TILE.SAND_TRAP]: 0xd4c89a,
-  [TILE.POND]: 0x3a7aaa,
-  [TILE.BENCH]: 0x8a6a3a,
-  [TILE.HEDGE]: 0x2a5a2a,
-  [TILE.BUSH]: 0x3a7a3a,
-  [TILE.WATER]: 0x2a5a8a,
-};
 
 const LOAD_RADIUS = 2;
 const UNLOAD_RADIUS = 3;
@@ -240,6 +205,9 @@ class LegendaryBeast {
     if (this.hp <= 0) {
       this.alive = false;
       this.hpBar.clear();
+      this.world.particleBurst(this.container.x, this.container.y, 0xffdd44, 24, 120);
+      this.world.particleBurst(this.container.x, this.container.y, 0xff4444, 16, 80);
+      this.world.scene.cameras.main.shake(400, 0.015);
       this.container.destroy();
     }
   }
@@ -321,6 +289,7 @@ class Creature {
     });
     if (this.hp <= 0) {
       this.alive = false;
+      this.world.particleBurst(this.container.x, this.container.y, 0x8a3a3a, 12, 80);
       this.container.destroy();
     }
   }
@@ -339,12 +308,14 @@ class Stone {
   private life: number;
   private damage: number;
   private alive = true;
-  constructor(scene: Phaser.Scene, x: number, y: number, vx: number, vy: number, damage: number) {
+  private world: WorldLayer;
+  constructor(world: WorldLayer, x: number, y: number, vx: number, vy: number, damage: number) {
+    this.world = world;
     this.vx = vx;
     this.vy = vy;
     this.life = 3000; // 3 seconds
     this.damage = damage;
-    this.sprite = scene.add.circle(x, y, 8, 0x888890, 1).setStrokeStyle(2, 0x444450, 1).setDepth(50);
+    this.sprite = world.scene.add.circle(x, y, 8, 0x888890, 1).setStrokeStyle(2, 0x444450, 1).setDepth(50);
   }
 
   get alive_(): boolean { return this.alive; }
@@ -360,6 +331,7 @@ class Stone {
     this.sprite.y += this.vy * (dt / 1000);
     const dist = Math.hypot(this.sprite.x - playerX, this.sprite.y - playerY);
     if (dist < 30) {
+      this.world.particleBurst(this.sprite.x, this.sprite.y, 0xaaaaaa, 8, 60);
       this.destroy();
       return { hit: true, damage: this.damage };
     }
@@ -486,7 +458,7 @@ export class WorldLayer {
   private officeH: number;
 
   private chunks = new Map<string, Chunk>();
-  private chunkGraphics = new Map<string, Phaser.GameObjects.Graphics>();
+  private chunkGraphics = new Map<string, Phaser.GameObjects.Container>();
   private ghosts = new Map<string, GhostNPC>();
 
   private compass!: Phaser.GameObjects.Text;
@@ -705,15 +677,16 @@ export class WorldLayer {
 
   private renderChunk(chunk: Chunk): void {
     const key = `${chunk.cx},${chunk.cy}`;
-    const g = this.scene.add.graphics().setDepth(-1);
+    const container = this.scene.add.container(0, 0).setDepth(-1);
     const ox = chunk.cx * CHUNK_SIZE * TILE_PX + this.offset.x;
     const oy = chunk.cy * CHUNK_SIZE * TILE_PX + this.offset.y;
 
-    // deterministic per-tile noise for color variation
-    const noise = (x: number, y: number) => {
-      let h = (chunk.cx * 31 + x) * 73856093 ^ (chunk.cy * 31 + y) * 19349663;
-      h = (h ^ (h >>> 13)) >>> 0;
-      return (h % 1000) / 1000;
+    // Map TILE enum values to world tileset frame indices.
+    // The tileset has 24 frames: 0-21 map to TILE.GRASS..TILE.WATER,
+    // frames 22-23 are water animation frames 1 and 2.
+    const tileToFrame = (tile: number): number => {
+      if (tile === TILE.WATER) return 21; // frame 0 — animation handled separately
+      return tile; // TILE enum values 0-20 map directly to frames 0-20
     };
 
     for (let y = 0; y < CHUNK_SIZE; y++) {
@@ -721,180 +694,22 @@ export class WorldLayer {
         const tile = chunk.tiles[y * CHUNK_SIZE + x];
         const px = ox + x * TILE_PX;
         const py = oy + y * TILE_PX;
-        const baseColor = TILE_COLORS[tile] ?? BIOME_FLOOR[chunk.biome];
+        const frame = tileToFrame(tile);
 
-        // subtle per-tile brightness variation for natural texture
-        const n = noise(x, y);
-        const variation = Math.floor((n - 0.5) * 16);
-        const color = this.adjustBrightness(baseColor, variation);
+        const sprite = this.scene.add.sprite(px, py, "world-tiles", frame);
+        sprite.setOrigin(0, 0);
+        sprite.setDepth(-1);
 
-        g.fillStyle(color, 1);
-        g.fillRect(px, py, TILE_PX, TILE_PX);
-
-        if (tile === TILE.TREE) {
-          g.fillStyle(0x1a3a0a, 1);
-          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, TILE_PX * 0.35);
-          g.fillStyle(0x2a5a1a, 1);
-          g.fillCircle(px + TILE_PX / 2 - 4, py + TILE_PX / 2 - 4, TILE_PX * 0.25);
-          g.fillStyle(0x3a7a2a, 1);
-          g.fillCircle(px + TILE_PX / 2 + 6, py + TILE_PX / 2 - 6, TILE_PX * 0.15);
-        } else if (tile === TILE.ROCK) {
-          g.fillStyle(0x6a6a72, 1);
-          g.fillRect(px + 10, py + 10, TILE_PX - 20, TILE_PX - 20);
-          g.fillStyle(0x8a8a92, 1);
-          g.fillRect(px + 10, py + 10, TILE_PX - 20, 4);
-        } else if (tile === TILE.FLOWER) {
-          g.fillStyle(0xe8c84a, 1);
-          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 6);
-          g.fillStyle(0xff8a4a, 1);
-          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 3);
-        } else if (tile === TILE.ACID) {
-          // acid vat — sickly green pool with bubbling rim
-          g.fillStyle(0x2a3a0a, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-          g.fillStyle(0x4aCC1a, 1);
-          g.fillRoundedRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4, 4);
-          g.fillStyle(0x8aFF4a, 0.5);
-          g.fillCircle(px + 10, py + 10, 4);
-          g.fillCircle(px + TILE_PX - 12, py + TILE_PX - 14, 3);
-          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 5);
-          // toxic rim
-          g.lineStyle(2, 0x6aCC2a, 1);
-          g.strokeRoundedRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4, 4);
-        } else if (tile === TILE.CRYSTAL) {
-          g.fillStyle(0x8a6ada, 1);
-          g.fillTriangle(
-            px + TILE_PX / 2, py + 6,
-            px + 8, py + TILE_PX - 8,
-            px + TILE_PX - 8, py + TILE_PX - 8,
-          );
-          g.fillStyle(0xaa8aea, 0.5);
-          g.fillTriangle(
-            px + TILE_PX / 2, py + 10,
-            px + 12, py + TILE_PX - 12,
-            px + TILE_PX - 12, py + TILE_PX - 12,
-          );
-        } else if (tile === TILE.LAVA) {
-          g.fillStyle(0xd44a1a, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-          g.fillStyle(0xff8a3a, 0.6);
-          g.fillCircle(px + 16, py + 16, 6);
-          g.fillCircle(px + TILE_PX - 14, py + TILE_PX - 14, 5);
-        } else if (tile === TILE.VOID) {
-          g.fillStyle(0x050508, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-        } else if (tile === TILE.CASTLE || tile === TILE.RUIN) {
-          g.fillStyle(0x6a6a75, 1);
-          g.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
-          g.fillStyle(0x8a8a95, 1);
-          g.fillRect(px + 6, py + 6, TILE_PX - 12, 4);
-        } else if (tile === TILE.FAIRWAY) {
-          g.fillStyle(0x5aa84a, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-          g.fillStyle(0x6ab85a, 0.4);
-          g.fillRect(px + 4, py + 4, TILE_PX - 8, 2);
-          g.fillRect(px + 4, py + TILE_PX - 6, TILE_PX - 8, 2);
-        } else if (tile === TILE.GOLF_FLAG) {
-          g.fillStyle(0x5aa84a, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-          // pole
-          g.fillStyle(0xaaaaaa, 1);
-          g.fillRect(px + TILE_PX / 2 - 1, py + 4, 2, TILE_PX - 8);
-          // flag
-          g.fillStyle(0xff3333, 1);
-          g.fillTriangle(
-            px + TILE_PX / 2 + 1, py + 4,
-            px + TILE_PX / 2 + 14, py + 8,
-            px + TILE_PX / 2 + 1, py + 12,
-          );
-        } else if (tile === TILE.SAND_TRAP) {
-          g.fillStyle(0xd4c89a, 1);
-          g.fillRoundedRect(px, py, TILE_PX, TILE_PX, 6);
-          g.fillStyle(0xc4b88a, 0.5);
-          g.fillCircle(px + 8, py + 10, 3);
-          g.fillCircle(px + TILE_PX - 10, py + TILE_PX - 12, 4);
-          g.fillCircle(px + TILE_PX / 2, py + TILE_PX / 2, 3);
-        } else if (tile === TILE.POND) {
-          g.fillStyle(0x2a5a8a, 1);
-          g.fillRoundedRect(px, py, TILE_PX, TILE_PX, 8);
-          g.fillStyle(0x4a8aca, 0.6);
-          g.fillRoundedRect(px + 3, py + 3, TILE_PX - 6, TILE_PX - 6, 6);
-          g.fillStyle(0x6aacea, 0.4);
-          g.fillEllipse(px + TILE_PX / 2, py + TILE_PX / 2, TILE_PX - 12, 6);
-        } else if (tile === TILE.BENCH) {
-          g.fillStyle(0x4a8a3a, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-          // bench seat
-          g.fillStyle(0x8a6a3a, 1);
-          g.fillRect(px + 6, py + 10, TILE_PX - 12, 6);
-          g.fillStyle(0x6a4a2a, 1);
-          g.fillRect(px + 8, py + 16, 4, 8);
-          g.fillRect(px + TILE_PX - 12, py + 16, 4, 8);
-        } else if (tile === TILE.HEDGE) {
-          g.fillStyle(0x1a4a1a, 1);
-          g.fillRoundedRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4, 6);
-          g.fillStyle(0x2a6a2a, 1);
-          g.fillRoundedRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8, 4);
-          g.fillStyle(0x3a7a3a, 0.5);
-          g.fillCircle(px + 10, py + 10, 4);
-          g.fillCircle(px + TILE_PX - 12, py + TILE_PX - 12, 3);
-        } else if (tile === TILE.BUSH) {
-          g.fillStyle(0x4a8a3a, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-          g.fillStyle(0x2a6a2a, 1);
-          g.fillCircle(px + 10, py + 12, 8);
-          g.fillCircle(px + TILE_PX - 12, py + 10, 7);
-          g.fillCircle(px + TILE_PX / 2, py + TILE_PX - 10, 9);
-          g.fillStyle(0x3a7a3a, 0.7);
-          g.fillCircle(px + 12, py + 14, 4);
-          g.fillCircle(px + TILE_PX - 14, py + 12, 3);
-        } else if (tile === TILE.WATER) {
-          // deep water base
-          g.fillStyle(0x1a3a6a, 1);
-          g.fillRect(px, py, TILE_PX, TILE_PX);
-          // water body with slight gradient — darker at edges
-          g.fillStyle(0x2a5a9a, 1);
-          g.fillRect(px + 2, py + 2, TILE_PX - 4, TILE_PX - 4);
-          // wave streaks — horizontal organic lines
-          g.lineStyle(2, 0x4a8aca, 0.6);
-          g.beginPath();
-          g.moveTo(px + 4, py + 8);
-          g.lineTo(px + 12, py + 6);
-          g.lineTo(px + 20, py + 9);
-          g.lineTo(px + TILE_PX - 6, py + 7);
-          g.strokePath();
-          g.lineStyle(2, 0x5a9ada, 0.5);
-          g.beginPath();
-          g.moveTo(px + 6, py + 18);
-          g.lineTo(px + 14, py + 16);
-          g.lineTo(px + 22, py + 19);
-          g.lineTo(px + TILE_PX - 8, py + 17);
-          g.strokePath();
-          g.lineStyle(1, 0x6aacee, 0.4);
-          g.beginPath();
-          g.moveTo(px + 4, py + TILE_PX - 10);
-          g.lineTo(px + 16, py + TILE_PX - 12);
-          g.lineTo(px + 24, py + TILE_PX - 9);
-          g.lineTo(px + TILE_PX - 6, py + TILE_PX - 11);
-          g.strokePath();
-          // shimmer dots
-          g.fillStyle(0x8aceee, 0.4);
-          g.fillCircle(px + 10, py + 6, 1.5);
-          g.fillCircle(px + 22, py + 16, 1);
-          g.fillCircle(px + TILE_PX - 12, py + TILE_PX - 12, 1.5);
+        // Animate water tiles by cycling frames 21-23
+        if (tile === TILE.WATER) {
+          sprite.play({ key: "water-anim", repeat: -1 }, true);
         }
+
+        container.add(sprite);
       }
     }
 
-    this.chunkGraphics.set(key, g);
-  }
-
-  /** Adjust hex color brightness by a small delta. */
-  private adjustBrightness(hex: number, delta: number): number {
-    const r = Math.max(0, Math.min(255, ((hex >> 16) & 0xff) + delta));
-    const g = Math.max(0, Math.min(255, ((hex >> 8) & 0xff) + delta));
-    const b = Math.max(0, Math.min(255, (hex & 0xff) + delta));
-    return (r << 16) | (g << 8) | b;
+    this.chunkGraphics.set(key, container);
   }
 
   /** Sync ghost NPCs with the store's fired agents. */
@@ -916,6 +731,25 @@ export class WorldLayer {
     this.tryRecruit(firedAgentId);
   }
 
+  /** Spawn a brief particle burst at a world position. */
+  particleBurst(x: number, y: number, color: number, count: number, speed: number): void {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      const p = this.scene.add.circle(x, y, 2 + Math.random() * 2, color, 0.9).setDepth(40);
+      this.scene.tweens.add({
+        targets: p,
+        x: x + vx,
+        y: y + vy,
+        alpha: 0,
+        scale: 0.2,
+        duration: 400 + Math.random() * 200,
+        onComplete: () => p.destroy(),
+      });
+    }
+  }
+
   private tryRecruit(firedAgentId: string): void {
     const ghost = this.ghosts.get(firedAgentId);
     if (!ghost) return;
@@ -929,6 +763,7 @@ export class WorldLayer {
     if (dist > 140) return;
 
     this.net.send({ type: "recruit", firedAgentId });
+    this.particleBurst(ghost.container.x, ghost.container.y, 0x4cb866, 16, 70);
     this.showRecruitedHint(ghost.info.name, cx, cy);
   }
 
@@ -990,7 +825,7 @@ export class WorldLayer {
         const targetAngle = Math.atan2(playerY - oy, playerX - ox) + (Math.random() - 0.5) * 0.3;
         const stoneSpeed = 200 + hostility * 30;
         const damage = 5 + hostility * 3;
-        this.stones.push(new Stone(this.scene, ox, oy, Math.cos(targetAngle) * stoneSpeed, Math.sin(targetAngle) * stoneSpeed, damage));
+        this.stones.push(new Stone(this, ox, oy, Math.cos(targetAngle) * stoneSpeed, Math.sin(targetAngle) * stoneSpeed, damage));
       }
 
       // --- roll for legendary beast spawn ---
@@ -1124,7 +959,7 @@ export class WorldLayer {
     }
   }
 
-  /** Player takes damage — flash red, update health bar, maybe teleport home. */
+  /** Player takes damage — flash red, shake screen, update health bar, maybe teleport home. */
   private takeDamage(amount: number, playerX: number, playerY: number, time: number): void {
     this.hp -= amount;
     this.invulnUntil = time + 500; // 0.5s invulnerability
@@ -1134,6 +969,8 @@ export class WorldLayer {
       fillAlpha: 0,
       duration: 300,
     });
+    // screen shake
+    this.scene.cameras.main.shake(200, 0.008);
     this.drawHealthBar();
 
     if (this.hp <= 0) {
@@ -1166,10 +1003,13 @@ export class WorldLayer {
     const y = 16;
     const pct = Math.max(0, this.hp / MAX_HP);
 
+    // outer frame
+    g.fillStyle(0x000000, 0.7);
+    g.fillRoundedRect(x - 4, y - 4, w + 8, h + 8, 5);
+    g.lineStyle(1, 0xffffff, 0.12);
+    g.strokeRoundedRect(x - 4, y - 4, w + 8, h + 8, 5);
     // background
-    g.fillStyle(0x000000, 0.6);
-    g.fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 4);
-    g.fillStyle(0x333333, 1);
+    g.fillStyle(0x2a2a2a, 1);
     g.fillRoundedRect(x, y, w, h, 3);
 
     // fill — color shifts from green to red
@@ -1177,6 +1017,9 @@ export class WorldLayer {
     const gr = Math.floor(200 * pct);
     g.fillStyle((r << 16) | (gr << 8), 1);
     g.fillRoundedRect(x, y, w * pct, h, 3);
+    // top highlight on fill
+    g.fillStyle(0xffffff, 0.15);
+    g.fillRoundedRect(x, y, w * pct, 4, 3);
   }
 
   private compassArrow(dx: number, dy: number): string {
