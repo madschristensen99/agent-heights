@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-import { CHAR_VARIANTS } from "../../../shared/types";
 import type { Store } from "../store";
 import { AgentNPC, YukiNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
 import { YUKI_ID } from "../../../shared/types";
@@ -7,7 +6,7 @@ import { Grid, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
-import { generateCharTexture, CHAR_FRAME_W, CHAR_FRAME_H } from "./chargen";
+import { generateCharTexture, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, MONITOR_TEX } from "./furniture";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 
@@ -101,37 +100,6 @@ export class OfficeScene extends Phaser.Scene {
     super("office");
   }
 
-  preload(): void {
-    // Cache-bust character PNGs to ensure browser loads 2x resolution versions
-    const v = "?v=2x";
-    this.load.tilemapTiledJSON("map-classic", "assets/maps/office.json");
-    this.load.tilemapTiledJSON("map-lumon", "assets/maps/lumon.json");
-    this.load.image("tiles-classic", "assets/tilesets/office.png");
-    this.load.image("tiles-lumon", "assets/tilesets/lumon.png");
-    for (let i = 0; i < CHAR_VARIANTS; i++) {
-      this.load.spritesheet(`char-${i}`, `assets/characters/char-${i}.png${v}`, {
-        frameWidth: CHAR_FRAME_W,
-        frameHeight: CHAR_FRAME_H,
-      });
-    }
-    this.load.spritesheet("boss", `assets/characters/boss.png${v}`, {
-      frameWidth: CHAR_FRAME_W,
-      frameHeight: CHAR_FRAME_H,
-    });
-    this.load.spritesheet("char-yuki", `assets/characters/char-yuki.png${v}`, {
-      frameWidth: CHAR_FRAME_W,
-      frameHeight: CHAR_FRAME_H,
-    });
-    this.load.spritesheet("bubble", "assets/sprites/bubble.png", {
-      frameWidth: 64,
-      frameHeight: 64,
-    });
-    this.load.spritesheet("world-tiles", "assets/tilesets/world.png", {
-      frameWidth: 64,
-      frameHeight: 64,
-    });
-  }
-
   create(): void {
     this.store = this.game.registry.get("store") as Store;
     this.theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
@@ -152,87 +120,6 @@ export class OfficeScene extends Phaser.Scene {
       this.cameras.main.setPostPipeline("BloomFX");
       this.cameras.main.setPostPipeline("ColorGrade");
       this.cameras.main.setPostPipeline("DOF");
-    }
-
-    // Generate procedural textures for creatures, beasts, effects
-    generateAllTextures(this);
-
-    // Create creature animations (idle, walk, attack)
-    const creatureNames = ["slime", "wolf", "skeleton", "imp", "wraith", "fire-elemental"];
-    for (const name of creatureNames) {
-      const key = `creature-${name}`;
-      if (this.anims.exists(`${key}-idle`)) continue;
-      // idle: frame 0 with subtle bobbing
-      this.anims.create({
-        key: `${key}-idle`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [0, 1, 0, 2] }),
-        frameRate: 3,
-        repeat: -1,
-      });
-      // walk: frames 1-2 cycling
-      this.anims.create({
-        key: `${key}-walk`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [1, 2, 1, 2] }),
-        frameRate: 8,
-        repeat: -1,
-      });
-      // attack: frame 3
-      this.anims.create({
-        key: `${key}-attack`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [3, 0] }),
-        frameRate: 6,
-        repeat: 0,
-      });
-    }
-
-    // Create beast animations
-    const beastNames = ["groveheart", "stone-colossus", "ash-wyrm", "void-leviathan", "infernal-sovereign"];
-    for (const name of beastNames) {
-      const key = `beast-${name}`;
-      if (this.anims.exists(`${key}-idle`)) continue;
-      this.anims.create({
-        key: `${key}-idle`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [0, 1, 0, 2] }),
-        frameRate: 2,
-        repeat: -1,
-      });
-      this.anims.create({
-        key: `${key}-move`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [1, 2, 1, 2] }),
-        frameRate: 5,
-        repeat: -1,
-      });
-      this.anims.create({
-        key: `${key}-attack`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [3, 0] }),
-        frameRate: 4,
-        repeat: 0,
-      });
-    }
-
-    // Create friendly creature animations (idle, walk, hop)
-    const friendlyNames = ["unicorn", "fairy-bunny", "baby-dragon", "crystal-fox"];
-    for (const name of friendlyNames) {
-      const key = `friendly-${name}`;
-      if (this.anims.exists(`${key}-idle`)) continue;
-      this.anims.create({
-        key: `${key}-idle`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [0, 1, 0, 2] }),
-        frameRate: 3,
-        repeat: -1,
-      });
-      this.anims.create({
-        key: `${key}-walk`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [1, 2, 1, 2] }),
-        frameRate: 6,
-        repeat: -1,
-      });
-      this.anims.create({
-        key: `${key}-hop`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [3, 1, 0] }),
-        frameRate: 5,
-        repeat: 0,
-      });
     }
 
     // Initialize audio on first user interaction
@@ -263,6 +150,12 @@ export class OfficeScene extends Phaser.Scene {
     this.plantUntil = 0;
     this.plantCooldownUntil = 0;
     this.sofaUntil = 0;
+
+    // Force-recreate procedural textures with valid GL bindings for this scene.
+    // BootScene creates them first, but its WebGL textures become stale after
+    // scene transition — force=true removes and recreates them here.
+    generateAllTextures(this, true);
+    this.ensureAllAnimations();
 
     const map = this.make.tilemap({ key: `map-${this.theme}` });
     const tiles = map.addTilesetImage(
@@ -398,59 +291,8 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // animations for every character sheet
-    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss", "char-yuki"];
-    const dirs: Dir[] = ["down", "left", "right", "up"];
-    const FRAMES_PER_ROW = 8;
-    for (const key of sheets) {
-      if (this.anims.exists(`${key}-work`)) continue; // already built before a restart
-      dirs.forEach((dir, row) => {
-        const base = row * FRAMES_PER_ROW;
-        this.anims.create({
-          key: `${key}-walk-${dir}`,
-          frames: this.anims.generateFrameNumbers(key, {
-            frames: [base, base + 1, base + 2, base + 3, base + 4, base + 5],
-          }),
-          frameRate: 10,
-          repeat: -1,
-        });
-        // idle: mostly breathing (frame 6) with a quick blink (frame 7)
-        // We duplicate frame 6 many times then show frame 7 once, so the
-        // blink is a brief single-frame flash among long breathing stretches.
-        const breathFrames = Array(24).fill(base + 6);
-        breathFrames.push(base + 7); // quick blink
-        breathFrames.push(base + 6); // back to breathing
-        this.anims.create({
-          key: `${key}-idle-${dir}`,
-          frames: this.anims.generateFrameNumbers(key, {
-            frames: breathFrames,
-          }),
-          frameRate: 10,
-          repeat: -1,
-          repeatDelay: Math.random() * 2,
-        });
-      });
-      // work animation — uses down-facing idle/breathing frames (row 0)
-      this.anims.create({
-        key: `${key}-work`,
-        frames: this.anims.generateFrameNumbers(key, { frames: [6, 7] }),
-        frameRate: 2.5,
-        repeat: -1,
-      });
-    }
-
     // Generate boss texture from player appearance (if set)
     this.refreshBossTexture();
-
-    // water animation — cycles through 3 frames in the world tileset
-    if (!this.anims.exists("water-anim")) {
-      this.anims.create({
-        key: "water-anim",
-        frames: this.anims.generateFrameNumbers("world-tiles", { frames: [21, 22, 23] }),
-        frameRate: 4,
-        repeat: -1,
-      });
-    }
 
     // the boss (you)
     const feet = feetOf(this.spawnTile);
@@ -520,6 +362,16 @@ export class OfficeScene extends Phaser.Scene {
     // world layer — infinite procedural world outside the office
     this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
     this.world.setOfficeGrid(this.grid);
+    // Preload world chunks around the door so there's no freeze on first exit
+    this.world.preloadDoorChunks();
+
+    // Warm up the particle system so the first biome ambient doesn't cause a
+    // stutter.  The first ParticleEmitter render compiles WebGL shaders and
+    // allocates GPU buffers.  We create the emitter now and let it render for
+    // a few frames (during the loading screen) before destroying it — the
+    // compiled shader stays cached in Phaser's shader manager.
+    this.world.vfx.startAmbient("meadow");
+    this.time.delayedCall(200, () => this.world.vfx.stopAmbient());
 
     // flower beds flanking the front door
     const doorPxX = this.spawnTile.x * TILE_PX + TILE_PX / 2;
@@ -622,6 +474,9 @@ export class OfficeScene extends Phaser.Scene {
     this.ready = true;
     this.syncAgents();
     this.world.syncGhosts();
+
+    // Fade in from black so the transition from BootScene is seamless.
+    this.cameras.main.fadeIn(400, 0, 0, 0);
   }
 
   /** Draw rounded background behind player nameplate. */
@@ -1771,6 +1626,55 @@ export class OfficeScene extends Phaser.Scene {
       frameRate: 2.5,
       repeat: -1,
     });
+  }
+
+  /** Ensure all game animations exist — called on create() to handle scene restarts. */
+  private ensureAllAnimations(): void {
+    const creatureNames = ["slime", "wolf", "skeleton", "imp", "wraith", "fire-elemental"];
+    for (const name of creatureNames) {
+      const key = `creature-${name}`;
+      if (this.anims.exists(`${key}-idle`)) continue;
+      this.anims.create({ key: `${key}-idle`, frames: this.anims.generateFrameNumbers(key, { frames: [0, 1, 0, 2] }), frameRate: 3, repeat: -1 });
+      this.anims.create({ key: `${key}-walk`, frames: this.anims.generateFrameNumbers(key, { frames: [1, 2, 1, 2] }), frameRate: 8, repeat: -1 });
+      this.anims.create({ key: `${key}-attack`, frames: this.anims.generateFrameNumbers(key, { frames: [3, 0] }), frameRate: 6, repeat: 0 });
+    }
+
+    const beastNames = ["groveheart", "stone-colossus", "ash-wyrm", "void-leviathan", "infernal-sovereign"];
+    for (const name of beastNames) {
+      const key = `beast-${name}`;
+      if (this.anims.exists(`${key}-idle`)) continue;
+      this.anims.create({ key: `${key}-idle`, frames: this.anims.generateFrameNumbers(key, { frames: [0, 1, 0, 2] }), frameRate: 2, repeat: -1 });
+      this.anims.create({ key: `${key}-move`, frames: this.anims.generateFrameNumbers(key, { frames: [1, 2, 1, 2] }), frameRate: 5, repeat: -1 });
+      this.anims.create({ key: `${key}-attack`, frames: this.anims.generateFrameNumbers(key, { frames: [3, 0] }), frameRate: 4, repeat: 0 });
+    }
+
+    const friendlyNames = ["unicorn", "fairy-bunny", "baby-dragon", "crystal-fox"];
+    for (const name of friendlyNames) {
+      const key = `friendly-${name}`;
+      if (this.anims.exists(`${key}-idle`)) continue;
+      this.anims.create({ key: `${key}-idle`, frames: this.anims.generateFrameNumbers(key, { frames: [0, 1, 0, 2] }), frameRate: 3, repeat: -1 });
+      this.anims.create({ key: `${key}-walk`, frames: this.anims.generateFrameNumbers(key, { frames: [1, 2, 1, 2] }), frameRate: 6, repeat: -1 });
+      this.anims.create({ key: `${key}-hop`, frames: this.anims.generateFrameNumbers(key, { frames: [3, 1, 0] }), frameRate: 5, repeat: 0 });
+    }
+
+    const sheets = ["boss", "char-yuki", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
+    const dirs: Dir[] = ["down", "left", "right", "up"];
+    for (const key of sheets) {
+      if (this.anims.exists(`${key}-work`)) continue;
+      dirs.forEach((dir, row) => {
+        const base = row * CHAR_FRAMES_PER_ROW;
+        this.anims.create({ key: `${key}-walk-${dir}`, frames: this.anims.generateFrameNumbers(key, { frames: [base, base + 1, base + 2, base + 3, base + 4, base + 5] }), frameRate: 10, repeat: -1 });
+        const breathFrames = Array(24).fill(base + 6);
+        breathFrames.push(base + 7);
+        breathFrames.push(base + 6);
+        this.anims.create({ key: `${key}-idle-${dir}`, frames: this.anims.generateFrameNumbers(key, { frames: breathFrames }), frameRate: 10, repeat: -1, repeatDelay: Math.random() * 2 });
+      });
+      this.anims.create({ key: `${key}-work`, frames: this.anims.generateFrameNumbers(key, { frames: [6, 7] }), frameRate: 2.5, repeat: -1 });
+    }
+
+    if (!this.anims.exists("water-anim")) {
+      this.anims.create({ key: "water-anim", frames: this.anims.generateFrameNumbers("world-tiles", { frames: [21, 22, 23] }), frameRate: 4, repeat: -1 });
+    }
   }
 
   /** Generate or refresh the boss texture from the player's appearance. */

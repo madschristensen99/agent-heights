@@ -106,6 +106,7 @@ class CanvasSheet {
     tctx.drawImage(this.canvas, px, py, pw, ph, 0, 0, pw, ph);
     this.ctx.save();
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(px, py, pw, ph);
     this.ctx.scale(-1, 1);
     this.ctx.drawImage(tmp, -px - pw, py);
     this.ctx.restore();

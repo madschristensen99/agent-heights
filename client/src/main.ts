@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { BootScene } from "./game/boot";
 import { OfficeScene } from "./game/scene";
 import { Net } from "./net";
 import { Store } from "./store";
@@ -30,7 +31,7 @@ const game = new Phaser.Game({
   // 10-frame delta smoothing lags those shifts, so speeds drift slow-then-fast.
   // The raw RAF delta is always correct — use it.
   fps: { smoothStep: false },
-  scene: [OfficeScene],
+  scene: [BootScene, OfficeScene],
 });
 
 game.registry.set("store", store);

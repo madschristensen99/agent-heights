@@ -3200,12 +3200,32 @@ const CREATURE_FRAMES = 4; // idle, walk1, walk2, attack
 const BEAST_FRAMES = 4; // idle, move1, move2, attack
 const TEX_SIZE = 128;
 
+/** All procedural texture keys created by generateAllTextures, for force-removal. */
+const ALL_PROC_KEYS = [
+  "creature-slime", "creature-wolf", "creature-skeleton", "creature-imp",
+  "creature-wraith", "creature-fire-elemental",
+  "beast-groveheart", "beast-stone-colossus", "beast-ash-wyrm",
+  "beast-void-leviathan", "beast-infernal-sovereign",
+  "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
+  "stone-proj", "spark", "dust", "shockwave", "recruit-beam",
+  "soft-glow", "fire-glow", "void-glow", "crystal-glow",
+  "golf-club", "golf-ball", "axe", "net",
+  "big-tree", "tee-box", "leprechaun", "fountain",
+  "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
+];
+
 /**
  * Generate all procedural textures and register them with the Phaser texture manager.
- * Call once during scene preload().
+ * @param force If true, remove existing textures before recreating (use when
+ *   called from a different scene context to avoid stale WebGL bindings).
  */
-export function generateAllTextures(scene: Phaser.Scene): void {
+export function generateAllTextures(scene: Phaser.Scene, force = false): void {
   const tex = scene.textures;
+  if (force) {
+    for (const key of ALL_PROC_KEYS) {
+      if (tex.exists(key)) tex.remove(key);
+    }
+  }
 
   // --- Creature spritesheets ---
   for (let i = 0; i < CREATURE_DESIGNS.length; i++) {

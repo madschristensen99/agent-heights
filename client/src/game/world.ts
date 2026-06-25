@@ -752,7 +752,6 @@ export class WorldLayer {
   private golfHolesSunk = 0;
   private golfStrokes = 0; // strokes on current hole
   private golfTotalStrokes = 0; // total strokes across all holes
-  private golfBallCleanedUp = false; // true after extra balls removed from loaded chunks
   private golfFlagCacheKey = "";
   private golfFlagCache: { flagX: number; flagY: number; foundFlag: boolean } | null = null;
 
@@ -1066,6 +1065,35 @@ export class WorldLayer {
         this.chunks.delete(key);
       }
     }
+  }
+
+  /** Synchronously preload all chunks around the door exit. Call once after
+   *  construction so the player doesn't hit a freeze when first walking outside. */
+  preloadDoorChunks(): void {
+    const doorX = this.officeW / 2;
+    const doorY = this.officeH + TILE_PX;
+    const { tx, ty } = this.pixelToTile(doorX, doorY);
+    const pcx = Math.floor(tx / CHUNK_SIZE);
+    const pcy = Math.floor(ty / CHUNK_SIZE);
+
+    const needed: { cx: number; cy: number; dist: number }[] = [];
+    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+        const ncy = pcy + dy;
+        if (ncy < 0) continue;
+        const ncx = pcx + dx;
+        const key = `${ncx},${ncy}`;
+        if (this.chunks.has(key)) continue;
+        needed.push({ cx: ncx, cy: ncy, dist: dx * dx + dy * dy });
+      }
+    }
+    needed.sort((a, b) => a.dist - b.dist);
+    for (const n of needed) {
+      this.loadChunk(n.cx, n.cy);
+    }
+    // One-time cleanup: remove extra golf balls so only one exists near the door.
+    // Done here during preloading so it doesn't cause a hitch on first outdoor frame.
+    this.removeExtraBalls();
   }
 
   private loadChunk(cx: number, cy: number): void {
@@ -1561,12 +1589,6 @@ export class WorldLayer {
 
     // --- golf interaction ---
     if (outside) {
-      // one-time cleanup: remove extra balls so only one exists in the world
-      if (!this.golfBallCleanedUp) {
-        this.golfBallCleanedUp = true;
-        this.removeExtraBalls();
-      }
-
       const { tx: ptx, ty: pty } = this.pixelToTile(playerX, playerY);
 
       // update golf ball physics
