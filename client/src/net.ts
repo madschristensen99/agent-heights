@@ -14,9 +14,10 @@ export class Net {
 
   connect(): void {
     const proto = location.protocol === "https:" ? "wss" : "ws";
+    const wsHost = import.meta.env.VITE_WS_HOST || location.host;
     const url = this.token
-      ? `${proto}://${location.host}/?token=${encodeURIComponent(this.token)}`
-      : `${proto}://${location.host}`;
+      ? `${proto}://${wsHost}/?token=${encodeURIComponent(this.token)}`
+      : `${proto}://${wsHost}`;
     const ws = new WebSocket(url);
     this.ws = ws;
 

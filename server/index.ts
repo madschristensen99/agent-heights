@@ -14,7 +14,7 @@ import { isSupabaseConfigured, verifyToken, type AuthUser } from "./supabase.js"
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
-import { stopRailwayMCP, checkRailwayStatus } from "./providers/railway-mcp.js";
+import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
@@ -300,6 +300,11 @@ wss.on("connection", async (ws, req) => {
           break;
         case "recruit":
           manager.recruit(msg.firedAgentId);
+          break;
+        case "railway_query":
+          queryRailway().then((result) => {
+            sess.broadcast({ type: "railway_data", data: result.data, error: result.error });
+          });
           break;
       }
     } catch (err) {

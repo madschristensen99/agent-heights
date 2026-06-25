@@ -19,12 +19,15 @@ export const ACCENTS = ["#c44a4a", "#3a7cb5", "#3d9152", "#b0741f", "#5b7d9e", "
 export const SKIN_TONES = [
   "#f2c39b", "#ffdbac", "#d9a066", "#c68642",
   "#a06a42", "#8d5524", "#6b4423", "#deb887",
+  "#c0c0c8", "#8a8a96", "#e8e8f0", "#a8c0d0",
 ];
 
 export const HAIR_STYLES = [
   "short", "spiky", "long", "ponytail",
   "buzz", "swept", "curly", "bun",
   "bald", "balding",
+  "mohawk", "afro", "braids", "pigtails",
+  "bob", "dreadlocks",
 ];
 
 export const HAIR_COLORS = [
@@ -44,7 +47,16 @@ export const PANTS_COLORS = [
   "#3e4a5c", "#23283a", "#1b1f2e", "#4a3a2a",
 ];
 
-export const ACCESSORIES = ["none", "glasses", "headband", "earrings"];
+export const ACCESSORIES = ["none", "glasses", "headband", "earrings", "cap", "beanie", "headphones"];
+
+export const BEARD_STYLES = ["none", "stubble", "mustache", "goatee", "full_beard"];
+
+export const EYE_COLORS = [
+  "#2a2040", "#00e5ff", "#ff3030", "#3aff3a",
+  "#ffaa00", "#cc44ff", "#ffffff",
+];
+
+export const HEAD_FEATURES = ["none", "cat_ears", "horns", "antennae", "elf_ears"];
 
 export const ACCENT_COLOR_OPTIONS = [
   "#c44a4a", "#3a7cb5", "#3d9152", "#b0741f",
@@ -54,13 +66,16 @@ export const ACCENT_COLOR_OPTIONS = [
 
 /** Piece-by-piece character appearance selected via the character builder. */
 export interface CharAppearance {
-  skin: number;      // index into SKIN_TONES
-  hairStyle: number; // index into HAIR_STYLES
-  hair: number;      // index into HAIR_COLORS
-  shirt: number;     // index into SHIRT_COLORS
-  pants: number;     // index into PANTS_COLORS
-  accessory: number; // index into ACCESSORIES
-  accent: number;    // index into ACCENT_COLOR_OPTIONS
+  skin: number;       // index into SKIN_TONES
+  hairStyle: number;  // index into HAIR_STYLES
+  hair: number;       // index into HAIR_COLORS
+  shirt: number;      // index into SHIRT_COLORS
+  pants: number;      // index into PANTS_COLORS
+  accessory: number;  // index into ACCESSORIES
+  accent: number;     // index into ACCENT_COLOR_OPTIONS
+  beard: number;      // index into BEARD_STYLES
+  eyeColor: number;   // index into EYE_COLORS
+  headFeature: number; // index into HEAD_FEATURES
 }
 
 /** Default appearance (matches pre-baked char-0). */
@@ -72,19 +87,22 @@ export const DEFAULT_APPEARANCE: CharAppearance = {
   pants: 0,
   accessory: 0,
   accent: 0,
+  beard: 0,
+  eyeColor: 0,
+  headFeature: 0,
 };
 
 /** Build a CharAppearance from a legacy sprite index (maps to the 8 pre-baked palettes). */
 export function appearanceFromSprite(sprite: number): CharAppearance {
   const map: CharAppearance[] = [
-    { skin: 0, hairStyle: 0, hair: 0, shirt: 0, pants: 0, accessory: 0, accent: 0 }, // char-0
-    { skin: 2, hairStyle: 1, hair: 2, shirt: 1, pants: 1, accessory: 1, accent: 1 }, // char-1
-    { skin: 4, hairStyle: 4, hair: 1, shirt: 2, pants: 2, accessory: 0, accent: 2 }, // char-2
-    { skin: 1, hairStyle: 2, hair: 4, shirt: 3, pants: 3, accessory: 3, accent: 3 }, // char-3
-    { skin: 0, hairStyle: 5, hair: 5, shirt: 4, pants: 4, accessory: 2, accent: 4 }, // char-4
-    { skin: 5, hairStyle: 3, hair: 0, shirt: 5, pants: 0, accessory: 0, accent: 5 }, // char-5
-    { skin: 2, hairStyle: 6, hair: 6, shirt: 6, pants: 1, accessory: 1, accent: 6 }, // char-6
-    { skin: 1, hairStyle: 7, hair: 7, shirt: 7, pants: 5, accessory: 3, accent: 7 }, // char-7
+    { skin: 0, hairStyle: 0, hair: 0, shirt: 0, pants: 0, accessory: 0, accent: 0, beard: 0, eyeColor: 0, headFeature: 0 }, // char-0
+    { skin: 2, hairStyle: 1, hair: 2, shirt: 1, pants: 1, accessory: 1, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 }, // char-1
+    { skin: 4, hairStyle: 4, hair: 1, shirt: 2, pants: 2, accessory: 0, accent: 2, beard: 0, eyeColor: 0, headFeature: 0 }, // char-2
+    { skin: 1, hairStyle: 2, hair: 4, shirt: 3, pants: 3, accessory: 3, accent: 3, beard: 0, eyeColor: 0, headFeature: 0 }, // char-3
+    { skin: 0, hairStyle: 5, hair: 5, shirt: 4, pants: 4, accessory: 2, accent: 4, beard: 0, eyeColor: 0, headFeature: 0 }, // char-4
+    { skin: 5, hairStyle: 3, hair: 0, shirt: 5, pants: 0, accessory: 0, accent: 5, beard: 0, eyeColor: 0, headFeature: 0 }, // char-5
+    { skin: 2, hairStyle: 6, hair: 6, shirt: 6, pants: 1, accessory: 1, accent: 6, beard: 0, eyeColor: 0, headFeature: 0 }, // char-6
+    { skin: 1, hairStyle: 7, hair: 7, shirt: 7, pants: 5, accessory: 3, accent: 7, beard: 0, eyeColor: 0, headFeature: 0 }, // char-7
   ];
   return map[sprite % map.length] ?? DEFAULT_APPEARANCE;
 }
@@ -248,6 +266,30 @@ export const DEFAULT_SETTINGS: GameSettings = {
   railway: { enabled: false },
 };
 
+export interface RailwayProject {
+  id: string;
+  name: string;
+  environment: string;
+  services: RailwayService[];
+}
+
+export interface RailwayService {
+  id: string;
+  name: string;
+  status: string;
+  url?: string;
+  deployments?: {
+    id: string;
+    status: string;
+    createdAt?: string;
+  }[];
+}
+
+export interface RailwayData {
+  projects: RailwayProject[];
+  raw?: string;
+}
+
 export type ClientMsg =
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
@@ -263,7 +305,8 @@ export type ClientMsg =
   | { type: "assign_card"; cardId: string; agentId: string }
   | { type: "move_card"; cardId: string; status: CardStatus }
   | { type: "delete_card"; cardId: string }
-  | { type: "recruit"; firedAgentId: string };
+  | { type: "recruit"; firedAgentId: string }
+  | { type: "railway_query" };
 
 export type ServerMsg =
   | {
@@ -288,7 +331,8 @@ export type ServerMsg =
   | { type: "world"; world: WorldState }
   | { type: "fired_agent"; agent: FiredAgent }
   | { type: "fired_agent_removed"; agentId: string }
-  | { type: "railway_status"; ok: boolean; message: string };
+  | { type: "railway_status"; ok: boolean; message: string }
+  | { type: "railway_data"; data: RailwayData | null; error: string | null };
 
 export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },

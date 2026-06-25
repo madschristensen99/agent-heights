@@ -15,6 +15,7 @@ export class VFXManager {
   private sparkPoolIdx = 0;
   private readonly SPARK_POOL_SIZE = 12;
   private smokeEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private emberEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private smokePositions: { x: number; y: number }[] = [];
   private smokeActive = false;
 
@@ -178,44 +179,70 @@ export class VFXManager {
   /**
    * Start continuous chimney smoke at the given positions.
    * Called when devops agents are actively working.
+   * Produces thick, energetic smoke with embers to convey intense server activity.
    */
   startSmoke(positions: { x: number; y: number }[]): void {
     this.smokePositions = positions;
     if (this.smokeActive || positions.length === 0) return;
     this.smokeActive = true;
 
+    // Main smoke column — thick, dark, fast-rising
     this.smokeEmitter = this.scene.add.particles(0, 0, "dust", {
-      x: { min: 0, max: 0 },
-      y: { min: 0, max: 0 },
-      speedX: { min: -8, max: 8 },
-      speedY: { min: -40, max: -20 },
-      scale: { start: 0.6, end: 2.5 },
-      alpha: { start: 0.5, end: 0 },
-      lifespan: { min: 2000, max: 4000 },
-      quantity: 1,
-      frequency: 80,
-      tint: 0x888888,
+      x: { min: -6, max: 6 },
+      y: { min: -2, max: 2 },
+      speedX: { min: -15, max: 15 },
+      speedY: { min: -80, max: -40 },
+      scale: { start: 1.2, end: 4.5 },
+      alpha: { start: 0.7, end: 0 },
+      lifespan: { min: 2500, max: 5000 },
+      quantity: 3,
+      frequency: 50,
+      tint: 0x555555,
       blendMode: Phaser.BlendModes.NORMAL,
     });
     this.smokeEmitter.setDepth(50);
+
+    // Ember emitter — fiery sparks shooting up from the chimney
+    this.emberEmitter = this.scene.add.particles(0, 0, "spark", {
+      x: { min: -4, max: 4 },
+      y: { min: -2, max: 2 },
+      speedX: { min: -20, max: 20 },
+      speedY: { min: -120, max: -60 },
+      scale: { start: 0.6, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 800, max: 1800 },
+      quantity: 2,
+      frequency: 120,
+      tint: [0xff6600, 0xff9900, 0xff3300],
+      blendMode: Phaser.BlendModes.ADD,
+    });
+    this.emberEmitter.setDepth(51);
   }
 
-  /** Stop chimney smoke. */
+  /** Stop chimney smoke and embers. */
   stopSmoke(): void {
     this.smokeActive = false;
     if (this.smokeEmitter) {
       this.smokeEmitter.destroy();
       this.smokeEmitter = null;
     }
+    if (this.emberEmitter) {
+      this.emberEmitter.destroy();
+      this.emberEmitter = null;
+    }
   }
 
-  /** Update smoke emitter position — call each frame. */
+  /** Update smoke + ember emitter positions — call each frame. */
   updateSmoke(): void {
-    if (!this.smokeEmitter || !this.smokeActive || this.smokePositions.length === 0) return;
-    // Cycle through chimney positions to emit from each
+    if (this.smokePositions.length === 0) return;
     const t = this.scene.time.now;
     const pos = this.smokePositions[Math.floor(t / 200) % this.smokePositions.length];
-    this.smokeEmitter.setPosition(pos.x, pos.y);
+    if (this.smokeEmitter && this.smokeActive) {
+      this.smokeEmitter.setPosition(pos.x, pos.y);
+    }
+    if (this.emberEmitter && this.smokeActive) {
+      this.emberEmitter.setPosition(pos.x, pos.y);
+    }
   }
 
   /** Start ambient biome particles — pollen, ash, snow, etc. */

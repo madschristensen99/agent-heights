@@ -1,4 +1,4 @@
-import type { AgentInfo, FiredAgent, GameSettings, LogEntry, PlayerInfo, ServerMsg, TaskCard } from "../../shared/types";
+import type { AgentInfo, FiredAgent, GameSettings, LogEntry, PlayerInfo, RailwayData, ServerMsg, TaskCard } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -34,6 +34,9 @@ export class Store {
   boardOpen = false;
   achievementsOpen = false;
   hallOfFameOpen = false;
+  railwayPanelOpen = false;
+  railwayData: RailwayData | null = null;
+  railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
 
   private listeners = new Set<Listener>();
@@ -73,6 +76,11 @@ export class Store {
 
   toggleHallOfFame(open?: boolean): void {
     this.hallOfFameOpen = open ?? !this.hallOfFameOpen;
+    this.emit();
+  }
+
+  toggleRailwayPanel(open?: boolean): void {
+    this.railwayPanelOpen = open ?? !this.railwayPanelOpen;
     this.emit();
   }
 
@@ -218,6 +226,11 @@ export class Store {
         this.railwayStatus = { ok: msg.ok, message: msg.message };
         this.toast(msg.message);
         return;
+      case "railway_data":
+        this.railwayData = msg.data;
+        this.railwayError = msg.error;
+        this.railwayPanelOpen = true;
+        break;
     }
     this.emit();
   }

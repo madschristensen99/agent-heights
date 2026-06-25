@@ -72,9 +72,10 @@ export class OfficeScene extends Phaser.Scene {
   private trophyAchCount = -1;
   private sceneStart = 0;
 
-  private hallOfFameTile: Tile = { x: 1, y: 15 };
+  private hallOfFameTile: Tile = { x: 10, y: 19 };
   private hallOfFameHint!: Phaser.GameObjects.Text;
   private hallOfFameGfx!: Phaser.GameObjects.Graphics;
+  private chimneyGfx!: Phaser.GameObjects.Graphics;
 
   // --- helicopter / red button ---
   private redButtonTile: Tile = { x: 25, y: 7 };
@@ -92,6 +93,9 @@ export class OfficeScene extends Phaser.Scene {
   private theme: "classic" | "lumon" = "classic";
   /** Pixel positions of chimney tiles — for smoke when devops agents work. */
   private chimneyPositions: { x: number; y: number }[] = [];
+  /** Server rack tile positions for E-interaction. */
+  private serverRackTiles: Tile[] = [];
+  private serverRackHint!: Phaser.GameObjects.Text;
   /** Store listeners are registered once; they survive scene restarts. */
   private wired = false;
   private ready = false;
@@ -211,13 +215,13 @@ export class OfficeScene extends Phaser.Scene {
     // Overlay enhanced procedural furniture on top of the tile-based furniture layer
     upgradeFurniture(this, furniture);
 
-    // Scan for chimney tiles to position smoke emitters
-    this.chimneyPositions = [];
+    // Scan for server rack tiles (tile ID 34) for E-interaction
+    this.serverRackTiles = [];
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const t = furniture.getTileAt(x, y);
-        if (t && (t.index === 36 || t.properties?.chimney)) {
-          this.chimneyPositions.push({ x: x * TILE_PX + TILE_PX / 2, y: y * TILE_PX + 4 });
+        if (t && t.index === 34) {
+          this.serverRackTiles.push({ x, y });
         }
       }
     }
@@ -359,6 +363,7 @@ export class OfficeScene extends Phaser.Scene {
     this.drawBoard();
     this.drawTrophyCase();
     this.drawHallOfFameBoard();
+    this.drawExteriorChimney();
     this.drawHelipad();
     this.drawRedButton();
     this.boardHint = this.add
@@ -385,6 +390,7 @@ export class OfficeScene extends Phaser.Scene {
     this.plantHint = this.makeHint();
     this.trophyHint = this.makeHint();
     this.hallOfFameHint = this.makeHint();
+    this.serverRackHint = this.makeHint();
     this.mailboxHint = this.makeHint();
     this.redButtonHint = this.makeHint();
 
@@ -659,28 +665,28 @@ export class OfficeScene extends Phaser.Scene {
       this.clockTile = { x: 14, y: 1 };
       this.vendingTile = { x: 27, y: 2 };
       this.sofaTile = null;
-      this.hallOfFameTile = { x: 1, y: 15 };
+      this.hallOfFameTile = { x: 10, y: 19 };
       this.filingTiles = [
         { x: 1, y: 3 }, { x: 1, y: 4 }, { x: 1, y: 12 }, { x: 1, y: 13 },
         { x: 20, y: 3 }, { x: 20, y: 12 }, { x: 22, y: 11 },
       ];
       this.plantTiles = [
-        { x: 20, y: 17 }, { x: 5, y: 17 }, { x: 11, y: 9 },
-        { x: 26, y: 16 }, { x: 27, y: 11 },
+        { x: 20, y: 17 }, { x: 12, y: 18 }, { x: 11, y: 9 },
+        { x: 26, y: 16 }, { x: 27, y: 11 }, { x: 16, y: 18 },
       ];
     } else {
       this.clockTile = { x: 6, y: 1 };
       this.vendingTile = null;
       this.sofaTile = { x: 23, y: 13 };
-      this.hallOfFameTile = { x: 1, y: 15 };
+      this.hallOfFameTile = { x: 10, y: 19 };
       this.filingTiles = [
         { x: 1, y: 6 }, { x: 1, y: 7 }, { x: 20, y: 3 },
         { x: 20, y: 4 }, { x: 22, y: 11 },
       ];
       this.plantTiles = [
-        { x: 1, y: 17 }, { x: 20, y: 2 }, { x: 28, y: 7 },
+        { x: 12, y: 18 }, { x: 20, y: 2 }, { x: 28, y: 7 },
         { x: 27, y: 13 }, { x: 11, y: 8 }, { x: 26, y: 16 },
-        { x: 5, y: 17 }, { x: 27, y: 11 },
+        { x: 16, y: 18 }, { x: 27, y: 11 },
       ];
     }
   }
@@ -1927,24 +1933,24 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Draw a cork-board bulletin board hanging on the west wall — the Hall of Fame. */
+  /** Draw a cork-board bulletin board hanging on the south wall — the Hall of Fame. */
   private drawHallOfFameBoard(): void {
     this.hallOfFameGfx = this.add.graphics().setDepth(3);
     const g = this.hallOfFameGfx;
 
-    // Board hangs on the west wall (x=0 tile), protruding slightly into the room.
-    // Portrait orientation, centered vertically on the hallOfFameTile row.
-    const wallFace = TILE_PX;              // wall tile ends at x=64
-    const bx = wallFace + 22;              // board center — hangs ~22px off the wall face
-    const by = this.hallOfFameTile.y * TILE_PX + 32;
-    const bw = 48;
-    const bh = 84;
+    // Board hangs on the south wall (bottom wall), landscape orientation,
+    // centered horizontally on the hallOfFameTile column, just above the wall.
+    const bx = this.hallOfFameTile.x * TILE_PX + 32;
+    const wallTop = this.hallOfFameTile.y * TILE_PX; // top edge of south wall tile
+    const by = wallTop - 10; // hangs just above the wall
+    const bw = 84;
+    const bh = 48;
 
-    // Drop shadow on the wall behind/below the board
+    // Drop shadow
     g.fillStyle(0x000000, 0.25);
     g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 4, bw, bh, 3);
 
-    // Wooden frame — visible thickness so it reads as a 3D object on the wall
+    // Wooden frame
     g.fillStyle(0x4a3220, 1);
     g.fillRoundedRect(bx - bw / 2 - 4, by - bh / 2 - 4, bw + 8, bh + 8, 5);
     g.fillStyle(0x5a4030, 1);
@@ -1954,7 +1960,7 @@ export class OfficeScene extends Phaser.Scene {
     g.fillStyle(0xcba872, 1);
     g.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 3);
 
-    // Cork texture — scattered dots
+    // Cork texture
     g.fillStyle(0xb8985f, 0.4);
     for (let i = 0; i < 30; i++) {
       const dx = bx - bw / 2 + 4 + Math.random() * (bw - 8);
@@ -1962,41 +1968,137 @@ export class OfficeScene extends Phaser.Scene {
       g.fillCircle(dx, dy, 0.8 + Math.random() * 0.8);
     }
 
-    // Title strip at top
+    // Title strip at left
     g.fillStyle(0x2a3848, 0.9);
-    g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 3, bw - 6, 12, 2);
+    g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 3, 12, bh - 6, 2);
 
-    // Gold star at top center
+    // Gold star
     g.fillStyle(0xffd700, 1);
-    g.fillCircle(bx, by - bh / 2 + 9, 2.5);
+    g.fillCircle(bx - bw / 2 + 9, by - bh / 2 + 9, 2.5);
 
-    // Mounting nails at top corners — small silver dots on the wall above the board
+    // Mounting nails at top corners
     g.fillStyle(0x888890, 1);
     g.fillCircle(bx - bw / 2 + 4, by - bh / 2 - 6, 1.5);
     g.fillCircle(bx + bw / 2 - 4, by - bh / 2 - 6, 1.5);
-    // nail highlights
     g.fillStyle(0xcccccc, 0.6);
     g.fillCircle(bx - bw / 2 + 3.5, by - bh / 2 - 6.5, 0.7);
     g.fillCircle(bx + bw / 2 - 4.5, by - bh / 2 - 6.5, 0.7);
 
-    // Pinned photos — 3 small polaroid cards stacked vertically
+    // Pinned photos — 3 small polaroid cards arranged horizontally
     const photoColors = [0xc44a4a, 0x3a7cb5, 0x3d9152];
-    const photoSpacing = 22;
-    const photoStartY = by - bh / 2 + 22;
+    const photoSpacing = 24;
+    const photoStartX = bx - bw / 2 + 22;
     for (let i = 0; i < photoColors.length; i++) {
-      const py = photoStartY + i * photoSpacing;
-      // white border
+      const px = photoStartX + i * photoSpacing;
       g.fillStyle(0xf8f6f0, 1);
-      g.fillRoundedRect(bx - 14, py - 8, 28, 18, 1);
-      // photo content
+      g.fillRoundedRect(px - 8, by - 9, 18, 22, 1);
       g.fillStyle(photoColors[i], 1);
-      g.fillRect(bx - 12, py - 6, 24, 10);
-      // push pin
+      g.fillRect(px - 6, by - 7, 14, 12);
       g.fillStyle(0xd44a4a, 1);
-      g.fillCircle(bx, py - 10, 2);
+      g.fillCircle(px, by - 10, 2);
       g.fillStyle(0xffffff, 0.5);
-      g.fillCircle(bx - 0.8, py - 10.8, 0.8);
+      g.fillCircle(px - 0.8, by - 10.8, 0.8);
     }
+  }
+
+  /** Draw the industrial chimney on the exterior left wall, extending from roof to server room. */
+  private drawExteriorChimney(): void {
+    this.chimneyGfx = this.add.graphics().setDepth(1);
+    const g = this.chimneyGfx;
+
+    // Chimney sits outside the left wall (x < 64), extending from y=0 (roof) to y=14*64 (server room)
+    const wallFace = TILE_PX; // left wall outer edge at x=64
+    const chimW = 28;          // chimney width
+    const chimX = wallFace - chimW - 6; // 6px gap from wall
+    const roofY = 0;           // top of building
+    const baseY = 14 * TILE_PX; // server room level
+
+    // Brick body — tapered from base to top
+    const baseW = chimW + 8;
+    const topW = chimW;
+
+    // Drop shadow on the wall
+    g.fillStyle(0x000000, 0.2);
+    g.fillRect(chimX + 4, roofY, chimW, baseY - roofY);
+
+    // Main brick body
+    g.fillStyle(0x4a3328, 1);
+    g.beginPath();
+    g.moveTo(chimX - 4, baseY);
+    g.lineTo(chimX + baseW - 4, baseY);
+    g.lineTo(chimX + baseW - 4 - 4, roofY + 8);
+    g.lineTo(chimX + 4, roofY + 8);
+    g.closePath();
+    g.fillPath();
+
+    // Lighter brick highlight on left side
+    g.fillStyle(0x5a4030, 1);
+    g.beginPath();
+    g.moveTo(chimX - 4, baseY);
+    g.lineTo(chimX + 6, baseY);
+    g.lineTo(chimX + 6 - 2, roofY + 8);
+    g.lineTo(chimX + 4, roofY + 8);
+    g.closePath();
+    g.fillPath();
+
+    // Darker shadow on right side
+    g.fillStyle(0x3a2820, 1);
+    g.beginPath();
+    g.moveTo(chimX + baseW - 10, baseY);
+    g.lineTo(chimX + baseW - 4, baseY);
+    g.lineTo(chimX + baseW - 4 - 4, roofY + 8);
+    g.lineTo(chimX + baseW - 10 - 3, roofY + 8);
+    g.closePath();
+    g.fillPath();
+
+    // Brick mortar lines — horizontal
+    g.lineStyle(1, 0x2a1a12, 0.5);
+    for (let y = roofY + 16; y < baseY; y += 12) {
+      const t = (y - roofY) / (baseY - roofY);
+      const w = baseW - 4 - t * 8;
+      const xL = chimX - 4 + (baseW - 4 - w) / 2;
+      g.beginPath();
+      g.moveTo(xL, y);
+      g.lineTo(xL + w, y);
+      g.strokePath();
+    }
+
+    // Brick mortar lines — vertical (staggered)
+    for (let row = 0; row < Math.floor((baseY - roofY) / 12); row++) {
+      const y = roofY + 16 + row * 12;
+      const t = (y - roofY) / (baseY - roofY);
+      const w = baseW - 4 - t * 8;
+      const xL = chimX - 4 + (baseW - 4 - w) / 2;
+      const offset = row % 2 === 0 ? 0 : w / 6;
+      for (let bx = 0; bx < 5; bx++) {
+        const vx = xL + offset + bx * (w / 5);
+        if (vx < xL + w) {
+          g.beginPath();
+          g.moveTo(vx, y);
+          g.lineTo(vx, y + 12);
+          g.strokePath();
+        }
+      }
+    }
+
+    // Top rim — wide cap
+    const rimW = topW + 6;
+    const rimX = chimX + (baseW - 4 - rimW) / 2 - 2;
+    g.fillStyle(0x2a1e14, 1);
+    g.fillRect(rimX, roofY, rimW, 8);
+    g.lineStyle(1, 0x5a4030, 0.5);
+    g.strokeRect(rimX, roofY, rimW, 8);
+
+    // Dark opening at top (where smoke comes out)
+    g.fillStyle(0x0a0608, 0.95);
+    g.fillRect(rimX + 4, roofY + 1, rimW - 8, 5);
+
+    // Heat shimmer hint
+    g.fillStyle(0xff6600, 0.08);
+    g.fillRect(rimX + 5, roofY + 1, rimW - 10, 3);
+
+    // Store the smoke position at the top of the chimney
+    this.chimneyPositions = [{ x: rimX + rimW / 2, y: roofY - 4 }];
   }
 
   /** Create walk/idle/work animations for a custom character texture key. */
@@ -2275,13 +2377,18 @@ export class OfficeScene extends Phaser.Scene {
       // trophy case check — before other interactables
       const trophyPx = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
       const trophyDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx.x, trophyPx.y);
-      // hall of fame bulletin board — west wall, bottom-left
-      const hofPx = { x: 86, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      // hall of fame bulletin board — south wall, between entrance and servers
+      const hofPx = { x: this.hallOfFameTile.x * TILE_PX + 32, y: this.hallOfFameTile.y * TILE_PX - 10 };
       const hofDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx.x, hofPx.y);
       if (trophyDist < 120) {
         this.store.toggleAchievements();
       } else if (hofDist < 120) {
         this.store.toggleHallOfFame();
+      } else
+      // server rack — query Railway data
+      if (this.nearestTile(this.serverRackTiles, 120)) {
+        (this.game.registry.get("net") as { send: (msg: { type: string }) => void }).send({ type: "railway_query" });
+        this.store.toast("Querying Railway...");
       } else
       // try new office interactables first
       if (this.tryOfficeInteract(time)) {
@@ -2485,20 +2592,32 @@ export class OfficeScene extends Phaser.Scene {
         this.trophyHint.setVisible(false);
       }
 
-      // hall of fame bulletin board — proximity hint (player approaches from the right)
-      const hofPx2 = { x: 86, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      // hall of fame bulletin board — proximity hint (player approaches from above)
+      const hofPx2 = { x: this.hallOfFameTile.x * TILE_PX + 32, y: this.hallOfFameTile.y * TILE_PX - 10 };
       const hofDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx2.x, hofPx2.y);
       if (hofDist2 < 120 && !this.store.hallOfFameOpen) {
         this.hallOfFameHint
-          .setPosition(hofPx2.x + 48, hofPx2.y)
+          .setPosition(hofPx2.x, hofPx2.y - 48)
           .setText("E: HALL OF FAME")
           .setVisible(true);
       } else {
         this.hallOfFameHint.setVisible(false);
       }
+
+      // server rack proximity hint
+      const rackNear = this.nearestTile(this.serverRackTiles, 120);
+      if (rackNear && !this.store.railwayPanelOpen) {
+        this.serverRackHint
+          .setPosition(rackNear.x * TILE_PX + 32, rackNear.y * TILE_PX + 64)
+          .setText("E: CHECK SERVERS")
+          .setVisible(true);
+      } else {
+        this.serverRackHint.setVisible(false);
+      }
     } else {
       this.trophyHint.setVisible(false);
       this.hallOfFameHint.setVisible(false);
+      this.serverRackHint.setVisible(false);
     }
   }
 }

@@ -822,6 +822,11 @@ export class AgentManager {
   }
 
   private async runChat(rt: AgentRuntime, text: string): Promise<void> {
+    if (rt.info.id === YUKI_ID) {
+      void this.runYukiChat(rt, text);
+      return;
+    }
+
     const abort = new AbortController();
     rt.abort = abort;
 
@@ -854,6 +859,94 @@ export class AgentManager {
         if (abort.signal.aborted) return;
         if (ev.kind === "result") continue; // "task complete" noise has no place in a chat
         this.log(rt, ev.kind, ev.text);
+      }
+    } catch (err) {
+      if (!abort.signal.aborted) {
+        this.log(rt, "error", err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      rt.abort = null;
+      if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
+        this.setStatus(rt, "idle");
+      }
+    }
+  }
+
+  /** Yuki chat routed through the marketplace Yuki API for marketplace + HQ knowledge. */
+  private async runYukiChat(rt: AgentRuntime, text: string): Promise<void> {
+    const abort = new AbortController();
+    rt.abort = abort;
+
+    const marketplaceUrl = process.env.MARKETPLACE_URL || "http://localhost:3000";
+
+    const roster = [...this.agents.values()]
+      .filter((a) => a.info.id !== YUKI_ID)
+      .map((a) => `- ${a.info.name} (${a.info.title}, ${a.info.model}, ${a.info.status})`)
+      .join("\n") || "(no agents hired yet)";
+
+    const cards = this.board.size > 0
+      ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
+      : "(no task cards)";
+
+    const hqContext = `## Agent HQ Context\n\nThe user is in Agent HQ — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.`;
+
+    const chatHistory = rt.logs
+      .filter((l) => l.kind === "boss" || l.kind === "text")
+      .slice(-10)
+      .map((l) => ({
+        role: l.kind === "boss" ? "user" as const : "assistant" as const,
+        content: l.text.replace(/^.*?: /, ""),
+      }));
+
+    try {
+      const res = await fetch(`${marketplaceUrl}/api/yuki`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: chatHistory,
+          entityContext: hqContext,
+        }),
+        signal: abort.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        this.log(rt, "error", `Yuki API returned ${res.status}`);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+
+      while (true) {
+        if (abort.signal.aborted) return;
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.type === "text" && data.delta) {
+              fullText += data.delta;
+            } else if (data.type === "error") {
+              this.log(rt, "error", data.message || "Yuki API error");
+              return;
+            }
+          } catch {
+            // partial JSON
+          }
+        }
+      }
+
+      if (fullText) {
+        this.log(rt, "text", fullText);
       }
     } catch (err) {
       if (!abort.signal.aborted) {

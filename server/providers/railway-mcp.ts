@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AgentTool } from "@cline/sdk";
+import type { RailwayData, RailwayProject } from "../../shared/types.js";
 
 /** Minimal JSON-RPC types for MCP stdio communication. */
 interface JsonRpcRequest {
@@ -219,6 +220,92 @@ export async function checkRailwayStatus(): Promise<{ ok: boolean; message: stri
       message: `Railway MCP unavailable: ${err instanceof Error ? err.message : String(err)}. Make sure the Railway CLI is installed and authenticated (railway login).`,
     };
   }
+}
+
+/**
+ * Query Railway for project + deployment data via MCP.
+ * Returns structured data for the client dashboard.
+ */
+export async function queryRailway(): Promise<{ data: RailwayData | null; error: string | null }> {
+  try {
+    const client = getRailwayMCP();
+    await client.start();
+    const tools = await client.listTools();
+
+    // Find a list-projects or similar tool
+    const listTool = tools.find(t => t.name.toLowerCase().includes("list") && t.name.toLowerCase().includes("project"));
+    if (!listTool) {
+      return { data: null, error: "No list-projects tool found in Railway MCP." };
+    }
+
+    const raw = await client.callTool(listTool.name, {});
+    const projects = parseProjects(raw);
+
+    return { data: { projects, raw }, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/** Best-effort parse of Railway MCP list-projects output into structured data. */
+function parseProjects(raw: string): RailwayProject[] {
+  const projects: RailwayProject[] = [];
+  try {
+    // Try JSON first
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      for (const p of parsed) {
+        projects.push({
+          id: String(p.id ?? p.projectId ?? ""),
+          name: String(p.name ?? p.projectName ?? "unnamed"),
+          environment: String(p.environment ?? p.env ?? "production"),
+          services: Array.isArray(p.services) ? p.services.map((s: any) => ({
+            id: String(s.id ?? s.serviceId ?? ""),
+            name: String(s.name ?? s.serviceName ?? "service"),
+            status: String(s.status ?? "unknown"),
+            url: s.url ? String(s.url) : undefined,
+            deployments: Array.isArray(s.deployments) ? s.deployments.map((d: any) => ({
+              id: String(d.id ?? ""),
+              status: String(d.status ?? "unknown"),
+              createdAt: d.createdAt ? String(d.createdAt) : undefined,
+            })) : undefined,
+          })) : [],
+        });
+      }
+      return projects;
+    }
+  } catch {
+    // Not JSON — fall through to text parsing
+  }
+
+  // Fallback: split by lines and look for project names
+  const lines = raw.split("\n").filter(l => l.trim());
+  let current: RailwayProject | null = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Look for project headers (usually have a name + id pattern)
+    if (trimmed && !trimmed.startsWith("-") && !trimmed.startsWith("•")) {
+      if (current) projects.push(current);
+      current = {
+        id: "",
+        name: trimmed.replace(/[│|┃]/g, "").trim(),
+        environment: "production",
+        services: [],
+      };
+    } else if (current && (trimmed.startsWith("-") || trimmed.startsWith("•"))) {
+      const svcName = trimmed.replace(/^[-•]\s*/, "").trim();
+      current.services.push({
+        id: "",
+        name: svcName,
+        status: "unknown",
+      });
+    }
+  }
+  if (current) projects.push(current);
+  return projects;
 }
 
 /**

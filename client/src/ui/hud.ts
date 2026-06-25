@@ -3,14 +3,13 @@ import type { FeedItem, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance } from "../../../shared/types";
 import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
-  ACCENT_COLOR_OPTIONS, DEFAULT_APPEARANCE,
+  ACCENT_COLOR_OPTIONS, DEFAULT_APPEARANCE, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
 import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
-import { YukiChat } from "./yuki-chat";
 import { getToken } from "../auth";
 
 const NAME_POOL = [
@@ -33,9 +32,12 @@ const BUILDER_PARTS: BuilderPart[] = [
   { key: "skin",      label: "SKIN",      options: SKIN_TONES,          max: SKIN_TONES.length },
   { key: "hairStyle", label: "HAIR STYLE",options: HAIR_STYLES,         max: HAIR_STYLES.length },
   { key: "hair",      label: "HAIR COLOR",options: HAIR_COLORS,         max: HAIR_COLORS.length },
+  { key: "beard",     label: "BEARD",     options: BEARD_STYLES,        max: BEARD_STYLES.length },
   { key: "shirt",     label: "SHIRT",     options: SHIRT_COLORS,        max: SHIRT_COLORS.length },
   { key: "pants",     label: "PANTS",     options: PANTS_COLORS,        max: PANTS_COLORS.length },
   { key: "accessory", label: "ACCESSORY", options: ACCESSORIES,         max: ACCESSORIES.length },
+  { key: "headFeature",label:"HEAD FEAT", options: HEAD_FEATURES,       max: HEAD_FEATURES.length },
+  { key: "eyeColor",  label: "EYE COLOR", options: EYE_COLORS,          max: EYE_COLORS.length },
   { key: "accent",    label: "ACCENT",    options: ACCENT_COLOR_OPTIONS,max: ACCENT_COLOR_OPTIONS.length },
 ];
 
@@ -57,7 +59,7 @@ class CharBuilder {
     const rows = BUILDER_PARTS.map((part) => {
       const idx = this.appearance[part.key];
       const val = part.options[idx % part.max];
-      const isColor = part.key !== "hairStyle" && part.key !== "accessory";
+      const isColor = part.key !== "hairStyle" && part.key !== "accessory" && part.key !== "beard" && part.key !== "headFeature";
       const swatch = isColor ? `<span class="builder-swatch" style="background:${val}"></span>` : "";
       return `
         <div class="builder-row" data-part="${part.key}">
@@ -105,7 +107,7 @@ class CharBuilder {
   private updateRow(row: HTMLElement, part: BuilderPart): void {
     const idx = this.appearance[part.key];
     const val = part.options[idx % part.max];
-    const isColor = part.key !== "hairStyle" && part.key !== "accessory";
+    const isColor = part.key !== "hairStyle" && part.key !== "accessory" && part.key !== "beard" && part.key !== "headFeature";
     const valueEl = row.querySelector(".builder-value")!;
     const swatch = isColor ? `<span class="builder-swatch" style="background:${val}"></span>` : "";
     valueEl.innerHTML = `${swatch}<span class="builder-value-text">${isColor ? "" : val}</span>`;
@@ -161,7 +163,6 @@ export class Hud {
         <span class="logo">AGENT&nbsp;HQ</span>
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
-        <button class="btn mini" id="yuki-btn">雪 YUKI</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <span id="conn" class="conn">●</span>
       </div>
@@ -206,6 +207,7 @@ export class Hud {
       <div class="modal-backdrop" id="onboard-modal" hidden></div>
       <div class="modal-backdrop" id="achievements-modal" hidden></div>
       <div class="modal-backdrop" id="hall-of-fame-modal" hidden></div>
+      <div class="modal-backdrop" id="railway-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
@@ -229,14 +231,12 @@ export class Hud {
     mqBrowser.onHireAgent = (agent: MarketplaceAgent) => this.hireFromMarketplace(agent);
     document.getElementById("marketplace-btn")!.addEventListener("click", () => mqBrowser.toggle());
 
-    const yukiChat = new YukiChat();
-    document.getElementById("yuki-btn")!.addEventListener("click", () => yukiChat.toggle());
-
     document.getElementById("d-publish")!.addEventListener("click", () => this.openPublishModal());
     this.bindDetail();
     this.bindFeed();
     this.bindBoard();
     this.bindHallOfFame();
+    this.bindRailwayPanel();
     this.bindShortcuts();
     // agents stream many messages per second — coalesce to one render per frame
     // so DOM work never starves the game loop
@@ -374,11 +374,13 @@ export class Hud {
       const onboard = document.getElementById("onboard-modal")!;
       const ach = document.getElementById("achievements-modal")!;
       const hof = document.getElementById("hall-of-fame-modal")!;
+      const railway = document.getElementById("railway-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
         settings.hidden = true;
         ach.hidden = true;
         hof.hidden = true;
+        railway.hidden = true;
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
         return;
@@ -887,6 +889,7 @@ export class Hud {
     this.renderBoard();
     this.renderAchievements();
     this.renderHallOfFame();
+    this.renderRailwayPanel();
   }
 
   private renderRoster(): void {
@@ -1249,6 +1252,82 @@ export class Hud {
     modal.hidden = false;
     document.getElementById("hof-close")!.addEventListener("click", () => {
       this.store.toggleHallOfFame(false);
+    });
+  }
+
+  private bindRailwayPanel(): void {
+    const modal = document.getElementById("railway-modal")!;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) this.store.toggleRailwayPanel(false);
+    });
+  }
+
+  private renderRailwayPanel(): void {
+    const modal = document.getElementById("railway-modal")!;
+    if (!this.store.railwayPanelOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+
+    let html = `<div class="railway-modal-content">`;
+    html += `<div class="railway-modal-header">`;
+    html += `<span class="railway-modal-title">🖥️ RAILWAY STATUS</span>`;
+    html += `<button class="x" id="railway-close">✕</button>`;
+    html += `</div>`;
+
+    if (this.store.railwayError) {
+      html += `<div class="railway-error">`;
+      html += `<div class="railway-error-icon">⚠️</div>`;
+      html += `<div class="railway-error-text">${esc(this.store.railwayError)}</div>`;
+      html += `<div class="railway-error-hint">Make sure Railway CLI is installed and authenticated:<br><code>npm i -g @railway/cli</code> · <code>railway login</code></div>`;
+      html += `</div>`;
+    } else if (!this.store.railwayData) {
+      html += `<div class="railway-loading">Querying Railway infrastructure…</div>`;
+    } else {
+      const data = this.store.railwayData;
+      if (data.projects.length === 0) {
+        html += `<div class="railway-empty">No Railway projects found.</div>`;
+      } else {
+        html += `<div class="railway-projects">`;
+        for (const proj of data.projects) {
+          html += `<div class="railway-project">`;
+          html += `<div class="railway-project-header">`;
+          html += `<span class="railway-project-name">${esc(proj.name)}</span>`;
+          html += `<span class="railway-project-env">${esc(proj.environment)}</span>`;
+          html += `</div>`;
+          if (proj.services.length === 0) {
+            html += `<div class="railway-no-services">No services</div>`;
+          } else {
+            html += `<div class="railway-services">`;
+            for (const svc of proj.services) {
+              const statusColor = svc.status.toLowerCase().includes("deploy") || svc.status.toLowerCase().includes("active") || svc.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
+              html += `<div class="railway-service">`;
+              html += `<span class="railway-service-dot" style="background:${statusColor}"></span>`;
+              html += `<span class="railway-service-name">${esc(svc.name)}</span>`;
+              html += `<span class="railway-service-status">${esc(svc.status)}</span>`;
+              if (svc.url) {
+                html += `<a class="railway-service-url" href="${esc(svc.url)}" target="_blank">${esc(svc.url)}</a>`;
+              }
+              if (svc.deployments && svc.deployments.length > 0) {
+                const latest = svc.deployments[0];
+                html += `<span class="railway-service-deploy">latest: ${esc(latest.status)}</span>`;
+              }
+              html += `</div>`;
+            }
+            html += `</div>`;
+          }
+          html += `</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    html += `</div>`;
+    modal.innerHTML = html;
+    modal.hidden = false;
+    document.getElementById("railway-close")!.addEventListener("click", () => {
+      this.store.toggleRailwayPanel(false);
     });
   }
 

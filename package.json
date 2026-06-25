@@ -5,11 +5,11 @@
   "type": "module",
   "description": "Retro pixel-art office where you hire and manage real AI agents (Claude Agent SDK + Codex)",
   "scripts": {
-    "dev": "concurrently -k -n server,client -c yellow,cyan \"tsx watch server/index.ts\" \"vite\"",
-    "server": "tsx server/index.ts",
+    "dev": "concurrently -k -n server,client -c yellow,cyan \"tsx watch --env-file=.env server/index.ts\" \"vite\"",
+    "server": "tsx --env-file=.env server/index.ts",
     "client": "vite",
     "build": "vite build",
-    "start": "tsx server/index.ts",
+    "start": "tsx --env-file=.env server/index.ts",
     "assets": "tsx scripts/generate-assets.ts",
     "typecheck": "tsc --noEmit"
   },
