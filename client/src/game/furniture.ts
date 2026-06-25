@@ -476,6 +476,54 @@ function drawOfficeChairLeft(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fill();
 }
 
+/** Filing cabinet (tile 20) */
+function drawFilingCabinet(ctx: CanvasRenderingContext2D, s: number): void {
+  const cx = s * 0.5;
+
+  // shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  ctx.beginPath();
+  ctx.ellipse(cx, s * 0.88, s * 0.22, s * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // cabinet body — grey metal with gradient
+  const bodyGrad = linearGrad(ctx, cx - s * 0.2, 0, cx + s * 0.2, 0, [
+    [0, shade(0x6a7078, -20)],
+    [0.5, shade(0x8a9098, 10)],
+    [1, shade(0x6a7078, -20)],
+  ]);
+  ctx.fillStyle = bodyGrad;
+  roundRect(ctx, cx - s * 0.2, s * 0.1, s * 0.4, s * 0.78, 3);
+  ctx.fill();
+
+  // top edge highlight
+  ctx.fillStyle = shade(0x8a9098, 20);
+  roundRect(ctx, cx - s * 0.2, s * 0.1, s * 0.4, s * 0.04, 2);
+  ctx.fill();
+
+  // drawer divider lines
+  ctx.strokeStyle = hexRGBA(0x4a5058, 0.6);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.18, s * 0.5);
+  ctx.lineTo(cx + s * 0.18, s * 0.5);
+  ctx.stroke();
+
+  // drawer handles — two small drawer pulls
+  ctx.fillStyle = shade(0x4a5058, -10);
+  for (const dy of [s * 0.3, s * 0.68]) {
+    roundRect(ctx, cx - s * 0.06, dy, s * 0.12, s * 0.03, 1);
+    ctx.fill();
+  }
+
+  // label slots
+  ctx.fillStyle = hexRGBA(0xeeeeee, 0.8);
+  for (const dy of [s * 0.2, s * 0.56]) {
+    roundRect(ctx, cx - s * 0.08, dy, s * 0.16, s * 0.04, 1);
+    ctx.fill();
+  }
+}
+
 /** Small plant (tile 20) */
 function drawSmallPlant(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
@@ -1474,6 +1522,202 @@ function drawDeskSideBottom(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillRect(s * 0.56, s * 0.95, 10, 3);
 }
 
+/** Mirrored side-view desk — top tile (front panel on left, desk surface on right, chair on left facing right) */
+function drawDeskSideTopMirror(ctx: CanvasRenderingContext2D, s: number): void {
+  const panelW = s * 0.3;
+  const surfaceX = panelW;
+  const surfaceW = s - panelW;
+
+  // shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.12);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.65, s * 0.92, s * 0.3, s * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // front panel — left portion (facing Hermes who sits on the left)
+  const panelGrad = linearGrad(ctx, 0, 0, panelW, 0, [
+    [0, shade(0xa3a8ad, -10)],
+    [0.5, shade(0xb3b8bd, -5)],
+    [1, shade(0xc3c8cd, 0)],
+  ]);
+  ctx.fillStyle = panelGrad;
+  ctx.fillRect(0, 0, panelW, s);
+  // panel right edge (transition to surface)
+  ctx.fillStyle = shade(0x9a9fa4, -10);
+  ctx.fillRect(panelW - 2, 0, 2, s);
+  // panel left edge
+  ctx.fillStyle = shade(0x8a8f94, -15);
+  ctx.fillRect(0, 0, 2, s);
+  // panel top edge
+  ctx.fillStyle = hexRGBA(0xd4d6d8, 0.5);
+  ctx.fillRect(0, 0, panelW, 2);
+
+  // desk surface — right portion (top-down view, the working area)
+  const surfGrad = linearGrad(ctx, 0, 0, 0, s, [
+    [0, shade(0xf4f6f8, 5)],
+    [0.5, shade(0xe4e6e8, 0)],
+    [1, shade(0xd4d6d8, -5)],
+  ]);
+  ctx.fillStyle = surfGrad;
+  ctx.fillRect(surfaceX, 0, surfaceW, s);
+  // right edge highlight (facing entrance)
+  ctx.fillStyle = hexRGBA(0xffffff, 0.3);
+  ctx.fillRect(s - 2, 0, 2, s);
+  // top edge
+  ctx.fillStyle = hexRGBA(0xb8babc, 0.5);
+  ctx.fillRect(surfaceX, 0, surfaceW, 2);
+
+  // cable hole on desk surface
+  ctx.beginPath();
+  ctx.ellipse(s * 0.65, s * 0.15, 4, 3, 0, 0, Math.PI * 2);
+  ctx.fillStyle = hexRGBA(0x1a1a1a, 0.6);
+  ctx.fill();
+}
+
+/** Mirrored side-view desk — bottom tile (front panel + surface continuation + items + legs) */
+function drawDeskSideBottomMirror(ctx: CanvasRenderingContext2D, s: number): void {
+  const panelW = s * 0.3;
+  const surfaceX = panelW;
+  const surfaceW = s - panelW;
+
+  // front panel continuation
+  const panelGrad = linearGrad(ctx, 0, 0, panelW, 0, [
+    [0, shade(0xa3a8ad, -10)],
+    [0.5, shade(0xb3b8bd, -5)],
+    [1, shade(0xc3c8cd, 0)],
+  ]);
+  ctx.fillStyle = panelGrad;
+  ctx.fillRect(0, 0, panelW, s);
+  ctx.fillStyle = shade(0x9a9fa4, -10);
+  ctx.fillRect(panelW - 2, 0, 2, s);
+  ctx.fillStyle = shade(0x8a8f94, -15);
+  ctx.fillRect(0, 0, 2, s);
+
+  // desk surface continuation
+  const surfGrad = linearGrad(ctx, 0, 0, 0, s, [
+    [0, shade(0xf4f6f8, 5)],
+    [0.5, shade(0xe4e6e8, 0)],
+    [1, shade(0xd4d6d8, -5)],
+  ]);
+  ctx.fillStyle = surfGrad;
+  ctx.fillRect(surfaceX, 0, surfaceW, s);
+  ctx.fillStyle = hexRGBA(0xffffff, 0.2);
+  ctx.fillRect(s - 1, 0, 1, s);
+
+  // papers with shadow on desk surface
+  ctx.fillStyle = hexRGBA(0x000000, 0.08);
+  ctx.fillRect(s * 0.62, s * 0.18, s * 0.3, s * 0.38);
+  ctx.fillStyle = "#f7f8fa";
+  ctx.fillRect(s * 0.61, s * 0.16, s * 0.3, s * 0.38);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(s * 0.61, s * 0.16, s * 0.3, 3);
+  ctx.fillStyle = hexRGBA(0x9aa0a8, 0.6);
+  ctx.fillRect(s * 0.67, s * 0.28, s * 0.18, 1);
+  ctx.fillRect(s * 0.70, s * 0.34, s * 0.15, 1);
+
+  // mug
+  ctx.fillStyle = "#3a6f57";
+  roundRect(ctx, s * 0.40, s * 0.22, s * 0.18, s * 0.18, 2);
+  ctx.fill();
+  ctx.fillStyle = hexRGBA(0x5a9a7a, 0.4);
+  ctx.fillRect(s * 0.40, s * 0.22, s * 0.18, 2);
+  ctx.fillStyle = hexRGBA(0x6aaa8a, 0.3);
+  ctx.fillRect(s * 0.42, s * 0.24, 3, s * 0.1);
+  // handle
+  ctx.fillStyle = "#3a6f57";
+  ctx.fillRect(s * 0.36, s * 0.28, s * 0.06, s * 0.09);
+
+  // bottom edge
+  ctx.fillStyle = shade(0x8a8f94, -10);
+  ctx.fillRect(0, s - 2, s, 2);
+
+  // desk legs under surface
+  ctx.fillStyle = shade(0x5a5a60, 0);
+  ctx.fillRect(s * 0.38, s * 0.85, 6, s * 0.12);
+  ctx.fillRect(s * 0.88, s * 0.85, 6, s * 0.12);
+  ctx.fillStyle = shade(0x3a3a40, -5);
+  ctx.fillRect(s * 0.38, s * 0.95, 10, 3);
+  ctx.fillRect(s * 0.88, s * 0.95, 10, 3);
+}
+
+/** Office chair facing right — side view (Hermes's chair, mirrored from Yuki's) */
+function drawOfficeChairRight(ctx: CanvasRenderingContext2D, s: number): void {
+  const cx = s * 0.5;
+
+  // shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  ctx.beginPath();
+  ctx.ellipse(cx, s * 0.85, s * 0.28, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 5-star wheel base
+  ctx.fillStyle = shade(0x2a2a30, 0);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
+    ctx.save();
+    ctx.translate(cx, s * 0.78);
+    ctx.rotate(a);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-3, s * 0.12);
+    ctx.lineTo(3, s * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, s * 0.13, 3, 0, Math.PI * 2);
+    ctx.fillStyle = shade(0x1a1a20, 0);
+    ctx.fill();
+    ctx.fillStyle = shade(0x2a2a30, 0);
+    ctx.restore();
+  }
+
+  // center column
+  const colGrad = linearGrad(ctx, cx - 4, 0, cx + 4, 0, [
+    [0, shade(0x1a1a20, -10)],
+    [0.5, shade(0x3a3a40, 10)],
+    [1, shade(0x1a1a20, -10)],
+  ]);
+  ctx.fillStyle = colGrad;
+  ctx.fillRect(cx - 4, s * 0.5, 8, s * 0.28);
+
+  // seat — viewed from side, narrower
+  const seatGrad = linearGrad(ctx, 0, s * 0.38, 0, s * 0.52, [
+    [0, shade(0x3a4a5a, 20)],
+    [0.5, shade(0x2a3a4a, 0)],
+    [1, shade(0x1a2a3a, -15)],
+  ]);
+  ctx.fillStyle = seatGrad;
+  roundRect(ctx, cx - s * 0.14, s * 0.38, s * 0.28, s * 0.14, 6);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.4);
+  ctx.lineWidth = 0.8;
+  roundRect(ctx, cx - s * 0.11, s * 0.4, s * 0.22, s * 0.1, 4);
+  ctx.stroke();
+
+  // backrest — on left side (chair faces right)
+  const backGrad = linearGrad(ctx, s * 0.08, 0, s * 0.45, 0, [
+    [0, shade(0x1a2a3a, -10)],
+    [0.5, shade(0x2a3a4a, 5)],
+    [1, shade(0x3a4a5a, 25)],
+  ]);
+  ctx.fillStyle = backGrad;
+  roundRect(ctx, s * 0.08, s * 0.08, s * 0.32, s * 0.34, 8);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.3);
+  ctx.lineWidth = 0.8;
+  roundRect(ctx, s * 0.11, s * 0.11, s * 0.26, s * 0.28, 6);
+  ctx.stroke();
+  ctx.fillStyle = hexRGBA(0x4a5a6a, 0.15);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.25, s * 0.25, s * 0.04, s * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // armrest (right side only visible from this angle)
+  ctx.fillStyle = shade(0x2a3a4a, -5);
+  roundRect(ctx, cx + s * 0.13, s * 0.36, s * 0.05, s * 0.12, 3);
+  ctx.fill();
+}
+
 /** Side-view monitor — thin profile seen from the side, screen faces right toward Yuki */
 function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
   const cx = s * 0.5;
@@ -1857,9 +2101,10 @@ const FURNITURE_TYPES: FurnitureType[] = [
   { tileIds: [17], draw: drawDeskLeft },
   { tileIds: [18], draw: drawDeskRight },
   { tileIds: [19], draw: drawOfficeChair },
-  { tileIds: [20], draw: drawSmallPlant },
-  { tileIds: [21], draw: drawWallPicture },
-  { tileIds: [22], draw: drawWindow },
+  { tileIds: [20], draw: drawFilingCabinet },
+  { tileIds: [21, 11], draw: drawWallPicture },
+  { tileIds: [10], draw: drawWindow },
+  { tileIds: [22], draw: drawSmallPlant },
   { tileIds: [23], draw: drawCoffeeMachineTop },
   { tileIds: [24], draw: drawCoffeeMachineBottom },
   { tileIds: [25], draw: drawWaterCooler },
@@ -1873,6 +2118,9 @@ const FURNITURE_TYPES: FurnitureType[] = [
   { tileIds: [33], draw: drawOfficeChairLeft },
   { tileIds: [38], draw: drawDeskSideTop },
   { tileIds: [39], draw: drawDeskSideBottom },
+  { tileIds: [40], draw: drawDeskSideTopMirror },
+  { tileIds: [41], draw: drawDeskSideBottomMirror },
+  { tileIds: [42], draw: drawOfficeChairRight },
   { tileIds: [35], draw: drawServerRack },
   { tileIds: [36], draw: drawServerScreen },
   { tileIds: [37], draw: drawChimney },
@@ -1881,10 +2129,11 @@ const FURNITURE_TYPES: FurnitureType[] = [
 export const CHAIR_TEX_DOWN = "chair-down";
 export const CHAIR_TEX_UP = "chair-up";
 export const CHAIR_TEX_LEFT = "chair-left";
+export const CHAIR_TEX_RIGHT = "chair-right";
 export const MONITOR_TEX = "monitor-proc";
 export const MONITOR_SIDE_TEX = "monitor-side-proc";
 
-const CHAIR_TILE_IDS = new Set([19, 33]);
+const CHAIR_TILE_IDS = new Set([19, 33, 42]);
 
 /**
  * Generate furniture textures and overlay them on the furniture layer.
@@ -1914,6 +2163,7 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
     [CHAIR_TEX_DOWN, drawOfficeChair],
     [CHAIR_TEX_UP, drawOfficeChairUp],
     [CHAIR_TEX_LEFT, drawOfficeChairLeft],
+    [CHAIR_TEX_RIGHT, drawOfficeChairRight],
   ];
   for (const [key, drawFn] of chairDraws) {
     if (tex.exists(key)) continue;
@@ -1984,6 +2234,10 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
       const py = y * TILE_PX;
       const sprite = scene.add.sprite(px, py, key);
       sprite.setOrigin(0, 0);
+      // Server racks and screens: shift up half a tile for visual fit
+      if (tileId === 35 || tileId === 36) {
+        sprite.y -= TILE_PX / 2;
+      }
       sprite.setDepth(furnitureLayer.depth + 0.1);
     }
   }

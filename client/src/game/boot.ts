@@ -38,6 +38,10 @@ export class BootScene extends Phaser.Scene {
       frameWidth: CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     });
+    this.load.spritesheet("char-hermes", `assets/characters/char-hermes.png${v}`, {
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
+    });
     this.load.spritesheet("bubble", "assets/sprites/bubble.png", {
       frameWidth: 64,
       frameHeight: 64,

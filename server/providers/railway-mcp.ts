@@ -85,6 +85,9 @@ export class RailwayMCPClient {
         if (!settled) { settled = true; reject(err); }
       });
 
+      proc.stdin.on("error", (err: NodeJS.ErrnoException) => {
+        console.error(`[railway-mcp] stdin error: ${err.message}`);
+      });
       proc.stdout.setEncoding("utf-8");
       proc.stdout.on("data", (chunk: string) => this.onStdout(chunk));
       proc.stderr.on("data", (chunk: Buffer) => {

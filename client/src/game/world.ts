@@ -1118,9 +1118,8 @@ export class WorldLayer {
     }
   }
 
-  /** Synchronously preload all chunks around the door exit. Call once after
-   *  construction so the player doesn't hit a freeze when first walking outside. */
-  preloadDoorChunks(): void {
+  /** Returns the list of chunks needed around the door exit, sorted by distance. */
+  getDoorChunkList(): { cx: number; cy: number }[] {
     const doorX = this.officeW / 2;
     const doorY = this.officeH + TILE_PX;
     const { tx, ty } = this.pixelToTile(doorX, doorY);
@@ -1139,11 +1138,26 @@ export class WorldLayer {
       }
     }
     needed.sort((a, b) => a.dist - b.dist);
+    return needed.map((n) => ({ cx: n.cx, cy: n.cy }));
+  }
+
+  /** Load a single chunk by coordinates. Safe to call incrementally. */
+  loadSingleChunk(cx: number, cy: number): void {
+    this.loadChunk(cx, cy);
+  }
+
+  /** Call after all door chunks are loaded to do post-load cleanup. */
+  finishDoorPreload(): void {
+    this.removeExtraBalls();
+  }
+
+  /** Synchronously preload all chunks around the door exit. Call once after
+   *  construction so the player doesn't hit a freeze when first walking outside. */
+  preloadDoorChunks(): void {
+    const needed = this.getDoorChunkList();
     for (const n of needed) {
       this.loadChunk(n.cx, n.cy);
     }
-    // One-time cleanup: remove extra golf balls so only one exists near the door.
-    // Done here during preloading so it doesn't cause a hitch on first outdoor frame.
     this.removeExtraBalls();
   }
 

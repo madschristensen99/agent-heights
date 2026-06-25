@@ -301,22 +301,71 @@ A regular coding agent that *also* has a workplace presence:
 
 ---
 
-## 6. Office Visuals for External Activity
+## 6. Office Visuals for External Activity — The Mail Room
 
 External platform events need to feel alive in the office, not just appear as
-log lines.
+log lines. The mail room is the physical hub for all external platform
+activity — a dedicated room carved out of the bottom-left lobby where a Hermes
+agent (the "mail clerk") sorts incoming messages and routes them to the right
+agent.
 
-### Phone call animation
+### The mail room
 
-When a messaging agent receives an external message:
+A new enclosed section in the office (bottom-left, x=1–10, y=13–17) with:
 
-1. Agent's desk phone sprite flashes (or a phone icon appears above the desk)
-2. Agent stands up, walks to a "phone spot" (like break room spots, but near
-   the door — "taking a call")
-3. Speech bubble shows: `[Slack] #support: getting a 500 on /api/users`
-4. Agent responds (typing animation while composing)
-5. Speech bubble shows the response
-6. Agent walks back to desk, resumes previous state
+- **Six platform mailboxes** along the north wall — one per platform Hermes
+  integrates with: Slack, Discord, Telegram, WhatsApp, Signal, Email. Each
+  mailbox is color-coded to its platform and has a red flag that goes **up**
+  when mail arrives. You can see at a glance which platforms have pending
+  messages.
+- **A desk for the Hermes agent** — the mail clerk sits here, sorting and
+  routing messages. Like Yuki, this is a permanent NPC with its own sprite
+  and personality.
+- **The server room** — the existing server racks live inside the mail room,
+  which is thematically correct: the Hermes gateway runs on those servers,
+  and the mail clerk works next to the infrastructure.
+- **Filing cabinets** — for archived messages and platform configs.
+
+### Platform mailboxes
+
+Each mailbox is drawn as a Phaser graphics object (not a tilemap tile) so it
+can be animated and color-coded:
+
+| Platform | Color | Mailbox position |
+|---|---|---|
+| Slack | `#611f69` (purple) | tile (2, 13) |
+| Discord | `#5865F2` (blurple) | tile (3, 13) |
+| Telegram | `#0088cc` (blue) | tile (5, 13) |
+| WhatsApp | `#25D366` (green) | tile (6, 13) |
+| Signal | `#3a76f0` (blue) | tile (8, 13) |
+| Email | `#ea4335` (red) | tile (9, 13) |
+
+When a platform event arrives (someone messaged the agent on Slack):
+
+1. That platform's mailbox flag goes **up** (red flag raised)
+2. A small notification badge appears on the mailbox (envelope icon + count)
+3. The Hermes agent walks to that mailbox, picks up the message
+4. Speech bubble shows: `[Slack] #support: getting a 500 on /api/users`
+5. The Hermes agent routes the message to the assigned agent (walks to their
+   desk, hands it off) OR responds directly if configured to do so
+6. The assigned agent's speech bubble shows the message, they respond
+7. The response flows back through the mailbox (flag goes down)
+8. The exchange appears in the office feed with a `[Slack]` tag
+
+The boss (you) can also walk up to any mailbox and press **E** to check that
+platform's recent messages — a toast shows the latest inbound/outbound
+exchange for that platform.
+
+### Mail clerk animation states
+
+The Hermes agent NPC has these states in addition to the standard
+`idle`/`working`/`done`:
+
+- **sorting** — walking between mailboxes, checking flags
+- **delivering** — walking to an agent's desk with a message (envelope icon
+  above head)
+- **collecting** — walking back to the mail room with a response
+- **idle** — sitting at the mail room desk, sorting papers
 
 ### Feed integration
 

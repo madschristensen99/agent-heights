@@ -228,6 +228,7 @@ export class AgentManager {
 
   hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null): void {
     const cleanName = name.trim().slice(0, 24) || "Agent";
+    console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
     const usedDesks = new Set([...this.agents.values()].map((a) => a.info.deskIndex));
     let deskIndex = 0;
@@ -274,6 +275,7 @@ export class AgentManager {
     this.session.record("hire", { agent: info });
     this.persist();
     this.broadcast({ type: "agent", agent: info });
+    console.log(`[manager] hired ${cleanName} (id=${info.id}) desk=${deskIndex} — broadcast sent to ${this.agents.size} total agents`);
     this.log(rt, "status", `${cleanName} the ${info.title} joined the office. (${provider} / ${model})`);
   }
 

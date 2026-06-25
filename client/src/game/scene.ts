@@ -1,14 +1,15 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, YukiNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
-import { YUKI_ID } from "../../../shared/types";
+import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
+import { YUKI_ID, HERMES_ID } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, CHAR_FRAMES_PER_ROW } from "./chargen";
-import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
+import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
+import { upgradeWorkshop } from "./workshop";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 
 const PLAYER_SPEED = 380;
@@ -38,6 +39,7 @@ export class OfficeScene extends Phaser.Scene {
   private grid!: Grid;
   private npcs = new Map<string, AgentNPC>();
   private yuki: YukiNPC | null = null;
+  private hermes: HermesNPC | null = null;
   private yukiSeat: Tile | null = null;
   private yukiOfficeZone: Phaser.GameObjects.Zone | null = null;
   private seats: Tile[] = [];
@@ -45,6 +47,8 @@ export class OfficeScene extends Phaser.Scene {
   private monitors: Phaser.GameObjects.Sprite[] = [];
   private chairs: Phaser.GameObjects.Sprite[] = [];
   private yukiMonitor: Phaser.GameObjects.Sprite | null = null;
+  private hermesSeat: Tile | null = null;
+  private hermesMonitor: Phaser.GameObjects.Sprite | null = null;
   private spawnTile: Tile = { x: 14, y: 16 };
   private doorTile: Tile = { x: 14, y: 17 };
   private boardTile: Tile = { x: 14, y: 2 };
@@ -123,6 +127,20 @@ export class OfficeScene extends Phaser.Scene {
   /** Server rack tile positions for E-interaction. */
   private serverRackTiles: Tile[] = [];
   private serverRackHint!: Phaser.GameObjects.Text;
+
+  // --- expedition workshop (break room) ---
+  // Each tile is the center of the multi-tile piece for proximity checks.
+  private warTableTile: Tile = { x: 26, y: 15 };   // 2×2 at (25,14)
+  private scrapBinTile: Tile = { x: 27, y: 17 };   // 1×2 at (27,16)
+  private radioTile: Tile = { x: 28, y: 14 };      // 1×1 at (28,14)
+  private workbenchTile: Tile = { x: 24, y: 17 };  // 2×1 at (23,17)
+  private researchTile: Tile = { x: 23, y: 14 };   // 2×1 at (22,14)
+  private warTableHint!: Phaser.GameObjects.Text;
+  private scrapBinHint!: Phaser.GameObjects.Text;
+  private radioHint!: Phaser.GameObjects.Text;
+  private workbenchHint!: Phaser.GameObjects.Text;
+  private researchHint!: Phaser.GameObjects.Text;
+
   /** Store listeners are registered once; they survive scene restarts. */
   private wired = false;
   private ready = false;
@@ -148,6 +166,41 @@ export class OfficeScene extends Phaser.Scene {
   create(): void {
     this.store = this.game.registry.get("store") as Store;
     this.theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
+    this.ready = false;
+
+    // Remove any stale overlay from a previous scene restart
+    document.getElementById("office-loading")?.remove();
+
+    // --- DOM loading overlay for phased office init ---
+    // Using DOM instead of Phaser Text avoids a canvas-texture crash that
+    // occurs when setText is called from delayedCall during scene init.
+    // The opaque blue background also hides the office being built behind it.
+    const loadOverlay = document.createElement("div");
+    loadOverlay.id = "office-loading";
+    loadOverlay.style.cssText = `
+      position: fixed; inset: 0; z-index: 9998;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #a3bdd0;
+      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+    `;
+    loadOverlay.innerHTML = `
+      <div id="office-loading-label" style="color:#fff; font-size:20px; font-weight:600;
+        text-shadow:0 2px 4px rgba(0,0,0,0.3); margin-bottom:18px;">Building office…</div>
+      <div style="width:320px; height:24px; background:#222233; border-radius:6px; overflow:hidden;">
+        <div id="office-loading-fill" style="width:0%; height:100%; background:#4cb866;
+          border-radius:6px; transition:width 0.1s ease;"></div>
+      </div>
+    `;
+    document.body.appendChild(loadOverlay);
+
+    const loadLabel = loadOverlay.querySelector("#office-loading-label") as HTMLDivElement;
+    const loadFill = loadOverlay.querySelector("#office-loading-fill") as HTMLDivElement;
+
+    const updateLoadBar = (progress: number, label: string) => {
+      loadLabel.textContent = label;
+      loadFill.style.width = `${Math.round(progress * 100)}%`;
+    };
 
     // register post-processing pipelines (once)
     const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
@@ -180,12 +233,14 @@ export class OfficeScene extends Phaser.Scene {
     // a theme change restarts the scene — drop everything the last run built
     this.npcs.clear();
     this.yuki = null;
+    this.hermes = null;
     this.yukiSeat = null;
     this.seats = [];
     this.extraSpots = [];
     this.monitors = [];
     this.chairs = [];
     this.yukiMonitor = null;
+    this.hermesMonitor = null;
     this.coffeeUntil = 0;
     this.fridgeUntil = 0;
     this.coolerUntil = 0;
@@ -204,370 +259,494 @@ export class OfficeScene extends Phaser.Scene {
     this.heliElevatorGfx?.destroy();
     this.heliElevatorGfx = null;
 
-    // Procedural textures and animations were created by BootScene and persist
-    // in the global TextureManager.  The existence guards make these fast
-    // no-ops on first run; they only do work on scene restart.
-    generateAllTextures(this);
-    this.ensureAllAnimations();
+    // Variables that cross phase boundaries
+    let map: Phaser.Tilemaps.Tilemap;
+    let walkable: boolean[][];
 
-    const map = this.make.tilemap({ key: `map-${this.theme}` });
-    const tiles = map.addTilesetImage(
-      this.theme === "lumon" ? "lumon" : "office",
-      `tiles-${this.theme}`,
-    )!;
+    const phases: Array<{ name: string; fn: () => void }> = [
+      {
+        name: "textures & animations",
+        fn: () => {
+          // Procedural textures and animations were created by BootScene and persist
+          // in the global TextureManager.  The existence guards make these fast
+          // no-ops on first run; they only do work on scene restart.
+          generateAllTextures(this);
+          this.ensureAllAnimations();
+        },
+      },
+      {
+        name: "tilemap & collision",
+        fn: () => {
+          map = this.make.tilemap({ key: `map-${this.theme}` });
+          const tiles = map.addTilesetImage(
+            this.theme === "lumon" ? "lumon" : "office",
+            `tiles-${this.theme}`,
+          )!;
 
-    // draw a floor-colored backdrop so empty map tiles aren't white
-    const floorColor = this.theme === "lumon" ? 0xe8e8ec : 0xd4d0c8;
-    const bg = this.add.graphics().setDepth(-1);
-    bg.fillStyle(floorColor, 1);
-    bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
-    // subtle grid lines for texture
-    bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0xd8d8dc, 0.3);
-    for (let x = 0; x <= map.width; x++) {
-      bg.moveTo(x * TILE_PX, 0);
-      bg.lineTo(x * TILE_PX, map.heightInPixels);
-    }
-    for (let y = 0; y <= map.height; y++) {
-      bg.moveTo(0, y * TILE_PX);
-      bg.lineTo(map.widthInPixels, y * TILE_PX);
-    }
-    bg.strokePath();
+          // draw a floor-colored backdrop so empty map tiles aren't white
+          const floorColor = this.theme === "lumon" ? 0xe8e8ec : 0xd4d0c8;
+          const bg = this.add.graphics().setDepth(-1);
+          bg.fillStyle(floorColor, 1);
+          bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
+          // subtle grid lines for texture
+          bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0xd8d8dc, 0.3);
+          for (let x = 0; x <= map.width; x++) {
+            bg.moveTo(x * TILE_PX, 0);
+            bg.lineTo(x * TILE_PX, map.heightInPixels);
+          }
+          for (let y = 0; y <= map.height; y++) {
+            bg.moveTo(0, y * TILE_PX);
+            bg.lineTo(map.widthInPixels, y * TILE_PX);
+          }
+          bg.strokePath();
 
-    map.createLayer("Ground", tiles)!.setDepth(0);
-    const walls = map.createLayer("Walls", tiles)!.setDepth(1);
-    const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
-    walls.setCollisionByProperty({ solid: true });
-    furniture.setCollisionByProperty({ solid: true });
+          map.createLayer("Ground", tiles)!.setDepth(0);
+          const walls = map.createLayer("Walls", tiles)!.setDepth(1);
+          const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
+          walls.setCollisionByProperty({ solid: true });
+          furniture.setCollisionByProperty({ solid: true });
 
-    // Overlay enhanced procedural furniture on top of the tile-based furniture layer
-    upgradeFurniture(this, furniture);
+          // Overlay enhanced procedural furniture on top of the tile-based furniture layer
+          upgradeFurniture(this, furniture);
+          upgradeWorkshop(this);
 
-    // Scan for server rack tiles (GID 35 = tile ID 34) for E-interaction
-    this.serverRackTiles = [];
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
-        const t = furniture.getTileAt(x, y);
-        if (t && (t.index === 35 || t.index === 36)) {
-          this.serverRackTiles.push({ x, y });
+          // Scan for server rack tiles (GID 35 = tile ID 34) for E-interaction
+          this.serverRackTiles = [];
+          for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+              const t = furniture.getTileAt(x, y);
+              if (t && (t.index === 35 || t.index === 36)) {
+                this.serverRackTiles.push({ x, y });
+              }
+            }
+          }
+
+          // walkability grid for NPC pathfinding
+          walkable = [];
+          for (let y = 0; y < map.height; y++) {
+            walkable[y] = [];
+            for (let x = 0; x < map.width; x++) {
+              const w = walls.getTileAt(x, y);
+              const f = furniture.getTileAt(x, y);
+              walkable[y][x] = !(w?.properties?.solid || f?.properties?.solid);
+            }
+          }
+          this.grid = new Grid(map.width, map.height, walkable);
+        },
+      },
+      {
+        name: "map objects",
+        fn: () => {
+          // points authored in the Tiled map
+          for (const obj of map.getObjectLayer("Points")?.objects ?? []) {
+            const tx = Math.floor((obj.x ?? 0) / TILE_PX);
+            const ty = Math.floor((obj.y ?? 0) / TILE_PX);
+            if (obj.name === "spawn") {
+              this.spawnTile = { x: tx, y: ty };
+            } else if (obj.name === "coffee") {
+              this.coffeeTile = { x: tx, y: ty };
+            } else if (obj.name === "yuki-seat") {
+              this.yukiSeat = { x: tx, y: ty };
+            } else if (obj.name === "yuki-monitor") {
+              // Side-view monitor on Yuki's desk — thin profile, screen faces right toward her
+              const mx = (obj.x ?? 0) + TILE_PX * 0.35;
+              const my = (obj.y ?? 0) - TILE_PX * 0.15;
+              const spr = this.add
+                .sprite(mx, my, MONITOR_SIDE_TEX, "0")
+                .setDepth(10 + (obj.y ?? 0) - 10);
+              this.yukiMonitor = spr;
+            } else if (obj.name === "hermes-seat") {
+              this.hermesSeat = { x: tx, y: ty };
+            } else if (obj.name === "hermes-monitor") {
+              // Side-view monitor on Hermes's desk — thin profile, screen faces left toward him
+              const mx = (obj.x ?? 0) - TILE_PX * 0.35;
+              const my = (obj.y ?? 0) - TILE_PX * 0.15;
+              const spr = this.add
+                .sprite(mx, my, MONITOR_SIDE_TEX, "0")
+                .setDepth(10 + (obj.y ?? 0) - 10)
+                .setFlipX(true);
+              this.hermesMonitor = spr;
+            } else if (obj.name.startsWith("seat-")) {
+              const idx = Number(obj.name.slice(5));
+              this.seats[idx] = { x: tx, y: ty };
+              // Create chair sprite at seat position, facing down (unassigned default)
+              const cx = tx * TILE_PX + TILE_PX / 2;
+              const cy = ty * TILE_PX + TILE_PX / 2;
+              const chair = this.add
+                .sprite(cx, cy, CHAIR_TEX_DOWN)
+                .setDepth(5 + ty * TILE_PX + 1);
+              this.chairs[idx] = chair;
+            } else if (obj.name.startsWith("monitor-")) {
+              const idx = Number(obj.name.slice(8));
+              // Procedural monitor standing on top of desk
+              const mx = (obj.x ?? 0) + TILE_PX / 2;
+              const my = (obj.y ?? 0) - TILE_PX * 0.35;
+              const spr = this.add
+                .sprite(mx, my, MONITOR_TEX, "0")
+                .setDepth(10 + (obj.y ?? 0) - 10);
+              this.monitors[idx] = spr;
+            }
+          }
+          this.doorTile = { x: this.spawnTile.x, y: this.spawnTile.y + 2 };
+          this.registry.set("spawnTile", this.spawnTile);
+
+          // carve a door gap — make the bottom wall tiles walkable at the door columns
+          // so the player can walk straight out into the world.
+          // The door is 2 tiles wide at spawnTile.x and spawnTile.x+1.
+          const doorX = this.spawnTile.x;
+          for (let dy = 0; dy <= 3; dy++) {
+            const ty = this.spawnTile.y + dy;
+            if (ty < map.height) {
+              walkable[ty][doorX] = true;
+              if (doorX + 1 < map.width) walkable[ty][doorX + 1] = true;
+            }
+          }
+          this.grid = new Grid(map.width, map.height, walkable);
+
+          // Yuki — the office manager NPC
+          if (this.yukiSeat) {
+            // Create Yuki's left-facing chair sprite
+            const ycx = this.yukiSeat.x * TILE_PX + TILE_PX / 2;
+            const ycy = this.yukiSeat.y * TILE_PX + TILE_PX / 2;
+            this.add
+              .sprite(ycx, ycy, CHAIR_TEX_LEFT)
+              .setDepth(5 + this.yukiSeat.y * TILE_PX + 1);
+
+            this.yuki = new YukiNPC(this, this.grid, this.yukiSeat, (clicked) =>
+              this.store.select(clicked),
+            );
+
+            // clickable zone over Yuki's office — clicking anywhere inside opens her chat
+            const zo = { x0: 22, y0: 8, x1: 27, y1: 11 };
+            const zx = (zo.x0 + zo.x1 + 1) / 2 * TILE_PX;
+            const zy = (zo.y0 + zo.y1 + 1) / 2 * TILE_PX;
+            const zw = (zo.x1 - zo.x0 + 1) * TILE_PX;
+            const zh = (zo.y1 - zo.y0 + 1) * TILE_PX;
+            this.yukiOfficeZone = this.add.zone(zx, zy, zw, zh);
+            this.yukiOfficeZone.setInteractive({ useHandCursor: true });
+            this.yukiOfficeZone.on("pointerdown", () => this.store.select(YUKI_ID));
+          }
+
+          // Hermes — right-facing chair at the mail room desk
+          if (this.hermesSeat) {
+            const hcx = this.hermesSeat.x * TILE_PX + TILE_PX / 2;
+            const hcy = this.hermesSeat.y * TILE_PX + TILE_PX / 2;
+            this.add
+              .sprite(hcx, hcy, CHAIR_TEX_RIGHT)
+              .setDepth(5 + this.hermesSeat.y * TILE_PX + 1);
+
+            this.hermes = new HermesNPC(this, this.grid, this.hermesSeat, (clicked) =>
+              this.store.select(clicked),
+            );
+          }
+
+          // standing spots for agents hired beyond the 8 desks — stable order so
+          // every client agrees on who stands where
+          for (let y = 3; y < map.height - 2 && this.extraSpots.length < 96; y++) {
+            for (let x = 2; x < map.width - 2; x++) {
+              if (!walkable[y][x] || (x + y) % 3 !== 0) continue;
+              if (this.seats.some((s) => s && s.x === x && s.y === y)) continue;
+              if (this.yukiSeat && this.yukiSeat.x === x && this.yukiSeat.y === y) continue;
+              if (this.hermesSeat && this.hermesSeat.x === x && this.hermesSeat.y === y) continue;
+              this.extraSpots.push({ x, y });
+            }
+          }
+        },
+      },
+      {
+        name: "player & UI",
+        fn: () => {
+          // Generate boss texture from player appearance (if set)
+          this.refreshBossTexture();
+
+          // the boss (you)
+          const feet = feetOf(this.spawnTile);
+          this.player = this.add.sprite(feet.x, feet.y, this.playerTexKey, 0)
+            .setOrigin(0.5, 1)
+            .setScale(1);
+          // no physics body — we do manual movement for smoothness
+
+          this.playerNameBg = this.add.graphics();
+          this.playerLabel = this.add
+            .text(0, 0, "BOSS", {
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+              fontSize: "16px",
+              color: "#1d2126",
+              stroke: "#f4f6f8",
+              strokeThickness: 3,
+            })
+            .setResolution(4)
+            .setOrigin(0.5, 1)
+            .setScale(0.7);
+          this.drawPlayerNameBg();
+
+          this.selectRing = this.add
+            .ellipse(0, 0, 56, 24)
+            .setStrokeStyle(2, 0x3a8cd4)
+            .setFillStyle(0, 0)
+            .setVisible(false)
+            .setDepth(9);
+
+          // --- task board on the front wall ---
+          this.drawBoard();
+          this.drawTrophyCase();
+          this.drawHallOfFameBoard();
+          this.drawExteriorChimney();
+          this.drawHelipad();
+          this.drawRedButton();
+          this.boardHint = this.add
+            .text(0, 0, "", {
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+              fontSize: "16px",
+              color: "#1d2126",
+              stroke: "#f4f6f8",
+              strokeThickness: 3,
+            })
+            .setResolution(4)
+            .setOrigin(0.5, 1)
+            .setScale(0.7)
+            .setDepth(100)
+            .setVisible(false);
+
+          this.coffeeHint = this.makeHint();
+          this.fridgeHint = this.makeHint();
+          this.coolerHint = this.makeHint();
+          this.clockHint = this.makeHint();
+          this.vendingHint = this.makeHint();
+          this.sofaHint = this.makeHint();
+          this.filingHint = this.makeHint();
+          this.plantHint = this.makeHint();
+          this.trophyHint = this.makeHint();
+          this.hallOfFameHint = this.makeHint();
+          this.serverRackHint = this.makeHint();
+          this.warTableHint = this.makeHint();
+          this.scrapBinHint = this.makeHint();
+          this.radioHint = this.makeHint();
+          this.workbenchHint = this.makeHint();
+          this.researchHint = this.makeHint();
+          this.mailboxHint = this.makeHint();
+          this.platformMailboxHint = this.makeHint();
+          this.redButtonHint = this.makeHint();
+        },
+      },
+      {
+        name: "interactables",
+        fn: () => {
+          // Set interactable tile positions based on theme
+          this.setupInteractables();
+
+          // Initialize platform mailboxes in the mail room
+          const mailRoomY = this.theme === "lumon" ? 14 : 13;
+          this.platformMailboxes = PLATFORM_CONFIG.map((cfg) => ({
+            platform: cfg.platform,
+            color: cfg.color,
+            colorLight: Phaser.Display.Color.IntegerToColor(cfg.color).lighten(20).color,
+            colorDark: Phaser.Display.Color.IntegerToColor(cfg.color).darken(20).color,
+            tile: { x: cfg.tile.x, y: mailRoomY },
+            flagUp: false,
+            pendingCount: 0,
+            lastMessage: "",
+          }));
+          this.platformMailboxGfx = this.add.graphics().setDepth(6);
+          this.drawPlatformMailboxes();
+        },
+      },
+      {
+        name: "world layer",
+        fn: () => {
+          this.sceneStart = this.time.now;
+
+          this.mapPx = { w: map.widthInPixels, h: map.heightInPixels };
+          // world layer — infinite procedural world outside the office
+          this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
+          this.world.setOfficeGrid(this.grid);
+
+          // Dynamically insert per-chunk loading phases after this phase
+          const doorChunks = this.world.getDoorChunkList();
+          for (let i = 0; i < doorChunks.length; i++) {
+            const c = doorChunks[i];
+            const idx = i + 1;
+            const total = doorChunks.length;
+            phases.splice(phaseIndex + 1 + i, 0, {
+              name: `world chunk ${idx}/${total}`,
+              fn: () => {
+                this.world.loadSingleChunk(c.cx, c.cy);
+              },
+            });
+          }
+          // Insert cleanup + VFX warmup after all chunks
+          phases.splice(phaseIndex + 1 + doorChunks.length, 0, {
+            name: "world cleanup & vfx",
+            fn: () => {
+              this.world.finishDoorPreload();
+
+              // Warm up the particle system so the first biome ambient doesn't cause a
+              // stutter.  The first ParticleEmitter render compiles WebGL shaders and
+              // allocates GPU buffers.  We create the emitter now and let it render for
+              // a few frames (during the loading screen) before destroying it — the
+              // compiled shader stays cached in Phaser's shader manager.
+              this.world.vfx.startAmbient("meadow");
+              this.time.delayedCall(200, () => this.world.vfx.stopAmbient());
+            },
+          });
+        },
+      },
+      {
+        name: "lighting & input",
+        fn: () => {
+          // flower beds flanking the front door
+          const doorPxX = this.spawnTile.x * TILE_PX + TILE_PX / 2;
+          const doorPxY = map.heightInPixels;
+          const flowerG = this.add.graphics().setDepth(3);
+          const flowerColors = [0xe8c84a, 0xe84a8a, 0x8a4ae8, 0xff6a4a, 0x4ae8ca];
+          for (const side of [-1, 1]) {
+            for (let i = 0; i < 6; i++) {
+              const fx = doorPxX + side * (TILE_PX * 1.5 + i * 14);
+              const fy = doorPxY + 10 + Math.sin(i * 1.7) * 8;
+              const color = flowerColors[(i + (side > 0 ? 2 : 0)) % flowerColors.length];
+              flowerG.fillStyle(0x2a6a2a, 1);
+              flowerG.fillCircle(fx, fy + 5, 3);
+              flowerG.fillStyle(color, 1);
+              flowerG.fillCircle(fx, fy, 5);
+              flowerG.fillStyle(0xffdd44, 1);
+              flowerG.fillCircle(fx, fy, 2);
+            }
+          }
+
+          // conspicuous mailbox to the left of the front door
+          this.mailboxPx = { x: doorPxX - TILE_PX * 3, y: doorPxY + 24 };
+          this.mailboxGfx = this.add.graphics().setDepth(3);
+          this.mailboxHasMail = true; // start with mail
+          this.mailboxNextMail = this.time.now + 45000; // next mail arrives in 45s
+          this.drawMailbox();
+
+          const cam = this.cameras.main;
+          // no camera bounds — the world is infinite
+          cam.startFollow(this.player, true);
+          cam.setZoom(this.bestZoom());
+          const onResize = () => {
+            cam.setZoom(this.bestZoom());
+            this.drawVignette();
+            this.dayNightTint.setSize(this.scale.width, this.scale.height);
+            this.brightnessBoost.setSize(this.scale.width, this.scale.height);
+          };
+          this.scale.on("resize", onResize);
+          this.events.once("shutdown", () => this.scale.off("resize", onResize));
+
+          // --- lighting system ---
+          // vignette: darkened edges fixed to screen
+          this.lightingOverlay = this.add.graphics().setDepth(900).setScrollFactor(0);
+          this.drawVignette();
+
+          // day/night tint: subtle color overlay that shifts over time
+          this.dayNightTint = this.add
+            .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
+            .setOrigin(0, 0)
+            .setDepth(890)
+            .setScrollFactor(0);
+
+          // brightness boost: makes the area just outside the office brighter than inside
+          this.brightnessBoost = this.add
+            .rectangle(0, 0, this.scale.width, this.scale.height, 0xffffff, 0)
+            .setOrigin(0, 0)
+            .setDepth(830)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setScrollFactor(0);
+
+          // monitor glow pool — one per monitor slot
+          this.monitors.forEach(() => {
+            const glow = this.add.circle(0, 0, 48, 0x4affa8, 0).setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
+            this.monitorGlows.push(glow);
+          });
+
+          this.cursors = this.input.keyboard!.createCursorKeys();
+          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q") as OfficeScene["keys"];
+          this.input.keyboard!.on("keydown-ESC", () => {
+            this.store.select(null);
+            this.store.toggleBoard(false);
+          });
+          // never swallow keystrokes meant for HUD inputs (onboarding, task box, …)
+          this.input.keyboard!.disableGlobalCapture();
+
+          if (!this.wired) {
+            this.wired = true;
+            this.store.subscribe(() => {
+              if (!this.ready) {
+                console.log("[scene] store emit but scene not ready — skipping syncAgents");
+                return;
+              }
+              const theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
+              if (theme !== this.theme) {
+                console.log("[scene] theme changed — restarting scene");
+                if (theme === "lumon") achievements.unlock("lumon_mode");
+                this.ready = false;
+                this.scene.restart();
+                return;
+              }
+              // refresh boss texture if player appearance changed
+              const prevKey = this.playerTexKey;
+              this.refreshBossTexture();
+              if (prevKey !== this.playerTexKey && this.player) {
+                this.player.setTexture(this.playerTexKey, 0).setScale(1);
+              }
+              this.syncAgents();
+              this.world.syncGhosts();
+              this.updateChimneySmoke();
+            });
+            this.store.onHuddle((agentIds) => {
+              if (this.ready) this.startHuddle(agentIds);
+            });
+            this.store.onHelicopter((delivery) => {
+              if (this.ready && !this.heliActive) this.triggerHelicopter(delivery);
+            });
+            this.store.onAssembly((agentIds) => {
+              if (this.ready) this.startAssembly(agentIds);
+            });
+          }
+          this.ready = true;
+          this.syncAgents();
+          this.world.syncGhosts();
+
+          // Diagnostic: verify NPC state after init
+          console.log(`[scene] INIT COMPLETE: yuki=${!!this.yuki} hermes=${!!this.hermes} yukiSeat=${JSON.stringify(this.yukiSeat)} hermesSeat=${JSON.stringify(this.hermesSeat)} npcs=${this.npcs.size} store.agents=${this.store.agents.size} ready=${this.ready}`);
+
+          // Fade in from black so the transition from BootScene is seamless.
+          this.cameras.main.fadeIn(400, 0, 0, 0);
+
+          // Clean up loading overlay
+          loadOverlay.remove();
+        },
+      },
+    ];
+
+    // Process phases one per frame so the loading bar visibly progresses.
+    // totalPhases is recalculated each frame because the "world layer" phase
+    // dynamically splices in per-chunk loading phases.
+    let phaseIndex = 0;
+
+    const processNextPhase = () => {
+      if (phaseIndex >= phases.length) return;
+
+      const phase = phases[phaseIndex];
+      const total = phases.length;
+      const progress = phaseIndex / total;
+      updateLoadBar(progress, `Building ${phase.name}…`);
+
+      // Run the phase on the next frame so the bar update renders first
+      this.time.delayedCall(0, () => {
+        try {
+          phase.fn();
+        } catch (err) {
+          console.error(`[scene] PHASE "${phase.name}" CRASHED:`, err);
         }
-      }
-    }
-
-    // walkability grid for NPC pathfinding
-    const walkable: boolean[][] = [];
-    for (let y = 0; y < map.height; y++) {
-      walkable[y] = [];
-      for (let x = 0; x < map.width; x++) {
-        const w = walls.getTileAt(x, y);
-        const f = furniture.getTileAt(x, y);
-        walkable[y][x] = !(w?.properties?.solid || f?.properties?.solid);
-      }
-    }
-    this.grid = new Grid(map.width, map.height, walkable);
-
-    // points authored in the Tiled map
-    for (const obj of map.getObjectLayer("Points")?.objects ?? []) {
-      const tx = Math.floor((obj.x ?? 0) / TILE_PX);
-      const ty = Math.floor((obj.y ?? 0) / TILE_PX);
-      if (obj.name === "spawn") {
-        this.spawnTile = { x: tx, y: ty };
-      } else if (obj.name === "coffee") {
-        this.coffeeTile = { x: tx, y: ty };
-      } else if (obj.name === "yuki-seat") {
-        this.yukiSeat = { x: tx, y: ty };
-      } else if (obj.name === "yuki-monitor") {
-        // Side-view monitor on Yuki's desk — thin profile, screen faces right toward her
-        const mx = (obj.x ?? 0) + TILE_PX * 0.35;
-        const my = (obj.y ?? 0) - TILE_PX * 0.15;
-        const spr = this.add
-          .sprite(mx, my, MONITOR_SIDE_TEX, "0")
-          .setDepth(10 + (obj.y ?? 0) - 10);
-        this.yukiMonitor = spr;
-      } else if (obj.name.startsWith("seat-")) {
-        const idx = Number(obj.name.slice(5));
-        this.seats[idx] = { x: tx, y: ty };
-        // Create chair sprite at seat position, facing down (unassigned default)
-        const cx = tx * TILE_PX + TILE_PX / 2;
-        const cy = ty * TILE_PX + TILE_PX / 2;
-        const chair = this.add
-          .sprite(cx, cy, CHAIR_TEX_DOWN)
-          .setDepth(5 + ty * TILE_PX + 1);
-        this.chairs[idx] = chair;
-      } else if (obj.name.startsWith("monitor-")) {
-        const idx = Number(obj.name.slice(8));
-        // Procedural monitor standing on top of desk
-        const mx = (obj.x ?? 0) + TILE_PX / 2;
-        const my = (obj.y ?? 0) - TILE_PX * 0.35;
-        const spr = this.add
-          .sprite(mx, my, MONITOR_TEX, "0")
-          .setDepth(10 + (obj.y ?? 0) - 10);
-        this.monitors[idx] = spr;
-      }
-    }
-    this.doorTile = { x: this.spawnTile.x, y: this.spawnTile.y + 2 };
-    this.registry.set("spawnTile", this.spawnTile);
-
-    // carve a door gap — make the bottom wall tiles walkable at the door columns
-    // so the player can walk straight out into the world.
-    // The door is 2 tiles wide at spawnTile.x and spawnTile.x+1.
-    const doorX = this.spawnTile.x;
-    for (let dy = 0; dy <= 3; dy++) {
-      const ty = this.spawnTile.y + dy;
-      if (ty < map.height) {
-        walkable[ty][doorX] = true;
-        if (doorX + 1 < map.width) walkable[ty][doorX + 1] = true;
-      }
-    }
-    this.grid = new Grid(map.width, map.height, walkable);
-
-    // Yuki — the office manager NPC
-    if (this.yukiSeat) {
-      // Create Yuki's left-facing chair sprite
-      const ycx = this.yukiSeat.x * TILE_PX + TILE_PX / 2;
-      const ycy = this.yukiSeat.y * TILE_PX + TILE_PX / 2;
-      this.add
-        .sprite(ycx, ycy, CHAIR_TEX_LEFT)
-        .setDepth(5 + this.yukiSeat.y * TILE_PX + 1);
-
-      this.yuki = new YukiNPC(this, this.grid, this.yukiSeat, (clicked) =>
-        this.store.select(clicked),
-      );
-
-      // clickable zone over Yuki's office — clicking anywhere inside opens her chat
-      const zo = { x0: 22, y0: 8, x1: 27, y1: 11 };
-      const zx = (zo.x0 + zo.x1 + 1) / 2 * TILE_PX;
-      const zy = (zo.y0 + zo.y1 + 1) / 2 * TILE_PX;
-      const zw = (zo.x1 - zo.x0 + 1) * TILE_PX;
-      const zh = (zo.y1 - zo.y0 + 1) * TILE_PX;
-      this.yukiOfficeZone = this.add.zone(zx, zy, zw, zh);
-      this.yukiOfficeZone.setInteractive({ useHandCursor: true });
-      this.yukiOfficeZone.on("pointerdown", () => this.store.select(YUKI_ID));
-    }
-
-    // standing spots for agents hired beyond the 8 desks — stable order so
-    // every client agrees on who stands where
-    for (let y = 3; y < map.height - 2 && this.extraSpots.length < 96; y++) {
-      for (let x = 2; x < map.width - 2; x++) {
-        if (!walkable[y][x] || (x + y) % 3 !== 0) continue;
-        if (this.seats.some((s) => s && s.x === x && s.y === y)) continue;
-        if (this.yukiSeat && this.yukiSeat.x === x && this.yukiSeat.y === y) continue;
-        this.extraSpots.push({ x, y });
-      }
-    }
-
-    // Generate boss texture from player appearance (if set)
-    this.refreshBossTexture();
-
-    // the boss (you)
-    const feet = feetOf(this.spawnTile);
-    this.player = this.add.sprite(feet.x, feet.y, this.playerTexKey, 0)
-      .setOrigin(0.5, 1)
-      .setScale(1);
-    // no physics body — we do manual movement for smoothness
-
-    this.playerNameBg = this.add.graphics();
-    this.playerLabel = this.add
-      .text(0, 0, "BOSS", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "16px",
-        color: "#1d2126",
-        stroke: "#f4f6f8",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7);
-    this.drawPlayerNameBg();
-
-    this.selectRing = this.add
-      .ellipse(0, 0, 56, 24)
-      .setStrokeStyle(2, 0x3a8cd4)
-      .setFillStyle(0, 0)
-      .setVisible(false)
-      .setDepth(9);
-
-    // --- task board on the front wall ---
-    this.drawBoard();
-    this.drawTrophyCase();
-    this.drawHallOfFameBoard();
-    this.drawExteriorChimney();
-    this.drawHelipad();
-    this.drawRedButton();
-    this.boardHint = this.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "16px",
-        color: "#1d2126",
-        stroke: "#f4f6f8",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7)
-      .setDepth(100)
-      .setVisible(false);
-
-    this.coffeeHint = this.makeHint();
-    this.fridgeHint = this.makeHint();
-    this.coolerHint = this.makeHint();
-    this.clockHint = this.makeHint();
-    this.vendingHint = this.makeHint();
-    this.sofaHint = this.makeHint();
-    this.filingHint = this.makeHint();
-    this.plantHint = this.makeHint();
-    this.trophyHint = this.makeHint();
-    this.hallOfFameHint = this.makeHint();
-    this.serverRackHint = this.makeHint();
-    this.mailboxHint = this.makeHint();
-    this.platformMailboxHint = this.makeHint();
-    this.redButtonHint = this.makeHint();
-
-    // Set interactable tile positions based on theme
-    this.setupInteractables();
-
-    // Initialize platform mailboxes in the mail room
-    const mailRoomY = this.theme === "lumon" ? 14 : 13;
-    this.platformMailboxes = PLATFORM_CONFIG.map((cfg) => ({
-      platform: cfg.platform,
-      color: cfg.color,
-      colorLight: Phaser.Display.Color.IntegerToColor(cfg.color).lighten(20).color,
-      colorDark: Phaser.Display.Color.IntegerToColor(cfg.color).darken(20).color,
-      tile: { x: cfg.tile.x, y: mailRoomY },
-      flagUp: false,
-      pendingCount: 0,
-      lastMessage: "",
-    }));
-    this.platformMailboxGfx = this.add.graphics().setDepth(6);
-    this.drawPlatformMailboxes();
-
-    this.sceneStart = this.time.now;
-
-    this.mapPx = { w: map.widthInPixels, h: map.heightInPixels };
-    // world layer — infinite procedural world outside the office
-    this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
-    this.world.setOfficeGrid(this.grid);
-    // Preload world chunks around the door so there's no freeze on first exit
-    this.world.preloadDoorChunks();
-
-    // Warm up the particle system so the first biome ambient doesn't cause a
-    // stutter.  The first ParticleEmitter render compiles WebGL shaders and
-    // allocates GPU buffers.  We create the emitter now and let it render for
-    // a few frames (during the loading screen) before destroying it — the
-    // compiled shader stays cached in Phaser's shader manager.
-    this.world.vfx.startAmbient("meadow");
-    this.time.delayedCall(200, () => this.world.vfx.stopAmbient());
-
-    // flower beds flanking the front door
-    const doorPxX = this.spawnTile.x * TILE_PX + TILE_PX / 2;
-    const doorPxY = map.heightInPixels;
-    const flowerG = this.add.graphics().setDepth(3);
-    const flowerColors = [0xe8c84a, 0xe84a8a, 0x8a4ae8, 0xff6a4a, 0x4ae8ca];
-    for (const side of [-1, 1]) {
-      for (let i = 0; i < 6; i++) {
-        const fx = doorPxX + side * (TILE_PX * 1.5 + i * 14);
-        const fy = doorPxY + 10 + Math.sin(i * 1.7) * 8;
-        const color = flowerColors[(i + (side > 0 ? 2 : 0)) % flowerColors.length];
-        flowerG.fillStyle(0x2a6a2a, 1);
-        flowerG.fillCircle(fx, fy + 5, 3);
-        flowerG.fillStyle(color, 1);
-        flowerG.fillCircle(fx, fy, 5);
-        flowerG.fillStyle(0xffdd44, 1);
-        flowerG.fillCircle(fx, fy, 2);
-      }
-    }
-
-    // conspicuous mailbox to the left of the front door
-    this.mailboxPx = { x: doorPxX - TILE_PX * 3, y: doorPxY + 24 };
-    this.mailboxGfx = this.add.graphics().setDepth(3);
-    this.mailboxHasMail = true; // start with mail
-    this.mailboxNextMail = this.time.now + 45000; // next mail arrives in 45s
-    this.drawMailbox();
-
-    const cam = this.cameras.main;
-    // no camera bounds — the world is infinite
-    cam.startFollow(this.player, true);
-    cam.setZoom(this.bestZoom());
-    const onResize = () => {
-      cam.setZoom(this.bestZoom());
-      this.drawVignette();
-      this.dayNightTint.setSize(this.scale.width, this.scale.height);
-      this.brightnessBoost.setSize(this.scale.width, this.scale.height);
+        phaseIndex++;
+        updateLoadBar(phaseIndex / phases.length, `Done: ${phase.name}`);
+        this.time.delayedCall(0, processNextPhase);
+      });
     };
-    this.scale.on("resize", onResize);
-    this.events.once("shutdown", () => this.scale.off("resize", onResize));
 
-    // --- lighting system ---
-    // vignette: darkened edges fixed to screen
-    this.lightingOverlay = this.add.graphics().setDepth(900).setScrollFactor(0);
-    this.drawVignette();
-
-    // day/night tint: subtle color overlay that shifts over time
-    this.dayNightTint = this.add
-      .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
-      .setOrigin(0, 0)
-      .setDepth(890)
-      .setScrollFactor(0);
-
-    // brightness boost: makes the area just outside the office brighter than inside
-    this.brightnessBoost = this.add
-      .rectangle(0, 0, this.scale.width, this.scale.height, 0xffffff, 0)
-      .setOrigin(0, 0)
-      .setDepth(830)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setScrollFactor(0);
-
-    // monitor glow pool — one per monitor slot
-    this.monitors.forEach(() => {
-      const glow = this.add.circle(0, 0, 48, 0x4affa8, 0).setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
-      this.monitorGlows.push(glow);
-    });
-
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q") as OfficeScene["keys"];
-    this.input.keyboard!.on("keydown-ESC", () => {
-      this.store.select(null);
-      this.store.toggleBoard(false);
-    });
-    // never swallow keystrokes meant for HUD inputs (onboarding, task box, …)
-    this.input.keyboard!.disableGlobalCapture();
-
-    if (!this.wired) {
-      this.wired = true;
-      this.store.subscribe(() => {
-        if (!this.ready) return;
-        const theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
-        if (theme !== this.theme) {
-          if (theme === "lumon") achievements.unlock("lumon_mode");
-          this.ready = false;
-          this.scene.restart();
-          return;
-        }
-        // refresh boss texture if player appearance changed
-        const prevKey = this.playerTexKey;
-        this.refreshBossTexture();
-        if (prevKey !== this.playerTexKey && this.player) {
-          this.player.setTexture(this.playerTexKey, 0).setScale(1);
-        }
-        this.syncAgents();
-        this.world.syncGhosts();
-        this.updateChimneySmoke();
-      });
-      this.store.onHuddle((agentIds) => {
-        if (this.ready) this.startHuddle(agentIds);
-      });
-      this.store.onHelicopter((delivery) => {
-        if (this.ready && !this.heliActive) this.triggerHelicopter(delivery);
-      });
-      this.store.onAssembly((agentIds) => {
-        if (this.ready) this.startAssembly(agentIds);
-      });
-    }
-    this.ready = true;
-    this.syncAgents();
-    this.world.syncGhosts();
-
-    // Fade in from black so the transition from BootScene is seamless.
-    this.cameras.main.fadeIn(400, 0, 0, 0);
+    // Start processing on the next frame
+    this.time.delayedCall(0, processNextPhase);
   }
 
   /** Draw rounded background behind player nameplate. */
@@ -941,6 +1120,42 @@ export class OfficeScene extends Phaser.Scene {
     // Platform mailboxes are handled in tryPlatformMailboxInteract() which is
     // called earlier in the E-press chain, before server racks.
 
+    // ── Expedition Workshop ──
+    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y) < 144) {
+      this.store.toast("The war table is empty. No expedition being planned.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y) < 144) {
+      this.store.toast("Scrap pool: 0. Not enough for any robot tier.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y) < 144) {
+      this.store.toast("The radio is silent. No robot deployed.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y) < 144) {
+      this.store.toast("The workbench is clear. No robot in production.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y) < 144) {
+      this.store.toast("Knowledge level: 0. No expedition data yet.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
     // Red Button — EMERGENCY STOP: cease all agent work and assemble by entrance
     const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y) < 160) {
@@ -1161,6 +1376,47 @@ export class OfficeScene extends Phaser.Scene {
         .setVisible(true);
     } else {
       this.redButtonHint.setVisible(false);
+    }
+
+    // ── Expedition Workshop ──
+    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+    const wtDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y);
+    if (wtDist < 144) {
+      this.warTableHint.setPosition(wtPx.x, wtPx.y + 64).setText("E: WAR TABLE").setVisible(true);
+    } else {
+      this.warTableHint.setVisible(false);
+    }
+
+    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+    const sbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y);
+    if (sbDist < 144) {
+      this.scrapBinHint.setPosition(sbPx.x, sbPx.y + 64).setText("E: SCRAP BIN").setVisible(true);
+    } else {
+      this.scrapBinHint.setVisible(false);
+    }
+
+    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+    const rdDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y);
+    if (rdDist < 144) {
+      this.radioHint.setPosition(rdPx.x, rdPx.y + 64).setText("E: RADIO").setVisible(true);
+    } else {
+      this.radioHint.setVisible(false);
+    }
+
+    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+    const wbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y);
+    if (wbDist < 144) {
+      this.workbenchHint.setPosition(wbPx.x, wbPx.y + 64).setText("E: WORKBENCH").setVisible(true);
+    } else {
+      this.workbenchHint.setVisible(false);
+    }
+
+    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+    const rsDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y);
+    if (rsDist < 144) {
+      this.researchHint.setPosition(rsPx.x, rsPx.y + 64).setText("E: RESEARCH").setVisible(true);
+    } else {
+      this.researchHint.setVisible(false);
     }
   }
 
@@ -1898,21 +2154,6 @@ export class OfficeScene extends Phaser.Scene {
           this.heliAgent.setDepth(10 + exitY);
           sprite.play(`${agentKey}-walk-down`);
 
-          // Send the hire WS message now — the server will create the real agent
-          // and syncAgents() will replace this cosmetic sprite with the real NPC.
-          if (this.heliDelivery) {
-            const net = this.game.registry.get("net") as import("../net").Net;
-            net.send({
-              type: "hire",
-              name: this.heliDelivery.name,
-              provider: this.heliDelivery.provider as import("../../../shared/types").Provider,
-              model: this.heliDelivery.model,
-              systemPrompt: this.heliDelivery.systemPrompt,
-              role: "worker",
-              appearance: this.heliDelivery.appearance,
-            });
-          }
-
           // walk to centre of office and idle
           const finalX = 14 * TILE_PX + 32;
           const finalY = 8 * TILE_PX + 52;
@@ -1970,22 +2211,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // agent fades out quickly — the real NPC replaces it via syncAgents()
     this.time.delayedCall(2000, () => {
-      if (this.heliAgent) {
-        this.tweens.add({
-          targets: this.heliAgent,
-          alpha: 0,
-          duration: 800,
-          onComplete: () => {
-            this.heliAgent?.destroy();
-            this.heliAgent = null;
-            this.heliActive = false;
-            this.heliDelivery = null;
-          },
-        });
-      } else {
-        this.heliActive = false;
-        this.heliDelivery = null;
-      }
+      this.endHelicopter();
     });
   }
 
@@ -1994,6 +2220,28 @@ export class OfficeScene extends Phaser.Scene {
     if (this.heliRotor) {
       this.heliRotor.rotation = time * 0.04;
     }
+  }
+
+  /** Tear down all helicopter cosmetic state.  Called either from
+   *  syncAgents (when the real NPC arrives) or from heliTakeoff's
+   *  delayed call (fallback if the server is slow to confirm). */
+  private endHelicopter(): void {
+    console.log("[heli] endHelicopter called — tearing down cosmetic sprite");
+    if (this.heliAgent) {
+      this.tweens.add({
+        targets: this.heliAgent,
+        alpha: 0,
+        duration: 600,
+        onComplete: () => {
+          this.heliAgent?.destroy();
+          this.heliAgent = null;
+        },
+      });
+    }
+    this.heliElevatorGfx?.destroy();
+    this.heliElevatorGfx = null;
+    this.heliActive = false;
+    this.heliDelivery = null;
   }
 
   /** Draw a kanban-style task board on the front wall of the office. */
@@ -2060,7 +2308,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!g) return;
     g.clear();
 
-    const tx = this.trophyTile.x * TILE_PX + 32;
+    const tx = this.trophyTile.x * TILE_PX + 57; // offset for x=1.9 visual position
     const ty = this.trophyTile.y * TILE_PX - 56;
     const cw = 96;  // case width
     const ch = 120; // case height
@@ -2416,7 +2664,7 @@ export class OfficeScene extends Phaser.Scene {
       this.anims.create({ key: `${key}-hop`, frames: this.anims.generateFrameNumbers(key, { frames: [3, 1, 0] }), frameRate: 5, repeat: 0 });
     }
 
-    const sheets = ["boss", "char-yuki", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
+    const sheets = ["boss", "char-yuki", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
     const dirs: Dir[] = ["down", "left", "right", "up"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
@@ -2455,15 +2703,23 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private syncAgents(): void {
+    console.log(`[syncAgents] store.agents=${this.store.agents.size} npcs=${this.npcs.size} heliActive=${this.heliActive} ready=${this.ready}`);
     for (const [id, info] of this.store.agents) {
       if (id === YUKI_ID) {
         this.yuki?.sync(info);
+        continue;
+      }
+      if (id === HERMES_ID) {
+        this.hermes?.sync(info);
         continue;
       }
       const existing = this.npcs.get(id);
       if (existing) {
         existing.sync(info);
       } else {
+        // If the helicopter cinematic is still playing, tear it down — the
+        // real NPC replaces the cosmetic sprite immediately.
+        if (this.heliActive) this.endHelicopter();
         // Generate custom texture if agent has an appearance
         if (info.appearance) {
           const key = agentTextureKey(info);
@@ -2479,10 +2735,12 @@ export class OfficeScene extends Phaser.Scene {
           this.store.select(clicked),
         );
         this.npcs.set(id, npc);
+        console.log(`[syncAgents] created NPC for ${info.name} (${id}) at desk ${info.deskIndex}`);
       }
     }
     for (const [id, npc] of this.npcs) {
       if (!this.store.agents.has(id)) {
+        console.log(`[syncAgents] DESTROYING NPC ${id} — not in store.agents!`);
         npc.destroy();
         this.npcs.delete(id);
       }
@@ -2521,6 +2779,11 @@ export class OfficeScene extends Phaser.Scene {
         this.yukiMonitor.clearTint();
       }
     }
+
+    // Hermes's monitor — always on
+    if (this.hermesMonitor) {
+      this.hermesMonitor.setFrame("1");
+    }
   }
 
   /** Toggle chimney smoke based on whether any devops agent is actively working. */
@@ -2537,6 +2800,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   update(time: number, dt: number): void {
+    if (!this.ready) return;
     // cap dt so a lag spike (chunk gen, GC, tab switch) doesn't cause a
     // teleport-length step that tunnels through collision
     dt = Math.min(dt, 100);
@@ -2547,11 +2811,14 @@ export class OfficeScene extends Phaser.Scene {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
       for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
       this.yuki?.update(time, dt, false, this.player.x, this.player.y);
+      this.hermes?.update(time, dt);
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
       const selYuki = this.store.selectedId === YUKI_ID ? this.yuki : null;
-      this.selectRing.setVisible(!!(sel || selYuki));
+      const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
+      this.selectRing.setVisible(!!(sel || selYuki || selHermes));
       if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
       else if (selYuki) this.selectRing.setPosition(selYuki.container.x, selYuki.container.y + 1);
+      else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
       return;
     }
 
@@ -2697,6 +2964,16 @@ export class OfficeScene extends Phaser.Scene {
             );
             if (d < 144 && (!best || d < best.d)) best = { id: YUKI_ID, d };
           }
+          // also check Hermes
+          if (this.hermes) {
+            const d = Phaser.Math.Distance.Between(
+              this.player.x,
+              this.player.y,
+              this.hermes.container.x,
+              this.hermes.container.y,
+            );
+            if (d < 144 && (!best || d < best.d)) best = { id: HERMES_ID, d };
+          }
           this.store.select(best ? best.id : null);
           if (best) {
             if (best.id === YUKI_ID) achievements.unlock("yuki_visit");
@@ -2716,13 +2993,16 @@ export class OfficeScene extends Phaser.Scene {
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
     this.yuki?.update(time, dt, false, this.player.x, this.player.y);
+    this.hermes?.update(time, dt);
 
     // selection ring
     const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
     const selYuki = this.store.selectedId === YUKI_ID ? this.yuki : null;
-    this.selectRing.setVisible(!!(sel || selYuki));
+    const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
+    this.selectRing.setVisible(!!(sel || selYuki || selHermes));
     if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
     else if (selYuki) this.selectRing.setPosition(selYuki.container.x, selYuki.container.y + 1);
+    else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
 
     // --- lighting ---
     this.updateLighting(time);

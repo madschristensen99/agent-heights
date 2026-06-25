@@ -369,3 +369,6 @@ export const SERVER_PORT = (typeof process !== "undefined" && Number(process.env
 
 /** Fixed agent id for Yuki, the office manager NPC. */
 export const YUKI_ID = "yuki";
+
+/** Fixed agent id for Hermes, the devops core engineer NPC in the mail room. */
+export const HERMES_ID = "hermes";

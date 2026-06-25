@@ -297,6 +297,7 @@ export const TILE = {
   CHAIR_LEFT: 32,
   SERVER_RACK: 34, SERVER_SCREEN: 35, CHIMNEY: 36,
   DESK_SIDE_TOP: 37, DESK_SIDE_BOTTOM: 38,
+  DESK_SIDE_TOP_MIRROR: 39, DESK_SIDE_BOTTOM_MIRROR: 40, CHAIR_RIGHT: 41,
 } as const;
 
 const SOLID_TILES = [
@@ -304,6 +305,7 @@ const SOLID_TILES = [
   TILE.CLOCK, TILE.DESK_L, TILE.DESK_R, TILE.FILING, TILE.TRASH, TILE.PLANT, TILE.SHELF_T,
   TILE.SHELF_B, TILE.COUNTER, TILE.FRIDGE, TILE.COFFEE, TILE.COOLER, TILE.SOFA_L, TILE.SOFA_R,
   TILE.VENDING, TILE.DESK_SIDE_TOP, TILE.DESK_SIDE_BOTTOM,
+  TILE.DESK_SIDE_TOP_MIRROR, TILE.DESK_SIDE_BOTTOM_MIRROR,
   TILE.SERVER_RACK, TILE.SERVER_SCREEN,
 ];
 
@@ -1141,6 +1143,74 @@ const drawers: Record<number, TileDrawer> = {
     s.rect(ox + 4, oy + 54, 6, 8, sp.dk);
     s.rect(ox + 36, oy + 54, 6, 8, sp.dk);
   },
+  [TILE.DESK_SIDE_TOP_MIRROR]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    // front panel — left portion (facing Hermes on the left)
+    vGrad(s, ox + 2, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 18, oy, 2, 64, sp.dk);
+    s.rect(ox + 2, oy, 2, 64, sp.sh);
+    // desk surface — right portion (top-down view, the working area)
+    vGrad(s, ox + 20, oy, 44, 64, tp.hi, tp.dk);
+    // right edge highlight (facing entrance)
+    s.rect(ox + 61, oy, 3, 64, tp.hi);
+    s.rect(ox + 63, oy, 1, 64, mix(tp.hi, "#fff", 0.3));
+    // top edge
+    s.rect(ox, oy, 64, 2, sp.sh);
+    // cable hole on desk surface
+    s.fillCircle(ox + 42, oy + 10, 3, "#1a1a1a");
+  },
+  [TILE.DESK_SIDE_BOTTOM_MIRROR]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    // front panel continuation
+    vGrad(s, ox + 2, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 18, oy, 2, 64, sp.dk);
+    s.rect(ox + 2, oy, 2, 64, sp.sh);
+    // desk surface continuation
+    vGrad(s, ox + 20, oy, 44, 64, tp.hi, tp.dk);
+    s.rect(ox + 63, oy, 1, 64, mix(tp.hi, "#fff", 0.2));
+    // papers with shadow
+    s.rect(ox + 39, oy + 11, 20, 24, mix("#f7f8fa", "#000", 0.08));
+    s.rect(ox + 38, oy + 10, 20, 24, "#f7f8fa");
+    s.rect(ox + 38, oy + 10, 20, 3, "#ffffff");
+    s.rect(ox + 42, oy + 18, 12, 1, "#9aa0a8");
+    s.rect(ox + 44, oy + 22, 10, 1, "#9aa0a8");
+    // mug
+    s.fillRoundedRect(ox + 26, oy + 14, 12, 12, 2, "#3a6f57");
+    s.rect(ox + 26, oy + 14, 12, 2, mix("#3a6f57", "#fff", 0.15));
+    s.rect(ox + 34, oy + 15, 3, 6, mix("#3a6f57", "#fff", 0.25));
+    s.rect(ox + 22, oy + 18, 4, 6, "#3a6f57");
+    // bottom edge
+    s.rect(ox, oy + 60, 64, 2, sp.sh);
+    // desk legs
+    s.rect(ox + 54, oy + 54, 6, 8, sp.dk);
+    s.rect(ox + 22, oy + 54, 6, 8, sp.dk);
+  },
+  [TILE.CHAIR_RIGHT]: (s, ox, oy) => {
+    const bp = shade5("#3c4458");
+    const sp = shade5("#2e3547");
+    // backrest on the left side (facing right) with 5-tone
+    vGrad(s, ox + 8, oy + 8, 28, 36, bp.hi, bp.dk);
+    s.rect(ox + 8, oy + 8, 28, 2, bp.hi);
+    s.rect(ox + 8, oy + 8, 2, 36, bp.dk);
+    s.rect(ox + 34, oy + 8, 2, 36, bp.li);
+    s.rect(ox + 8, oy + 42, 28, 2, bp.sh);
+    // backrest detail — padded seam (vertical)
+    s.rect(ox + 22, oy + 12, 2, 28, bp.dk);
+    s.rect(ox + 21, oy + 12, 1, 28, bp.sh);
+    // seat with bevel
+    vGrad(s, ox + 28, oy + 26, 28, 44, sp.li, sp.dk);
+    s.rect(ox + 28, oy + 26, 28, 2, sp.hi);
+    s.rect(ox + 28, oy + 68, 28, 2, sp.sh);
+    // legs
+    s.rect(ox + 48, oy + 26, 8, 4, sp.sh);
+    s.rect(ox + 48, oy + 38, 8, 6, sp.sh);
+    s.rect(ox + 48, oy + 52, 8, 6, sp.sh);
+    // castor wheels
+    s.fillCircle(ox + 54, oy + 28, 2, sp.dk);
+    s.fillCircle(ox + 54, oy + 56, 2, sp.dk);
+  },
   [TILE.SERVER_RACK]: (s, ox, oy) => {
     const p = shade5("#1a1a22");
     // tall dark metal cabinet
@@ -1471,6 +1541,49 @@ const lumonDrawers: Record<number, TileDrawer> = {
     s.rect(ox + 4, oy + 54, 6, 8, sp.dk);
     s.rect(ox + 36, oy + 54, 6, 8, sp.dk);
   },
+  [TILE.DESK_SIDE_TOP_MIRROR]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    vGrad(s, ox + 2, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 18, oy, 2, 64, sp.dk);
+    s.rect(ox + 2, oy, 2, 64, sp.sh);
+    vGrad(s, ox + 20, oy, 44, 64, tp.hi, tp.dk);
+    s.rect(ox + 61, oy, 3, 64, tp.hi);
+    s.rect(ox + 63, oy, 1, 64, mix(tp.hi, "#fff", 0.3));
+    s.rect(ox, oy, 64, 2, sp.sh);
+    s.fillCircle(ox + 42, oy + 10, 3, "#1a1a1a");
+  },
+  [TILE.DESK_SIDE_BOTTOM_MIRROR]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    vGrad(s, ox + 2, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 18, oy, 2, 64, sp.dk);
+    s.rect(ox + 2, oy, 2, 64, sp.sh);
+    vGrad(s, ox + 20, oy, 44, 64, tp.hi, tp.dk);
+    s.rect(ox + 63, oy, 1, 64, mix(tp.hi, "#fff", 0.2));
+    s.rect(ox, oy + 60, 64, 2, sp.sh);
+    s.rect(ox + 54, oy + 54, 6, 8, sp.dk);
+    s.rect(ox + 22, oy + 54, 6, 8, sp.dk);
+  },
+  [TILE.CHAIR_RIGHT]: (s, ox, oy) => {
+    const bp = shade5("#3c4458");
+    const sp = shade5("#2e3547");
+    vGrad(s, ox + 8, oy + 8, 28, 36, bp.hi, bp.dk);
+    s.rect(ox + 8, oy + 8, 28, 2, bp.hi);
+    s.rect(ox + 8, oy + 8, 2, 36, bp.dk);
+    s.rect(ox + 34, oy + 8, 2, 36, bp.li);
+    s.rect(ox + 8, oy + 42, 28, 2, bp.sh);
+    s.rect(ox + 22, oy + 12, 2, 28, bp.dk);
+    s.rect(ox + 21, oy + 12, 1, 28, bp.sh);
+    vGrad(s, ox + 28, oy + 26, 28, 44, sp.li, sp.dk);
+    s.rect(ox + 28, oy + 26, 28, 2, sp.hi);
+    s.rect(ox + 28, oy + 68, 28, 2, sp.sh);
+    s.rect(ox + 48, oy + 26, 8, 4, sp.sh);
+    s.rect(ox + 48, oy + 38, 8, 6, sp.sh);
+    s.rect(ox + 48, oy + 52, 8, 6, sp.sh);
+    s.fillCircle(ox + 54, oy + 28, 2, sp.dk);
+    s.fillCircle(ox + 54, oy + 56, 2, sp.dk);
+  },
   [TILE.SERVER_RACK]: (s, ox, oy) => {
     const p = shade5("#1a1a22");
     vGrad(s, ox + 2, oy, 60, 64, p.li, p.dk);
@@ -1533,9 +1646,9 @@ const lumonDrawers: Record<number, TileDrawer> = {
 
 function buildTileset(set: Record<number, TileDrawer>): Sheet {
   const cols = 8;
-  const rows = 5;
+  const rows = 6;
   const s = new Sheet(cols * T, rows * T);
-  for (let id = 0; id < 40; id++) {
+  for (let id = 0; id < 42; id++) {
     const drawer = set[id];
     if (drawer) drawer(s, (id % cols) * T, Math.floor(id / cols) * T);
   }
@@ -1556,6 +1669,7 @@ interface CharPalette {
   accessory: string;
   headFeature?: string;
   beard?: string;
+  bodyType?: "normal" | "fat";
 }
 
 function mix(hex1: string, hex2: string, t: number): string {
@@ -1584,6 +1698,10 @@ const YUKI_PALETTE: CharPalette = {
   skin: "#f2c39b", hair: "#1a1a2a", shirt: "#c44a4a", shirtShade: "#a83a3a", pants: "#c44a4a", eyeColor: "#3a9a4e", hairStyle: "long", accessory: "headband", headFeature: "none", beard: "none",
 };
 
+const HERMES_PALETTE: CharPalette = {
+  skin: "#e8c5a0", hair: "#3a2a1a", shirt: "#4a5a3a", shirtShade: "#3a4a2a", pants: "#2a2a3a", eyeColor: "#6a8a3a", hairStyle: "long", accessory: "glasses", headFeature: "none", beard: "full_beard", bodyType: "fat",
+};
+
 const CW = 64;
 const CH = 96;
 const SHOE = "#3a3548";
@@ -1595,6 +1713,7 @@ const DIRS: Dir[] = ["down", "left", "right", "up"]; // sheet row order
 function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, pose: number): void {
   const mirror = dir === "left";
   const d: Dir = mirror ? "right" : dir;
+  const isFat = pal.bodyType === "fat";
 
   const isIdle = pose === 6;
   const isBlink = pose === 7;
@@ -2161,8 +2280,8 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
     s.set(bx(33), by(36), skinDk);
 
     // ---- TORSO: compact with 3D shading ----
-    const tw = breathing ? 24 : 22;
-    const tx = breathing ? 20 : 21;
+    const tw = isFat ? (breathing ? 30 : 28) : (breathing ? 24 : 22);
+    const tx = isFat ? (breathing ? 17 : 18) : (breathing ? 20 : 21);
     rrO(bx(tx), by(38), tw, 18, 5, pal.shirt);
     // 3-tone shirt: highlight, mid, shadow
     rr(bx(tx + 2), by(38), tw - 4, 3, 3, shirtLi);
@@ -2188,16 +2307,18 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
     s.set(bx(31), by(50), shirtDk);
 
     // ---- ARMS: stubby with 3D shading ----
-    elO(bx(17 + armSwingL), by(45), 4, 7, pal.shirt);
-    el(bx(16 + armSwingL), by(43), 2, 3, shirtLi);
-    el(bx(17 + armSwingL), by(44), 2, 4, shirtMid);
-    elO(bx(45 + armSwingR), by(45), 4, 7, pal.shirt);
-    el(bx(46 + armSwingR), by(48), 2, 3, shirtDk);
+    const armLX = isFat ? 14 : 17;
+    const armRX = isFat ? 48 : 45;
+    elO(bx(armLX + armSwingL), by(45), 4, 7, pal.shirt);
+    el(bx(armLX - 1 + armSwingL), by(43), 2, 3, shirtLi);
+    el(bx(armLX + armSwingL), by(44), 2, 4, shirtMid);
+    elO(bx(armRX + armSwingR), by(45), 4, 7, pal.shirt);
+    el(bx(armRX + 1 + armSwingR), by(48), 2, 3, shirtDk);
     // Hands
-    ciO(bx(17 + armSwingL), by(53), 3, pal.skin);
-    s.set(bx(16 + armSwingL), by(52), skinLi);
-    ciO(bx(45 + armSwingR), by(53), 3, pal.skin);
-    s.set(bx(46 + armSwingR), by(54), skinDk);
+    ciO(bx(armLX + armSwingL), by(53), 3, pal.skin);
+    s.set(bx(armLX - 1 + armSwingL), by(52), skinLi);
+    ciO(bx(armRX + armSwingR), by(53), 3, pal.skin);
+    s.set(bx(armRX + 1 + armSwingR), by(54), skinDk);
 
     // ---- LEGS & SHOES with 3D shading ----
     if (stepping) {
@@ -2217,21 +2338,24 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
       elO(lx(rx2 + 4), ly(72), 6, 4, SHOE);
       s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
-      rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
-      rrO(lx(33), ly(58), 8, 14, 3, pal.pants);
-      rr(lx(23), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(23) + 3, ly(58), 2, 14, 2, pantsMid);
-      rr(lx(33), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(33) + 3, ly(58), 2, 14, 2, pantsMid);
+      const legLX = isFat ? 21 : 23;
+      const legRX = isFat ? 35 : 33;
+      const legW = isFat ? 9 : 8;
+      rrO(lx(legLX), ly(58), legW, 14, 3, pal.pants);
+      rrO(lx(legRX), ly(58), legW, 14, 3, pal.pants);
+      rr(lx(legLX), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(legLX) + 3, ly(58), 2, 14, 2, pantsMid);
+      rr(lx(legRX), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(legRX) + 3, ly(58), 2, 14, 2, pantsMid);
       // Shoes — 3-tone
-      elO(lx(27), ly(74), 6, 4, SHOE);
-      elO(lx(37), ly(74), 6, 4, SHOE);
-      s.set(lx(25), ly(73), shoeLi);
-      s.set(lx(26), ly(73), shoeMid);
-      s.set(lx(35), ly(73), shoeLi);
-      s.set(lx(36), ly(73), shoeMid);
-      s.set(lx(29), ly(76), shoeDk);
-      s.set(lx(39), ly(76), shoeDk);
+      elO(lx(legLX + 4), ly(74), 6, 4, SHOE);
+      elO(lx(legRX + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(legLX + 2), ly(73), shoeLi);
+      s.set(lx(legLX + 3), ly(73), shoeMid);
+      s.set(lx(legRX + 2), ly(73), shoeLi);
+      s.set(lx(legRX + 3), ly(73), shoeMid);
+      s.set(lx(legLX + 6), ly(76), shoeDk);
+      s.set(lx(legRX + 6), ly(76), shoeDk);
     }
 
   } else if (d === "up") {
@@ -2252,29 +2376,33 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
     s.set(bx(33), by(36), skinDk);
 
     // ---- TORSO (back) — 3-tone ----
-    rrO(bx(21), by(38), 22, 18, 5, pal.shirt);
-    rr(bx(23), by(38), 18, 3, 3, shirtLi);
-    rr(bx(25), by(38), 14, 2, 2, shirtMid);
-    rr(bx(21), by(38), 2, 18, 2, shirtLi);
-    rr(bx(23), by(38), 2, 18, 2, shirtMid);
-    rr(bx(40), by(38), 2, 18, 2, shirtDk);
-    rr(bx(21), by(52), 22, 4, 3, shirtDk);
+    const utw = isFat ? 28 : 22;
+    const utx = isFat ? 18 : 21;
+    rrO(bx(utx), by(38), utw, 18, 5, pal.shirt);
+    rr(bx(utx + 2), by(38), utw - 4, 3, 3, shirtLi);
+    rr(bx(utx + 4), by(38), utw - 8, 2, 2, shirtMid);
+    rr(bx(utx), by(38), 2, 18, 2, shirtLi);
+    rr(bx(utx + 2), by(38), 2, 18, 2, shirtMid);
+    rr(bx(utx + utw - 2), by(38), 2, 18, 2, shirtDk);
+    rr(bx(utx), by(52), utw, 4, 3, shirtDk);
     // Back seam
     s.set(bx(31), by(40), shirtDk);
     s.set(bx(32), by(42), shirtDk);
     s.set(bx(31), by(44), shirtDk);
     // Belt line
-    s.rect(bx(21), by(55), 22, 1, pantsDk);
+    s.rect(bx(utx), by(55), utw, 1, pantsDk);
 
     // ---- ARMS — 3-tone ----
-    elO(bx(17 + armSwingL), by(45), 4, 7, pal.shirt);
-    elO(bx(45 + armSwingR), by(45), 4, 7, pal.shirt);
-    el(bx(16 + armSwingL), by(43), 2, 3, shirtLi);
-    el(bx(17 + armSwingL), by(44), 2, 4, shirtMid);
-    el(bx(46 + armSwingR), by(48), 2, 3, shirtDk);
-    ciO(bx(17 + armSwingL), by(53), 3, pal.skin);
-    ciO(bx(45 + armSwingR), by(53), 3, pal.skin);
-    s.set(bx(46 + armSwingR), by(54), skinDk);
+    const uarmLX = isFat ? 14 : 17;
+    const uarmRX = isFat ? 48 : 45;
+    elO(bx(uarmLX + armSwingL), by(45), 4, 7, pal.shirt);
+    elO(bx(uarmRX + armSwingR), by(45), 4, 7, pal.shirt);
+    el(bx(uarmLX - 1 + armSwingL), by(43), 2, 3, shirtLi);
+    el(bx(uarmLX + armSwingL), by(44), 2, 4, shirtMid);
+    el(bx(uarmRX + 1 + armSwingR), by(48), 2, 3, shirtDk);
+    ciO(bx(uarmLX + armSwingL), by(53), 3, pal.skin);
+    ciO(bx(uarmRX + armSwingR), by(53), 3, pal.skin);
+    s.set(bx(uarmRX + 1 + armSwingR), by(54), skinDk);
 
     // ---- LEGS & SHOES — 3-tone ----
     if (stepping) {
@@ -2363,33 +2491,37 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
     s.set(bx(33), by(36), skinDk);
 
     // ---- TORSO (profile) — 3-tone ----
-    rrO(bx(23), by(38), 18, 18, 5, pal.shirt);
-    rr(bx(25), by(38), 14, 3, 3, shirtLi);
-    rr(bx(27), by(38), 10, 2, 2, shirtMid);
-    rr(bx(23), by(38), 2, 18, 2, shirtLi);
-    rr(bx(25), by(38), 2, 18, 2, shirtMid);
-    rr(bx(37), by(38), 2, 18, 2, shirtDk);
-    rr(bx(23), by(52), 18, 4, 3, shirtDk);
+    const rtw = isFat ? 22 : 18;
+    const rtx = isFat ? 21 : 23;
+    rrO(bx(rtx), by(38), rtw, 18, 5, pal.shirt);
+    rr(bx(rtx + 2), by(38), rtw - 4, 3, 3, shirtLi);
+    rr(bx(rtx + 4), by(38), rtw - 8, 2, 2, shirtMid);
+    rr(bx(rtx), by(38), 2, 18, 2, shirtLi);
+    rr(bx(rtx + 2), by(38), 2, 18, 2, shirtMid);
+    rr(bx(rtx + rtw - 2), by(38), 2, 18, 2, shirtDk);
+    rr(bx(rtx), by(52), rtw, 4, 3, shirtDk);
     // Collar
-    s.set(bx(25), by(40), shirtDk);
-    s.set(bx(26), by(41), shirtDk);
+    s.set(bx(rtx + 2), by(40), shirtDk);
+    s.set(bx(rtx + 3), by(41), shirtDk);
     // Belt line
-    s.rect(bx(23), by(55), 18, 1, pantsDk);
+    s.rect(bx(rtx), by(55), rtw, 1, pantsDk);
 
     // ---- ARM — 3-tone ----
-    elO(bx(37 + armSwing), by(45), 4, 8, pal.shirt);
-    el(bx(36 + armSwing), by(43), 2, 3, shirtLi);
-    el(bx(37 + armSwing), by(44), 2, 4, shirtMid);
-    ciO(bx(37 + armSwing), by(54), 3, pal.skin);
-    s.set(bx(36 + armSwing), by(53), skinLi);
-    s.set(bx(38 + armSwing), by(55), skinDk);
+    const rarmX = isFat ? 35 : 37;
+    elO(bx(rarmX + armSwing), by(45), 4, 8, pal.shirt);
+    el(bx(rarmX - 1 + armSwing), by(43), 2, 3, shirtLi);
+    el(bx(rarmX + armSwing), by(44), 2, 4, shirtMid);
+    ciO(bx(rarmX + armSwing), by(54), 3, pal.skin);
+    s.set(bx(rarmX - 1 + armSwing), by(53), skinLi);
+    s.set(bx(rarmX + 1 + armSwing), by(55), skinDk);
 
     // ---- LEGS (profile) — 3-tone ----
+    const rlegW = isFat ? 10 : 8;
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
       const frontX = leftUp ? 29 : 25;
       const backX = leftUp ? 25 : 29;
-      rrO(lx(frontX), ly(58), 8, 14, 3, pal.pants);
+      rrO(lx(frontX), ly(58), rlegW, 14, 3, pal.pants);
       rr(lx(frontX), ly(58), 2, 14, 2, pantsLi);
       rr(lx(frontX) + 3, ly(58), 2, 14, 2, pantsMid);
       elO(lx(frontX + 4), ly(74), 6, 4, SHOE);
@@ -2397,11 +2529,11 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
       s.set(lx(frontX + 3), ly(73), shoeMid);
       s.set(lx(frontX + 6), ly(76), shoeDk);
       // Back leg darker
-      rrO(lx(backX), ly(60), 8, 10, 3, pantsDk);
+      rrO(lx(backX), ly(60), rlegW, 10, 3, pantsDk);
       elO(lx(backX + 4), ly(72), 6, 4, shoeDk);
     } else {
-      rrO(lx(25), ly(58), 8, 14, 3, pal.pants);
-      rrO(lx(33), ly(58), 8, 14, 3, pantsDk);
+      rrO(lx(25), ly(58), rlegW, 14, 3, pal.pants);
+      rrO(lx(33), ly(58), rlegW, 14, 3, pantsDk);
       rr(lx(25), ly(58), 2, 14, 2, pantsLi);
       rr(lx(25) + 3, ly(58), 2, 14, 2, pantsMid);
       elO(lx(29), ly(74), 6, 4, SHOE);
@@ -2482,6 +2614,8 @@ interface MapTheme {
   desks: Array<[number, number]>;
   /** Yuki's desk top-left tile (placed separately from regular desks). */
   yukiDesk?: [number, number];
+  /** Hermes agent desk top-left tile (mirrored side desk, chair on left). */
+  hermesDesk?: [number, number];
   /** Floors, walls and decor — desks, chairs and points are common. */
   paint(G: Plot, W: Plot, F: Plot): void;
 }
@@ -2493,6 +2627,7 @@ const CLASSIC: MapTheme = {
     [3, 10], [8, 10], [13, 10], [18, 10],
   ],
   yukiDesk: [25, 9],
+  hermesDesk: [2, 16],
   paint(G, W, F) {
     // --- floors with distinct zones ---
     // Main work area: wood floor
@@ -2619,22 +2754,16 @@ const CLASSIC: MapTheme = {
     // Yuki's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
-    // Server room (inside mail room, bottom-left corner) — tall racks along the wall
-    F(2, 15, TILE.SERVER_RACK);
-    F(2, 16, TILE.SERVER_RACK);
-    F(3, 15, TILE.SERVER_RACK);
-    F(3, 16, TILE.SERVER_RACK);
-    F(4, 15, TILE.SERVER_SCREEN);
-    F(4, 16, TILE.SERVER_SCREEN);
-    // Mail room — Hermes agent desk (facing south, chair below)
-    F(8, 14, TILE.DESK_L);
-    F(9, 14, TILE.DESK_R);
-    F(8, 15, TILE.CHAIR);
+    // Server room (inside mail room, bottom-left corner)
+    F(5, 17, TILE.SERVER_RACK);
+    F(5, 18, TILE.SERVER_RACK);
+    F(6, 17, TILE.SERVER_RACK);
+    F(6, 18, TILE.SERVER_RACK);
+    F(7, 17, TILE.SERVER_SCREEN);
+    F(7, 18, TILE.SERVER_SCREEN);
     // Mail room — filing cabinets for archived messages
     F(10, 16, TILE.FILING);
     F(10, 17, TILE.FILING);
-    // Mail room — plant for decor
-    F(6, 17, TILE.PLANT);
   },
 };
 
@@ -2647,6 +2776,7 @@ const LUMON: MapTheme = {
     [11, 11], [13, 11], [15, 11], [17, 11],
   ],
   yukiDesk: [25, 9],
+  hermesDesk: [2, 17],
   paint(G, W, F) {
     // --- distinct floor zones ---
     // Work area: green carpet
@@ -2757,22 +2887,13 @@ const LUMON: MapTheme = {
     // Yuki's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
-    // Server room (inside mail room, bottom-left corner) — tall racks along the wall
-    F(2, 15, TILE.SERVER_RACK);
-    F(2, 16, TILE.SERVER_RACK);
-    F(3, 15, TILE.SERVER_RACK);
-    F(3, 16, TILE.SERVER_RACK);
-    F(4, 15, TILE.SERVER_SCREEN);
-    F(4, 16, TILE.SERVER_SCREEN);
-    // Mail room — Hermes agent desk (facing south, chair below)
-    F(8, 15, TILE.DESK_L);
-    F(9, 15, TILE.DESK_R);
-    F(8, 16, TILE.CHAIR);
+    // Server room (inside mail room, bottom-left corner)
+    F(5, 18, TILE.SERVER_RACK);
+    F(6, 18, TILE.SERVER_RACK);
+    F(7, 18, TILE.SERVER_SCREEN);
     // Mail room — filing cabinets for archived messages
     F(10, 17, TILE.FILING);
     F(10, 18, TILE.FILING);
-    // Mail room — plant for decor
-    F(6, 18, TILE.PLANT);
   },
 };
 
@@ -2802,6 +2923,14 @@ function buildMap(theme: MapTheme): object {
     F(ydx + 1, ydy, TILE.CHAIR_LEFT);
   }
 
+  // Hermes desk — mirrored vertical (facing right), chair on the left
+  if (theme.hermesDesk) {
+    const [hdx, hdy] = theme.hermesDesk;
+    F(hdx, hdy, TILE.DESK_SIDE_TOP_MIRROR);
+    F(hdx, hdy + 1, TILE.DESK_SIDE_BOTTOM_MIRROR);
+    F(hdx - 1, hdy, TILE.CHAIR_RIGHT);
+  }
+
   // --- object layer ---
   const objects: object[] = [];
   let oid = 1;
@@ -2825,6 +2954,12 @@ function buildMap(theme: MapTheme): object {
     objects.push(point("yuki-seat", ydx + 1, ydy));
     objects.push(point("yuki-desk", ydx, ydy));
     objects.push(point("yuki-monitor", ydx, ydy));
+  }
+  if (theme.hermesDesk) {
+    const [hdx, hdy] = theme.hermesDesk;
+    objects.push(point("hermes-seat", hdx - 1, hdy));
+    objects.push(point("hermes-desk", hdx, hdy));
+    objects.push(point("hermes-monitor", hdx, hdy));
   }
 
   const tileLayer = (id: number, name: string, data: number[]) => ({
@@ -2876,10 +3011,10 @@ function buildMap(theme: MapTheme): object {
         name: theme.tileset,
         image: `../tilesets/${theme.tileset}.png`,
         imagewidth: 512,
-        imageheight: 320,
+        imageheight: 384,
         tilewidth: T,
         tileheight: T,
-        tilecount: 40,
+        tilecount: 42,
         columns: 8,
         margin: 0,
         spacing: 0,
@@ -3464,6 +3599,7 @@ CHAR_PALETTES.forEach((pal, i) => {
 });
 buildCharSheet(BOSS_PALETTE).save(join(ASSETS, "characters", "boss.png"));
 buildCharSheet(YUKI_PALETTE).save(join(ASSETS, "characters", "char-yuki.png"));
+buildCharSheet(HERMES_PALETTE).save(join(ASSETS, "characters", "char-hermes.png"));
 
 const worldTileset = buildWorldTileset();
 worldTileset.save(join(ASSETS, "tilesets", "world.png"));

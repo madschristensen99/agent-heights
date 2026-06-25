@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { AgentInfo } from "../../../shared/types";
-import { YUKI_ID } from "../../../shared/types";
+import { YUKI_ID, HERMES_ID } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
 
 /** Returns the Phaser texture key for an agent's character sprite. */
@@ -591,6 +591,87 @@ export class YukiNPC {
     // sitting at desk — face left toward the entrance
     this.dir = "left";
     this.play(`${c}-idle-left`);
+    this.container.setDepth(10 + this.container.y);
+  }
+
+  destroy(): void {
+    this.container.destroy();
+  }
+}
+
+/** Hermes — the devops core engineer. Sits at his desk in the mail room, facing right. */
+export class HermesNPC {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private label: Phaser.GameObjects.Text;
+  private nameBg: Phaser.GameObjects.Graphics;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private dot: Phaser.GameObjects.Arc;
+
+  info!: AgentInfo;
+
+  constructor(
+    scene: Phaser.Scene,
+    _grid: Grid,
+    seat: Tile,
+    onClick: (id: string) => void,
+  ) {
+    const c = "char-hermes";
+
+    const feet = feetOf(seat);
+    this.shadow = scene.add.ellipse(0, 2, 52, 20, 0x000000, 0.15);
+    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(1);
+    this.nameBg = scene.add.graphics();
+    this.label = scene.add
+      .text(0, -108, "Hermes", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "16px",
+        color: "#1d2126",
+        stroke: "#f4f6f8",
+        strokeThickness: 3,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.7);
+    this.drawNameBg();
+    this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS.idle).setStrokeStyle(1, 0x000000, 0.3);
+
+    this.container = scene.add.container(feet.x, feet.y, [
+      this.shadow,
+      this.sprite,
+      this.nameBg,
+      this.label,
+      this.dot,
+    ]);
+    this.container.setDepth(10 + this.container.y);
+    this.sprite.play(`${c}-idle-right`);
+
+    this.sprite.setInteractive({ useHandCursor: true });
+    this.sprite.on("pointerdown", () => onClick(HERMES_ID));
+  }
+
+  sync(info: AgentInfo): void {
+    this.info = info;
+    this.dot.setFillStyle(STATUS_COLORS[info.status]);
+  }
+
+  private drawNameBg(): void {
+    const g = this.nameBg;
+    g.clear();
+    const w = this.label.displayWidth + 16;
+    const h = 18;
+    const x = -w / 2;
+    const y = -122;
+    const r = 4;
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(x, y, w, h, r);
+    g.lineStyle(1, 0xffffff, 0.15);
+    g.strokeRoundedRect(x, y, w, h, r);
+  }
+
+  update(_time: number, _dt: number): void {
+    const c = "char-hermes";
+    this.sprite.play(`${c}-idle-right`, true);
     this.container.setDepth(10 + this.container.y);
   }
 

@@ -782,6 +782,19 @@ export class Hud {
       appearance: randomAppearance(),
     };
 
+    // Send the hire message immediately so the agent is created on the server
+    // and persists even if the helicopter animation is interrupted.
+    console.log("[hire] sending hire message for", delivery.name);
+    this.net.send({
+      type: "hire",
+      name: delivery.name,
+      provider: "cline",
+      model: delivery.model,
+      systemPrompt,
+      role: "worker",
+      appearance: delivery.appearance,
+    });
+
     this.store.triggerHelicopter(delivery);
   }
 

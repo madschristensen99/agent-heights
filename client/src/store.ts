@@ -123,6 +123,7 @@ export class Store {
   apply(msg: ServerMsg): void {
     switch (msg.type) {
       case "snapshot": {
+        console.log(`[store] snapshot received: ${msg.agents.length} agents`);
         this.agents = new Map(msg.agents.map((a) => [a.id, a]));
         this.logs = new Map(Object.entries(msg.logs));
         this.board = new Map(msg.board.map((c) => [c.id, c]));
@@ -162,6 +163,7 @@ export class Store {
       case "agent": {
         const prev = this.agents.get(msg.agent.id);
         const isNew = !prev;
+        console.log(`[store] agent message: id=${msg.agent.id} name=${msg.agent.name} isNew=${isNew}`);
         this.agents.set(msg.agent.id, msg.agent);
         if (isNew) {
           const count = this.agents.size;
@@ -189,6 +191,7 @@ export class Store {
         break;
       }
       case "agent_removed":
+        console.log(`[store] agent_removed: ${msg.agentId}`);
         this.agents.delete(msg.agentId);
         this.logs.delete(msg.agentId);
         if (this.selectedId === msg.agentId) this.selectedId = null;

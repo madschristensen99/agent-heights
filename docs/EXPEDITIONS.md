@@ -540,6 +540,33 @@ interface RobotLoot {
 20. **Knowledge system** — track points, unlock tiers/recommendations
 21. **Petition UI** — small panel/modal for approve/deny/downgrade
 
+### Phase 5 — Expedition Workshop (Break Room Transformation)
+
+22. **War table** — new furniture tile, huddle redirect from water cooler,
+    holographic projection of proposed expedition
+23. **Coin funding terminal** — wall-mounted interactable, replaces petition
+    modal with physical E-interaction
+24. **Scrap recycling bin** — visual scrap pool indicator, agent toss
+    animation on task completion
+25. **Robot workbench** — build phase relocates here, build VFX + progress
+    bar, agent builder gathering
+26. **Parts rack** — tier-locked component shelves, knowledge-gated
+    visibility, E-browse interaction
+27. **Charging dock** — robot return bay, loot unload VFX, signal-lost
+    indicator on destruction
+28. **Telemetry radio** — live deployment readout, audio cues for
+    launch/death/return, agent clustering
+29. **Research station** — post-expedition knowledge processing animation,
+    E-interaction for knowledge level and unlocks
+30. **Specimen shelves** — creature samples, crystal fragments, biome
+    terrain jars, robot nameplates (fed by `ExpeditionRecord`)
+31. **Biome map wall** — wall-mounted cartography, route/death/treasure
+    markers, E-interaction for expedition history overlay
+32. **Workshop furniture textures** — all new pieces via CanvasTexture in
+    `furniture.ts`, registered in `upgradeFurniture()`
+33. **Workshop interactables** — all new E-press handlers in
+    `setupInteractables()` / `tryInteract()` in `scene.ts`
+
 ---
 
 ## 15. What Already Exists
@@ -559,15 +586,301 @@ interface RobotLoot {
 | Minimap entity list | `world.ts:1463` | Add robots to entity array |
 | CanvasTexture sprite system | `textures.ts` | Robot sprite generation |
 | `AgentNPC` idle state | `agent.ts:309-350` | Branch into expedition cycle |
+| `BREAK_SPOTS` in `agent.ts` | `agent.ts:35-40` | Agents already walk to break room post-task — redirect to scrap bin toss |
+| `setupInteractables()` in `scene.ts` | `scene.ts:729-761` | Register new workshop interactable tile positions |
+| `tryInteract()` in `scene.ts` | `scene.ts:800+` | Add E-press handlers for war table, terminal, radio, etc. |
+| `upgradeFurniture()` in `furniture.ts` | `furniture.ts:1942+` | Generate CanvasTexture sprites for new workshop furniture |
+| Break room furniture tiles | `furniture.ts:1904-1928` | Existing sofa/cooler/microwave/toaster tiles — workshop pieces add alongside |
+| Trophy case rendering | `scene.ts` | Pattern for specimen shelves and nameplate wall |
 
 ---
 
-## 16. Future Ideas (Not v1)
+## 16. The Expedition Workshop
+
+The break room (bottom-right of the office, roughly x=20–28, y=11–17)
+transforms from a post-task chill zone into the **Expedition Workshop** — a
+single room with three functional zones that map to the three phases of the
+expedition loop. It's a laboratory, an armory, and a factory rolled into one.
+
+The existing break room furniture (sofa, water cooler, coffee machine, fridge,
+vending machine, microwave, toaster, kitchen counter/sink) stays — agents still
+take breaks here. But the room gains a second identity: it's where the agents'
+side projects live. A startup within a startup, with a garage.
+
+```
+┌─────────────────────────────────────────────┐
+│  LABORATORY (top-right)                     │
+│  · Research station (knowledge terminal)     │
+│  · Sample analysis desk (creature drops)     │
+│  · Biome map wall (expedition cartography)   │
+│  · Specimen shelves (trophies + samples)     │
+│                                              │
+│  ARMORY (center)                             │
+│  · Robot workbench (build phase)             │
+│  · Parts rack (tier components on shelves)   │
+│  · Loadout customization station             │
+│  · Charging dock (robot return bay)          │
+│                                              │
+│  FACTORY (bottom / entrance side)            │
+│  · Scrap recycling bin (scrap accumulation)  │
+│  · Coin funding terminal                     │
+│  · War table (planning huddle anchor)        │
+│  · Telemetry radio (deployment monitor)      │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+### 16.1 The Laboratory (Knowledge & Research)
+
+The post-expedition analysis zone. This is where findings become
+understanding.
+
+#### Research station
+
+A desk with a microscope/terminal where agents analyze what the robot brought
+back. After each expedition, one of the builder agents walks to the research
+station and "processes" the results — a short animation (3–5s) where they
+hunch over the terminal, sparks of data fly, and knowledge points tick up.
+
+- Press **E** to see current knowledge level, progress to next unlock, and
+  what's been learned.
+- Unlocks are revealed here first: "Excavator blueprints acquired — build
+  them at the workbench."
+- At higher knowledge levels, the station shows **biome intel** — hostility
+  ratings, creature types, treasure density per biome (gathered from past
+  expedition data).
+
+#### Specimen shelves
+
+A natural-history-museum vibe that grows with every expedition:
+
+- **Creature samples** — mounted on small pins, labeled ("Forest Wolf —
+  hostility 1, 30 HP").
+- **Crystal fragments** — glowing on a shelf, dim glow that brightens as you
+  collect more.
+- **Biome terrain samples** — small jars of dirt/stone from each biome
+  reached (first-time-only unlocks).
+- **Robot nameplates** — memorial plaques: "Scout-1 — Reached the Void",
+  "Ranger-2 — Lost in the Ruins." Mixed with the specimens.
+
+The shelves visually fill up over time. A fresh office has empty shelves with
+dust. A veteran office looks like a cramped field research station.
+
+#### Biome map wall
+
+A wall-mounted map that starts blank and fills in as expeditions explore:
+
+- Each biome discovered adds a colored region to the map.
+- Robot routes are drawn as dotted lines (fading over time).
+- Death markers (small X's) show where robots were lost.
+- Treasure markers (gold dots) show where loot was found.
+- Press **E** for a detailed overlay — "3 expeditions to the Ruins, 2
+  returns, 1 loss, 14 crystals recovered."
+
+This is the **cartography** piece — the Labyrinth becomes known territory
+through sacrifice.
+
+---
+
+### 16.2 The Armory (Construction & Customization)
+
+The build phase anchor. Where robots are constructed, upgraded, and stored.
+
+#### Robot workbench
+
+The central piece. A heavy workbench with:
+
+- **Parts laid out** — chassis, limbs, antenna, sensor dish — visible on the
+  surface, varying by proposed tier.
+- **Build progress** — sparks, welding VFX, progress bar above the bench
+  during build phase.
+- **2–3 agent builders** gathered around, playing work animations.
+- **Interrupt visual** — if you assign a task to a builder, the half-built
+  robot slumps, parts scatter, scrap is lost.
+
+After the build completes, the robot sprite is "activated" on the workbench
+before rolling to the door — a brief moment where you see your creation come
+to life.
+
+This replaces the current build phase location ("the desk closest to the
+office door") with a dedicated workshop space.
+
+#### Parts rack
+
+Shelves behind the workbench showing available components:
+
+- **Tier-locked** — Scout parts are always visible. Ranger parts appear at
+  knowledge 1. Excavator parts at knowledge 3. Bruiser parts at knowledge 5.
+- **Custom loadout components** (v2, per the knowledge unlocks) — armor
+  plating, extended battery, treasure sensors, each with a distinct visual
+  on the shelf.
+- Press **E** to browse available upgrades and their scrap costs.
+
+This makes the tier system *visible*. You can see what you've unlocked.
+Empty slots tease future possibilities.
+
+#### Charging dock
+
+Where returned robots park:
+
+- Robot rolls in from the door, navigates to the dock, parks.
+- Agents gather, loot is unloaded (treasure icons pop out with spark VFX).
+- Robot sits for 5–10s while agents celebrate, then dissolves.
+- **Empty dock after a loss** — a faint signal-lost indicator (red blinking
+  light, static on a small screen) persists until the next expedition.
+
+The dock is the emotional bookend. Build at the workbench, return at the
+dock. The loop is physical.
+
+---
+
+### 16.3 The Factory (Economy & Planning)
+
+The logistics zone — where resources are managed and expeditions are
+commissioned.
+
+#### Scrap recycling bin
+
+A physical bin that fills with debris as scrap accumulates:
+
+- Agents toss scrap in after completing tasks (quick walk-by animation,
+  debris arc into the bin).
+- Fill level = scrap pool amount (visual tiers: empty → quarter → half →
+  full → overflowing).
+- Press **E** to see exact scrap count and which tiers are currently
+  affordable.
+- At high scrap, the bin overflows with extra debris on the floor around it.
+
+#### Coin funding terminal
+
+A wall-mounted terminal (ATM vibes) where:
+
+- The petition appears when a huddle is ready.
+- Shows: proposed tier, target biome, scrap cost, coin cost, expected
+  rewards.
+- Player presses **E** to approve (coin-drop sound + VFX) or walks away to
+  deny.
+- Shows current coin balance.
+- **Downgrade option** — "Can't afford the Ranger? Press Q to fund a Scout
+  instead."
+
+This replaces a popup modal with a physical interaction. You walk to the
+terminal to fund your agents' dream.
+
+#### War table
+
+The planning huddle anchor. A table with a holographic projection:
+
+- When a huddle triggers, agents gather around the war table (not the water
+  cooler).
+- A mini Labyrinth map projects above the table showing:
+  - Proposed route (dotted line from office to target biome).
+  - Robot tier preview (small sprite hovering above the table).
+  - Risk indicators (creature icons along the route).
+  - Treasure estimates (gold dots at the destination).
+- The projection color matches the lead agent's accent color.
+- After approve/deny, the projection fades, agents disperse.
+
+The war table is the **decision point**. Everything in the factory zone
+feeds into it — scrap from the bin, coins from the terminal, knowledge from
+the lab, parts from the armory.
+
+#### Telemetry radio
+
+A vintage radio/terminal mounted on the wall near the war table:
+
+- Silent when no robot is deployed.
+- Crackles to life when a robot launches (audio cue — static, then signal
+  lock).
+- Live readout: distance, biome, HP, loot count, AI state.
+- Agents cluster around it during deployment, reacting to events.
+- Signal cuts to static on robot death (visceral audio moment).
+- Victory jingle on successful return.
+
+---
+
+### 16.4 How the Room Flows
+
+The expedition loop becomes a physical journey through the room:
+
+```
+Factory: Huddle at War Table → Approve at Coin Terminal
+    │
+    ▼
+Armory: Agents gather at Workbench → Build robot → Robot activates
+    │
+    ▼
+Factory: Robot rolls out → Telemetry Radio crackles to life
+    │
+    ▼
+(monitoring phase — agents cluster around radio)
+    │
+    ├──► Robot returns → rolls to Charging Dock → loot unloaded
+    │         │
+    │         ▼
+    │    Laboratory: Agent processes findings at Research Station
+    │         │
+    │         ▼
+    │    Laboratory: Specimen shelves update, biome map updates
+    │         │
+    │         ▼
+    │    Factory: Scrap bin fills with converted treasure
+    │
+    └──► Robot destroyed → Radio goes static → Dock sits empty
+              │
+              ▼
+         Laboratory: Death marker on biome map, nameplate on shelf
+              │
+              ▼
+         Factory: Agents grumble at war table, plan revenge expedition
+```
+
+Every expedition is a **walk through the room** — plan at the table, build at
+the bench, monitor at the radio, return at the dock, analyze at the station,
+remember on the shelves. The room *is* the loop.
+
+---
+
+### 16.5 Visual Evolution
+
+The room visually transforms as the office gains expedition experience:
+
+| Stage | Look |
+|---|---|
+| Fresh office | Empty shelves, blank map, dim radio, clean workbench, empty dock |
+| 5 expeditions | A few specimens, partial map, radio has signal logs, workbench has tool marks |
+| 20 expeditions | Shelves filling, map shows multiple biomes, dock has wear marks, parts rack has unlocked tiers |
+| 50 expeditions | Museum-grade specimen wall, full biome map with routes, overflowing scrap bin, workbench is a veteran build station, nameplates line the wall |
+
+A new player walks in and sees an empty workshop. A veteran player walks in
+and sees a **laboratory of exploration history**. The room tells the story.
+
+---
+
+### 16.6 Tying Into Existing Systems
+
+| Existing component | How it connects |
+|---|---|
+| `BREAK_SPOTS` in `agent.ts` | Agents already walk here post-task — redirect to scrap bin toss |
+| `AgentNPC.huddle()` | Huddle now targets the war table instead of water cooler |
+| `ExpeditionState` (scrap, knowledge, history) | All visualized physically in the room |
+| `ExpeditionRecord` | Feeds specimen shelves, biome map, nameplates |
+| `PERSONALITIES` in `manager.ts` | Docs Bard writes dramatic field reports at the research station; Code Gremlin obsesses over the parts rack |
+| Feed system | Agent posts come from physical positions in the room ("Mocha is analyzing samples at the research station") |
+| `VFXManager` | sparkBurst for scrap toss, celebrate for robot return, shockwave for build completion |
+| Filing cabinet interaction pattern | Reused for research station, specimen shelf, biome map E-interactions |
+| Trophy case rendering in `scene.ts` | Extended to specimen shelves and nameplate wall |
+| `upgradeFurniture()` in `furniture.ts` | New workshop furniture textures generated via CanvasTexture |
+| `setupInteractables()` in `scene.ts` | New interactable tiles registered for E-press handling |
+
+---
+
+## 17. Future Ideas (Not v1)
 
 - **Two-bot expeditions** — send a Scout + Bruiser together
 - **Custom robot loadouts** — spend extra scrap on armor plating, extended
   battery, treasure sensors
-- **Office display case** — trophies from expeditions shown in the office
 - **Robot naming** — agents name their robots (personality-driven)
 - **Inter-office robot races** — multiplayer tie-in
 - **Robot salvage** — send a robot to recover a destroyed robot's parts for

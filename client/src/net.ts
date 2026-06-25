@@ -47,7 +47,6 @@ export class Net {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     } else {
-      // hold it until the socket (re)connects
       this.queue.push(msg);
     }
   }
