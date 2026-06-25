@@ -137,10 +137,10 @@ export class Store {
           if (count >= 8) achievements.unlock("full_office");
           if (count >= 9) achievements.unlock("overflow");
           if (msg.agent.role === "manager") achievements.unlock("hire_manager");
-          achievements.addToSet("providers", msg.agent.provider);
-          if (achievements.getSetSize("providers") >= 2) achievements.unlock("both_providers");
           achievements.addToSet("models", msg.agent.model);
-          if (achievements.getSetSize("models") >= 5) achievements.unlock("all_models");
+          if (achievements.getSetSize("models") >= 3) achievements.unlock("both_providers");
+          achievements.addToSet("models", msg.agent.model);
+          if (achievements.getSetSize("models") >= 9) achievements.unlock("all_models");
           achievements.addToSet("titles", msg.agent.title);
           if (achievements.getSetSize("titles") >= 10) achievements.unlock("all_titles");
         }

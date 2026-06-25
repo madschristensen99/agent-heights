@@ -11,8 +11,9 @@ terminal panes or a YAML pipeline, your AI agents are pixel-art coworkers in an
 office you walk around in. You hire them, brief them in a huddle, watch them
 walk to their desks and type, chat with them, chain them into handoffs, and read
 everything they did in one feed. Underneath the charm is a real orchestration
-runtime: every character is a live Claude or Codex session with persistent
-memory, its own workspace on disk, role prompts, and an exportable audit trail.
+runtime: every character is a live Cline agent session routed through the
+Swarms API with persistent memory, its own workspace on disk, role prompts,
+and an exportable audit trail.
 
 **One-liner:** *Sims for AI agents — except the work is real.*
 
@@ -33,9 +34,8 @@ a table of run IDs.
 
 ### Who it's for (in order of adoption)
 
-1. **AI-curious developers** — already pay for Claude Code / Codex; want a
-   delightful cockpit for parallel agents. (Beachhead. They have keys, they
-   have Twitter.)
+1. **AI-curious developers** — already pay for LLM APIs; want a delightful
+   cockpit for parallel agents. (Beachhead. They have keys, they have Twitter.)
 2. **Indie hackers & agencies** — run agent "staff" (researcher → writer →
    reviewer pipelines) for client work; need the audit trail and exports.
 3. **Teams** — shared offices where teammates see each other's agents working;
@@ -56,7 +56,7 @@ Two revenue engines that compound:
   blended margin: software-like on subs, ~20–30% on usage
 ```
 
-Key structural choice: **BYOK-first** (bring your own Claude/Codex keys).
+Key structural choice: **BYOK-first** (bring your own Swarms API key).
 - BYOK keeps our COGS near zero on Free/Pro → high-margin subscriptions.
 - A **managed-keys option** (we provision inference, billed as credits) is the
   usage engine: zero-setup onboarding for non-technical users, ~25% markup on
@@ -197,9 +197,9 @@ products; predictable bills with caps users set themselves build trust.
 
 ## 8. Honest risks
 
-- **Platform risk**: Anthropic/OpenAI could ship official multi-agent UIs.
-  Counter: stay provider-neutral (the office runs *all* of them side by side),
-  move fast on multiplayer + marketplace, own the fun.
+- **Platform risk**: LLM providers could ship official multi-agent UIs.
+  Counter: stay provider-neutral via Swarms API (the office runs any model
+  side by side), move fast on multiplayer + marketplace, own the fun.
 - **Novelty decay**: pixel charm gets a user in the door; only real utility
   (memory, pipelines, audit, scheduling) keeps them. Ship utility relentlessly.
 - **Usage margin pressure**: inference prices fall ~10x/18mo. Fine — credits

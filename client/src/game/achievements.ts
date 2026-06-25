@@ -30,8 +30,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "hire_manager", name: "Middle Management", desc: "Hire a manager-role agent.", tier: "Agent Mastery", icon: "👔" },
   { id: "chat_with_agent", name: "Watercooler Wisdom", desc: "Chat (not task) with an agent.", tier: "Agent Mastery", icon: "💬" },
   { id: "clear_memory", name: "Clean Slate", desc: "Clear an agent's chat/memory.", tier: "Agent Mastery", icon: "🧠" },
-  { id: "both_providers", name: "Bilingual Office", desc: "Have both a Claude and a Codex agent.", tier: "Agent Mastery", icon: "🤝" },
-  { id: "all_models", name: "Model Collector", desc: "Hire agents using all 5 available models.", tier: "Agent Mastery", icon: "🧩" },
+  { id: "both_providers", name: "Model Variety", desc: "Hire agents using 3+ different models.", tier: "Agent Mastery", icon: "🤝" },
+  { id: "all_models", name: "Model Collector", desc: "Hire agents using all 9 available models.", tier: "Agent Mastery", icon: "🧩" },
   { id: "all_titles", name: "Full Roster", desc: "Hire agents with all 10 job titles.", tier: "Agent Mastery", icon: "🎖️" },
 
   // ── Explorer ──

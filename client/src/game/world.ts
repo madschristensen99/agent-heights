@@ -367,7 +367,7 @@ class Creature {
       this.attackCd = 1000;
       // attack animation — frame 3
       this.sprite.setFrame(3);
-      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff3333, 6, 60);
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff3333, 4, 60);
       this.world.audio?.creatureGrowl();
       return { hit: true, damage: this.damage };
     }
@@ -733,6 +733,7 @@ export class WorldLayer {
   private stones: Stone[] = [];
   private friendlies: FriendlyCreature[] = [];
   private hp = MAX_HP;
+  private tennisChunks = new Set<string>();
   private lastStoneTime = 0;
   private lastSpawnTime = 0;
   private lastBeastTime = 0;
@@ -922,6 +923,7 @@ export class WorldLayer {
     if (!chunk) {
       chunk = generateChunk(this.store.worldSeed, cx, cy);
       this.chunks.set(key, chunk);
+      this.scanTennisTiles(chunk);
       this.renderChunk(chunk);
     }
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -959,6 +961,7 @@ export class WorldLayer {
     if (!chunk) {
       chunk = generateChunk(this.store.worldSeed, cx, cy);
       this.chunks.set(key, chunk);
+      this.scanTennisTiles(chunk);
       this.renderChunk(chunk);
     }
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -969,6 +972,19 @@ export class WorldLayer {
   /** Check if a world tile is walkable for creatures — excludes tiles within 4 of a tennis court. */
   isCreatureWalkable(worldTileX: number, worldTileY: number): boolean {
     if (!this.isTileWalkable(worldTileX, worldTileY)) return false;
+    // Fast path: if no nearby chunks contain tennis tiles, skip the 81-tile scan
+    const minCX = Math.floor((worldTileX - 4) / CHUNK_SIZE);
+    const maxCX = Math.floor((worldTileX + 4) / CHUNK_SIZE);
+    const minCY = Math.floor((worldTileY - 4) / CHUNK_SIZE);
+    const maxCY = Math.floor((worldTileY + 4) / CHUNK_SIZE);
+    let hasTennis = false;
+    for (let cy = minCY; cy <= maxCY; cy++) {
+      for (let cx = minCX; cx <= maxCX; cx++) {
+        if (this.tennisChunks.has(`${cx},${cy}`)) { hasTennis = true; break; }
+      }
+      if (hasTennis) break;
+    }
+    if (!hasTennis) return true;
     // scan 4-tile radius for any tennis court tiles
     for (let dy = -4; dy <= 4; dy++) {
       for (let dx = -4; dx <= 4; dx++) {
@@ -1029,14 +1045,24 @@ export class WorldLayer {
     return true;
   }
 
-  /** Load/unload chunks around the player. Loads at most MAX_CHUNKS_PER_FRAME per frame to avoid spikes. */
-  updateChunks(playerX: number, playerY: number): void {
+  /** Load/unload chunks around the player. Loads at most MAX_CHUNKS_PER_FRAME per frame to avoid spikes.
+   *  When vx/vy are provided, chunks in the movement direction are prioritised (predictive preloading). */
+  updateChunks(playerX: number, playerY: number, vx = 0, vy = 0): void {
     const { tx, ty } = this.pixelToTile(playerX, playerY);
     const pcx = Math.floor(tx / CHUNK_SIZE);
     const pcy = Math.floor(ty / CHUNK_SIZE);
 
-    // Collect needed chunks sorted by distance from player (closest first)
-    const needed: { cx: number; cy: number; dist: number }[] = [];
+    // Normalise velocity for directional bias (zero velocity = pure distance sort)
+    const vlen = Math.hypot(vx, vy);
+    const nvx = vlen > 0 ? vx / vlen : 0;
+    const nvy = vlen > 0 ? vy / vlen : 0;
+
+    // Collect needed chunks; sort key combines distance with directional bias
+    // so chunks the player is walking toward load before equally-distant ones
+    // behind/orthogonal.  The bias term (nvx*dx + nvy*dy) ranges -LOAD_RADIUS..+LOAD_RADIUS;
+    // we scale it to compete with distance (0..LOAD_RADIUS²).
+    const BIAS_WEIGHT = LOAD_RADIUS;
+    const needed: { cx: number; cy: number; priority: number }[] = [];
     for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
       for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
         const ncy = pcy + dy;
@@ -1044,10 +1070,13 @@ export class WorldLayer {
         const ncx = pcx + dx;
         const key = `${ncx},${ncy}`;
         if (this.chunks.has(key)) continue;
-        needed.push({ cx: ncx, cy: ncy, dist: dx * dx + dy * dy });
+        const dist = dx * dx + dy * dy;
+        const dirAlign = nvx * dx + nvy * dy;
+        const priority = dist - dirAlign * BIAS_WEIGHT;
+        needed.push({ cx: ncx, cy: ncy, priority });
       }
     }
-    needed.sort((a, b) => a.dist - b.dist);
+    needed.sort((a, b) => a.priority - b.priority);
 
     // Load only a few chunks per frame to spread the cost
     let loaded = 0;
@@ -1063,6 +1092,7 @@ export class WorldLayer {
         this.chunkGraphics.get(key)?.destroy();
         this.chunkGraphics.delete(key);
         this.chunks.delete(key);
+        this.tennisChunks.delete(key);
       }
     }
   }
@@ -1096,6 +1126,18 @@ export class WorldLayer {
     this.removeExtraBalls();
   }
 
+  private scanTennisTiles(chunk: Chunk): void {
+    const key = `${chunk.cx},${chunk.cy}`;
+    for (let i = 0; i < chunk.tiles.length; i++) {
+      const t = chunk.tiles[i];
+      if (t === TILE.TENNIS_COURT || t === TILE.TENNIS_NET || t === TILE.TENNIS_WALL ||
+          t === TILE.TENNIS_RACKET || t === TILE.TENNIS_BALL) {
+        this.tennisChunks.add(key);
+        return;
+      }
+    }
+  }
+
   private loadChunk(cx: number, cy: number): void {
     // never generate chunks above the office (cy < 0)
     if (cy < 0) return;
@@ -1103,6 +1145,7 @@ export class WorldLayer {
     if (this.chunks.has(key)) return;
     const chunk = generateChunk(this.store.worldSeed, cx, cy);
     this.chunks.set(key, chunk);
+    this.scanTennisTiles(chunk);
     this.renderChunk(chunk);
   }
 
@@ -1356,7 +1399,7 @@ export class WorldLayer {
   }
 
   /** Called every frame. Manages chunks, ghosts, compass, hazards, and interaction. */
-  update(time: number, dt: number, playerX: number, playerY: number, ePressed: boolean): void {
+  update(time: number, dt: number, playerX: number, playerY: number, ePressed: boolean, vx = 0, vy = 0): void {
     const outside = this.isOutside(playerX, playerY);
 
     // show compass + health bar when outside
@@ -1486,7 +1529,7 @@ export class WorldLayer {
     // load/unload chunks — when inside, preload around the door exit so chunks
     // are ready by the time the player walks outside (avoids first-exit hitch)
     if (outside) {
-      this.updateChunks(playerX, playerY);
+      this.updateChunks(playerX, playerY, vx, vy);
     } else {
       this.updateChunks(this.officeW / 2, this.officeH + TILE_PX);
     }

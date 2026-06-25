@@ -688,6 +688,7 @@ input.invalid {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  width: 240px;
 }
 
 .hire-preview {
@@ -781,6 +782,7 @@ input.invalid {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  width: 100%;
 }
 
 .builder-preview-wrap {
@@ -1196,6 +1198,16 @@ kbd {
   max-height: 80vh;
   overflow-y: auto;
   padding: 20px 24px;
+}
+
+.ach-modal-sticky {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 10;
+  margin: -20px -24px 0;
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid var(--panel-edge);
 }
 
 .ach-modal-header {

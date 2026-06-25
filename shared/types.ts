@@ -1,6 +1,6 @@
 // Types shared between the game client and the agent server.
 
-export type Provider = "claude" | "codex";
+export type Provider = "cline";
 
 export type AgentStatus = "idle" | "thinking" | "working" | "done" | "error";
 
@@ -108,8 +108,8 @@ export interface AgentInfo {
   systemPrompt: string;
   role: AgentRole;
   /**
-   * Provider conversation id (Claude session / Codex thread). Every task
-   * resumes it, so the agent remembers all previous orders and its own work.
+   * Provider conversation id. Every task resumes it, so the agent remembers
+   * all previous orders and its own work.
    */
   sessionId: string | null;
   tasksDone: number;
@@ -223,13 +223,11 @@ export const OFFICE_THEMES: Array<{ id: OfficeTheme; label: string }> = [
 ];
 
 export interface GameSettings {
-  claude: {
-    /** bypassPermissions runs shell commands unattended; acceptEdits forbids unapproved Bash. */
-    permissionMode: "bypassPermissions" | "acceptEdits";
-    maxTurns: number;
-  };
-  codex: {
-    sandboxMode: "read-only" | "workspace-write" | "danger-full-access";
+  cline: {
+    /** Maximum agent reasoning iterations per task. */
+    maxIterations: number;
+    /** If true, shell commands run without approval prompts. */
+    autoApproveCommands: boolean;
   };
   game: {
     idleWander: boolean;
@@ -238,8 +236,7 @@ export interface GameSettings {
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
-  claude: { permissionMode: "bypassPermissions", maxTurns: 60 },
-  codex: { sandboxMode: "workspace-write" },
+  cline: { maxIterations: 60, autoApproveCommands: true },
   game: { idleWander: true, theme: "classic" },
 };
 
@@ -284,15 +281,16 @@ export type ServerMsg =
   | { type: "fired_agent"; agent: FiredAgent }
   | { type: "fired_agent_removed"; agentId: string };
 
-export const CLAUDE_MODELS = [
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (balanced)" },
-  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (fast)" },
-  { id: "claude-opus-4-8", label: "Opus 4.8 (deep)" },
-] as const;
-
-export const CODEX_MODELS = [
-  { id: "gpt-5.1-codex", label: "GPT-5.1 Codex" },
-  { id: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
+export const SWARMS_MODELS = [
+  { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },
+  { id: "claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet (fast)" },
+  { id: "claude-opus-4", label: "Claude Opus 4 (deep)" },
+  { id: "gpt-4.1", label: "GPT-4.1 (balanced)" },
+  { id: "gpt-4.1-mini", label: "GPT-4.1 Mini (fast)" },
+  { id: "gpt-4.1-nano", label: "GPT-4.1 Nano (cheapest)" },
+  { id: "o3-mini", label: "o3-mini (reasoning)" },
+  { id: "groq/llama3-70b-8192", label: "Llama 3 70B via Groq (fast)" },
+  { id: "groq/deepseek-r1-distill-llama-70b", label: "DeepSeek R1 via Groq (reasoning)" },
 ] as const;
 
 export const SERVER_PORT = 3001;

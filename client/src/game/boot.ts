@@ -1,14 +1,14 @@
 import Phaser from "phaser";
 import { CHAR_VARIANTS } from "../../../shared/types";
 import { CHAR_FRAME_W, CHAR_FRAME_H, CHAR_FRAMES_PER_ROW } from "./chargen";
-import { generateAllTextures } from "./textures";
+import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
  * procedural textures and animations before starting the main OfficeScene.
- * This moves heavy synchronous work out of OfficeScene.create() so the game
- * starts smoothly with no black screen gap.
+ * Texture generation is spread across frames so the progress bar moves
+ * visibly as each category is generated.
  */
 export class BootScene extends Phaser.Scene {
   private bar!: Phaser.GameObjects.Graphics;
@@ -73,21 +73,54 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     const w = this.scale.width;
     const h = this.scale.height;
+    const barX = w / 2 - 160;
+    const barY = h / 2;
+    const barW = 320;
+    const barH = 24;
 
-    // Show "Generating world…" phase, then defer heavy synchronous work to the
-    // next frame so this text actually renders before the main thread blocks.
-    this.statusText.setText("Generating world…");
-    this.bar.clear();
-    this.bar.fillStyle(0x222233, 1);
-    this.bar.fillRoundedRect(w / 2 - 160, h / 2, 320, 24, 6);
-    this.bar.fillStyle(0x4cb866, 1);
-    this.bar.fillRoundedRect(w / 2 - 160, h / 2, 320, 24, 6);
+    // Get texture generation steps + animation step
+    const texSteps = getTextureGenerationSteps(this);
+    const totalSteps = texSteps.length + 1; // +1 for animations
 
-    this.time.delayedCall(0, () => {
-      generateAllTextures(this);
-      this.createAnimations();
-      this.scene.start("office");
-    });
+    const updateBar = (progress: number, label: string) => {
+      this.statusText.setText(label);
+      this.bar.clear();
+      this.bar.fillStyle(0x222233, 1);
+      this.bar.fillRoundedRect(barX, barY, barW, barH, 6);
+      this.bar.fillStyle(0x4cb866, 1);
+      this.bar.fillRoundedRect(barX, barY, barW * progress, barH, 6);
+    };
+
+    // Process steps one per frame so the bar visibly progresses
+    let stepIndex = 0;
+    const allSteps: Array<{ name: string; fn: () => void }> = [
+      ...texSteps,
+      { name: "Animations", fn: () => this.createAnimations() },
+    ];
+
+    const processNextStep = () => {
+      if (stepIndex >= allSteps.length) {
+        this.scene.start("office");
+        return;
+      }
+
+      const step = allSteps[stepIndex];
+      const progress = stepIndex / totalSteps;
+      updateBar(progress, `Generating ${step.name}…`);
+
+      // Run the step on the next frame so the bar update renders first
+      this.time.delayedCall(0, () => {
+        step.fn();
+        stepIndex++;
+        // Update bar to show this step completed
+        updateBar(stepIndex / totalSteps, `Done: ${step.name}`);
+        // Schedule next step on the following frame
+        this.time.delayedCall(0, processNextStep);
+      });
+    };
+
+    // Start processing on the next frame so "Generating…" text renders first
+    this.time.delayedCall(0, processNextStep);
   }
 
   private createAnimations(): void {

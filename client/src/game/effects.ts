@@ -11,26 +11,38 @@ import Phaser from "phaser";
 export class VFXManager {
   private scene: Phaser.Scene;
   private ambientEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private sparkPool: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
+  private sparkPoolIdx = 0;
+  private readonly SPARK_POOL_SIZE = 12;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    // Pre-create a pool of spark emitters (hidden, reused via explode())
+    for (let i = 0; i < this.SPARK_POOL_SIZE; i++) {
+      const emitter = this.scene.add.particles(0, 0, "spark", {
+        speed: { min: 30, max: 100 },
+        angle: { min: 0, max: 360 },
+        scale: { start: 0.8, end: 0 },
+        alpha: { start: 1, end: 0 },
+        lifespan: { min: 300, max: 600 },
+        quantity: 12,
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      emitter.setActive(false).setVisible(false);
+      this.sparkPool.push(emitter);
+    }
   }
 
   /** Burst of sparks at a position — for hits, impacts, explosions. */
   sparkBurst(x: number, y: number, color: number, count = 12, speed = 100): void {
-    const emitter = this.scene.add.particles(x, y, "spark", {
-      speed: { min: speed * 0.3, max: speed },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.8, end: 0 },
-      alpha: { start: 1, end: 0 },
-      lifespan: { min: 300, max: 600 },
-      quantity: count,
-      tint: color,
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    });
+    const emitter = this.sparkPool[this.sparkPoolIdx];
+    this.sparkPoolIdx = (this.sparkPoolIdx + 1) % this.SPARK_POOL_SIZE;
+    emitter.setActive(true).setVisible(true);
     emitter.explode(count, x, y);
-    this.scene.time.delayedCall(700, () => emitter.destroy());
+    this.scene.time.delayedCall(700, () => {
+      emitter.setActive(false).setVisible(false);
+    });
   }
 
   /** Dust cloud — for footsteps, landings, creature movement. */
@@ -197,6 +209,8 @@ export class VFXManager {
 
   destroy(): void {
     this.stopAmbient();
+    for (const e of this.sparkPool) e.destroy();
+    this.sparkPool = [];
   }
 }
 

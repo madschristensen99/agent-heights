@@ -1,6 +1,6 @@
 # Agent HQ
 
-A retro pixel-art office where you hire and manage **real AI agents**. Each employee at a desk is a live coding agent — powered by the [Claude Agent SDK](https://docs.anthropic.com/en/api/agent-sdk/overview) or the [OpenAI Codex SDK](https://github.com/openai/codex) — that actually reads, writes, and runs code in its own workspace folder while you watch it work from a top-down Phaser office.
+A retro pixel-art office where you hire and manage **real AI agents**. Each employee at a desk is a live coding agent — powered by the [Cline SDK](https://github.com/cline/cline) routed through the [Swarms API](https://swarms.world) — that actually reads, writes, and runs code in its own workspace folder while you watch it work from a top-down Phaser office.
 
 Hire an agent, give it a name and a model, type a task, and watch it walk to its desk and start typing. Speech bubbles and the office feed stream its real tool calls and output in real time.
 
@@ -12,8 +12,7 @@ Hire an agent, give it a name and a model, type a task, and watch it walk to its
 ┌─────────────────────┐        WebSocket         ┌──────────────────────┐
 │  Client (Phaser 3)  │ ◄──── ws://:3001 ─────►  │  Server (Node + ws)  │
 │  office scene, HUD  │                          │  AgentManager        │
-└─────────────────────┘                          │   ├─ Claude runner ──┼──► @anthropic-ai/claude-agent-sdk
-                                                 │   └─ Codex runner ───┼──► @openai/codex-sdk
+└─────────────────────┘                          │   └─ Cline runner ───┼──► @cline/sdk → Swarms API
                                                  └──────────┬───────────┘
                                                             │ each agent works in
                                                             ▼
@@ -28,10 +27,11 @@ Hire an agent, give it a name and a model, type a task, and watch it walk to its
 ## Features
 
 - **Hire as many agents as you want** — the first 8 get desks, the rest work standing. Each gets a name, a random job title (Code Gremlin, Bug Whisperer, Refactor Goblin…), a sprite, and an optional custom system prompt set at hire time.
-- **Persistent memory** — each agent is one continuous conversation (Claude session / Codex thread, resumed on every task), so it remembers every order you've given it and everything it did, across server restarts.
-- **Two providers, five models**:
-  - Claude: Sonnet 4.6 (balanced), Haiku 4.5 (fast), Opus 4.8 (deep)
-  - Codex: GPT-5.1 Codex, GPT-5.1 Codex Mini
+- **Persistent memory** — each agent is one continuous conversation (Cline Agent instance with message history, resumed on every task), so it remembers every order you've given it and everything it did, across server restarts.
+- **One provider, nine models** via Swarms API:
+  - Claude: Sonnet 4 (balanced), Haiku 3.5 (fast), Opus 4 (deep)
+  - OpenAI: GPT-4.1, o3-mini
+  - Groq: Llama 3.3 70B, DeepSeek R1 Distill Llama 70B
 - **Assign tasks** to one agent or broadcast the same task to everyone who's free ("ASSIGN TO ALL").
 - **Live activity feed** — assistant text, tool calls, results, and errors stream into the office feed and per-agent log panels.
 - **Stop and fire** — abort a running task, or remove an agent entirely (their desk frees up).
@@ -41,10 +41,7 @@ Hire an agent, give it a name and a model, type a task, and watch it walk to its
 
 - Node.js 20+
 - [pnpm](https://pnpm.io)
-- **For Claude agents**: an `ANTHROPIC_API_KEY` in your environment / `.env`, or an authenticated Claude Code install on this machine.
-- **For Codex agents**: the Codex CLI authenticated (`codex login`) or an `OPENAI_API_KEY`.
-
-You only need credentials for the provider(s) you actually hire from.
+- A `SWARMS_API_KEY` in your environment / `.env` (get one at [https://swarms.world/platform/api-keys](https://swarms.world/platform/api-keys)).
 
 ## Getting started
 
@@ -73,13 +70,11 @@ Then open **http://localhost:5173**. On first launch you'll name yourself and yo
 
 ## Configuration
 
-| Variable                | Default             | Purpose                                                                                                    |
-| ----------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`     | —                   | Auth for Claude agents (not needed if Claude Code is logged in locally)                                     |
-| `OPENAI_API_KEY`        | —                   | Auth for Codex agents (alternative to `codex login`)                                                        |
-| `AGENT_PERMISSION_MODE` | `bypassPermissions` | Claude agent permission mode. Set to `acceptEdits` to allow file edits but forbid unapproved shell commands |
+| Variable                | Default | Purpose                                                                                                    |
+| ----------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `SWARMS_API_KEY`        | —       | Auth key for the Swarms API (required)                                                                      |
 
-> ⚠️ **Security note:** by default Claude agents run with `bypassPermissions`, meaning they execute shell commands unattended inside their workspace folder. Codex agents run with `workspace-write` sandboxing. Treat `ag/workspace/` as untrusted output, and set `AGENT_PERMISSION_MODE=acceptEdits` if you want a tighter leash.
+> ⚠️ **Security note:** agents can run shell commands inside their workspace folder. The workspace folder is a *convention* enforced by prompt (`cwd` + instructions), not an OS sandbox. Treat `ag/workspace/` as untrusted output, and disable auto-approve in Settings if you want manual confirmation before each command.
 
 ## Project layout
 
@@ -94,8 +89,7 @@ agent-game/
 │   ├── logger.ts             # SessionLogger — append-only session log in ag/logs/
 │   └── providers/
 │       ├── types.ts          # ProviderRunner interface (task → async stream of TaskEvents)
-│       ├── claude.ts         # Claude Agent SDK runner
-│       └── codex.ts          # Codex SDK runner
+│       └── cline.ts          # Cline SDK runner (Swarms API + local tools)
 ├── client/
 │   ├── index.html
 │   ├── public/assets/        # Generated tileset, character sprites, map
@@ -126,5 +120,6 @@ Providers are pluggable. Implement the `ProviderRunner` signature from `server/p
 - [Vite](https://vite.dev/) — client dev server and build
 - [ws](https://github.com/websockets/ws) — WebSocket server
 - [tsx](https://tsx.is/) — TypeScript execution for the server
-- [@anthropic-ai/claude-agent-sdk](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) + [@openai/codex-sdk](https://www.npmjs.com/package/@openai/codex-sdk) — the actual agents
+- [@cline/sdk](https://www.npmjs.com/package/@cline/sdk) — open-source agent runtime with local tools and streaming
+- [Swarms API](https://swarms.world) — unified cloud API for LLM providers
 - [pngjs](https://github.com/pngjs/pngjs) — procedural pixel-art generation

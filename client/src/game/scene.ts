@@ -76,6 +76,18 @@ export class OfficeScene extends Phaser.Scene {
   private hallOfFameHint!: Phaser.GameObjects.Text;
   private hallOfFameGfx!: Phaser.GameObjects.Graphics;
 
+  // --- helicopter / red button ---
+  private redButtonTile: Tile = { x: 25, y: 7 };
+  private redButtonHint!: Phaser.GameObjects.Text;
+  private redButtonUntil = 0;
+  private padCenter = { x: 960, y: -130 };
+  private padFrontPx = { x: 932, y: -92 };
+  private heliActive = false;
+  private heliContainer: Phaser.GameObjects.Container | null = null;
+  private heliRotor: Phaser.GameObjects.Graphics | null = null;
+  private heliAgent: Phaser.GameObjects.Container | null = null;
+  private heliElevatorGfx: Phaser.GameObjects.Graphics | null = null;
+
   private world!: WorldLayer;
   private theme: "classic" | "lumon" = "classic";
   /** Store listeners are registered once; they survive scene restarts. */
@@ -150,11 +162,19 @@ export class OfficeScene extends Phaser.Scene {
     this.plantUntil = 0;
     this.plantCooldownUntil = 0;
     this.sofaUntil = 0;
+    this.heliActive = false;
+    this.heliContainer?.destroy();
+    this.heliContainer = null;
+    this.heliRotor = null;
+    this.heliAgent?.destroy();
+    this.heliAgent = null;
+    this.heliElevatorGfx?.destroy();
+    this.heliElevatorGfx = null;
 
-    // Force-recreate procedural textures with valid GL bindings for this scene.
-    // BootScene creates them first, but its WebGL textures become stale after
-    // scene transition — force=true removes and recreates them here.
-    generateAllTextures(this, true);
+    // Procedural textures and animations were created by BootScene and persist
+    // in the global TextureManager.  The existence guards make these fast
+    // no-ops on first run; they only do work on scene restart.
+    generateAllTextures(this);
     this.ensureAllAnimations();
 
     const map = this.make.tilemap({ key: `map-${this.theme}` });
@@ -327,6 +347,7 @@ export class OfficeScene extends Phaser.Scene {
     this.drawTrophyCase();
     this.drawHallOfFameBoard();
     this.drawHelipad();
+    this.drawRedButton();
     this.boardHint = this.add
       .text(0, 0, "", {
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
@@ -352,6 +373,7 @@ export class OfficeScene extends Phaser.Scene {
     this.trophyHint = this.makeHint();
     this.hallOfFameHint = this.makeHint();
     this.mailboxHint = this.makeHint();
+    this.redButtonHint = this.makeHint();
 
     // Set interactable tile positions based on theme
     this.setupInteractables();
@@ -799,6 +821,20 @@ export class OfficeScene extends Phaser.Scene {
       return true;
     }
 
+    // Red Button — summon helicopter
+    const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y) < 160) {
+      if (this.heliActive) {
+        this.store.toast("Helicopter is already on the way!");
+      } else if (time < this.redButtonUntil) {
+        this.store.toast("The button is cooling down.");
+      } else {
+        this.redButtonUntil = time + 30000;
+        this.triggerHelicopter();
+      }
+      return true;
+    }
+
     return false;
   }
 
@@ -972,6 +1008,18 @@ export class OfficeScene extends Phaser.Scene {
         .setVisible(true);
     } else {
       this.mailboxHint.setVisible(false);
+    }
+
+    // Red Button
+    const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
+    const rbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y);
+    if (rbDist < 160) {
+      this.redButtonHint
+        .setPosition(rbPx.x, rbPx.y + 64)
+        .setText(this.heliActive ? "..." : time < this.redButtonUntil ? "E: COOLING" : "E: PUSH!")
+        .setVisible(true);
+    } else {
+      this.redButtonHint.setVisible(false);
     }
   }
 
@@ -1392,6 +1440,335 @@ export class OfficeScene extends Phaser.Scene {
     g.lineTo(wsP.x + 18, wsP.y - 13);
     g.closePath();
     g.fillPath();
+
+    // Store pad coordinates for helicopter arrival sequence
+    this.padCenter = { x: cx, y: padCY };
+    const _pf = padPoint(Math.PI / 2);
+    this.padFrontPx = { x: _pf.x, y: _pf.y };
+  }
+
+  /** Draw a big red emergency button on the wall in Yuki's office. */
+  private drawRedButton(): void {
+    const g = this.add.graphics().setDepth(3);
+    const bx = this.redButtonTile.x * TILE_PX + 32;
+    const by = this.redButtonTile.y * TILE_PX + 56;
+
+    // mounting plate
+    g.fillStyle(0x2a2a30, 1);
+    g.fillRoundedRect(bx - 22, by - 22, 44, 44, 6);
+    g.fillStyle(0x48484e, 1);
+    g.fillRoundedRect(bx - 20, by - 20, 40, 40, 5);
+    // screws
+    g.fillStyle(0x666666, 1);
+    for (const [sx, sy] of [[-16, -16], [16, -16], [-16, 16], [16, 16]] as const) {
+      g.fillCircle(bx + sx, by + sy, 2);
+    }
+    // glass dome cover (semi-transparent ring)
+    g.fillStyle(0xaaaaaa, 0.08);
+    g.fillCircle(bx, by, 19);
+    g.lineStyle(1.5, 0x888888, 0.3);
+    g.strokeCircle(bx, by, 19);
+    // red button — dark outer ring
+    g.fillStyle(0x881111, 1);
+    g.fillCircle(bx, by, 13);
+    // red button — bright top
+    g.fillStyle(0xdd2222, 1);
+    g.fillCircle(bx, by, 11);
+    g.fillStyle(0xff3333, 1);
+    g.fillCircle(bx - 1, by - 1, 9);
+    // specular highlight
+    g.fillStyle(0xff8888, 0.7);
+    g.fillCircle(bx - 3, by - 3, 4);
+    g.fillStyle(0xffaaaa, 0.5);
+    g.fillCircle(bx - 4, by - 4, 2);
+  }
+
+  /** Create the helicopter visual as a container and return it.
+   *  Layering (bottom to top): landing skids → body → rotor.
+   *  The rotor is a separate graphics positioned at (0, -30) so its
+   *  rotation spins the blades in-place above the body. */
+  private drawHelicopter(): Phaser.GameObjects.Container {
+    // --- landing skids (bottom layer) ---
+    const skids = this.add.graphics();
+    skids.fillStyle(0x000000, 0.2);
+    skids.fillEllipse(0, 26, 90, 14);
+    skids.fillStyle(0x3a3a40, 1);
+    skids.fillRect(-38, 22, 76, 4);
+    skids.fillRect(-32, 16, 3, 10);
+    skids.fillRect(28, 16, 3, 10);
+
+    // --- body (middle layer) ---
+    const body = this.add.graphics();
+    // tail boom
+    body.fillStyle(0x1a5a2a, 1);
+    body.fillRect(28, -5, 52, 10);
+    body.fillStyle(0x226632, 1);
+    body.fillRect(28, -5, 52, 3);
+    // tail housing
+    body.fillStyle(0x1a5a2a, 1);
+    body.fillRoundedRect(72, -12, 18, 24, 4);
+    // tail fin
+    body.fillStyle(0x226632, 1);
+    body.fillTriangle(78, -12, 90, -12, 84, -28);
+    // tail rotor blade
+    body.fillStyle(0x333333, 1);
+    body.fillRect(88, -24, 2, 18);
+    // fuselage — main body
+    body.fillStyle(0x1a5a2a, 1);
+    body.fillRoundedRect(-42, -22, 84, 44, 14);
+    // top highlight
+    body.fillStyle(0x226632, 1);
+    body.fillRoundedRect(-40, -22, 80, 12, 10);
+    // belly shadow
+    body.fillStyle(0x144a20, 1);
+    body.fillRoundedRect(-40, 8, 80, 14, 10);
+    // cockpit windshield
+    body.fillStyle(0x88bbdd, 0.85);
+    body.fillRoundedRect(-34, -18, 44, 22, 8);
+    body.fillStyle(0xaaddee, 0.5);
+    body.fillRoundedRect(-32, -17, 20, 10, 5);
+    // door outline
+    body.lineStyle(1.5, 0x144a20, 0.6);
+    body.strokeRoundedRect(8, -14, 24, 28, 4);
+    // side stripe
+    body.fillStyle(0xeeee44, 0.8);
+    body.fillRect(-20, -1, 48, 3);
+    // rotor mast sticking up from the body
+    body.fillStyle(0x444444, 1);
+    body.fillRect(-2, -30, 4, 8);
+
+    // --- rotor (top layer, positioned at y=-30 so rotation spins in-place) ---
+    const rotor = this.add.graphics();
+    rotor.setPosition(0, -30);
+    // rotor hub
+    rotor.fillStyle(0x555555, 1);
+    rotor.fillCircle(0, 0, 5);
+    // rotor blades — drawn centered at (0,0) so rotation spins them in place
+    rotor.lineStyle(4, 0x222222, 1);
+    rotor.beginPath();
+    rotor.moveTo(-48, 0);
+    rotor.lineTo(48, 0);
+    rotor.strokePath();
+    rotor.lineStyle(2, 0x333333, 0.6);
+    rotor.beginPath();
+    rotor.moveTo(-30, 0);
+    rotor.lineTo(30, 0);
+    rotor.strokePath();
+
+    this.heliRotor = rotor;
+    // container children render in order: skids (bottom) → body → rotor (top)
+    return this.add.container(0, 0, [skids, body, rotor]);
+  }
+
+  /** Summon the helicopter — full cinematic sequence.
+   *  The heli descends from high above the pad straight down, lands softly,
+   *  then unloads the agent. */
+  private triggerHelicopter(): void {
+    this.heliActive = true;
+    this.store.toast("Helicopter summoned! Agent incoming...");
+    this.world?.audio.uiClick();
+
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+
+    // create helicopter high above the pad (same x, well above)
+    const heli = this.drawHelicopter();
+    heli.setPosition(padCx, padCy - 600);
+    heli.setDepth(-0.4);
+    heli.setAlpha(0);
+    this.heliContainer = heli;
+
+    // fade in as it descends from the sky
+    this.tweens.add({
+      targets: heli,
+      alpha: 1,
+      duration: 1500,
+      ease: "Cubic.in",
+    });
+
+    // descend slowly to the pad — soft landing with ease-out at the end
+    this.tweens.add({
+      targets: heli,
+      y: padCy,
+      duration: 5500,
+      ease: "Cubic.out",
+      onComplete: () => {
+        // landed — pause for rotor spin-down, then unload agent
+        this.time.delayedCall(1000, () => this.heliUnload());
+      },
+    });
+  }
+
+  /** Agent exits helicopter and walks to elevator entrance on the pad. */
+  private heliUnload(): void {
+    if (!this.heliContainer) return;
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+    const elevX = this.padFrontPx.x;
+    const elevY = this.padFrontPx.y;
+
+    const agentKey = `char-${Math.floor(Math.random() * 8)}`;
+    const sprite = this.add
+      .sprite(0, 0, agentKey, 6)
+      .setOrigin(0.5, 1)
+      .setScale(0.5);
+    const label = this.add
+      .text(0, -108, "AGENT", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "16px",
+        color: "#1d2126",
+        stroke: "#f4f6f8",
+        strokeThickness: 3,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.7);
+
+    const agent = this.add.container(padCx + 30, padCy, [sprite, label]);
+    agent.setDepth(-0.3);
+    this.heliAgent = agent;
+    sprite.play(`${agentKey}-walk-down`);
+
+    // walk to elevator entrance on pad
+    this.tweens.add({
+      targets: agent,
+      x: elevX,
+      y: elevY,
+      duration: 1200,
+      ease: "Quad.inOut",
+      onComplete: () => {
+        this.heliElevatorDescend(agentKey, sprite);
+      },
+    });
+  }
+
+  /** Elevator descends from the helipad to the office interior. */
+  private heliElevatorDescend(
+    agentKey: string,
+    sprite: Phaser.GameObjects.Sprite,
+  ): void {
+    const elevX = this.padFrontPx.x;
+    const elevStartY = this.padFrontPx.y;
+    // elevator exit inside the office — tile {x:14, y:3}
+    const exitX = 14 * TILE_PX + 32;
+    const exitY = 3 * TILE_PX + 52;
+
+    // draw elevator platform
+    const elev = this.add.graphics().setDepth(5);
+    elev.fillStyle(0x000000, 0.3);
+    elev.fillRoundedRect(elevX - 32, elevStartY - 32, 64, 64, 6);
+    elev.fillStyle(0x444450, 1);
+    elev.fillRoundedRect(elevX - 30, elevStartY - 30, 60, 60, 5);
+    elev.fillStyle(0x555560, 1);
+    elev.fillRoundedRect(elevX - 28, elevStartY - 28, 56, 56, 4);
+    // door seam
+    elev.lineStyle(2, 0x222228, 0.8);
+    elev.beginPath();
+    elev.moveTo(elevX, elevStartY - 28);
+    elev.lineTo(elevX, elevStartY + 28);
+    elev.strokePath();
+    // indicator lights
+    elev.fillStyle(0xffcc44, 1);
+    elev.fillCircle(elevX - 20, elevStartY - 22, 2);
+    elev.fillCircle(elevX + 20, elevStartY - 22, 2);
+    this.heliElevatorGfx = elev;
+
+    // hide agent inside elevator
+    if (this.heliAgent) this.heliAgent.setVisible(false);
+
+    // descend
+    this.tweens.add({
+      targets: elev,
+      y: exitY - elevStartY,
+      duration: 2000,
+      ease: "Cubic.inOut",
+      onComplete: () => {
+        // agent emerges from elevator
+        if (this.heliAgent) {
+          this.heliAgent.setPosition(exitX, exitY);
+          this.heliAgent.setVisible(true);
+          this.heliAgent.setDepth(10 + exitY);
+          sprite.play(`${agentKey}-walk-down`);
+
+          // walk to centre of office and idle
+          const finalX = 14 * TILE_PX + 32;
+          const finalY = 8 * TILE_PX + 52;
+          this.tweens.add({
+            targets: this.heliAgent,
+            x: finalX,
+            y: finalY,
+            duration: 1500,
+            ease: "Quad.inOut",
+            onComplete: () => {
+              sprite.play(`${agentKey}-idle-down`);
+              this.heliAgent?.setDepth(10 + finalY);
+            },
+          });
+        }
+        // remove elevator visual
+        this.time.delayedCall(600, () => {
+          elev.destroy();
+          this.heliElevatorGfx = null;
+        });
+        // helicopter takes off simultaneously
+        this.heliTakeoff();
+      },
+    });
+  }
+
+  /** Helicopter lifts off and flies away. */
+  private heliTakeoff(): void {
+    if (!this.heliContainer) return;
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+
+    // lift off straight up slowly, then fly away to the side
+    this.tweens.add({
+      targets: this.heliContainer,
+      y: padCy - 250,
+      duration: 2000,
+      ease: "Cubic.out",
+      onComplete: () => {
+        if (!this.heliContainer) return;
+        this.tweens.add({
+          targets: this.heliContainer,
+          x: padCx + 500,
+          y: padCy - 500,
+          duration: 3000,
+          ease: "Cubic.in",
+          onComplete: () => {
+            this.heliContainer?.destroy();
+            this.heliContainer = null;
+            this.heliRotor = null;
+          },
+        });
+      },
+    });
+
+    // agent fades out after lingering in the office for 10s
+    this.time.delayedCall(10000, () => {
+      if (this.heliAgent) {
+        this.tweens.add({
+          targets: this.heliAgent,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => {
+            this.heliAgent?.destroy();
+            this.heliAgent = null;
+            this.heliActive = false;
+          },
+        });
+      } else {
+        this.heliActive = false;
+      }
+    });
+  }
+
+  /** Animate helicopter rotor while active. */
+  private updateHelicopter(time: number): void {
+    if (this.heliRotor) {
+      this.heliRotor.rotation = time * 0.04;
+    }
   }
 
   /** Draw a kanban-style task board on the front wall of the office. */
@@ -1460,12 +1837,12 @@ export class OfficeScene extends Phaser.Scene {
 
     const tx = this.trophyTile.x * TILE_PX + 32;
     const ty = this.trophyTile.y * TILE_PX + 8;
-    const cw = 80;  // case width
-    const ch = 96;  // case height
-    const cols = 4;
-    const rows = 3;
-    const slotW = 16;
-    const slotH = 24;
+    const cw = 96;  // case width
+    const ch = 120; // case height
+    const cols = 6;
+    const rows = 4;
+    const slotW = 12;
+    const slotH = 20;
     const gapX = (cw - cols * slotW) / (cols + 1);
     const gapY = (ch - rows * slotH) / (rows + 1);
 
@@ -1486,34 +1863,50 @@ export class OfficeScene extends Phaser.Scene {
       g.fillRect(tx - cw / 2 + 2, sy - 1, cw - 4, 3);
     }
 
-    // draw trophy slots — filled or empty
+    // draw trophy slots — proportional fill based on unlocked/total
     const unlocked = achievements.getUnlockedIds();
     const allAch = ACHIEVEMENTS.filter((a) => !a.comingSoon);
+    const unlockedAch = allAch.filter((a) => unlocked.has(a.id));
+    const totalSlots = cols * rows;
+    const filledSlots = Math.round(totalSlots * unlockedAch.length / allAch.length);
+
+    // tier-based trophy colors — rarer tiers get more prestigious metals
+    const tierColors: Record<string, number> = {
+      "First Steps":   0xcd7f32, // bronze
+      "Agent Mastery": 0xc0c0c0, // silver
+      "Explorer":      0xffd700, // gold
+      "Adventurer":    0xff8c00, // amber
+      "Warrior":       0xb22222, // ruby red
+      "Ghosts":        0x9370db, // amethyst
+      "Secret":        0x00ced1, // teal
+    };
+
+    // fill from bottom row upward (like a real trophy case)
     let idx = 0;
-    for (let row = 0; row < rows; row++) {
+    for (let row = rows - 1; row >= 0; row--) {
       for (let col = 0; col < cols; col++) {
-        if (idx >= allAch.length) break;
         const sx = tx - cw / 2 + gapX + col * (slotW + gapX);
         const sy = ty + gapY + row * (slotH + gapY);
-        const ach = allAch[idx];
-        const isUnlocked = unlocked.has(ach.id);
+        const isFilled = idx < filledSlots;
 
-        if (isUnlocked) {
-          // filled slot — small trophy cup
-          g.fillStyle(0xffd700, 1);
-          g.fillCircle(sx + slotW / 2, sy + 8, 5);
-          g.fillRect(sx + slotW / 2 - 3, sy + 12, 6, 5);
-          g.fillRect(sx + slotW / 2 - 5, sy + 17, 10, 3);
+        if (isFilled) {
+          const ach = unlockedAch[idx];
+          const color = ach ? (tierColors[ach.tier] ?? 0xffd700) : 0xffd700;
+          // trophy cup
+          g.fillStyle(color, 1);
+          g.fillCircle(sx + slotW / 2, sy + 6, 4);
+          g.fillRect(sx + slotW / 2 - 2, sy + 9, 4, 4);
+          g.fillRect(sx + slotW / 2 - 4, sy + 13, 8, 2);
           // sparkle
           g.fillStyle(0xffffff, 0.5);
-          g.fillCircle(sx + slotW / 2 + 3, sy + 6, 1.5);
+          g.fillCircle(sx + slotW / 2 + 2, sy + 5, 1);
         } else {
           // empty cavity — dark recessed slot
           g.fillStyle(0x0a0808, 0.6);
           g.fillRoundedRect(sx, sy, slotW, slotH, 2);
           // subtle dust
           g.fillStyle(0x2a2a2a, 0.3);
-          g.fillCircle(sx + slotW / 2, sy + slotH / 2, 2);
+          g.fillCircle(sx + slotW / 2, sy + slotH / 2, 1.5);
         }
         idx++;
       }
@@ -1681,9 +2074,15 @@ export class OfficeScene extends Phaser.Scene {
   private refreshBossTexture(): void {
     const ap = this.store.player?.appearance;
     if (ap) {
-      this.playerTexKey = "boss-custom";
-      generateCharTexture(this, this.playerTexKey, ap);
-      this.ensureCharAnimations(this.playerTexKey);
+      const key = "boss-custom";
+      // Only regenerate if the texture doesn't exist yet or appearance changed
+      const existing = this.textures.get(key);
+      if (!existing || (this as any)._lastBossAp !== ap) {
+        (this as any)._lastBossAp = ap;
+        generateCharTexture(this, key, ap);
+        this.ensureCharAnimations(key);
+      }
+      this.playerTexKey = key;
     } else {
       this.playerTexKey = "boss";
     }
@@ -1759,6 +2158,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   update(time: number, dt: number): void {
+    // cap dt so a lag spike (chunk gen, GC, tab switch) doesn't cause a
+    // teleport-length step that tunnels through collision
+    dt = Math.min(dt, 100);
     // typing in a HUD field? the game keyboard is yours, not the boss's
     const active = document.activeElement?.tagName;
     const typing = active === "INPUT" || active === "TEXTAREA" || active === "SELECT";
@@ -1794,21 +2196,28 @@ export class OfficeScene extends Phaser.Scene {
     const stepX = vx * speed * (dt / 1000);
     const stepY = vy * speed * (dt / 1000);
 
-    if (outside) {
-      // world tile collision
-      if (stepX !== 0 && this.world.canWalk(this.player.x + stepX, this.player.y)) {
-        this.player.x += stepX;
-      }
-      if (stepY !== 0 && this.world.canWalk(this.player.x, this.player.y + stepY)) {
-        this.player.y += stepY;
-      }
-    } else {
-      // office collision via the walkability grid
-      if (stepX !== 0 && this.canWalkOffice(this.player.x + stepX, this.player.y)) {
-        this.player.x += stepX;
-      }
-      if (stepY !== 0 && this.canWalkOffice(this.player.x, this.player.y + stepY)) {
-        this.player.y += stepY;
+    // Sub-step movement to prevent tunneling through walls on large frames.
+    // Collision checks only verify the endpoint, so a single big step can
+    // skip past walls entirely. Break it into sub-steps of at most half a tile.
+    const maxStep = TILE_PX * 0.5;
+    const subSteps = Math.max(1, Math.ceil(Math.max(Math.abs(stepX), Math.abs(stepY)) / maxStep));
+    const subX = stepX / subSteps;
+    const subY = stepY / subSteps;
+    for (let i = 0; i < subSteps; i++) {
+      if (outside) {
+        if (subX !== 0 && this.world.canWalk(this.player.x + subX, this.player.y)) {
+          this.player.x += subX;
+        }
+        if (subY !== 0 && this.world.canWalk(this.player.x, this.player.y + subY)) {
+          this.player.y += subY;
+        }
+      } else {
+        if (subX !== 0 && this.canWalkOffice(this.player.x + subX, this.player.y)) {
+          this.player.x += subX;
+        }
+        if (subY !== 0 && this.canWalkOffice(this.player.x, this.player.y + subY)) {
+          this.player.y += subY;
+        }
       }
     }
 
@@ -1912,6 +2321,9 @@ export class OfficeScene extends Phaser.Scene {
     }
     }
 
+    // --- helicopter rotor ---
+    this.updateHelicopter(time);
+
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
     this.yuki?.update(time, dt, false, this.player.x, this.player.y);
@@ -1928,7 +2340,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- world layer: chunks, ghosts, compass, recruit ---
     this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
-    this.world.update(time, dt, this.player.x, this.player.y, ePressed);
+    this.world.update(time, dt, this.player.x, this.player.y, ePressed, vx, vy);
 
     // Q: teleport back to office when outside
     if (outside && Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
@@ -1991,6 +2403,7 @@ export class OfficeScene extends Phaser.Scene {
       this.filingHint.setVisible(false);
       this.plantHint.setVisible(false);
       this.mailboxHint.setVisible(false);
+      this.redButtonHint.setVisible(false);
     }
 
     // mailbox: new mail arrives on timer
@@ -2033,7 +2446,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     // trophy case & hall of fame proximity hints — skip when outside
     if (!outside) {
-      const trophyPx2 = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
+      const trophyPx2 = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 68 };
       const trophyDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx2.x, trophyPx2.y);
       if (trophyDist2 < 120 && !this.store.achievementsOpen) {
         this.trophyHint

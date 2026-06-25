@@ -18,8 +18,8 @@ import type {
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID, ACCENT_COLOR_OPTIONS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
-import { runClaude } from "./providers/claude.js";
-import { runCodex } from "./providers/codex.js";
+import { runCline } from "./providers/cline.js";
+import { clearAgentMemory } from "./providers/cline.js";
 import type { SessionLogger } from "./logger.js";
 import type { SaveFile, SaveState } from "./persistence.js";
 
@@ -149,25 +149,16 @@ export class AgentManager {
     }
     if (saved?.settings) {
       this.setSettings(saved.settings, false);
-    } else if (process.env.AGENT_PERMISSION_MODE === "acceptEdits") {
-      this.settings.claude.permissionMode = "acceptEdits";
     }
 
     this.ensureYuki();
   }
 
   setSettings(s: GameSettings, announce = true): void {
-    const sandboxModes = ["read-only", "workspace-write", "danger-full-access"] as const;
     this.settings = {
-      claude: {
-        permissionMode:
-          s?.claude?.permissionMode === "acceptEdits" ? "acceptEdits" : "bypassPermissions",
-        maxTurns: Math.min(500, Math.max(1, Math.round(Number(s?.claude?.maxTurns) || 60))),
-      },
-      codex: {
-        sandboxMode: sandboxModes.includes(s?.codex?.sandboxMode)
-          ? s.codex.sandboxMode
-          : "workspace-write",
+      cline: {
+        maxIterations: Math.min(500, Math.max(1, Math.round(Number(s?.cline?.maxIterations) || 60))),
+        autoApproveCommands: s?.cline?.autoApproveCommands !== false,
       },
       game: {
         idleWander: s?.game?.idleWander !== false,
@@ -188,8 +179,8 @@ export class AgentManager {
       id: YUKI_ID,
       name: "Yuki",
       title: YUKI_TITLE,
-      provider: "claude",
-      model: "claude-sonnet-4-6",
+      provider: "cline",
+      model: "claude-sonnet-4-20250514",
       status: "idle",
       task: null,
       deskIndex: -1,
@@ -360,6 +351,7 @@ export class AgentManager {
     }
     rt.logs = [];
     rt.info.sessionId = null;
+    clearAgentMemory(agentId);
     this.session.record("clear", { agentId: rt.info.id, agentName: rt.info.name });
     this.persist();
     this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
@@ -381,6 +373,7 @@ export class AgentManager {
     for (const rt of free) {
       rt.logs = [];
       rt.info.sessionId = null;
+      clearAgentMemory(rt.info.id);
       this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
       this.log(rt, "status", `Fresh start — chat cleared and memory wiped.`);
     }
@@ -631,7 +624,7 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
-    const runner: ProviderRunner = rt.info.provider === "claude" ? runClaude : runCodex;
+    const runner: ProviderRunner = runCline;
     const slug = this.slugFor(rt);
     const systemPrompt = this.buildSystemPrompt(rt);
     const isManager = rt.info.role === "manager";
@@ -649,6 +642,7 @@ export class AgentManager {
         systemPrompt,
         abort,
         settings: this.settings,
+        agentId: rt.info.id,
         sessionId: rt.info.sessionId ?? null,
         onSession: (id) => {
           if (rt.info.sessionId !== id) {
@@ -820,7 +814,7 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
-    const runner: ProviderRunner = rt.info.provider === "claude" ? runClaude : runCodex;
+    const runner: ProviderRunner = runCline;
     const prompt = [
       `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
       `This is NOT a work task — do not use tools or touch files.`,
@@ -835,6 +829,7 @@ export class AgentManager {
         systemPrompt: this.buildSystemPrompt(rt),
         abort,
         settings: this.settings,
+        agentId: rt.info.id,
         sessionId: rt.info.sessionId ?? null,
         onSession: (id) => {
           if (rt.info.sessionId !== id) {

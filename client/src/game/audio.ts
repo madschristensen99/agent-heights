@@ -166,7 +166,12 @@ export class AudioSystem {
     this.noise(0.04, 0.08, 2000, 2);
   }
 
+  private lastGrowlTime = 0;
+
   creatureGrowl(): void {
+    const now = performance.now();
+    if (now - this.lastGrowlTime < 200) return;
+    this.lastGrowlTime = now;
     this.sweep(200, 80, 0.4, "sawtooth", 0.2);
   }
 

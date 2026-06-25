@@ -17,11 +17,11 @@ system, how memory works, and where every byte of agent data lives.
 │        └── client/src/store.ts ───┘      │   │  roster, task lifecycle,        │
 │            (mirror of state)             │   │  status, logs, persistence      │
 └───────────────────────────────────┘      │   ▼                                 │
-                                           │  server/providers/{claude,codex}.ts │
+                                           │  server/providers/cline.ts          │
                                            │   │ async generators of TaskEvents  │
                                            └───┼─────────────────────────────────┘
                                                ▼
-                                  @anthropic-ai/claude-agent-sdk  /  @openai/codex-sdk
+                                  @cline/sdk  →  Swarms API
                                                │
                                                ▼
                                      ag/workspace/<slug>-<id>/   (real files)
@@ -45,7 +45,7 @@ An agent is three things glued together by one record:
    | --- | --- |
    | `id` | 8-char uuid slice, stable for the agent's lifetime |
    | `name`, `title` | display name + random job title ("Bug Whisperer", …) |
-   | `provider` | `"claude"` or `"codex"` |
+   | `provider` | `"cline"` |
    | `model` | model id passed verbatim to the SDK |
    | `status` | `idle → thinking → working → done / error` (see §4) |
    | `task` | the currently/last assigned task text |
@@ -55,8 +55,8 @@ An agent is three things glued together by one record:
    | `sessionId` | **the agent's memory** — provider conversation id (§5) |
    | `tasksDone` | completed-task counter |
 
-2. **A conversation with a model** — one continuous Claude session or Codex
-   thread, resumed for every task (§5).
+2. **A conversation with a model** — one continuous Cline Agent instance with
+   message history, resumed for every task (§5).
 
 3. **A folder on disk** — `ag/workspace/<name-slug>-<id>/`, created at hire.
    Every task runs with `cwd` set there; whatever files the agent writes land
@@ -129,30 +129,28 @@ The thinking→working flip happens on the *first event of any kind* — it's a
 
 ## 5. Memory — how agents remember
 
-**Mechanism: provider-native conversation resume.** There is no custom vector
-store or summary file; an agent's memory *is* its one long conversation.
+**Mechanism: in-memory message history with session restore.** There is no
+custom vector store or summary file; an agent's memory *is* its one long
+conversation.
 
-- **Claude** (`server/providers/claude.ts`): every `query()` passes
-  `resume: sessionId`. The Claude Agent SDK emits a `system/init` message
-  containing `session_id`; the runner reports it through `ctx.onSession`, and
-  the manager stores it on `AgentInfo.sessionId` (persisted immediately).
-  First task: `sessionId` is `null` → fresh session. Every later task resumes
-  the same session, so the model's context contains **every previous order and
-  everything the agent said and did** (until the SDK's own context compaction
-  summarizes very old turns).
-- **Codex** (`server/providers/codex.ts`): same idea with
-  `codex.resumeThread(threadId)` / `thread.id`. On resumed threads the prompt
-  is just `"New task from the boss: …"` — the system prompt is only sent on
-  the first task, since the thread already has it.
+- **Cline** (`server/providers/cline.ts`): each agent gets a persistent
+  `AgentRuntime` instance keyed by `agentId`. Messages are stored in an
+  in-memory `Map<agentId, AgentMessage[]>`. On every task, the existing
+  message history is passed to `agent.restore()` so the model's context
+  contains **every previous order and everything the agent said and did**.
+  First task: no history → fresh conversation. Every later task resumes the
+  same conversation. The `sessionId` on `AgentInfo` tracks the run for
+  persistence; on server restart, the message store is rebuilt from the
+  saved log entries.
 
 Properties that follow from this design:
 
 - **Broadcast orders are remembered** — `assign_all` calls the same `assign()`
   per agent, so an "everyone do X" lands in each agent's conversation
   identically to a personal order.
-- **Memory survives restarts** — `sessionId` lives in `ag/save.json`, and the
-  conversation transcripts live in the Claude/Codex CLI's own storage
-  (`~/.claude`, `~/.codex`). Restarting the game server loses nothing.
+- **Memory survives restarts** — `sessionId` lives in `ag/save.json`, and
+  message history is persisted in the save file. Restarting the game server
+  loses nothing.
 - **Memory is per-agent and private.** Agents do not see each other's
   conversations. The only shared channel is the boss relaying things.
 - **Stop ≠ amnesia** — an aborted task still happened inside the conversation;
@@ -162,8 +160,7 @@ Properties that follow from this design:
   "Couldn't resume memory — starting a fresh conversation next task", and the
   agent keeps functioning (with reset memory) instead of erroring forever.
 - **Fire = permanent memory loss** for the game (the roster entry holding
-  `sessionId` is deleted), though the raw transcript still exists in the CLI
-  storage if you ever need it forensically.
+  `sessionId` is deleted and the in-memory message store is cleared).
 
 What agents do **not** remember: anything that happened in the game outside
 their conversation (other agents' work, huddles, your walking around).
@@ -178,21 +175,20 @@ their conversation (other agents' work, huddles, your walking around).
 type ProviderRunner = (task: string, ctx: RunContext) => AsyncGenerator<TaskEvent>;
 ```
 
-| | Claude | Codex |
-| --- | --- | --- |
-| SDK | `@anthropic-ai/claude-agent-sdk` `query()` | `@openai/codex-sdk` threads |
-| System prompt | `claude_code` preset + append | prepended to the first prompt |
-| Tools | `Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch, TodoWrite` | whatever the Codex CLI allows |
-| Permissions | `settings.claude.permissionMode` (`bypassPermissions` \| `acceptEdits`) | `settings.codex.sandboxMode` (`read-only` \| `workspace-write` \| `danger-full-access`) |
-| Turn cap | `settings.claude.maxTurns` | Codex-internal |
-| Memory | `resume:` session id | `resumeThread(id)` |
-| Abort | `abortController` option | checked between events |
-| Event mapping | text blocks → `text`, `tool_use` → `tool`, result → `result`/`error` (result text deduped against the last assistant message) | `agent_message` → `text`, `command_execution`/`file_change` → `tool`, `turn.completed` → `result` |
+| | Cline |
+| --- | --- |
+| SDK | `@cline/sdk` `AgentRuntime` via Swarms API |
+| System prompt | composed prompt prepended to the first message |
+| Tools | `read_files`, `write_files`, `list_files`, `run_commands`, `submit_and_exit` (custom local tools) |
+| Permissions | `settings.cline.autoApproveCommands` (auto-approve shell commands or require manual confirmation) |
+| Turn cap | `settings.cline.maxIterations` |
+| Memory | in-memory message store + `agent.restore()` |
+| Abort | `agent.abort()` via `AbortController` |
+| Event mapping | `assistant-text-delta` → `text`, `tool-started`/`tool-finished` → `tool`, `run-finished` → `result`, `run-failed` → `error` |
 
 To add a provider: implement the generator, map its native events to
-`TaskEvent`s, wire it into the runner pick in `manager.ts`, add its models to
-`shared/types.ts`, and report a conversation id through `ctx.onSession` if it
-supports resume.
+`TaskEvent`s, wire it into the runner pick in `manager.ts`, and add its models
+to `shared/types.ts`.
 
 Settings are read **per run** — changing them in the ⚙ SETTINGS modal affects
 each agent's *next* task, not one already in flight.
@@ -230,7 +226,6 @@ never decides anything about tasks; it only animates what the store says.
 | `ag/save.json` | **the** save: player, settings, full roster (incl. `sessionId`s), last 500 log entries per agent | `server/persistence.ts`, debounced 400 ms, reloaded on boot |
 | `ag/logs/<ISO-time>-<uuid>.json` | append-only transcript of one server session: every hire/assign/status/log/fire/settings event with timestamps | `server/logger.ts`, debounced 300 ms |
 | `ag/workspace/<slug>-<id>/` | the agent's real working directory | the agents themselves |
-| `~/.claude` / `~/.codex` | provider-side conversation transcripts (the actual memory payload) | the SDKs/CLIs |
 | browser `localStorage` (`agent-hq-player`) | your boss name + workspace (skips onboarding) | the HUD |
 
 **Export**: ⚙ SETTINGS → "EXPORT CHATS & LOGS" downloads
@@ -239,8 +234,9 @@ built from the client store (which mirrors the server's save state).
 
 **Restart behavior**: on boot the server reloads `ag/save.json`. Agents that
 were mid-task come back `idle` with a "task was interrupted" log line — the
-SDK process died with the server — but their memory (`sessionId`) is intact,
-so you can re-assign and they'll remember the interrupted order was given.
+agent process died with the server — but their memory (`sessionId` + saved
+messages) is intact, so you can re-assign and they'll remember the
+interrupted order was given.
 
 ---
 
@@ -262,11 +258,9 @@ reconnect (exponential backoff, 0.5 s → 8 s).
 
 Agents are real programs with real tool access:
 
-- Claude agents default to `bypassPermissions`: they can run **arbitrary shell
-  commands unattended**. The workspace folder is a *convention* enforced by
-  prompt (`cwd` + instructions), not an OS sandbox. Switch to `acceptEdits` in
-  Settings for file-edit-only behavior (Bash gets auto-denied headlessly).
-- Codex agents run under the Codex CLI's own sandbox (`workspace-write` by
-  default), which *is* enforced.
+- Agents can run **arbitrary shell commands** inside their workspace folder.
+  The workspace folder is a *convention* enforced by prompt (`cwd` +
+  instructions), not an OS sandbox. Disable `autoApproveCommands` in Settings
+  if you want manual confirmation before each command.
 - Treat `ag/workspace/` contents as untrusted output; don't point agents at
   secrets.

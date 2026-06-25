@@ -11,6 +11,8 @@ export interface RunContext {
   systemPrompt: string;
   abort: AbortController;
   settings: GameSettings;
+  /** Agent id — used to key persistent agent instances. */
+  agentId: string;
   /** Conversation to resume (null on the agent's first task). */
   sessionId: string | null;
   /** Called with the provider's conversation id so it can be persisted. */

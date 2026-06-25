@@ -1,7 +1,7 @@
 import type { Net } from "../net";
 import type { FeedItem, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance } from "../../../shared/types";
-import { CLAUDE_MODELS, CODEX_MODELS, OFFICE_THEMES, YUKI_ID,
+import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, DEFAULT_APPEARANCE,
 } from "../../../shared/types";
@@ -507,25 +507,13 @@ export class Hud {
           <button class="tab" data-tab="data">DATA</button>
         </div>
         <div class="tabpanel" data-panel="agents">
-          <div class="sec">CLAUDE CODE</div>
-          <label>PERMISSION MODE
-            <select id="s-perm">
-              <option value="bypassPermissions" ${s.claude.permissionMode === "bypassPermissions" ? "selected" : ""}>
-                bypassPermissions — run shell commands unattended</option>
-              <option value="acceptEdits" ${s.claude.permissionMode === "acceptEdits" ? "selected" : ""}>
-                acceptEdits — file edits only, no unapproved Bash</option>
-            </select>
+          <div class="sec">CLINE AGENT</div>
+          <label>MAX ITERATIONS PER TASK
+            <input id="s-turns" type="number" min="1" max="500" value="${s.cline.maxIterations}" />
           </label>
-          <label>MAX TURNS PER TASK
-            <input id="s-turns" type="number" min="1" max="500" value="${s.claude.maxTurns}" />
-          </label>
-          <div class="sec">CODEX</div>
-          <label>SANDBOX MODE
-            <select id="s-sandbox">
-              <option value="read-only" ${s.codex.sandboxMode === "read-only" ? "selected" : ""}>read-only</option>
-              <option value="workspace-write" ${s.codex.sandboxMode === "workspace-write" ? "selected" : ""}>workspace-write</option>
-              <option value="danger-full-access" ${s.codex.sandboxMode === "danger-full-access" ? "selected" : ""}>danger-full-access</option>
-            </select>
+          <label class="chk">
+            <input type="checkbox" id="s-auto-cmd" ${s.cline.autoApproveCommands ? "checked" : ""} />
+            <span>AUTO-APPROVE SHELL COMMANDS (unattended execution)</span>
           </label>
         </div>
         <div class="tabpanel" data-panel="game" hidden>
@@ -552,8 +540,7 @@ export class Hud {
             <button class="btn" id="s-board">📋 TASK BOARD</button>
           </div>
           <div class="row">
-            <button class="btn" id="s-quick-claude">⚡ INSTANT CLAUDE WORKER</button>
-            <button class="btn" id="s-quick-codex">⚡ INSTANT CODEX WORKER</button>
+            <button class="btn" id="s-quick-cline">⚡ INSTANT AGENT</button>
           </div>
           <div class="sec">KEYBOARD</div>
           <div class="controls">
@@ -608,12 +595,8 @@ export class Hud {
       this.store.toggleBoard();
       modal.hidden = true;
     });
-    document.getElementById("s-quick-claude")!.addEventListener("click", () => {
-      this.quickHire("claude");
-      modal.hidden = true;
-    });
-    document.getElementById("s-quick-codex")!.addEventListener("click", () => {
-      this.quickHire("codex");
+    document.getElementById("s-quick-cline")!.addEventListener("click", () => {
+      this.quickHire("cline");
       modal.hidden = true;
     });
     document.getElementById("s-cancel")!.addEventListener("click", () => (modal.hidden = true));
@@ -621,14 +604,9 @@ export class Hud {
       this.net.send({
         type: "set_settings",
         settings: {
-          claude: {
-            permissionMode: (document.getElementById("s-perm") as HTMLSelectElement)
-              .value as "bypassPermissions" | "acceptEdits",
-            maxTurns: Number((document.getElementById("s-turns") as HTMLInputElement).value) || 60,
-          },
-          codex: {
-            sandboxMode: (document.getElementById("s-sandbox") as HTMLSelectElement)
-              .value as "read-only" | "workspace-write" | "danger-full-access",
+          cline: {
+            maxIterations: Number((document.getElementById("s-turns") as HTMLInputElement).value) || 60,
+            autoApproveCommands: (document.getElementById("s-auto-cmd") as HTMLInputElement).checked,
           },
           game: {
             idleWander: (document.getElementById("s-wander") as HTMLInputElement).checked,
@@ -661,7 +639,7 @@ export class Hud {
   /** One-click hire: random name, default model, worker role. */
   private quickHire(provider: Provider): void {
     const name = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
-    const models = provider === "claude" ? CLAUDE_MODELS : CODEX_MODELS;
+    const models = SWARMS_MODELS;
     this.net.send({
       type: "hire",
       name,
@@ -670,7 +648,7 @@ export class Hud {
       systemPrompt: "",
       role: "worker",
     });
-    this.toast(`${name} is on the way in (${provider}, ${models[0].label}).`);
+    this.toast(`${name} is on the way in (${models[0].label}).`);
   }
 
   /** Download everything the office knows as one JSON file. */
@@ -697,8 +675,8 @@ export class Hud {
   private openHireModal(): void {
     const modal = document.getElementById("hire-modal")!;
     const suggested = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
-    const modelOptions = (provider: Provider) =>
-      (provider === "claude" ? CLAUDE_MODELS : CODEX_MODELS)
+    const modelOptions = () =>
+      SWARMS_MODELS
         .map((m) => `<option value="${m.id}">${m.label}</option>`)
         .join("");
 
@@ -720,13 +698,7 @@ export class Hud {
                 <option value="manager">Manager — splits big goals across the team</option>
               </select>
             </label>
-            <label>PROVIDER
-              <select id="h-provider">
-                <option value="claude">Claude (Agent SDK)</option>
-                <option value="codex">Codex (OpenAI)</option>
-              </select>
-            </label>
-            <label>MODEL <select id="h-model">${modelOptions("claude")}</select></label>
+            <label>MODEL <select id="h-model">${modelOptions()}</select></label>
             <label>SYSTEM PROMPT <span class="opt">(optional)</span>
               <textarea id="h-prompt" rows="4"
                 placeholder="Standing instructions for this agent, e.g. 'You are a senior TypeScript reviewer. Always write tests first.'"></textarea>
@@ -741,11 +713,7 @@ export class Hud {
     `;
     builder.mount();
 
-    const providerSel = document.getElementById("h-provider") as HTMLSelectElement;
     const modelSel = document.getElementById("h-model") as HTMLSelectElement;
-    providerSel.addEventListener("change", () => {
-      modelSel.innerHTML = modelOptions(providerSel.value as Provider);
-    });
     document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
     document.getElementById("h-ok")!.addEventListener("click", () => {
       const name = (document.getElementById("h-name") as HTMLInputElement).value.trim();
@@ -753,7 +721,7 @@ export class Hud {
       this.net.send({
         type: "hire",
         name,
-        provider: providerSel.value as Provider,
+        provider: "cline",
         model: modelSel.value,
         systemPrompt: (document.getElementById("h-prompt") as HTMLTextAreaElement).value,
         role: (document.getElementById("h-role") as HTMLSelectElement).value as AgentRole,
@@ -1024,12 +992,14 @@ export class Hud {
     const total = achievements.getTotalCount();
     const count = achievements.getUnlockedCount();
     let html = `<div class="ach-modal-content">`;
+    html += `<div class="ach-modal-sticky">`;
     html += `<div class="ach-modal-header">`;
     html += `<span class="ach-modal-title">🏆 ACHIEVEMENTS</span>`;
     html += `<span class="ach-modal-progress">${count} / ${total}</span>`;
     html += `<button class="x" id="ach-close">✕</button>`;
     html += `</div>`;
     html += `<div class="ach-modal-progress-bar"><div class="ach-modal-progress-fill" style="width:${(count / total) * 100}%"></div></div>`;
+    html += `</div>`;
     for (const [tier, items] of Object.entries(tiers)) {
       html += `<div class="ach-tier-name">${tier}</div>`;
       html += `<div class="ach-tier-grid">`;

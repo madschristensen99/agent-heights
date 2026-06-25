@@ -3215,11 +3215,11 @@ const ALL_PROC_KEYS = [
 ];
 
 /**
- * Generate all procedural textures and register them with the Phaser texture manager.
- * @param force If true, remove existing textures before recreating (use when
- *   called from a different scene context to avoid stale WebGL bindings).
+ * Build an array of named generation steps for progressive loading.
+ * Each step is a self-contained function that generates one category of textures.
+ * Callers can spread these across frames to show a progress bar.
  */
-export function generateAllTextures(scene: Phaser.Scene, force = false): void {
+export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): Array<{ name: string; fn: () => void }> {
   const tex = scene.textures;
   if (force) {
     for (const key of ALL_PROC_KEYS) {
@@ -3227,239 +3227,248 @@ export function generateAllTextures(scene: Phaser.Scene, force = false): void {
     }
   }
 
+  const steps: Array<{ name: string; fn: () => void }> = [];
+
   // --- Creature spritesheets ---
-  for (let i = 0; i < CREATURE_DESIGNS.length; i++) {
-    const design = CREATURE_DESIGNS[i];
-    const key = `creature-${design.name}`;
-    if (tex.exists(key)) continue;
-
-    const sheetW = TEX_SIZE * CREATURE_FRAMES;
-    const sheetH = TEX_SIZE;
-    const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
-    const ctx = canvasTex.getContext();
-
-    for (let f = 0; f < CREATURE_FRAMES; f++) {
-      ctx.save();
-      ctx.translate(f * TEX_SIZE, 0);
-      design.draw(ctx, f, TEX_SIZE, design);
-      ctx.restore();
-    }
-    canvasTex.refresh();
-    registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
-  }
+  steps.push({
+    name: "Creatures",
+    fn: () => {
+      for (let i = 0; i < CREATURE_DESIGNS.length; i++) {
+        const design = CREATURE_DESIGNS[i];
+        const key = `creature-${design.name}`;
+        if (tex.exists(key)) continue;
+        const sheetW = TEX_SIZE * CREATURE_FRAMES;
+        const sheetH = TEX_SIZE;
+        const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+        const ctx = canvasTex.getContext();
+        for (let f = 0; f < CREATURE_FRAMES; f++) {
+          ctx.save();
+          ctx.translate(f * TEX_SIZE, 0);
+          design.draw(ctx, f, TEX_SIZE, design);
+          ctx.restore();
+        }
+        canvasTex.refresh();
+        registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
+      }
+    },
+  });
 
   // --- Beast spritesheets ---
-  for (let i = 0; i < BEAST_DESIGNS.length; i++) {
-    const design = BEAST_DESIGNS[i];
-    const key = `beast-${design.name}`;
-    if (tex.exists(key)) continue;
-
-    const sheetW = TEX_SIZE * BEAST_FRAMES;
-    const sheetH = TEX_SIZE;
-    const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
-    const ctx = canvasTex.getContext();
-
-    for (let f = 0; f < BEAST_FRAMES; f++) {
-      ctx.save();
-      ctx.translate(f * TEX_SIZE, 0);
-      design.draw(ctx, f, TEX_SIZE, design);
-      ctx.restore();
-    }
-    canvasTex.refresh();
-    registerFrames(tex.get(key)!, BEAST_FRAMES, TEX_SIZE);
-  }
+  steps.push({
+    name: "Beasts",
+    fn: () => {
+      for (let i = 0; i < BEAST_DESIGNS.length; i++) {
+        const design = BEAST_DESIGNS[i];
+        const key = `beast-${design.name}`;
+        if (tex.exists(key)) continue;
+        const sheetW = TEX_SIZE * BEAST_FRAMES;
+        const sheetH = TEX_SIZE;
+        const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+        const ctx = canvasTex.getContext();
+        for (let f = 0; f < BEAST_FRAMES; f++) {
+          ctx.save();
+          ctx.translate(f * TEX_SIZE, 0);
+          design.draw(ctx, f, TEX_SIZE, design);
+          ctx.restore();
+        }
+        canvasTex.refresh();
+        registerFrames(tex.get(key)!, BEAST_FRAMES, TEX_SIZE);
+      }
+    },
+  });
 
   // --- Friendly creature spritesheets ---
-  for (let i = 0; i < FRIENDLY_DESIGNS.length; i++) {
-    const design = FRIENDLY_DESIGNS[i];
-    const key = `friendly-${design.name}`;
-    if (tex.exists(key)) continue;
+  steps.push({
+    name: "Friendly creatures",
+    fn: () => {
+      for (let i = 0; i < FRIENDLY_DESIGNS.length; i++) {
+        const design = FRIENDLY_DESIGNS[i];
+        const key = `friendly-${design.name}`;
+        if (tex.exists(key)) continue;
+        const sheetW = TEX_SIZE * CREATURE_FRAMES;
+        const sheetH = TEX_SIZE;
+        const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+        const ctx = canvasTex.getContext();
+        for (let f = 0; f < CREATURE_FRAMES; f++) {
+          ctx.save();
+          ctx.translate(f * TEX_SIZE, 0);
+          design.draw(ctx, f, TEX_SIZE, design);
+          ctx.restore();
+        }
+        canvasTex.refresh();
+        registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
+      }
+    },
+  });
 
-    const sheetW = TEX_SIZE * CREATURE_FRAMES;
-    const sheetH = TEX_SIZE;
-    const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
-    const ctx = canvasTex.getContext();
+  // --- Effects & projectiles ---
+  steps.push({
+    name: "Effects",
+    fn: () => {
+      if (!tex.exists("stone-proj")) {
+        const ct = createCanvasTexture(tex, "stone-proj", 24, 24);
+        drawStoneTexture(ct.getContext(), 24);
+        ct.refresh();
+      }
+      if (!tex.exists("spark")) {
+        const ct = createCanvasTexture(tex, "spark", 32, 32);
+        radialGradient(ct.getContext(), 16, 16, 16, 0xffffff, 0xffffff, 1, 0);
+        ct.refresh();
+      }
+      if (!tex.exists("dust")) {
+        const ct = createCanvasTexture(tex, "dust", 32, 32);
+        radialGradient(ct.getContext(), 16, 16, 14, 0xccccaa, 0x886644, 0.6, 0);
+        ct.refresh();
+      }
+      if (!tex.exists("shockwave")) {
+        const ct = createCanvasTexture(tex, "shockwave", 96, 96);
+        const ctx = ct.getContext();
+        ctx.strokeStyle = rgba(0xffffff, 0.8);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(48, 48, 42, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = rgba(0xffffff, 0.3);
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.arc(48, 48, 42, 0, Math.PI * 2);
+        ctx.stroke();
+        ct.refresh();
+      }
+      if (!tex.exists("recruit-beam")) {
+        const ct = createCanvasTexture(tex, "recruit-beam", 32, 96);
+        const ctx = ct.getContext();
+        const grad = ctx.createLinearGradient(16, 0, 16, 96);
+        grad.addColorStop(0, rgba(0x4cb866, 0));
+        grad.addColorStop(0.5, rgba(0x4cb866, 0.6));
+        grad.addColorStop(1, rgba(0x88ffaa, 0.9));
+        ctx.fillStyle = grad;
+        ctx.fillRect(10, 0, 12, 96);
+        radialGradient(ctx, 16, 48, 16, 0x88ffaa, 0x4cb866, 0.4, 0);
+        ct.refresh();
+      }
+    },
+  });
 
-    for (let f = 0; f < CREATURE_FRAMES; f++) {
-      ctx.save();
-      ctx.translate(f * TEX_SIZE, 0);
-      design.draw(ctx, f, TEX_SIZE, design);
-      ctx.restore();
-    }
-    canvasTex.refresh();
-    registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
-  }
+  // --- Glows ---
+  steps.push({
+    name: "Light glows",
+    fn: () => {
+      if (!tex.exists("soft-glow")) {
+        const ct = createCanvasTexture(tex, "soft-glow", 128, 128);
+        radialGradient(ct.getContext(), 64, 64, 64, 0xffffff, 0x000000, 0.5, 0);
+        ct.refresh();
+      }
+      if (!tex.exists("fire-glow")) {
+        const ct = createCanvasTexture(tex, "fire-glow", 128, 128);
+        radialGradient(ct.getContext(), 64, 64, 64, 0xff6600, 0xff0000, 0.4, 0);
+        ct.refresh();
+      }
+      if (!tex.exists("void-glow")) {
+        const ct = createCanvasTexture(tex, "void-glow", 128, 128);
+        radialGradient(ct.getContext(), 64, 64, 64, 0xaa00ff, 0x000000, 0.3, 0);
+        ct.refresh();
+      }
+      if (!tex.exists("crystal-glow")) {
+        const ct = createCanvasTexture(tex, "crystal-glow", 128, 128);
+        radialGradient(ct.getContext(), 64, 64, 64, 0x44aaff, 0x000033, 0.3, 0);
+        ct.refresh();
+      }
+    },
+  });
 
-  // --- Stone projectile ---
-  if (!tex.exists("stone-proj")) {
-    const canvasTex = createCanvasTexture(tex, "stone-proj", 24, 24);
-    drawStoneTexture(canvasTex.getContext(), 24);
-    canvasTex.refresh();
-  }
+  // --- Items ---
+  steps.push({
+    name: "Items",
+    fn: () => {
+      if (!tex.exists("golf-club")) {
+        const ct = createCanvasTexture(tex, "golf-club", 64, 64);
+        drawGolfClub(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("golf-ball")) {
+        const ct = createCanvasTexture(tex, "golf-ball", 64, 64);
+        drawGolfBall(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("axe")) {
+        const ct = createCanvasTexture(tex, "axe", 64, 64);
+        drawAxe(ct.getContext(), 64);
+        ct.refresh();
+      }
+    },
+  });
 
-  // --- Spark particle ---
-  if (!tex.exists("spark")) {
-    const canvasTex = createCanvasTexture(tex, "spark", 32, 32);
-    const ctx = canvasTex.getContext();
-    radialGradient(ctx, 16, 16, 16, 0xffffff, 0xffffff, 1, 0);
-    canvasTex.refresh();
-  }
+  // --- World objects ---
+  steps.push({
+    name: "World objects",
+    fn: () => {
+      if (!tex.exists("big-tree")) {
+        const ct = createCanvasTexture(tex, "big-tree", 64, 64);
+        drawBigTree(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("tee-box")) {
+        const ct = createCanvasTexture(tex, "tee-box", 64, 64);
+        drawTeeBox(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("leprechaun")) {
+        const ct = createCanvasTexture(tex, "leprechaun", 64, 64);
+        drawLeprechaun(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("fountain")) {
+        const ct = createCanvasTexture(tex, "fountain", 64, 64);
+        drawFountain(ct.getContext(), 64);
+        ct.refresh();
+      }
+    },
+  });
 
-  // --- Dust particle ---
-  if (!tex.exists("dust")) {
-    const canvasTex = createCanvasTexture(tex, "dust", 32, 32);
-    const ctx = canvasTex.getContext();
-    radialGradient(ctx, 16, 16, 14, 0xccccaa, 0x886644, 0.6, 0);
-    canvasTex.refresh();
-  }
+  // --- Tennis ---
+  steps.push({
+    name: "Tennis",
+    fn: () => {
+      if (!tex.exists("tennis-court")) {
+        const ct = createCanvasTexture(tex, "tennis-court", 64, 64);
+        drawTennisCourt(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("tennis-wall")) {
+        const ct = createCanvasTexture(tex, "tennis-wall", 64, 64);
+        drawTennisWall(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("tennis-racket")) {
+        const ct = createCanvasTexture(tex, "tennis-racket", 64, 64);
+        drawTennisRacket(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("tennis-ball")) {
+        const ct = createCanvasTexture(tex, "tennis-ball", 64, 64);
+        drawTennisBall(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("tennis-net")) {
+        const ct = createCanvasTexture(tex, "tennis-net", 64, 64);
+        drawTennisNet(ct.getContext(), 64);
+        ct.refresh();
+      }
+    },
+  });
 
-  // --- Shockwave ring ---
-  if (!tex.exists("shockwave")) {
-    const canvasTex = createCanvasTexture(tex, "shockwave", 96, 96);
-    const ctx = canvasTex.getContext();
-    ctx.strokeStyle = rgba(0xffffff, 0.8);
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(48, 48, 42, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = rgba(0xffffff, 0.3);
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(48, 48, 42, 0, Math.PI * 2);
-    ctx.stroke();
-    canvasTex.refresh();
-  }
+  return steps;
+}
 
-  // --- Recruit beam ---
-  if (!tex.exists("recruit-beam")) {
-    const canvasTex = createCanvasTexture(tex, "recruit-beam", 32, 96);
-    const ctx = canvasTex.getContext();
-    const grad = ctx.createLinearGradient(16, 0, 16, 96);
-    grad.addColorStop(0, rgba(0x4cb866, 0));
-    grad.addColorStop(0.5, rgba(0x4cb866, 0.6));
-    grad.addColorStop(1, rgba(0x88ffaa, 0.9));
-    ctx.fillStyle = grad;
-    ctx.fillRect(10, 0, 12, 96);
-    // sparkle
-    radialGradient(ctx, 16, 48, 16, 0x88ffaa, 0x4cb866, 0.4, 0);
-    canvasTex.refresh();
-  }
-
-  // --- Soft glow (for light sources) ---
-  if (!tex.exists("soft-glow")) {
-    const canvasTex = createCanvasTexture(tex, "soft-glow", 128, 128);
-    const ctx = canvasTex.getContext();
-    radialGradient(ctx, 64, 64, 64, 0xffffff, 0x000000, 0.5, 0);
-    canvasTex.refresh();
-  }
-
-  // --- Fire glow ---
-  if (!tex.exists("fire-glow")) {
-    const canvasTex = createCanvasTexture(tex, "fire-glow", 128, 128);
-    const ctx = canvasTex.getContext();
-    radialGradient(ctx, 64, 64, 64, 0xff6600, 0xff0000, 0.4, 0);
-    canvasTex.refresh();
-  }
-
-  // --- Void glow ---
-  if (!tex.exists("void-glow")) {
-    const canvasTex = createCanvasTexture(tex, "void-glow", 128, 128);
-    const ctx = canvasTex.getContext();
-    radialGradient(ctx, 64, 64, 64, 0xaa00ff, 0x000000, 0.3, 0);
-    canvasTex.refresh();
-  }
-
-  // --- Ice crystal glow ---
-  if (!tex.exists("crystal-glow")) {
-    const canvasTex = createCanvasTexture(tex, "crystal-glow", 128, 128);
-    const ctx = canvasTex.getContext();
-    radialGradient(ctx, 64, 64, 64, 0x44aaff, 0x000033, 0.3, 0);
-    canvasTex.refresh();
-  }
-
-  // --- Golf club ---
-  if (!tex.exists("golf-club")) {
-    const canvasTex = createCanvasTexture(tex, "golf-club", 64, 64);
-    drawGolfClub(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Golf ball ---
-  if (!tex.exists("golf-ball")) {
-    const canvasTex = createCanvasTexture(tex, "golf-ball", 64, 64);
-    drawGolfBall(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Axe ---
-  if (!tex.exists("axe")) {
-    const canvasTex = createCanvasTexture(tex, "axe", 64, 64);
-    drawAxe(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Big tree ---
-  if (!tex.exists("big-tree")) {
-    const canvasTex = createCanvasTexture(tex, "big-tree", 64, 64);
-    drawBigTree(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Tee box ---
-  if (!tex.exists("tee-box")) {
-    const canvasTex = createCanvasTexture(tex, "tee-box", 64, 64);
-    drawTeeBox(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Leprechaun ---
-  if (!tex.exists("leprechaun")) {
-    const canvasTex = createCanvasTexture(tex, "leprechaun", 64, 64);
-    drawLeprechaun(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Fountain ---
-  if (!tex.exists("fountain")) {
-    const canvasTex = createCanvasTexture(tex, "fountain", 64, 64);
-    drawFountain(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Tennis court ---
-  if (!tex.exists("tennis-court")) {
-    const canvasTex = createCanvasTexture(tex, "tennis-court", 64, 64);
-    drawTennisCourt(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Tennis wall ---
-  if (!tex.exists("tennis-wall")) {
-    const canvasTex = createCanvasTexture(tex, "tennis-wall", 64, 64);
-    drawTennisWall(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Tennis racket ---
-  if (!tex.exists("tennis-racket")) {
-    const canvasTex = createCanvasTexture(tex, "tennis-racket", 64, 64);
-    drawTennisRacket(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Tennis ball ---
-  if (!tex.exists("tennis-ball")) {
-    const canvasTex = createCanvasTexture(tex, "tennis-ball", 64, 64);
-    drawTennisBall(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
-
-  // --- Tennis net ---
-  if (!tex.exists("tennis-net")) {
-    const canvasTex = createCanvasTexture(tex, "tennis-net", 64, 64);
-    drawTennisNet(canvasTex.getContext(), 64);
-    canvasTex.refresh();
-  }
+/**
+ * Generate all procedural textures and register them with the Phaser texture manager.
+ * @param force If true, remove existing textures before recreating (use when
+ *   called from a different scene context to avoid stale WebGL bindings).
+ */
+export function generateAllTextures(scene: Phaser.Scene, force = false): void {
+  const steps = getTextureGenerationSteps(scene, force);
+  for (const step of steps) step.fn();
 }
 
 /** Get the creature texture key for a hostility level. */
