@@ -3,6 +3,12 @@ import type { AgentInfo } from "../../../shared/types";
 import { YUKI_ID } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
 
+/** Returns the Phaser texture key for an agent's character sprite. */
+export function agentTextureKey(info: AgentInfo): string {
+  if (info.appearance) return `char-custom-${info.id}`;
+  return `char-${info.sprite}`;
+}
+
 export const TILE_PX = 64;
 
 export const STATUS_COLORS: Record<AgentInfo["status"], number> = {
@@ -86,13 +92,14 @@ export class AgentNPC {
     this.scene = scene;
 
     const feet = feetOf(spawn);
-    this.shadow = scene.add.ellipse(0, 0, 44, 16, 0x000000, 0.22);
-    this.sprite = scene.add.sprite(0, 0, `char-${info.sprite}`, 0)
-      .setOrigin(0.5, 1);
+    this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
+    this.sprite = scene.add.sprite(0, 0, agentTextureKey(info), 0)
+      .setOrigin(0.5, 1)
+      .setScale(0.5);
     this.nameBg = scene.add.graphics();
     this.label = scene.add
       .text(0, -108, info.name, {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#1d2126",
         stroke: "#f4f6f8",
@@ -198,7 +205,7 @@ export class AgentNPC {
     // after a long frame (tab switch, GC, DOM jank) don't take one giant step;
     // 100ms keeps speed truthful down to 10fps while still preventing teleports
     dt = Math.min(dt, 100);
-    const c = `char-${this.info.sprite}`;
+    const c = agentTextureKey(this.info);
     if (this.huddling && time >= this.huddleUntil) {
       this.huddleUntil = 0;
       this.huddleFace = null;
@@ -424,12 +431,12 @@ export class YukiNPC {
     const c = "char-yuki";
 
     const feet = feetOf(seat);
-    this.shadow = scene.add.ellipse(0, 0, 44, 16, 0x000000, 0.22);
-    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1);
+    this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
+    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(0.5);
     this.nameBg = scene.add.graphics();
     this.label = scene.add
       .text(0, -108, "Yuki", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#1d2126",
         stroke: "#f4f6f8",

@@ -13,6 +13,82 @@ export const CHAR_VARIANTS = 8;
 /** Accent colors paired with sprite variants by index. */
 export const ACCENTS = ["#c44a4a", "#3a7cb5", "#3d9152", "#b0741f", "#5b7d9e", "#2a8f8b", "#b54a93", "#6b7280"];
 
+// --------------------------------------------------- character customizer ---
+
+/** Customization options for building a character piece by piece. */
+export const SKIN_TONES = [
+  "#f2c39b", "#ffdbac", "#d9a066", "#c68642",
+  "#a06a42", "#8d5524", "#6b4423", "#deb887",
+];
+
+export const HAIR_STYLES = [
+  "short", "spiky", "long", "ponytail",
+  "buzz", "swept", "curly", "bun",
+  "bald", "balding",
+];
+
+export const HAIR_COLORS = [
+  "#2b1d0e", "#15100a", "#5a3825", "#3f2a1a",
+  "#c9a227", "#9e2b2b", "#e8e8e8", "#3f7d4e",
+  "#1a1a2a", "#cc6622", "#8b4513", "#704214",
+];
+
+export const SHIRT_COLORS = [
+  "#e05d5d", "#4f9dde", "#53b86b", "#c9852c",
+  "#5b7d9e", "#36b5b0", "#d65db1", "#7d8597",
+  "#2e3547", "#c44a4a", "#9b59b6", "#e67e22",
+];
+
+export const PANTS_COLORS = [
+  "#2f3e5c", "#454545", "#5c4a2f", "#3a5a40",
+  "#3e4a5c", "#23283a", "#1b1f2e", "#4a3a2a",
+];
+
+export const ACCESSORIES = ["none", "glasses", "headband", "earrings"];
+
+export const ACCENT_COLOR_OPTIONS = [
+  "#c44a4a", "#3a7cb5", "#3d9152", "#b0741f",
+  "#5b7d9e", "#2a8f8b", "#b54a93", "#6b7280",
+  "#e05d5d", "#4f9dde", "#53b86b", "#c9852c",
+];
+
+/** Piece-by-piece character appearance selected via the character builder. */
+export interface CharAppearance {
+  skin: number;      // index into SKIN_TONES
+  hairStyle: number; // index into HAIR_STYLES
+  hair: number;      // index into HAIR_COLORS
+  shirt: number;     // index into SHIRT_COLORS
+  pants: number;     // index into PANTS_COLORS
+  accessory: number; // index into ACCESSORIES
+  accent: number;    // index into ACCENT_COLOR_OPTIONS
+}
+
+/** Default appearance (matches pre-baked char-0). */
+export const DEFAULT_APPEARANCE: CharAppearance = {
+  skin: 0,
+  hairStyle: 0,
+  hair: 0,
+  shirt: 0,
+  pants: 0,
+  accessory: 0,
+  accent: 0,
+};
+
+/** Build a CharAppearance from a legacy sprite index (maps to the 8 pre-baked palettes). */
+export function appearanceFromSprite(sprite: number): CharAppearance {
+  const map: CharAppearance[] = [
+    { skin: 0, hairStyle: 0, hair: 0, shirt: 0, pants: 0, accessory: 0, accent: 0 }, // char-0
+    { skin: 2, hairStyle: 1, hair: 2, shirt: 1, pants: 1, accessory: 1, accent: 1 }, // char-1
+    { skin: 4, hairStyle: 4, hair: 1, shirt: 2, pants: 2, accessory: 0, accent: 2 }, // char-2
+    { skin: 1, hairStyle: 2, hair: 4, shirt: 3, pants: 3, accessory: 3, accent: 3 }, // char-3
+    { skin: 0, hairStyle: 5, hair: 5, shirt: 4, pants: 4, accessory: 2, accent: 4 }, // char-4
+    { skin: 5, hairStyle: 3, hair: 0, shirt: 5, pants: 0, accessory: 0, accent: 5 }, // char-5
+    { skin: 2, hairStyle: 6, hair: 6, shirt: 6, pants: 1, accessory: 1, accent: 6 }, // char-6
+    { skin: 1, hairStyle: 7, hair: 7, shirt: 7, pants: 5, accessory: 3, accent: 7 }, // char-7
+  ];
+  return map[sprite % map.length] ?? DEFAULT_APPEARANCE;
+}
+
 export interface AgentInfo {
   id: string;
   name: string;
@@ -22,8 +98,10 @@ export interface AgentInfo {
   status: AgentStatus;
   task: string | null;
   deskIndex: number;
-  /** Which char-N.png sprite sheet this agent uses. */
+  /** Which char-N.png sprite sheet this agent uses (legacy, kept for backward compat). */
   sprite: number;
+  /** Piece-by-piece character appearance (used for runtime sprite generation). */
+  appearance: CharAppearance | null;
   /** Accent color for UI panels. */
   accent: string;
   /** Optional custom system prompt given at hire time. */
@@ -48,6 +126,7 @@ export interface FiredAgent {
   name: string;
   title: string;
   sprite: number;
+  appearance: CharAppearance | null;
   accent: string;
   provider: Provider;
   model: string;
@@ -96,6 +175,18 @@ export const TILE = {
   HEDGE: 19,
   BUSH: 20,
   WATER: 21,
+  GOLF_CLUB: 22,
+  GOLF_BALL: 23,
+  BIG_TREE: 24,
+  AXE: 25,
+  LEPRECHAUN: 26,
+  TEE_BOX: 27,
+  FOUNTAIN: 28,
+  TENNIS_COURT: 29,
+  TENNIS_WALL: 30,
+  TENNIS_RACKET: 31,
+  TENNIS_BALL: 32,
+  TENNIS_NET: 33,
 } as const;
 
 export type CardStatus = "backlog" | "in_progress" | "done";
@@ -120,6 +211,7 @@ export interface LogEntry {
 export interface PlayerInfo {
   name: string;
   workspace: string;
+  appearance?: CharAppearance | null;
 }
 
 /** Visual theme for the office map + tileset. */
@@ -154,7 +246,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
 export type ClientMsg =
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
   | { type: "chat"; agentId: string; text: string }

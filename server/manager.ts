@@ -6,6 +6,7 @@ import type {
   AgentRole,
   AgentStatus,
   CardStatus,
+  CharAppearance,
   FiredAgent,
   FiredAgentMood,
   GameSettings,
@@ -15,7 +16,7 @@ import type {
   TaskCard,
   WorldState,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID, ACCENT_COLOR_OPTIONS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runClaude } from "./providers/claude.js";
 import { runCodex } from "./providers/codex.js";
@@ -193,6 +194,7 @@ export class AgentManager {
       task: null,
       deskIndex: -1,
       sprite: 0,
+      appearance: null,
       accent: "#c44a4a",
       systemPrompt: "",
       role: "manager",
@@ -227,7 +229,7 @@ export class AgentManager {
     this.save.setWorld(this.worldState());
   }
 
-  hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number): void {
+  hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null): void {
     const cleanName = name.trim().slice(0, 24) || "Agent";
 
     const usedDesks = new Set([...this.agents.values()].map((a) => a.info.deskIndex));
@@ -259,7 +261,8 @@ export class AgentManager {
       task: null,
       deskIndex,
       sprite: chosenSprite,
-      accent: ACCENTS[chosenSprite % ACCENTS.length],
+      appearance: appearance ?? null,
+      accent: appearance ? ACCENT_COLOR_OPTIONS[appearance.accent % ACCENT_COLOR_OPTIONS.length] : ACCENTS[chosenSprite % ACCENTS.length],
       systemPrompt: systemPrompt.trim().slice(0, 4000),
       role,
       sessionId: null,
@@ -413,6 +416,7 @@ export class AgentManager {
       name: rt.info.name,
       title: rt.info.title,
       sprite: rt.info.sprite,
+      appearance: rt.info.appearance ?? null,
       accent: rt.info.accent,
       provider: rt.info.provider,
       model: rt.info.model,
@@ -460,6 +464,7 @@ export class AgentManager {
       task: null,
       deskIndex,
       sprite: fa.sprite,
+      appearance: fa.appearance ?? null,
       accent: fa.accent,
       systemPrompt: fa.systemPrompt,
       role: fa.role,

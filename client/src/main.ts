@@ -15,9 +15,9 @@ new Hud(store, net);
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
-  backgroundColor: "#dce4ec",
-  pixelArt: true,
-  roundPixels: true,
+  backgroundColor: "#a3bdd0",
+  pixelArt: false,
+  roundPixels: false,
   scale: {
     mode: Phaser.Scale.RESIZE,
     width: "100%",

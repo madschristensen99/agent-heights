@@ -1,13 +1,15 @@
 import Phaser from "phaser";
 import { CHAR_VARIANTS } from "../../../shared/types";
 import type { Store } from "../store";
-import { AgentNPC, YukiNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, type Dir } from "./agent";
+import { AgentNPC, YukiNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
 import { YUKI_ID } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
 import { WorldLayer } from "./world";
-import { CRTWarmthPipeline, BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
+import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
-import { upgradeFurniture } from "./furniture";
+import { generateCharTexture, CHAR_FRAME_W, CHAR_FRAME_H } from "./chargen";
+import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, MONITOR_TEX } from "./furniture";
+import { achievements, ACHIEVEMENTS } from "./achievements";
 
 const PLAYER_SPEED = 380;
 
@@ -21,6 +23,8 @@ export class OfficeScene extends Phaser.Scene {
   private seats: Tile[] = [];
   private extraSpots: Tile[] = [];
   private monitors: Phaser.GameObjects.Sprite[] = [];
+  private chairs: Phaser.GameObjects.Sprite[] = [];
+  private yukiMonitor: Phaser.GameObjects.Sprite | null = null;
   private spawnTile: Tile = { x: 14, y: 16 };
   private doorTile: Tile = { x: 14, y: 17 };
   private boardTile: Tile = { x: 14, y: 2 };
@@ -47,6 +51,13 @@ export class OfficeScene extends Phaser.Scene {
   private plantCooldownUntil = 0; // cooldown for watering
   private sofaUntil = 0; // cooldown for sofa
 
+  private mailboxGfx!: Phaser.GameObjects.Graphics;
+  private mailboxHint!: Phaser.GameObjects.Text;
+  private mailboxUntil = 0; // cooldown for checking mail
+  private mailboxHasMail = false;
+  private mailboxNextMail = 0; // timestamp when next mail arrives
+  private mailboxPx = { x: 0, y: 0 };
+
   private fridgeHint!: Phaser.GameObjects.Text;
   private coolerHint!: Phaser.GameObjects.Text;
   private clockHint!: Phaser.GameObjects.Text;
@@ -54,8 +65,17 @@ export class OfficeScene extends Phaser.Scene {
   private sofaHint!: Phaser.GameObjects.Text;
   private filingHint!: Phaser.GameObjects.Text;
   private plantHint!: Phaser.GameObjects.Text;
+  // mailboxHint declared above with mailbox fields
 
+  private trophyTile: Tile = { x: 2, y: 2 };
+  private trophyHint!: Phaser.GameObjects.Text;
+  private trophyGfx!: Phaser.GameObjects.Graphics;
+  private trophyAchCount = -1;
   private sceneStart = 0;
+
+  private hallOfFameTile: Tile = { x: 1, y: 15 };
+  private hallOfFameHint!: Phaser.GameObjects.Text;
+  private hallOfFameGfx!: Phaser.GameObjects.Graphics;
 
   private world!: WorldLayer;
   private theme: "classic" | "lumon" = "classic";
@@ -68,6 +88,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerLabel!: Phaser.GameObjects.Text;
   private playerNameBg!: Phaser.GameObjects.Graphics;
   private playerDir: Dir = "down";
+  private playerTexKey = "boss";
   private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
@@ -81,27 +102,25 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Cache-bust character PNGs to ensure browser loads 2x resolution versions
+    const v = "?v=2x";
     this.load.tilemapTiledJSON("map-classic", "assets/maps/office.json");
     this.load.tilemapTiledJSON("map-lumon", "assets/maps/lumon.json");
     this.load.image("tiles-classic", "assets/tilesets/office.png");
     this.load.image("tiles-lumon", "assets/tilesets/lumon.png");
     for (let i = 0; i < CHAR_VARIANTS; i++) {
-      this.load.spritesheet(`char-${i}`, `assets/characters/char-${i}.png`, {
-        frameWidth: 64,
-        frameHeight: 96,
+      this.load.spritesheet(`char-${i}`, `assets/characters/char-${i}.png${v}`, {
+        frameWidth: CHAR_FRAME_W,
+        frameHeight: CHAR_FRAME_H,
       });
     }
-    this.load.spritesheet("boss", "assets/characters/boss.png", {
-      frameWidth: 64,
-      frameHeight: 96,
+    this.load.spritesheet("boss", `assets/characters/boss.png${v}`, {
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
     });
-    this.load.spritesheet("char-yuki", "assets/characters/char-yuki.png", {
-      frameWidth: 64,
-      frameHeight: 96,
-    });
-    this.load.spritesheet("monitor", "assets/sprites/monitor.png", {
-      frameWidth: 64,
-      frameHeight: 64,
+    this.load.spritesheet("char-yuki", `assets/characters/char-yuki.png${v}`, {
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
     });
     this.load.spritesheet("bubble", "assets/sprites/bubble.png", {
       frameWidth: 64,
@@ -119,9 +138,6 @@ export class OfficeScene extends Phaser.Scene {
 
     // register post-processing pipelines (once)
     const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-    if (renderer && !renderer.pipelines.has("CRTWarmth")) {
-      renderer.pipelines.add("CRTWarmth", new CRTWarmthPipeline(this.game));
-    }
     if (renderer && !renderer.pipelines.has("BloomFX")) {
       renderer.pipelines.add("BloomFX", new BloomPipeline(this.game));
     }
@@ -131,9 +147,8 @@ export class OfficeScene extends Phaser.Scene {
     if (renderer && !renderer.pipelines.has("DOF")) {
       renderer.pipelines.add("DOF", new DOFPipeline(this.game));
     }
-    // apply pipelines to camera (order: CRT -> Bloom -> ColorGrade -> DOF)
+    // apply pipelines to camera (order: Bloom -> ColorGrade -> DOF)
     if (renderer) {
-      this.cameras.main.setPostPipeline("CRTWarmth");
       this.cameras.main.setPostPipeline("BloomFX");
       this.cameras.main.setPostPipeline("ColorGrade");
       this.cameras.main.setPostPipeline("DOF");
@@ -195,6 +210,31 @@ export class OfficeScene extends Phaser.Scene {
       });
     }
 
+    // Create friendly creature animations (idle, walk, hop)
+    const friendlyNames = ["unicorn", "fairy-bunny", "baby-dragon", "crystal-fox"];
+    for (const name of friendlyNames) {
+      const key = `friendly-${name}`;
+      if (this.anims.exists(`${key}-idle`)) continue;
+      this.anims.create({
+        key: `${key}-idle`,
+        frames: this.anims.generateFrameNumbers(key, { frames: [0, 1, 0, 2] }),
+        frameRate: 3,
+        repeat: -1,
+      });
+      this.anims.create({
+        key: `${key}-walk`,
+        frames: this.anims.generateFrameNumbers(key, { frames: [1, 2, 1, 2] }),
+        frameRate: 6,
+        repeat: -1,
+      });
+      this.anims.create({
+        key: `${key}-hop`,
+        frames: this.anims.generateFrameNumbers(key, { frames: [3, 1, 0] }),
+        frameRate: 5,
+        repeat: 0,
+      });
+    }
+
     // Initialize audio on first user interaction
     this.input.once("pointerdown", () => {
       this.world?.audio.init();
@@ -212,6 +252,8 @@ export class OfficeScene extends Phaser.Scene {
     this.seats = [];
     this.extraSpots = [];
     this.monitors = [];
+    this.chairs = [];
+    this.yukiMonitor = null;
     this.coffeeUntil = 0;
     this.fridgeUntil = 0;
     this.coolerUntil = 0;
@@ -277,21 +319,30 @@ export class OfficeScene extends Phaser.Scene {
       } else if (obj.name === "yuki-seat") {
         this.yukiSeat = { x: tx, y: ty };
       } else if (obj.name === "yuki-monitor") {
-        // Side view of monitor — thin dark rectangle (back of monitor facing left toward entrance)
-        const mx = obj.x ?? 0;
-        const my = (obj.y ?? 0) - 4;
-        const g = this.add.graphics();
-        g.fillStyle(0x2a2a2e, 1);
-        g.fillRoundedRect(mx - 4, my - 28, 8, 48, 2);
-        g.fillStyle(0x1a1a1e, 1);
-        g.fillRect(mx - 2, my + 18, 4, 8);
-        g.setDepth(10 + (obj.y ?? 0) - 10);
+        // Procedural monitor on Yuki's desk — standing up, facing left
+        const mx = (obj.x ?? 0) + TILE_PX / 2;
+        const my = (obj.y ?? 0) - TILE_PX * 0.35;
+        const spr = this.add
+          .sprite(mx, my, MONITOR_TEX, "0")
+          .setDepth(10 + (obj.y ?? 0) - 10);
+        this.yukiMonitor = spr;
       } else if (obj.name.startsWith("seat-")) {
-        this.seats[Number(obj.name.slice(5))] = { x: tx, y: ty };
+        const idx = Number(obj.name.slice(5));
+        this.seats[idx] = { x: tx, y: ty };
+        // Create chair sprite at seat position, facing down (unassigned default)
+        const cx = tx * TILE_PX + TILE_PX / 2;
+        const cy = ty * TILE_PX + TILE_PX / 2;
+        const chair = this.add
+          .sprite(cx, cy, CHAIR_TEX_DOWN)
+          .setDepth(5 + ty * TILE_PX + 1);
+        this.chairs[idx] = chair;
       } else if (obj.name.startsWith("monitor-")) {
         const idx = Number(obj.name.slice(8));
+        // Procedural monitor standing on top of desk
+        const mx = (obj.x ?? 0) + TILE_PX / 2;
+        const my = (obj.y ?? 0) - TILE_PX * 0.35;
         const spr = this.add
-          .sprite(obj.x ?? 0, (obj.y ?? 0) - 4, "monitor", 0)
+          .sprite(mx, my, MONITOR_TEX, "0")
           .setDepth(10 + (obj.y ?? 0) - 10);
         this.monitors[idx] = spr;
       }
@@ -314,6 +365,13 @@ export class OfficeScene extends Phaser.Scene {
 
     // Yuki — the office manager NPC
     if (this.yukiSeat) {
+      // Create Yuki's left-facing chair sprite
+      const ycx = this.yukiSeat.x * TILE_PX + TILE_PX / 2;
+      const ycy = this.yukiSeat.y * TILE_PX + TILE_PX / 2;
+      this.add
+        .sprite(ycx, ycy, CHAIR_TEX_LEFT)
+        .setDepth(5 + this.yukiSeat.y * TILE_PX + 1);
+
       this.yuki = new YukiNPC(this, this.grid, this.yukiSeat, (clicked) =>
         this.store.select(clicked),
       );
@@ -381,6 +439,9 @@ export class OfficeScene extends Phaser.Scene {
       });
     }
 
+    // Generate boss texture from player appearance (if set)
+    this.refreshBossTexture();
+
     // water animation — cycles through 3 frames in the world tileset
     if (!this.anims.exists("water-anim")) {
       this.anims.create({
@@ -393,14 +454,15 @@ export class OfficeScene extends Phaser.Scene {
 
     // the boss (you)
     const feet = feetOf(this.spawnTile);
-    this.player = this.add.sprite(feet.x, feet.y, "boss", 0)
-      .setOrigin(0.5, 1);
+    this.player = this.add.sprite(feet.x, feet.y, this.playerTexKey, 0)
+      .setOrigin(0.5, 1)
+      .setScale(0.5);
     // no physics body — we do manual movement for smoothness
 
     this.playerNameBg = this.add.graphics();
     this.playerLabel = this.add
       .text(0, 0, "BOSS", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#1d2126",
         stroke: "#f4f6f8",
@@ -420,9 +482,12 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- task board on the front wall ---
     this.drawBoard();
+    this.drawTrophyCase();
+    this.drawHallOfFameBoard();
+    this.drawHelipad();
     this.boardHint = this.add
       .text(0, 0, "", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#1d2126",
         stroke: "#f4f6f8",
@@ -442,6 +507,9 @@ export class OfficeScene extends Phaser.Scene {
     this.sofaHint = this.makeHint();
     this.filingHint = this.makeHint();
     this.plantHint = this.makeHint();
+    this.trophyHint = this.makeHint();
+    this.hallOfFameHint = this.makeHint();
+    this.mailboxHint = this.makeHint();
 
     // Set interactable tile positions based on theme
     this.setupInteractables();
@@ -471,6 +539,13 @@ export class OfficeScene extends Phaser.Scene {
         flowerG.fillCircle(fx, fy, 2);
       }
     }
+
+    // conspicuous mailbox to the left of the front door
+    this.mailboxPx = { x: doorPxX - TILE_PX * 3, y: doorPxY + 24 };
+    this.mailboxGfx = this.add.graphics().setDepth(3);
+    this.mailboxHasMail = true; // start with mail
+    this.mailboxNextMail = this.time.now + 45000; // next mail arrives in 45s
+    this.drawMailbox();
 
     const cam = this.cameras.main;
     // no camera bounds — the world is infinite
@@ -526,9 +601,16 @@ export class OfficeScene extends Phaser.Scene {
         if (!this.ready) return;
         const theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
         if (theme !== this.theme) {
+          if (theme === "lumon") achievements.unlock("lumon_mode");
           this.ready = false;
           this.scene.restart();
           return;
+        }
+        // refresh boss texture if player appearance changed
+        const prevKey = this.playerTexKey;
+        this.refreshBossTexture();
+        if (prevKey !== this.playerTexKey && this.player) {
+          this.player.setTexture(this.playerTexKey, 0).setScale(0.5);
         }
         this.syncAgents();
         this.world.syncGhosts();
@@ -667,7 +749,7 @@ export class OfficeScene extends Phaser.Scene {
   private makeHint(): Phaser.GameObjects.Text {
     return this.add
       .text(0, 0, "", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#1d2126",
         stroke: "#f4f6f8",
@@ -686,6 +768,7 @@ export class OfficeScene extends Phaser.Scene {
       this.clockTile = { x: 14, y: 1 };
       this.vendingTile = { x: 27, y: 2 };
       this.sofaTile = null;
+      this.hallOfFameTile = { x: 1, y: 15 };
       this.filingTiles = [
         { x: 1, y: 3 }, { x: 1, y: 4 }, { x: 1, y: 12 }, { x: 1, y: 13 },
         { x: 20, y: 3 }, { x: 20, y: 12 }, { x: 22, y: 11 },
@@ -698,6 +781,7 @@ export class OfficeScene extends Phaser.Scene {
       this.clockTile = { x: 6, y: 1 };
       this.vendingTile = null;
       this.sofaTile = { x: 23, y: 13 };
+      this.hallOfFameTile = { x: 1, y: 15 };
       this.filingTiles = [
         { x: 1, y: 6 }, { x: 1, y: 7 }, { x: 20, y: 3 },
         { x: 20, y: 4 }, { x: 22, y: 11 },
@@ -754,6 +838,7 @@ export class OfficeScene extends Phaser.Scene {
         this.waterCoolerGossip();
         this.world.vfx.sparkBurst(coolerPx.x, coolerPx.y, 0x4a9cd8, 8, 60);
         this.world.audio.uiClick();
+        if (achievements.incStat("cooler") >= 5) achievements.unlock("gossip_monger");
       }
       return true;
     }
@@ -794,6 +879,8 @@ export class OfficeScene extends Phaser.Scene {
           this.store.toast("Power nap! 1.5x speed for 10s.");
           this.world.vfx.sparkBurst(sPx.x, sPx.y, 0x9a7acb, 10, 60);
           this.world.audio.uiClick();
+          achievements.unlock("power_nap");
+          if (time < this.coffeeUntil) achievements.unlock("speed_demon");
         }
         return true;
       }
@@ -825,6 +912,34 @@ export class OfficeScene extends Phaser.Scene {
         this.world.vfx.sparkBurst(px, py, 0x4acb4a, 16, 70);
         this.world.vfx.celebrate(px, py);
         this.world.audio.uiClick();
+        achievements.unlock("green_thumb");
+      }
+      return true;
+    }
+
+    // Mailbox — check mail
+    const mbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.mailboxPx.x, this.mailboxPx.y);
+    if (mbDist < 120) {
+      if (time < this.mailboxUntil) {
+        this.store.toast("The mailbox is empty. Check back later.");
+      } else if (this.mailboxHasMail) {
+        this.mailboxHasMail = false;
+        this.mailboxUntil = time + 5000;
+        this.mailboxNextMail = time + 45000 + Math.random() * 30000;
+        this.drawMailbox();
+        const mailMessages = [
+          "You got a letter from HQ: 'Keep up the good work!'",
+          "Junk mail — buy one get one on office supplies.",
+          "A postcard from a rival AI lab. Nice view.",
+          "Performance bonus check! ...It's a coupon for the vending machine.",
+          "A handwritten note: 'Don't forget to water the plants.'",
+          "Speedrun community newsletter — new strats inside!",
+        ];
+        this.store.toast(mailMessages[Math.floor(Math.random() * mailMessages.length)]);
+        this.world.vfx.sparkBurst(this.mailboxPx.x, this.mailboxPx.y, 0xffdd44, 10, 60);
+        this.world.audio.uiClick();
+      } else {
+        this.store.toast("No mail yet. The flag is down for a reason.");
       }
       return true;
     }
@@ -876,6 +991,8 @@ export class OfficeScene extends Phaser.Scene {
     } else {
       this.store.toast("Mystery snack! It tastes like... existential dread.");
       this.world.vfx.sparkBurst(px, py, 0xaa44ff, 12, 80);
+      achievements.unlock("mystery_snack");
+      if (achievements.incStat("mysterySnacks") >= 3) achievements.unlock("existential_dread");
     }
     this.world.vfx.celebrate(px, py);
     this.world.audio.uiClick();
@@ -990,6 +1107,436 @@ export class OfficeScene extends Phaser.Scene {
     } else {
       this.plantHint.setVisible(false);
     }
+
+    // Mailbox
+    const mbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.mailboxPx.x, this.mailboxPx.y);
+    if (mbDist < 120) {
+      this.mailboxHint
+        .setPosition(this.mailboxPx.x, this.mailboxPx.y + 64)
+        .setText(this.mailboxHasMail ? "E: CHECK MAIL" : "E: EMPTY")
+        .setVisible(true);
+    } else {
+      this.mailboxHint.setVisible(false);
+    }
+  }
+
+  /** Redraw the mailbox graphics, showing the flag up or down based on mail state. */
+  private drawMailbox(): void {
+    const mbX = this.mailboxPx.x;
+    const mbY = this.mailboxPx.y;
+    const g = this.mailboxGfx;
+    g.clear();
+    // ground shadow
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(mbX, mbY + 52, 36, 8);
+    // post — wooden, with grain shading
+    g.fillStyle(0x6a4a2a, 1);
+    g.fillRect(mbX - 5, mbY + 20, 10, 32);
+    g.fillStyle(0x7a5a3a, 1);
+    g.fillRect(mbX - 5, mbY + 20, 3, 32);
+    g.fillStyle(0x4a3a1a, 1);
+    g.fillRect(mbX + 2, mbY + 20, 3, 32);
+    // mailbox body — blue, rounded top
+    const mbBlue = this.theme === "lumon" ? 0x3a6f57 : 0x2a5cb8;
+    const mbBlueLi = this.theme === "lumon" ? 0x4c8a6e : 0x3a78d8;
+    const mbBlueDk = this.theme === "lumon" ? 0x2a5440 : 0x1a4090;
+    g.fillStyle(mbBlueDk, 1);
+    g.fillRoundedRect(mbX - 22, mbY - 12, 44, 36, 6);
+    g.fillStyle(mbBlue, 1);
+    g.fillRoundedRect(mbX - 21, mbY - 11, 42, 34, 5);
+    // top highlight
+    g.fillStyle(mbBlueLi, 1);
+    g.fillRoundedRect(mbX - 20, mbY - 10, 40, 8, 4);
+    g.fillStyle(0xffffff, 0.12);
+    g.fillRoundedRect(mbX - 19, mbY - 9, 38, 3, 2);
+    // bottom shadow
+    g.fillStyle(mbBlueDk, 1);
+    g.fillRoundedRect(mbX - 21, mbY + 14, 42, 8, 3);
+    // mail slot — dark recessed
+    g.fillStyle(0x0a0a14, 1);
+    g.fillRoundedRect(mbX - 14, mbY - 4, 28, 5, 2);
+    g.fillStyle(0x1a1a28, 1);
+    g.fillRoundedRect(mbX - 13, mbY - 3, 26, 3, 1);
+    // label plate
+    g.fillStyle(0xe8e4d0, 1);
+    g.fillRoundedRect(mbX - 12, mbY + 4, 24, 8, 1);
+    g.fillStyle(0x33373d, 1);
+    g.fillRect(mbX - 9, mbY + 6, 18, 1);
+    g.fillRect(mbX - 9, mbY + 9, 14, 1);
+    // red flag — up when mail, down when empty
+    if (this.mailboxHasMail) {
+      g.fillStyle(0xc83030, 1);
+      g.fillRect(mbX + 18, mbY - 8, 3, 16);
+      g.fillRect(mbX + 18, mbY - 8, 10, 4);
+      g.fillStyle(0xe84848, 1);
+      g.fillRect(mbX + 19, mbY - 7, 1, 14);
+      g.fillRect(mbX + 19, mbY - 7, 8, 2);
+      g.fillStyle(0x8a2020, 1);
+      g.fillCircle(mbX + 19, mbY + 7, 2);
+    } else {
+      g.fillStyle(0xc83030, 1);
+      g.fillRect(mbX + 18, mbY + 2, 3, 14);
+      g.fillRect(mbX + 18, mbY + 12, 10, 4);
+      g.fillStyle(0xe84848, 1);
+      g.fillRect(mbX + 19, mbY + 3, 1, 12);
+      g.fillRect(mbX + 19, mbY + 13, 8, 2);
+      g.fillStyle(0x8a2020, 1);
+      g.fillCircle(mbX + 19, mbY + 3, 2);
+    }
+  }
+
+  /** Draw a helicopter pad on the roof of the building, in a 3/4 diagonal perspective. */
+  private drawHelipad(): void {
+    const g = this.add.graphics().setDepth(-0.5);
+
+    const mapPxW = 30 * TILE_PX; // 1920
+    const cx = mapPxW / 2;       // 960
+    const roofY = 0;             // top edge of the office map
+
+    // ── LAYOUT ── bigger pad, viewed at a diagonal 3/4 angle.
+    // The skew shifts the back of the pad to the right, simulating a
+    // camera that's looking from the front-left rather than dead-centre.
+    const padRX = 140;           // horizontal radius (bigger!)
+    const padRY = 38;            // vertical radius (foreshortened)
+    const padCY = roofY - 130;   // pad centre, high above the roof
+    const skew  = 28;            // horizontal offset applied to back vs front
+
+    // Helper: map a parametric angle (0..2π) to a screen point on the
+    // skewed ellipse.  t=0 is the front-centre, t=π is the back-centre.
+    const padPoint = (angle: number, rxScale = 1, ryScale = 1) => {
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      // base ellipse point
+      let px = cosA * padRX * rxScale;
+      let py = sinA * padRY * ryScale;
+      // apply skew: back half (sinA < 0) shifts right, front half shifts left
+      px += skew * (-sinA / padRY) * padRY;
+      return { x: cx + px, y: padCY + py };
+    };
+
+    // Key pad edge point — front-centre (where stairs connect)
+    const padFront = padPoint(Math.PI / 2);
+
+    // ── COLUMNS ── four support pillars at ~45° intervals, asymmetric
+    // heights because of the diagonal view.  Back columns are taller.
+    const colW = 9;
+    const colAngles = [
+      { angle: -Math.PI * 0.75, base: 0x5a5a66, hi: 0x727280, lo: 0x404048 }, // back-left
+      { angle: -Math.PI * 0.25, base: 0x52525e, hi: 0x6a6a76, lo: 0x383840 }, // back-right
+      { angle:  Math.PI * 0.75, base: 0x48484e, hi: 0x60606a, lo: 0x303036 }, // front-left
+      { angle:  Math.PI * 0.25, base: 0x424248, hi: 0x58585e, lo: 0x2c2c32 }, // front-right
+    ];
+
+    const drawCol = (x: number, topY: number, base: number, hi: number, lo: number) => {
+      const h = roofY - topY;
+      // main shaft
+      g.fillStyle(base, 1);
+      g.fillRect(x - colW / 2, topY, colW, h);
+      // left highlight stripe
+      g.fillStyle(hi, 1);
+      g.fillRect(x - colW / 2, topY, 2.5, h);
+      // right shadow stripe
+      g.fillStyle(lo, 1);
+      g.fillRect(x + colW / 2 - 2.5, topY, 2.5, h);
+      // fluting — two thin grooves
+      g.fillStyle(lo, 0.4);
+      g.fillRect(x - 1, topY, 1, h);
+      g.fillRect(x + 1, topY, 1, h);
+      // capital (top plate)
+      g.fillStyle(base, 1);
+      g.fillEllipse(x, topY, colW + 8, 5);
+      g.fillStyle(hi, 0.5);
+      g.fillEllipse(x, topY - 1, colW + 6, 3);
+      // base plate on roof
+      g.fillStyle(0x2a2a30, 1);
+      g.fillEllipse(x, roofY - 1, colW + 12, 6);
+      g.fillStyle(0x3a3a40, 0.6);
+      g.fillEllipse(x, roofY - 2, colW + 10, 4);
+    };
+
+    // Draw back columns first (taller — they reach the back rim of the pad)
+    for (const c of colAngles) {
+      if (Math.sin(c.angle) > 0) continue; // skip front columns
+      const p = padPoint(c.angle, 0.82);
+      drawCol(p.x, p.y, c.base, c.hi, c.lo);
+    }
+
+    // ── STAIRS ── wider, more dramatic, with railing posts
+    const stairCount = 12;
+    const stairBaseW = 80;
+    const stairTopW  = 48;
+    const stairBaseY = roofY;
+    const stairTopY  = padFront.y + 4;
+    const stairH     = stairBaseY - stairTopY;
+    // stairs shift slightly left to align with the pad's front-centre
+    const stairCX = padFront.x;
+
+    // Staircase side walls — give visible depth
+    g.fillStyle(0x30303a, 1);
+    for (const side of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(stairCX + side * stairBaseW / 2, stairBaseY);
+      g.lineTo(stairCX + side * stairTopW  / 2, stairTopY);
+      g.lineTo(stairCX + side * stairTopW  / 2, stairTopY + 5);
+      g.lineTo(stairCX + side * stairBaseW / 2, stairBaseY + 5);
+      g.closePath();
+      g.fillPath();
+    }
+
+    for (let i = 0; i < stairCount; i++) {
+      const t0 = i / stairCount;
+      const t1 = (i + 1) / stairCount;
+      const y0 = stairBaseY - t0 * stairH;
+      const y1 = stairBaseY - t1 * stairH;
+      const w0 = stairBaseW + (stairTopW - stairBaseW) * t0;
+      const w1 = stairBaseW + (stairTopW - stairBaseW) * t1;
+
+      // Riser (vertical face) — dark with gradient feel
+      g.fillStyle(0x44444e, 1);
+      g.beginPath();
+      g.moveTo(stairCX - w0 / 2, y0);
+      g.lineTo(stairCX + w0 / 2, y0);
+      g.lineTo(stairCX + w1 / 2, y1);
+      g.lineTo(stairCX - w1 / 2, y1);
+      g.closePath();
+      g.fillPath();
+
+      // Tread (horizontal surface) — lighter, thin ellipse
+      if (i < stairCount - 1) {
+        g.fillStyle(0x585862, 1);
+        g.fillEllipse(stairCX, y1, w1, w1 * 0.14);
+        // front edge highlight
+        g.fillStyle(0x6a6a74, 0.5);
+        g.fillEllipse(stairCX, y1 - 1, w1 * 0.9, w1 * 0.1);
+      }
+    }
+
+    // Stair railing — posts on both sides with a handrail
+    g.lineStyle(2, 0x888890, 0.8);
+    for (const side of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(stairCX + side * stairBaseW / 2, stairBaseY - 2);
+      g.lineTo(stairCX + side * stairTopW  / 2, stairTopY - 2);
+      g.strokePath();
+      // railing posts
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        const ry = stairBaseY - t * stairH;
+        const rw = stairBaseW + (stairTopW - stairBaseW) * t;
+        g.fillStyle(0x707078, 0.7);
+        g.fillRect(stairCX + side * rw / 2 - 1, ry - 6, 2, 6);
+      }
+    }
+
+    // ── PAD SLAB ── drawn as a skewed ellipse polygon for the 3/4 look
+    const padPoly = (rxScale = 1, yOff = 0) => {
+      const segs = 48;
+      const pts: { x: number; y: number }[] = [];
+      for (let i = 0; i <= segs; i++) {
+        pts.push(padPoint((i / segs) * Math.PI * 2, rxScale, 1));
+      }
+      g.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        if (i === 0) g.moveTo(pts[i].x, pts[i].y + yOff);
+        else g.lineTo(pts[i].x, pts[i].y + yOff);
+      }
+      g.closePath();
+    };
+
+    // Drop shadow beneath the pad
+    g.fillStyle(0x000000, 0.25);
+    padPoly(1.02, 6);
+    g.fillPath();
+
+    // Slab thickness / edge — darker, offset down
+    g.fillStyle(0x282830, 1);
+    padPoly(1, 5);
+    g.fillPath();
+    g.fillStyle(0x30303a, 1);
+    padPoly(0.99, 3);
+    g.fillPath();
+
+    // Top asphalt surface
+    g.fillStyle(0x383840, 1);
+    padPoly(1, 0);
+    g.fillPath();
+
+    // Surface gradient — lighter near the front (closer to viewer)
+    g.fillStyle(0x44444e, 0.5);
+    padPoly(0.7, padRY * 0.3);
+    g.fillPath();
+
+    // Texture speckles
+    g.fillStyle(0x4c4c56, 0.3);
+    for (let i = 0; i < 45; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 0.82;
+      const p = padPoint(a, r, r);
+      g.fillRect(p.x, p.y, 2, 2);
+    }
+
+    // ── PAD MARKINGS (all follow the skewed ellipse) ──
+
+    // Outer safety ring — solid white, thick
+    g.lineStyle(3.5, 0xf0f0f0, 0.92);
+    const ringSegs = 48;
+    g.beginPath();
+    for (let i = 0; i <= ringSegs; i++) {
+      const p = padPoint((i / ringSegs) * Math.PI * 2, (padRX - 12) / padRX, (padRY - 8) / padRY);
+      if (i === 0) g.moveTo(p.x, p.y);
+      else g.lineTo(p.x, p.y);
+    }
+    g.closePath();
+    g.strokePath();
+
+    // Dashed inner ring
+    const dashCount = 32;
+    g.lineStyle(2.5, 0xf0f0f0, 0.6);
+    for (let i = 0; i < dashCount; i++) {
+      if (i % 2 !== 0) continue;
+      const a0 = (i / dashCount) * Math.PI * 2;
+      const a1 = ((i + 1) / dashCount) * Math.PI * 2;
+      const segs = 5;
+      g.beginPath();
+      for (let s = 0; s <= segs; s++) {
+        const a = a0 + (a1 - a0) * (s / segs);
+        const p = padPoint(a, (padRX - 28) / padRX, (padRY - 12) / padRY);
+        if (s === 0) g.moveTo(p.x, p.y);
+        else g.lineTo(p.x, p.y);
+      }
+      g.strokePath();
+    }
+
+    // H marker — foreshortened and skewed to lie flat on the angled pad
+    const hW = 56;
+    const hH = 16;
+    const hT = 8;
+    // skew the H slightly to match the pad's diagonal
+    const hSkew = 6;
+    g.fillStyle(0xf0f0f0, 1);
+    // left leg (skewed)
+    g.beginPath();
+    g.moveTo(cx - hW / 2 - hSkew, padCY - hH / 2);
+    g.lineTo(cx - hW / 2 + hT - hSkew, padCY - hH / 2);
+    g.lineTo(cx - hW / 2 + hT + hSkew, padCY + hH / 2);
+    g.lineTo(cx - hW / 2 + hSkew, padCY + hH / 2);
+    g.closePath();
+    g.fillPath();
+    // right leg (skewed)
+    g.beginPath();
+    g.moveTo(cx + hW / 2 - hT - hSkew, padCY - hH / 2);
+    g.lineTo(cx + hW / 2 - hSkew, padCY - hH / 2);
+    g.lineTo(cx + hW / 2 + hSkew, padCY + hH / 2);
+    g.lineTo(cx + hW / 2 - hT + hSkew, padCY + hH / 2);
+    g.closePath();
+    g.fillPath();
+    // crossbar (skewed parallelogram)
+    g.beginPath();
+    g.moveTo(cx - hW / 2 - hSkew, padCY - hT / 2);
+    g.lineTo(cx + hW / 2 - hSkew, padCY - hT / 2);
+    g.lineTo(cx + hW / 2 + hSkew, padCY + hT / 2);
+    g.lineTo(cx - hW / 2 + hSkew, padCY + hT / 2);
+    g.closePath();
+    g.fillPath();
+
+    // ── CORNER APPROACH LIGHTS ── glowing yellow with halo
+    for (const c of colAngles) {
+      const p = padPoint(c.angle, 0.72, 0.72);
+      // halo
+      g.fillStyle(0xffee88, 0.15);
+      g.fillCircle(p.x, p.y, 9);
+      g.fillStyle(0xffee88, 0.25);
+      g.fillCircle(p.x, p.y, 6);
+      // core
+      g.fillStyle(0xffcc44, 1);
+      g.fillCircle(p.x, p.y, 3.5);
+      g.fillStyle(0xffffff, 0.7);
+      g.fillCircle(p.x, p.y, 1.5);
+    }
+
+    // ── RAILING around the pad edge ── small posts at intervals
+    const railPosts = 16;
+    for (let i = 0; i < railPosts; i++) {
+      const a = (i / railPosts) * Math.PI * 2;
+      const p = padPoint(a, 0.96, 0.96);
+      // skip the front section where stairs connect
+      if (Math.sin(a) > 0.7) continue;
+      g.fillStyle(0x8a8a92, 0.7);
+      g.fillRect(p.x - 1, p.y - 8, 2, 8);
+      g.fillStyle(0xaab0b8, 0.5);
+      g.fillRect(p.x - 0.5, p.y - 8, 1, 8);
+    }
+    // railing rail — thin line following the pad rim
+    g.lineStyle(1.5, 0x8a8a92, 0.5);
+    g.beginPath();
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * Math.PI * 2;
+      if (Math.sin(a) > 0.7) { // gap for stairs
+        g.moveTo(padPoint(a, 0.96, 0.96).x, padPoint(a, 0.96, 0.96).y - 8);
+        continue;
+      }
+      const p = padPoint(a, 0.96, 0.96);
+      if (i === 0 || Math.sin(a) > 0.65) g.moveTo(p.x, p.y - 8);
+      else g.lineTo(p.x, p.y - 8);
+    }
+    g.strokePath();
+
+    // ── FRONT COLUMNS (drawn last — overlap pad rim for depth) ──
+    for (const c of colAngles) {
+      if (Math.sin(c.angle) <= 0) continue; // skip back columns
+      const p = padPoint(c.angle, 0.82);
+      drawCol(p.x, p.y, c.base, c.hi, c.lo);
+    }
+
+    // ── BEACON ── a tall light pole at the back-right of the pad
+    const beaconP = padPoint(-Math.PI * 0.15, 0.7, 0.7);
+    g.fillStyle(0x555560, 1);
+    g.fillRect(beaconP.x - 1.5, beaconP.y - 34, 3, 34);
+    // beacon housing
+    g.fillStyle(0x444450, 1);
+    g.fillRoundedRect(beaconP.x - 4, beaconP.y - 40, 8, 8, 2);
+    // glowing top
+    g.fillStyle(0xff3322, 0.2);
+    g.fillCircle(beaconP.x, beaconP.y - 42, 10);
+    g.fillStyle(0xff3322, 0.4);
+    g.fillCircle(beaconP.x, beaconP.y - 42, 6);
+    g.fillStyle(0xff5544, 1);
+    g.fillCircle(beaconP.x, beaconP.y - 42, 3);
+    g.fillStyle(0xffffff, 0.6);
+    g.fillCircle(beaconP.x, beaconP.y - 43, 1.5);
+
+    // ── WIND SOCK ── on a pole at the back-left, blowing right
+    const wsP = padPoint(-Math.PI * 0.85, 0.75, 0.75);
+    g.fillStyle(0x666666, 1);
+    g.fillRect(wsP.x, wsP.y - 28, 2, 28);
+    // pole top cap
+    g.fillStyle(0x888888, 1);
+    g.fillCircle(wsP.x + 1, wsP.y - 28, 2);
+    // sock — orange, striped, blowing to the right
+    g.fillStyle(0xff8833, 0.95);
+    g.beginPath();
+    g.moveTo(wsP.x + 2, wsP.y - 24);
+    g.lineTo(wsP.x + 28, wsP.y - 18);
+    g.lineTo(wsP.x + 28, wsP.y - 14);
+    g.lineTo(wsP.x + 2, wsP.y - 12);
+    g.closePath();
+    g.fillPath();
+    // white stripes on sock
+    g.fillStyle(0xffffff, 0.5);
+    g.beginPath();
+    g.moveTo(wsP.x + 8, wsP.y - 23);
+    g.lineTo(wsP.x + 12, wsP.y - 22);
+    g.lineTo(wsP.x + 12, wsP.y - 13);
+    g.lineTo(wsP.x + 8, wsP.y - 14);
+    g.closePath();
+    g.fillPath();
+    g.beginPath();
+    g.moveTo(wsP.x + 18, wsP.y - 20);
+    g.lineTo(wsP.x + 22, wsP.y - 19);
+    g.lineTo(wsP.x + 22, wsP.y - 14);
+    g.lineTo(wsP.x + 18, wsP.y - 13);
+    g.closePath();
+    g.fillPath();
   }
 
   /** Draw a kanban-style task board on the front wall of the office. */
@@ -1044,6 +1591,200 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** Draw a trophy case on the wall — a wooden cabinet with empty cavities that fill with trophies. */
+  private drawTrophyCase(): void {
+    this.trophyGfx = this.add.graphics().setDepth(3);
+    this.updateTrophyCase();
+  }
+
+  /** Redraw the trophy case with current achievement unlock state. */
+  private updateTrophyCase(): void {
+    const g = this.trophyGfx;
+    if (!g) return;
+    g.clear();
+
+    const tx = this.trophyTile.x * TILE_PX + 32;
+    const ty = this.trophyTile.y * TILE_PX + 8;
+    const cw = 80;  // case width
+    const ch = 96;  // case height
+    const cols = 4;
+    const rows = 3;
+    const slotW = 16;
+    const slotH = 24;
+    const gapX = (cw - cols * slotW) / (cols + 1);
+    const gapY = (ch - rows * slotH) / (rows + 1);
+
+    // outer wooden frame
+    g.fillStyle(0x3a2818, 1);
+    g.fillRoundedRect(tx - cw / 2 - 6, ty - 6, cw + 12, ch + 12, 6);
+    // inner dark background (cabinet interior)
+    g.fillStyle(0x1a1410, 1);
+    g.fillRoundedRect(tx - cw / 2, ty, cw, ch, 4);
+    // glass sheen
+    g.fillStyle(0xffffff, 0.04);
+    g.fillRoundedRect(tx - cw / 2 + 2, ty + 2, cw - 4, ch / 3, 3);
+
+    // wooden shelves
+    g.fillStyle(0x3a2818, 0.8);
+    for (let r = 1; r < rows; r++) {
+      const sy = ty + gapY * r + slotH * r;
+      g.fillRect(tx - cw / 2 + 2, sy - 1, cw - 4, 3);
+    }
+
+    // draw trophy slots — filled or empty
+    const unlocked = achievements.getUnlockedIds();
+    const allAch = ACHIEVEMENTS.filter((a) => !a.comingSoon);
+    let idx = 0;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (idx >= allAch.length) break;
+        const sx = tx - cw / 2 + gapX + col * (slotW + gapX);
+        const sy = ty + gapY + row * (slotH + gapY);
+        const ach = allAch[idx];
+        const isUnlocked = unlocked.has(ach.id);
+
+        if (isUnlocked) {
+          // filled slot — small trophy cup
+          g.fillStyle(0xffd700, 1);
+          g.fillCircle(sx + slotW / 2, sy + 8, 5);
+          g.fillRect(sx + slotW / 2 - 3, sy + 12, 6, 5);
+          g.fillRect(sx + slotW / 2 - 5, sy + 17, 10, 3);
+          // sparkle
+          g.fillStyle(0xffffff, 0.5);
+          g.fillCircle(sx + slotW / 2 + 3, sy + 6, 1.5);
+        } else {
+          // empty cavity — dark recessed slot
+          g.fillStyle(0x0a0808, 0.6);
+          g.fillRoundedRect(sx, sy, slotW, slotH, 2);
+          // subtle dust
+          g.fillStyle(0x2a2a2a, 0.3);
+          g.fillCircle(sx + slotW / 2, sy + slotH / 2, 2);
+        }
+        idx++;
+      }
+    }
+  }
+
+  /** Draw a cork-board bulletin board hanging on the west wall — the Hall of Fame. */
+  private drawHallOfFameBoard(): void {
+    this.hallOfFameGfx = this.add.graphics().setDepth(3);
+    const g = this.hallOfFameGfx;
+
+    // Board hangs on the west wall (x=0 tile), protruding slightly into the room.
+    // Portrait orientation, centered vertically on the hallOfFameTile row.
+    const wallFace = TILE_PX;              // wall tile ends at x=64
+    const bx = wallFace + 22;              // board center — hangs ~22px off the wall face
+    const by = this.hallOfFameTile.y * TILE_PX + 32;
+    const bw = 48;
+    const bh = 84;
+
+    // Drop shadow on the wall behind/below the board
+    g.fillStyle(0x000000, 0.25);
+    g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 4, bw, bh, 3);
+
+    // Wooden frame — visible thickness so it reads as a 3D object on the wall
+    g.fillStyle(0x4a3220, 1);
+    g.fillRoundedRect(bx - bw / 2 - 4, by - bh / 2 - 4, bw + 8, bh + 8, 5);
+    g.fillStyle(0x5a4030, 1);
+    g.fillRoundedRect(bx - bw / 2 - 2, by - bh / 2 - 2, bw + 4, bh + 4, 4);
+
+    // Cork surface
+    g.fillStyle(0xcba872, 1);
+    g.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 3);
+
+    // Cork texture — scattered dots
+    g.fillStyle(0xb8985f, 0.4);
+    for (let i = 0; i < 30; i++) {
+      const dx = bx - bw / 2 + 4 + Math.random() * (bw - 8);
+      const dy = by - bh / 2 + 4 + Math.random() * (bh - 8);
+      g.fillCircle(dx, dy, 0.8 + Math.random() * 0.8);
+    }
+
+    // Title strip at top
+    g.fillStyle(0x2a3848, 0.9);
+    g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 3, bw - 6, 12, 2);
+
+    // Gold star at top center
+    g.fillStyle(0xffd700, 1);
+    g.fillCircle(bx, by - bh / 2 + 9, 2.5);
+
+    // Mounting nails at top corners — small silver dots on the wall above the board
+    g.fillStyle(0x888890, 1);
+    g.fillCircle(bx - bw / 2 + 4, by - bh / 2 - 6, 1.5);
+    g.fillCircle(bx + bw / 2 - 4, by - bh / 2 - 6, 1.5);
+    // nail highlights
+    g.fillStyle(0xcccccc, 0.6);
+    g.fillCircle(bx - bw / 2 + 3.5, by - bh / 2 - 6.5, 0.7);
+    g.fillCircle(bx + bw / 2 - 4.5, by - bh / 2 - 6.5, 0.7);
+
+    // Pinned photos — 3 small polaroid cards stacked vertically
+    const photoColors = [0xc44a4a, 0x3a7cb5, 0x3d9152];
+    const photoSpacing = 22;
+    const photoStartY = by - bh / 2 + 22;
+    for (let i = 0; i < photoColors.length; i++) {
+      const py = photoStartY + i * photoSpacing;
+      // white border
+      g.fillStyle(0xf8f6f0, 1);
+      g.fillRoundedRect(bx - 14, py - 8, 28, 18, 1);
+      // photo content
+      g.fillStyle(photoColors[i], 1);
+      g.fillRect(bx - 12, py - 6, 24, 10);
+      // push pin
+      g.fillStyle(0xd44a4a, 1);
+      g.fillCircle(bx, py - 10, 2);
+      g.fillStyle(0xffffff, 0.5);
+      g.fillCircle(bx - 0.8, py - 10.8, 0.8);
+    }
+  }
+
+  /** Create walk/idle/work animations for a custom character texture key. */
+  private ensureCharAnimations(key: string): void {
+    if (this.anims.exists(`${key}-work`)) return;
+    const dirs: Dir[] = ["down", "left", "right", "up"];
+    const FRAMES_PER_ROW = 8;
+    dirs.forEach((dir, row) => {
+      const base = row * FRAMES_PER_ROW;
+      this.anims.create({
+        key: `${key}-walk-${dir}`,
+        frames: this.anims.generateFrameNumbers(key, {
+          frames: [base, base + 1, base + 2, base + 3, base + 4, base + 5],
+        }),
+        frameRate: 10,
+        repeat: -1,
+      });
+      const breathFrames = Array(24).fill(base + 6);
+      breathFrames.push(base + 7);
+      breathFrames.push(base + 6);
+      this.anims.create({
+        key: `${key}-idle-${dir}`,
+        frames: this.anims.generateFrameNumbers(key, {
+          frames: breathFrames,
+        }),
+        frameRate: 10,
+        repeat: -1,
+        repeatDelay: Math.random() * 2,
+      });
+    });
+    this.anims.create({
+      key: `${key}-work`,
+      frames: this.anims.generateFrameNumbers(key, { frames: [6, 7] }),
+      frameRate: 2.5,
+      repeat: -1,
+    });
+  }
+
+  /** Generate or refresh the boss texture from the player's appearance. */
+  private refreshBossTexture(): void {
+    const ap = this.store.player?.appearance;
+    if (ap) {
+      this.playerTexKey = "boss-custom";
+      generateCharTexture(this, this.playerTexKey, ap);
+      this.ensureCharAnimations(this.playerTexKey);
+    } else {
+      this.playerTexKey = "boss";
+    }
+  }
+
   private syncAgents(): void {
     for (const [id, info] of this.store.agents) {
       if (id === YUKI_ID) {
@@ -1054,6 +1795,12 @@ export class OfficeScene extends Phaser.Scene {
       if (existing) {
         existing.sync(info);
       } else {
+        // Generate custom texture if agent has an appearance
+        if (info.appearance) {
+          const key = agentTextureKey(info);
+          generateCharTexture(this, key, info.appearance);
+          this.ensureCharAnimations(key);
+        }
         const overflow = info.deskIndex - this.seats.length;
         const seat =
           this.seats[info.deskIndex] ??
@@ -1076,12 +1823,35 @@ export class OfficeScene extends Phaser.Scene {
     this.monitors.forEach((m, i) => {
       const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
       if (!agent || agent.status === "idle") {
-        m?.setFrame(0).clearTint();
+        m?.setFrame("0").clearTint();
       } else {
-        m?.setFrame(1);
+        m?.setFrame("1");
         m?.setTint(STATUS_COLORS[agent.status]);
       }
     });
+
+    // chairs: face up (toward desk) if assigned, face down if unassigned
+    this.chairs.forEach((chair, i) => {
+      if (!chair) return;
+      const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
+      if (agent) {
+        chair.setTexture(CHAIR_TEX_UP);
+      } else {
+        chair.setTexture(CHAIR_TEX_DOWN);
+      }
+    });
+
+    // Yuki's monitor — always on since she's always at her desk
+    if (this.yukiMonitor) {
+      const yukiInfo = this.store.agents.get(YUKI_ID);
+      if (yukiInfo && yukiInfo.status !== "idle") {
+        this.yukiMonitor.setFrame("1");
+        this.yukiMonitor.setTint(STATUS_COLORS[yukiInfo.status]);
+      } else {
+        this.yukiMonitor.setFrame("0");
+        this.yukiMonitor.clearTint();
+      }
+    }
   }
 
   update(time: number, dt: number): void {
@@ -1089,7 +1859,7 @@ export class OfficeScene extends Phaser.Scene {
     const active = document.activeElement?.tagName;
     const typing = active === "INPUT" || active === "TEXTAREA" || active === "SELECT";
     if (typing) {
-      this.player.play(`boss-idle-${this.playerDir}`, true);
+      this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
       for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
       this.yuki?.update(time, dt, false, this.player.x, this.player.y);
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
@@ -1141,9 +1911,9 @@ export class OfficeScene extends Phaser.Scene {
     if (vx !== 0 || vy !== 0) {
       this.playerDir =
         Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
-      this.player.play(`boss-walk-${this.playerDir}`, true);
+      this.player.play(`${this.playerTexKey}-walk-${this.playerDir}`, true);
     } else {
-      this.player.play(`boss-idle-${this.playerDir}`, true);
+      this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
     }
     this.player.setDepth(10 + this.player.y);
     const playerName = (this.store.player?.name ?? "BOSS").toUpperCase();
@@ -1162,6 +1932,17 @@ export class OfficeScene extends Phaser.Scene {
     // E: grab coffee, talk to the nearest agent, open the task board, or recruit a ghost
     const ePressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
     if (ePressed) {
+      // trophy case check — before other interactables
+      const trophyPx = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
+      const trophyDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx.x, trophyPx.y);
+      // hall of fame bulletin board — west wall, bottom-left
+      const hofPx = { x: 86, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      const hofDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx.x, hofPx.y);
+      if (trophyDist < 120) {
+        this.store.toggleAchievements();
+      } else if (hofDist < 120) {
+        this.store.toggleHallOfFame();
+      } else
       // try new office interactables first
       if (this.tryOfficeInteract(time)) {
         // handled by a new interactable
@@ -1180,6 +1961,8 @@ export class OfficeScene extends Phaser.Scene {
         this.world.vfx.sparkBurst(coffeePx.x, coffeePx.y, 0xb0741f, 12, 80);
         this.world.vfx.celebrate(coffeePx.x, coffeePx.y);
         this.world.audio.coffee();
+        if (achievements.incStat("coffee") >= 10) achievements.unlock("coffee_addict");
+        if (time < this.sofaUntil) achievements.unlock("speed_demon");
       } else {
         // check the board — it's a big target on the wall
         const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
@@ -1214,6 +1997,7 @@ export class OfficeScene extends Phaser.Scene {
           }
           this.store.select(best ? best.id : null);
           if (best) {
+            if (best.id === YUKI_ID) achievements.unlock("yuki_visit");
             // defer focus so this keypress doesn't type "e" into the chat box
             setTimeout(() => {
               (document.getElementById("d-chat") as HTMLInputElement | null)?.focus();
@@ -1264,32 +2048,113 @@ export class OfficeScene extends Phaser.Scene {
       this.store.toast("You were knocked out and dragged back to the office!");
     }
 
-    // board proximity hint
-    const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
-    const boardDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boardPx.x, boardPx.y);
-    if (boardDist < 160 && !this.store.boardOpen) {
-      this.boardHint
-        .setPosition(boardPx.x, boardPx.y + 64)
-        .setText("E: TASK BOARD")
-        .setVisible(true);
+    // office proximity hints — skip distance checks when outside
+    if (!outside) {
+      // board proximity hint
+      const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
+      const boardDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boardPx.x, boardPx.y);
+      if (boardDist < 160 && !this.store.boardOpen) {
+        this.boardHint
+          .setPosition(boardPx.x, boardPx.y + 64)
+          .setText("E: TASK BOARD")
+          .setVisible(true);
+      } else {
+        this.boardHint.setVisible(false);
+      }
+
+      // coffee machine proximity hint
+      const coffeePx = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
+      const coffeeDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, coffeePx.x, coffeePx.y);
+      if (coffeeDist < 144) {
+        this.coffeeHint
+          .setPosition(coffeePx.x, coffeePx.y + 64)
+          .setText(time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE")
+          .setVisible(true);
+      } else {
+        this.coffeeHint.setVisible(false);
+      }
+
+      // new interactable proximity hints
+      this.updateInteractHints(time);
     } else {
       this.boardHint.setVisible(false);
-    }
-
-    // coffee machine proximity hint
-    const coffeePx = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
-    const coffeeDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, coffeePx.x, coffeePx.y);
-    if (coffeeDist < 144) {
-      this.coffeeHint
-        .setPosition(coffeePx.x, coffeePx.y + 64)
-        .setText(time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE")
-        .setVisible(true);
-    } else {
       this.coffeeHint.setVisible(false);
+      this.fridgeHint.setVisible(false);
+      this.coolerHint.setVisible(false);
+      this.clockHint.setVisible(false);
+      this.vendingHint.setVisible(false);
+      this.sofaHint.setVisible(false);
+      this.filingHint.setVisible(false);
+      this.plantHint.setVisible(false);
+      this.mailboxHint.setVisible(false);
     }
 
-    // new interactable proximity hints
-    this.updateInteractHints(time);
+    // mailbox: new mail arrives on timer
+    if (!this.mailboxHasMail && time >= this.mailboxNextMail) {
+      this.mailboxHasMail = true;
+      this.drawMailbox();
+    }
+
+    // --- achievements: exploration ---
+    if (outside) {
+      achievements.unlock("step_outside");
+      const hostility = this.world.getHostilityAt(this.player.x, this.player.y);
+      if (hostility >= 0) achievements.unlock("meadow_explorer");
+      if (hostility >= 1) achievements.unlock("forest_explorer");
+      if (hostility >= 2) achievements.unlock("ruins_explorer");
+      if (hostility >= 3) achievements.unlock("wasteland_explorer");
+      if (hostility >= 4) achievements.unlock("void_explorer");
+      if (hostility >= 5) achievements.unlock("infernal_explorer");
+      const chunkDist = this.world.chunkDistance(this.player.x, this.player.y);
+      if (chunkDist >= 10) achievements.unlock("deep_diver");
+      if (chunkDist >= 18) achievements.unlock("marathoner");
+      const df = this.world.distanceFactor(this.player.x, this.player.y);
+      if (df >= 1.0) achievements.unlock("night_walker");
+      if (this.world.playerHp < 10) achievements.incStat("lowHpOutside", 0); // just touch the stat
+    } else {
+      // returned to office — check close_call
+      if (this.world.playerHp > 0 && this.world.playerHp < 10) {
+        achievements.unlock("close_call");
+      }
+    }
+
+    // insomniac: 60 min in one session
+    if ((time - this.sceneStart) >= 3600000) achievements.unlock("insomniac");
+
+    // trophy case — update display only when achievement count changes
+    const achCount = achievements.getUnlockedCount();
+    if (!outside && achCount !== this.trophyAchCount) {
+      this.trophyAchCount = achCount;
+      this.updateTrophyCase();
+    }
+    // trophy case & hall of fame proximity hints — skip when outside
+    if (!outside) {
+      const trophyPx2 = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
+      const trophyDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx2.x, trophyPx2.y);
+      if (trophyDist2 < 120 && !this.store.achievementsOpen) {
+        this.trophyHint
+          .setPosition(trophyPx2.x, trophyPx2.y + 64)
+          .setText("E: TROPHY CASE")
+          .setVisible(true);
+      } else {
+        this.trophyHint.setVisible(false);
+      }
+
+      // hall of fame bulletin board — proximity hint (player approaches from the right)
+      const hofPx2 = { x: 86, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      const hofDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx2.x, hofPx2.y);
+      if (hofDist2 < 120 && !this.store.hallOfFameOpen) {
+        this.hallOfFameHint
+          .setPosition(hofPx2.x + 48, hofPx2.y)
+          .setText("E: HALL OF FAME")
+          .setVisible(true);
+      } else {
+        this.hallOfFameHint.setVisible(false);
+      }
+    } else {
+      this.trophyHint.setVisible(false);
+      this.hallOfFameHint.setVisible(false);
+    }
   }
 }
 

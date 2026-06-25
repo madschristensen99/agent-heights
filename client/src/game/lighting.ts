@@ -18,7 +18,7 @@
 import Phaser from "phaser";
 import { TILE } from "../../../shared/types";
 
-interface LightSource {
+export interface LightSource {
   sprite: Phaser.GameObjects.Image;
   x: number;
   y: number;

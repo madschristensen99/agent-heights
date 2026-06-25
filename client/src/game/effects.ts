@@ -100,6 +100,11 @@ export class VFXManager {
     this.scene.cameras.main.shake(c.duration, c.intensity);
   }
 
+  /** Subtle continuous rumble — for nearby behemoths. Intensity 0–1. */
+  rumble(intensity: number): void {
+    this.scene.cameras.main.shake(120, 0.002 * intensity);
+  }
+
   /** Hit-stop: brief freeze frame on heavy impacts. */
   hitStop(duration = 80): void {
     this.scene.time.timeScale = 0;
@@ -112,7 +117,7 @@ export class VFXManager {
   damageNumber(x: number, y: number, amount: number, color = 0xff4444): void {
     const text = this.scene.add
       .text(x, y, `-${Math.round(amount)}`, {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "18px",
         color: `#${color.toString(16).padStart(6, "0")}`,
         stroke: "#000000",

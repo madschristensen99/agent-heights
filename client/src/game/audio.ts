@@ -151,6 +151,21 @@ export class AudioSystem {
     this.tone(80, 0.1, "square", 0.2);
   }
 
+  golfSwing(): void {
+    this.sweep(800, 200, 0.15, "sine", 0.15);
+    this.noise(0.1, 0.15, 2000, 1);
+  }
+
+  tennisHit(): void {
+    this.sweep(600, 300, 0.08, "sine", 0.18);
+    this.noise(0.06, 0.12, 3000, 1.5);
+  }
+
+  tennisBounce(): void {
+    this.tone(440, 0.05, "sine", 0.15);
+    this.noise(0.04, 0.08, 2000, 2);
+  }
+
   creatureGrowl(): void {
     this.sweep(200, 80, 0.4, "sawtooth", 0.2);
   }
@@ -159,6 +174,11 @@ export class AudioSystem {
     this.sweep(150, 50, 0.8, "sawtooth", 0.4);
     this.tone(60, 0.6, "square", 0.3);
     this.noise(0.5, 0.2, 500, 0.5);
+  }
+
+  rumble(): void {
+    this.tone(35, 0.4, "sine", 0.12);
+    this.noise(0.3, 0.08, 60, 0.5);
   }
 
   stoneImpact(): void {

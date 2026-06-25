@@ -58,7 +58,7 @@ export class HUDSystem {
     this.compass = this.scene.add.graphics().setDepth(950).setScrollFactor(0).setVisible(false);
     this.compassText = this.scene.add
       .text(0, 0, "", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "12px",
         color: "#aabbdd",
         stroke: "#0a0a14",
@@ -74,7 +74,7 @@ export class HUDSystem {
     this.beastBanner = this.scene.add.graphics().setDepth(950).setScrollFactor(0).setVisible(false);
     this.beastBannerText = this.scene.add
       .text(0, 0, "", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "18px",
         color: "#ffcc44",
         stroke: "#1a0a00",
@@ -372,7 +372,7 @@ export class HUDSystem {
       const bg = this.scene.add.graphics().setDepth(99);
       const label = this.scene.add
         .text(0, 0, "", {
-          fontFamily: "monospace",
+          fontFamily: "'M PLUS Rounded 1c', sans-serif",
           fontSize: "14px",
           color: "#1d2126",
           stroke: "#f4f6f8",

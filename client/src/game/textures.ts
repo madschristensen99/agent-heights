@@ -15,7 +15,7 @@
 
 import Phaser from "phaser";
 
-export const SPRITE_SCALE = 2; // render at 2x for crispness
+export const SPRITE_SCALE = 1; // no pixel-art upscaling — smooth rendering
 
 type RGB = { r: number; g: number; b: number };
 
@@ -252,16 +252,19 @@ function drawRune(
   ctx.restore();
 }
 
-/** Draw a drop shadow beneath a creature. */
+/** Draw a soft drop shadow beneath a creature. */
 function drawGroundShadow(ctx: CanvasRenderingContext2D, cx: number, groundY: number, width: number): void {
   ctx.save();
-  const grad = ctx.createRadialGradient(cx, groundY, 0, cx, groundY, width);
-  grad.addColorStop(0, rgba(0x000000, 0.35));
+  ctx.filter = "blur(3px)";
+  const grad = ctx.createRadialGradient(cx, groundY, 0, cx, groundY, width * 1.2);
+  grad.addColorStop(0, rgba(0x000000, 0.3));
+  grad.addColorStop(0.5, rgba(0x000000, 0.15));
   grad.addColorStop(1, rgba(0x000000, 0));
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.ellipse(cx, groundY, width, width * 0.3, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, groundY, width * 1.2, width * 0.35, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.filter = "none";
   ctx.restore();
 }
 
@@ -1071,6 +1074,622 @@ const CREATURE_DESIGNS: CreatureDesign[] = [
         ctx.arc(cx, s * 0.3, 8, 0, Math.PI * 2);
         ctx.fillStyle = rgba(0xffff88, 0.8);
         ctx.fill();
+      }
+    },
+  },
+];
+
+// ============================================================
+// FRIENDLY CREATURE SPRITES — 4 cute types, 4 frames each (idle, walk1, walk2, hop)
+// ============================================================
+
+interface FriendlyDesign {
+  name: string;
+  baseColor: number;
+  accentColor: number;
+  eyeColor: number;
+  size: number;
+  draw: (ctx: CanvasRenderingContext2D, frame: number, size: number, colors: FriendlyDesign) => void;
+}
+
+const FRIENDLY_DESIGNS: FriendlyDesign[] = [
+  // Unicorn — white horse body with golden horn and pastel rainbow mane
+  {
+    name: "unicorn",
+    baseColor: 0xfefefe,
+    accentColor: 0xffccff,
+    eyeColor: 0x6644aa,
+    size: 28,
+    draw: (ctx, frame, s, c) => {
+      const cx = s * 0.5;
+      const groundY = s * 0.88;
+      const legPhase = frame === 1 ? 4 : frame === 2 ? -4 : frame === 3 ? -8 : 0;
+      const hop = frame === 3 ? -6 : 0;
+
+      drawGroundShadow(ctx, cx, groundY, s * 0.4);
+
+      // legs — 4 slender horse legs
+      drawLimb(ctx, cx - s * 0.15, s * 0.55 + hop, cx - s * 0.18 + legPhase, groundY - 2, 4, 2.5, darken(c.baseColor, 0.1));
+      drawLimb(ctx, cx + s * 0.12, s * 0.55 + hop, cx + s * 0.15 - legPhase, groundY - 2, 4, 2.5, darken(c.baseColor, 0.1));
+      drawLimb(ctx, cx - s * 0.05, s * 0.55 + hop, cx - s * 0.02 + legPhase, groundY - 2, 4, 2.5, c.baseColor);
+      drawLimb(ctx, cx + s * 0.22, s * 0.55 + hop, cx + s * 0.25 - legPhase, groundY - 2, 4, 2.5, c.baseColor);
+
+      // body — horse torso, elongated and slim
+      ctx.save();
+      const bodyGrad = ctx.createLinearGradient(0, s * 0.4 + hop, 0, s * 0.56 + hop);
+      bodyGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.05), 1));
+      bodyGrad.addColorStop(0.5, rgba(c.baseColor, 1));
+      bodyGrad.addColorStop(1, rgba(darken(c.baseColor, 0.12), 1));
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, s * 0.5 + hop, s * 0.34, s * 0.11, -0.02, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // tail — flowing rainbow strands
+      ctx.save();
+      ctx.lineCap = "round";
+      const tailColors = [0xff9999, 0xffcc99, 0xccffcc, 0xccccff, 0xffccff];
+      for (let i = 0; i < tailColors.length; i++) {
+        ctx.strokeStyle = rgba(tailColors[i], 0.7);
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - s * 0.28, s * 0.48 + hop);
+        ctx.quadraticCurveTo(cx - s * 0.4, s * 0.42 + hop + i * 1.5, cx - s * 0.38 + legPhase * 0.3, s * 0.3 + hop + i * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // neck — connects body to head, angled forward like a real horse
+      ctx.save();
+      ctx.fillStyle = rgba(c.baseColor, 1);
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.08, s * 0.45 + hop);
+      ctx.quadraticCurveTo(cx + s * 0.18, s * 0.36 + hop, cx + s * 0.26, s * 0.34 + hop);
+      ctx.lineTo(cx + s * 0.32, s * 0.4 + hop);
+      ctx.quadraticCurveTo(cx + s * 0.22, s * 0.46 + hop, cx + s * 0.12, s * 0.52 + hop);
+      ctx.closePath();
+      ctx.fill();
+      // neck shading
+      ctx.fillStyle = rgba(darken(c.baseColor, 0.08), 0.5);
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.08, s * 0.45 + hop);
+      ctx.quadraticCurveTo(cx + s * 0.18, s * 0.36 + hop, cx + s * 0.26, s * 0.34 + hop);
+      ctx.lineTo(cx + s * 0.22, s * 0.37 + hop);
+      ctx.quadraticCurveTo(cx + s * 0.14, s * 0.4 + hop, cx + s * 0.1, s * 0.48 + hop);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // head — horse-shaped: longer muzzle, rounded forehead, proper proportions
+      const hx = cx + s * 0.3;
+      const hy = s * 0.33 + hop;
+      ctx.save();
+      const headGrad = ctx.createLinearGradient(hx, hy - s * 0.08, hx, hy + s * 0.08);
+      headGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.08), 1));
+      headGrad.addColorStop(0.6, rgba(c.baseColor, 1));
+      headGrad.addColorStop(1, rgba(darken(c.baseColor, 0.08), 1));
+      ctx.fillStyle = headGrad;
+      // horse head shape — rounded poll (forehead) flowing into tapered muzzle
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.04, hy - s * 0.06);
+      ctx.quadraticCurveTo(hx + s * 0.02, hy - s * 0.1, hx + s * 0.08, hy - s * 0.07);
+      ctx.quadraticCurveTo(hx + s * 0.14, hy - s * 0.03, hx + s * 0.16, hy + s * 0.02);
+      ctx.quadraticCurveTo(hx + s * 0.18, hy + s * 0.06, hx + s * 0.14, hy + s * 0.08);
+      ctx.quadraticCurveTo(hx + s * 0.08, hy + s * 0.09, hx + s * 0.02, hy + s * 0.07);
+      ctx.quadraticCurveTo(hx - s * 0.02, hy + s * 0.04, hx - s * 0.04, hy - s * 0.06);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // nostril — small dark dot on muzzle
+      ctx.fillStyle = rgba(darken(c.baseColor, 0.3), 0.5);
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.12, hy + s * 0.05, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // mouth — gentle smile line
+      ctx.strokeStyle = rgba(darken(c.baseColor, 0.2), 0.4);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.1, hy + s * 0.07, s * 0.03, 0.3, Math.PI - 0.3);
+      ctx.stroke();
+
+      // ears — horse ears: curved cones, not sharp triangles
+      ctx.fillStyle = rgba(c.baseColor, 1);
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.02, hy - s * 0.07);
+      ctx.quadraticCurveTo(hx - s * 0.04, hy - s * 0.14, hx - s * 0.01, hy - s * 0.12);
+      ctx.quadraticCurveTo(hx + s * 0.01, hy - s * 0.1, hx + s * 0.02, hy - s * 0.07);
+      ctx.fill();
+      // ear inner
+      ctx.fillStyle = rgba(c.accentColor, 0.5);
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.01, hy - s * 0.08);
+      ctx.quadraticCurveTo(hx - s * 0.02, hy - s * 0.12, hx, hy - s * 0.11);
+      ctx.quadraticCurveTo(hx + s * 0.005, hy - s * 0.09, hx + s * 0.005, hy - s * 0.08);
+      ctx.fill();
+      // second ear (far side, slightly offset)
+      ctx.fillStyle = rgba(darken(c.baseColor, 0.06), 1);
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 0.04, hy - s * 0.06);
+      ctx.quadraticCurveTo(hx + s * 0.03, hy - s * 0.12, hx + s * 0.07, hy - s * 0.1);
+      ctx.quadraticCurveTo(hx + s * 0.08, hy - s * 0.08, hx + s * 0.06, hy - s * 0.06);
+      ctx.fill();
+
+      // horn — golden, rising from forehead between the ears
+      ctx.save();
+      ctx.strokeStyle = rgba(0xffdd44, 0.9);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 0.02, hy - s * 0.1);
+      ctx.lineTo(hx + s * 0.05, hy - s * 0.24);
+      ctx.stroke();
+      // spiral ridges
+      ctx.strokeStyle = rgba(0xffaa00, 0.6);
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        const t = (i + 1) / 4;
+        ctx.beginPath();
+        ctx.moveTo(hx + s * 0.02 + (s * 0.03) * t, hy - s * 0.1 - (s * 0.14) * t);
+        ctx.lineTo(hx + s * 0.04 + (s * 0.02) * t, hy - s * 0.11 - (s * 0.14) * t);
+        ctx.stroke();
+      }
+      // horn shine
+      ctx.fillStyle = rgba(0xffffaa, 0.5);
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.035, hy - s * 0.2, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // mane — pastel rainbow flowing down the neck
+      ctx.save();
+      const maneColors = [0xffb3ff, 0xb3ddff, 0xb3ffb3, 0xffddb3];
+      for (let i = 0; i < maneColors.length; i++) {
+        ctx.fillStyle = rgba(maneColors[i], 0.75);
+        ctx.beginPath();
+        ctx.ellipse(cx + s * 0.14 - i * s * 0.02, s * 0.38 + hop + i * s * 0.025, s * 0.04, s * 0.025, 0.5 + i * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // forelock — small tuft between ears
+      ctx.fillStyle = rgba(maneColors[0], 0.7);
+      ctx.beginPath();
+      ctx.ellipse(hx + s * 0.01, hy - s * 0.08, s * 0.03, s * 0.02, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // eye — simple cute dot (no glowing pupil, just a warm eye with sparkle)
+      ctx.fillStyle = rgba(c.eyeColor, 1);
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.05, hy + s * 0.01, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = rgba(0x000000, 0.5);
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.05, hy + s * 0.01, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      // eye sparkle
+      ctx.fillStyle = rgba(0xffffff, 0.9);
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.055, hy + s * 0.003, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // sparkles around unicorn
+      if (frame === 0 || frame === 3) {
+        for (let i = 0; i < 3; i++) {
+          const sa = (i / 3) * Math.PI * 2 + frame * 0.5;
+          const sr = s * 0.35;
+          ctx.fillStyle = rgba(0xffffaa, 0.6);
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(sa) * sr, s * 0.4 + hop + Math.sin(sa) * sr * 0.5, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    },
+  },
+  // Fairy Bunny — fluffy round bunny with tiny wings and sparkle trail
+  {
+    name: "fairy-bunny",
+    baseColor: 0xfff5ee,
+    accentColor: 0xffb3d9,
+    eyeColor: 0x66ddaa,
+    size: 28,
+    draw: (ctx, frame, s, c) => {
+      const cx = s * 0.5;
+      const groundY = s * 0.85;
+      const hop = frame === 3 ? -10 : frame === 1 ? -2 : 0;
+      const earWiggle = frame === 1 ? 2 : frame === 2 ? -2 : 0;
+
+      drawGroundShadow(ctx, cx, groundY, s * 0.3);
+
+      // tiny wings — translucent fairy wings
+      ctx.save();
+      const wingFlap = frame === 1 ? 6 : frame === 2 ? -4 : frame === 3 ? 8 : 2;
+      ctx.fillStyle = rgba(c.accentColor, 0.35);
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.2, s * 0.42 + hop, s * 0.12, s * 0.08, -0.3 + wingFlap * 0.02, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.2, s * 0.42 + hop, s * 0.12, s * 0.08, 0.3 - wingFlap * 0.02, 0, Math.PI * 2);
+      ctx.fill();
+      // wing shimmer
+      ctx.strokeStyle = rgba(0xffffff, 0.4);
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.2, s * 0.42 + hop, s * 0.12, s * 0.08, -0.3 + wingFlap * 0.02, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.2, s * 0.42 + hop, s * 0.12, s * 0.08, 0.3 - wingFlap * 0.02, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // body — round and fluffy
+      ctx.save();
+      const bodyGrad = ctx.createRadialGradient(cx - 4, s * 0.55 + hop, 2, cx, s * 0.6 + hop, s * 0.3);
+      bodyGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.08), 1));
+      bodyGrad.addColorStop(0.7, rgba(c.baseColor, 1));
+      bodyGrad.addColorStop(1, rgba(darken(c.baseColor, 0.1), 1));
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, s * 0.62 + hop, s * 0.22, s * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // feet — small round paws
+      ctx.fillStyle = rgba(darken(c.baseColor, 0.08), 1);
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.1, groundY - 3, s * 0.06, s * 0.04, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.1, groundY - 3, s * 0.06, s * 0.04, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // head — round
+      const hy = s * 0.42 + hop;
+      ctx.save();
+      const headGrad = ctx.createRadialGradient(cx - 3, hy - 3, 0, cx, hy, s * 0.18);
+      headGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.1), 1));
+      headGrad.addColorStop(0.7, rgba(c.baseColor, 1));
+      headGrad.addColorStop(1, rgba(darken(c.baseColor, 0.08), 1));
+      ctx.fillStyle = headGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, hy, s * 0.16, s * 0.14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // ears — long and floppy with pink inner
+      ctx.save();
+      ctx.fillStyle = rgba(c.baseColor, 1);
+      // left ear
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.08 + earWiggle, hy - s * 0.18, s * 0.04, s * 0.12, -0.1 + earWiggle * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = rgba(c.accentColor, 0.6);
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.08 + earWiggle, hy - s * 0.18, s * 0.02, s * 0.08, -0.1 + earWiggle * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+      // right ear
+      ctx.fillStyle = rgba(c.baseColor, 1);
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.08 - earWiggle, hy - s * 0.18, s * 0.04, s * 0.12, 0.1 - earWiggle * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = rgba(c.accentColor, 0.6);
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.08 - earWiggle, hy - s * 0.18, s * 0.02, s * 0.08, 0.1 - earWiggle * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // eyes — simple cute dots with sparkle
+      ctx.fillStyle = rgba(0x2a2a3a, 1);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.06, hy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.06, hy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = rgba(0xffffff, 0.9);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.05, hy - s * 0.01, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.07, hy - s * 0.01, 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // nose — tiny pink
+      ctx.fillStyle = rgba(c.accentColor, 1);
+      ctx.beginPath();
+      ctx.arc(cx, hy + s * 0.05, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // cheek blush
+      ctx.fillStyle = rgba(0xffaaaa, 0.3);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.1, hy + s * 0.03, s * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.1, hy + s * 0.03, s * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+
+      // sparkles
+      if (frame === 0 || frame === 3) {
+        for (let i = 0; i < 4; i++) {
+          const sa = (i / 4) * Math.PI * 2 + frame * 0.4;
+          const sr = s * 0.3;
+          ctx.fillStyle = rgba(0xffeeff, 0.5);
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(sa) * sr, s * 0.5 + hop + Math.sin(sa) * sr * 0.6, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    },
+  },
+  // Baby Dragon — small round dragon with big eyes and tiny wings
+  {
+    name: "baby-dragon",
+    baseColor: 0x6dd4b0,
+    accentColor: 0xa0ffd0,
+    eyeColor: 0xffaa44,
+    size: 28,
+    draw: (ctx, frame, s, c) => {
+      const cx = s * 0.5;
+      const groundY = s * 0.85;
+      const hop = frame === 3 ? -5 : 0;
+      const wobble = frame === 1 ? 2 : frame === 2 ? -2 : 0;
+
+      drawGroundShadow(ctx, cx, groundY, s * 0.3);
+
+      // tiny wings
+      ctx.save();
+      const wingFlap = frame === 1 ? 5 : frame === 2 ? -3 : frame === 3 ? 7 : 1;
+      ctx.fillStyle = rgba(lighten(c.accentColor, 0.1), 0.6);
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.12, s * 0.45 + hop);
+      ctx.quadraticCurveTo(cx - s * 0.28, s * 0.3 + hop - wingFlap, cx - s * 0.2, s * 0.2 + hop);
+      ctx.quadraticCurveTo(cx - s * 0.15, s * 0.3 + hop, cx - s * 0.08, s * 0.4 + hop);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.12, s * 0.45 + hop);
+      ctx.quadraticCurveTo(cx + s * 0.28, s * 0.3 + hop - wingFlap, cx + s * 0.2, s * 0.2 + hop);
+      ctx.quadraticCurveTo(cx + s * 0.15, s * 0.3 + hop, cx + s * 0.08, s * 0.4 + hop);
+      ctx.fill();
+      ctx.restore();
+
+      // body — round and chubby
+      ctx.save();
+      const bodyGrad = ctx.createRadialGradient(cx - 4, s * 0.5 + hop, 2, cx, s * 0.58 + hop, s * 0.28);
+      bodyGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.2), 1));
+      bodyGrad.addColorStop(0.5, rgba(c.baseColor, 1));
+      bodyGrad.addColorStop(1, rgba(darken(c.baseColor, 0.2), 1));
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, s * 0.58 + hop + wobble, s * 0.22, s * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // belly — lighter patch
+      ctx.fillStyle = rgba(lighten(c.baseColor, 0.3), 0.6);
+      ctx.beginPath();
+      ctx.ellipse(cx, s * 0.62 + hop + wobble, s * 0.12, s * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // feet — small claws
+      ctx.fillStyle = rgba(darken(c.baseColor, 0.3), 1);
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.1, groundY - 2, s * 0.05, s * 0.03, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.1, groundY - 2, s * 0.05, s * 0.03, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // tail — small curl
+      ctx.save();
+      ctx.strokeStyle = rgba(c.baseColor, 1);
+      ctx.lineWidth = 5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.2, s * 0.55 + hop);
+      ctx.quadraticCurveTo(cx - s * 0.3, s * 0.5 + hop, cx - s * 0.28 + wobble, s * 0.38 + hop);
+      ctx.stroke();
+      // tail tip
+      ctx.fillStyle = rgba(c.accentColor, 0.8);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.28 + wobble, s * 0.38 + hop, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // head — big and round
+      const hy = s * 0.38 + hop;
+      ctx.save();
+      const headGrad = ctx.createRadialGradient(cx - 3, hy - 3, 0, cx, hy, s * 0.18);
+      headGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.25), 1));
+      headGrad.addColorStop(0.6, rgba(c.baseColor, 1));
+      headGrad.addColorStop(1, rgba(darken(c.baseColor, 0.15), 1));
+      ctx.fillStyle = headGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, hy, s * 0.17, s * 0.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // snout
+      ctx.fillStyle = rgba(lighten(c.baseColor, 0.15), 1);
+      ctx.beginPath();
+      ctx.ellipse(cx, hy + s * 0.06, s * 0.08, s * 0.06, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // nostrils
+      ctx.fillStyle = rgba(darken(c.baseColor, 0.4), 0.5);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.03, hy + s * 0.05, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.03, hy + s * 0.05, 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // eyes — simple cute dots with sparkle
+      ctx.fillStyle = rgba(0x2a2a3a, 1);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.07, hy - s * 0.02, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.07, hy - s * 0.02, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = rgba(0xffffff, 0.9);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.06, hy - s * 0.03, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.08, hy - s * 0.03, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // tiny horns / nubs on head
+      ctx.fillStyle = rgba(darken(c.accentColor, 0.1), 0.8);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.08, hy - s * 0.12, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.08, hy - s * 0.12, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // little smile
+      ctx.beginPath();
+      ctx.arc(cx, hy + s * 0.08, s * 0.04, 0.2, Math.PI - 0.2);
+      ctx.strokeStyle = rgba(darken(c.baseColor, 0.4), 0.6);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    },
+  },
+  // Crystal Fox — shimmering fox with crystalline fur
+  {
+    name: "crystal-fox",
+    baseColor: 0x88ccff,
+    accentColor: 0xddffff,
+    eyeColor: 0x66ffcc,
+    size: 28,
+    draw: (ctx, frame, s, c) => {
+      const cx = s * 0.5;
+      const groundY = s * 0.88;
+      const legPhase = frame === 1 ? 3 : frame === 2 ? -3 : frame === 3 ? -6 : 0;
+      const hop = frame === 3 ? -4 : 0;
+
+      drawGroundShadow(ctx, cx, groundY, s * 0.35);
+
+      // legs
+      drawLimb(ctx, cx - s * 0.12, s * 0.55 + hop, cx - s * 0.14 + legPhase, groundY - 2, 4, 2.5, darken(c.baseColor, 0.15));
+      drawLimb(ctx, cx + s * 0.1, s * 0.55 + hop, cx + s * 0.12 - legPhase, groundY - 2, 4, 2.5, darken(c.baseColor, 0.15));
+      drawLimb(ctx, cx - s * 0.02, s * 0.55 + hop, cx + legPhase, groundY - 2, 4, 2.5, c.baseColor);
+      drawLimb(ctx, cx + s * 0.18, s * 0.55 + hop, cx + s * 0.2 - legPhase, groundY - 2, 4, 2.5, c.baseColor);
+
+      // body
+      ctx.save();
+      const bodyGrad = ctx.createLinearGradient(0, s * 0.38 + hop, 0, s * 0.6 + hop);
+      bodyGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.15), 1));
+      bodyGrad.addColorStop(0.5, rgba(c.baseColor, 1));
+      bodyGrad.addColorStop(1, rgba(darken(c.baseColor, 0.2), 1));
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, s * 0.5 + hop, s * 0.26, s * 0.15, -0.03, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // crystal fur facets — shimmering triangles
+      ctx.save();
+      ctx.strokeStyle = rgba(c.accentColor, 0.4);
+      ctx.lineWidth = 0.8;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const x1 = cx + Math.cos(a) * s * 0.15;
+        const y1 = s * 0.5 + hop + Math.sin(a) * s * 0.08;
+        const x2 = cx + Math.cos(a) * s * 0.22;
+        const y2 = s * 0.5 + hop + Math.sin(a) * s * 0.12;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // tail — big bushy crystal tail
+      ctx.save();
+      const tailGrad = ctx.createRadialGradient(cx - s * 0.35, s * 0.35 + hop, 0, cx - s * 0.35, s * 0.35 + hop, s * 0.15);
+      tailGrad.addColorStop(0, rgba(c.accentColor, 0.9));
+      tailGrad.addColorStop(0.6, rgba(c.baseColor, 0.8));
+      tailGrad.addColorStop(1, rgba(darken(c.baseColor, 0.2), 0.5));
+      ctx.fillStyle = tailGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.32 + legPhase * 0.2, s * 0.38 + hop, s * 0.1, s * 0.14, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      // tail tip — bright crystal
+      ctx.fillStyle = rgba(c.accentColor, 0.8);
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.38 + legPhase * 0.2, s * 0.28 + hop, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // head
+      const hx = cx + s * 0.25;
+      const hy = s * 0.4 + hop;
+      ctx.save();
+      const headGrad = ctx.createRadialGradient(hx - 3, hy - 3, 0, hx, hy, s * 0.14);
+      headGrad.addColorStop(0, rgba(lighten(c.baseColor, 0.2), 1));
+      headGrad.addColorStop(0.6, rgba(c.baseColor, 1));
+      headGrad.addColorStop(1, rgba(darken(c.baseColor, 0.15), 1));
+      ctx.fillStyle = headGrad;
+      ctx.beginPath();
+      ctx.ellipse(hx, hy, s * 0.12, s * 0.1, 0.05, 0, Math.PI * 2);
+      ctx.fill();
+      // snout — pointed fox
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 0.05, hy - s * 0.02);
+      ctx.lineTo(hx + s * 0.14, hy + s * 0.04);
+      ctx.lineTo(hx + s * 0.05, hy + s * 0.06);
+      ctx.fillStyle = rgba(lighten(c.baseColor, 0.1), 1);
+      ctx.fill();
+      ctx.restore();
+
+      // ears — pointy crystal ears
+      ctx.fillStyle = rgba(c.baseColor, 1);
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.05, hy - s * 0.08);
+      ctx.lineTo(hx - s * 0.07, hy - s * 0.2);
+      ctx.lineTo(hx - s * 0.01, hy - s * 0.1);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 0.03, hy - s * 0.08);
+      ctx.lineTo(hx + s * 0.01, hy - s * 0.2);
+      ctx.lineTo(hx + s * 0.07, hy - s * 0.1);
+      ctx.fill();
+      // inner ear — crystal
+      ctx.fillStyle = rgba(c.accentColor, 0.6);
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.05, hy - s * 0.1);
+      ctx.lineTo(hx - s * 0.06, hy - s * 0.17);
+      ctx.lineTo(hx - s * 0.02, hy - s * 0.11);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 0.03, hy - s * 0.1);
+      ctx.lineTo(hx + s * 0.02, hy - s * 0.17);
+      ctx.lineTo(hx + s * 0.06, hy - s * 0.11);
+      ctx.fill();
+
+      // eyes — simple cute dot with sparkle
+      ctx.fillStyle = rgba(0x2a2a3a, 1);
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.02, hy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = rgba(0xffffff, 0.9);
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.03, hy - s * 0.01, 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // crystal shimmer particles
+      if (frame === 0 || frame === 3) {
+        for (let i = 0; i < 3; i++) {
+          const sa = (i / 3) * Math.PI * 2 + frame * 0.3;
+          const sr = s * 0.3;
+          ctx.fillStyle = rgba(c.accentColor, 0.5);
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(sa) * sr, s * 0.45 + hop + Math.sin(sa) * sr * 0.5, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     },
   },
@@ -1918,12 +2537,668 @@ function drawStoneTexture(ctx: CanvasRenderingContext2D, size: number): void {
 }
 
 // ============================================================
+// GOLF TEXTURES
+// ============================================================
+
+/** Draw an axe lying diagonally on the ground. */
+function drawAxe(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const handleLen = size * 0.5;
+  const angle = Math.PI / 4; // diagonal from top-left to bottom-right
+
+  // shadow
+  ctx.save();
+  ctx.translate(cx + 2, cy + 4);
+  ctx.rotate(angle);
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.fillRect(-handleLen / 2, -3, handleLen, 6);
+  ctx.restore();
+
+  // handle — wooden brown gradient
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  const handleGrad = ctx.createLinearGradient(0, -3, 0, 3);
+  handleGrad.addColorStop(0, rgba(0x8b5a2b, 1));
+  handleGrad.addColorStop(0.5, rgba(0x6b4a1b, 1));
+  handleGrad.addColorStop(1, rgba(0x4b3a0b, 1));
+  ctx.fillStyle = handleGrad;
+  ctx.beginPath();
+  ctx.rect(-handleLen / 2, -2.5, handleLen, 5);
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x3b2a0b, 0.6);
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // axe head — steel blade at the top end
+  const headX = handleLen / 2;
+  ctx.fillStyle = rgba(0xaaaaaa, 1);
+  ctx.beginPath();
+  ctx.moveTo(headX - 2, -2);
+  ctx.lineTo(headX + 10, -8);
+  ctx.lineTo(headX + 12, 0);
+  ctx.lineTo(headX + 10, 8);
+  ctx.lineTo(headX - 2, 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x555555, 0.8);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // blade highlight
+  ctx.fillStyle = rgba(0xdddddd, 0.5);
+  ctx.beginPath();
+  ctx.moveTo(headX + 1, -1);
+  ctx.lineTo(headX + 8, -5);
+  ctx.lineTo(headX + 9, -1);
+  ctx.lineTo(headX + 1, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/** Draw a decorative fountain — stone basin with water and splashing. */
+function drawFountain(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // outer stone basin — wide circular base
+  const basinR = size * 0.38;
+  ctx.fillStyle = rgba(0x888899, 1);
+  ctx.beginPath();
+  ctx.arc(cx, cy + size * 0.05, basinR, 0, Math.PI * 2);
+  ctx.fill();
+  // basin rim shading
+  ctx.strokeStyle = rgba(0x6a6a7a, 1);
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // basin top highlight
+  ctx.strokeStyle = rgba(0xaaaabb, 0.6);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy + size * 0.05, basinR - 2, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.stroke();
+
+  // inner water pool
+  const waterR = size * 0.28;
+  const waterGrad = ctx.createRadialGradient(cx, cy + size * 0.02, 2, cx, cy + size * 0.05, waterR);
+  waterGrad.addColorStop(0, rgba(0x88ccff, 0.9));
+  waterGrad.addColorStop(0.5, rgba(0x4499dd, 0.85));
+  waterGrad.addColorStop(1, rgba(0x3366aa, 0.8));
+  ctx.fillStyle = waterGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy + size * 0.05, waterR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // water ripples — concentric circles
+  ctx.strokeStyle = rgba(0xaaeeff, 0.4);
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    const r = waterR * (0.3 + i * 0.25);
+    ctx.beginPath();
+    ctx.arc(cx, cy + size * 0.05, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // central pillar
+  const pillarW = size * 0.08;
+  const pillarH = size * 0.18;
+  ctx.fillStyle = rgba(0x9999aa, 1);
+  ctx.fillRect(cx - pillarW / 2, cy - pillarH + size * 0.05, pillarW, pillarH);
+  ctx.fillStyle = rgba(0x777788, 0.5);
+  ctx.fillRect(cx - pillarW / 2, cy - pillarH + size * 0.05, pillarW * 0.3, pillarH);
+
+  // water spout on top — glowing splash
+  radialGradient(ctx, cx, cy - pillarH + size * 0.05, size * 0.12, 0xaaeeff, 0x4499dd, 0.5, 0);
+  ctx.fillStyle = rgba(0xddffff, 0.7);
+  ctx.beginPath();
+  ctx.arc(cx, cy - pillarH + size * 0.05, size * 0.06, 0, Math.PI * 2);
+  ctx.fill();
+
+  // splash droplets
+  ctx.fillStyle = rgba(0xaaeeff, 0.6);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const r = size * 0.1;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * r, cy - pillarH + size * 0.05 + Math.sin(a) * r * 0.5, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // water highlight on pool surface
+  ctx.fillStyle = rgba(0xffffff, 0.3);
+  ctx.beginPath();
+  ctx.ellipse(cx - waterR * 0.3, cy + size * 0.02, waterR * 0.3, waterR * 0.1, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw a big tree — taller and wider than the regular tree tile. */
+function drawBigTree(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // trunk — wider and taller than normal tree
+  const trunkW = size * 0.14;
+  const trunkH = size * 0.35;
+  const trunkX = cx - trunkW / 2;
+  const trunkY = cy + size * 0.05;
+  ctx.fillStyle = rgba(0x4a3a1a, 1);
+  ctx.fillRect(trunkX, trunkY, trunkW, trunkH);
+  // trunk shading
+  ctx.fillStyle = rgba(0x3a2a0a, 0.4);
+  ctx.fillRect(trunkX, trunkY, trunkW * 0.3, trunkH);
+
+  // canopy — layered circles for a fuller look
+  const canopyR = size * 0.32;
+  const canopyY = cy - size * 0.1;
+
+  // dark base layer
+  ctx.fillStyle = rgba(0x2a5a1a, 1);
+  ctx.beginPath();
+  ctx.arc(cx, canopyY, canopyR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // mid layer — slightly offset
+  ctx.fillStyle = rgba(0x3a7a2a, 1);
+  ctx.beginPath();
+  ctx.arc(cx - canopyR * 0.2, canopyY - canopyR * 0.15, canopyR * 0.85, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + canopyR * 0.2, canopyY - canopyR * 0.1, canopyR * 0.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // highlight layer
+  ctx.fillStyle = rgba(0x4a9a3a, 1);
+  ctx.beginPath();
+  ctx.arc(cx - canopyR * 0.15, canopyY - canopyR * 0.3, canopyR * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // top highlight
+  ctx.fillStyle = rgba(0x6abb4a, 0.6);
+  ctx.beginPath();
+  ctx.arc(cx - canopyR * 0.2, canopyY - canopyR * 0.4, canopyR * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+
+  // outline
+  ctx.strokeStyle = rgba(0x1a3a0a, 0.5);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, canopyY, canopyR, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Draw a golf club lying diagonally on the ground. */
+function drawGolfClub(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const shaftLen = size * 0.55;
+  const angle = -Math.PI / 4; // diagonal from bottom-left to top-right
+
+  // shadow
+  ctx.save();
+  ctx.translate(cx + 2, cy + 4);
+  ctx.rotate(angle);
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.fillRect(-shaftLen / 2, -3, shaftLen, 6);
+  ctx.restore();
+
+  // shaft — steel gradient
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  const shaftGrad = ctx.createLinearGradient(0, -3, 0, 3);
+  shaftGrad.addColorStop(0, rgba(0xcccccc, 1));
+  shaftGrad.addColorStop(0.5, rgba(0x888888, 1));
+  shaftGrad.addColorStop(1, rgba(0x555555, 1));
+  ctx.fillStyle = shaftGrad;
+  ctx.beginPath();
+  ctx.rect(-shaftLen / 2, -2.5, shaftLen, 5);
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x444444, 0.6);
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // grip — dark rubber at the top end
+  const gripLen = shaftLen * 0.22;
+  ctx.fillStyle = rgba(0x2a1a0a, 1);
+  ctx.fillRect(shaftLen / 2 - gripLen, -3, gripLen, 6);
+  // grip texture lines
+  ctx.strokeStyle = rgba(0x1a0a00, 0.5);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 5; i++) {
+    const gx = shaftLen / 2 - gripLen + (i + 1) * (gripLen / 6);
+    ctx.beginPath();
+    ctx.moveTo(gx, -3);
+    ctx.lineTo(gx, 3);
+    ctx.stroke();
+  }
+
+  // club head — iron at the bottom end
+  const headX = -shaftLen / 2;
+  ctx.fillStyle = rgba(0x999999, 1);
+  ctx.beginPath();
+  ctx.moveTo(headX, -2);
+  ctx.lineTo(headX - 8, -5);
+  ctx.lineTo(headX - 10, 2);
+  ctx.lineTo(headX - 6, 6);
+  ctx.lineTo(headX, 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x555555, 0.8);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // highlight on club head
+  ctx.fillStyle = rgba(0xcccccc, 0.5);
+  ctx.beginPath();
+  ctx.moveTo(headX - 1, -1);
+  ctx.lineTo(headX - 6, -3);
+  ctx.lineTo(headX - 7, 0);
+  ctx.lineTo(headX - 1, 1);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/** Draw a golf ball with dimples. */
+function drawGolfBall(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.16;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, cy + r + 2, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ball — radial gradient for 3D look
+  const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+  grad.addColorStop(0, rgba(0xffffff, 1));
+  grad.addColorStop(0.7, rgba(0xeeeeee, 1));
+  grad.addColorStop(1, rgba(0xcccccc, 1));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // outline
+  ctx.strokeStyle = rgba(0xaaaaaa, 0.5);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // dimples
+  ctx.fillStyle = rgba(0xdddddd, 0.6);
+  const dimpleR = r * 0.12;
+  const dimples = [
+    [-r * 0.4, -r * 0.3], [r * 0.3, -r * 0.4], [0, -r * 0.5],
+    [-r * 0.5, r * 0.1], [r * 0.5, r * 0.1], [-r * 0.2, r * 0.3],
+    [r * 0.2, r * 0.3], [0, r * 0.1], [r * 0.1, -r * 0.1],
+  ];
+  for (const [dx, dy] of dimples) {
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy + dy, dimpleR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // shine
+  ctx.fillStyle = rgba(0xffffff, 0.7);
+  ctx.beginPath();
+  ctx.arc(cx - r * 0.35, cy - r * 0.35, r * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw a tee box — a distinct rectangular mat with tee markers. */
+function drawTeeBox(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const matW = size * 0.7;
+  const matH = size * 0.5;
+  const matX = cx - matW / 2;
+  const matY = cy - matH / 2;
+
+  // mat base — slightly raised, lighter fairway green
+  const matGrad = ctx.createLinearGradient(matX, matY, matX, matY + matH);
+  matGrad.addColorStop(0, rgba(0x7ec85a, 1));
+  matGrad.addColorStop(0.5, rgba(0x6ab84a, 1));
+  matGrad.addColorStop(1, rgba(0x5aa83a, 1));
+  ctx.fillStyle = matGrad;
+  ctx.fillRect(matX, matY, matW, matH);
+
+  // mat border — darker outline
+  ctx.strokeStyle = rgba(0x3a7a2a, 0.8);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(matX, matY, matW, matH);
+
+  // inner border line — tee box marking
+  ctx.strokeStyle = rgba(0xffffff, 0.4);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(matX + 3, matY + 3, matW - 6, matH - 6);
+
+  // tee markers — two small posts on either side
+  for (const side of [-1, 1]) {
+    const px = cx + side * (matW / 2 - 4);
+    // post shadow
+    ctx.fillStyle = rgba(0x000000, 0.2);
+    ctx.beginPath();
+    ctx.ellipse(px + 1, matY + matH - 2, 3, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // post
+    ctx.fillStyle = rgba(0xeeeeee, 0.9);
+    ctx.fillRect(px - 1.5, matY + 2, 3, matH - 4);
+    // post cap — red
+    ctx.fillStyle = rgba(0xdd2222, 1);
+    ctx.beginPath();
+    ctx.arc(px, matY + 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // "TEE" text indicator — small dots forming a tee symbol in center
+  ctx.fillStyle = rgba(0xffffff, 0.3);
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw a leprechaun — small green-clothed figure with a hat. */
+function drawLeprechaun(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, cy + size * 0.2, size * 0.18, size * 0.06, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // body — green coat
+  ctx.fillStyle = rgba(0x2a8a2a, 1);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + size * 0.05, size * 0.14, size * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // coat shading
+  ctx.fillStyle = rgba(0x1a6a1a, 0.5);
+  ctx.beginPath();
+  ctx.ellipse(cx - size * 0.04, cy + size * 0.05, size * 0.1, size * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // belt — black with gold buckle
+  ctx.fillStyle = rgba(0x1a1a1a, 1);
+  ctx.fillRect(cx - size * 0.12, cy + size * 0.08, size * 0.24, size * 0.04);
+  ctx.fillStyle = rgba(0xffdd00, 1);
+  ctx.fillRect(cx - size * 0.02, cy + size * 0.08, size * 0.04, size * 0.04);
+
+  // head — skin tone
+  ctx.fillStyle = rgba(0xddaa77, 1);
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.08, size * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+
+  // beard — orange
+  ctx.fillStyle = rgba(0xcc6622, 1);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - size * 0.02, size * 0.08, size * 0.07, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // eyes
+  ctx.fillStyle = rgba(0x000000, 0.8);
+  ctx.beginPath();
+  ctx.arc(cx - size * 0.03, cy - size * 0.09, 1.2, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.03, cy - size * 0.09, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // hat — classic leprechaun top hat
+  ctx.fillStyle = rgba(0x1a6a1a, 1);
+  // brim
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - size * 0.14, size * 0.12, size * 0.04, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // top
+  ctx.fillRect(cx - size * 0.06, cy - size * 0.24, size * 0.12, size * 0.1);
+  // hat band — gold
+  ctx.fillStyle = rgba(0xffaa00, 1);
+  ctx.fillRect(cx - size * 0.06, cy - size * 0.16, size * 0.12, size * 0.03);
+  // buckle on band
+  ctx.fillStyle = rgba(0xffdd00, 1);
+  ctx.fillRect(cx - size * 0.015, cy - size * 0.16, size * 0.03, size * 0.03);
+}
+
+// ============================================================
+// TENNIS TEXTURES
+// ============================================================
+
+/** Draw a tennis court tile — blue-green hard court surface (US Open style). */
+function drawTennisCourt(ctx: CanvasRenderingContext2D, size: number): void {
+  // court surface — blue-green hard court, uniform color
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, rgba(0x2e80b8, 1));
+  grad.addColorStop(0.5, rgba(0x3088c0, 1));
+  grad.addColorStop(1, rgba(0x2870a8, 1));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // subtle texture — faint noise dots for acrylic court feel
+  ctx.fillStyle = rgba(0x4098d0, 0.15);
+  for (let i = 0; i < 12; i++) {
+    const nx = (i * 37 + 13) % size;
+    const ny = (i * 53 + 7) % size;
+    ctx.fillRect(nx, ny, 2, 2);
+  }
+  ctx.fillStyle = rgba(0x1a6090, 0.1);
+  for (let i = 0; i < 8; i++) {
+    const nx = (i * 61 + 23) % size;
+    const ny = (i * 43 + 29) % size;
+    ctx.fillRect(nx, ny, 1, 1);
+  }
+}
+
+/** Draw a tennis wall — brick/concrete back wall. */
+function drawTennisWall(ctx: CanvasRenderingContext2D, size: number): void {
+  // wall base — concrete gray
+  const grad = ctx.createLinearGradient(0, 0, 0, size);
+  grad.addColorStop(0, rgba(0x888888, 1));
+  grad.addColorStop(0.7, rgba(0x777777, 1));
+  grad.addColorStop(1, rgba(0x666666, 1));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // brick texture — rows of bricks
+  ctx.strokeStyle = rgba(0x555555, 0.5);
+  ctx.lineWidth = 0.8;
+  const brickH = size * 0.12;
+  for (let row = 0; row < 8; row++) {
+    const y = row * brickH;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(size, y);
+    ctx.stroke();
+    // vertical mortar lines — offset every other row
+    const offset = row % 2 === 0 ? 0 : size * 0.25;
+    for (let bx = offset; bx < size; bx += size * 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(bx, y);
+      ctx.lineTo(bx, y + brickH);
+      ctx.stroke();
+    }
+  }
+
+  // top edge highlight — white cap
+  ctx.fillStyle = rgba(0xeeeeee, 0.8);
+  ctx.fillRect(0, 0, size, 2);
+}
+
+/** Draw a tennis racket lying diagonally on the ground. */
+function drawTennisRacket(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const frameR = size * 0.28;
+  const angle = -Math.PI / 5;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.2);
+  ctx.beginPath();
+  ctx.ellipse(2, 4, frameR * 1.1, frameR * 0.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // handle — dark grip
+  const handleLen = size * 0.22;
+  ctx.fillStyle = rgba(0x2a1a0a, 1);
+  ctx.fillRect(frameR, -3, handleLen, 6);
+  // grip texture lines
+  ctx.strokeStyle = rgba(0x1a0a00, 0.5);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 6; i++) {
+    const gx = frameR + (i + 1) * (handleLen / 7);
+    ctx.beginPath();
+    ctx.moveTo(gx, -3);
+    ctx.lineTo(gx, 3);
+    ctx.stroke();
+  }
+
+  // frame head — elliptical racket head
+  ctx.strokeStyle = rgba(0xcc3333, 1);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, frameR, frameR * 0.75, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // inner frame highlight
+  ctx.strokeStyle = rgba(0xee5555, 0.5);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, frameR - 2, frameR * 0.75 - 2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // strings — grid pattern inside the frame
+  ctx.strokeStyle = rgba(0xeeeedd, 0.6);
+  ctx.lineWidth = 0.5;
+  const stringCount = 7;
+  for (let i = 0; i <= stringCount; i++) {
+    const t = (i / stringCount) * 2 - 1;
+    // vertical strings
+    const sx = t * (frameR - 1);
+    const sy = Math.sqrt(1 - t * t) * (frameR * 0.75 - 1);
+    ctx.beginPath();
+    ctx.moveTo(sx, -sy);
+    ctx.lineTo(sx, sy);
+    ctx.stroke();
+    // horizontal strings
+    const hx = Math.sqrt(1 - t * t) * (frameR - 1);
+    const hy = t * (frameR * 0.75 - 1);
+    ctx.beginPath();
+    ctx.moveTo(-hx, hy);
+    ctx.lineTo(hx, hy);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+/** Draw a tennis ball — fluorescent yellow-green with seam line. */
+function drawTennisBall(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.18;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, cy + r + 2, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ball — radial gradient for 3D look (tennis ball yellow-green)
+  const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+  grad.addColorStop(0, rgba(0xeeff44, 1));
+  grad.addColorStop(0.6, rgba(0xccdd22, 1));
+  grad.addColorStop(1, rgba(0xaabb11, 1));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // outline
+  ctx.strokeStyle = rgba(0x889900, 0.6);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // seam — curved white line characteristic of tennis balls
+  ctx.strokeStyle = rgba(0xffffff, 0.9);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.85, -Math.PI * 0.7, -Math.PI * 0.3);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx + r * 0.3, cy, r * 0.85, Math.PI * 0.3, Math.PI * 0.7);
+  ctx.stroke();
+
+  // shine
+  ctx.fillStyle = rgba(0xffffff, 0.5);
+  ctx.beginPath();
+  ctx.arc(cx - r * 0.35, cy - r * 0.35, r * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw a tennis net — mesh netting between two posts. */
+function drawTennisNet(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const netW = size * 0.7;
+  const netH = size * 0.45;
+  const nx = cx - netW / 2;
+  const ny = cy - netH / 2;
+
+  // posts on either side
+  for (const side of [-1, 1]) {
+    const px = cx + side * (netW / 2);
+    // post shadow
+    ctx.fillStyle = rgba(0x000000, 0.2);
+    ctx.beginPath();
+    ctx.ellipse(px + 1, ny + netH - 1, 2.5, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // post
+    ctx.fillStyle = rgba(0x444444, 1);
+    ctx.fillRect(px - 1.5, ny, 3, netH);
+    // post cap — white
+    ctx.fillStyle = rgba(0xeeeeee, 1);
+    ctx.fillRect(px - 2, ny, 4, 2);
+  }
+
+  // net mesh — grid of thin lines
+  ctx.strokeStyle = rgba(0xdddddd, 0.5);
+  ctx.lineWidth = 0.5;
+  const meshCols = 8;
+  const meshRows = 5;
+  for (let i = 0; i <= meshCols; i++) {
+    const x = nx + (i / meshCols) * netW;
+    ctx.beginPath();
+    ctx.moveTo(x, ny + 1);
+    ctx.lineTo(x, ny + netH - 1);
+    ctx.stroke();
+  }
+  for (let i = 0; i <= meshRows; i++) {
+    const y = ny + 1 + (i / meshRows) * (netH - 2);
+    ctx.beginPath();
+    ctx.moveTo(nx, y);
+    ctx.lineTo(nx + netW, y);
+    ctx.stroke();
+  }
+
+  // top band — white tape
+  ctx.fillStyle = rgba(0xffffff, 0.8);
+  ctx.fillRect(nx, ny, netW, 2);
+}
+
+// ============================================================
 // MAIN TEXTURE GENERATION ENTRY POINT
 // ============================================================
 
 const CREATURE_FRAMES = 4; // idle, walk1, walk2, attack
 const BEAST_FRAMES = 4; // idle, move1, move2, attack
-const TEX_SIZE = 96;
+const TEX_SIZE = 128;
 
 /**
  * Generate all procedural textures and register them with the Phaser texture manager.
@@ -1974,6 +3249,27 @@ export function generateAllTextures(scene: Phaser.Scene): void {
     registerFrames(tex.get(key)!, BEAST_FRAMES, TEX_SIZE);
   }
 
+  // --- Friendly creature spritesheets ---
+  for (let i = 0; i < FRIENDLY_DESIGNS.length; i++) {
+    const design = FRIENDLY_DESIGNS[i];
+    const key = `friendly-${design.name}`;
+    if (tex.exists(key)) continue;
+
+    const sheetW = TEX_SIZE * CREATURE_FRAMES;
+    const sheetH = TEX_SIZE;
+    const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+    const ctx = canvasTex.getContext();
+
+    for (let f = 0; f < CREATURE_FRAMES; f++) {
+      ctx.save();
+      ctx.translate(f * TEX_SIZE, 0);
+      design.draw(ctx, f, TEX_SIZE, design);
+      ctx.restore();
+    }
+    canvasTex.refresh();
+    registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
+  }
+
   // --- Stone projectile ---
   if (!tex.exists("stone-proj")) {
     const canvasTex = createCanvasTexture(tex, "stone-proj", 24, 24);
@@ -1983,33 +3279,33 @@ export function generateAllTextures(scene: Phaser.Scene): void {
 
   // --- Spark particle ---
   if (!tex.exists("spark")) {
-    const canvasTex = createCanvasTexture(tex, "spark", 16, 16);
+    const canvasTex = createCanvasTexture(tex, "spark", 32, 32);
     const ctx = canvasTex.getContext();
-    radialGradient(ctx, 8, 8, 8, 0xffffff, 0xffffff, 1, 0);
+    radialGradient(ctx, 16, 16, 16, 0xffffff, 0xffffff, 1, 0);
     canvasTex.refresh();
   }
 
   // --- Dust particle ---
   if (!tex.exists("dust")) {
-    const canvasTex = createCanvasTexture(tex, "dust", 16, 16);
+    const canvasTex = createCanvasTexture(tex, "dust", 32, 32);
     const ctx = canvasTex.getContext();
-    radialGradient(ctx, 8, 8, 7, 0xccccaa, 0x886644, 0.6, 0);
+    radialGradient(ctx, 16, 16, 14, 0xccccaa, 0x886644, 0.6, 0);
     canvasTex.refresh();
   }
 
   // --- Shockwave ring ---
   if (!tex.exists("shockwave")) {
-    const canvasTex = createCanvasTexture(tex, "shockwave", 64, 64);
+    const canvasTex = createCanvasTexture(tex, "shockwave", 96, 96);
     const ctx = canvasTex.getContext();
     ctx.strokeStyle = rgba(0xffffff, 0.8);
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(32, 32, 28, 0, Math.PI * 2);
+    ctx.arc(48, 48, 42, 0, Math.PI * 2);
     ctx.stroke();
     ctx.strokeStyle = rgba(0xffffff, 0.3);
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 8;
     ctx.beginPath();
-    ctx.arc(32, 32, 28, 0, Math.PI * 2);
+    ctx.arc(48, 48, 42, 0, Math.PI * 2);
     ctx.stroke();
     canvasTex.refresh();
   }
@@ -2060,6 +3356,90 @@ export function generateAllTextures(scene: Phaser.Scene): void {
     radialGradient(ctx, 64, 64, 64, 0x44aaff, 0x000033, 0.3, 0);
     canvasTex.refresh();
   }
+
+  // --- Golf club ---
+  if (!tex.exists("golf-club")) {
+    const canvasTex = createCanvasTexture(tex, "golf-club", 64, 64);
+    drawGolfClub(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Golf ball ---
+  if (!tex.exists("golf-ball")) {
+    const canvasTex = createCanvasTexture(tex, "golf-ball", 64, 64);
+    drawGolfBall(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Axe ---
+  if (!tex.exists("axe")) {
+    const canvasTex = createCanvasTexture(tex, "axe", 64, 64);
+    drawAxe(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Big tree ---
+  if (!tex.exists("big-tree")) {
+    const canvasTex = createCanvasTexture(tex, "big-tree", 64, 64);
+    drawBigTree(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Tee box ---
+  if (!tex.exists("tee-box")) {
+    const canvasTex = createCanvasTexture(tex, "tee-box", 64, 64);
+    drawTeeBox(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Leprechaun ---
+  if (!tex.exists("leprechaun")) {
+    const canvasTex = createCanvasTexture(tex, "leprechaun", 64, 64);
+    drawLeprechaun(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Fountain ---
+  if (!tex.exists("fountain")) {
+    const canvasTex = createCanvasTexture(tex, "fountain", 64, 64);
+    drawFountain(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Tennis court ---
+  if (!tex.exists("tennis-court")) {
+    const canvasTex = createCanvasTexture(tex, "tennis-court", 64, 64);
+    drawTennisCourt(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Tennis wall ---
+  if (!tex.exists("tennis-wall")) {
+    const canvasTex = createCanvasTexture(tex, "tennis-wall", 64, 64);
+    drawTennisWall(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Tennis racket ---
+  if (!tex.exists("tennis-racket")) {
+    const canvasTex = createCanvasTexture(tex, "tennis-racket", 64, 64);
+    drawTennisRacket(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Tennis ball ---
+  if (!tex.exists("tennis-ball")) {
+    const canvasTex = createCanvasTexture(tex, "tennis-ball", 64, 64);
+    drawTennisBall(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
+
+  // --- Tennis net ---
+  if (!tex.exists("tennis-net")) {
+    const canvasTex = createCanvasTexture(tex, "tennis-net", 64, 64);
+    drawTennisNet(canvasTex.getContext(), 64);
+    canvasTex.refresh();
+  }
 }
 
 /** Get the creature texture key for a hostility level. */
@@ -2101,3 +3481,12 @@ export function beastDesignName(beastName: string): string {
 
 export const CREATURE_FRAME_COUNT = CREATURE_FRAMES;
 export const BEAST_FRAME_COUNT = BEAST_FRAMES;
+
+/** Get the friendly creature texture key by index. */
+export function friendlyCreatureKey(index: number): string {
+  const idx = ((index % FRIENDLY_DESIGNS.length) + FRIENDLY_DESIGNS.length) % FRIENDLY_DESIGNS.length;
+  return `friendly-${FRIENDLY_DESIGNS[idx].name}`;
+}
+
+/** Number of friendly creature designs. */
+export const FRIENDLY_CREATURE_COUNT = FRIENDLY_DESIGNS.length;

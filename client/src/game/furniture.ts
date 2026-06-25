@@ -86,6 +86,16 @@ function drawDeskLeft(ctx: CanvasRenderingContext2D, s: number): void {
   roundRect(ctx, 2, topY, s - 2, h, 4);
   ctx.fill();
 
+  // front panel — darker wood side covering lower tile
+  const panelGrad = linearGrad(ctx, 0, topY + h, 0, s * 0.95, [
+    [0, shade(0x5a4a3a, -5)],
+    [0.5, shade(0x4a3a2a, -15)],
+    [1, shade(0x3a2a1a, -25)],
+  ]);
+  ctx.fillStyle = panelGrad;
+  roundRect(ctx, 2, topY + h, s - 2, s * 0.35, 4);
+  ctx.fill();
+
   // surface texture — subtle wood grain lines
   ctx.strokeStyle = hexRGBA(0x4a3a2a, 0.15);
   ctx.lineWidth = 0.8;
@@ -150,6 +160,16 @@ function drawDeskRight(ctx: CanvasRenderingContext2D, s: number): void {
   ]);
   ctx.fillStyle = surfaceGrad;
   roundRect(ctx, 0, topY, s - 2, h, 4);
+  ctx.fill();
+
+  // front panel — darker wood side covering lower tile
+  const panelGrad = linearGrad(ctx, 0, topY + h, 0, s * 0.95, [
+    [0, shade(0x5a4a3a, -5)],
+    [0.5, shade(0x4a3a2a, -15)],
+    [1, shade(0x3a2a1a, -25)],
+  ]);
+  ctx.fillStyle = panelGrad;
+  roundRect(ctx, 0, topY + h, s - 2, s * 0.35, 4);
   ctx.fill();
 
   // wood grain
@@ -261,6 +281,198 @@ function drawOfficeChair(ctx: CanvasRenderingContext2D, s: number): void {
   roundRect(ctx, cx - s * 0.22, s * 0.36, s * 0.05, s * 0.12, 3);
   ctx.fill();
   roundRect(ctx, cx + s * 0.17, s * 0.36, s * 0.05, s * 0.12, 3);
+  ctx.fill();
+}
+
+/** Office chair facing up toward desk — rear view (assigned seat) */
+function drawOfficeChairUp(ctx: CanvasRenderingContext2D, s: number): void {
+  const cx = s * 0.5;
+
+  // shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  ctx.beginPath();
+  ctx.ellipse(cx, s * 0.88, s * 0.26, s * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 5-star wheel base at bottom (same as front — symmetrical)
+  ctx.fillStyle = shade(0x2a2a30, 0);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
+    ctx.save();
+    ctx.translate(cx, s * 0.8);
+    ctx.rotate(a);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-3, s * 0.1);
+    ctx.lineTo(3, s * 0.1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, s * 0.11, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = shade(0x1a1a20, 0);
+    ctx.fill();
+    ctx.fillStyle = shade(0x2a2a30, 0);
+    ctx.restore();
+  }
+
+  // center column — short, mostly hidden behind seat
+  const colGrad = linearGrad(ctx, cx - 3, 0, cx + 3, 0, [
+    [0, shade(0x1a1a20, -10)],
+    [0.5, shade(0x3a3a40, 10)],
+    [1, shade(0x1a1a20, -10)],
+  ]);
+  ctx.fillStyle = colGrad;
+  ctx.fillRect(cx - 3, s * 0.62, 6, s * 0.2);
+
+  // seat — only the front edge visible peeking out below the backrest
+  const seatGrad = linearGrad(ctx, 0, s * 0.54, 0, s * 0.66, [
+    [0, shade(0x2a3a4a, 5)],
+    [0.5, shade(0x1a2a3a, -5)],
+    [1, shade(0x1a2a3a, -15)],
+  ]);
+  ctx.fillStyle = seatGrad;
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.14, s * 0.54);
+  ctx.lineTo(cx + s * 0.14, s * 0.54);
+  ctx.lineTo(cx + s * 0.16, s * 0.66);
+  ctx.lineTo(cx - s * 0.16, s * 0.66);
+  ctx.closePath();
+  ctx.fill();
+
+  // back of backrest — the dominant feature, showing rear surface
+  // slightly narrower at top (ergonomic flare), wider at bottom
+  const backGrad = linearGrad(ctx, 0, s * 0.08, 0, s * 0.58, [
+    [0, shade(0x2a3a4a, 10)],
+    [0.3, shade(0x2a3a4a, 0)],
+    [0.7, shade(0x1a2a3a, -8)],
+    [1, shade(0x1a2a3a, -18)],
+  ]);
+  ctx.fillStyle = backGrad;
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.13, s * 0.1);
+  ctx.quadraticCurveTo(cx - s * 0.16, s * 0.08, cx - s * 0.15, s * 0.12);
+  ctx.lineTo(cx - s * 0.17, s * 0.52);
+  ctx.quadraticCurveTo(cx - s * 0.17, s * 0.58, cx - s * 0.13, s * 0.58);
+  ctx.lineTo(cx + s * 0.13, s * 0.58);
+  ctx.quadraticCurveTo(cx + s * 0.17, s * 0.58, cx + s * 0.17, s * 0.52);
+  ctx.lineTo(cx + s * 0.15, s * 0.12);
+  ctx.quadraticCurveTo(cx + s * 0.16, s * 0.08, cx + s * 0.13, s * 0.1);
+  ctx.quadraticCurveTo(cx, s * 0.06, cx - s * 0.13, s * 0.1);
+  ctx.closePath();
+  ctx.fill();
+
+  // rear seam — vertical stitch line down the middle of the back
+  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.2);
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(cx, s * 0.14);
+  ctx.lineTo(cx, s * 0.52);
+  ctx.stroke();
+
+  // subtle horizontal support lines on backrest
+  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.12);
+  ctx.lineWidth = 0.6;
+  for (let i = 0; i < 3; i++) {
+    const y = s * 0.2 + i * s * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.14, y);
+    ctx.quadraticCurveTo(cx, y + 1, cx + s * 0.14, y);
+    ctx.stroke();
+  }
+
+  // top edge highlight — catches light from above
+  ctx.fillStyle = hexRGBA(0x5a6a7a, 0.25);
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.12, s * 0.1);
+  ctx.quadraticCurveTo(cx, s * 0.07, cx + s * 0.12, s * 0.1);
+  ctx.lineTo(cx + s * 0.11, s * 0.14);
+  ctx.quadraticCurveTo(cx, s * 0.11, cx - s * 0.11, s * 0.14);
+  ctx.closePath();
+  ctx.fill();
+
+  // armrest tops — just the tips visible on either side of the backrest
+  ctx.fillStyle = shade(0x2a3a4a, -8);
+  roundRect(ctx, cx - s * 0.2, s * 0.36, s * 0.04, s * 0.08, 2);
+  ctx.fill();
+  roundRect(ctx, cx + s * 0.16, s * 0.36, s * 0.04, s * 0.08, 2);
+  ctx.fill();
+}
+
+/** Office chair facing left — side view (Yuki's chair) */
+function drawOfficeChairLeft(ctx: CanvasRenderingContext2D, s: number): void {
+  const cx = s * 0.5;
+
+  // shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  ctx.beginPath();
+  ctx.ellipse(cx, s * 0.85, s * 0.28, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 5-star wheel base
+  ctx.fillStyle = shade(0x2a2a30, 0);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
+    ctx.save();
+    ctx.translate(cx, s * 0.78);
+    ctx.rotate(a);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-3, s * 0.12);
+    ctx.lineTo(3, s * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, s * 0.13, 3, 0, Math.PI * 2);
+    ctx.fillStyle = shade(0x1a1a20, 0);
+    ctx.fill();
+    ctx.fillStyle = shade(0x2a2a30, 0);
+    ctx.restore();
+  }
+
+  // center column
+  const colGrad = linearGrad(ctx, cx - 4, 0, cx + 4, 0, [
+    [0, shade(0x1a1a20, -10)],
+    [0.5, shade(0x3a3a40, 10)],
+    [1, shade(0x1a1a20, -10)],
+  ]);
+  ctx.fillStyle = colGrad;
+  ctx.fillRect(cx - 4, s * 0.5, 8, s * 0.28);
+
+  // seat — viewed from side, narrower
+  const seatGrad = linearGrad(ctx, 0, s * 0.38, 0, s * 0.52, [
+    [0, shade(0x3a4a5a, 20)],
+    [0.5, shade(0x2a3a4a, 0)],
+    [1, shade(0x1a2a3a, -15)],
+  ]);
+  ctx.fillStyle = seatGrad;
+  roundRect(ctx, cx - s * 0.14, s * 0.38, s * 0.28, s * 0.14, 6);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.4);
+  ctx.lineWidth = 0.8;
+  roundRect(ctx, cx - s * 0.11, s * 0.4, s * 0.22, s * 0.1, 4);
+  ctx.stroke();
+
+  // backrest — on right side (chair faces left)
+  const backGrad = linearGrad(ctx, s * 0.55, 0, s * 0.92, 0, [
+    [0, shade(0x3a4a5a, 25)],
+    [0.5, shade(0x2a3a4a, 5)],
+    [1, shade(0x1a2a3a, -10)],
+  ]);
+  ctx.fillStyle = backGrad;
+  roundRect(ctx, s * 0.55, s * 0.08, s * 0.32, s * 0.34, 8);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.3);
+  ctx.lineWidth = 0.8;
+  roundRect(ctx, s * 0.58, s * 0.11, s * 0.26, s * 0.28, 6);
+  ctx.stroke();
+  ctx.fillStyle = hexRGBA(0x4a5a6a, 0.15);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.71, s * 0.25, s * 0.04, s * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // armrest (left side only visible from this angle)
+  ctx.fillStyle = shade(0x2a3a4a, -5);
+  roundRect(ctx, cx - s * 0.18, s * 0.36, s * 0.05, s * 0.12, 3);
   ctx.fill();
 }
 
@@ -1145,7 +1357,7 @@ function drawToaster(ctx: CanvasRenderingContext2D, s: number): void {
 }
 
 /** Desk monitor (tile 33) */
-function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number): void {
+function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
   const cx = s * 0.5;
 
   // shadow
@@ -1185,25 +1397,35 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.stroke();
 
   // screen
-  ctx.fillStyle = hexRGBA(0x0a0a14, 0.95);
+  if (lit) {
+    ctx.fillStyle = hexRGBA(0xaaccff, 0.5);
+  } else {
+    ctx.fillStyle = hexRGBA(0x0a0a14, 0.95);
+  }
   roundRect(ctx, s * 0.15, s * 0.11, s * 0.7, s * 0.4, 2);
   ctx.fill();
 
-  // screen content — code editor look
-  ctx.fillStyle = hexRGBA(0x4488cc, 0.15);
-  ctx.fillRect(s * 0.17, s * 0.13, s * 0.66, s * 0.36);
-  // code lines
-  const lineColors = [0x4a9acd, 0xcc8844, 0x88cc66, 0x666688];
-  for (let i = 0; i < 8; i++) {
-    const ly = s * 0.15 + i * (s * 0.045);
-    const indent = (i % 3) * s * 0.04;
-    const lineW = s * (0.15 + Math.random() * 0.3);
-    ctx.fillStyle = hexRGBA(lineColors[i % lineColors.length], 0.5);
-    ctx.fillRect(s * 0.19 + indent, ly, lineW, 2);
+  if (!lit) {
+    // screen content — code editor look
+    ctx.fillStyle = hexRGBA(0x4488cc, 0.15);
+    ctx.fillRect(s * 0.17, s * 0.13, s * 0.66, s * 0.36);
+    // code lines
+    const lineColors = [0x4a9acd, 0xcc8844, 0x88cc66, 0x666688];
+    for (let i = 0; i < 8; i++) {
+      const ly = s * 0.15 + i * (s * 0.045);
+      const indent = (i % 3) * s * 0.04;
+      const lineW = s * (0.15 + Math.random() * 0.3);
+      ctx.fillStyle = hexRGBA(lineColors[i % lineColors.length], 0.5);
+      ctx.fillRect(s * 0.19 + indent, ly, lineW, 2);
+    }
   }
 
   // screen glow
-  ctx.fillStyle = hexRGBA(0x4488ff, 0.05);
+  if (lit) {
+    ctx.fillStyle = hexRGBA(0xffffff, 0.1);
+  } else {
+    ctx.fillStyle = hexRGBA(0x4488ff, 0.05);
+  }
   roundRect(ctx, s * 0.15, s * 0.11, s * 0.7, s * 0.4, 2);
   ctx.fill();
 
@@ -1239,8 +1461,15 @@ const FURNITURE_TYPES: FurnitureType[] = [
   { tileIds: [30], draw: drawSofaRight },
   { tileIds: [31], draw: drawLargePlant },
   { tileIds: [32], draw: drawToaster },
-  { tileIds: [33], draw: drawDeskMonitor },
+  { tileIds: [33], draw: drawOfficeChairLeft },
 ];
+
+export const CHAIR_TEX_DOWN = "chair-down";
+export const CHAIR_TEX_UP = "chair-up";
+export const CHAIR_TEX_LEFT = "chair-left";
+export const MONITOR_TEX = "monitor-proc";
+
+const CHAIR_TILE_IDS = new Set([19, 33]);
 
 /**
  * Generate furniture textures and overlay them on the furniture layer.
@@ -1265,14 +1494,58 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
     }
   }
 
+  // Generate chair direction textures
+  const chairDraws: Array<[string, (ctx: CanvasRenderingContext2D, s: number) => void]> = [
+    [CHAIR_TEX_DOWN, drawOfficeChair],
+    [CHAIR_TEX_UP, drawOfficeChairUp],
+    [CHAIR_TEX_LEFT, drawOfficeChairLeft],
+  ];
+  for (const [key, drawFn] of chairDraws) {
+    if (tex.exists(key)) continue;
+    const canvasTex = tex.createCanvas(key, TILE_PX, TILE_PX);
+    if (!canvasTex) continue;
+    const ctx = canvasTex.getContext();
+    ctx.clearRect(0, 0, TILE_PX, TILE_PX);
+    drawFn(ctx, TILE_PX);
+    canvasTex.refresh();
+  }
+
+  // Generate procedural monitor texture (2 frames: off / on)
+  if (!tex.exists(MONITOR_TEX)) {
+    const canvasTex = tex.createCanvas(MONITOR_TEX, TILE_PX * 2, TILE_PX);
+    if (canvasTex) {
+      const ctx = canvasTex.getContext();
+      ctx.clearRect(0, 0, TILE_PX, TILE_PX);
+      drawDeskMonitor(ctx, TILE_PX, false);
+      ctx.save();
+      ctx.translate(TILE_PX, 0);
+      drawDeskMonitor(ctx, TILE_PX, true);
+      ctx.restore();
+      canvasTex.refresh();
+      const texture = tex.get(MONITOR_TEX);
+      texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
+      texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+    }
+  }
+
   // Iterate through furniture layer and overlay enhanced sprites
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
       const tile = furnitureLayer.getTileAt(x, y);
       if (!tile) continue;
       const tileId = tile.index;
+
+      // Skip chair tiles — scene manages them as separate sprites
+      if (CHAIR_TILE_IDS.has(tileId)) {
+        tile.alpha = 0;
+        continue;
+      }
+
       const key = `furniture-${tileId}`;
       if (!tex.exists(key)) continue;
+
+      // Hide the underlying tile to prevent double rendering
+      tile.alpha = 0;
 
       const px = x * TILE_PX;
       const py = y * TILE_PX;

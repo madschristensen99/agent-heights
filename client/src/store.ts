@@ -1,5 +1,6 @@
 import type { AgentInfo, FiredAgent, GameSettings, LogEntry, PlayerInfo, ServerMsg, TaskCard } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
+import { achievements } from "./game/achievements";
 
 type Listener = () => void;
 
@@ -31,6 +32,8 @@ export class Store {
   selectedId: string | null = null;
   connected = false;
   boardOpen = false;
+  achievementsOpen = false;
+  hallOfFameOpen = false;
 
   private listeners = new Set<Listener>();
   private toastListeners = new Set<(text: string) => void>();
@@ -59,6 +62,16 @@ export class Store {
 
   toggleBoard(open?: boolean): void {
     this.boardOpen = open ?? !this.boardOpen;
+    this.emit();
+  }
+
+  toggleAchievements(open?: boolean): void {
+    this.achievementsOpen = open ?? !this.achievementsOpen;
+    this.emit();
+  }
+
+  toggleHallOfFame(open?: boolean): void {
+    this.hallOfFameOpen = open ?? !this.hallOfFameOpen;
     this.emit();
   }
 
@@ -114,9 +127,34 @@ export class Store {
       case "settings":
         this.settings = msg.settings;
         break;
-      case "agent":
+      case "agent": {
+        const prev = this.agents.get(msg.agent.id);
+        const isNew = !prev;
         this.agents.set(msg.agent.id, msg.agent);
+        if (isNew) {
+          const count = this.agents.size;
+          if (count >= 1) achievements.unlock("first_hire");
+          if (count >= 8) achievements.unlock("full_office");
+          if (count >= 9) achievements.unlock("overflow");
+          if (msg.agent.role === "manager") achievements.unlock("hire_manager");
+          achievements.addToSet("providers", msg.agent.provider);
+          if (achievements.getSetSize("providers") >= 2) achievements.unlock("both_providers");
+          achievements.addToSet("models", msg.agent.model);
+          if (achievements.getSetSize("models") >= 5) achievements.unlock("all_models");
+          achievements.addToSet("titles", msg.agent.title);
+          if (achievements.getSetSize("titles") >= 10) achievements.unlock("all_titles");
+        }
+        if (prev && msg.agent.tasksDone > prev.tasksDone) {
+          const diff = msg.agent.tasksDone - prev.tasksDone;
+          const total = achievements.incStat("tasksDone", diff);
+          achievements.unlock("first_done");
+          if (total >= 10) achievements.unlock("ten_tasks");
+          if (total >= 50) achievements.unlock("fifty_tasks");
+          if (total >= 100) achievements.unlock("hundred_tasks");
+          if (msg.agent.tasksDone >= 25) achievements.unlock("star_employee");
+        }
         break;
+      }
       case "agent_removed":
         this.agents.delete(msg.agentId);
         this.logs.delete(msg.agentId);
@@ -126,6 +164,7 @@ export class Store {
         this.logs.set(msg.agentId, []);
         this.feed = this.feed.filter((f) => f.agentId !== msg.agentId);
         this.feedVersion++;
+        achievements.unlock("clear_memory");
         break;
       case "log": {
         const list = this.logs.get(msg.agentId) ?? [];
@@ -146,9 +185,14 @@ export class Store {
       case "toast":
         for (const fn of this.toastListeners) fn(msg.text);
         return;
-      case "card":
+      case "card": {
+        const prevCard = this.board.get(msg.card.id);
         this.board.set(msg.card.id, msg.card);
+        if (msg.card.status === "done" && (!prevCard || prevCard.status !== "done")) {
+          if (achievements.incStat("boardCardsDone") >= 20) achievements.unlock("board_master");
+        }
         break;
+      }
       case "card_removed":
         this.board.delete(msg.cardId);
         break;
@@ -158,9 +202,12 @@ export class Store {
         break;
       case "fired_agent":
         this.firedAgents.set(msg.agent.id, msg.agent);
+        achievements.unlock("first_fire");
         break;
       case "fired_agent_removed":
         this.firedAgents.delete(msg.agentId);
+        achievements.unlock("first_recruit");
+        if (achievements.incStat("recruited") >= 5) achievements.unlock("recruit_five");
         break;
       case "huddle":
         for (const fn of this.huddleListeners) fn(msg.agentIds);

@@ -2,102 +2,12 @@
  * Post-processing pipelines for the game.
  *
  * Pipelines:
- * - CRTWarmthPipeline: subtle scanlines, warm color grading, vignette, bloom,
- *   chromatic aberration, night factor support.
  * - BloomPipeline: multi-pass Gaussian bloom for high-luminance areas.
  * - ColorGradePipeline: cinematic color grading with ACES tone mapping.
  * - DOFPipeline: depth-of-field pseudo-blur on screen edges (vignette blur).
  */
 
 import Phaser from "phaser";
-
-// ============================================================
-// CRT Warmth — the original pipeline, enhanced
-// ============================================================
-
-const CRT_FRAGMENT = `
-precision mediump float;
-uniform sampler2D uMainSampler;
-uniform float uTime;
-uniform vec2 uResolution;
-uniform float uNightFactor;
-varying vec2 outTexCoord;
-
-void main() {
-  vec2 uv = outTexCoord;
-  vec4 color = texture2D(uMainSampler, uv);
-
-  // subtle scanlines — very faint, only visible up close
-  float scanline = sin(uv.y * uResolution.y * 0.7) * 0.03;
-  color.rgb -= scanline;
-
-  // warm color grading — shift slightly toward amber
-  color.r = color.r * 1.02;
-  color.g = color.g * 0.99;
-  color.b = color.b * 0.96;
-
-  // slight saturation boost
-  float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-  color.rgb = mix(vec3(gray), color.rgb, 1.08);
-
-  // enhanced bloom — multi-threshold brightening
-  float lum = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-  if (lum > 0.55) {
-    float bloomStrength = smoothstep(0.55, 0.9, lum);
-    color.rgb += (color.rgb - vec3(lum)) * 0.25 * bloomStrength;
-  }
-  // secondary bloom for very bright areas (fire, lava, glows)
-  if (lum > 0.8) {
-    color.rgb += color.rgb * 0.08;
-  }
-
-  // subtle CRT curvature — barely perceptible edge darkening
-  vec2 center = uv - 0.5;
-  float dist = dot(center, center);
-  color.rgb *= 1.0 - dist * 0.15;
-
-  // night factor darkening — applied when outside at night
-  color.rgb *= 1.0 - uNightFactor * 0.15;
-  // cool tint at night
-  color.b = mix(color.b, color.b * 1.1, uNightFactor * 0.5);
-
-  // chromatic aberration — very subtle, stronger at edges
-  float caStrength = dist * 0.008;
-  float rChannel = texture2D(uMainSampler, uv + vec2(caStrength, 0.0)).r;
-  float bChannel = texture2D(uMainSampler, uv - vec2(caStrength, 0.0)).b;
-  color.r = mix(color.r, rChannel, 0.5);
-  color.b = mix(color.b, bChannel, 0.5);
-
-  gl_FragColor = clamp(color, 0.0, 1.0);
-}
-`;
-
-export class CRTWarmthPipeline extends Phaser.Renderer.WebGL.Pipelines
-  .PostFXPipeline {
-  private nightFactor = 0;
-
-  constructor(game: Phaser.Game) {
-    super({
-      game,
-      name: "CRTWarmth",
-      fragShader: CRT_FRAGMENT,
-    });
-  }
-
-  setNightFactor(factor: number): void {
-    this.nightFactor = Phaser.Math.Clamp(factor, 0, 1);
-  }
-
-  onPreRender(): void {
-    this.set1f("uTime", this.game.loop.time / 1000);
-    this.set2f(
-      "uResolution",
-      this.renderer.width,
-      this.renderer.height,
-    );
-    this.set1f("uNightFactor", this.nightFactor);
-  }
-}
 
 // ============================================================
 // Bloom Pipeline — enhanced glow for bright areas
@@ -211,10 +121,6 @@ void main() {
 
   // apply tone mapping
   color.rgb = mix(color.rgb, toned, uGradeIntensity * 0.6);
-
-  // subtle film grain
-  float grain = fract(sin(dot(outTexCoord * uTime, vec2(12.9898, 78.233))) * 43758.5453);
-  color.rgb += (grain - 0.5) * 0.015;
 
   gl_FragColor = clamp(color, 0.0, 1.0);
 }

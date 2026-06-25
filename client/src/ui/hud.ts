@@ -1,8 +1,13 @@
 import type { Net } from "../net";
 import type { FeedItem, Store } from "../store";
-import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard } from "../../../shared/types";
-import { ACCENTS, CHAR_VARIANTS, CLAUDE_MODELS, CODEX_MODELS, OFFICE_THEMES, YUKI_ID } from "../../../shared/types";
+import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance } from "../../../shared/types";
+import { CLAUDE_MODELS, CODEX_MODELS, OFFICE_THEMES, YUKI_ID,
+  SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
+  ACCENT_COLOR_OPTIONS, DEFAULT_APPEARANCE,
+} from "../../../shared/types";
 import { md } from "./md";
+import { achievements, ACHIEVEMENTS } from "../game/achievements";
+import { generateCharPreviewDataURL } from "../game/chargen";
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -10,6 +15,110 @@ const NAME_POOL = [
 ];
 
 const PLAYER_KEY = "agent-hq-player";
+
+// ----------------------------------------------------------- character builder
+
+interface BuilderPart {
+  key: keyof CharAppearance;
+  label: string;
+  options: string[];
+  max: number;
+}
+
+const BUILDER_PARTS: BuilderPart[] = [
+  { key: "skin",      label: "SKIN",      options: SKIN_TONES,          max: SKIN_TONES.length },
+  { key: "hairStyle", label: "HAIR STYLE",options: HAIR_STYLES,         max: HAIR_STYLES.length },
+  { key: "hair",      label: "HAIR COLOR",options: HAIR_COLORS,         max: HAIR_COLORS.length },
+  { key: "shirt",     label: "SHIRT",     options: SHIRT_COLORS,        max: SHIRT_COLORS.length },
+  { key: "pants",     label: "PANTS",     options: PANTS_COLORS,        max: PANTS_COLORS.length },
+  { key: "accessory", label: "ACCESSORY", options: ACCESSORIES,         max: ACCESSORIES.length },
+  { key: "accent",    label: "ACCENT",    options: ACCENT_COLOR_OPTIONS,max: ACCENT_COLOR_OPTIONS.length },
+];
+
+/** Renders the character builder HTML and wires up arrow selectors + live preview. */
+class CharBuilder {
+  private appearance: CharAppearance;
+  private prefix: string;
+  private onPreview: (ap: CharAppearance) => void;
+
+  constructor(prefix: string, initial: CharAppearance, onPreview: (ap: CharAppearance) => void) {
+    this.prefix = prefix;
+    this.appearance = { ...initial };
+    this.onPreview = onPreview;
+  }
+
+  /** Returns the HTML string for the builder UI. */
+  html(): string {
+    const p = this.prefix;
+    const rows = BUILDER_PARTS.map((part) => {
+      const idx = this.appearance[part.key];
+      const val = part.options[idx % part.max];
+      const isColor = part.key !== "hairStyle" && part.key !== "accessory";
+      const swatch = isColor ? `<span class="builder-swatch" style="background:${val}"></span>` : "";
+      return `
+        <div class="builder-row" data-part="${part.key}">
+          <button class="builder-arrow" data-dir="-1">◀</button>
+          <span class="builder-label">${part.label}</span>
+          <span class="builder-value">${swatch}<span class="builder-value-text">${isColor ? "" : val}</span></span>
+          <button class="builder-arrow" data-dir="1">▶</button>
+        </div>`;
+    }).join("");
+
+    return `
+      <div class="char-builder" id="${p}-builder">
+        <div class="builder-preview-wrap">
+          <div class="sprite-preview builder-preview" id="${p}-preview"></div>
+        </div>
+        <div class="builder-controls">
+          ${rows}
+        </div>
+      </div>`;
+  }
+
+  /** Wire up event listeners after the HTML is in the DOM. */
+  mount(): void {
+    const p = this.prefix;
+    const root = document.getElementById(`${p}-builder`);
+    if (!root) return;
+
+    root.querySelectorAll<HTMLElement>(".builder-row").forEach((row) => {
+      const partKey = row.dataset.part as keyof CharAppearance;
+      const part = BUILDER_PARTS.find((b) => b.key === partKey)!;
+      row.querySelectorAll<HTMLElement>(".builder-arrow").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const dir = Number(btn.dataset.dir);
+          const cur = this.appearance[partKey];
+          this.appearance[partKey] = (cur + dir + part.max) % part.max;
+          this.updateRow(row, part);
+          this.refreshPreview();
+        });
+      });
+    });
+
+    this.refreshPreview();
+  }
+
+  private updateRow(row: HTMLElement, part: BuilderPart): void {
+    const idx = this.appearance[part.key];
+    const val = part.options[idx % part.max];
+    const isColor = part.key !== "hairStyle" && part.key !== "accessory";
+    const valueEl = row.querySelector(".builder-value")!;
+    const swatch = isColor ? `<span class="builder-swatch" style="background:${val}"></span>` : "";
+    valueEl.innerHTML = `${swatch}<span class="builder-value-text">${isColor ? "" : val}</span>`;
+  }
+
+  private refreshPreview(): void {
+    const previewEl = document.getElementById(`${this.prefix}-preview`);
+    if (previewEl) {
+      previewEl.style.backgroundImage = `url('${generateCharPreviewDataURL(this.appearance, 3)}')`;
+    }
+    this.onPreview(this.appearance);
+  }
+
+  getAppearance(): CharAppearance {
+    return { ...this.appearance };
+  }
+}
 
 /* Crisp inline icons — font glyphs like ⛶ render as tofu in the pixel font. */
 const ICON = {
@@ -87,6 +196,8 @@ export class Hud {
       <div class="modal-backdrop" id="hire-modal" hidden></div>
       <div class="modal-backdrop" id="settings-modal" hidden></div>
       <div class="modal-backdrop" id="onboard-modal" hidden></div>
+      <div class="modal-backdrop" id="achievements-modal" hidden></div>
+      <div class="modal-backdrop" id="hall-of-fame-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
@@ -108,11 +219,15 @@ export class Hud {
     this.bindDetail();
     this.bindFeed();
     this.bindBoard();
+    this.bindHallOfFame();
     this.bindShortcuts();
     // agents stream many messages per second — coalesce to one render per frame
     // so DOM work never starves the game loop
     store.subscribe(() => this.scheduleRender());
     store.onToast((text) => this.toast(text));
+    achievements.onUnlock((def) => {
+      this.toast(`🏆 ${def.name} — ${def.desc}`);
+    });
 
     this.maybeOnboard();
   }
@@ -130,6 +245,7 @@ export class Hud {
       this.net.send({ type: "assign", agentId: id, task, handoffTo: handoffSel.value || undefined });
       input.value = "";
       handoffSel.value = "";
+      achievements.unlock("first_task");
     });
     const chatInput = document.getElementById("d-chat") as HTMLInputElement;
     const sendChat = () => {
@@ -138,6 +254,7 @@ export class Hud {
       if (!id || !text) return;
       this.net.send({ type: "chat", agentId: id, text });
       chatInput.value = "";
+      achievements.unlock("chat_with_agent");
     };
     document.getElementById("d-say")!.addEventListener("click", sendChat);
     chatInput.addEventListener("keydown", (e) => {
@@ -175,6 +292,8 @@ export class Hud {
       if (!task) return;
       this.net.send({ type: "assign_all", task });
       allTask.value = "";
+      achievements.unlock("first_task");
+      achievements.unlock("broadcast");
     };
     document.getElementById("all-assign")!.addEventListener("click", send);
     allTask.addEventListener("keydown", (e) => {
@@ -236,15 +355,21 @@ export class Hud {
       const hire = document.getElementById("hire-modal")!;
       const settings = document.getElementById("settings-modal")!;
       const onboard = document.getElementById("onboard-modal")!;
+      const ach = document.getElementById("achievements-modal")!;
+      const hof = document.getElementById("hall-of-fame-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
         settings.hidden = true;
+        ach.hidden = true;
+        hof.hidden = true;
+        this.store.toggleAchievements(false);
+        this.store.toggleHallOfFame(false);
         return;
       }
       // never steal keystrokes from a form field or while a modal is up
       const active = document.activeElement?.tagName;
       if (active === "INPUT" || active === "TEXTAREA" || active === "SELECT") return;
-      if (!hire.hidden || !settings.hidden || !onboard.hidden) return;
+      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden) return;
       switch (e.key.toLowerCase()) {
         case "h":
           e.preventDefault();
@@ -316,19 +441,32 @@ export class Hud {
     }
     const modal = document.getElementById("onboard-modal")!;
     modal.hidden = false;
+
+    const builder = new CharBuilder("ob", DEFAULT_APPEARANCE, () => {});
+
     modal.innerHTML = `
       <div class="modal onboard">
         <h1>AGENT&nbsp;HQ</h1>
         <p class="sub">— FIRST DAY ON THE JOB —</p>
-        <label>YOUR NAME
-          <input id="ob-name" maxlength="24" placeholder="e.g. Kye" autofocus />
-        </label>
-        <label>WORKSPACE NAME
-          <input id="ob-workspace" maxlength="32" placeholder="e.g. Swarms HQ" />
-        </label>
+        <div class="onboard-layout">
+          <div class="onboard-form">
+            <label>YOUR NAME
+              <input id="ob-name" maxlength="24" placeholder="e.g. Kye" autofocus />
+            </label>
+            <label>WORKSPACE NAME
+              <input id="ob-workspace" maxlength="32" placeholder="e.g. Swarms HQ" />
+            </label>
+          </div>
+          <div class="onboard-builder">
+            <p class="builder-title">BUILD YOUR AVATAR</p>
+            ${builder.html()}
+          </div>
+        </div>
         <button class="btn primary" id="ob-go">CLOCK IN ▶</button>
       </div>
     `;
+    builder.mount();
+
     const go = () => {
       const nameEl = document.getElementById("ob-name") as HTMLInputElement;
       const wsEl = document.getElementById("ob-workspace") as HTMLInputElement;
@@ -340,7 +478,7 @@ export class Hud {
         (name ? wsEl : nameEl).focus();
         return;
       }
-      const player = { name, workspace };
+      const player = { name, workspace, appearance: builder.getAppearance() };
       localStorage.setItem(PLAYER_KEY, JSON.stringify(player));
       this.net.send({ type: "setup", player });
       modal.hidden = true;
@@ -564,22 +702,7 @@ export class Hud {
         .map((m) => `<option value="${m.id}">${m.label}</option>`)
         .join("");
 
-    const usedSprites = new Set([...this.store.agents.values()].map((a) => a.sprite));
-    let selectedSprite = 0;
-    for (let i = 0; i < CHAR_VARIANTS; i++) {
-      if (!usedSprites.has(i)) {
-        selectedSprite = i;
-        break;
-      }
-    }
-
-    const spriteThumb = (i: number) => {
-      const used = usedSprites.has(i);
-      return `<button class="sprite-thumb${i === selectedSprite ? " selected" : ""}${used ? " in-use" : ""}" data-sprite="${i}"${used ? " disabled" : ""}>
-        <div class="sprite-img" style="background-image:url('assets/characters/char-${i}.png')"></div>
-        <span class="sprite-label" style="color:${ACCENTS[i]}">#${i + 1}</span>
-      </button>`;
-    };
+    const builder = new CharBuilder("h", DEFAULT_APPEARANCE, () => {});
 
     modal.hidden = false;
     modal.innerHTML = `
@@ -587,13 +710,7 @@ export class Hud {
         <h2>HIRE AGENT</h2>
         <div class="hire-layout">
           <div class="hire-appearance">
-            <div class="hire-preview">
-              <div class="sprite-preview" id="h-preview" style="background-image:url('assets/characters/char-${selectedSprite}.png')"></div>
-              <div class="preview-label" id="h-preview-label" style="color:${ACCENTS[selectedSprite]}">VARIANT #${selectedSprite + 1}</div>
-            </div>
-            <div class="hire-sprites">
-              ${Array.from({ length: CHAR_VARIANTS }, (_, i) => spriteThumb(i)).join("")}
-            </div>
+            ${builder.html()}
           </div>
           <div class="hire-form">
             <label>NAME <input id="h-name" maxlength="24" value="${suggested}" /></label>
@@ -622,25 +739,7 @@ export class Hud {
         </div>
       </div>
     `;
-
-    const updatePreview = (sprite: number) => {
-      selectedSprite = sprite;
-      const preview = document.getElementById("h-preview")!;
-      preview.style.backgroundImage = `url('assets/characters/char-${sprite}.png')`;
-      const labelEl = document.getElementById("h-preview-label")!;
-      labelEl.style.color = ACCENTS[sprite];
-      labelEl.textContent = `VARIANT #${sprite + 1}`;
-      modal.querySelectorAll<HTMLElement>(".sprite-thumb").forEach((el) => {
-        el.classList.toggle("selected", Number(el.dataset.sprite) === sprite);
-      });
-    };
-
-    modal.querySelectorAll<HTMLElement>(".sprite-thumb").forEach((el) => {
-      el.addEventListener("click", () => {
-        if (el.classList.contains("in-use")) return;
-        updatePreview(Number(el.dataset.sprite));
-      });
-    });
+    builder.mount();
 
     const providerSel = document.getElementById("h-provider") as HTMLSelectElement;
     const modelSel = document.getElementById("h-model") as HTMLSelectElement;
@@ -658,7 +757,7 @@ export class Hud {
         model: modelSel.value,
         systemPrompt: (document.getElementById("h-prompt") as HTMLTextAreaElement).value,
         role: (document.getElementById("h-role") as HTMLSelectElement).value as AgentRole,
-        sprite: selectedSprite,
+        appearance: builder.getAppearance(),
       });
       modal.hidden = true;
     });
@@ -685,6 +784,8 @@ export class Hud {
     this.renderDetail();
     this.renderFeed();
     this.renderBoard();
+    this.renderAchievements();
+    this.renderHallOfFame();
   }
 
   private renderRoster(): void {
@@ -701,6 +802,7 @@ export class Hud {
     const roster = document.getElementById("roster")!;
     roster.classList.toggle("collapsed", this.rosterCollapsed);
     const rows = [...this.store.agents.values()]
+      .sort((a, b) => (a.name === "Yuki" ? -1 : b.name === "Yuki" ? 1 : 0))
       .map(
         (a) => `
         <div class="agent-row ${a.id === this.store.selectedId ? "selected" : ""}" data-id="${a.id}">
@@ -903,6 +1005,147 @@ export class Hud {
       el.addEventListener("click", () => {
         this.net.send({ type: "delete_card", cardId: el.dataset.delete! });
       });
+    });
+  }
+
+  private renderAchievements(): void {
+    const modal = document.getElementById("achievements-modal")!;
+    if (!this.store.achievementsOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+    const unlocked = achievements.getUnlockedIds();
+    const tiers: Record<string, typeof ACHIEVEMENTS> = {};
+    for (const a of ACHIEVEMENTS) {
+      if (!tiers[a.tier]) tiers[a.tier] = [];
+      tiers[a.tier].push(a);
+    }
+    const total = achievements.getTotalCount();
+    const count = achievements.getUnlockedCount();
+    let html = `<div class="ach-modal-content">`;
+    html += `<div class="ach-modal-header">`;
+    html += `<span class="ach-modal-title">🏆 ACHIEVEMENTS</span>`;
+    html += `<span class="ach-modal-progress">${count} / ${total}</span>`;
+    html += `<button class="x" id="ach-close">✕</button>`;
+    html += `</div>`;
+    html += `<div class="ach-modal-progress-bar"><div class="ach-modal-progress-fill" style="width:${(count / total) * 100}%"></div></div>`;
+    for (const [tier, items] of Object.entries(tiers)) {
+      html += `<div class="ach-tier-name">${tier}</div>`;
+      html += `<div class="ach-tier-grid">`;
+      for (const a of items) {
+        const isUnlocked = unlocked.has(a.id);
+        const comingClass = a.comingSoon ? " coming-soon" : "";
+        html += `<div class="ach-card${isUnlocked ? " unlocked" : " locked"}${comingClass}">`;
+        html += `<span class="ach-icon">${a.comingSoon ? "🔒" : isUnlocked ? a.icon : "❓"}</span>`;
+        html += `<div class="ach-info">`;
+        html += `<span class="ach-name">${a.name}</span>`;
+        html += `<span class="ach-desc">${a.desc}</span>`;
+        if (a.comingSoon) html += `<span class="ach-soon">Coming Soon</span>`;
+        html += `</div></div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+    modal.innerHTML = html;
+    modal.hidden = false;
+    document.getElementById("ach-close")!.addEventListener("click", () => {
+      this.store.toggleAchievements(false);
+    });
+  }
+
+  private bindHallOfFame(): void {
+    const modal = document.getElementById("hall-of-fame-modal")!;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) this.store.toggleHallOfFame(false);
+    });
+  }
+
+  private renderHallOfFame(): void {
+    const modal = document.getElementById("hall-of-fame-modal")!;
+    if (!this.store.hallOfFameOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+
+    const agents = [...this.store.agents.values()].filter((a) => a.id !== YUKI_ID);
+    const fired = [...this.store.firedAgents.values()];
+
+    const allAgents = [
+      ...agents.map((a) => ({
+        id: a.id,
+        name: a.name,
+        title: a.title,
+        accent: a.accent,
+        sprite: a.sprite,
+        tasksDone: a.tasksDone,
+        provider: a.provider,
+        model: a.model,
+        status: a.status,
+        fired: false,
+      })),
+      ...fired.map((a) => ({
+        id: a.id,
+        name: a.name,
+        title: a.title,
+        accent: a.accent,
+        sprite: a.sprite,
+        tasksDone: a.tasksDone,
+        provider: a.provider,
+        model: a.model,
+        status: "fired" as const,
+        fired: true,
+      })),
+    ];
+
+    const sorted = allAgents.sort((a, b) => b.tasksDone - a.tasksDone);
+    const topAgent = sorted[0];
+
+    const medals = ["🥇", "🥈", "🥉"];
+
+    let html = `<div class="hof-modal-content">`;
+    html += `<div class="hof-modal-header">`;
+    html += `<span class="hof-modal-title">⭐ HALL OF FAME</span>`;
+    html += `<button class="x" id="hof-close">✕</button>`;
+    html += `</div>`;
+    html += `<div class="hof-subtitle">Employee of the Month — Break Room Bulletin Board</div>`;
+
+    if (topAgent && topAgent.tasksDone > 0) {
+      html += `<div class="hof-spotlight">`;
+      html += `<div class="hof-spotlight-avatar" style="background-image:url('assets/characters/char-${topAgent.sprite}.png')"></div>`;
+      html += `<div class="hof-spotlight-info">`;
+      html += `<span class="hof-spotlight-name" style="color:${topAgent.accent}">${esc(topAgent.name)}</span>`;
+      html += `<span class="hof-spotlight-title">${esc(topAgent.title)}</span>`;
+      html += `<span class="hof-spotlight-tasks">${topAgent.tasksDone} task${topAgent.tasksDone !== 1 ? "s" : ""} completed${topAgent.fired ? " · (fired)" : ""}</span>`;
+      html += `</div>`;
+      html += `<span class="hof-spotlight-medal">🏆</span>`;
+      html += `</div>`;
+    }
+
+    if (sorted.length === 0) {
+      html += `<div class="hof-empty">No agents yet. Hire someone and put them to work!</div>`;
+    } else {
+      html += `<div class="hof-list">`;
+      for (let i = 0; i < sorted.length; i++) {
+        const a = sorted[i];
+        const medal = i < 3 ? medals[i] : `${i + 1}.`;
+        html += `<div class="hof-row${i < 3 ? " top3" : ""}">`;
+        html += `<span class="hof-medal">${medal}</span>`;
+        html += `<div class="hof-avatar" style="background-image:url('assets/characters/char-${a.sprite}.png')"></div>`;
+        html += `<span class="hof-name" style="color:${a.accent}">${esc(a.name)}</span>`;
+        html += `<span class="hof-title">${esc(a.title)}</span>`;
+        html += `<span class="hof-tasks">${a.tasksDone} done${a.fired ? " · 🔥" : ""}</span>`;
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+    modal.innerHTML = html;
+    modal.hidden = false;
+    document.getElementById("hof-close")!.addEventListener("click", () => {
+      this.store.toggleHallOfFame(false);
     });
   }
 

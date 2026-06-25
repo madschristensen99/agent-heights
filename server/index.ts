@@ -53,12 +53,17 @@ wss.on("connection", (ws) => {
           const name = String(msg.player?.name ?? "").trim().slice(0, 24);
           const workspace = String(msg.player?.workspace ?? "").trim().slice(0, 32);
           if (!name || !workspace) break;
+          const appearance = msg.player?.appearance ?? null;
           const changed =
             !player || player.name !== name || player.workspace !== workspace;
           if (changed) {
-            player = { name, workspace };
+            player = { name, workspace, appearance };
             manager.bossName = player.name;
             session.setPlayer(player);
+            save.setPlayer(player);
+            broadcast({ type: "player", player });
+          } else if (appearance && player && !player.appearance) {
+            player = { name: player.name, workspace: player.workspace, appearance };
             save.setPlayer(player);
             broadcast({ type: "player", player });
           }
@@ -68,7 +73,7 @@ wss.on("connection", (ws) => {
           manager.setSettings(msg.settings);
           break;
         case "hire":
-          manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite);
+          manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance);
           break;
         case "assign":
           manager.assign(msg.agentId, msg.task, msg.handoffTo);

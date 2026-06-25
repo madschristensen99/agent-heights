@@ -58,6 +58,18 @@ export interface Chunk {
 
 const idx = (x: number, y: number) => y * CHUNK_SIZE + x;
 
+/** Tiles that should not be overwritten by other feature placement. */
+const PROTECTED_TILES = new Set<number>([
+  TILE.GOLF_CLUB, TILE.GOLF_BALL, TILE.GOLF_FLAG, TILE.TEE_BOX,
+  TILE.AXE, TILE.LEPRECHAUN, TILE.BIG_TREE, TILE.FOUNTAIN,
+  TILE.TENNIS_COURT, TILE.TENNIS_WALL, TILE.TENNIS_RACKET, TILE.TENNIS_BALL, TILE.TENNIS_NET,
+]);
+
+/** Check if a tile can be safely overwritten by a feature. */
+function canOverwrite(tiles: number[], i: number): boolean {
+  return !PROTECTED_TILES.has(tiles[i]);
+}
+
 /**
  * Generate a chunk deterministically.
  *
@@ -83,24 +95,54 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
       const obstacleChance = Math.min(0.25, 0.02 + hostility * 0.04);
       const hostileChance = hostility >= 2 ? Math.min(0.30, (hostility - 1) * 0.06) : 0;
 
-      if (r < obstacleChance) {
-        tiles[i] = pickObstacle(biome, rng);
-      } else if (r < obstacleChance + hostileChance) {
-        tiles[i] = pickHostile(biome, rng);
-      } else if (r < obstacleChance + hostileChance + decorationChance(biome)) {
-        tiles[i] = pickDecoration(biome, rng);
+      if (canOverwrite(tiles, i)) {
+        if (r < obstacleChance) {
+          tiles[i] = pickObstacle(biome, rng, hostility);
+        } else if (r < obstacleChance + hostileChance) {
+          tiles[i] = pickHostile(biome, rng);
+        } else if (r < obstacleChance + hostileChance + decorationChance(biome)) {
+          tiles[i] = pickDecoration(biome, rng);
+        }
       }
     }
   }
 
-  // golf course in meadow chunks near the office
-  if (biome === "meadow" && rng() < 0.4) {
+  // golf course in meadow chunks near the office — expanded
+  // Guarantee a golf course in the meadow chunk closest to the office door,
+  // with the tee box 10-20 tiles out in a varied direction.
+  // Chunk (0,0) is directly below the office; (0,1), (-1,0), (1,0) are adjacent.
+  const nearOffice = (cx >= -1 && cx <= 1 && cy >= 0 && cy <= 1);
+  if (biome === "meadow" && nearOffice && rng() < 0.85) {
+    placeGolfCourseNearOffice(tiles, rng, cx, cy);
+  } else if (biome === "meadow" && rng() < 0.6) {
     placeGolfCourse(tiles, rng);
+  }
+
+  // leprechaun agent — small chance to spawn near a big tree in forest/ruins
+  if ((biome === "forest" || biome === "ruins") && hostility >= 2 && rng() < 0.15) {
+    placeLeprechaun(tiles, rng);
+  }
+
+  // brick fortresses — enterable structures far from the office (~150+ tiles)
+  const chunkDist = Math.hypot(cx, cy);
+  if (chunkDist >= 5 && rng() < 0.15) {
+    placeBrickTower(tiles, biome, rng);
   }
 
   // park features in meadow — benches, hedges, ponds
   if (biome === "meadow" && rng() < 0.25) {
     placeParkFeature(tiles, rng);
+  }
+
+  // fountains in meadow — decorative water feature right outside the office
+  if (biome === "meadow" && rng() < 0.35) {
+    placeFountain(tiles, rng);
+  }
+
+  // tennis courts — placed 50-75 tiles from the office (chunk dist ~1.5-2.5)
+  const tennisDist = Math.hypot(cx, cy);
+  if ((biome === "meadow" || biome === "forest") && tennisDist >= 1.5 && tennisDist <= 2.5 && rng() < 0.55) {
+    placeTennisCourt(tiles, rng);
   }
 
   // water features — grouped clusters of 6+ tiles, more common near office
@@ -144,13 +186,17 @@ function baseGround(biome: Biome): number {
   }
 }
 
-function pickObstacle(biome: Biome, rng: () => number): number {
+function pickObstacle(biome: Biome, rng: () => number, hostility: number): number {
+  // Big trees become more common farther from the office
+  const bigTreeChance = Math.max(0, (hostility - 1) * 0.15);
   switch (biome) {
     case "meadow":
       return rng() < 0.5 ? TILE.TREE : TILE.HEDGE;
     case "forest":
+      if (rng() < bigTreeChance) return TILE.BIG_TREE;
       return rng() < 0.8 ? TILE.TREE : TILE.ROCK;
     case "ruins":
+      if (rng() < bigTreeChance * 0.5) return TILE.BIG_TREE;
       return rng() < 0.5 ? TILE.RUIN : TILE.ROCK;
     case "wasteland":
       return rng() < 0.6 ? TILE.ROCK : TILE.RUIN;
@@ -211,7 +257,7 @@ function placeWaterCluster(tiles: number[], rng: () => number): void {
       const d = Math.hypot(x - cx, y - cy);
       // organic irregular edge — noise-based threshold
       const edgeNoise = (Math.sin(x * 2.3) + Math.cos(y * 1.7) + rng() * 1.5) * 0.8;
-      if (d <= r + edgeNoise) {
+      if (d <= r + edgeNoise && canOverwrite(tiles, idx(x, y))) {
         tiles[idx(x, y)] = TILE.WATER;
       }
     }
@@ -227,7 +273,8 @@ function placeAcidCluster(tiles: number[], rng: () => number): void {
     const ax = cx + Math.floor((rng() - 0.5) * 4);
     const ay = cy + Math.floor((rng() - 0.5) * 4);
     if (ax >= 0 && ax < CHUNK_SIZE && ay >= 0 && ay < CHUNK_SIZE) {
-      tiles[idx(ax, ay)] = TILE.ACID;
+      const ai = idx(ax, ay);
+      if (canOverwrite(tiles, ai)) tiles[ai] = TILE.ACID;
     }
   }
 }
@@ -241,41 +288,290 @@ function placeLavaPatch(tiles: number[], rng: () => number): void {
     const lx = cx + Math.floor((rng() - 0.5) * 6);
     const ly = cy + Math.floor((rng() - 0.5) * 6);
     if (lx >= 0 && lx < CHUNK_SIZE && ly >= 0 && ly < CHUNK_SIZE) {
-      tiles[idx(lx, ly)] = TILE.LAVA;
+      const li = idx(lx, ly);
+      if (canOverwrite(tiles, li)) tiles[li] = TILE.LAVA;
     }
   }
 }
 
-/** Place a golf course hole — fairway, sand trap, and flag. */
-function placeGolfCourse(tiles: number[], rng: () => number): void {
-  const fw = 6 + Math.floor(rng() * 6);
-  const fh = 6 + Math.floor(rng() * 6);
-  const ox = 2 + Math.floor(rng() * (CHUNK_SIZE - fw - 4));
-  const oy = 2 + Math.floor(rng() * (CHUNK_SIZE - fh - 4));
-
-  // fairway — lighter green
-  for (let y = oy; y < oy + fh; y++) {
-    for (let x = ox; x < ox + fw; x++) {
-      tiles[idx(x, y)] = TILE.FAIRWAY;
+/** Place a leprechaun agent near a big tree, with an axe to trade. */
+function placeLeprechaun(tiles: number[], rng: () => number): void {
+  // Find a big tree in the chunk
+  const bigTrees: { x: number; y: number }[] = [];
+  for (let y = 0; y < CHUNK_SIZE; y++) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      if (tiles[idx(x, y)] === TILE.BIG_TREE) bigTrees.push({ x, y });
     }
   }
-  // sand trap
-  const stx = ox + Math.floor(fw * 0.3);
-  const sty = oy + Math.floor(fh * 0.3);
-  const stR = 2 + Math.floor(rng() * 2);
-  for (let y = sty - stR; y <= sty + stR; y++) {
-    for (let x = stx - stR; x <= stx + stR; x++) {
+  if (bigTrees.length === 0) return;
+
+  const tree = bigTrees[Math.floor(rng() * bigTrees.length)];
+
+  // Find a walkable tile adjacent to the big tree
+  const offsets = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  for (const [dx, dy] of offsets) {
+    const lx = tree.x + dx;
+    const ly = tree.y + dy;
+    if (lx >= 0 && lx < CHUNK_SIZE && ly >= 0 && ly < CHUNK_SIZE) {
+      const t = tiles[idx(lx, ly)];
+      if (t === TILE.GRASS || t === TILE.PATH || t === TILE.SAND || t === TILE.FLOWER) {
+        tiles[idx(lx, ly)] = TILE.LEPRECHAUN;
+        // Place an axe tile next to the leprechaun (the axe they offer)
+        const ax = lx + (dx === 0 ? 1 : 0);
+        const ay = ly + (dy === 0 ? 1 : 0);
+        if (ax >= 0 && ax < CHUNK_SIZE && ay >= 0 && ay < CHUNK_SIZE) {
+          const at = tiles[idx(ax, ay)];
+          if (at === TILE.GRASS || at === TILE.PATH || at === TILE.SAND || at === TILE.FLOWER) {
+            tiles[idx(ax, ay)] = TILE.AXE;
+          }
+        }
+        return;
+      }
+    }
+  }
+}
+
+/**
+ * Place a golf course near the office with varied tee box position.
+ * The tee box is placed 10-20 tiles from the office door in a random
+ * direction (down, down-left, down-right, left, or right).
+ * The course is placed within the given chunk, positioned so the tee
+ * box lands at the varied offset.
+ */
+function placeGolfCourseNearOffice(tiles: number[], rng: () => number, cx: number, cy: number): void {
+  const fw = 14 + Math.floor(rng() * 6); // 14-19 wide
+  const fh = 12 + Math.floor(rng() * 6); // 12-17 tall
+
+  // The office door is at world tile (~14, 0) — top of chunk (0,0).
+  // Pick a target tee position 10-20 tiles from the door in a varied direction.
+  // Direction options: straight down, down-left, down-right, left, right
+  const doorX = 14;
+  const doorY = 0;
+  const dist = 10 + Math.floor(rng() * 11); // 10-20 tiles
+  const angle = rng();
+  let teeWorldX: number, teeWorldY: number;
+  if (angle < 0.35) {
+    // straight down
+    teeWorldX = doorX + Math.floor((rng() - 0.5) * 6);
+    teeWorldY = doorY + dist;
+  } else if (angle < 0.55) {
+    // down-left
+    teeWorldX = doorX - dist;
+    teeWorldY = doorY + Math.floor(dist * 0.6);
+  } else if (angle < 0.75) {
+    // down-right
+    teeWorldX = doorX + dist;
+    teeWorldY = doorY + Math.floor(dist * 0.6);
+  } else if (angle < 0.88) {
+    // left
+    teeWorldX = doorX - dist;
+    teeWorldY = doorY + 2 + Math.floor(rng() * 4);
+  } else {
+    // right
+    teeWorldX = doorX + dist;
+    teeWorldY = doorY + 2 + Math.floor(rng() * 4);
+  }
+
+  // Convert world tile to chunk-local coordinates
+  const localTeeX = teeWorldX - cx * CHUNK_SIZE;
+  const localTeeY = teeWorldY - cy * CHUNK_SIZE;
+
+  // Place the fairway centered on the tee, with tee at the near end (toward the door)
+  // The fairway extends away from the door from the tee box.
+  // Direction from door to tee = the "forward" direction of the course
+  const dirDx = teeWorldX - doorX;
+  const dirDy = teeWorldY - doorY;
+  const dirLen = Math.hypot(dirDx, dirDy) || 1;
+  const fwdX = dirDx / dirLen;
+  const fwdY = dirDy / dirLen;
+
+  // Fairway origin: tee is near the start, course extends forward
+  // Place tee at ~1/4 into the fairway along the forward direction
+  const teeOffsetAlong = Math.floor(fh * 0.25);
+  const fairwayCenterX = localTeeX + Math.round(fwdX * (fh * 0.5 - teeOffsetAlong));
+  const fairwayCenterY = localTeeY + Math.round(fwdY * (fh * 0.5 - teeOffsetAlong));
+
+  // For simplicity, use axis-aligned fairway (snap to dominant direction)
+  const horizontal = Math.abs(fwdX) > Math.abs(fwdY);
+  let ox: number, oy: number;
+  if (horizontal) {
+    // course is laid out horizontally
+    ox = fairwayCenterX - Math.floor(fh / 2); // use fh as length along x
+    oy = fairwayCenterY - Math.floor(fw / 2); // use fw as width along y
+  } else {
+    // course is laid out vertically (standard)
+    ox = fairwayCenterX - Math.floor(fw / 2);
+    oy = fairwayCenterY - Math.floor(fh / 2);
+  }
+
+  // Clamp to chunk bounds
+  ox = Math.max(1, Math.min(CHUNK_SIZE - (horizontal ? fh : fw) - 1, ox));
+  oy = Math.max(1, Math.min(CHUNK_SIZE - (horizontal ? fw : fh) - 1, oy));
+
+  const courseW = horizontal ? fh : fw;
+  const courseH = horizontal ? fw : fh;
+
+  // fairway
+  for (let y = oy; y < oy + courseH; y++) {
+    for (let x = ox; x < ox + courseW; x++) {
       if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
-        if (Math.hypot(x - stx, y - sty) <= stR) {
+        tiles[idx(x, y)] = TILE.FAIRWAY;
+      }
+    }
+  }
+
+  // tee box — 3x3 at the near end (toward the door)
+  const teeLocalX = Math.max(ox + 1, Math.min(ox + courseW - 2, localTeeX));
+  const teeLocalY = Math.max(oy + 1, Math.min(oy + courseH - 2, localTeeY));
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const tx = teeLocalX + dx;
+      const ty = teeLocalY + dy;
+      if (tx >= ox && tx < ox + courseW && ty >= oy && ty < oy + courseH) {
+        tiles[idx(tx, ty)] = TILE.TEE_BOX;
+      }
+    }
+  }
+
+  // sand trap 1 — mid-course
+  const st1x = ox + Math.floor(courseW * 0.35);
+  const st1y = oy + Math.floor(courseH * 0.5);
+  const st1R = 2 + Math.floor(rng() * 2);
+  for (let y = st1y - st1R; y <= st1y + st1R; y++) {
+    for (let x = st1x - st1R; x <= st1x + st1R; x++) {
+      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+        if (Math.hypot(x - st1x, y - st1y) <= st1R && canOverwrite(tiles, idx(x, y))) {
           tiles[idx(x, y)] = TILE.SAND_TRAP;
         }
       }
     }
   }
+
+  // sand trap 2 — near the flag
+  const st2x = ox + Math.floor(courseW * 0.65);
+  const st2y = oy + courseH - 4;
+  const st2R = 2 + Math.floor(rng() * 2);
+  for (let y = st2y - st2R; y <= st2y + st2R; y++) {
+    for (let x = st2x - st2R; x <= st2x + st2R; x++) {
+      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+        if (Math.hypot(x - st2x, y - st2y) <= st2R && canOverwrite(tiles, idx(x, y))) {
+          tiles[idx(x, y)] = TILE.SAND_TRAP;
+        }
+      }
+    }
+  }
+
+  // water hazard — small pond on one side
+  if (rng() < 0.5) {
+    const px = ox + Math.floor(courseW * 0.7);
+    const py = oy + Math.floor(courseH * 0.5);
+    const pR = 2 + Math.floor(rng() * 2);
+    for (let y = py - pR; y <= py + pR; y++) {
+      for (let x = px - pR; x <= px + pR; x++) {
+        if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+          if (Math.hypot(x - px, y - py) <= pR && canOverwrite(tiles, idx(x, y))) {
+            tiles[idx(x, y)] = TILE.POND;
+          }
+        }
+      }
+    }
+  }
+
+  // flag at the far end (opposite from the tee / door)
+  const flagX = ox + Math.floor(courseW / 2);
+  const flagY = oy + courseH - 2;
+  tiles[idx(flagX, flagY)] = TILE.GOLF_FLAG;
+
+  // golf ball at the tee
+  tiles[idx(teeLocalX, teeLocalY)] = TILE.GOLF_BALL;
+
+  // golf club next to the ball
+  const clubOffset = rng() < 0.5 ? -1 : 1;
+  const clubX = Math.max(ox, Math.min(ox + courseW - 1, teeLocalX + clubOffset));
+  tiles[idx(clubX, teeLocalY)] = TILE.GOLF_CLUB;
+}
+
+/** Place an expanded golf course — wider fairway, tee area with club & ball, sand traps, water hazard, and flag. */
+function placeGolfCourse(tiles: number[], rng: () => number): void {
+  const fw = 10 + Math.floor(rng() * 8); // 10-17 wide
+  const fh = 10 + Math.floor(rng() * 8); // 10-17 tall
+  const ox = 2 + Math.floor(rng() * (CHUNK_SIZE - fw - 4));
+  const oy = 2 + Math.floor(rng() * (CHUNK_SIZE - fh - 4));
+  for (let y = oy; y < oy + fh; y++) {
+    for (let x = ox; x < ox + fw; x++) {
+      tiles[idx(x, y)] = TILE.FAIRWAY;
+    }
+  }
+
+  // tee box — 3x3 distinct raised area at the near end (top)
+  const teeX = ox + Math.floor(fw / 2);
+  const teeY = oy + 2;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const tx = teeX + dx;
+      const ty = teeY + dy;
+      if (tx >= ox && tx < ox + fw && ty >= oy && ty < oy + fh) {
+        tiles[idx(tx, ty)] = TILE.TEE_BOX;
+      }
+    }
+  }
+
+  // sand trap 1 — mid-left
+  const st1x = ox + Math.floor(fw * 0.25);
+  const st1y = oy + Math.floor(fh * 0.4);
+  const st1R = 2 + Math.floor(rng() * 2);
+  for (let y = st1y - st1R; y <= st1y + st1R; y++) {
+    for (let x = st1x - st1R; x <= st1x + st1R; x++) {
+      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+        if (Math.hypot(x - st1x, y - st1y) <= st1R) {
+          tiles[idx(x, y)] = TILE.SAND_TRAP;
+        }
+      }
+    }
+  }
+
+  // sand trap 2 — near the flag for challenge
+  const st2x = ox + Math.floor(fw * 0.6);
+  const st2y = oy + fh - 4;
+  const st2R = 2 + Math.floor(rng() * 2);
+  for (let y = st2y - st2R; y <= st2y + st2R; y++) {
+    for (let x = st2x - st2R; x <= st2x + st2R; x++) {
+      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+        if (Math.hypot(x - st2x, y - st2y) <= st2R) {
+          tiles[idx(x, y)] = TILE.SAND_TRAP;
+        }
+      }
+    }
+  }
+
+  // water hazard — small pond on one side
+  if (rng() < 0.5) {
+    const px = ox + Math.floor(fw * 0.7);
+    const py = oy + Math.floor(fh * 0.5);
+    const pR = 2 + Math.floor(rng() * 2);
+    for (let y = py - pR; y <= py + pR; y++) {
+      for (let x = px - pR; x <= px + pR; x++) {
+        if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+          if (Math.hypot(x - px, y - py) <= pR) {
+            tiles[idx(x, y)] = TILE.POND;
+          }
+        }
+      }
+    }
+  }
+
   // flag at the far end
   const flagX = ox + Math.floor(fw / 2);
   const flagY = oy + fh - 2;
   tiles[idx(flagX, flagY)] = TILE.GOLF_FLAG;
+
+  // golf ball at the tee
+  tiles[idx(teeX, teeY)] = TILE.GOLF_BALL;
+
+  // golf club next to the ball
+  const clubOffset = rng() < 0.5 ? -1 : 1;
+  const clubX = Math.max(ox, Math.min(ox + fw - 1, teeX + clubOffset));
+  tiles[idx(clubX, teeY)] = TILE.GOLF_CLUB;
 }
 
 /** Place a park feature — pond, bench, or hedge garden. */
@@ -290,7 +586,7 @@ function placeParkFeature(tiles: number[], rng: () => number): void {
     for (let y = cy - r; y <= cy + r; y++) {
       for (let x = cx - r; x <= cx + r; x++) {
         if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
-          if (Math.hypot(x - cx, y - cy) <= r) {
+          if (Math.hypot(x - cx, y - cy) <= r && canOverwrite(tiles, idx(x, y))) {
             tiles[idx(x, y)] = TILE.POND;
           }
         }
@@ -298,7 +594,7 @@ function placeParkFeature(tiles: number[], rng: () => number): void {
     }
   } else if (type === 1) {
     // bench surrounded by flowers
-    tiles[idx(cx, cy)] = TILE.BENCH;
+    if (canOverwrite(tiles, idx(cx, cy))) tiles[idx(cx, cy)] = TILE.BENCH;
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         if (dx === 0 && dy === 0) continue;
@@ -314,11 +610,86 @@ function placeParkFeature(tiles: number[], rng: () => number): void {
     // hedge garden — small maze of hedges
     for (let y = cy; y < cy + 5 && y < CHUNK_SIZE; y++) {
       for (let x = cx; x < cx + 5 && x < CHUNK_SIZE; x++) {
-        if ((x + y) % 2 === 0) {
+        if ((x + y) % 2 === 0 && canOverwrite(tiles, idx(x, y))) {
           tiles[idx(x, y)] = TILE.HEDGE;
         }
       }
     }
+  }
+}
+
+/** Place a fountain — stone basin with surrounding flowers. */
+function placeFountain(tiles: number[], rng: () => number): void {
+  const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+  const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+  // place fountain center
+  if (canOverwrite(tiles, idx(cx, cy))) {
+    tiles[idx(cx, cy)] = TILE.FOUNTAIN;
+  }
+  // surround with flowers for a garden feel
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = cx + dx, ny = cy + dy;
+      if (nx >= 0 && nx < CHUNK_SIZE && ny >= 0 && ny < CHUNK_SIZE) {
+        if (tiles[idx(nx, ny)] === TILE.GRASS && rng() < 0.6) {
+          tiles[idx(nx, ny)] = TILE.FLOWER;
+        }
+      }
+    }
+  }
+}
+
+/** Place a brick fortress — large enterable structure with CASTLE walls, corner towers, and a door. */
+function placeBrickTower(tiles: number[], biome: Biome, rng: () => number): void {
+  const size = 8 + Math.floor(rng() * 5); // 8-12 tiles square — fortress-scale
+  const ox = 2 + Math.floor(rng() * (CHUNK_SIZE - size - 4));
+  const oy = 2 + Math.floor(rng() * (CHUNK_SIZE - size - 4));
+  const floor = baseGround(biome);
+
+  // clear interior to floor
+  for (let y = oy; y < oy + size; y++) {
+    for (let x = ox; x < ox + size; x++) {
+      if (canOverwrite(tiles, idx(x, y))) tiles[idx(x, y)] = floor;
+    }
+  }
+
+  // perimeter walls
+  for (let x = ox; x < ox + size; x++) {
+    if (canOverwrite(tiles, idx(x, oy))) tiles[idx(x, oy)] = TILE.CASTLE;
+    if (canOverwrite(tiles, idx(x, oy + size - 1))) tiles[idx(x, oy + size - 1)] = TILE.CASTLE;
+  }
+  for (let y = oy; y < oy + size; y++) {
+    if (canOverwrite(tiles, idx(ox, y))) tiles[idx(ox, y)] = TILE.CASTLE;
+    if (canOverwrite(tiles, idx(ox + size - 1, y))) tiles[idx(ox + size - 1, y)] = TILE.CASTLE;
+  }
+
+  // reinforce corners with 2x2 tower blocks
+  for (const [cx, cy] of [[ox, oy], [ox + size - 2, oy], [ox, oy + size - 2], [ox + size - 2, oy + size - 2]]) {
+    for (let dy = 0; dy < 2; dy++) {
+      for (let dx = 0; dx < 2; dx++) {
+        tiles[idx(cx + dx, cy + dy)] = TILE.CASTLE;
+      }
+    }
+  }
+
+  // door gap on the bottom wall (facing the player approaching from the office)
+  const doorX = ox + Math.floor(size / 2);
+  tiles[idx(doorX, oy + size - 1)] = floor;
+  // widen to a 2-tile gate
+  if (doorX + 1 < ox + size - 1) tiles[idx(doorX + 1, oy + size - 1)] = floor;
+
+  // 40% chance of a second gate on the top wall for through-passage
+  if (rng() < 0.4) {
+    tiles[idx(doorX, oy)] = floor;
+    if (doorX + 1 < ox + size - 1) tiles[idx(doorX + 1, oy)] = floor;
+  }
+
+  // interior pillar — gives the fortress a ruined/structural feel
+  if (size >= 10) {
+    const px = ox + Math.floor(size / 2);
+    const py = oy + Math.floor(size / 2);
+    tiles[idx(px, py)] = TILE.CASTLE;
   }
 }
 
@@ -333,17 +704,58 @@ function placeStructure(tiles: number[], biome: Biome, rng: () => number): void 
 
   // perimeter walls
   for (let x = ox; x < ox + w; x++) {
-    tiles[idx(x, oy)] = wallTile;
-    tiles[idx(x, oy + h - 1)] = wallTile;
+    if (canOverwrite(tiles, idx(x, oy))) tiles[idx(x, oy)] = wallTile;
+    if (canOverwrite(tiles, idx(x, oy + h - 1))) tiles[idx(x, oy + h - 1)] = wallTile;
   }
   for (let y = oy; y < oy + h; y++) {
-    tiles[idx(ox, y)] = wallTile;
-    tiles[idx(ox + w - 1, y)] = wallTile;
+    if (canOverwrite(tiles, idx(ox, y))) tiles[idx(ox, y)] = wallTile;
+    if (canOverwrite(tiles, idx(ox + w - 1, y))) tiles[idx(ox + w - 1, y)] = wallTile;
   }
   // door gap
   const doorX = ox + Math.floor(w / 2);
   tiles[idx(doorX, oy + h - 1)] = baseGround(biome);
   tiles[idx(doorX, oy)] = baseGround(biome);
+}
+
+/** Place a tennis court — rectangular hard court with walls, net, racket, and ball. */
+function placeTennisCourt(tiles: number[], rng: () => number): void {
+  const cw = 10 + Math.floor(rng() * 4); // 10-13 wide
+  const ch = 14 + Math.floor(rng() * 4); // 14-17 tall
+  const ox = 2 + Math.floor(rng() * (CHUNK_SIZE - cw - 4));
+  const oy = 2 + Math.floor(rng() * (CHUNK_SIZE - ch - 4));
+
+  // court surface
+  for (let y = oy; y < oy + ch; y++) {
+    for (let x = ox; x < ox + cw; x++) {
+      tiles[idx(x, y)] = TILE.TENNIS_COURT;
+    }
+  }
+
+  // back wall at the far end (top) — the ball bounces off this
+  for (let x = ox; x < ox + cw; x++) {
+    tiles[idx(x, oy)] = TILE.TENNIS_WALL;
+  }
+  // side walls — partial, just corners for visual framing
+  for (let y = oy; y < oy + 3; y++) {
+    tiles[idx(ox, y)] = TILE.TENNIS_WALL;
+    tiles[idx(ox + cw - 1, y)] = TILE.TENNIS_WALL;
+  }
+
+  // net across the middle — decorative, slows the ball
+  const netY = oy + Math.floor(ch / 2);
+  for (let x = ox + 1; x < ox + cw - 1; x++) {
+    tiles[idx(x, netY)] = TILE.TENNIS_NET;
+  }
+
+  // tennis racket placed near the bottom (player side)
+  const racketX = ox + Math.floor(cw / 2) + (rng() < 0.5 ? -2 : 2);
+  const racketY = oy + ch - 3;
+  tiles[idx(Math.max(ox + 1, Math.min(ox + cw - 2, racketX)), racketY)] = TILE.TENNIS_RACKET;
+
+  // tennis ball placed on the court, between the net and the wall
+  const ballX = ox + Math.floor(cw / 2);
+  const ballY = oy + Math.floor(ch * 0.3);
+  tiles[idx(ballX, ballY)] = TILE.TENNIS_BALL;
 }
 
 function carvePath(tiles: number[], startX: number, startY: number, dir: number, len: number): void {
@@ -376,6 +788,16 @@ export function isWalkable(tile: number): boolean {
     case TILE.SAND_TRAP:
     case TILE.POND:
     case TILE.BUSH:
+    case TILE.GOLF_CLUB:
+    case TILE.GOLF_BALL:
+    case TILE.GOLF_FLAG:
+    case TILE.AXE:
+    case TILE.LEPRECHAUN:
+    case TILE.TEE_BOX:
+    case TILE.TENNIS_COURT:
+    case TILE.TENNIS_RACKET:
+    case TILE.TENNIS_BALL:
+    case TILE.TENNIS_NET:
       return true;
     default:
       return false;
@@ -391,6 +813,8 @@ export function tileSpeed(tile: number): number {
       return 0.5;
     case TILE.POND:
       return 0.6;
+    case TILE.TENNIS_NET:
+      return 0.3;
     default:
       return 1;
   }

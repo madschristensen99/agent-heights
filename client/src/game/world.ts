@@ -4,13 +4,15 @@ import type { FiredAgent } from "../../../shared/types";
 import type { Store } from "../store";
 import type { Net } from "../net";
 import { TILE_PX, type Dir } from "./agent";
+import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
-import { creatureKey, beastKey, beastDesignName } from "./textures";
+import { creatureKey, beastKey, beastDesignName, friendlyCreatureKey, FRIENDLY_CREATURE_COUNT } from "./textures";
 import { VFXManager } from "./effects";
-import { LightingSystem } from "./lighting";
+import { LightingSystem, type LightSource } from "./lighting";
 import { AudioSystem } from "./audio";
 import { HUDSystem } from "./hud";
+import { achievements } from "./achievements";
 
 /**
  * World offset: the world tile grid starts at the bottom-left corner of the
@@ -24,8 +26,10 @@ export interface WorldOffset {
 
 const LOAD_RADIUS = 2;
 const UNLOAD_RADIUS = 3;
+const MAX_CHUNKS_PER_FRAME = 3;
 const MAX_HP = 100;
 const CREATURE_CAP = 20;
+const FRIENDLY_CAP = 8;
 const STONE_INTERVAL = 2500;
 const BEAST_SPAWN_INTERVAL = 15000; // check for legendary beast spawns
 
@@ -146,7 +150,7 @@ class LegendaryBeast {
 
     const designName = beastDesignName(def.name);
     this.animKey = beastKey(designName);
-    this.scale = 1.5 + (def.radius - 28) / 20;
+    this.scale = (1.5 + (def.radius - 28) / 20) * 0.75;
 
     // shadow
     this.shadow = scene.add.ellipse(0, 0, def.radius * 3, def.radius * 1.2, 0x000000, 0.4);
@@ -185,7 +189,7 @@ class LegendaryBeast {
       const nx = this.container.x + (dx / dist) * step;
       const ny = this.container.y + (dy / dist) * step;
       const { tx, ty } = this.world.pixelToTile(nx, ny);
-      if (this.world.isTileWalkable(tx, ty)) {
+      if (this.world.isCreatureWalkable(tx, ty)) {
         this.container.setPosition(nx, ny);
         this.container.setDepth(25 + ny);
         moving = true;
@@ -262,6 +266,10 @@ class LegendaryBeast {
       this.world.vfx?.hitStop(120);
       this.world.audio?.death();
       this.container.destroy();
+      // achievement tracking
+      achievements.unlock("beast_slayer");
+      const beastId = this.name.toLowerCase().replace(/\s+/g, "_");
+      achievements.unlock(`${beastId}_kill`);
     }
   }
 
@@ -300,7 +308,7 @@ class Creature {
     this.animKey = creatureKey(hostility);
 
     // shadow
-    this.shadow = scene.add.ellipse(0, 0, radius * 2.5, radius * 0.8, 0x000000, 0.35);
+    this.shadow = scene.add.ellipse(0, 2, radius * 2.8, radius * 0.9, 0x000000, 0.2);
 
     // sprite
     this.sprite = scene.add.sprite(0, 0, this.animKey, 0).setOrigin(0.5, 0.7).setScale(1.2);
@@ -335,7 +343,7 @@ class Creature {
       const ny = this.container.y + (dy / dist) * step;
       // simple collision: only move if target tile is walkable
       const { tx, ty } = this.world.pixelToTile(nx, ny);
-      if (this.world.isTileWalkable(tx, ty)) {
+      if (this.world.isCreatureWalkable(tx, ty)) {
         this.container.setPosition(nx, ny);
         this.container.setDepth(20 + ny);
         moving = true;
@@ -375,7 +383,143 @@ class Creature {
       this.world.vfx?.deathDissolve(this.container.x, this.container.y, 0x8a3a3a, 1);
       this.world.audio?.death();
       this.container.destroy();
+      achievements.unlock("first_blood");
+      if (achievements.incStat("creaturesKilled") >= 20) achievements.unlock("creature_slayer");
     }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.container.destroy();
+  }
+}
+
+/** A friendly creature that wanders peacefully near the office — no combat. */
+class FriendlyCreature {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private lightGlow: Phaser.GameObjects.Image;
+  private alive = true;
+  private world: WorldLayer;
+  private animKey: string;
+  private walkTimer = 0;
+  private wanderAt = 0;
+  private targetX: number;
+  private targetY: number;
+  private moving = false;
+  private sparkleAt = 0;
+  private curiousUntil = 0;
+
+  constructor(world: WorldLayer, x: number, y: number, typeIndex: number) {
+    this.world = world;
+    const scene = world.scene;
+    this.animKey = friendlyCreatureKey(typeIndex);
+    const radius = 8;
+
+    this.shadow = scene.add.ellipse(0, 2, radius * 2.8, radius * 0.9, 0x000000, 0.12);
+
+    this.sprite = scene.add.sprite(0, 0, this.animKey, 0).setOrigin(0.5, 0.7).setScale(0.53);
+
+    // soft friendly glow — pink/warm
+    this.lightGlow = scene.add
+      .image(0, 0, "soft-glow")
+      .setDisplaySize(radius * 4, radius * 4)
+      .setTint(0xffaaee)
+      .setAlpha(0.08)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(19);
+
+    this.container = scene.add.container(x, y, [this.lightGlow, this.shadow, this.sprite]).setDepth(20 + y);
+    this.targetX = x;
+    this.targetY = y;
+  }
+
+  get alive_(): boolean { return this.alive; }
+
+  update(time: number, dt: number, playerX: number, playerY: number): void {
+    if (!this.alive) return;
+    const dx = playerX - this.container.x;
+    const dy = playerY - this.container.y;
+    const dist = Math.hypot(dx, dy);
+
+    // curious approach: if player is moderately close, move toward them briefly
+    if (dist < 180 && dist > 60 && time > this.curiousUntil && Math.random() < 0.01) {
+      this.curiousUntil = time + 2000;
+      this.targetX = this.container.x + dx * 0.3;
+      this.targetY = this.container.y + dy * 0.3;
+      this.moving = true;
+    }
+
+    // if player gets too close, hop away shyly
+    if (dist < 50) {
+      const hopAngle = Math.atan2(-dy, -dx);
+      this.targetX = this.container.x + Math.cos(hopAngle) * 80;
+      this.targetY = this.container.y + Math.sin(hopAngle) * 80;
+      this.moving = true;
+      this.curiousUntil = 0;
+    }
+
+    // wander randomly when idle
+    if (!this.moving && time > this.wanderAt) {
+      const range = 5;
+      for (let tries = 0; tries < 8; tries++) {
+        const wdx = Math.floor((Math.random() - 0.5) * range * 2);
+        const wdy = Math.floor((Math.random() - 0.5) * range * 2);
+        const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + wdx;
+        const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + wdy;
+        if (this.world.isCreatureWalkable(tx, ty)) {
+          this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
+          this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
+          this.moving = true;
+          break;
+        }
+      }
+      this.wanderAt = time + 4000 + Math.random() * 6000;
+    }
+
+    // move toward target
+    if (this.moving) {
+      const mdx = this.targetX - this.container.x;
+      const mdy = this.targetY - this.container.y;
+      const md = Math.hypot(mdx, mdy);
+      const speed = 50;
+      const step = speed * (dt / 1000);
+      if (md <= step) {
+        this.container.setPosition(this.targetX, this.targetY);
+        this.moving = false;
+      } else {
+        const nx = this.container.x + (mdx / md) * step;
+        const ny = this.container.y + (mdy / md) * step;
+        const { tx, ty } = this.world.pixelToTile(nx, ny);
+        if (this.world.isCreatureWalkable(tx, ty)) {
+          this.container.setPosition(nx, ny);
+          this.sprite.setFlipX(mdx < 0);
+        } else {
+          this.moving = false;
+        }
+      }
+      this.container.setDepth(20 + this.container.y);
+    }
+
+    // animation: walk vs idle vs hop
+    if (this.moving) {
+      this.walkTimer += dt;
+      const frame = Math.floor(this.walkTimer / 250) % 2 + 1; // frames 1,2
+      this.sprite.setFrame(frame);
+    } else {
+      this.sprite.setFrame(0);
+    }
+
+    // occasional sparkle / heart particles
+    if (time > this.sparkleAt) {
+      this.sparkleAt = time + 3000 + Math.random() * 4000;
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y - 10, 0xffaaee, 3, 20);
+    }
+
+    // pulse glow
+    const pulse = 0.08 + Math.sin(time * 0.003) * 0.04;
+    this.lightGlow.setAlpha(pulse);
   }
 
   destroy(): void {
@@ -465,13 +609,28 @@ class GhostNPC {
     const px = info.worldX * TILE_PX + TILE_PX / 2 + world.offset.x;
     const py = info.worldY * TILE_PX + TILE_PX / 2 + world.offset.y;
 
-    this.shadow = scene.add.ellipse(0, 0, 44, 16, 0x000000, 0.3).setDepth(0);
-    this.sprite = scene.add.sprite(0, 0, `char-${info.sprite}`, 0).setOrigin(0.5, 1).setDepth(5);
+    this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.2).setDepth(0);
+    const texKey = info.appearance ? `char-ghost-${info.id}` : `char-${info.sprite}`;
+    if (info.appearance) {
+      generateCharTexture(scene, texKey, info.appearance);
+      const dirs: Dir[] = ["down", "left", "right", "up"];
+      const FPR = 8;
+      if (!scene.anims.exists(`${texKey}-work`)) {
+        dirs.forEach((dir, row) => {
+          const base = row * FPR;
+          scene.anims.create({ key: `${texKey}-walk-${dir}`, frames: scene.anims.generateFrameNumbers(texKey, { frames: [base, base+1, base+2, base+3, base+4, base+5] }), frameRate: 10, repeat: -1 });
+          const breath = Array(24).fill(base + 6); breath.push(base + 7); breath.push(base + 6);
+          scene.anims.create({ key: `${texKey}-idle-${dir}`, frames: scene.anims.generateFrameNumbers(texKey, { frames: breath }), frameRate: 10, repeat: -1, repeatDelay: Math.random() * 2 });
+        });
+        scene.anims.create({ key: `${texKey}-work`, frames: scene.anims.generateFrameNumbers(texKey, { frames: [6, 7] }), frameRate: 2.5, repeat: -1 });
+      }
+    }
+    this.sprite = scene.add.sprite(0, 0, texKey, 0).setOrigin(0.5, 1).setScale(0.5).setDepth(5);
     this.sprite.setTint(0x8888aa);
 
     this.label = scene.add
       .text(0, -108, info.name, {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#aaaacc",
         stroke: "#1a1a22",
@@ -490,7 +649,7 @@ class GhostNPC {
   }
 
   update(time: number, dt: number): void {
-    const c = `char-${this.info.sprite}`;
+    const c = this.info.appearance ? `char-ghost-${this.info.id}` : `char-${this.info.sprite}`;
 
     if (!this.moving && time > this.wanderAt) {
       const range = 6;
@@ -499,7 +658,7 @@ class GhostNPC {
         const dy = Math.floor((Math.random() - 0.5) * range * 2);
         const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + dx;
         const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + dy;
-        if (this.world.isTileWalkable(tx, ty)) {
+        if (this.world.isCreatureWalkable(tx, ty)) {
           this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
           this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
           this.moving = true;
@@ -563,6 +722,7 @@ export class WorldLayer {
 
   private chunks = new Map<string, Chunk>();
   private chunkGraphics = new Map<string, Phaser.GameObjects.Container>();
+  private chunkLights = new Map<string, LightSource[]>();
   private ghosts = new Map<string, GhostNPC>();
 
   private ghostDialog!: Phaser.GameObjects.Text;
@@ -571,10 +731,49 @@ export class WorldLayer {
   private creatures: Creature[] = [];
   private beasts: LegendaryBeast[] = [];
   private stones: Stone[] = [];
+  private friendlies: FriendlyCreature[] = [];
   private hp = MAX_HP;
   private lastStoneTime = 0;
   private lastSpawnTime = 0;
   private lastBeastTime = 0;
+  private lastFriendlySpawnTime = 0;
+
+  // --- golf state ---
+  private hasGolfClub = false;
+  private golfBall: Phaser.GameObjects.Image | null = null;
+  private golfBallVx = 0;
+  private golfBallVy = 0;
+  private golfBallActive = false;
+  private golfHint!: Phaser.GameObjects.Text;
+  private golfPowerBar!: Phaser.GameObjects.Graphics;
+  private golfPower = 0; // 0..1 oscillating
+  private golfPowerDir = 1; // direction of oscillation
+  private golfPowerActive = false; // true when charging (near ball with club)
+  private golfHolesSunk = 0;
+  private golfStrokes = 0; // strokes on current hole
+  private golfTotalStrokes = 0; // total strokes across all holes
+  private golfBallCleanedUp = false; // true after extra balls removed from loaded chunks
+  private golfFlagCacheKey = "";
+  private golfFlagCache: { flagX: number; flagY: number; foundFlag: boolean } | null = null;
+
+  // --- tennis state ---
+  private hasTennisRacket = false;
+  private tennisBall: Phaser.GameObjects.Image | null = null;
+  private tennisBallVx = 0;
+  private tennisBallVy = 0;
+  private tennisBallActive = false;
+  private tennisHint!: Phaser.GameObjects.Text;
+  private tennisPowerBar!: Phaser.GameObjects.Graphics;
+  private tennisPower = 0;
+  private tennisPowerDir = 1;
+  private tennisPowerActive = false;
+  private tennisScore = 0;
+  private tennisRallies = 0;
+  private tennisWallCacheKey = "";
+  private tennisWallCache: { wallX: number; wallY: number; foundWall: boolean } | null = null;
+
+  /** Current player HP (read-only access for achievement checks). */
+  get playerHp(): number { return this.hp; }
   private officeGrid: Grid | null = null;
   private invulnUntil = 0;
 
@@ -595,7 +794,7 @@ export class WorldLayer {
 
     this.ghostDialog = scene.add
       .text(0, 0, "", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "14px",
         color: "#ccccdd",
         stroke: "#1a1a22",
@@ -611,7 +810,7 @@ export class WorldLayer {
 
     this.recruitedHint = scene.add
       .text(0, 0, "", {
-        fontFamily: "monospace",
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#4cb866",
         stroke: "#1a1a22",
@@ -629,6 +828,64 @@ export class WorldLayer {
       .setOrigin(0, 0)
       .setDepth(950)
       .setScrollFactor(0);
+
+    // golf interaction hint
+    this.golfHint = scene.add
+      .text(0, 0, "", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "14px",
+        color: "#ffffff",
+        stroke: "#1a1a22",
+        strokeThickness: 3,
+        backgroundColor: "#1a1a22",
+        padding: { x: 8, y: 6 },
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.8)
+      .setDepth(400)
+      .setVisible(false);
+
+    // golf power bar — oscillating charge bar above player's head
+    this.golfPowerBar = scene.add.graphics().setDepth(410).setVisible(false);
+
+    // tennis interaction hint
+    this.tennisHint = scene.add
+      .text(0, 0, "", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "14px",
+        color: "#ffffff",
+        stroke: "#1a1a22",
+        strokeThickness: 3,
+        backgroundColor: "#1a1a22",
+        padding: { x: 8, y: 6 },
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.8)
+      .setDepth(400)
+      .setVisible(false);
+
+    // tennis power bar
+    this.tennisPowerBar = scene.add.graphics().setDepth(410).setVisible(false);
+  }
+
+  /** Get hostility level at a pixel position (0–5). */
+  getHostilityAt(px: number, py: number): number {
+    if (!this.isOutside(px, py)) return 0;
+    const { tx, ty } = this.pixelToTile(px, py);
+    const cx = Math.floor(tx / CHUNK_SIZE);
+    const cy = Math.floor(ty / CHUNK_SIZE);
+    return hostilityAt(cx, cy);
+  }
+
+  /** Chunk distance from the office origin (0,0). */
+  chunkDistance(px: number, py: number): number {
+    if (!this.isOutside(px, py)) return 0;
+    const { tx, ty } = this.pixelToTile(px, py);
+    const cx = Math.floor(tx / CHUNK_SIZE);
+    const cy = Math.floor(ty / CHUNK_SIZE);
+    return Math.hypot(cx, cy);
   }
 
   /** Whether the player is outside the office map bounds (in the world). */
@@ -673,6 +930,26 @@ export class WorldLayer {
     return chunk.tiles[localY * CHUNK_SIZE + localX];
   }
 
+  /** Set the tile type at world tile coordinates and re-render the chunk. */
+  private setTileAt(worldTileX: number, worldTileY: number, newTile: number): void {
+    const cx = Math.floor(worldTileX / CHUNK_SIZE);
+    const cy = Math.floor(worldTileY / CHUNK_SIZE);
+    const key = `${cx},${cy}`;
+    const chunk = this.chunks.get(key);
+    if (!chunk) return;
+    const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    chunk.tiles[localY * CHUNK_SIZE + localX] = newTile;
+    // re-render the chunk to reflect the change
+    const oldContainer = this.chunkGraphics.get(key);
+    if (oldContainer) {
+      oldContainer.destroy(true);
+      this.chunkGraphics.delete(key);
+    }
+    this.removeChunkLights(key);
+    this.renderChunk(chunk);
+  }
+
   /** Check if a world tile is walkable. Generates the chunk if needed. */
   isTileWalkable(worldTileX: number, worldTileY: number): boolean {
     if (worldTileY < 0) return false;
@@ -688,6 +965,29 @@ export class WorldLayer {
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     return isWalkable(chunk.tiles[localY * CHUNK_SIZE + localX]);
+  }
+
+  /** Check if a world tile is walkable for creatures — excludes tiles within 4 of a tennis court. */
+  isCreatureWalkable(worldTileX: number, worldTileY: number): boolean {
+    if (!this.isTileWalkable(worldTileX, worldTileY)) return false;
+    // scan 4-tile radius for any tennis court tiles
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const cx = Math.floor((worldTileX + dx) / CHUNK_SIZE);
+        const cy = Math.floor((worldTileY + dy) / CHUNK_SIZE);
+        const key = `${cx},${cy}`;
+        const chunk = this.chunks.get(key);
+        if (!chunk) continue;
+        const lx = (((worldTileX + dx) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+        const ly = (((worldTileY + dy) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+        const t = chunk.tiles[ly * CHUNK_SIZE + lx];
+        if (t === TILE.TENNIS_COURT || t === TILE.TENNIS_NET || t === TILE.TENNIS_WALL ||
+            t === TILE.TENNIS_RACKET || t === TILE.TENNIS_BALL) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   /** Set the office walkability grid so world collision can check office tiles. */
@@ -730,22 +1030,37 @@ export class WorldLayer {
     return true;
   }
 
-  /** Load/unload chunks around the player. */
+  /** Load/unload chunks around the player. Loads at most MAX_CHUNKS_PER_FRAME per frame to avoid spikes. */
   updateChunks(playerX: number, playerY: number): void {
     const { tx, ty } = this.pixelToTile(playerX, playerY);
     const pcx = Math.floor(tx / CHUNK_SIZE);
     const pcy = Math.floor(ty / CHUNK_SIZE);
 
+    // Collect needed chunks sorted by distance from player (closest first)
+    const needed: { cx: number; cy: number; dist: number }[] = [];
     for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
       for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
         const ncy = pcy + dy;
         if (ncy < 0) continue;
-        this.loadChunk(pcx + dx, ncy);
+        const ncx = pcx + dx;
+        const key = `${ncx},${ncy}`;
+        if (this.chunks.has(key)) continue;
+        needed.push({ cx: ncx, cy: ncy, dist: dx * dx + dy * dy });
       }
+    }
+    needed.sort((a, b) => a.dist - b.dist);
+
+    // Load only a few chunks per frame to spread the cost
+    let loaded = 0;
+    for (const n of needed) {
+      if (loaded >= MAX_CHUNKS_PER_FRAME) break;
+      this.loadChunk(n.cx, n.cy);
+      loaded++;
     }
 
     for (const [key, chunk] of this.chunks) {
       if (Math.abs(chunk.cx - pcx) > UNLOAD_RADIUS || Math.abs(chunk.cy - pcy) > UNLOAD_RADIUS) {
+        this.removeChunkLights(key);
         this.chunkGraphics.get(key)?.destroy();
         this.chunkGraphics.delete(key);
         this.chunks.delete(key);
@@ -763,50 +1078,94 @@ export class WorldLayer {
     this.renderChunk(chunk);
   }
 
+  private removeChunkLights(key: string): void {
+    const lights = this.chunkLights.get(key);
+    if (lights) {
+      for (const light of lights) {
+        this.lighting.removeLight(light);
+      }
+      this.chunkLights.delete(key);
+    }
+  }
+
   private renderChunk(chunk: Chunk): void {
     const key = `${chunk.cx},${chunk.cy}`;
+    const chunkPxSize = CHUNK_SIZE * TILE_PX;
     const container = this.scene.add.container(0, 0).setDepth(-1);
     const ox = chunk.cx * CHUNK_SIZE * TILE_PX + this.offset.x;
     const oy = chunk.cy * CHUNK_SIZE * TILE_PX + this.offset.y;
+    const chunkLightList: LightSource[] = [];
 
-    // Map TILE enum values to world tileset frame indices.
-    // The tileset has 24 frames: 0-21 map to TILE.GRASS..TILE.WATER,
-    // frames 22-23 are water animation frames 1 and 2.
-    const tileToFrame = (tile: number): number => {
-      if (tile === TILE.WATER) return 21; // frame 0 — animation handled separately
-      return tile; // TILE enum values 0-20 map directly to frames 0-20
+    const overlayTextures: Record<number, string> = {
+      [TILE.GOLF_CLUB]: "golf-club",
+      [TILE.GOLF_BALL]: "golf-ball",
+      [TILE.BIG_TREE]: "big-tree",
+      [TILE.AXE]: "axe",
+      [TILE.LEPRECHAUN]: "leprechaun",
+      [TILE.TEE_BOX]: "tee-box",
+      [TILE.FOUNTAIN]: "fountain",
+      [TILE.TENNIS_COURT]: "tennis-court",
+      [TILE.TENNIS_WALL]: "tennis-wall",
+      [TILE.TENNIS_RACKET]: "tennis-racket",
+      [TILE.TENNIS_BALL]: "tennis-ball",
+      [TILE.TENNIS_NET]: "tennis-net",
     };
+
+    const tileToFrame = (tile: number): number => {
+      if (tile === TILE.WATER) return 21;
+      if (tile >= 22) return TILE.GRASS;
+      return tile;
+    };
+
+    // Single RenderTexture for all static tiles — one draw call instead of ~1024 sprites
+    const rt = this.scene.add.renderTexture(ox, oy, chunkPxSize, chunkPxSize);
+    rt.setOrigin(0, 0);
 
     for (let y = 0; y < CHUNK_SIZE; y++) {
       for (let x = 0; x < CHUNK_SIZE; x++) {
         const tile = chunk.tiles[y * CHUNK_SIZE + x];
-        const px = ox + x * TILE_PX;
-        const py = oy + y * TILE_PX;
+        const px = x * TILE_PX;
+        const py = y * TILE_PX;
         const frame = tileToFrame(tile);
 
-        const sprite = this.scene.add.sprite(px, py, "world-tiles", frame);
-        sprite.setOrigin(0, 0);
-        sprite.setDepth(-1);
+        // Draw base tile onto the RenderTexture
+        rt.drawFrame("world-tiles", frame, px, py);
 
-        // Animate water tiles by cycling frames 21-23
+        // Tennis objects (ball/racket/net) sit on court surface, not grass
+        if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
+          rt.draw("tennis-court", px, py);
+        }
+
+        // Water tiles: keep a separate animated sprite on top of the RT
         if (tile === TILE.WATER) {
-          sprite.play({ key: "water-anim", repeat: -1 }, true);
+          const waterSprite = this.scene.add.sprite(ox + px, oy + py, "world-tiles", 21);
+          waterSprite.setOrigin(0, 0);
+          waterSprite.play({ key: "water-anim", repeat: -1 }, true);
+          container.add(waterSprite);
+        }
+
+        // Draw overlay textures onto the RT (golf items, trees, etc.)
+        const overlayKey = overlayTextures[tile];
+        if (overlayKey) {
+          rt.draw(overlayKey, px, py);
         }
 
         // Add tile-based light sources for special tiles
         if (tile === TILE.LAVA) {
-          this.lighting.addLight(px + TILE_PX / 2, py + TILE_PX / 2, 80, 0xff6600, 0.4, 0.1, 0.005);
+          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 80, 0xff6600, 0.4, 0.1, 0.005));
         } else if (tile === TILE.CRYSTAL) {
-          this.lighting.addLight(px + TILE_PX / 2, py + TILE_PX / 2, 60, 0x44aaff, 0.3, 0.05, 0.003);
+          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 60, 0x44aaff, 0.3, 0.05, 0.003));
         } else if (tile === TILE.VOID) {
-          this.lighting.addLight(px + TILE_PX / 2, py + TILE_PX / 2, 70, 0xaa00ff, 0.25, 0.08, 0.004);
+          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 70, 0xaa00ff, 0.25, 0.08, 0.004));
+        } else if (tile === TILE.FOUNTAIN) {
+          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 50, 0x88ccff, 0.2, 0.03, 0.002));
         }
-
-        container.add(sprite);
       }
     }
 
+    container.add(rt);
     this.chunkGraphics.set(key, container);
+    this.chunkLights.set(key, chunkLightList);
   }
 
   /** Sync ghost NPCs with the store's fired agents. */
@@ -859,6 +1218,115 @@ export class WorldLayer {
     this.scene.time.delayedCall(3000, () => this.recruitedHint.setVisible(false));
   }
 
+  /** Remove all GOLF_BALL tiles from loaded chunks except the one nearest to the office door. */
+  private removeExtraBalls(): void {
+    let bestBall: { cx: number; cy: number; lx: number; ly: number; dist: number } | null = null;
+    for (const [, chunk] of this.chunks) {
+      for (let y = 0; y < CHUNK_SIZE; y++) {
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+          if (chunk.tiles[y * CHUNK_SIZE + x] === TILE.GOLF_BALL) {
+            const worldTx = chunk.cx * CHUNK_SIZE + x;
+            const worldTy = chunk.cy * CHUNK_SIZE + y;
+            // distance from office door (~14, 0)
+            const d = Math.hypot(worldTx - 14, worldTy);
+            if (!bestBall || d < bestBall.dist) {
+              bestBall = { cx: chunk.cx, cy: chunk.cy, lx: x, ly: y, dist: d };
+            }
+          }
+        }
+      }
+    }
+    // remove all balls except the best one
+    for (const [key, chunk] of this.chunks) {
+      let changed = false;
+      for (let y = 0; y < CHUNK_SIZE; y++) {
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+          if (chunk.tiles[y * CHUNK_SIZE + x] === TILE.GOLF_BALL) {
+            if (bestBall && chunk.cx === bestBall.cx && chunk.cy === bestBall.cy && x === bestBall.lx && y === bestBall.ly) {
+              continue; // keep this one
+            }
+            chunk.tiles[y * CHUNK_SIZE + x] = TILE.TEE_BOX;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        const oldContainer = this.chunkGraphics.get(key);
+        if (oldContainer) {
+          oldContainer.destroy(true);
+          this.chunkGraphics.delete(key);
+        }
+        this.removeChunkLights(key);
+        this.renderChunk(chunk);
+      }
+    }
+  }
+
+  /** Find the next golf flag (not at sunkTx/sunkTy) and spawn a ball on its tee box. */
+  private spawnBallAtNextHole(sunkTx: number, sunkTy: number): boolean {
+    // search loaded chunks first, then generate nearby chunks if needed
+    let bestFlag: { tx: number; ty: number; dist: number } | null = null;
+
+    // search a 5x5 chunk area around the sunk flag
+    const baseCx = Math.floor(sunkTx / CHUNK_SIZE);
+    const baseCy = Math.floor(sunkTy / CHUNK_SIZE);
+    for (let cy = baseCy - 2; cy <= baseCy + 2; cy++) {
+      for (let cx = baseCx - 2; cx <= baseCx + 2; cx++) {
+        if (cy < 0) continue;
+        const key = `${cx},${cy}`;
+        let chunk = this.chunks.get(key);
+        if (!chunk) {
+          // generate the chunk to search it
+          chunk = generateChunk(this.store.worldSeed, cx, cy);
+          this.chunks.set(key, chunk);
+          this.renderChunk(chunk);
+        }
+        for (let y = 0; y < CHUNK_SIZE; y++) {
+          for (let x = 0; x < CHUNK_SIZE; x++) {
+            if (chunk.tiles[y * CHUNK_SIZE + x] === TILE.GOLF_FLAG) {
+              const worldTx = cx * CHUNK_SIZE + x;
+              const worldTy = cy * CHUNK_SIZE + y;
+              // skip the flag we just sank
+              if (Math.hypot(worldTx - sunkTx, worldTy - sunkTy) < 3) continue;
+              const d = Math.hypot(worldTx - sunkTx, worldTy - sunkTy);
+              if (!bestFlag || d < bestFlag.dist) {
+                bestFlag = { tx: worldTx, ty: worldTy, dist: d };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!bestFlag) return false;
+
+    // find the tee box nearest to this flag
+    let bestTee: { tx: number; ty: number; dist: number } | null = null;
+    for (let dy = -20; dy <= 20; dy++) {
+      for (let dx = -20; dx <= 20; dx++) {
+        const tx = bestFlag.tx + dx;
+        const ty = bestFlag.ty + dy;
+        const tile = this.getTileAt(tx, ty);
+        if (tile === TILE.TEE_BOX) {
+          const d = Math.hypot(dx, dy);
+          if (!bestTee || d < bestTee.dist) {
+            bestTee = { tx, ty, dist: d };
+          }
+        }
+      }
+    }
+
+    if (bestTee) {
+      this.setTileAt(bestTee.tx, bestTee.ty, TILE.GOLF_BALL);
+      // spawn effect
+      const px = bestTee.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
+      const py = bestTee.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
+      this.vfx.sparkBurst(px, py, 0xffffff, 16, 60);
+      return true;
+    }
+    return false;
+  }
+
   /** Called every frame. Manages chunks, ghosts, compass, hazards, and interaction. */
   update(time: number, dt: number, playerX: number, playerY: number, ePressed: boolean): void {
     const outside = this.isOutside(playerX, playerY);
@@ -899,9 +1367,25 @@ export class WorldLayer {
             const sx = playerX + Math.cos(angle) * dist;
             const sy = playerY + Math.sin(angle) * dist;
             const { tx, ty } = this.pixelToTile(sx, sy);
-            if (this.isTileWalkable(tx, ty)) {
+            if (this.isCreatureWalkable(tx, ty)) {
               this.creatures.push(new Creature(this, sx, sy, hostility));
             }
+          }
+        }
+      }
+
+      // --- spawn friendly creatures in the meadow (hostility 0) ---
+      if (this.friendlies.length < FRIENDLY_CAP && time - this.lastFriendlySpawnTime > 2000 + Math.random() * 3000) {
+        this.lastFriendlySpawnTime = time;
+        if (hostility === 0) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 200 + Math.random() * 200;
+          const sx = playerX + Math.cos(angle) * dist;
+          const sy = playerY + Math.sin(angle) * dist;
+          const { tx, ty } = this.pixelToTile(sx, sy);
+          if (this.isCreatureWalkable(tx, ty)) {
+            const typeIndex = Math.floor(Math.random() * FRIENDLY_CREATURE_COUNT);
+            this.friendlies.push(new FriendlyCreature(this, sx, sy, typeIndex));
           }
         }
       }
@@ -941,7 +1425,7 @@ export class WorldLayer {
           const sx = playerX + Math.cos(angle) * dist;
           const sy = playerY + Math.sin(angle) * dist;
           const { tx, ty } = this.pixelToTile(sx, sy);
-          if (this.isTileWalkable(tx, ty)) {
+          if (this.isCreatureWalkable(tx, ty)) {
             this.beasts.push(new LegendaryBeast(this, chosen, sx, sy));
             this.hud.showBeastBanner(chosen.name, Math.round(dist / TILE_PX));
             this.audio.beastRoar();
@@ -963,14 +1447,21 @@ export class WorldLayer {
       this.beasts = [];
       for (const s of this.stones) s.destroy();
       this.stones = [];
+      for (const f of this.friendlies) f.destroy();
+      this.friendlies = [];
       // heal in office
       if (this.hp < MAX_HP) {
         this.hp = Math.min(MAX_HP, this.hp + 20 * (dt / 1000));
       }
     }
 
-    // load/unload chunks
-    this.updateChunks(playerX, playerY);
+    // load/unload chunks — when inside, preload around the door exit so chunks
+    // are ready by the time the player walks outside (avoids first-exit hitch)
+    if (outside) {
+      this.updateChunks(playerX, playerY);
+    } else {
+      this.updateChunks(this.officeW / 2, this.officeH + TILE_PX);
+    }
 
     // update ghosts
     for (const ghost of this.ghosts.values()) {
@@ -985,6 +1476,12 @@ export class WorldLayer {
       }
     }
     this.creatures = this.creatures.filter((c) => c.alive_);
+
+    // --- update friendly creatures ---
+    for (const f of this.friendlies) {
+      f.update(time, dt, playerX, playerY);
+    }
+    this.friendlies = this.friendlies.filter((f) => f.alive_);
 
     // --- update legendary beasts ---
     let nearestBeast: LegendaryBeast | null = null;
@@ -1031,6 +1528,7 @@ export class WorldLayer {
           this.vfx.sparkBurst(playerX, playerY, 0x000000, 12, 60);
           this.vfx.shake("large");
           this.audio.voidDeath();
+          achievements.unlock("void_death");
         } else if (tile === TILE.LAVA) {
           this.vfx.sparkBurst(playerX, playerY, 0xff6020, 8, 50);
           this.audio.hit();
@@ -1041,13 +1539,6 @@ export class WorldLayer {
     // --- update lighting ---
     const distFactor = this.distanceFactor(playerX, playerY);
     this.lighting.update(time, playerX, playerY, distFactor);
-
-    // Update CRT pipeline night factor — gradual like the overlays
-    const renderer = this.scene.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-    const crtPipeline = renderer?.pipelines.get("CRTWarmth") as unknown as { setNightFactor?: (f: number) => void } | undefined;
-    const delayedDarkness = Math.max(0, (distFactor - 0.1) / 0.9);
-    const nightFactor = this.lighting.getNightFactor(time);
-    crtPipeline?.setNightFactor?.(nightFactor * delayedDarkness);
 
     // --- update minimap when outside ---
     if (outside) {
@@ -1060,9 +1551,433 @@ export class WorldLayer {
       this.ghosts.forEach((g) => entities.push({
         x: g.container.x, y: g.container.y, color: 0x4cb866, size: 3,
       }));
+      this.friendlies.forEach((f) => entities.push({
+        x: f.container.x, y: f.container.y, color: 0xffaaee, size: 2,
+      }));
       this.hud.updateMinimap(true, playerX, playerY, entities, this.officeW / 2, this.officeH);
     } else {
       this.hud.updateMinimap(false, 0, 0, [], 0, 0);
+    }
+
+    // --- golf interaction ---
+    if (outside) {
+      // one-time cleanup: remove extra balls so only one exists in the world
+      if (!this.golfBallCleanedUp) {
+        this.golfBallCleanedUp = true;
+        this.removeExtraBalls();
+      }
+
+      const { tx: ptx, ty: pty } = this.pixelToTile(playerX, playerY);
+
+      // update golf ball physics
+      if (this.golfBallActive && this.golfBall) {
+        const ballDt = dt / 1000;
+        this.golfBall.x += this.golfBallVx * ballDt;
+        this.golfBall.y += this.golfBallVy * ballDt;
+        // friction — ball slows down
+        this.golfBallVx *= 0.985;
+        this.golfBallVy *= 0.985;
+        // check if ball reached the flag
+        const { tx: btx, ty: bty } = this.pixelToTile(this.golfBall.x, this.golfBall.y);
+        const ballTile = this.getTileAt(btx, bty);
+        if (ballTile === TILE.GOLF_FLAG) {
+          // SUNK!
+          const bx = this.golfBall.x;
+          const by = this.golfBall.y;
+          this.golfBallActive = false;
+          this.golfBall.setVisible(false);
+          this.golfBall = null;
+          this.golfHolesSunk++;
+          this.golfTotalStrokes += this.golfStrokes;
+          this.vfx.celebrate(bx, by);
+          this.vfx.sparkBurst(bx, by, 0xffdd44, 30, 120);
+          this.vfx.shake("medium");
+          const scoreLabel = this.golfStrokes === 1 ? "HOLE IN ONE!" : this.golfStrokes <= 3 ? "Great round!" : this.golfStrokes <= 5 ? "Nice!" : "Sunk it!";
+          this.store.toast(`${scoreLabel} 🏌️ Hole ${this.golfHolesSunk}: ${this.golfStrokes} stroke${this.golfStrokes > 1 ? "s" : ""}. Total: ${this.golfTotalStrokes}`);
+          achievements.unlock("hole_in_one");
+          this.audio.recruit(); // celebratory sound
+          // reset strokes for next hole
+          this.golfStrokes = 0;
+          // spawn ball at the next hole's tee box
+          const spawned = this.spawnBallAtNextHole(btx, bty);
+          if (spawned) {
+            this.store.toast(`Ball spawned at hole ${this.golfHolesSunk + 1} tee. ⛳`);
+          } else {
+            this.store.toast("No more holes nearby — explore to find more! 🏌️");
+          }
+        } else if (Math.hypot(this.golfBallVx, this.golfBallVy) < 5) {
+          // ball stopped — place it on the ground so player can hit it again
+          this.golfBallActive = false;
+          this.setTileAt(btx, bty, TILE.GOLF_BALL);
+          this.golfBall?.setVisible(false);
+          this.golfBall = null;
+          this.store.toast(`Ball stopped. Stroke ${this.golfStrokes}. Walk up and hit again! 🏌️`);
+        }
+      }
+
+      // scan nearby tiles for golf items
+      let nearestClub: { tx: number; ty: number; d: number } | null = null;
+      let nearestBall: { tx: number; ty: number; d: number } | null = null;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const ctx2 = ptx + dx;
+          const cty2 = pty + dy;
+          const t = this.getTileAt(ctx2, cty2);
+          const cx2 = ctx2 * TILE_PX + TILE_PX / 2 + this.offset.x;
+          const cy2 = cty2 * TILE_PX + TILE_PX / 2 + this.offset.y;
+          const d = Math.hypot(playerX - cx2, playerY - cy2);
+          if (t === TILE.GOLF_CLUB && (!nearestClub || d < nearestClub.d)) {
+            nearestClub = { tx: ctx2, ty: cty2, d };
+          }
+          if (t === TILE.GOLF_BALL && (!nearestBall || d < nearestBall.d)) {
+            nearestBall = { tx: ctx2, ty: cty2, d };
+          }
+        }
+      }
+
+      // show hint and handle E press
+      if (nearestClub && nearestClub.d < 100 && !this.hasGolfClub) {
+        this.golfHint
+          .setText("E: Pick up golf club")
+          .setPosition(nearestClub.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestClub.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.hasGolfClub = true;
+          this.setTileAt(nearestClub.tx, nearestClub.ty, TILE.TEE_BOX);
+          this.store.toast("Picked up golf club! ⛳");
+          this.vfx.sparkBurst(
+            nearestClub.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestClub.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0x88cc88, 10, 60,
+          );
+          achievements.unlock("club_pickup");
+        }
+      } else if (nearestBall && nearestBall.d < 100 && this.hasGolfClub && !this.golfBallActive) {
+        // find the flag direction — cached per ball tile to avoid 41x41 scan every frame
+        const ballKey = `${nearestBall.tx},${nearestBall.ty}`;
+        let flagX = 0, flagY = 0, foundFlag = false;
+        if (this.golfFlagCacheKey === ballKey && this.golfFlagCache) {
+          ({ flagX, flagY, foundFlag } = this.golfFlagCache);
+        } else {
+          for (let sy = -20; sy <= 20 && !foundFlag; sy++) {
+            for (let sx = -20; sx <= 20 && !foundFlag; sx++) {
+              if (this.getTileAt(nearestBall.tx + sx, nearestBall.ty + sy) === TILE.GOLF_FLAG) {
+                flagX = (nearestBall.tx + sx) * TILE_PX + TILE_PX / 2 + this.offset.x;
+                flagY = (nearestBall.ty + sy) * TILE_PX + TILE_PX / 2 + this.offset.y;
+                foundFlag = true;
+              }
+            }
+          }
+          this.golfFlagCacheKey = ballKey;
+          this.golfFlagCache = { flagX, flagY, foundFlag };
+        }
+        const ballPx = nearestBall.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
+        const ballPy = nearestBall.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
+
+        // power bar is active — oscillate and show above player
+        this.golfPowerActive = true;
+        this.golfHint
+          .setText(`E: Swing! (stroke ${this.golfStrokes + 1})`)
+          .setPosition(ballPx, ballPy - 30)
+          .setVisible(true);
+
+        // update oscillating power
+        this.golfPower += this.golfPowerDir * (dt / 1000) * 1.2; // full cycle ~1.7s
+        if (this.golfPower >= 1) { this.golfPower = 1; this.golfPowerDir = -1; }
+        if (this.golfPower <= 0) { this.golfPower = 0; this.golfPowerDir = 1; }
+
+        // draw the power bar above the player
+        const barW = 60;
+        const barH = 8;
+        const barX = playerX - barW / 2;
+        const barY = playerY - 110;
+        const power = this.golfPower;
+        // color: blue (0x4488ff) at 0 → yellow (0xffdd44) at 0.5 → red (0xff4444) at 1
+        const r = Math.floor(0x44 + (0xff - 0x44) * power);
+        const g = Math.floor(0x88 + (0x44 - 0x88) * power);
+        const b = Math.floor(0xff + (0x44 - 0xff) * power);
+        const fillColor = (r << 16) | (g << 8) | b;
+
+        this.golfPowerBar.clear();
+        // background
+        this.golfPowerBar.fillStyle(0x000000, 0.6);
+        this.golfPowerBar.fillRoundedRect(barX - 2, barY - 2, barW + 4, barH + 4, 3);
+        // fill
+        this.golfPowerBar.fillStyle(fillColor, 1);
+        this.golfPowerBar.fillRoundedRect(barX, barY, barW * power, barH, 2);
+        // border
+        this.golfPowerBar.lineStyle(1, 0xffffff, 0.5);
+        this.golfPowerBar.strokeRoundedRect(barX, barY, barW, barH, 2);
+        this.golfPowerBar.setVisible(true);
+
+        if (ePressed) {
+          // capture power: 0.15 (min) to 1.0 (max) → speed 120 to 550
+          const hitSpeed = 120 + power * 430;
+          if (foundFlag) {
+            const dx = flagX - ballPx;
+            const dy = flagY - ballPy;
+            const dist = Math.hypot(dx, dy);
+            this.golfBallVx = (dx / dist) * hitSpeed;
+            this.golfBallVy = (dy / dist) * hitSpeed;
+          } else {
+            this.golfBallVx = 0;
+            this.golfBallVy = hitSpeed;
+          }
+          this.golfBall = this.scene.add.image(ballPx, ballPy, "golf-ball").setDepth(50).setScale(0.7);
+          this.golfBallActive = true;
+          this.golfStrokes++;
+          this.setTileAt(nearestBall.tx, nearestBall.ty, TILE.TEE_BOX);
+          this.vfx.sparkBurst(ballPx, ballPy, 0xffffff, 8 + Math.floor(power * 16), 60 + power * 80);
+          this.audio.golfSwing();
+          achievements.unlock("first_swing");
+          const powerLabel = power > 0.75 ? "POWER DRIVE!" : power > 0.4 ? "Nice shot!" : "Soft tap.";
+          this.store.toast(`Fore! ${powerLabel} Stroke ${this.golfStrokes}. 🏏`);
+          // reset power bar
+          this.golfPowerActive = false;
+          this.golfPower = 0;
+          this.golfPowerDir = 1;
+          this.golfPowerBar.setVisible(false);
+        }
+      } else {
+        this.golfHint.setVisible(false);
+        if (this.golfPowerActive) {
+          this.golfPowerActive = false;
+          this.golfPower = 0;
+          this.golfPowerDir = 1;
+          this.golfPowerBar.setVisible(false);
+        }
+      }
+    } else {
+      this.golfHint.setVisible(false);
+      this.golfPowerBar.setVisible(false);
+      this.golfPowerActive = false;
+      this.golfPower = 0;
+      this.golfPowerDir = 1;
+      // reset golf state when entering office
+      if (this.golfBallActive) {
+        this.golfBall?.setVisible(false);
+        this.golfBall = null;
+        this.golfBallActive = false;
+      }
+    }
+
+    // --- tennis interaction ---
+    if (outside) {
+      const { tx: tptx, ty: tpty } = this.pixelToTile(playerX, playerY);
+
+      // update tennis ball physics
+      if (this.tennisBallActive && this.tennisBall) {
+        const ballDt = dt / 1000;
+        this.tennisBall.x += this.tennisBallVx * ballDt;
+        this.tennisBall.y += this.tennisBallVy * ballDt;
+        // friction — ball slows down gradually
+        this.tennisBallVx *= 0.992;
+        this.tennisBallVy *= 0.992;
+
+        const { tx: btx, ty: bty } = this.pixelToTile(this.tennisBall.x, this.tennisBall.y);
+        const ballTile = this.getTileAt(btx, bty);
+
+        // check if ball hit the wall — bounce back
+        if (ballTile === TILE.TENNIS_WALL) {
+          // determine bounce direction — reverse the dominant axis
+          const { tx: prevTx, ty: prevTy } = this.pixelToTile(
+            this.tennisBall.x - this.tennisBallVx * ballDt,
+            this.tennisBall.y - this.tennisBallVy * ballDt,
+          );
+          const dtx = btx - prevTx;
+          const dty = bty - prevTy;
+          if (Math.abs(dtx) > Math.abs(dty)) {
+            this.tennisBallVx = -this.tennisBallVx * 0.85;
+          } else {
+            this.tennisBallVy = -this.tennisBallVy * 0.85;
+          }
+          // push ball out of wall
+          this.tennisBall.x += this.tennisBallVx * ballDt * 2;
+          this.tennisBall.y += this.tennisBallVy * ballDt * 2;
+          // award points for successful wall hit
+          this.tennisScore += 10;
+          this.tennisRallies++;
+          this.vfx.sparkBurst(this.tennisBall.x, this.tennisBall.y, 0xeeff44, 12, 80);
+          this.audio.tennisBounce();
+          this.store.toast(`Wall hit! +10 🎾 Rally: ${this.tennisRallies} | Score: ${this.tennisScore}`);
+          achievements.unlock("tennis_first_hit");
+          if (this.tennisRallies >= 5) achievements.unlock("tennis_rally");
+          if (this.tennisRallies >= 15) achievements.unlock("tennis_pro");
+        }
+
+        // check if ball stopped
+        if (Math.hypot(this.tennisBallVx, this.tennisBallVy) < 8) {
+          this.tennisBallActive = false;
+          // place ball back on the court
+          const stopTile = this.getTileAt(btx, bty);
+          if (stopTile === TILE.TENNIS_COURT || stopTile === TILE.TENNIS_NET) {
+            this.setTileAt(btx, bty, TILE.TENNIS_BALL);
+          } else {
+            // ball landed off-court — place it back on nearest court tile
+            let placed = false;
+            for (let r = 1; r <= 5 && !placed; r++) {
+              for (let dy = -r; dy <= r && !placed; dy++) {
+                for (let dx = -r; dx <= r && !placed; dx++) {
+                  const t = this.getTileAt(btx + dx, bty + dy);
+                  if (t === TILE.TENNIS_COURT) {
+                    this.setTileAt(btx + dx, bty + dy, TILE.TENNIS_BALL);
+                    placed = true;
+                  }
+                }
+              }
+            }
+          }
+          this.tennisBall?.setVisible(false);
+          this.tennisBall = null;
+          if (this.tennisRallies > 0) {
+            this.store.toast(`Ball stopped. Rally of ${this.tennisRallies}! Score: ${this.tennisScore} 🎾`);
+            this.tennisRallies = 0;
+          } else {
+            this.store.toast("Ball stopped. Pick it up and serve! 🎾");
+          }
+        }
+      }
+
+      // scan nearby tiles for tennis items
+      let nearestRacket: { tx: number; ty: number; d: number } | null = null;
+      let nearestTennisBall: { tx: number; ty: number; d: number } | null = null;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const ctx2 = tptx + dx;
+          const cty2 = tpty + dy;
+          const t = this.getTileAt(ctx2, cty2);
+          const cx2 = ctx2 * TILE_PX + TILE_PX / 2 + this.offset.x;
+          const cy2 = cty2 * TILE_PX + TILE_PX / 2 + this.offset.y;
+          const d = Math.hypot(playerX - cx2, playerY - cy2);
+          if (t === TILE.TENNIS_RACKET && (!nearestRacket || d < nearestRacket.d)) {
+            nearestRacket = { tx: ctx2, ty: cty2, d };
+          }
+          if (t === TILE.TENNIS_BALL && (!nearestTennisBall || d < nearestTennisBall.d)) {
+            nearestTennisBall = { tx: ctx2, ty: cty2, d };
+          }
+        }
+      }
+
+      // show hint and handle E press for racket pickup
+      if (nearestRacket && nearestRacket.d < 100 && !this.hasTennisRacket) {
+        this.tennisHint
+          .setText("E: Pick up tennis racket")
+          .setPosition(nearestRacket.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestRacket.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.hasTennisRacket = true;
+          this.setTileAt(nearestRacket.tx, nearestRacket.ty, TILE.TENNIS_COURT);
+          this.store.toast("Picked up tennis racket! 🎾");
+          this.vfx.sparkBurst(
+            nearestRacket.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestRacket.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0xeeff44, 10, 60,
+          );
+          achievements.unlock("tennis_pickup");
+        }
+      } else if (nearestTennisBall && nearestTennisBall.d < 100 && this.hasTennisRacket && !this.tennisBallActive) {
+        // find the nearest wall — cached per ball tile
+        const ballKey = `${nearestTennisBall.tx},${nearestTennisBall.ty}`;
+        let wallX = 0, wallY = 0, foundWall = false;
+        if (this.tennisWallCacheKey === ballKey && this.tennisWallCache) {
+          ({ wallX, wallY, foundWall } = this.tennisWallCache);
+        } else {
+          for (let sy = -15; sy <= 15 && !foundWall; sy++) {
+            for (let sx = -15; sx <= 15 && !foundWall; sx++) {
+              if (this.getTileAt(nearestTennisBall.tx + sx, nearestTennisBall.ty + sy) === TILE.TENNIS_WALL) {
+                wallX = (nearestTennisBall.tx + sx) * TILE_PX + TILE_PX / 2 + this.offset.x;
+                wallY = (nearestTennisBall.ty + sy) * TILE_PX + TILE_PX / 2 + this.offset.y;
+                foundWall = true;
+              }
+            }
+          }
+          this.tennisWallCacheKey = ballKey;
+          this.tennisWallCache = { wallX, wallY, foundWall };
+        }
+        const ballPx = nearestTennisBall.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
+        const ballPy = nearestTennisBall.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
+
+        // power bar is active — oscillate and show above player
+        this.tennisPowerActive = true;
+        this.tennisHint
+          .setText(`E: Serve! (rally ${this.tennisRallies})`)
+          .setPosition(ballPx, ballPy - 30)
+          .setVisible(true);
+
+        // update oscillating power
+        this.tennisPower += this.tennisPowerDir * (dt / 1000) * 1.5; // faster than golf
+        if (this.tennisPower >= 1) { this.tennisPower = 1; this.tennisPowerDir = -1; }
+        if (this.tennisPower <= 0) { this.tennisPower = 0; this.tennisPowerDir = 1; }
+
+        // draw the power bar above the player
+        const barW = 60;
+        const barH = 8;
+        const barX = playerX - barW / 2;
+        const barY = playerY - 110;
+        const power = this.tennisPower;
+        // color: green at 0 → yellow at 0.5 → red at 1
+        const r = Math.floor(0x44 + (0xff - 0x44) * power);
+        const g = Math.floor(0xff + (0x44 - 0xff) * power);
+        const b = Math.floor(0x44 + (0x44 - 0x44) * power);
+        const fillColor = (r << 16) | (g << 8) | b;
+
+        this.tennisPowerBar.clear();
+        this.tennisPowerBar.fillStyle(0x000000, 0.6);
+        this.tennisPowerBar.fillRoundedRect(barX - 2, barY - 2, barW + 4, barH + 4, 3);
+        this.tennisPowerBar.fillStyle(fillColor, 1);
+        this.tennisPowerBar.fillRoundedRect(barX, barY, barW * power, barH, 2);
+        this.tennisPowerBar.lineStyle(1, 0xffffff, 0.5);
+        this.tennisPowerBar.strokeRoundedRect(barX, barY, barW, barH, 2);
+        this.tennisPowerBar.setVisible(true);
+
+        if (ePressed) {
+          // capture power: 0.2 (min) to 1.0 (max) → speed 150 to 500
+          const hitSpeed = 150 + power * 350;
+          if (foundWall) {
+            const dx = wallX - ballPx;
+            const dy = wallY - ballPy;
+            const dist = Math.hypot(dx, dy);
+            this.tennisBallVx = (dx / dist) * hitSpeed;
+            this.tennisBallVy = (dy / dist) * hitSpeed;
+          } else {
+            this.tennisBallVx = 0;
+            this.tennisBallVy = -hitSpeed;
+          }
+          this.tennisBall = this.scene.add.image(ballPx, ballPy, "tennis-ball").setDepth(50).setScale(0.7);
+          this.tennisBallActive = true;
+          this.setTileAt(nearestTennisBall.tx, nearestTennisBall.ty, TILE.TENNIS_COURT);
+          this.vfx.sparkBurst(ballPx, ballPy, 0xeeff44, 8 + Math.floor(power * 16), 60 + power * 80);
+          this.audio.tennisHit();
+          achievements.unlock("tennis_first_swing");
+          const powerLabel = power > 0.75 ? "SMASH!" : power > 0.4 ? "Nice serve!" : "Soft touch.";
+          this.store.toast(`Tennis! ${powerLabel} 🎾`);
+          // reset power bar
+          this.tennisPowerActive = false;
+          this.tennisPower = 0;
+          this.tennisPowerDir = 1;
+          this.tennisPowerBar.setVisible(false);
+        }
+      } else {
+        this.tennisHint.setVisible(false);
+        if (this.tennisPowerActive) {
+          this.tennisPowerActive = false;
+          this.tennisPower = 0;
+          this.tennisPowerDir = 1;
+          this.tennisPowerBar.setVisible(false);
+        }
+      }
+    } else {
+      this.tennisHint.setVisible(false);
+      this.tennisPowerBar.setVisible(false);
+      this.tennisPowerActive = false;
+      this.tennisPower = 0;
+      this.tennisPowerDir = 1;
+      // reset tennis state when entering office
+      if (this.tennisBallActive) {
+        this.tennisBall?.setVisible(false);
+        this.tennisBall = null;
+        this.tennisBallActive = false;
+      }
     }
 
     // find nearest ghost for dialogue
@@ -1081,6 +1996,9 @@ export class WorldLayer {
         .setText(`${fa.name}: "${line}"\nE: recruit back to office`)
         .setPosition(nearestGhost.ghost.container.x, nearestGhost.ghost.container.y - 130)
         .setVisible(true);
+      achievements.unlock("ghost_encounter");
+      if (fa.mood === "melancholy") achievements.unlock("melancholy_ghost");
+      if (fa.mood === "hostile") achievements.unlock("hostile_ghost");
     } else {
       this.ghostDialog.setVisible(false);
     }
@@ -1109,10 +2027,13 @@ export class WorldLayer {
     if (this.hp <= 0) {
       this.hp = MAX_HP * 0.5;
       this.hud.setHealth(this.hp, MAX_HP);
+      achievements.unlock("knocked_out");
       for (const c of this.creatures) c.destroy();
       this.creatures = [];
       for (const s of this.stones) s.destroy();
       this.stones = [];
+      for (const f of this.friendlies) f.destroy();
+      this.friendlies = [];
       const scene = this.scene as Phaser.Scene;
       const spawn = scene.registry.get("spawnTile") as { x: number; y: number } | undefined;
       if (spawn) {
@@ -1158,11 +2079,14 @@ export class WorldLayer {
   }
 
   destroy(): void {
+    for (const key of this.chunkLights.keys()) this.removeChunkLights(key);
     for (const g of this.chunkGraphics.values()) g.destroy();
     for (const g of this.ghosts.values()) g.destroy();
+    for (const f of this.friendlies) f.destroy();
     this.chunks.clear();
     this.chunkGraphics.clear();
     this.ghosts.clear();
+    this.friendlies = [];
     this.vfx.destroy();
     this.lighting.destroy();
     this.hud.destroy();
