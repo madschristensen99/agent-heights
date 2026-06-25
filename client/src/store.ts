@@ -44,6 +44,7 @@ export class Store {
   achievementsOpen = false;
   hallOfFameOpen = false;
   railwayPanelOpen = false;
+  wardrobeOpen = false;
   railwayData: RailwayData | null = null;
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
@@ -104,6 +105,11 @@ export class Store {
 
   toggleRailwayPanel(open?: boolean): void {
     this.railwayPanelOpen = open ?? !this.railwayPanelOpen;
+    this.emit();
+  }
+
+  toggleWardrobe(open?: boolean): void {
+    this.wardrobeOpen = open ?? !this.wardrobeOpen;
     this.emit();
   }
 
@@ -238,6 +244,14 @@ export class Store {
         break;
       case "fired_agent":
         this.firedAgents.set(msg.agent.id, msg.agent);
+        this.feed.push({
+          agentId: msg.agent.id,
+          name: msg.agent.name,
+          accent: msg.agent.accent,
+          entry: { ts: Date.now(), kind: "status", text: "was fired and wandered into the Labyrinth. Use the office feed to re-hire them." },
+          seq: this.feedSeq++,
+        });
+        if (this.feed.length > FEED_MAX) this.feed.splice(0, this.feed.length - FEED_MAX);
         achievements.unlock("first_fire");
         break;
       case "fired_agent_removed":

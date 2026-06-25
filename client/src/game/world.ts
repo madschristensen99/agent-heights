@@ -24,9 +24,10 @@ export interface WorldOffset {
   y: number;
 }
 
-const LOAD_RADIUS = 2;
+export const LOAD_RADIUS = 2;
 const UNLOAD_RADIUS = 3;
 const MAX_CHUNKS_PER_FRAME = 3;
+const MAX_LIGHTS_PER_CHUNK = 8;
 const MAX_HP = 100;
 const CREATURE_CAP = 20;
 const FRIENDLY_CAP = 8;
@@ -733,6 +734,7 @@ export class WorldLayer {
   private stones: Stone[] = [];
   private friendlies: FriendlyCreature[] = [];
   private hp = MAX_HP;
+  private currentAmbientBiome: string | null = null;
   private tennisChunks = new Set<string>();
   private lastStoneTime = 0;
   private lastSpawnTime = 0;
@@ -934,7 +936,7 @@ export class WorldLayer {
     };
   }
 
-  /** Get the tile type at world tile coordinates. */
+  /** Get the tile type at world tile coordinates. Generates the chunk if needed. */
   private getTileAt(worldTileX: number, worldTileY: number): number {
     if (worldTileY < 0) return TILE.WALL;
     const cx = Math.floor(worldTileX / CHUNK_SIZE);
@@ -947,6 +949,21 @@ export class WorldLayer {
       this.scanTennisTiles(chunk);
       this.renderChunk(chunk);
     }
+    const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    return chunk.tiles[localY * CHUNK_SIZE + localX];
+  }
+
+  /** Get the tile type at world tile coordinates without generating chunks.
+   *  Returns -1 if the chunk isn't loaded yet. Use for per-frame scans to avoid
+   *  mid-frame chunk generation spikes. */
+  private getTileAtLoaded(worldTileX: number, worldTileY: number): number {
+    if (worldTileY < 0) return TILE.WALL;
+    const cx = Math.floor(worldTileX / CHUNK_SIZE);
+    const cy = Math.floor(worldTileY / CHUNK_SIZE);
+    const key = `${cx},${cy}`;
+    const chunk = this.chunks.get(key);
+    if (!chunk) return -1;
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     return chunk.tiles[localY * CHUNK_SIZE + localX];
@@ -990,9 +1007,23 @@ export class WorldLayer {
     return isWalkable(chunk.tiles[localY * CHUNK_SIZE + localX]);
   }
 
+  /** Check if a world tile is walkable without generating chunks.
+   *  Returns false for unloaded chunks (safe default — caller just won't move there). */
+  private isTileWalkableLoaded(worldTileX: number, worldTileY: number): boolean {
+    if (worldTileY < 0) return false;
+    const cx = Math.floor(worldTileX / CHUNK_SIZE);
+    const cy = Math.floor(worldTileY / CHUNK_SIZE);
+    const key = `${cx},${cy}`;
+    const chunk = this.chunks.get(key);
+    if (!chunk) return false;
+    const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    return isWalkable(chunk.tiles[localY * CHUNK_SIZE + localX]);
+  }
+
   /** Check if a world tile is walkable for creatures — excludes tiles within 4 of a tennis court. */
   isCreatureWalkable(worldTileX: number, worldTileY: number): boolean {
-    if (!this.isTileWalkable(worldTileX, worldTileY)) return false;
+    if (!this.isTileWalkableLoaded(worldTileX, worldTileY)) return false;
     // Fast path: if no nearby chunks contain tennis tiles, skip the 81-tile scan
     const minCX = Math.floor((worldTileX - 4) / CHUNK_SIZE);
     const maxCX = Math.floor((worldTileX + 4) / CHUNK_SIZE);
@@ -1243,7 +1274,9 @@ export class WorldLayer {
         }
 
         // Water tiles: keep a separate animated sprite on top of the RT
-        if (tile === TILE.WATER) {
+        // Only create sprites for a subset of water tiles to limit per-frame
+        // animation overhead. The static frame is already on the RT.
+        if (tile === TILE.WATER && (x % 3 === 0) && (y % 3 === 0)) {
           const waterSprite = this.scene.add.sprite(ox + px, oy + py, "world-tiles", 21);
           waterSprite.setOrigin(0, 0);
           waterSprite.play({ key: "water-anim", repeat: -1 }, true);
@@ -1256,15 +1289,17 @@ export class WorldLayer {
           rt.draw(overlayKey, px, py);
         }
 
-        // Add tile-based light sources for special tiles
-        if (tile === TILE.LAVA) {
-          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 80, 0xff6600, 0.4, 0.1, 0.005));
-        } else if (tile === TILE.CRYSTAL) {
-          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 60, 0x44aaff, 0.3, 0.05, 0.003));
-        } else if (tile === TILE.VOID) {
-          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 70, 0xaa00ff, 0.25, 0.08, 0.004));
-        } else if (tile === TILE.FOUNTAIN) {
-          chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 50, 0x88ccff, 0.2, 0.03, 0.002));
+        // Add tile-based light sources for special tiles (capped per chunk for perf)
+        if (chunkLightList.length < MAX_LIGHTS_PER_CHUNK) {
+          if (tile === TILE.LAVA) {
+            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 80, 0xff6600, 0.4, 0.1, 0.005));
+          } else if (tile === TILE.CRYSTAL) {
+            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 60, 0x44aaff, 0.3, 0.05, 0.003));
+          } else if (tile === TILE.VOID) {
+            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 70, 0xaa00ff, 0.25, 0.08, 0.004));
+          } else if (tile === TILE.FOUNTAIN) {
+            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 50, 0x88ccff, 0.2, 0.03, 0.002));
+          }
         }
       }
     }
@@ -1459,8 +1494,11 @@ export class WorldLayer {
       // Audio: play biome music
       // this.audio.playMusic(biomeName);
 
-      // Ambient particles for biome
-      this.vfx.startAmbient(biomeName as any);
+      // Ambient particles for biome — only restart when biome changes
+      if (this.currentAmbientBiome !== biomeName) {
+        this.currentAmbientBiome = biomeName;
+        this.vfx.startAmbient(biomeName as any);
+      }
 
       // --- spawn creatures based on hostility ---
       if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 800 + Math.random() * 1500) {
@@ -1545,6 +1583,7 @@ export class WorldLayer {
       this.hud.hideHealthBar();
       this.hud.hideBeastBanner();
       this.vfx.stopAmbient();
+      this.currentAmbientBiome = null;
       this.audio.stopMusic();
       // clear creatures and beasts when back in office
       for (const c of this.creatures) c.destroy();
@@ -1715,14 +1754,15 @@ export class WorldLayer {
         }
       }
 
-      // scan nearby tiles for golf items
+      // scan nearby tiles for golf items (use loaded-only to avoid mid-frame chunk gen)
       let nearestClub: { tx: number; ty: number; d: number } | null = null;
       let nearestBall: { tx: number; ty: number; d: number } | null = null;
       for (let dy = -2; dy <= 2; dy++) {
         for (let dx = -2; dx <= 2; dx++) {
           const ctx2 = ptx + dx;
           const cty2 = pty + dy;
-          const t = this.getTileAt(ctx2, cty2);
+          const t = this.getTileAtLoaded(ctx2, cty2);
+          if (t < 0) continue;
           const cx2 = ctx2 * TILE_PX + TILE_PX / 2 + this.offset.x;
           const cy2 = cty2 * TILE_PX + TILE_PX / 2 + this.offset.y;
           const d = Math.hypot(playerX - cx2, playerY - cy2);
@@ -1938,14 +1978,15 @@ export class WorldLayer {
         }
       }
 
-      // scan nearby tiles for tennis items
+      // scan nearby tiles for tennis items (use loaded-only to avoid mid-frame chunk gen)
       let nearestRacket: { tx: number; ty: number; d: number } | null = null;
       let nearestTennisBall: { tx: number; ty: number; d: number } | null = null;
       for (let dy = -2; dy <= 2; dy++) {
         for (let dx = -2; dx <= 2; dx++) {
           const ctx2 = tptx + dx;
           const cty2 = tpty + dy;
-          const t = this.getTileAt(ctx2, cty2);
+          const t = this.getTileAtLoaded(ctx2, cty2);
+          if (t < 0) continue;
           const cx2 = ctx2 * TILE_PX + TILE_PX / 2 + this.offset.x;
           const cy2 = cty2 * TILE_PX + TILE_PX / 2 + this.offset.y;
           const d = Math.hypot(playerX - cx2, playerY - cy2);
@@ -2088,7 +2129,8 @@ export class WorldLayer {
         for (let dx = -1; dx <= 1; dx++) {
           const ftx = ptx + dx;
           const fty = pty + dy;
-          if (this.getTileAt(ftx, fty) === TILE.FLOWER) {
+          const ft = this.getTileAtLoaded(ftx, fty);
+          if (ft === TILE.FLOWER) {
             const fx = ftx * TILE_PX + TILE_PX / 2 + this.offset.x;
             const fy = fty * TILE_PX + TILE_PX / 2 + this.offset.y;
             const d = Math.hypot(playerX - fx, playerY - fy);

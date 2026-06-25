@@ -324,7 +324,8 @@ export type ClientMsg =
   | { type: "move_card"; cardId: string; status: CardStatus }
   | { type: "delete_card"; cardId: string }
   | { type: "recruit"; firedAgentId: string }
-  | { type: "railway_query" };
+  | { type: "railway_query" }
+  | { type: "update_appearance"; appearance: CharAppearance };
 
 export type ServerMsg =
   | {
@@ -362,7 +363,6 @@ export const SWARMS_MODELS = [
   { id: "gpt-4.1-nano", label: "GPT-4.1 Nano (cheapest)" },
   { id: "o3-mini", label: "o3-mini (reasoning)" },
   { id: "groq/llama3-70b-8192", label: "Llama 3 70B via Groq (fast)" },
-  { id: "groq/deepseek-r1-distill-llama-70b", label: "DeepSeek R1 via Groq (reasoning)" },
 ] as const;
 
 export const SERVER_PORT = (typeof process !== "undefined" && Number(process.env?.PORT)) || 3001;

@@ -11,7 +11,7 @@ import { wrapRailwayTools } from "./railway-mcp.js";
 const execFileAsync = promisify(execFile);
 
 const SWARMS_BASE_URL = "https://api.swarms.world/v1";
-const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? "";
+const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
 
 /** Active Cline Agent instances keyed by agentId, for conversation continuity. */
 const agents = new Map<string, Agent>();

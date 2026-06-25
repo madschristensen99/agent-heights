@@ -850,18 +850,19 @@ const WORKSHOP_PIECES: WorkshopPiece[] = [
 /** Tile coordinates (top-left) and pixel dimensions for each workshop piece.
  *  Layout — distinct zones with walking space between them:
  *
- *    y=13:  [sofa] [sofa] .     .     .     .     [plant] .
+ *    y=13:  [sofa] [sofa] .     .     .     .     .      [plant]
  *    y=14:  [research 2×1] .   [war table 2×2   ] [radio]
  *    y=15:  [plant] .         [war table 2×2   ] .      .
- *    y=16:  .     .           .     [plant] .   [scrap 1×2]
- *    y=17:  [workbench 2×1]   .     .     .     [scrap 1×2]
+ *    y=16:  .     .           .     .     .     .      .
+ *    y=17:  .     .           .     .     .     .      [scrap 1×2]
+ *    y=18:  [workbench 2×1]   .     .     .     .      [scrap 1×2]
  */
 export const WORKSHOP_LAYOUT: Record<string, { tile: { x: number; y: number }; w: number; h: number }> = {
   [WORKSHOP_TEX_RESEARCH_STATION]: { tile: { x: 22, y: 14 }, w: TILE_PX * 2, h: TILE_PX },
   [WORKSHOP_TEX_WAR_TABLE]: { tile: { x: 25, y: 14 }, w: TILE_PX * 2, h: TILE_PX * 2 },
   [WORKSHOP_TEX_TELEMETRY_RADIO]: { tile: { x: 28, y: 14 }, w: TILE_PX, h: TILE_PX },
-  [WORKSHOP_TEX_WORKBENCH]: { tile: { x: 23, y: 17 }, w: TILE_PX * 2, h: TILE_PX },
-  [WORKSHOP_TEX_SCRAP_BIN]: { tile: { x: 27, y: 16 }, w: TILE_PX, h: TILE_PX * 2 },
+  [WORKSHOP_TEX_WORKBENCH]: { tile: { x: 23, y: 18 }, w: TILE_PX * 2, h: TILE_PX },
+  [WORKSHOP_TEX_SCRAP_BIN]: { tile: { x: 28, y: 17 }, w: TILE_PX, h: TILE_PX * 2 },
 };
 
 /**

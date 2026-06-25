@@ -131,6 +131,7 @@ export class AgentNPC {
     this.coolerSpot = WATER_COOLER_SPOTS[info.deskIndex % WATER_COOLER_SPOTS.length].tile;
     const coolerPath = findPath(grid, spawn, this.coolerSpot);
     this.path = coolerPath.length > 0 ? coolerPath : findPath(grid, spawn, seat);
+    console.log(`[AgentNPC] created: name=${info.name} id=${info.id} spawn=${JSON.stringify(spawn)} seat=${JSON.stringify(seat)} coolerSpot=${JSON.stringify(this.coolerSpot)} pathLen=${this.path.length} pos=(${this.container.x},${this.container.y})`);
   }
 
   private positionDot(): void {

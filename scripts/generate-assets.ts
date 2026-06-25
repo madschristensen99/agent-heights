@@ -298,6 +298,7 @@ export const TILE = {
   SERVER_RACK: 34, SERVER_SCREEN: 35, CHIMNEY: 36,
   DESK_SIDE_TOP: 37, DESK_SIDE_BOTTOM: 38,
   DESK_SIDE_TOP_MIRROR: 39, DESK_SIDE_BOTTOM_MIRROR: 40, CHAIR_RIGHT: 41,
+  RED_CARPET_A: 42, RED_CARPET_B: 43,
 } as const;
 
 const SOLID_TILES = [
@@ -464,6 +465,8 @@ const drawers: Record<number, TileDrawer> = {
   [TILE.WOOD_B]: woodTile("#bc9464", "#9c7242"),
   [TILE.CARPET_A]: carpetTile("#909caa", "#7a8694"),
   [TILE.CARPET_B]: carpetTile("#8a96a2", "#74808e"),
+  [TILE.RED_CARPET_A]: carpetTile("#b05050", "#8a3c3c"),
+  [TILE.RED_CARPET_B]: carpetTile("#a44848", "#7e3434"),
   [TILE.RUG]: (s, ox, oy) => {
     const p = shade5("#8e4242");
     const bp = shade5("#6a3030");
@@ -1648,7 +1651,7 @@ function buildTileset(set: Record<number, TileDrawer>): Sheet {
   const cols = 8;
   const rows = 6;
   const s = new Sheet(cols * T, rows * T);
-  for (let id = 0; id < 42; id++) {
+  for (let id = 0; id < 44; id++) {
     const drawer = set[id];
     if (drawer) drawer(s, (id % cols) * T, Math.floor(id / cols) * T);
   }
@@ -2704,20 +2707,22 @@ const CLASSIC: MapTheme = {
     for (let x = 1; x <= 10; x++) W(x, 12, TILE.WALL_TOP);
     // Re-open the passage from the work area to the lobby at x=14-15 (the aisle)
     // by carving back the wall tiles we just placed at the aisle position
-    G(14, 12, TILE.CARPET_A);
-    G(15, 12, TILE.CARPET_A);
+    G(14, 12, (14 + 12) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
+    G(15, 12, (15 + 12) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
     // Mail room floor — distinct tile to set it apart from lobby
     for (let y = 13; y <= 17; y++) {
       for (let x = 1; x <= 10; x++) G(x, y, (x + y) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
     }
 
     // --- Yuki's office (right side, between break room and meeting corner) ---
-    // Floor
+    // Floor — red carpet
     for (let y = 8; y <= 11; y++) {
-      for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
+      for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.RED_CARPET_A : TILE.RED_CARPET_B);
     }
-    // Entrance floor (3-tile opening at y=8,9,10)
-    for (let y = 8; y <= 10; y++) G(21, y, (21 + y) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
+    // Entrance floor (3-tile opening at y=8,9,10) — grey carpet top two, wood bottom
+    G(21, 8, (21 + 8) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    G(21, 9, (21 + 9) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    G(21, 10, (21 + 10) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
     // North wall
     for (let x = 22; x <= 27; x++) W(x, 7, TILE.WALL_TOP);
     // South wall
@@ -2849,12 +2854,14 @@ const LUMON: MapTheme = {
     }
 
     // --- Yuki's office (right side, between break room and meeting corner) ---
-    // Floor
+    // Floor — red carpet
     for (let y = 8; y <= 11; y++) {
-      for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+      for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.RED_CARPET_A : TILE.RED_CARPET_B);
     }
-    // Entrance floor (3-tile opening at y=8,9,10)
-    for (let y = 8; y <= 10; y++) G(21, y, (21 + y) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    // Entrance floor (3-tile opening at y=8,9,10) — grey carpet top two, wood bottom
+    G(21, 8, (21 + 8) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    G(21, 9, (21 + 9) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    G(21, 10, (21 + 10) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
     // North wall
     for (let x = 22; x <= 27; x++) W(x, 7, TILE.WALL_TOP);
     // South wall
@@ -3014,7 +3021,7 @@ function buildMap(theme: MapTheme): object {
         imageheight: 384,
         tilewidth: T,
         tileheight: T,
-        tilecount: 42,
+        tilecount: 44,
         columns: 8,
         margin: 0,
         spacing: 0,

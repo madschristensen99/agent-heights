@@ -1,10 +1,10 @@
 import type { Net } from "../net";
 import type { FeedItem, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance } from "../../../shared/types";
-import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID,
+import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
-  randomAppearance,
+  randomAppearance, DEFAULT_APPEARANCE,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
@@ -209,6 +209,7 @@ export class Hud {
       <div class="modal-backdrop" id="achievements-modal" hidden></div>
       <div class="modal-backdrop" id="hall-of-fame-modal" hidden></div>
       <div class="modal-backdrop" id="railway-modal" hidden></div>
+      <div class="modal-backdrop" id="wardrobe-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
@@ -296,10 +297,7 @@ export class Hud {
       }
     });
     document.getElementById("d-fire")!.addEventListener("click", () => {
-      const agent = this.store.selected();
-      if (agent && confirm(`Fire ${agent.name}? Their workspace folder stays on disk.`)) {
-        this.net.send({ type: "fire", agentId: agent.id });
-      }
+      if (this.store.selectedId) this.net.send({ type: "fire", agentId: this.store.selectedId });
     });
   }
 
@@ -376,20 +374,23 @@ export class Hud {
       const ach = document.getElementById("achievements-modal")!;
       const hof = document.getElementById("hall-of-fame-modal")!;
       const railway = document.getElementById("railway-modal")!;
+      const wardrobe = document.getElementById("wardrobe-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
         settings.hidden = true;
         ach.hidden = true;
         hof.hidden = true;
         railway.hidden = true;
+        wardrobe.hidden = true;
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
+        this.store.toggleWardrobe(false);
         return;
       }
       // never steal keystrokes from a form field or while a modal is up
       const active = document.activeElement?.tagName;
       if (active === "INPUT" || active === "TEXTAREA" || active === "SELECT") return;
-      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden) return;
+      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden) return;
       switch (e.key.toLowerCase()) {
         case "h":
           e.preventDefault();
@@ -462,7 +463,7 @@ export class Hud {
     const modal = document.getElementById("onboard-modal")!;
     modal.hidden = false;
 
-    const builder = new CharBuilder("ob", randomAppearance(), () => {});
+    const builder = new CharBuilder("ob", DEFAULT_APPEARANCE, () => {});
 
     modal.innerHTML = `
       <div class="modal onboard">
@@ -782,19 +783,10 @@ export class Hud {
       appearance: randomAppearance(),
     };
 
-    // Send the hire message immediately so the agent is created on the server
-    // and persists even if the helicopter animation is interrupted.
-    console.log("[hire] sending hire message for", delivery.name);
-    this.net.send({
-      type: "hire",
-      name: delivery.name,
-      provider: "cline",
-      model: delivery.model,
-      systemPrompt,
-      role: "worker",
-      appearance: delivery.appearance,
-    });
-
+    // Trigger the helicopter delivery animation. The hire WS message is
+    // sent from the scene when the agent emerges from the elevator, so the
+    // server creates the agent at the right moment and syncAgents() replaces
+    // the cosmetic sprite with the real NPC.
     this.store.triggerHelicopter(delivery);
   }
 
@@ -910,6 +902,7 @@ export class Hud {
     this.renderAchievements();
     this.renderHallOfFame();
     this.renderRailwayPanel();
+    this.renderWardrobe();
   }
 
   private renderRoster(): void {
@@ -926,12 +919,16 @@ export class Hud {
     const roster = document.getElementById("roster")!;
     roster.classList.toggle("collapsed", this.rosterCollapsed);
     const rows = [...this.store.agents.values()]
-      .sort((a, b) => (a.name === "Yuki" ? -1 : b.name === "Yuki" ? 1 : 0))
+      .sort((a, b) => {
+        const perm = (id: string) => id === YUKI_ID ? 0 : id === HERMES_ID ? 1 : 2;
+        const pa = perm(a.id), pb = perm(b.id);
+        return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
+      })
       .map(
         (a) => `
         <div class="agent-row ${a.id === this.store.selectedId ? "selected" : ""}" data-id="${a.id}">
           <span class="dot ${a.status}"></span>
-          <span class="name" style="color:${a.accent}">${esc(a.name)}${a.role === "manager" ? " 👔" : ""}</span>
+          <span class="name" style="color:${a.accent}">${esc(a.name)}${a.role === "manager" ? " 👔" : a.role === "devops" ? " 🚂" : ""}</span>
           <span class="status">${a.status}</span>
         </div>`,
       )
@@ -967,11 +964,11 @@ export class Hud {
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
       ${agent.role === "manager" ? "· 👔 MANAGER " : ""}· ${agent.provider} / ${esc(agent.model)}
-      · ${agent.id === YUKI_ID ? "own office" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
+      · ${agent.id === YUKI_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
 
-    // Yuki can't be fired
+    // Yuki and Hermes can't be fired
     const fireBtn = document.getElementById("d-fire") as HTMLButtonElement | null;
-    if (fireBtn) fireBtn.hidden = agent.id === YUKI_ID;
+    if (fireBtn) fireBtn.hidden = agent.id === YUKI_ID || agent.id === HERMES_ID;
 
     const handoffSel = document.getElementById("d-handoff") as HTMLSelectElement;
     const others = [...this.store.agents.values()].filter((a) => a.id !== agent.id);
@@ -1348,6 +1345,50 @@ export class Hud {
     modal.hidden = false;
     document.getElementById("railway-close")!.addEventListener("click", () => {
       this.store.toggleRailwayPanel(false);
+    });
+  }
+
+  private renderWardrobe(): void {
+    const modal = document.getElementById("wardrobe-modal")!;
+    if (!this.store.wardrobeOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+
+    const current = this.store.player?.appearance ?? DEFAULT_APPEARANCE;
+    const builder = new CharBuilder("wd", current, () => {});
+
+    modal.innerHTML = `
+      <div class="modal wardrobe-modal">
+        <h2>WARDROBE</h2>
+        <p class="sub" style="margin-bottom:12px;">Change your look anytime.</p>
+        <div class="wardrobe-layout">
+          <div class="wardrobe-builder">
+            ${builder.html()}
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" id="wd-cancel">CANCEL</button>
+          <button class="btn primary" id="wd-save">SAVE LOOK ▶</button>
+        </div>
+      </div>
+    `;
+    modal.hidden = false;
+    builder.mount();
+
+    document.getElementById("wd-cancel")!.addEventListener("click", () => {
+      this.store.toggleWardrobe(false);
+    });
+    document.getElementById("wd-save")!.addEventListener("click", () => {
+      const ap = builder.getAppearance();
+      const player = this.store.player;
+      if (player) {
+        const updated = { ...player, appearance: ap };
+        localStorage.setItem(PLAYER_KEY, JSON.stringify(updated));
+        this.net.send({ type: "update_appearance", appearance: ap });
+      }
+      this.store.toggleWardrobe(false);
     });
   }
 

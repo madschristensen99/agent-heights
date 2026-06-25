@@ -16,7 +16,7 @@ import type {
   TaskCard,
   WorldState,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID, ACCENT_COLOR_OPTIONS } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory } from "./providers/cline.js";
@@ -155,6 +155,7 @@ export class AgentManager {
     }
 
     this.ensureYuki();
+    this.ensureHermes();
   }
 
   setSettings(s: GameSettings, announce = true): void {
@@ -201,6 +202,33 @@ export class AgentManager {
     mkdirSync(this.cwdFor("yuki", YUKI_ID), { recursive: true });
     const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
     this.agents.set(YUKI_ID, rt);
+    this.persist();
+    this.broadcast({ type: "agent", agent: info });
+  }
+
+  /** Ensure Hermes — the permanent devops engineer — always exists in the roster. */
+  private ensureHermes(): void {
+    if (this.agents.has(HERMES_ID)) return;
+    const info: AgentInfo = {
+      id: HERMES_ID,
+      name: "Hermes",
+      title: DEVOPS_TITLE,
+      provider: "cline",
+      model: "claude-sonnet-4-20250514",
+      status: "idle",
+      task: null,
+      deskIndex: -1,
+      sprite: 0,
+      appearance: null,
+      accent: "#3a7cb5",
+      systemPrompt: "",
+      role: "devops",
+      sessionId: null,
+      tasksDone: 0,
+    };
+    mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
+    this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
   }
@@ -431,6 +459,10 @@ export class AgentManager {
   fire(agentId: string): void {
     if (agentId === YUKI_ID) {
       this.broadcast({ type: "toast", text: "You can't fire Yuki — she runs this office." });
+      return;
+    }
+    if (agentId === HERMES_ID) {
+      this.broadcast({ type: "toast", text: "You can't fire Hermes — he runs the infrastructure." });
       return;
     }
     const rt = this.agents.get(agentId);
@@ -860,7 +892,10 @@ export class AgentManager {
       void this.runYukiChat(rt, text);
       return;
     }
+    await this.runClineChat(rt, text);
+  }
 
+  private async runClineChat(rt: AgentRuntime, text: string): Promise<void> {
     const abort = new AbortController();
     rt.abort = abort;
 
@@ -891,7 +926,7 @@ export class AgentManager {
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;
-        if (ev.kind === "result") continue; // "task complete" noise has no place in a chat
+        if (ev.kind === "result") continue;
         this.log(rt, ev.kind, ev.text);
       }
     } catch (err) {
@@ -983,9 +1018,9 @@ export class AgentManager {
         this.log(rt, "text", fullText);
       }
     } catch (err) {
-      if (!abort.signal.aborted) {
-        this.log(rt, "error", err instanceof Error ? err.message : String(err));
-      }
+      if (abort.signal.aborted) return;
+      // Marketplace unreachable — fall back to regular cline chat
+      await this.runClineChat(rt, text);
     } finally {
       rt.abort = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {

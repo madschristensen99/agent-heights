@@ -271,6 +271,13 @@ wss.on("connection", async (ws, req) => {
         case "hire":
           manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance);
           break;
+        case "update_appearance": {
+          if (!sess.player) break;
+          sess.player = { ...sess.player, appearance: msg.appearance };
+          save.setPlayer(sess.player);
+          sess.broadcast({ type: "player", player: sess.player });
+          break;
+        }
         case "assign":
           manager.assign(msg.agentId, msg.task, msg.handoffTo);
           break;

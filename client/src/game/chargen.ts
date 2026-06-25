@@ -59,7 +59,7 @@ class PixelSheet {
     this.width = w;
     this.height = h;
     this.data = new Uint8ClampedArray(w * h * 4);
-    for (let i = 3; i < this.data.length; i += 4) this.data[i] = 255;
+    // All pixels start transparent — only drawn pixels become opaque
   }
 
   private inClip(x: number, y: number): boolean {
@@ -113,6 +113,7 @@ class PixelSheet {
     d[i] = Math.round(d[i] * (1 - a) + r * a);
     d[i + 1] = Math.round(d[i + 1] * (1 - a) + g * a);
     d[i + 2] = Math.round(d[i + 2] * (1 - a) + b * a);
+    d[i + 3] = 255;
   }
 
   fillCircle(cx: number, cy: number, r: number, hex: string): void {

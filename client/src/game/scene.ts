@@ -4,7 +4,7 @@ import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
 import { YUKI_ID, HERMES_ID } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
-import { WorldLayer } from "./world";
+import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, CHAR_FRAMES_PER_ROW } from "./chargen";
@@ -96,6 +96,11 @@ export class OfficeScene extends Phaser.Scene {
   private plantHint!: Phaser.GameObjects.Text;
   // mailboxHint declared above with mailbox fields
 
+  // --- wardrobe (break room) ---
+  private wardrobeTile: Tile = { x: 21, y: 17 };
+  private wardrobeHint!: Phaser.GameObjects.Text;
+  private wardrobeGfx!: Phaser.GameObjects.Graphics;
+
   private trophyTile: Tile = { x: 1, y: 8 };
   private trophyHint!: Phaser.GameObjects.Text;
   private trophyGfx!: Phaser.GameObjects.Graphics;
@@ -131,9 +136,9 @@ export class OfficeScene extends Phaser.Scene {
   // --- expedition workshop (break room) ---
   // Each tile is the center of the multi-tile piece for proximity checks.
   private warTableTile: Tile = { x: 26, y: 15 };   // 2×2 at (25,14)
-  private scrapBinTile: Tile = { x: 27, y: 17 };   // 1×2 at (27,16)
+  private scrapBinTile: Tile = { x: 28, y: 18 };   // 1×2 at (28,17)
   private radioTile: Tile = { x: 28, y: 14 };      // 1×1 at (28,14)
-  private workbenchTile: Tile = { x: 24, y: 17 };  // 2×1 at (23,17)
+  private workbenchTile: Tile = { x: 24, y: 18 };  // 2×1 at (23,18)
   private researchTile: Tile = { x: 23, y: 14 };   // 2×1 at (22,14)
   private warTableHint!: Phaser.GameObjects.Text;
   private scrapBinHint!: Phaser.GameObjects.Text;
@@ -262,6 +267,31 @@ export class OfficeScene extends Phaser.Scene {
     // Variables that cross phase boundaries
     let map: Phaser.Tilemaps.Tilemap;
     let walkable: boolean[][];
+
+    // Pre-compute how many door chunks will be needed so the progress bar
+    // total is stable from the first frame (avoids glitch when phases are
+    // dynamically inserted).
+    // doorX = mapW/2, doorY = mapH + TILE_PX (one tile below office)
+    // offset = { x: 0, y: mapH }, so ty = floor(TILE_PX / TILE_PX) = 1
+    // pcy = floor(1 / CHUNK_SIZE) = 0, so only dy >= 0 chunks are valid
+    const doorChunkCount = (() => {
+      let count = 0;
+      for (let dy = 0; dy <= LOAD_RADIUS; dy++) {
+        for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+          count++;
+        }
+      }
+      return count;
+    })();
+
+    // Pre-allocate chunk phase slots (filled in by the "world layer" phase)
+    const chunkPhases: Array<{ name: string; fn: () => void }> = [];
+    for (let i = 0; i < doorChunkCount; i++) {
+      chunkPhases.push({
+        name: `world chunk ${i + 1}/${doorChunkCount}`,
+        fn: () => {}, // filled in by "world layer" phase
+      });
+    }
 
     const phases: Array<{ name: string; fn: () => void }> = [
       {
@@ -494,6 +524,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawExteriorChimney();
           this.drawHelipad();
           this.drawRedButton();
+          this.drawWardrobe();
           this.boardHint = this.add
             .text(0, 0, "", {
               fontFamily: "'M PLUS Rounded 1c', sans-serif",
@@ -527,6 +558,7 @@ export class OfficeScene extends Phaser.Scene {
           this.mailboxHint = this.makeHint();
           this.platformMailboxHint = this.makeHint();
           this.redButtonHint = this.makeHint();
+          this.wardrobeHint = this.makeHint();
         },
       },
       {
@@ -561,34 +593,29 @@ export class OfficeScene extends Phaser.Scene {
           this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
           this.world.setOfficeGrid(this.grid);
 
-          // Dynamically insert per-chunk loading phases after this phase
+          // Fill in the pre-allocated chunk phase slots with actual chunk data
           const doorChunks = this.world.getDoorChunkList();
-          for (let i = 0; i < doorChunks.length; i++) {
+          for (let i = 0; i < doorChunks.length && i < chunkPhases.length; i++) {
             const c = doorChunks[i];
-            const idx = i + 1;
-            const total = doorChunks.length;
-            phases.splice(phaseIndex + 1 + i, 0, {
-              name: `world chunk ${idx}/${total}`,
-              fn: () => {
-                this.world.loadSingleChunk(c.cx, c.cy);
-              },
-            });
+            chunkPhases[i].fn = () => {
+              this.world.loadSingleChunk(c.cx, c.cy);
+            };
           }
-          // Insert cleanup + VFX warmup after all chunks
-          phases.splice(phaseIndex + 1 + doorChunks.length, 0, {
-            name: "world cleanup & vfx",
-            fn: () => {
-              this.world.finishDoorPreload();
+        },
+      },
+      ...chunkPhases,
+      {
+        name: "world cleanup & vfx",
+        fn: () => {
+          this.world.finishDoorPreload();
 
-              // Warm up the particle system so the first biome ambient doesn't cause a
-              // stutter.  The first ParticleEmitter render compiles WebGL shaders and
-              // allocates GPU buffers.  We create the emitter now and let it render for
-              // a few frames (during the loading screen) before destroying it — the
-              // compiled shader stays cached in Phaser's shader manager.
-              this.world.vfx.startAmbient("meadow");
-              this.time.delayedCall(200, () => this.world.vfx.stopAmbient());
-            },
-          });
+          // Warm up the particle system so the first biome ambient doesn't cause a
+          // stutter.  The first ParticleEmitter render compiles WebGL shaders and
+          // allocates GPU buffers.  We create the emitter now and let it render for
+          // a few frames (during the loading screen) before destroying it — the
+          // compiled shader stays cached in Phaser's shader manager.
+          this.world.vfx.startAmbient("meadow");
+          this.time.delayedCall(200, () => this.world.vfx.stopAmbient());
         },
       },
       {
@@ -675,6 +702,7 @@ export class OfficeScene extends Phaser.Scene {
                 console.log("[scene] store emit but scene not ready — skipping syncAgents");
                 return;
               }
+              console.log("[scene] store emit fired — calling syncAgents. agents in store:", [...this.store.agents.keys()]);
               const theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
               if (theme !== this.theme) {
                 console.log("[scene] theme changed — restarting scene");
@@ -720,16 +748,16 @@ export class OfficeScene extends Phaser.Scene {
     ];
 
     // Process phases one per frame so the loading bar visibly progresses.
-    // totalPhases is recalculated each frame because the "world layer" phase
-    // dynamically splices in per-chunk loading phases.
+    // All phases (including per-chunk slots) are pre-allocated, so the total
+    // is stable from the first frame — no progress bar glitches.
     let phaseIndex = 0;
+    const totalPhases = phases.length;
 
     const processNextPhase = () => {
       if (phaseIndex >= phases.length) return;
 
       const phase = phases[phaseIndex];
-      const total = phases.length;
-      const progress = phaseIndex / total;
+      const progress = phaseIndex / totalPhases;
       updateLoadBar(progress, `Building ${phase.name}…`);
 
       // Run the phase on the next frame so the bar update renders first
@@ -740,7 +768,7 @@ export class OfficeScene extends Phaser.Scene {
           console.error(`[scene] PHASE "${phase.name}" CRASHED:`, err);
         }
         phaseIndex++;
-        updateLoadBar(phaseIndex / phases.length, `Done: ${phase.name}`);
+        updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
         this.time.delayedCall(0, processNextPhase);
       });
     };
@@ -912,6 +940,7 @@ export class OfficeScene extends Phaser.Scene {
       this.vendingTile = { x: 27, y: 2 };
       this.sofaTile = null;
       this.hallOfFameTile = { x: 1, y: 2 };
+      this.wardrobeTile = { x: 21, y: 17 };
       this.filingTiles = [
         { x: 1, y: 3 }, { x: 1, y: 4 }, { x: 1, y: 12 }, { x: 1, y: 13 },
         { x: 20, y: 3 }, { x: 20, y: 12 }, { x: 22, y: 11 },
@@ -919,7 +948,7 @@ export class OfficeScene extends Phaser.Scene {
       ];
       this.plantTiles = [
         { x: 20, y: 17 }, { x: 12, y: 18 },
-        { x: 26, y: 16 }, { x: 27, y: 11 }, { x: 16, y: 18 },
+        { x: 27, y: 11 }, { x: 16, y: 18 },
         { x: 6, y: 18 },
       ];
     } else {
@@ -927,6 +956,7 @@ export class OfficeScene extends Phaser.Scene {
       this.vendingTile = null;
       this.sofaTile = { x: 23, y: 13 };
       this.hallOfFameTile = { x: 1, y: 5 };
+      this.wardrobeTile = { x: 21, y: 17 };
       this.filingTiles = [
         { x: 20, y: 3 },
         { x: 20, y: 4 }, { x: 22, y: 11 },
@@ -934,7 +964,7 @@ export class OfficeScene extends Phaser.Scene {
       ];
       this.plantTiles = [
         { x: 1, y: 9 }, { x: 12, y: 18 }, { x: 20, y: 2 }, { x: 28, y: 7 },
-        { x: 27, y: 13 }, { x: 26, y: 16 },
+        { x: 29, y: 13 },
         { x: 16, y: 18 }, { x: 27, y: 11 }, { x: 6, y: 17 },
       ];
     }
@@ -1071,6 +1101,50 @@ export class OfficeScene extends Phaser.Scene {
       return true;
     }
 
+    // Wardrobe — change appearance
+    const wdPx = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wdPx.x, wdPx.y) < 144) {
+      this.store.toggleWardrobe(true);
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    // ── Expedition Workshop (before plants — plants at (26,16) overlap war table) ──
+    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y) < 144) {
+      this.store.toast("The war table is empty. No expedition being planned.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y) < 144) {
+      this.store.toast("Scrap pool: 0. Not enough for any robot tier.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y) < 144) {
+      this.store.toast("The radio is silent. No robot deployed.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y) < 144) {
+      this.store.toast("The workbench is clear. No robot in production.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
+    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y) < 144) {
+      this.store.toast("Knowledge level: 0. No expedition data yet.");
+      this.world.audio.uiClick();
+      return true;
+    }
+
     // Plants — water for morale boost
     const plantNear = this.nearestTile(this.plantTiles, 144);
     if (plantNear) {
@@ -1119,42 +1193,6 @@ export class OfficeScene extends Phaser.Scene {
 
     // Platform mailboxes are handled in tryPlatformMailboxInteract() which is
     // called earlier in the E-press chain, before server racks.
-
-    // ── Expedition Workshop ──
-    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y) < 144) {
-      this.store.toast("The war table is empty. No expedition being planned.");
-      this.world.audio.uiClick();
-      return true;
-    }
-
-    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y) < 144) {
-      this.store.toast("Scrap pool: 0. Not enough for any robot tier.");
-      this.world.audio.uiClick();
-      return true;
-    }
-
-    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y) < 144) {
-      this.store.toast("The radio is silent. No robot deployed.");
-      this.world.audio.uiClick();
-      return true;
-    }
-
-    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y) < 144) {
-      this.store.toast("The workbench is clear. No robot in production.");
-      this.world.audio.uiClick();
-      return true;
-    }
-
-    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y) < 144) {
-      this.store.toast("Knowledge level: 0. No expedition data yet.");
-      this.world.audio.uiClick();
-      return true;
-    }
 
     // Red Button — EMERGENCY STOP: cease all agent work and assemble by entrance
     const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
@@ -1322,6 +1360,55 @@ export class OfficeScene extends Phaser.Scene {
       this.filingHint.setVisible(false);
     }
 
+    // Wardrobe proximity hint
+    const wdHintPx = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wdHintPx.x, wdHintPx.y) < 144) {
+      this.wardrobeHint.setPosition(wdHintPx.x, wdHintPx.y + 64).setText("E: WARDROBE").setVisible(true);
+    } else {
+      this.wardrobeHint.setVisible(false);
+    }
+
+    // ── Expedition Workshop (before plants — war table overlaps plant at 26,16) ──
+    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+    const wtDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y);
+    if (wtDist < 144) {
+      this.warTableHint.setPosition(wtPx.x, wtPx.y + 64).setText("E: WAR TABLE").setVisible(true);
+    } else {
+      this.warTableHint.setVisible(false);
+    }
+
+    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+    const sbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y);
+    if (sbDist < 144) {
+      this.scrapBinHint.setPosition(sbPx.x, sbPx.y + 64).setText("E: SCRAP BIN").setVisible(true);
+    } else {
+      this.scrapBinHint.setVisible(false);
+    }
+
+    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+    const rdDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y);
+    if (rdDist < 144) {
+      this.radioHint.setPosition(rdPx.x, rdPx.y + 64).setText("E: RADIO").setVisible(true);
+    } else {
+      this.radioHint.setVisible(false);
+    }
+
+    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+    const wbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y);
+    if (wbDist < 144) {
+      this.workbenchHint.setPosition(wbPx.x, wbPx.y + 64).setText("E: WORKBENCH").setVisible(true);
+    } else {
+      this.workbenchHint.setVisible(false);
+    }
+
+    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+    const rsDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y);
+    if (rsDist < 144) {
+      this.researchHint.setPosition(rsPx.x, rsPx.y + 64).setText("E: RESEARCH").setVisible(true);
+    } else {
+      this.researchHint.setVisible(false);
+    }
+
     // Plants — check nearest
     const plantNear = this.nearestTile(this.plantTiles, 144);
     if (plantNear) {
@@ -1376,47 +1463,6 @@ export class OfficeScene extends Phaser.Scene {
         .setVisible(true);
     } else {
       this.redButtonHint.setVisible(false);
-    }
-
-    // ── Expedition Workshop ──
-    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
-    const wtDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y);
-    if (wtDist < 144) {
-      this.warTableHint.setPosition(wtPx.x, wtPx.y + 64).setText("E: WAR TABLE").setVisible(true);
-    } else {
-      this.warTableHint.setVisible(false);
-    }
-
-    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
-    const sbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y);
-    if (sbDist < 144) {
-      this.scrapBinHint.setPosition(sbPx.x, sbPx.y + 64).setText("E: SCRAP BIN").setVisible(true);
-    } else {
-      this.scrapBinHint.setVisible(false);
-    }
-
-    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
-    const rdDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y);
-    if (rdDist < 144) {
-      this.radioHint.setPosition(rdPx.x, rdPx.y + 64).setText("E: RADIO").setVisible(true);
-    } else {
-      this.radioHint.setVisible(false);
-    }
-
-    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
-    const wbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y);
-    if (wbDist < 144) {
-      this.workbenchHint.setPosition(wbPx.x, wbPx.y + 64).setText("E: WORKBENCH").setVisible(true);
-    } else {
-      this.workbenchHint.setVisible(false);
-    }
-
-    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
-    const rsDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y);
-    if (rsDist < 144) {
-      this.researchHint.setPosition(rsPx.x, rsPx.y + 64).setText("E: RESEARCH").setVisible(true);
-    } else {
-      this.researchHint.setVisible(false);
     }
   }
 
@@ -1945,6 +1991,51 @@ export class OfficeScene extends Phaser.Scene {
     g.fillCircle(bx - 4, by - 4, 2);
   }
 
+  /** Draw a wardrobe cabinet in the break room for changing your appearance. */
+  private drawWardrobe(): void {
+    this.wardrobeGfx = this.add.graphics().setDepth(3);
+    const g = this.wardrobeGfx;
+    const bx = this.wardrobeTile.x * TILE_PX;
+    const by = this.wardrobeTile.y * TILE_PX;
+
+    // shadow
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(bx + 32, by + 60, 52, 10);
+
+    // body — dark wood
+    g.fillStyle(0x4a3528, 1);
+    g.fillRoundedRect(bx + 6, by + 4, 52, 56, 4);
+    g.fillStyle(0x5a4232, 1);
+    g.fillRoundedRect(bx + 8, by + 6, 48, 52, 3);
+
+    // left door
+    g.fillStyle(0x6a4a38, 1);
+    g.fillRoundedRect(bx + 10, by + 8, 22, 48, 2);
+    g.fillStyle(0x7a5a48, 1);
+    g.fillRect(bx + 11, by + 9, 20, 6);
+
+    // right door
+    g.fillStyle(0x6a4a38, 1);
+    g.fillRoundedRect(bx + 34, by + 8, 22, 48, 2);
+    g.fillStyle(0x7a5a48, 1);
+    g.fillRect(bx + 35, by + 9, 20, 6);
+
+    // door handles
+    g.fillStyle(0xc0a050, 1);
+    g.fillCircle(bx + 30, by + 32, 2);
+    g.fillCircle(bx + 36, by + 32, 2);
+
+    // top molding
+    g.fillStyle(0x3a2818, 1);
+    g.fillRoundedRect(bx + 4, by + 2, 56, 6, 2);
+
+    // mirror on left door
+    g.fillStyle(0x88aacc, 0.35);
+    g.fillRoundedRect(bx + 12, by + 16, 18, 24, 2);
+    g.fillStyle(0xffffff, 0.15);
+    g.fillRect(bx + 13, by + 17, 16, 3);
+  }
+
   /** Create the helicopter visual as a container and return it.
    *  Layering (bottom to top): landing skids → body → rotor.
    *  The rotor is a separate graphics positioned at (0, -30) so its
@@ -2071,11 +2162,13 @@ export class OfficeScene extends Phaser.Scene {
     const elevX = this.padFrontPx.x;
     const elevY = this.padFrontPx.y;
 
-    const agentKey = `char-${Math.floor(Math.random() * 8)}`;
-    const sprite = this.add
-      .sprite(0, 0, agentKey, 6)
-      .setOrigin(0.5, 1)
-      .setScale(1);
+    // Generate a custom texture from the delivery's appearance so the
+    // cosmetic sprite matches the real NPC that syncAgents() will create.
+    const agentKey = "char-heli-delivery";
+    if (this.heliDelivery?.appearance) {
+      generateCharTexture(this, agentKey, this.heliDelivery.appearance);
+      this.ensureCharAnimations(agentKey);
+    }
     const label = this.add
       .text(0, -108, this.heliDelivery?.name ?? "AGENT", {
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
@@ -2087,6 +2180,11 @@ export class OfficeScene extends Phaser.Scene {
       .setResolution(4)
       .setOrigin(0.5, 1)
       .setScale(0.7);
+
+    const sprite = this.add
+      .sprite(0, 0, agentKey, 6)
+      .setOrigin(0.5, 1)
+      .setScale(1);
 
     const agent = this.add.container(padCx + 30, padCy, [sprite, label]);
     agent.setDepth(-0.3);
@@ -2147,27 +2245,26 @@ export class OfficeScene extends Phaser.Scene {
       duration: 2000,
       ease: "Cubic.inOut",
       onComplete: () => {
-        // agent emerges from elevator
-        if (this.heliAgent) {
+        // agent emerges from elevator — send hire message now so the server
+        // creates the agent and broadcasts it back. syncAgents() will replace
+        // this cosmetic sprite with the real NPC seamlessly.
+        if (this.heliDelivery) {
+          const net = this.game.registry.get("net") as import("../net").Net;
+          net.send({
+            type: "hire",
+            name: this.heliDelivery.name,
+            provider: "cline",
+            model: this.heliDelivery.model,
+            systemPrompt: this.heliDelivery.systemPrompt,
+            role: "worker",
+            appearance: this.heliDelivery.appearance,
+          });
+        }
+        if (this.heliAgent && sprite.active) {
           this.heliAgent.setPosition(exitX, exitY);
           this.heliAgent.setVisible(true);
           this.heliAgent.setDepth(10 + exitY);
-          sprite.play(`${agentKey}-walk-down`);
-
-          // walk to centre of office and idle
-          const finalX = 14 * TILE_PX + 32;
-          const finalY = 8 * TILE_PX + 52;
-          this.tweens.add({
-            targets: this.heliAgent,
-            x: finalX,
-            y: finalY,
-            duration: 1500,
-            ease: "Quad.inOut",
-            onComplete: () => {
-              sprite.play(`${agentKey}-idle-down`);
-              this.heliAgent?.setDepth(10 + finalY);
-            },
-          });
+          sprite.play(`${agentKey}-idle-down`);
         }
         // remove elevator visual
         this.time.delayedCall(600, () => {
@@ -2227,17 +2324,8 @@ export class OfficeScene extends Phaser.Scene {
    *  delayed call (fallback if the server is slow to confirm). */
   private endHelicopter(): void {
     console.log("[heli] endHelicopter called — tearing down cosmetic sprite");
-    if (this.heliAgent) {
-      this.tweens.add({
-        targets: this.heliAgent,
-        alpha: 0,
-        duration: 600,
-        onComplete: () => {
-          this.heliAgent?.destroy();
-          this.heliAgent = null;
-        },
-      });
-    }
+    this.heliAgent?.destroy();
+    this.heliAgent = null;
     this.heliElevatorGfx?.destroy();
     this.heliElevatorGfx = null;
     this.heliActive = false;
@@ -2717,12 +2805,14 @@ export class OfficeScene extends Phaser.Scene {
       if (existing) {
         existing.sync(info);
       } else {
+        console.log(`[syncAgents] NEW agent detected: id=${id} name=${info.name} desk=${info.deskIndex} appearance=${!!info.appearance}`);
         // If the helicopter cinematic is still playing, tear it down — the
         // real NPC replaces the cosmetic sprite immediately.
         if (this.heliActive) this.endHelicopter();
         // Generate custom texture if agent has an appearance
         if (info.appearance) {
           const key = agentTextureKey(info);
+          console.log(`[syncAgents] generating char texture: key=${key}`);
           generateCharTexture(this, key, info.appearance);
           this.ensureCharAnimations(key);
         }
@@ -2731,11 +2821,14 @@ export class OfficeScene extends Phaser.Scene {
           this.seats[info.deskIndex] ??
           this.extraSpots[overflow % Math.max(this.extraSpots.length, 1)] ??
           this.spawnTile;
-        const npc = new AgentNPC(this, this.grid, info, this.doorTile, seat, (clicked) =>
+        // When delivered via helicopter, spawn at the elevator exit (top of
+        // office) instead of the front door.
+        const spawnTile = this.heliActive ? { x: 14, y: 3 } : this.doorTile;
+        const npc = new AgentNPC(this, this.grid, info, spawnTile, seat, (clicked) =>
           this.store.select(clicked),
         );
         this.npcs.set(id, npc);
-        console.log(`[syncAgents] created NPC for ${info.name} (${id}) at desk ${info.deskIndex}`);
+        console.log(`[syncAgents] created NPC for ${info.name} (${id}) at desk ${info.deskIndex} — total NPCs: ${this.npcs.size}`);
       }
     }
     for (const [id, npc] of this.npcs) {
@@ -3075,6 +3168,7 @@ export class OfficeScene extends Phaser.Scene {
       this.mailboxHint.setVisible(false);
       this.platformMailboxHint.setVisible(false);
       this.redButtonHint.setVisible(false);
+      this.wardrobeHint.setVisible(false);
     }
 
     // mailbox: new mail arrives on timer

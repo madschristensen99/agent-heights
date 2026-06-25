@@ -928,6 +928,35 @@ input.invalid {
   height: 108px;
 }
 
+/* --------------------------------------------------- wardrobe modal */
+
+.modal.wardrobe-modal {
+  width: 480px;
+  max-width: 92vw;
+}
+
+.wardrobe-layout {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.wardrobe-builder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.wardrobe-builder .char-builder {
+  width: 280px;
+}
+
+.wardrobe-builder .builder-preview {
+  width: 96px;
+  height: 144px;
+}
+
 kbd {
   font-family: var(--font-body);
   font-size: 11px;
