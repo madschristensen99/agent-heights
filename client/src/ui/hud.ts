@@ -612,6 +612,9 @@ export class Hud {
             idleWander: (document.getElementById("s-wander") as HTMLInputElement).checked,
             theme: (document.getElementById("s-theme") as HTMLSelectElement).value as OfficeTheme,
           },
+          railway: {
+            enabled: (document.getElementById("s-railway") as HTMLInputElement)?.checked ?? false,
+          },
         },
       });
       modal.hidden = true;

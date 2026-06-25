@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
+import { wrapRailwayTools } from "./railway-mcp.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -18,7 +19,7 @@ const agents = new Map<string, Agent>();
 /** Persisted message snapshots keyed by agentId, for restore after restart. */
 const messageStore = new Map<string, unknown[]>();
 
-function makeTools(cwd: string): AgentTool<any, any>[] {
+async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
     const rel = relative(cwd, resolved);
@@ -160,7 +161,16 @@ function makeTools(cwd: string): AgentTool<any, any>[] {
     },
   };
 
-  return [readFilesTool, writeFilesTool, listFilesTool, runCommandsTool, submitTool];
+  const base = [readFilesTool, writeFilesTool, listFilesTool, runCommandsTool, submitTool];
+
+  if (opts?.railway) {
+    const railwayTools = await wrapRailwayTools();
+    if (railwayTools.length > 0) {
+      return [...base, ...railwayTools];
+    }
+  }
+
+  return base;
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
@@ -184,7 +194,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         baseUrl: SWARMS_BASE_URL,
         headers: { "x-api-key": SWARMS_API_KEY },
         systemPrompt: ctx.systemPrompt,
-        tools: makeTools(ctx.cwd),
+        tools: await makeTools(ctx.cwd, { railway: ctx.railway }),
         maxIterations: ctx.settings.cline.maxIterations,
       });
 

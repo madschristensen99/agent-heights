@@ -17,6 +17,8 @@ export interface RunContext {
   sessionId: string | null;
   /** Called with the provider's conversation id so it can be persisted. */
   onSession: (id: string) => void;
+  /** Whether to inject Railway MCP tools (devops agents when railway is enabled). */
+  railway: boolean;
 }
 
 export type ProviderRunner = (

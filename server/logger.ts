@@ -23,7 +23,7 @@ export class SessionLogger {
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(rootDir: string) {
-    const dir = join(rootDir, "ag", "logs");
+    const dir = join(rootDir, "logs");
     mkdirSync(dir, { recursive: true });
     const stamp = this.startedAt.replace(/[:.]/g, "-");
     this.file = join(dir, `${stamp}-${this.sessionId}.json`);

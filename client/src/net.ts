@@ -4,12 +4,19 @@ export class Net {
   private ws: WebSocket | null = null;
   private retryMs = 500;
   private queue: ClientMsg[] = [];
+  private token: string | null = null;
   onMessage: (msg: ServerMsg) => void = () => {};
   onStatus: (connected: boolean) => void = () => {};
 
+  setToken(token: string | null): void {
+    this.token = token;
+  }
+
   connect(): void {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const url = `${proto}://${location.host}`;
+    const url = this.token
+      ? `${proto}://${location.host}/?token=${encodeURIComponent(this.token)}`
+      : `${proto}://${location.host}`;
     const ws = new WebSocket(url);
     this.ws = ws;
 

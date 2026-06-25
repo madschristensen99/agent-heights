@@ -3,14 +3,19 @@ import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize } from "node:path";
 import { readFile, stat } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
 import type { ClientMsg, PlayerInfo, ServerMsg } from "../shared/types.js";
 import { SERVER_PORT } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
-import { SaveFile } from "./persistence.js";
+import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
+import { DbPersistence } from "./db.js";
+import { isSupabaseConfigured, verifyToken, type AuthUser } from "./supabase.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
+
+// ── static file serving ──────────────────────────────────────────────────
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -35,7 +40,6 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
   let urlPath = req.url?.split("?")[0] ?? "/";
   if (urlPath === "/") urlPath = "/index.html";
 
-  // Prevent path traversal
   const filePath = normalize(join(distDir, urlPath));
   if (!filePath.startsWith(distDir)) {
     res.writeHead(403);
@@ -45,16 +49,12 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
 
   try {
     const info = await stat(filePath);
-    if (info.isDirectory()) {
-      // Directory requests fall through to index.html (SPA fallback)
-      throw new Error("is directory");
-    }
+    if (info.isDirectory()) throw new Error("is directory");
     const data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
     res.writeHead(200, { "Content-Type": mime });
     res.end(data);
   } catch {
-    // SPA fallback: serve index.html for any non-file route
     try {
       const indexPath = join(distDir, "index.html");
       const data = await readFile(indexPath);
@@ -67,6 +67,71 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
   }
 }
 
+// ── per-user session management ───────────────────────────────────────────
+
+interface UserSession {
+  user: AuthUser;
+  manager: AgentManager;
+  save: Persistence;
+  session: SessionLogger;
+  player: PlayerInfo | null;
+  clients: Set<WebSocket>;
+  broadcast: (msg: ServerMsg) => void;
+}
+
+const sessions = new Map<string, UserSession>();
+
+async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
+  const existing = sessions.get(user.id);
+  if (existing) return existing;
+
+  const userDir = join(rootDir, "ag", "users", user.id);
+  mkdirSync(userDir, { recursive: true });
+
+  let save: Persistence;
+  let saved: SaveState | null;
+
+  if (isSupabaseConfigured) {
+    const db = new DbPersistence(user.id);
+    save = db;
+    saved = await db.load();
+  } else {
+    const file = new SaveFile(userDir);
+    save = file;
+    saved = file.load();
+  }
+
+  const session = new SessionLogger(userDir);
+  const clients = new Set<WebSocket>();
+  const player = saved?.player ?? null;
+
+  const sess: UserSession = {
+    user,
+    save,
+    session,
+    player,
+    clients,
+    manager: null as unknown as AgentManager,
+    broadcast: () => {},
+  };
+
+  sess.broadcast = (msg: ServerMsg): void => {
+    const data = JSON.stringify(msg);
+    for (const ws of sess.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    }
+  };
+
+  sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved);
+  if (player) sess.manager.bossName = player.name;
+
+  sessions.set(user.id, sess);
+  console.log(`[agent-hq] created session for user ${user.id} (${user.email ?? "no email"})`);
+  return sess;
+}
+
+// ── HTTP + WebSocket server ───────────────────────────────────────────────
+
 const server = createServer((req, res) => {
   serveStatic(req, res).catch(() => {
     res.writeHead(500);
@@ -75,33 +140,38 @@ const server = createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server });
-const clients = new Set<WebSocket>();
 
-const save = new SaveFile(rootDir);
-const saved = save.load();
-let player: PlayerInfo | null = saved?.player ?? null;
+wss.on("connection", async (ws, req) => {
+  let user: AuthUser;
 
-function broadcast(msg: ServerMsg): void {
-  const data = JSON.stringify(msg);
-  for (const ws of clients) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+  if (isSupabaseConfigured) {
+    const url = new URL(req.url ?? "", "http://localhost");
+    const token = url.searchParams.get("token");
+    if (!token) {
+      ws.close(4001, "No auth token provided");
+      return;
+    }
+    const verified = await verifyToken(token);
+    if (!verified) {
+      ws.close(4003, "Invalid or expired token");
+      return;
+    }
+    user = verified;
+  } else {
+    user = { id: "dev", email: null };
   }
-}
 
-const session = new SessionLogger(rootDir);
-const manager = new AgentManager(rootDir, broadcast, session, save, saved);
-if (player) manager.bossName = player.name;
+  const sess = await getOrCreateSession(user);
+  sess.clients.add(ws);
 
-wss.on("connection", (ws) => {
-  clients.add(ws);
-  const snap = manager.snapshot();
+  const snap = sess.manager.snapshot();
   ws.send(
     JSON.stringify({
       type: "snapshot",
       ...snap,
-      player,
-      settings: manager.settings,
-      world: manager.worldState(),
+      player: sess.player,
+      settings: sess.manager.settings,
+      world: sess.manager.worldState(),
     } satisfies ServerMsg),
   );
 
@@ -113,6 +183,7 @@ wss.on("connection", (ws) => {
       return;
     }
     try {
+      const { manager, session: sessLog, save } = sess;
       switch (msg.type) {
         case "setup": {
           const name = String(msg.player?.name ?? "").trim().slice(0, 24);
@@ -120,17 +191,17 @@ wss.on("connection", (ws) => {
           if (!name || !workspace) break;
           const appearance = msg.player?.appearance ?? null;
           const changed =
-            !player || player.name !== name || player.workspace !== workspace;
+            !sess.player || sess.player.name !== name || sess.player.workspace !== workspace;
           if (changed) {
-            player = { name, workspace, appearance };
-            manager.bossName = player.name;
-            session.setPlayer(player);
-            save.setPlayer(player);
-            broadcast({ type: "player", player });
-          } else if (appearance && player && !player.appearance) {
-            player = { name: player.name, workspace: player.workspace, appearance };
-            save.setPlayer(player);
-            broadcast({ type: "player", player });
+            sess.player = { name, workspace, appearance };
+            manager.bossName = name;
+            sessLog.setPlayer(sess.player);
+            save.setPlayer(sess.player);
+            sess.broadcast({ type: "player", player: sess.player });
+          } else if (appearance && sess.player && !sess.player.appearance) {
+            sess.player = { name: sess.player.name, workspace: sess.player.workspace, appearance };
+            save.setPlayer(sess.player);
+            sess.broadcast({ type: "player", player: sess.player });
           }
           break;
         }
@@ -179,16 +250,24 @@ wss.on("connection", (ws) => {
       }
     } catch (err) {
       console.error("[server] error handling message:", err);
-      broadcast({ type: "toast", text: "Server error — check the server logs." });
+      const data = JSON.stringify({ type: "toast", text: "Server error — check the server logs." });
+      if (ws.readyState === WebSocket.OPEN) ws.send(data);
     }
   });
 
-  ws.on("close", () => clients.delete(ws));
-  ws.on("error", () => clients.delete(ws));
+  ws.on("close", () => sess.clients.delete(ws));
+  ws.on("error", () => sess.clients.delete(ws));
 });
+
+// ── start ─────────────────────────────────────────────────────────────────
 
 server.listen(SERVER_PORT, () => {
   console.log(`[agent-hq] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
-  console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (save.json, logs/, workspace/)`);
-  console.log(`[agent-hq] session log: ${session.file}`);
+  if (isSupabaseConfigured) {
+    console.log(`[agent-hq] Supabase auth enabled`);
+  } else {
+    console.log(`[agent-hq] Supabase not configured — running in dev mode (no auth)`);
+    console.log(`[agent-hq]   Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable auth`);
+  }
+  console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
 });

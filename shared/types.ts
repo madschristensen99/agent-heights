@@ -5,7 +5,7 @@ export type Provider = "cline";
 export type AgentStatus = "idle" | "thinking" | "working" | "done" | "error";
 
 /** Workers do tasks; a manager splits a goal into subtasks for the team. */
-export type AgentRole = "worker" | "manager";
+export type AgentRole = "worker" | "manager" | "devops";
 
 /** Number of pre-generated character sprite-sheet variants (char-0..N-1). */
 export const CHAR_VARIANTS = 8;
@@ -187,6 +187,8 @@ export const TILE = {
   TENNIS_RACKET: 31,
   TENNIS_BALL: 32,
   TENNIS_NET: 33,
+  SERVER_RACK: 34,
+  SERVER_SCREEN: 35,
 } as const;
 
 export type CardStatus = "backlog" | "in_progress" | "done";
@@ -233,11 +235,16 @@ export interface GameSettings {
     idleWander: boolean;
     theme: OfficeTheme;
   };
+  railway: {
+    /** Whether Railway MCP tools are available to devops agents. */
+    enabled: boolean;
+  };
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
   cline: { maxIterations: 60, autoApproveCommands: true },
   game: { idleWander: true, theme: "classic" },
+  railway: { enabled: false },
 };
 
 export type ClientMsg =
@@ -279,7 +286,8 @@ export type ServerMsg =
   | { type: "card_removed"; cardId: string }
   | { type: "world"; world: WorldState }
   | { type: "fired_agent"; agent: FiredAgent }
-  | { type: "fired_agent_removed"; agentId: string };
+  | { type: "fired_agent_removed"; agentId: string }
+  | { type: "railway_status"; ok: boolean; message: string };
 
 export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },

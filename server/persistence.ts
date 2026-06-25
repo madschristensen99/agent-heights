@@ -11,12 +11,21 @@ export interface SaveState {
   world?: WorldState;
 }
 
+export interface Persistence {
+  setPlayer(player: PlayerInfo): void;
+  setAgents(agents: AgentInfo[], logs: Record<string, LogEntry[]>): void;
+  setSettings(settings: GameSettings): void;
+  setBoard(board: TaskCard[]): void;
+  setWorld(world: WorldState): void;
+  getWorld(): WorldState;
+}
+
 /**
  * The single save file for the whole game: player, roster, and every agent
  * message live in ag/save.json. The server reloads it on boot, so the office
  * comes back exactly as you left it.
  */
-export class SaveFile {
+export class SaveFile implements Persistence {
   readonly path: string;
   private state: SaveState = { player: null, agents: [], logs: {}, board: [], world: { seed: 0, firedAgents: [] } };
   private timer: ReturnType<typeof setTimeout> | null = null;

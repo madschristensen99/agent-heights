@@ -21,7 +21,7 @@ import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory } from "./providers/cline.js";
 import type { SessionLogger } from "./logger.js";
-import type { SaveFile, SaveState } from "./persistence.js";
+import type { Persistence, SaveState } from "./persistence.js";
 
 const MAX_LOG = 500;
 const DONE_LINGER_MS = 6000;
@@ -41,6 +41,7 @@ const TITLES = [
 
 const MANAGER_TITLE = "The Manager";
 const YUKI_TITLE = "Office Manager";
+const DEVOPS_TITLE = "Railway Operator";
 
 /** Each job title carries a voice that gets baked into the system prompt. */
 const PERSONALITIES: Record<string, string> = {
@@ -68,6 +69,8 @@ const PERSONALITIES: Record<string, string> = {
     "You are an upbeat, organized middle manager. You speak in short encouraging memos and you love delegating.",
   [YUKI_TITLE]:
     "You are Yuki, the office manager. You are warm, organized, and always know what's going on. You greet everyone with a friendly welcome and keep the office running smoothly. You have a calm, caring demeanor and you're always happy to chat.",
+  [DEVOPS_TITLE]:
+    "You are a no-nonsense infrastructure engineer. You think in terms of deployments, environments, and logs. You speak efficiently — status reports, not stories.",
 };
 
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -96,10 +99,10 @@ export class AgentManager {
     rootDir: string,
     private broadcast: (msg: ServerMsg) => void,
     private session: SessionLogger,
-    private save: SaveFile,
+    private save: Persistence,
     saved: SaveState | null,
   ) {
-    this.workspaceRoot = join(rootDir, "ag", "workspace");
+    this.workspaceRoot = join(rootDir, "workspace");
     mkdirSync(this.workspaceRoot, { recursive: true });
 
     // reload the office from the save file
@@ -163,6 +166,9 @@ export class AgentManager {
       game: {
         idleWander: s?.game?.idleWander !== false,
         theme: s?.game?.theme === "lumon" ? "lumon" : "classic",
+      },
+      railway: {
+        enabled: s?.railway?.enabled === true,
       },
     };
     if (announce) {
@@ -245,7 +251,7 @@ export class AgentManager {
     const info: AgentInfo = {
       id: randomUUID().slice(0, 8),
       name: cleanName,
-      title: role === "manager" ? MANAGER_TITLE : pick(TITLES),
+      title: role === "manager" ? MANAGER_TITLE : role === "devops" ? DEVOPS_TITLE : pick(TITLES),
       provider,
       model,
       status: "idle",
@@ -584,12 +590,16 @@ export class AgentManager {
   }
 
   private buildSystemPrompt(rt: AgentRuntime): string {
+    const devopsLine = rt.info.role === "devops"
+      ? "You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. Use them when asked about deployments or infrastructure."
+      : "";
     return [
       `You are ${rt.info.name}, job title "${rt.info.title}", an agent employed in a pixel-art office game called Agent HQ.`,
       PERSONALITIES[rt.info.title] ?? "",
       `Stay in character — let that personality color your replies and summaries (but never at the expense of doing the work well).`,
       `Your boss is ${this.bossName}. This is one ongoing conversation — remember your boss's previous orders and what you did.`,
       `Work only inside your workspace directory. Be effective and concise.`,
+      devopsLine,
       `When you finish, summarize what you did in a few short lines.`,
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
     ].join(" ");
@@ -650,6 +660,7 @@ export class AgentManager {
             this.persist();
           }
         },
+        railway: this.settings.railway.enabled && rt.info.role === "devops",
       });
 
       for await (const ev of events) {
@@ -837,6 +848,7 @@ export class AgentManager {
             this.persist();
           }
         },
+        railway: false,
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;
