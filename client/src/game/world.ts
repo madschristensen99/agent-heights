@@ -625,7 +625,7 @@ class GhostNPC {
         scene.anims.create({ key: `${texKey}-work`, frames: scene.anims.generateFrameNumbers(texKey, { frames: [6, 7] }), frameRate: 2.5, repeat: -1 });
       }
     }
-    this.sprite = scene.add.sprite(0, 0, texKey, 0).setOrigin(0.5, 1).setScale(0.5).setDepth(5);
+    this.sprite = scene.add.sprite(0, 0, texKey, 0).setOrigin(0.5, 1).setScale(1).setDepth(5);
     this.sprite.setTint(0x8888aa);
 
     this.label = scene.add

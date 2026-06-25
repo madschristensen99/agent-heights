@@ -1,6 +1,6 @@
 /**
- * Runtime character sprite generator — draws smooth, anti-aliased characters
- * using Canvas2D primitives at 2x resolution for a modern look.
+ * Runtime character sprite generator — draws pixel-art characters using
+ * raw ImageData manipulation, matching the style of generate-assets.ts.
  */
 import type Phaser from "phaser";
 import {
@@ -8,9 +8,6 @@ import {
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS,
   PANTS_COLORS, ACCESSORIES, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
 } from "../../../shared/types";
-
-/** Resolution multiplier — logical coords are 64×96, rendered at 2x for crisp smooth output. */
-const SHEET_SCALE = 2;
 
 // ------------------------------------------------------------------- palette
 
@@ -52,181 +49,196 @@ export function appearanceToPalette(ap: CharAppearance): CharPalette {
 
 // ------------------------------------------------------------- canvas sheet
 
-class CanvasSheet {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
+class PixelSheet {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
   clip: { x: number; y: number; w: number; h: number } | null = null;
 
-  constructor(
-    public w: number,
-    public h: number,
-  ) {
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = w * SHEET_SCALE;
-    this.canvas.height = h * SHEET_SCALE;
-    this.ctx = this.canvas.getContext("2d")!;
-    this.ctx.scale(SHEET_SCALE, SHEET_SCALE);
-    this.ctx.imageSmoothingEnabled = true;
-    this.ctx.imageSmoothingQuality = "high";
+  constructor(w: number, h: number) {
+    this.width = w;
+    this.height = h;
+    this.data = new Uint8ClampedArray(w * h * 4);
+    for (let i = 3; i < this.data.length; i += 4) this.data[i] = 255;
   }
 
-  private saveClip(): void {
-    if (this.clip) {
-      this.ctx.save();
-      this.ctx.beginPath();
-      this.ctx.rect(this.clip.x, this.clip.y, this.clip.w, this.clip.h);
-      this.ctx.clip();
-    }
-  }
-
-  private restoreClip(): void {
-    if (this.clip) this.ctx.restore();
+  private inClip(x: number, y: number): boolean {
+    if (!this.clip) return true;
+    return x >= this.clip.x && x < this.clip.x + this.clip.w &&
+           y >= this.clip.y && y < this.clip.y + this.clip.h;
   }
 
   set(x: number, y: number, hex: string): void {
     x = Math.round(x);
     y = Math.round(y);
-    this.saveClip();
-    this.ctx.fillStyle = hex;
-    this.ctx.fillRect(x, y, 1, 1);
-    this.restoreClip();
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return;
+    if (!this.inClip(x, y)) return;
+    const i = (y * this.width + x) * 4;
+    const d = this.data;
+    d[i] = parseInt(hex.slice(1, 3), 16);
+    d[i + 1] = parseInt(hex.slice(3, 5), 16);
+    d[i + 2] = parseInt(hex.slice(5, 7), 16);
+    d[i + 3] = 255;
   }
 
   rect(x: number, y: number, w: number, h: number, hex: string): void {
-    this.saveClip();
-    this.ctx.fillStyle = hex;
-    this.ctx.fillRect(x, y, w, h);
-    this.restoreClip();
+    for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) this.set(xx, yy, hex);
   }
 
   flipH(x: number, y: number, w: number, h: number): void {
-    const px = x * SHEET_SCALE;
-    const py = y * SHEET_SCALE;
-    const pw = w * SHEET_SCALE;
-    const ph = h * SHEET_SCALE;
-    const tmp = document.createElement("canvas");
-    tmp.width = pw;
-    tmp.height = ph;
-    const tctx = tmp.getContext("2d")!;
-    tctx.drawImage(this.canvas, px, py, pw, ph, 0, 0, pw, ph);
-    this.ctx.save();
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.clearRect(px, py, pw, ph);
-    this.ctx.scale(-1, 1);
-    this.ctx.drawImage(tmp, -px - pw, py);
-    this.ctx.restore();
+    const d = this.data;
+    for (let yy = y; yy < y + h; yy++) {
+      for (let xx = 0; xx < Math.floor(w / 2); xx++) {
+        const a = (yy * this.width + x + xx) * 4;
+        const b = (yy * this.width + x + w - 1 - xx) * 4;
+        for (let c = 0; c < 4; c++) {
+          const t = d[a + c];
+          d[a + c] = d[b + c];
+          d[b + c] = t;
+        }
+      }
+    }
   }
 
   setAlpha(x: number, y: number, hex: string, a: number): void {
     x = Math.round(x);
     y = Math.round(y);
-    this.saveClip();
-    this.ctx.globalAlpha = a;
-    this.ctx.fillStyle = hex;
-    this.ctx.fillRect(x, y, 1, 1);
-    this.ctx.globalAlpha = 1;
-    this.restoreClip();
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return;
+    if (!this.inClip(x, y)) return;
+    const i = (y * this.width + x) * 4;
+    const d = this.data;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    d[i] = Math.round(d[i] * (1 - a) + r * a);
+    d[i + 1] = Math.round(d[i + 1] * (1 - a) + g * a);
+    d[i + 2] = Math.round(d[i + 2] * (1 - a) + b * a);
   }
 
   fillCircle(cx: number, cy: number, r: number, hex: string): void {
+    cx = Math.round(cx);
+    cy = Math.round(cy);
+    r = Math.round(r);
     if (r <= 0) { this.set(cx, cy, hex); return; }
-    this.saveClip();
-    this.ctx.fillStyle = hex;
-    this.ctx.beginPath();
-    this.ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.restoreClip();
+    for (let y = -r; y <= r; y++) {
+      const w = Math.floor(Math.sqrt(r * r - y * y));
+      this.rect(cx - w, cy + y, w * 2 + 1, 1, hex);
+    }
   }
 
   fillCircleAlpha(cx: number, cy: number, r: number, hex: string, a: number): void {
+    cx = Math.round(cx);
+    cy = Math.round(cy);
+    r = Math.round(r);
     if (r <= 0) { this.setAlpha(cx, cy, hex, a); return; }
-    this.saveClip();
-    this.ctx.globalAlpha = a;
-    this.ctx.fillStyle = hex;
-    this.ctx.beginPath();
-    this.ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.globalAlpha = 1;
-    this.restoreClip();
+    for (let y = -r; y <= r; y++) {
+      const w = Math.floor(Math.sqrt(r * r - y * y));
+      for (let x = -w; x <= w; x++) this.setAlpha(cx + x, cy + y, hex, a);
+    }
   }
 
   fillEllipse(cx: number, cy: number, rx: number, ry: number, hex: string): void {
+    cx = Math.round(cx);
+    cy = Math.round(cy);
+    rx = Math.round(rx);
+    ry = Math.round(ry);
     if (rx <= 0 || ry <= 0) { this.set(cx, cy, hex); return; }
-    this.saveClip();
-    this.ctx.fillStyle = hex;
-    this.ctx.beginPath();
-    this.ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.restoreClip();
+    for (let y = -ry; y <= ry; y++) {
+      const w = Math.floor(rx * Math.sqrt(1 - (y * y) / (ry * ry)));
+      this.rect(cx - w, cy + y, w * 2 + 1, 1, hex);
+    }
   }
 
   line(x0: number, y0: number, x1: number, y1: number, hex: string): void {
-    this.saveClip();
-    this.ctx.strokeStyle = hex;
-    this.ctx.lineWidth = 1;
-    this.ctx.beginPath();
-    this.ctx.moveTo(x0 + 0.5, y0 + 0.5);
-    this.ctx.lineTo(x1 + 0.5, y1 + 0.5);
-    this.ctx.stroke();
-    this.restoreClip();
+    x0 = Math.round(x0); y0 = Math.round(y0);
+    x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    while (true) {
+      this.set(x0, y0, hex);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
   }
 
   lineThick(x0: number, y0: number, x1: number, y1: number, hex: string, thick: number): void {
-    this.saveClip();
-    this.ctx.strokeStyle = hex;
-    this.ctx.lineWidth = thick;
-    this.ctx.lineCap = "round";
-    this.ctx.beginPath();
-    this.ctx.moveTo(x0, y0);
-    this.ctx.lineTo(x1, y1);
-    this.ctx.stroke();
-    this.ctx.lineCap = "butt";
-    this.restoreClip();
+    const half = Math.floor(thick / 2);
+    x0 = Math.round(x0); y0 = Math.round(y0);
+    x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    while (true) {
+      this.rect(x0 - half, y0 - half, thick, thick, hex);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
   }
 
   fillTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, hex: string): void {
-    this.saveClip();
-    this.ctx.fillStyle = hex;
-    this.ctx.beginPath();
-    this.ctx.moveTo(x0, y0);
-    this.ctx.lineTo(x1, y1);
-    this.ctx.lineTo(x2, y2);
-    this.ctx.closePath();
-    this.ctx.fill();
-    this.restoreClip();
+    const pts = [[x0, y0], [x1, y1], [x2, y2]].sort((a, b) => a[1] - b[1]);
+    const [ax, ay] = pts[0], [bx, by] = pts[1], [cx, cy] = pts[2];
+    const totalH = cy - ay;
+    if (totalH === 0) { this.set(ax, ay, hex); return; }
+    for (let y = ay; y <= cy; y++) {
+      const segH = y < by ? by - ay : cy - by;
+      if (segH === 0) continue;
+      const t1 = (y - ay) / totalH;
+      let t2: number;
+      if (y < by) {
+        t2 = (y - ay) / (by - ay || 1);
+      } else {
+        t2 = (y - by) / (cy - by || 1);
+      }
+      const lx = Math.round(ax + (cx - ax) * t1);
+      const rx2 = y < by
+        ? Math.round(ax + (bx - ax) * t2)
+        : Math.round(bx + (cx - bx) * t2);
+      const lo = Math.min(lx, rx2);
+      const hi = Math.max(lx, rx2);
+      this.rect(lo, y, hi - lo + 1, 1, hex);
+    }
   }
 
   fillRoundedRect(x: number, y: number, w: number, h: number, r: number, hex: string): void {
-    r = Math.min(r, w / 2, h / 2);
-    this.saveClip();
-    this.ctx.fillStyle = hex;
-    this.ctx.beginPath();
-    this.ctx.moveTo(x + r, y);
-    this.ctx.lineTo(x + w - r, y);
-    this.ctx.arcTo(x + w, y, x + w, y + r, r);
-    this.ctx.lineTo(x + w, y + h - r);
-    this.ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    this.ctx.lineTo(x + r, y + h);
-    this.ctx.arcTo(x, y + h, x, y + h - r, r);
-    this.ctx.lineTo(x, y + r);
-    this.ctx.arcTo(x, y, x + r, y, r);
-    this.ctx.closePath();
-    this.ctx.fill();
-    this.restoreClip();
+    r = Math.min(r, Math.floor(w / 2), Math.floor(h / 2));
+    this.rect(x + r, y, w - 2 * r, h, hex);
+    this.rect(x, y + r, w, h - 2 * r, hex);
+    this.fillCircle(x + r, y + r, r, hex);
+    this.fillCircle(x + w - r - 1, y + r, r, hex);
+    this.fillCircle(x + r, y + h - r - 1, r, hex);
+    this.fillCircle(x + w - r - 1, y + h - r - 1, r, hex);
   }
 
   blurEdges(x: number, y: number, w: number, h: number, hex: string, a: number): void {
-    this.saveClip();
-    this.ctx.globalAlpha = a;
-    this.ctx.strokeStyle = hex;
-    this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    this.ctx.globalAlpha = 1;
-    this.restoreClip();
+    for (let xx = x; xx < x + w; xx++) {
+      this.setAlpha(xx, y, hex, a);
+      this.setAlpha(xx, y + h - 1, hex, a);
+    }
+    for (let yy = y; yy < y + h; yy++) {
+      this.setAlpha(x, yy, hex, a);
+      this.setAlpha(x + w - 1, yy, hex, a);
+    }
   }
 
   toCanvas(): HTMLCanvasElement {
-    return this.canvas;
+    const canvas = document.createElement("canvas");
+    canvas.width = this.width;
+    canvas.height = this.height;
+    const ctx = canvas.getContext("2d")!;
+    const imageData = ctx.createImageData(this.width, this.height);
+    imageData.data.set(this.data);
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
   }
 }
 
@@ -240,7 +252,7 @@ const OUTLINE = "#2e2640";
 type Dir = "down" | "left" | "right" | "up";
 const DIRS: Dir[] = ["down", "left", "right", "up"];
 
-function drawChar(s: CanvasSheet, ox: number, oy: number, pal: CharPalette, dir: Dir, pose: number): void {
+function drawChar(s: PixelSheet, ox: number, oy: number, pal: CharPalette, dir: Dir, pose: number): void {
   const mirror = dir === "left";
   const d: Dir = mirror ? "right" : dir;
 
@@ -1008,9 +1020,9 @@ function drawChar(s: CanvasSheet, ox: number, oy: number, pal: CharPalette, dir:
   if (mirror) s.flipH(ox, oy, CW, CH);
 }
 
-function buildCharSheet(pal: CharPalette): CanvasSheet {
+function buildCharSheet(pal: CharPalette): PixelSheet {
   const cols = 8;
-  const s = new CanvasSheet(CW * cols, CH * DIRS.length);
+  const s = new PixelSheet(CW * cols, CH * DIRS.length);
   DIRS.forEach((dir, row) => {
     for (let pose = 0; pose < cols; pose++) {
       drawChar(s, pose * CW, row * CH, pal, dir, pose);
@@ -1021,8 +1033,8 @@ function buildCharSheet(pal: CharPalette): CanvasSheet {
 
 // --------------------------------------------------------- public API
 
-export const CHAR_FRAME_W = CW * SHEET_SCALE;
-export const CHAR_FRAME_H = CH * SHEET_SCALE;
+export const CHAR_FRAME_W = CW;
+export const CHAR_FRAME_H = CH;
 export const CHAR_FRAMES_PER_ROW = 8;
 
 /**
@@ -1055,14 +1067,14 @@ export function generateCharTexture(scene: Phaser.Scene, key: string, ap: CharAp
  */
 export function generateCharPreviewDataURL(ap: CharAppearance, scale = 3): string {
   const pal = appearanceToPalette(ap);
-  const s = new CanvasSheet(CW, CH);
+  const s = new PixelSheet(CW, CH);
   drawChar(s, 0, 0, pal, "down", 6); // idle pose
 
   const canvas = document.createElement("canvas");
   canvas.width = CHAR_FRAME_W * scale;
   canvas.height = CHAR_FRAME_H * scale;
   const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingEnabled = false;
 
   const srcCanvas = s.toCanvas();
   ctx.drawImage(srcCanvas, 0, 0, CHAR_FRAME_W, CHAR_FRAME_H, 0, 0, CHAR_FRAME_W * scale, CHAR_FRAME_H * scale);
@@ -1076,11 +1088,12 @@ export function generateCharSheetDataURL(ap: CharAppearance, scale = 1): string 
   const pal = appearanceToPalette(ap);
   const sheet = buildCharSheet(pal);
   if (scale === 1) return sheet.toCanvas().toDataURL();
+  const srcCanvas = sheet.toCanvas();
   const canvas = document.createElement("canvas");
-  canvas.width = sheet.canvas.width * scale;
-  canvas.height = sheet.canvas.height * scale;
+  canvas.width = srcCanvas.width * scale;
+  canvas.height = srcCanvas.height * scale;
   const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(sheet.toCanvas(), 0, 0, sheet.canvas.width, sheet.canvas.height, 0, 0, sheet.canvas.width * scale, sheet.canvas.height * scale);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(srcCanvas, 0, 0, srcCanvas.width, srcCanvas.height, 0, 0, srcCanvas.width * scale, srcCanvas.height * scale);
   return canvas.toDataURL();
 }

@@ -2557,6 +2557,25 @@ const CLASSIC: MapTheme = {
     W(21, 14, TILE.WALL_TOP);
     W(21, 15, TILE.WALL_FACE);
 
+    // --- Mail room (bottom-left, x=1-10, y=13-17) ---
+    // East wall with opening at y=15 (entrance from lobby)
+    W(11, 13, TILE.WALL_TOP);
+    W(11, 14, TILE.WALL_FACE);
+    W(11, 16, TILE.WALL_FACE);
+    W(11, 17, TILE.WALL_TOP);
+    // North wall (along y=12 — reuse the existing wall at y=12 area)
+    // The lobby tile floor already covers this area; the wall at x=1-10, y=12
+    // is the boundary between work area and mail room
+    for (let x = 1; x <= 10; x++) W(x, 12, TILE.WALL_TOP);
+    // Re-open the passage from the work area to the lobby at x=14-15 (the aisle)
+    // by carving back the wall tiles we just placed at the aisle position
+    G(14, 12, TILE.CARPET_A);
+    G(15, 12, TILE.CARPET_A);
+    // Mail room floor — distinct tile to set it apart from lobby
+    for (let y = 13; y <= 17; y++) {
+      for (let x = 1; x <= 10; x++) G(x, y, (x + y) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
+    }
+
     // --- Yuki's office (right side, between break room and meeting corner) ---
     // Floor
     for (let y = 8; y <= 11; y++) {
@@ -2575,20 +2594,14 @@ const CLASSIC: MapTheme = {
     W(21, 13, TILE.WALL_TOP);
 
     // --- furniture ---
-    // Bookshelves along the west wall
-    F(1, 3, TILE.SHELF_T);
-    F(1, 4, TILE.SHELF_B);
     // Filing cabinets
-    F(1, 6, TILE.FILING);
-    F(1, 7, TILE.FILING);
     F(20, 3, TILE.FILING);
     F(20, 4, TILE.FILING);
     // Plants scattered organically
-    F(1, 17, TILE.PLANT);
+    F(1, 9, TILE.PLANT);
     F(20, 2, TILE.PLANT);
     F(28, 7, TILE.PLANT);
     F(27, 13, TILE.PLANT);
-    F(11, 8, TILE.PLANT);
     // Break room
     F(22, 2, TILE.COUNTER);
     F(23, 2, TILE.COFFEE);
@@ -2603,17 +2616,25 @@ const CLASSIC: MapTheme = {
     F(26, 16, TILE.PLANT);
     // Lobby clutter
     F(19, 17, TILE.TRASH);
-    F(5, 17, TILE.PLANT);
     // Yuki's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
-    // Server room (bottom-left corner) — tall racks along the wall
+    // Server room (inside mail room, bottom-left corner) — tall racks along the wall
     F(2, 15, TILE.SERVER_RACK);
     F(2, 16, TILE.SERVER_RACK);
     F(3, 15, TILE.SERVER_RACK);
     F(3, 16, TILE.SERVER_RACK);
     F(4, 15, TILE.SERVER_SCREEN);
     F(4, 16, TILE.SERVER_SCREEN);
+    // Mail room — Hermes agent desk (facing south, chair below)
+    F(8, 14, TILE.DESK_L);
+    F(9, 14, TILE.DESK_R);
+    F(8, 15, TILE.CHAIR);
+    // Mail room — filing cabinets for archived messages
+    F(10, 16, TILE.FILING);
+    F(10, 17, TILE.FILING);
+    // Mail room — plant for decor
+    F(6, 17, TILE.PLANT);
   },
 };
 
@@ -2681,6 +2702,22 @@ const LUMON: MapTheme = {
     W(21, 15, TILE.WALL_TOP);
     W(21, 16, TILE.WALL_FACE);
 
+    // --- Mail room (bottom-left, x=1-10, y=14-18) ---
+    // East wall with opening at y=16 (entrance from lobby)
+    W(11, 14, TILE.WALL_TOP);
+    W(11, 15, TILE.WALL_FACE);
+    W(11, 17, TILE.WALL_FACE);
+    W(11, 18, TILE.WALL_TOP);
+    // North wall (along y=13 — boundary between work area and mail room)
+    for (let x = 1; x <= 10; x++) W(x, 13, TILE.WALL_TOP);
+    // Re-open the passage from the work area to the lobby at x=14-15 (the aisle)
+    G(14, 13, TILE.CARPET_B);
+    G(15, 13, TILE.CARPET_B);
+    // Mail room floor — distinct tile to set it apart from lobby
+    for (let y = 14; y <= 18; y++) {
+      for (let x = 1; x <= 10; x++) G(x, y, (x + y) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
+    }
+
     // --- Yuki's office (right side, between break room and meeting corner) ---
     // Floor
     for (let y = 8; y <= 11; y++) {
@@ -2716,19 +2753,26 @@ const LUMON: MapTheme = {
 
     // --- sparse decor ---
     F(20, 17, TILE.PLANT);
-    F(5, 17, TILE.PLANT);
-    F(11, 9, TILE.PLANT);
     F(26, 16, TILE.PLANT);
     // Yuki's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
-    // Server room (bottom-left corner) — tall racks along the wall
+    // Server room (inside mail room, bottom-left corner) — tall racks along the wall
     F(2, 15, TILE.SERVER_RACK);
     F(2, 16, TILE.SERVER_RACK);
     F(3, 15, TILE.SERVER_RACK);
     F(3, 16, TILE.SERVER_RACK);
     F(4, 15, TILE.SERVER_SCREEN);
     F(4, 16, TILE.SERVER_SCREEN);
+    // Mail room — Hermes agent desk (facing south, chair below)
+    F(8, 15, TILE.DESK_L);
+    F(9, 15, TILE.DESK_R);
+    F(8, 16, TILE.CHAIR);
+    // Mail room — filing cabinets for archived messages
+    F(10, 17, TILE.FILING);
+    F(10, 18, TILE.FILING);
+    // Mail room — plant for decor
+    F(6, 18, TILE.PLANT);
   },
 };
 
@@ -3415,11 +3459,11 @@ lumonTileset.preview(join(PREVIEWS, "tileset-lumon.png"), 2);
 
 CHAR_PALETTES.forEach((pal, i) => {
   const sheet = buildCharSheet(pal);
-  sheet.saveScaled(join(ASSETS, "characters", `char-${i}.png`));
+  sheet.save(join(ASSETS, "characters", `char-${i}.png`));
   if (i === 0) sheet.preview(join(PREVIEWS, "char-0.png"), 6);
 });
-buildCharSheet(BOSS_PALETTE).saveScaled(join(ASSETS, "characters", "boss.png"));
-buildCharSheet(YUKI_PALETTE).saveScaled(join(ASSETS, "characters", "char-yuki.png"));
+buildCharSheet(BOSS_PALETTE).save(join(ASSETS, "characters", "boss.png"));
+buildCharSheet(YUKI_PALETTE).save(join(ASSETS, "characters", "char-yuki.png"));
 
 const worldTileset = buildWorldTileset();
 worldTileset.save(join(ASSETS, "tilesets", "world.png"));

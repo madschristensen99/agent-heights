@@ -96,7 +96,7 @@ export class AgentNPC {
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
     this.sprite = scene.add.sprite(0, 0, agentTextureKey(info), 0)
       .setOrigin(0.5, 1)
-      .setScale(0.5);
+      .setScale(1);
     this.nameBg = scene.add.graphics();
     this.label = scene.add
       .text(0, -108, info.name, {
@@ -456,7 +456,7 @@ export class YukiNPC {
 
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
-    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(0.5);
+    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(1);
     this.nameBg = scene.add.graphics();
     this.label = scene.add
       .text(0, -108, "Yuki", {

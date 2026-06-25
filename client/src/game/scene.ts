@@ -13,6 +13,26 @@ import { achievements, ACHIEVEMENTS } from "./achievements";
 
 const PLAYER_SPEED = 380;
 
+interface PlatformMailbox {
+  platform: string;
+  color: number;
+  colorLight: number;
+  colorDark: number;
+  tile: Tile;
+  flagUp: boolean;
+  pendingCount: number;
+  lastMessage: string;
+}
+
+const PLATFORM_CONFIG = [
+  { platform: "Slack",    color: 0x611f69, tile: { x: 2, y: 13 } },
+  { platform: "Discord",  color: 0x5865f2, tile: { x: 3, y: 13 } },
+  { platform: "Telegram", color: 0x0088cc, tile: { x: 5, y: 13 } },
+  { platform: "WhatsApp", color: 0x25d366, tile: { x: 6, y: 13 } },
+  { platform: "Signal",   color: 0x3a76f0, tile: { x: 8, y: 13 } },
+  { platform: "Email",    color: 0xea4335, tile: { x: 9, y: 13 } },
+];
+
 export class OfficeScene extends Phaser.Scene {
   private store!: Store;
   private grid!: Grid;
@@ -58,6 +78,11 @@ export class OfficeScene extends Phaser.Scene {
   private mailboxNextMail = 0; // timestamp when next mail arrives
   private mailboxPx = { x: 0, y: 0 };
 
+  // --- platform mailboxes (mail room) ---
+  private platformMailboxGfx!: Phaser.GameObjects.Graphics;
+  private platformMailboxHint!: Phaser.GameObjects.Text;
+  private platformMailboxes: PlatformMailbox[] = [];
+
   private fridgeHint!: Phaser.GameObjects.Text;
   private coolerHint!: Phaser.GameObjects.Text;
   private clockHint!: Phaser.GameObjects.Text;
@@ -67,13 +92,13 @@ export class OfficeScene extends Phaser.Scene {
   private plantHint!: Phaser.GameObjects.Text;
   // mailboxHint declared above with mailbox fields
 
-  private trophyTile: Tile = { x: 2, y: 2 };
+  private trophyTile: Tile = { x: 1, y: 8 };
   private trophyHint!: Phaser.GameObjects.Text;
   private trophyGfx!: Phaser.GameObjects.Graphics;
   private trophyAchCount = -1;
   private sceneStart = 0;
 
-  private hallOfFameTile: Tile = { x: 10, y: 19 };
+  private hallOfFameTile: Tile = { x: 1, y: 5 };
   private hallOfFameHint!: Phaser.GameObjects.Text;
   private hallOfFameGfx!: Phaser.GameObjects.Graphics;
   private chimneyGfx!: Phaser.GameObjects.Graphics;
@@ -337,7 +362,7 @@ export class OfficeScene extends Phaser.Scene {
     const feet = feetOf(this.spawnTile);
     this.player = this.add.sprite(feet.x, feet.y, this.playerTexKey, 0)
       .setOrigin(0.5, 1)
-      .setScale(0.5);
+      .setScale(1);
     // no physics body — we do manual movement for smoothness
 
     this.playerNameBg = this.add.graphics();
@@ -394,10 +419,26 @@ export class OfficeScene extends Phaser.Scene {
     this.hallOfFameHint = this.makeHint();
     this.serverRackHint = this.makeHint();
     this.mailboxHint = this.makeHint();
+    this.platformMailboxHint = this.makeHint();
     this.redButtonHint = this.makeHint();
 
     // Set interactable tile positions based on theme
     this.setupInteractables();
+
+    // Initialize platform mailboxes in the mail room
+    const mailRoomY = this.theme === "lumon" ? 14 : 13;
+    this.platformMailboxes = PLATFORM_CONFIG.map((cfg) => ({
+      platform: cfg.platform,
+      color: cfg.color,
+      colorLight: Phaser.Display.Color.IntegerToColor(cfg.color).lighten(20).color,
+      colorDark: Phaser.Display.Color.IntegerToColor(cfg.color).darken(20).color,
+      tile: { x: cfg.tile.x, y: mailRoomY },
+      flagUp: false,
+      pendingCount: 0,
+      lastMessage: "",
+    }));
+    this.platformMailboxGfx = this.add.graphics().setDepth(6);
+    this.drawPlatformMailboxes();
 
     this.sceneStart = this.time.now;
 
@@ -505,7 +546,7 @@ export class OfficeScene extends Phaser.Scene {
         const prevKey = this.playerTexKey;
         this.refreshBossTexture();
         if (prevKey !== this.playerTexKey && this.player) {
-          this.player.setTexture(this.playerTexKey, 0).setScale(0.5);
+          this.player.setTexture(this.playerTexKey, 0).setScale(1);
         }
         this.syncAgents();
         this.world.syncGhosts();
@@ -691,28 +732,31 @@ export class OfficeScene extends Phaser.Scene {
       this.clockTile = { x: 14, y: 1 };
       this.vendingTile = { x: 27, y: 2 };
       this.sofaTile = null;
-      this.hallOfFameTile = { x: 10, y: 19 };
+      this.hallOfFameTile = { x: 1, y: 2 };
       this.filingTiles = [
         { x: 1, y: 3 }, { x: 1, y: 4 }, { x: 1, y: 12 }, { x: 1, y: 13 },
         { x: 20, y: 3 }, { x: 20, y: 12 }, { x: 22, y: 11 },
+        { x: 10, y: 17 }, { x: 10, y: 18 },
       ];
       this.plantTiles = [
-        { x: 20, y: 17 }, { x: 12, y: 18 }, { x: 11, y: 9 },
+        { x: 20, y: 17 }, { x: 12, y: 18 },
         { x: 26, y: 16 }, { x: 27, y: 11 }, { x: 16, y: 18 },
+        { x: 6, y: 18 },
       ];
     } else {
       this.clockTile = { x: 6, y: 1 };
       this.vendingTile = null;
       this.sofaTile = { x: 23, y: 13 };
-      this.hallOfFameTile = { x: 10, y: 19 };
+      this.hallOfFameTile = { x: 1, y: 5 };
       this.filingTiles = [
-        { x: 1, y: 6 }, { x: 1, y: 7 }, { x: 20, y: 3 },
+        { x: 20, y: 3 },
         { x: 20, y: 4 }, { x: 22, y: 11 },
+        { x: 10, y: 16 }, { x: 10, y: 17 },
       ];
       this.plantTiles = [
-        { x: 12, y: 18 }, { x: 20, y: 2 }, { x: 28, y: 7 },
-        { x: 27, y: 13 }, { x: 11, y: 8 }, { x: 26, y: 16 },
-        { x: 16, y: 18 }, { x: 27, y: 11 },
+        { x: 1, y: 9 }, { x: 12, y: 18 }, { x: 20, y: 2 }, { x: 28, y: 7 },
+        { x: 27, y: 13 }, { x: 26, y: 16 },
+        { x: 16, y: 18 }, { x: 27, y: 11 }, { x: 6, y: 17 },
       ];
     }
   }
@@ -731,6 +775,33 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     return best;
+  }
+
+  /** Try interacting with a platform mailbox. Returns true if an interaction fired. */
+  private tryPlatformMailboxInteract(): boolean {
+    let nearest: PlatformMailbox | null = null;
+    let nearestDist = Infinity;
+    for (const mb of this.platformMailboxes) {
+      const mbPx = { x: mb.tile.x * TILE_PX + TILE_PX / 2, y: mb.tile.y * TILE_PX + TILE_PX / 2 };
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, mbPx.x, mbPx.y);
+      if (d < 100 && d < nearestDist) {
+        nearest = mb;
+        nearestDist = d;
+      }
+    }
+    if (!nearest) return false;
+    const mbPx = { x: nearest.tile.x * TILE_PX + TILE_PX / 2, y: nearest.tile.y * TILE_PX + TILE_PX / 2 };
+    if (nearest.flagUp && nearest.lastMessage) {
+      this.store.toast(`[${nearest.platform}] ${nearest.lastMessage}`);
+      nearest.flagUp = false;
+      nearest.pendingCount = 0;
+      this.drawPlatformMailboxes();
+      this.world.vfx.sparkBurst(mbPx.x, mbPx.y, nearest.color, 8, 50);
+      this.world.audio.uiClick();
+    } else {
+      this.store.toast(`[${nearest.platform}] No new messages.`);
+    }
+    return true;
   }
 
   /** Try interacting with any new office object. Returns true if an interaction fired. */
@@ -866,6 +937,9 @@ export class OfficeScene extends Phaser.Scene {
       }
       return true;
     }
+
+    // Platform mailboxes are handled in tryPlatformMailboxInteract() which is
+    // called earlier in the E-press chain, before server racks.
 
     // Red Button — EMERGENCY STOP: cease all agent work and assemble by entrance
     const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
@@ -1056,6 +1130,27 @@ export class OfficeScene extends Phaser.Scene {
       this.mailboxHint.setVisible(false);
     }
 
+    // Platform mailboxes (mail room)
+    let nearestPm: PlatformMailbox | null = null;
+    let nearestPmDist = Infinity;
+    for (const pm of this.platformMailboxes) {
+      const pmPx = { x: pm.tile.x * TILE_PX + TILE_PX / 2, y: pm.tile.y * TILE_PX + TILE_PX / 2 };
+      const pmDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, pmPx.x, pmPx.y);
+      if (pmDist < 100 && pmDist < nearestPmDist) {
+        nearestPm = pm;
+        nearestPmDist = pmDist;
+      }
+    }
+    if (nearestPm) {
+      const pmPx = { x: nearestPm.tile.x * TILE_PX + TILE_PX / 2, y: nearestPm.tile.y * TILE_PX + TILE_PX / 2 };
+      this.platformMailboxHint
+        .setPosition(pmPx.x, pmPx.y + 64)
+        .setText(nearestPm.flagUp ? `E: CHECK ${nearestPm.platform.toUpperCase()}` : "E: EMPTY")
+        .setVisible(true);
+    } else {
+      this.platformMailboxHint.setVisible(false);
+    }
+
     // Red Button
     const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
     const rbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y);
@@ -1131,6 +1226,71 @@ export class OfficeScene extends Phaser.Scene {
       g.fillRect(mbX + 19, mbY + 13, 8, 2);
       g.fillStyle(0x8a2020, 1);
       g.fillCircle(mbX + 19, mbY + 3, 2);
+    }
+  }
+
+  /** Draw the 6 platform mailboxes along the north wall of the mail room. */
+  private drawPlatformMailboxes(): void {
+    const g = this.platformMailboxGfx;
+    g.clear();
+    for (const mb of this.platformMailboxes) {
+      const px = mb.tile.x * TILE_PX + TILE_PX / 2;
+      const py = mb.tile.y * TILE_PX + TILE_PX / 2;
+      // ground shadow
+      g.fillStyle(0x000000, 0.2);
+      g.fillEllipse(px, py + 28, 28, 6);
+      // post
+      g.fillStyle(0x6a4a2a, 1);
+      g.fillRect(px - 3, py + 12, 6, 18);
+      g.fillStyle(0x4a3a1a, 1);
+      g.fillRect(px + 1, py + 12, 2, 18);
+      // mailbox body — platform-colored, rounded top
+      const w = 28, h = 26;
+      g.fillStyle(mb.colorDark, 1);
+      g.fillRoundedRect(px - w / 2, py - h / 2 - 2, w, h, 5);
+      g.fillStyle(mb.color, 1);
+      g.fillRoundedRect(px - w / 2 + 1, py - h / 2 - 1, w - 2, h - 2, 4);
+      // top highlight
+      g.fillStyle(mb.colorLight, 1);
+      g.fillRoundedRect(px - w / 2 + 2, py - h / 2, w - 4, 6, 3);
+      g.fillStyle(0xffffff, 0.1);
+      g.fillRoundedRect(px - w / 2 + 3, py - h / 2 + 1, w - 6, 2, 1);
+      // mail slot
+      g.fillStyle(0x0a0a14, 1);
+      g.fillRoundedRect(px - 9, py - 4, 18, 4, 2);
+      // platform label plate
+      g.fillStyle(0xe8e4d0, 1);
+      g.fillRoundedRect(px - 10, py + 2, 20, 7, 1);
+      g.fillStyle(0x33373d, 1);
+      const label = mb.platform.slice(0, 4);
+      for (let i = 0; i < label.length; i++) {
+        g.fillRect(px - 8 + i * 4, py + 4, 3, 1);
+        g.fillRect(px - 8 + i * 4, py + 6, 2, 1);
+      }
+      // red flag — up when mail pending, down when empty
+      if (mb.flagUp) {
+        g.fillStyle(0xc83030, 1);
+        g.fillRect(px + 12, py - 12, 2, 12);
+        g.fillRect(px + 12, py - 12, 8, 3);
+        g.fillStyle(0xe84848, 1);
+        g.fillRect(px + 13, py - 11, 1, 10);
+        g.fillRect(px + 13, py - 11, 6, 1);
+        // pending count badge
+        if (mb.pendingCount > 0) {
+          g.fillStyle(0xff4444, 1);
+          g.fillCircle(px + 16, py - 14, 5);
+          g.fillStyle(0xffffff, 1);
+          g.fillRect(px + 14, py - 15, 4, 1);
+          g.fillRect(px + 15, py - 16, 2, 3);
+        }
+      } else {
+        g.fillStyle(0xc83030, 1);
+        g.fillRect(px + 12, py - 2, 2, 10);
+        g.fillRect(px + 12, py + 6, 8, 3);
+        g.fillStyle(0xe84848, 1);
+        g.fillRect(px + 13, py - 1, 1, 8);
+        g.fillRect(px + 13, py + 7, 6, 1);
+      }
     }
   }
 
@@ -1659,7 +1819,7 @@ export class OfficeScene extends Phaser.Scene {
     const sprite = this.add
       .sprite(0, 0, agentKey, 6)
       .setOrigin(0.5, 1)
-      .setScale(0.5);
+      .setScale(1);
     const label = this.add
       .text(0, -108, this.heliDelivery?.name ?? "AGENT", {
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
@@ -1901,7 +2061,7 @@ export class OfficeScene extends Phaser.Scene {
     g.clear();
 
     const tx = this.trophyTile.x * TILE_PX + 32;
-    const ty = this.trophyTile.y * TILE_PX + 8;
+    const ty = this.trophyTile.y * TILE_PX - 56;
     const cw = 96;  // case width
     const ch = 120; // case height
     const cols = 6;
@@ -1983,13 +2143,12 @@ export class OfficeScene extends Phaser.Scene {
     this.hallOfFameGfx = this.add.graphics().setDepth(3);
     const g = this.hallOfFameGfx;
 
-    // Board hangs on the south wall (bottom wall), landscape orientation,
-    // centered horizontally on the hallOfFameTile column, just above the wall.
-    const bx = this.hallOfFameTile.x * TILE_PX + 32;
-    const wallTop = this.hallOfFameTile.y * TILE_PX; // top edge of south wall tile
-    const by = wallTop - 10; // hangs just above the wall
-    const bw = 84;
-    const bh = 48;
+    // Board hangs on the west wall, portrait orientation,
+    // centered vertically on the hallOfFameTile row, just right of the wall.
+    const bx = this.hallOfFameTile.x * TILE_PX + 10; // just off the west wall
+    const by = this.hallOfFameTile.y * TILE_PX + 32;
+    const bw = 48;
+    const bh = 84;
 
     // Drop shadow
     g.fillStyle(0x000000, 0.25);
@@ -2013,66 +2172,67 @@ export class OfficeScene extends Phaser.Scene {
       g.fillCircle(dx, dy, 0.8 + Math.random() * 0.8);
     }
 
-    // Title strip at left
+    // Title strip at top
     g.fillStyle(0x2a3848, 0.9);
-    g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 3, 12, bh - 6, 2);
+    g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 3, bw - 6, 12, 2);
 
     // Gold star
     g.fillStyle(0xffd700, 1);
     g.fillCircle(bx - bw / 2 + 9, by - bh / 2 + 9, 2.5);
 
-    // Mounting nails at top corners
+    // Mounting nails at left side (attached to wall)
     g.fillStyle(0x888890, 1);
-    g.fillCircle(bx - bw / 2 + 4, by - bh / 2 - 6, 1.5);
-    g.fillCircle(bx + bw / 2 - 4, by - bh / 2 - 6, 1.5);
+    g.fillCircle(bx - bw / 2 - 6, by - bh / 2 + 4, 1.5);
+    g.fillCircle(bx - bw / 2 - 6, by + bh / 2 - 4, 1.5);
     g.fillStyle(0xcccccc, 0.6);
-    g.fillCircle(bx - bw / 2 + 3.5, by - bh / 2 - 6.5, 0.7);
-    g.fillCircle(bx + bw / 2 - 4.5, by - bh / 2 - 6.5, 0.7);
+    g.fillCircle(bx - bw / 2 - 6.5, by - bh / 2 + 3.5, 0.7);
+    g.fillCircle(bx - bw / 2 - 6.5, by + bh / 2 - 4.5, 0.7);
 
-    // Pinned photos — 3 small polaroid cards arranged horizontally
+    // Pinned photos — 3 small polaroid cards arranged vertically
     const photoColors = [0xc44a4a, 0x3a7cb5, 0x3d9152];
     const photoSpacing = 24;
-    const photoStartX = bx - bw / 2 + 22;
+    const photoStartY = by - bh / 2 + 20;
     for (let i = 0; i < photoColors.length; i++) {
-      const px = photoStartX + i * photoSpacing;
+      const py = photoStartY + i * photoSpacing;
       g.fillStyle(0xf8f6f0, 1);
-      g.fillRoundedRect(px - 8, by - 9, 18, 22, 1);
+      g.fillRoundedRect(bx - 9, py - 8, 18, 22, 1);
       g.fillStyle(photoColors[i], 1);
-      g.fillRect(px - 6, by - 7, 14, 12);
+      g.fillRect(bx - 7, py - 6, 14, 12);
       g.fillStyle(0xd44a4a, 1);
-      g.fillCircle(px, by - 10, 2);
+      g.fillCircle(bx, py - 10, 2);
       g.fillStyle(0xffffff, 0.5);
-      g.fillCircle(px - 0.8, by - 10.8, 0.8);
+      g.fillCircle(bx - 0.8, py - 10.8, 0.8);
     }
   }
 
-  /** Draw the industrial chimney on the exterior left wall, extending from roof to server room. */
+  /** Draw the industrial chimney on the exterior left wall, extending above the roof. */
   private drawExteriorChimney(): void {
     this.chimneyGfx = this.add.graphics().setDepth(1);
     const g = this.chimneyGfx;
 
-    // Chimney sits outside the left wall (x < 64), extending from y=0 (roof) to y=14*64 (server room)
-    const wallFace = TILE_PX; // left wall outer edge at x=64
-    const chimW = 28;          // chimney width
+    // Chimney sits outside the left wall (x < 64), extending above the roof down to server room
+    const wallFace = TILE_PX;        // left wall outer edge at x=64
+    const chimW = 28;                 // chimney width at the shaft
     const chimX = wallFace - chimW - 6; // 6px gap from wall
-    const roofY = 0;           // top of building
-    const baseY = 14 * TILE_PX; // server room level
+    const roofY = 0;                  // top of building / roof line
+    const chimTopY = -52;             // chimney extends 52px above the roof
+    const baseY = 14 * TILE_PX;       // server room level
 
     // Brick body — tapered from base to top
     const baseW = chimW + 8;
     const topW = chimW;
 
-    // Drop shadow on the wall
+    // Drop shadow on the wall (only the part at/below roof level)
     g.fillStyle(0x000000, 0.2);
     g.fillRect(chimX + 4, roofY, chimW, baseY - roofY);
 
-    // Main brick body
+    // Main brick body — from baseY up to chimTopY (above the roof)
     g.fillStyle(0x4a3328, 1);
     g.beginPath();
     g.moveTo(chimX - 4, baseY);
     g.lineTo(chimX + baseW - 4, baseY);
-    g.lineTo(chimX + baseW - 4 - 4, roofY + 8);
-    g.lineTo(chimX + 4, roofY + 8);
+    g.lineTo(chimX + baseW - 4 - 4, chimTopY + 8);
+    g.lineTo(chimX + 4, chimTopY + 8);
     g.closePath();
     g.fillPath();
 
@@ -2081,8 +2241,8 @@ export class OfficeScene extends Phaser.Scene {
     g.beginPath();
     g.moveTo(chimX - 4, baseY);
     g.lineTo(chimX + 6, baseY);
-    g.lineTo(chimX + 6 - 2, roofY + 8);
-    g.lineTo(chimX + 4, roofY + 8);
+    g.lineTo(chimX + 6 - 2, chimTopY + 8);
+    g.lineTo(chimX + 4, chimTopY + 8);
     g.closePath();
     g.fillPath();
 
@@ -2091,15 +2251,15 @@ export class OfficeScene extends Phaser.Scene {
     g.beginPath();
     g.moveTo(chimX + baseW - 10, baseY);
     g.lineTo(chimX + baseW - 4, baseY);
-    g.lineTo(chimX + baseW - 4 - 4, roofY + 8);
-    g.lineTo(chimX + baseW - 10 - 3, roofY + 8);
+    g.lineTo(chimX + baseW - 4 - 4, chimTopY + 8);
+    g.lineTo(chimX + baseW - 10 - 3, chimTopY + 8);
     g.closePath();
     g.fillPath();
 
     // Brick mortar lines — horizontal
     g.lineStyle(1, 0x2a1a12, 0.5);
-    for (let y = roofY + 16; y < baseY; y += 12) {
-      const t = (y - roofY) / (baseY - roofY);
+    for (let y = chimTopY + 16; y < baseY; y += 12) {
+      const t = (y - chimTopY) / (baseY - chimTopY);
       const w = baseW - 4 - t * 8;
       const xL = chimX - 4 + (baseW - 4 - w) / 2;
       g.beginPath();
@@ -2109,9 +2269,9 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Brick mortar lines — vertical (staggered)
-    for (let row = 0; row < Math.floor((baseY - roofY) / 12); row++) {
-      const y = roofY + 16 + row * 12;
-      const t = (y - roofY) / (baseY - roofY);
+    for (let row = 0; row < Math.floor((baseY - chimTopY) / 12); row++) {
+      const y = chimTopY + 16 + row * 12;
+      const t = (y - chimTopY) / (baseY - chimTopY);
       const w = baseW - 4 - t * 8;
       const xL = chimX - 4 + (baseW - 4 - w) / 2;
       const offset = row % 2 === 0 ? 0 : w / 6;
@@ -2126,24 +2286,69 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // Top rim — wide cap
-    const rimW = topW + 6;
-    const rimX = chimX + (baseW - 4 - rimW) / 2 - 2;
-    g.fillStyle(0x2a1e14, 1);
-    g.fillRect(rimX, roofY, rimW, 8);
-    g.lineStyle(1, 0x5a4030, 0.5);
-    g.strokeRect(rimX, roofY, rimW, 8);
+    // --- Chimney cap (the part above the roof that makes it look like a chimney) ---
 
-    // Dark opening at top (where smoke comes out)
-    g.fillStyle(0x0a0608, 0.95);
-    g.fillRect(rimX + 4, roofY + 1, rimW - 8, 5);
+    // Corbelled brick course just above roof line (wider than shaft)
+    const corbelW = topW + 10;
+    const corbelX = chimX + (baseW - 4 - corbelW) / 2 - 3;
+    g.fillStyle(0x4a3328, 1);
+    g.fillRect(corbelX, roofY - 6, corbelW, 6);
+    // corbel highlight/shadow
+    g.fillStyle(0x5a4030, 1);
+    g.fillRect(corbelX, roofY - 6, corbelW, 2);
+    g.fillStyle(0x3a2820, 1);
+    g.fillRect(corbelX, roofY - 1, corbelW, 1);
 
-    // Heat shimmer hint
-    g.fillStyle(0xff6600, 0.08);
-    g.fillRect(rimX + 5, roofY + 1, rimW - 10, 3);
+    // Concrete cap — wide slab on top of the shaft
+    const capW = topW + 12;
+    const capH = 10;
+    const capX = chimX + (baseW - 4 - capW) / 2 - 4;
+    const capY = chimTopY;
+    g.fillStyle(0x6a6058, 1);
+    g.fillRect(capX, capY, capW, capH);
+    // cap bevel — top highlight
+    g.fillStyle(0x8a8078, 1);
+    g.fillRect(capX, capY, capW, 2);
+    // cap bevel — bottom shadow
+    g.fillStyle(0x4a4038, 1);
+    g.fillRect(capX, capY + capH - 2, capW, 2);
+    // cap left/right edges
+    g.fillStyle(0x5a5048, 1);
+    g.fillRect(capX, capY, 2, capH);
+    g.fillRect(capX + capW - 2, capY, 2, capH);
 
-    // Store the smoke position at the top of the chimney
-    this.chimneyPositions = [{ x: rimX + rimW / 2, y: roofY - 4 }];
+    // Brick shaft between cap and corbel (the part above the roof, below the cap)
+    const shaftTopY = capY + capH;
+    const shaftBotY = roofY - 6;
+    g.fillStyle(0x4a3328, 1);
+    g.fillRect(chimX - 2, shaftTopY, topW + 4, shaftBotY - shaftTopY);
+    // shaft highlight on left
+    g.fillStyle(0x5a4030, 1);
+    g.fillRect(chimX - 2, shaftTopY, 4, shaftBotY - shaftTopY);
+    // shaft shadow on right
+    g.fillStyle(0x3a2820, 1);
+    g.fillRect(chimX + topW - 2, shaftTopY, 4, shaftBotY - shaftTopY);
+    // a couple mortar lines on the exposed shaft
+    g.lineStyle(1, 0x2a1a12, 0.5);
+    for (let y = shaftTopY + 8; y < shaftBotY; y += 10) {
+      g.beginPath();
+      g.moveTo(chimX - 2, y);
+      g.lineTo(chimX + topW + 2, y);
+      g.strokePath();
+    }
+
+    // Dark opening at top (where smoke comes out) — recessed into the cap
+    const openW = topW - 4;
+    const openX = chimX + (topW - openW) / 2;
+    g.fillStyle(0x0a0608, 1);
+    g.fillRect(openX, capY + 2, openW, 5);
+
+    // Inner heat shimmer
+    g.fillStyle(0xff6600, 0.12);
+    g.fillRect(openX + 1, capY + 2, openW - 2, 3);
+
+    // Store the smoke position above the chimney cap
+    this.chimneyPositions = [{ x: openX + openW / 2, y: capY - 2 }];
   }
 
   /** Create walk/idle/work animations for a custom character texture key. */
@@ -2422,13 +2627,17 @@ export class OfficeScene extends Phaser.Scene {
       // trophy case check — before other interactables
       const trophyPx = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
       const trophyDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx.x, trophyPx.y);
-      // hall of fame bulletin board — south wall, between entrance and servers
-      const hofPx = { x: this.hallOfFameTile.x * TILE_PX + 32, y: this.hallOfFameTile.y * TILE_PX - 10 };
+      // hall of fame bulletin board — west wall, above trophy case
+      const hofPx = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
       const hofDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx.x, hofPx.y);
       if (trophyDist < 120) {
         this.store.toggleAchievements();
       } else if (hofDist < 120) {
         this.store.toggleHallOfFame();
+      } else
+      // platform mailboxes — check before server racks since they overlap in the mail room
+      if (this.tryPlatformMailboxInteract()) {
+        // handled
       } else
       // server rack — query Railway data
       if (this.nearestTile(this.serverRackTiles, 150)) {
@@ -2584,6 +2793,7 @@ export class OfficeScene extends Phaser.Scene {
       this.filingHint.setVisible(false);
       this.plantHint.setVisible(false);
       this.mailboxHint.setVisible(false);
+      this.platformMailboxHint.setVisible(false);
       this.redButtonHint.setVisible(false);
     }
 
@@ -2638,12 +2848,12 @@ export class OfficeScene extends Phaser.Scene {
         this.trophyHint.setVisible(false);
       }
 
-      // hall of fame bulletin board — proximity hint (player approaches from above)
-      const hofPx2 = { x: this.hallOfFameTile.x * TILE_PX + 32, y: this.hallOfFameTile.y * TILE_PX - 10 };
+      // hall of fame bulletin board — proximity hint (player approaches from the right)
+      const hofPx2 = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
       const hofDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx2.x, hofPx2.y);
       if (hofDist2 < 120 && !this.store.hallOfFameOpen) {
         this.hallOfFameHint
-          .setPosition(hofPx2.x, hofPx2.y - 48)
+          .setPosition(hofPx2.x + 48, hofPx2.y)
           .setText("E: HALL OF FAME")
           .setVisible(true);
       } else {

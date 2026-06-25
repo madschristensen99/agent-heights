@@ -705,7 +705,7 @@ input.invalid {
 .sprite-preview {
   width: 96px;
   height: 144px;
-  background-size: 768px 576px;
+  background-size: 100% 100%;
   background-position: 0 0;
   background-repeat: no-repeat;
   image-rendering: pixelated;
