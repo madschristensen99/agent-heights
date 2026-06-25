@@ -20,4 +20,4 @@ EXPOSE 3001
 ENV PORT=3001
 ENV NODE_ENV=production
 
-CMD ["pnpm", "start"]
+CMD ["pnpm", "exec", "tsx", "server/index.ts"]
