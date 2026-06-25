@@ -8,6 +8,8 @@ import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID,
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
 import { generateCharPreviewDataURL } from "../game/chargen";
+import { MarketplaceBrowser } from "./marketplace";
+import type { MarketplaceAgent } from "../../../shared/marketplace";
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -156,6 +158,7 @@ export class Hud {
       <div class="topbar">
         <span class="logo">AGENT&nbsp;HQ</span>
         <span id="workspace-name"></span>
+        <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <span id="conn" class="conn">●</span>
       </div>
@@ -216,6 +219,10 @@ export class Hud {
 
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
     document.getElementById("settings-btn")!.addEventListener("click", () => this.openSettings());
+
+    const mqBrowser = new MarketplaceBrowser();
+    mqBrowser.onHireAgent = (agent: MarketplaceAgent) => this.hireFromMarketplace(agent);
+    document.getElementById("marketplace-btn")!.addEventListener("click", () => mqBrowser.toggle());
     this.bindDetail();
     this.bindFeed();
     this.bindBoard();
@@ -515,6 +522,11 @@ export class Hud {
             <input type="checkbox" id="s-auto-cmd" ${s.cline.autoApproveCommands ? "checked" : ""} />
             <span>AUTO-APPROVE SHELL COMMANDS (unattended execution)</span>
           </label>
+          <div class="sec">RAILWAY</div>
+          <label class="chk">
+            <input type="checkbox" id="s-railway" ${s.railway?.enabled ? "checked" : ""} />
+            <span>ENABLE RAILWAY MCP TOOLS (devops agents get deploy, logs, variables, domains)</span>
+          </label>
         </div>
         <div class="tabpanel" data-panel="game" hidden>
           <label>OFFICE THEME
@@ -699,6 +711,7 @@ export class Hud {
               <select id="h-role">
                 <option value="worker">Worker — does the tasks</option>
                 <option value="manager">Manager — splits big goals across the team</option>
+                <option value="devops">DevOps — manages Railway deployments & infrastructure</option>
               </select>
             </label>
             <label>MODEL <select id="h-model">${modelOptions()}</select></label>
@@ -734,7 +747,24 @@ export class Hud {
     });
   }
 
-  // ----------------------------------------------------------------- render
+  private hireFromMarketplace(agent: MarketplaceAgent): void {
+    const systemPrompt = [
+      agent.description ? agent.description : "",
+      agent.use_cases.length > 0 ? `\nUse cases:\n${agent.use_cases.map((u) => `- ${u}`).join("\n")}` : "",
+      agent.requirements.length > 0 ? `\nRequirements:\n${agent.requirements.map((r) => `- ${r}`).join("\n")}` : "",
+      agent.language ? `\nLanguage: ${agent.language}` : "",
+    ].filter(Boolean).join("\n").slice(0, 4000);
+
+    this.net.send({
+      type: "hire",
+      name: agent.name.slice(0, 24) || "Agent",
+      provider: "cline",
+      model: "claude-sonnet-4-20250514",
+      systemPrompt,
+      role: "worker",
+    });
+    this.toast(`${agent.name} hired from the marketplace!`);
+  }
 
   private scheduleRender(): void {
     if (this.renderQueued) return;

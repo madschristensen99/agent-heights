@@ -11,6 +11,8 @@ import { SessionLogger } from "./logger.js";
 import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
 import { DbPersistence } from "./db.js";
 import { isSupabaseConfigured, verifyToken, type AuthUser } from "./supabase.js";
+import { handleMarketplaceRequest } from "./marketplace.js";
+import { stopRailwayMCP, checkRailwayStatus } from "./providers/railway-mcp.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
@@ -133,9 +135,13 @@ async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
 const server = createServer((req, res) => {
-  serveStatic(req, res).catch(() => {
-    res.writeHead(500);
-    res.end("Internal server error");
+  handleMarketplaceRequest(req, res).then((handled) => {
+    if (!handled) {
+      serveStatic(req, res).catch(() => {
+        res.writeHead(500);
+        res.end("Internal server error");
+      });
+    }
   });
 });
 
@@ -207,6 +213,11 @@ wss.on("connection", async (ws, req) => {
         }
         case "set_settings":
           manager.setSettings(msg.settings);
+          if (msg.settings.railway?.enabled) {
+            checkRailwayStatus().then((status) => {
+              sess.broadcast({ type: "railway_status", ok: status.ok, message: status.message });
+            });
+          }
           break;
         case "hire":
           manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance);
@@ -270,4 +281,13 @@ server.listen(SERVER_PORT, () => {
     console.log(`[agent-hq]   Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable auth`);
   }
   console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
+});
+
+process.on("SIGINT", () => {
+  stopRailwayMCP();
+  process.exit(0);
+});
+process.on("SIGTERM", () => {
+  stopRailwayMCP();
+  process.exit(0);
 });

@@ -189,6 +189,7 @@ export const TILE = {
   TENNIS_NET: 33,
   SERVER_RACK: 34,
   SERVER_SCREEN: 35,
+  CHIMNEY: 36,
 } as const;
 
 export type CardStatus = "backlog" | "in_progress" | "done";

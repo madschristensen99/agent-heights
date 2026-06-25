@@ -34,6 +34,7 @@ export class Store {
   boardOpen = false;
   achievementsOpen = false;
   hallOfFameOpen = false;
+  railwayStatus: { ok: boolean; message: string } | null = null;
 
   private listeners = new Set<Listener>();
   private toastListeners = new Set<(text: string) => void>();
@@ -137,6 +138,7 @@ export class Store {
           if (count >= 8) achievements.unlock("full_office");
           if (count >= 9) achievements.unlock("overflow");
           if (msg.agent.role === "manager") achievements.unlock("hire_manager");
+          if (msg.agent.role === "devops") achievements.unlock("hire_devops");
           achievements.addToSet("models", msg.agent.model);
           if (achievements.getSetSize("models") >= 3) achievements.unlock("both_providers");
           achievements.addToSet("models", msg.agent.model);
@@ -211,6 +213,10 @@ export class Store {
         break;
       case "huddle":
         for (const fn of this.huddleListeners) fn(msg.agentIds);
+        return;
+      case "railway_status":
+        this.railwayStatus = { ok: msg.ok, message: msg.message };
+        this.toast(msg.message);
         return;
     }
     this.emit();

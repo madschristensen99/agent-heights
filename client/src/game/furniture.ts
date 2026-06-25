@@ -1442,6 +1442,89 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean 
   ctx.fillText("SYNC", cx, s * 0.54);
 }
 
+/* ---------- server room furniture ---------- */
+
+function drawServerRack(ctx: CanvasRenderingContext2D, s: number): void {
+  // dark metal cabinet body
+  const bodyGrad = linearGrad(ctx, s * 0.1, 0, s * 0.9, 0, [
+    [0, shade(0x2a2a35, 10)],
+    [0.5, shade(0x1a1a22, 0)],
+    [1, shade(0x0a0a12, -10)],
+  ]);
+  ctx.fillStyle = bodyGrad;
+  roundRect(ctx, s * 0.1, s * 0.05, s * 0.8, s * 0.9, 3);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x3a3a45, 0.6);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // server units (1U strips)
+  const unitH = s * 0.085;
+  const startY = s * 0.1;
+  for (let i = 0; i < 8; i++) {
+    const y = startY + i * unitH;
+    // unit background
+    ctx.fillStyle = hexRGBA(0x12121a, 0.9);
+    ctx.fillRect(s * 0.14, y, s * 0.72, unitH - 2);
+    // vent slots
+    ctx.fillStyle = hexRGBA(0x08080e, 0.8);
+    for (let j = 0; j < 4; j++) {
+      ctx.fillRect(s * 0.18 + j * s * 0.14, y + 2, s * 0.08, 1.5);
+    }
+    // LED indicators (alternating colors)
+    const ledColors = [0x44ff44, 0x44ddff, 0xffaa44, 0x44ff44, 0xff4444, 0x44ddff, 0x44ff44, 0xffaa44];
+    ctx.beginPath();
+    ctx.arc(s * 0.82, y + unitH * 0.4, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = hexRGBA(ledColors[i % ledColors.length], 0.8);
+    ctx.fill();
+  }
+
+  // top border highlight
+  ctx.fillStyle = hexRGBA(0x4a4a55, 0.3);
+  ctx.fillRect(s * 0.1, s * 0.05, s * 0.8, 1);
+}
+
+function drawServerScreen(ctx: CanvasRenderingContext2D, s: number): void {
+  const cx = s / 2;
+  // mounting arm
+  ctx.fillStyle = hexRGBA(0x2a2a30, 0.6);
+  ctx.fillRect(cx - 2, s * 0.4, 4, s * 0.5);
+
+  // screen bezel
+  const bezelGrad = linearGrad(ctx, 0, s * 0.05, 0, s * 0.45, [
+    [0, shade(0x2a2a35, 5)],
+    [0.5, shade(0x1a1a22, 0)],
+    [1, shade(0x0a0a12, -10)],
+  ]);
+  ctx.fillStyle = bezelGrad;
+  roundRect(ctx, s * 0.08, s * 0.05, s * 0.84, s * 0.4, 3);
+  ctx.fill();
+
+  // screen — dark with terminal green text
+  ctx.fillStyle = hexRGBA(0x0a0a0e, 0.95);
+  roundRect(ctx, s * 0.11, s * 0.08, s * 0.78, s * 0.34, 2);
+  ctx.fill();
+
+  // terminal-style log lines
+  const logColors = [0x44ff66, 0x44ddaa, 0x66ff88, 0x44aaff, 0x44ff66];
+  for (let i = 0; i < 5; i++) {
+    const ly = s * 0.1 + i * s * 0.055;
+    ctx.fillStyle = hexRGBA(logColors[i % logColors.length], 0.5);
+    ctx.fillRect(s * 0.14, ly, s * (0.1 + (i % 3) * 0.15), 2);
+  }
+
+  // scanline glow
+  ctx.fillStyle = hexRGBA(0x44ff66, 0.04);
+  roundRect(ctx, s * 0.11, s * 0.08, s * 0.78, s * 0.34, 2);
+  ctx.fill();
+
+  // power LED
+  ctx.beginPath();
+  ctx.arc(s * 0.86, s * 0.42, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = hexRGBA(0x44ff44, 0.8);
+  ctx.fill();
+}
+
 /* ---------- furniture type registry ---------- */
 
 const FURNITURE_TYPES: FurnitureType[] = [
@@ -1462,6 +1545,8 @@ const FURNITURE_TYPES: FurnitureType[] = [
   { tileIds: [31], draw: drawLargePlant },
   { tileIds: [32], draw: drawToaster },
   { tileIds: [33], draw: drawOfficeChairLeft },
+  { tileIds: [34], draw: drawServerRack },
+  { tileIds: [35], draw: drawServerScreen },
 ];
 
 export const CHAIR_TEX_DOWN = "chair-down";

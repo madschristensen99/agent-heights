@@ -28,6 +28,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "hundred_tasks", name: "Centurion", desc: "Complete 100 total tasks.", tier: "Agent Mastery", icon: "💯" },
   { id: "star_employee", name: "Employee of the Month", desc: "A single agent completes 25 tasks.", tier: "Agent Mastery", icon: "⭐" },
   { id: "hire_manager", name: "Middle Management", desc: "Hire a manager-role agent.", tier: "Agent Mastery", icon: "👔" },
+  { id: "hire_devops", name: "Infrastructure as Code", desc: "Hire a DevOps-role agent.", tier: "Agent Mastery", icon: "🚂" },
   { id: "chat_with_agent", name: "Watercooler Wisdom", desc: "Chat (not task) with an agent.", tier: "Agent Mastery", icon: "💬" },
   { id: "clear_memory", name: "Clean Slate", desc: "Clear an agent's chat/memory.", tier: "Agent Mastery", icon: "🧠" },
   { id: "both_providers", name: "Model Variety", desc: "Hire agents using 3+ different models.", tier: "Agent Mastery", icon: "🤝" },
