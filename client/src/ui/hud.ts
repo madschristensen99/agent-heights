@@ -10,6 +10,7 @@ import { achievements, ACHIEVEMENTS } from "../game/achievements";
 import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
+import { YukiChat } from "./yuki-chat";
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -159,6 +160,7 @@ export class Hud {
         <span class="logo">AGENT&nbsp;HQ</span>
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
+        <button class="btn mini" id="yuki-btn">雪 YUKI</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <span id="conn" class="conn">●</span>
       </div>
@@ -223,6 +225,9 @@ export class Hud {
     const mqBrowser = new MarketplaceBrowser();
     mqBrowser.onHireAgent = (agent: MarketplaceAgent) => this.hireFromMarketplace(agent);
     document.getElementById("marketplace-btn")!.addEventListener("click", () => mqBrowser.toggle());
+
+    const yukiChat = new YukiChat();
+    document.getElementById("yuki-btn")!.addEventListener("click", () => yukiChat.toggle());
     this.bindDetail();
     this.bindFeed();
     this.bindBoard();

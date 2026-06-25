@@ -1525,6 +1525,95 @@ function drawServerScreen(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fill();
 }
 
+/* ---------- industrial chimney ---------- */
+
+function drawChimney(ctx: CanvasRenderingContext2D, s: number): void {
+
+  // brick base — wide industrial footing
+  const baseGrad = linearGrad(ctx, s * 0.05, s * 0.6, s * 0.95, s * 0.95, [
+    [0, shade(0x5a4030, 10)],
+    [0.5, shade(0x4a3328, 0)],
+    [1, shade(0x3a2820, -10)],
+  ]);
+  ctx.fillStyle = baseGrad;
+  roundRect(ctx, s * 0.05, s * 0.6, s * 0.9, s * 0.35, 2);
+  ctx.fill();
+
+  // brick texture lines
+  ctx.strokeStyle = hexRGBA(0x2a1a12, 0.4);
+  ctx.lineWidth = 1;
+  for (let row = 0; row < 4; row++) {
+    const y = s * 0.64 + row * s * 0.08;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.07, y);
+    ctx.lineTo(s * 0.93, y);
+    ctx.stroke();
+    // staggered vertical mortar lines
+    const offset = row % 2 === 0 ? 0 : s * 0.08;
+    for (let bx = 0; bx < 6; bx++) {
+      const x = s * 0.1 + offset + bx * s * 0.14;
+      if (x < s * 0.93) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + s * 0.08);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // chimney stack — tapered tall column
+  const stackGrad = linearGrad(ctx, s * 0.28, 0, s * 0.72, 0, [
+    [0, shade(0x4a3828, 15)],
+    [0.5, shade(0x3a2a1e, 0)],
+    [1, shade(0x2a1e14, -10)],
+  ]);
+  ctx.fillStyle = stackGrad;
+  ctx.beginPath();
+  ctx.moveTo(s * 0.28, s * 0.62);
+  ctx.lineTo(s * 0.72, s * 0.62);
+  ctx.lineTo(s * 0.66, s * 0.02);
+  ctx.lineTo(s * 0.34, s * 0.02);
+  ctx.closePath();
+  ctx.fill();
+
+  // vertical brick lines on stack
+  ctx.strokeStyle = hexRGBA(0x2a1a12, 0.3);
+  for (let row = 0; row < 8; row++) {
+    const y = s * 0.06 + row * s * 0.07;
+    const taperL = s * 0.34 + (row / 8) * s * 0.06;
+    const taperR = s * 0.66 - (row / 8) * s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(taperL, y);
+    ctx.lineTo(taperR, y);
+    ctx.stroke();
+    const offset = row % 2 === 0 ? 0 : s * 0.04;
+    for (let bx = 0; bx < 4; bx++) {
+      const x = taperL + offset + bx * (taperR - taperL) / 4;
+      if (x < taperR) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + s * 0.07);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // rim at top of stack
+  ctx.fillStyle = shade(0x2a1e14, -5);
+  ctx.fillRect(s * 0.32, s * 0.0, s * 0.36, s * 0.04);
+  ctx.strokeStyle = hexRGBA(0x5a4030, 0.4);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(s * 0.32, s * 0.0, s * 0.36, s * 0.04);
+
+  // dark opening at top (where smoke comes out)
+  ctx.fillStyle = hexRGBA(0x0a0608, 0.9);
+  ctx.fillRect(s * 0.35, s * 0.0, s * 0.3, s * 0.025);
+
+  // subtle heat shimmer hint at opening
+  ctx.fillStyle = hexRGBA(0xff6600, 0.06);
+  ctx.fillRect(s * 0.36, s * 0.0, s * 0.28, s * 0.02);
+}
+
 /* ---------- furniture type registry ---------- */
 
 const FURNITURE_TYPES: FurnitureType[] = [
@@ -1547,6 +1636,7 @@ const FURNITURE_TYPES: FurnitureType[] = [
   { tileIds: [33], draw: drawOfficeChairLeft },
   { tileIds: [34], draw: drawServerRack },
   { tileIds: [35], draw: drawServerScreen },
+  { tileIds: [36], draw: drawChimney },
 ];
 
 export const CHAIR_TEX_DOWN = "chair-down";

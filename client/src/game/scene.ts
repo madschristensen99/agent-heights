@@ -90,6 +90,8 @@ export class OfficeScene extends Phaser.Scene {
 
   private world!: WorldLayer;
   private theme: "classic" | "lumon" = "classic";
+  /** Pixel positions of chimney tiles — for smoke when devops agents work. */
+  private chimneyPositions: { x: number; y: number }[] = [];
   /** Store listeners are registered once; they survive scene restarts. */
   private wired = false;
   private ready = false;
@@ -208,6 +210,17 @@ export class OfficeScene extends Phaser.Scene {
 
     // Overlay enhanced procedural furniture on top of the tile-based furniture layer
     upgradeFurniture(this, furniture);
+
+    // Scan for chimney tiles to position smoke emitters
+    this.chimneyPositions = [];
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        const t = furniture.getTileAt(x, y);
+        if (t && (t.index === 36 || t.properties?.chimney)) {
+          this.chimneyPositions.push({ x: x * TILE_PX + TILE_PX / 2, y: y * TILE_PX + 4 });
+        }
+      }
+    }
 
     // walkability grid for NPC pathfinding
     const walkable: boolean[][] = [];
@@ -488,6 +501,7 @@ export class OfficeScene extends Phaser.Scene {
         }
         this.syncAgents();
         this.world.syncGhosts();
+        this.updateChimneySmoke();
       });
       this.store.onHuddle((agentIds) => {
         if (this.ready) this.startHuddle(agentIds);
@@ -2157,6 +2171,19 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** Toggle chimney smoke based on whether any devops agent is actively working. */
+  private updateChimneySmoke(): void {
+    if (this.chimneyPositions.length === 0) return;
+    const devopsWorking = [...this.store.agents.values()].some(
+      (a) => a.role === "devops" && (a.status === "working" || a.status === "thinking"),
+    );
+    if (devopsWorking) {
+      this.world.vfx.startSmoke(this.chimneyPositions);
+    } else {
+      this.world.vfx.stopSmoke();
+    }
+  }
+
   update(time: number, dt: number): void {
     // cap dt so a lag spike (chunk gen, GC, tab switch) doesn't cause a
     // teleport-length step that tunnels through collision
@@ -2341,6 +2368,7 @@ export class OfficeScene extends Phaser.Scene {
     // --- world layer: chunks, ghosts, compass, recruit ---
     this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
     this.world.update(time, dt, this.player.x, this.player.y, ePressed, vx, vy);
+    this.world.vfx.updateSmoke();
 
     // Q: teleport back to office when outside
     if (outside && Phaser.Input.Keyboard.JustDown(this.keys.Q)) {

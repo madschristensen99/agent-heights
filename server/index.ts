@@ -12,6 +12,7 @@ import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
 import { DbPersistence } from "./db.js";
 import { isSupabaseConfigured, verifyToken, type AuthUser } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
+import { handleYukiRequest } from "./yuki.js";
 import { stopRailwayMCP, checkRailwayStatus } from "./providers/railway-mcp.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -135,6 +136,34 @@ async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
 const server = createServer((req, res) => {
+  // Yuki chat proxy — needs HQ context from the session
+  if (req.url?.split("?")[0] === "/api/yuki") {
+    void handleYukiRequest(req, res, () => {
+      // In dev mode, use the dev session; in auth mode, find by token
+      if (isSupabaseConfigured) {
+        // Extract token from the request to find the session
+        // For now, use the first session (single-user for Yuki context)
+        const sess = sessions.values().next().value;
+        if (!sess) return null;
+        const snap = sess.manager.snapshot();
+        return { agents: snap.agents, board: snap.board, bossName: sess.manager.bossName };
+      }
+      // Dev mode — use dev session
+      const sess = sessions.get("dev");
+      if (!sess) return null;
+      const snap = sess.manager.snapshot();
+      return { agents: snap.agents, board: snap.board, bossName: sess.manager.bossName };
+    }).then((handled) => {
+      if (!handled) {
+        serveStatic(req, res).catch(() => {
+          res.writeHead(500);
+          res.end("Internal server error");
+        });
+      }
+    });
+    return;
+  }
+
   handleMarketplaceRequest(req, res).then((handled) => {
     if (!handled) {
       serveStatic(req, res).catch(() => {

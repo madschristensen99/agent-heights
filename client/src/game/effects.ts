@@ -14,6 +14,9 @@ export class VFXManager {
   private sparkPool: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
   private sparkPoolIdx = 0;
   private readonly SPARK_POOL_SIZE = 12;
+  private smokeEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private smokePositions: { x: number; y: number }[] = [];
+  private smokeActive = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -172,6 +175,49 @@ export class VFXManager {
     });
   }
 
+  /**
+   * Start continuous chimney smoke at the given positions.
+   * Called when devops agents are actively working.
+   */
+  startSmoke(positions: { x: number; y: number }[]): void {
+    this.smokePositions = positions;
+    if (this.smokeActive || positions.length === 0) return;
+    this.smokeActive = true;
+
+    this.smokeEmitter = this.scene.add.particles(0, 0, "dust", {
+      x: { min: 0, max: 0 },
+      y: { min: 0, max: 0 },
+      speedX: { min: -8, max: 8 },
+      speedY: { min: -40, max: -20 },
+      scale: { start: 0.6, end: 2.5 },
+      alpha: { start: 0.5, end: 0 },
+      lifespan: { min: 2000, max: 4000 },
+      quantity: 1,
+      frequency: 80,
+      tint: 0x888888,
+      blendMode: Phaser.BlendModes.NORMAL,
+    });
+    this.smokeEmitter.setDepth(50);
+  }
+
+  /** Stop chimney smoke. */
+  stopSmoke(): void {
+    this.smokeActive = false;
+    if (this.smokeEmitter) {
+      this.smokeEmitter.destroy();
+      this.smokeEmitter = null;
+    }
+  }
+
+  /** Update smoke emitter position — call each frame. */
+  updateSmoke(): void {
+    if (!this.smokeEmitter || !this.smokeActive || this.smokePositions.length === 0) return;
+    // Cycle through chimney positions to emit from each
+    const t = this.scene.time.now;
+    const pos = this.smokePositions[Math.floor(t / 200) % this.smokePositions.length];
+    this.smokeEmitter.setPosition(pos.x, pos.y);
+  }
+
   /** Start ambient biome particles — pollen, ash, snow, etc. */
   startAmbient(type: "meadow" | "forest" | "ruins" | "wasteland" | "void" | "infernal"): void {
     this.stopAmbient();
@@ -209,6 +255,7 @@ export class VFXManager {
 
   destroy(): void {
     this.stopAmbient();
+    this.stopSmoke();
     for (const e of this.sparkPool) e.destroy();
     this.sparkPool = [];
   }
