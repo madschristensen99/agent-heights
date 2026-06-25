@@ -302,7 +302,7 @@ export const SWARMS_MODELS = [
   { id: "groq/deepseek-r1-distill-llama-70b", label: "DeepSeek R1 via Groq (reasoning)" },
 ] as const;
 
-export const SERVER_PORT = Number(process.env.PORT) || 3001;
+export const SERVER_PORT = (typeof process !== "undefined" && Number(process.env?.PORT)) || 3001;
 
 /** Fixed agent id for Yuki, the office manager NPC. */
 export const YUKI_ID = "yuki";

@@ -13,6 +13,7 @@ import { DbPersistence } from "./db.js";
 import { isSupabaseConfigured, verifyToken, type AuthUser } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleYukiRequest } from "./yuki.js";
+import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus } from "./providers/railway-mcp.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -154,6 +155,19 @@ const server = createServer((req, res) => {
       const snap = sess.manager.snapshot();
       return { agents: snap.agents, board: snap.board, bossName: sess.manager.bossName };
     }).then((handled) => {
+      if (!handled) {
+        serveStatic(req, res).catch(() => {
+          res.writeHead(500);
+          res.end("Internal server error");
+        });
+      }
+    });
+    return;
+  }
+
+  // Publish agent to marketplace
+  if (req.url?.split("?")[0] === "/api/publish-agent") {
+    void handlePublishRequest(req, res).then((handled) => {
       if (!handled) {
         serveStatic(req, res).catch(() => {
           res.writeHead(500);

@@ -11,6 +11,7 @@ import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import { YukiChat } from "./yuki-chat";
+import { getToken } from "../auth";
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -195,9 +196,11 @@ export class Hud {
           <button class="btn primary" id="d-assign">ASSIGN ▶</button>
           <button class="btn" id="d-stop">STOP</button>
           <button class="btn" id="d-clear">NEW CHAT</button>
+          <button class="btn" id="d-publish">📤 PUBLISH</button>
           <button class="btn danger" id="d-fire">FIRE</button>
         </div>
       </div>
+      <div class="modal-backdrop" id="publish-modal" hidden></div>
       <div class="modal-backdrop" id="hire-modal" hidden></div>
       <div class="modal-backdrop" id="settings-modal" hidden></div>
       <div class="modal-backdrop" id="onboard-modal" hidden></div>
@@ -228,6 +231,8 @@ export class Hud {
 
     const yukiChat = new YukiChat();
     document.getElementById("yuki-btn")!.addEventListener("click", () => yukiChat.toggle());
+
+    document.getElementById("d-publish")!.addEventListener("click", () => this.openPublishModal());
     this.bindDetail();
     this.bindFeed();
     this.bindBoard();
@@ -769,6 +774,96 @@ export class Hud {
       role: "worker",
     });
     this.toast(`${agent.name} hired from the marketplace!`);
+  }
+
+  private openPublishModal(): void {
+    const agent = this.store.selected();
+    if (!agent || agent.id === YUKI_ID) return;
+
+    const modal = document.getElementById("publish-modal")!;
+    modal.hidden = false;
+    modal.innerHTML = `
+      <div class="modal hire-modal">
+        <h2>PUBLISH TO MARKETPLACE</h2>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:0.75rem;">
+          Publish <span style="color:${agent.accent}">${esc(agent.name)}</span> to the Swarms Marketplace.
+          Other users will be able to discover and hire this agent.
+        </p>
+        <div class="hire-form">
+          <label>SUMMARY <span class="opt">(shown in browse list)</span>
+            <input id="p-summary" maxlength="120" placeholder="A brief one-line summary of what this agent does" />
+          </label>
+          <label>DESCRIPTION <span class="opt">(full detail page)</span>
+            <textarea id="p-desc" rows="4" placeholder="Detailed description of the agent's capabilities, approach, and best use cases."></textarea>
+          </label>
+          <label>TAGS <span class="opt">(comma-separated)</span>
+            <input id="p-tags" placeholder="typescript, testing, review" />
+          </label>
+          <label>PRICE <span class="opt">(USD, 0 = free)</span>
+            <input id="p-price" type="number" min="0" step="0.01" value="0" style="width:80px;" />
+          </label>
+        </div>
+        <div class="row">
+          <button class="btn" id="p-cancel">CANCEL</button>
+          <button class="btn primary" id="p-ok">PUBLISH ▶</button>
+        </div>
+        <div id="p-status" style="font-size:0.8rem;margin-top:0.5rem;min-height:1.2em;"></div>
+      </div>
+    `;
+
+    const statusEl = modal.querySelector("#p-status") as HTMLDivElement;
+
+    modal.querySelector("#p-cancel")!.addEventListener("click", () => { modal.hidden = true; });
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
+
+    modal.querySelector("#p-ok")!.addEventListener("click", async () => {
+      const summary = (modal.querySelector("#p-summary") as HTMLInputElement).value.trim();
+      const description = (modal.querySelector("#p-desc") as HTMLTextAreaElement).value.trim();
+      const tags = (modal.querySelector("#p-tags") as HTMLInputElement).value.trim();
+      const price = parseFloat((modal.querySelector("#p-price") as HTMLInputElement).value) || 0;
+
+      if (!summary) {
+        statusEl.textContent = "Summary is required.";
+        statusEl.style.color = "#e05d5d";
+        return;
+      }
+
+      statusEl.textContent = "Publishing…";
+      statusEl.style.color = "#888";
+
+      try {
+        const res = await fetch("/api/publish-agent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+          },
+          body: JSON.stringify({
+            agentId: agent.id,
+            name: agent.name,
+            summary,
+            description,
+            tags,
+            price,
+            model: agent.model,
+            systemPrompt: agent.systemPrompt ?? "",
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Request failed" }));
+          throw new Error(err.error ?? res.statusText);
+        }
+
+        statusEl.textContent = "Published! Your agent is now pending approval on the marketplace.";
+        statusEl.style.color = "#53b86b";
+        this.toast(`${agent.name} published to the marketplace!`);
+        setTimeout(() => { modal.hidden = true; }, 2000);
+      } catch (err) {
+        statusEl.textContent = `Error: ${err instanceof Error ? err.message : "unknown"}`;
+        statusEl.style.color = "#e05d5d";
+      }
+    });
   }
 
   private scheduleRender(): void {
