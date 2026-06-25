@@ -51,7 +51,9 @@ onAuthChange((state) => {
     net.setToken(token);
     if (!connected) { net.connect(); connected = true; }
   } else {
-    authOverlay.show();
+    // Dev fallback: connect without auth — server will use dev session
+    authOverlay.hide();
+    if (!connected) { net.connect(); connected = true; }
   }
 });
 

@@ -22,6 +22,7 @@ export class Net {
     this.ws = ws;
 
     ws.onopen = () => {
+      console.log("[net] WebSocket connected to", url);
       this.retryMs = 500;
       this.onStatus(true);
       for (const msg of this.queue.splice(0)) {
@@ -35,15 +36,18 @@ export class Net {
         // ignore malformed frames
       }
     };
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
+      console.log("[net] WebSocket closed:", ev.code, ev.reason);
       this.onStatus(false);
       this.retryMs = Math.min(this.retryMs * 2, 8000);
       setTimeout(() => this.connect(), this.retryMs);
     };
-    ws.onerror = () => ws.close();
+    ws.onerror = (ev) => { console.log("[net] WebSocket error:", ev); ws.close(); };
   }
 
   send(msg: ClientMsg): void {
+    const state = this.ws?.readyState;
+    console.log("[net] send:", msg.type, "wsState:", state, "OPEN:", WebSocket.OPEN);
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     } else {

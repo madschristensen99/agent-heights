@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import type { Store } from "../store";
+import type { Store, HelicopterDelivery } from "../store";
+import type { Net } from "../net";
 import { AgentNPC, YukiNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
 import { YUKI_ID } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
@@ -88,6 +89,7 @@ export class OfficeScene extends Phaser.Scene {
   private heliRotor: Phaser.GameObjects.Graphics | null = null;
   private heliAgent: Phaser.GameObjects.Container | null = null;
   private heliElevatorGfx: Phaser.GameObjects.Graphics | null = null;
+  private heliDelivery: HelicopterDelivery | null = null;
 
   private world!: WorldLayer;
   private theme: "classic" | "lumon" = "classic";
@@ -511,6 +513,9 @@ export class OfficeScene extends Phaser.Scene {
       });
       this.store.onHuddle((agentIds) => {
         if (this.ready) this.startHuddle(agentIds);
+      });
+      this.store.onHelicopter((delivery) => {
+        if (this.ready && !this.heliActive) this.triggerHelicopter(delivery);
       });
     }
     this.ready = true;
@@ -1583,9 +1588,11 @@ export class OfficeScene extends Phaser.Scene {
   /** Summon the helicopter — full cinematic sequence.
    *  The heli descends from high above the pad straight down, lands softly,
    *  then unloads the agent. */
-  private triggerHelicopter(): void {
+  private triggerHelicopter(delivery?: HelicopterDelivery): void {
     this.heliActive = true;
-    this.store.toast("Helicopter summoned! Agent incoming...");
+    this.heliDelivery = delivery ?? null;
+    const agentName = delivery?.name ?? "Agent";
+    this.store.toast(`Helicopter summoned! ${agentName} incoming...`);
     this.world?.audio.uiClick();
 
     const padCx = this.padCenter.x;
@@ -1633,7 +1640,7 @@ export class OfficeScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setScale(0.5);
     const label = this.add
-      .text(0, -108, "AGENT", {
+      .text(0, -108, this.heliDelivery?.name ?? "AGENT", {
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#1d2126",
@@ -1710,6 +1717,20 @@ export class OfficeScene extends Phaser.Scene {
           this.heliAgent.setDepth(10 + exitY);
           sprite.play(`${agentKey}-walk-down`);
 
+          // Send the hire WS message now — the server will create the real agent
+          // and syncAgents() will replace this cosmetic sprite with the real NPC.
+          if (this.heliDelivery) {
+            const net = this.game.registry.get("net") as import("../net").Net;
+            net.send({
+              type: "hire",
+              name: this.heliDelivery.name,
+              provider: this.heliDelivery.provider as import("../../../shared/types").Provider,
+              model: this.heliDelivery.model,
+              systemPrompt: this.heliDelivery.systemPrompt,
+              role: "worker",
+            });
+          }
+
           // walk to centre of office and idle
           const finalX = 14 * TILE_PX + 32;
           const finalY = 8 * TILE_PX + 52;
@@ -1765,21 +1786,23 @@ export class OfficeScene extends Phaser.Scene {
       },
     });
 
-    // agent fades out after lingering in the office for 10s
-    this.time.delayedCall(10000, () => {
+    // agent fades out quickly — the real NPC replaces it via syncAgents()
+    this.time.delayedCall(2000, () => {
       if (this.heliAgent) {
         this.tweens.add({
           targets: this.heliAgent,
           alpha: 0,
-          duration: 1000,
+          duration: 800,
           onComplete: () => {
             this.heliAgent?.destroy();
             this.heliAgent = null;
             this.heliActive = false;
+            this.heliDelivery = null;
           },
         });
       } else {
         this.heliActive = false;
+        this.heliDelivery = null;
       }
     });
   }
@@ -2387,7 +2410,9 @@ export class OfficeScene extends Phaser.Scene {
       } else
       // server rack — query Railway data
       if (this.nearestTile(this.serverRackTiles, 120)) {
-        (this.game.registry.get("net") as { send: (msg: { type: string }) => void }).send({ type: "railway_query" });
+        const net = this.game.registry.get("net") as Net;
+        console.log("[scene] server rack E-pressed, sending railway_query, rackTiles:", this.serverRackTiles.length, "net:", !!net);
+        net.send({ type: "railway_query" });
         this.store.toast("Querying Railway...");
       } else
       // try new office interactables first

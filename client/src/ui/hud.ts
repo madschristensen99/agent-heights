@@ -767,15 +767,14 @@ export class Hud {
       agent.language ? `\nLanguage: ${agent.language}` : "",
     ].filter(Boolean).join("\n").slice(0, 4000);
 
-    this.net.send({
-      type: "hire",
+    const delivery = {
       name: agent.name.slice(0, 24) || "Agent",
-      provider: "cline",
-      model: "claude-sonnet-4-20250514",
       systemPrompt,
-      role: "worker",
-    });
-    this.toast(`${agent.name} hired from the marketplace!`);
+      model: "claude-sonnet-4-20250514",
+      provider: "cline",
+    };
+
+    this.store.triggerHelicopter(delivery);
   }
 
   private openPublishModal(): void {

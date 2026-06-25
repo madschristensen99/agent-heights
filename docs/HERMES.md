@@ -1,11 +1,11 @@
-# Agent HQ — Hermes Integration
+# Agent HQ — Workplace Agents & External Presence
 
-Agents don't just sit at desks coding in sandboxed folders. They have **real
-external presence** — a Telegram bot, a Discord moderator, a Slack support
-agent. You see it working in the office, but it's also out in the world,
-responding to messages, running workflows, and being a bot on platforms you
-actually use. Agent HQ is the mission control. Hermes is the deployment
-runtime.
+Your agents don't just sit at desks coding in sandboxed folders. They're
+**embedded in your actual workplace tools** — answering questions in Slack,
+triaging issues in Linear, managing PRs in GitHub, deploying on Railway. You
+see it all happen in the pixel-art office, but the work is real and it's
+happening in the tools your team already uses. Agent HQ is the control plane.
+The office is the dashboard. The agents are your workforce, everywhere at once.
 
 This builds on the existing provider architecture (`docs/DOCS.md` §6). The
 provider layer is already pluggable — Hermes becomes a new provider that
@@ -18,21 +18,55 @@ bridges agents to the outside world.
 Right now an Agent HQ agent is a coding agent in a box. It reads files, writes
 files, runs commands, and reports back. It's useful, but it's sealed — the
 agent can't reach out, can't be reached, and has no life outside its workspace
-folder.
+folder. It's also not sticky. You try it, it's cool, then you close the tab and
+forget about it because the agent isn't *anywhere* you actually work.
 
-Hermes Agent (by Nous Research) is a self-improving AI agent with a built-in
-learning loop, a messaging gateway (Telegram, Discord, Slack, WhatsApp, Signal,
-Email), MCP tool ecosystem, skills system, and structured persistent memory.
-It's designed to *live* on a server and talk to you from wherever you are.
+The thesis: **agents become sticky when they live where you work.** Not in a
+sandboxed folder, not in a chat sidebar — in your Slack channels, your Linear
+board, your GitHub repos. When an agent is the one answering questions in
+`#support`, triaging bugs in Linear, and opening PRs in GitHub, you don't
+forget about it. You can't. It's part of your team's daily flow.
 
-The integration: **Agent HQ hires an agent → a Hermes profile is created → the
-agent gets a Telegram/Discord/Slack presence → all external activity flows back
-into the office as live events.**
+Agent HQ is how you manage that fleet. The pixel-art office is where you see
+what every agent is doing across all your tools, assign work, hire, fire, and
+watch the activity stream in real time. The agents have *embodiment* — they're
+characters at desks, not entries in a config file — and they have *reach* —
+they're connected to your real workplace infrastructure.
 
-The office becomes a dashboard for a fleet of agents that have real platform
-presence. You watch your Code Gremlin answer a Discord support ticket, your
-Docs Bard post a summary to Slack, your Pipeline Plumber respond to a Telegram
-query — all visible as office activity, all real.
+### Why Hermes
+
+Hermes Agent (by Nous Research) is the runtime that makes this possible. It's
+a self-improving AI agent with:
+
+- A **messaging gateway** — bridges to Slack, Discord, Telegram, WhatsApp,
+  Signal, Email from a single process
+- An **MCP ecosystem** — curated catalog of one-click MCP servers for GitHub,
+  Linear, n8n, filesystem, browser automation, and more
+- A **skills system** — agents create, update, and delete their own
+  procedural skills from experience
+- **Structured persistent memory** — `MEMORY.md` + `USER.md`, agent-managed,
+  with capacity limits
+- **Session search** — agents search their own past conversations
+- **Multi-provider** — 300+ models via Nous Portal, OpenRouter, OpenAI, etc.
+- **Cron scheduling** — time-based task triggers
+- **Self-improvement loop** — background review after sessions
+
+Hermes is designed to *live* on a server and be reachable from wherever you
+are. Agent HQ gives it a face, a desk, and a place in the world.
+
+### Why not just use Hermes directly
+
+Because Hermes alone is a CLI. It's powerful but invisible. You run it on a
+VPS, you talk to it from Telegram, and that's it. There's no sense of *who* the
+agent is, no visualization of what it's doing, no way to manage a fleet of
+them, no game loop, no fun. Hermes is the engine. Agent HQ is the car.
+
+The reason agent products aren't sticky isn't that they lack capability — it's
+that they lack **embodiment** and **presence**. A chat box is not a place. A
+config file is not an identity. Agent HQ solves both: agents have bodies
+(sprites, desks, personalities) and they have reach (Slack, Linear, GitHub).
+You don't manage agents by editing YAML. You manage them by walking up to their
+desk in an office.
 
 ---
 
@@ -64,8 +98,8 @@ query — all visible as office activity, all real.
 │   │ typing  │  │ on phone│  │ idle    │     office scene                  │
 │   └────┬────┘  └────┬────┘  └────┬────┘                                 │
 │        │            │            │                                       │
-│        │  task      │  telegram  │  idle                                 │
-│        │  events    │  message   │                                       │
+│        │  coding    │  slack     │  idle                                 │
+│        │  task      │  message   │                                       │
 │        ▼            ▼            ▼                                       │
 │   ┌─────────────────────────────────────┐                                │
 │   │     Agent HQ Server (Node + ws)     │                                │
@@ -82,13 +116,13 @@ query — all visible as office activity, all real.
           │   Hermes Agent       │
           │   (Python runtime)   │
           │                     │
-          │   profile: pixel     │──► Telegram bot @pixel_hq
-          │   profile: mocha     │──► Discord bot in #support
-          │   profile: scout     │──► Slack bot in #devops
+          │   profile: pixel     │──► GitHub MCP (PRs, issues, reviews)
+          │   profile: mocha     │──► Slack gateway (#support, #engineering)
+          │   profile: scout     │──► Linear MCP (issue triage, status)
+          │                     │──► Railway MCP (deploys, logs)
           │                     │
           │   Skills (SKILL.md)  │
           │   Memory (MEMORY.md) │
-          │   MCP tools          │
           │   Session search     │
           └─────────────────────┘
 ```
@@ -96,13 +130,19 @@ query — all visible as office activity, all real.
 An agent exists in two places at once:
 
 1. **In the office** — a sprite at a desk, animated based on what it's doing.
-   Coding? Typing animation. Got a Telegram message? Phone rings, agent walks
-   to a phone desk, responds, walks back. Idle? Wandering or on break.
+   Coding? Typing animation. Got a Slack message? Phone rings, agent walks to
+   a phone desk, responds, walks back. Idle? Wandering or on break.
 
-2. **In the world** — a live bot on a platform. Real messages in, real
-   responses out. Someone DMs the agent on Telegram → the agent processes it
-   through Hermes → the response is sent → Agent HQ sees the whole exchange in
-   the office feed.
+2. **In your workplace** — a live participant in your real tools. Someone asks
+   a question in `#support` on Slack → the agent responds. A new issue lands in
+   Linear → the agent triages it. A PR needs review on GitHub → the agent
+   reviews it. All of this flows back into the office as live events.
+
+The key insight: **the office is the control plane, not the execution plane.**
+Agents do real work in real tools. The office is where you watch, manage, and
+understand what they're doing. You don't need to check Slack, Linear, and
+GitHub separately to know what your agent fleet is up to — you look at the
+office.
 
 ---
 
@@ -158,9 +198,9 @@ events_wait(after_cursor=42)    → blocks up to timeout for next event
 Event types: `message`, `approval_requested`, `approval_resolved`.
 
 Agent HQ's server runs a background poller per Hermes-connected agent. When
-an external event arrives (someone messaged the agent on Telegram), it:
+an external event arrives (someone messaged the agent on Slack), it:
 
-1. Creates a `TaskEvent` with `kind: "text"` and a prefix like `[Telegram]`
+1. Creates a `TaskEvent` with `kind: "text"` and a prefix like `[Slack]`
 2. Broadcasts it to all clients as a log entry
 3. Triggers the agent's "phone ring" animation in the office
 4. The agent processes the message through Hermes and the response flows back
@@ -196,37 +236,68 @@ hermes profile delete <agentId>
 
 ## 5. Agent Roles with External Presence
 
-### The messaging agent
+### The Slack agent
 
-Hire an agent whose *primary job* is being a platform bot:
+Hire an agent that lives in your workplace Slack:
 
-- **Role:** `messenger` (new role, or a sub-type of `worker`)
-- **Platform:** Telegram, Discord, Slack, etc.
+- **Role:** `worker` with Slack gateway connection
+- **Channels:** `#support`, `#engineering`, `#deploys` — you pick which channels
+  the agent monitors
 - **Behavior:** The Hermes gateway runs continuously. The agent sits at its
-  desk in "standby" — not working on a coding task, but available. When a
-  message arrives, the agent's phone rings (animation), it responds, and the
-  exchange appears in the office feed.
-- **You can still assign coding tasks** — the agent pauses its bot duties,
-  does the task, then resumes listening for messages.
+  desk in "standby" — not working on a coding task, but listening. When a
+  message arrives in a monitored channel, the agent's phone rings (animation),
+  it walks to a phone spot, responds in character, and walks back. The full
+  exchange appears in the office feed with a `[Slack]` tag.
+- **You can still assign coding tasks** — the agent pauses its Slack duties,
+  does the task, then resumes listening.
+- **Why this is sticky:** your team already lives in Slack. An agent that
+  answers questions in `#support` while you watch it work from the office is
+  an agent that becomes part of the team's daily rhythm. You don't forget
+  about it because your coworkers are talking to it.
+
+### The Linear agent
+
+Hire an agent that triages your Linear board:
+
+- **Role:** `worker` with Linear MCP connection
+- **Behavior:** The agent monitors your Linear inbox. When a new issue lands,
+  it reads the description, assigns labels, sets priority, and posts a summary
+  to the office feed: `[Linear] Triaged BUG-247: auth loop — labeled as P1,
+  assigned to backend cycle.`
+- **Scheduled sweeps:** using Hermes's cron, the agent does a full board sweep
+  every morning — checking for stale issues, unassigned bugs, and broken
+  cycles. The results appear as a morning briefing in the office feed.
+
+### The GitHub agent
+
+Hire an agent that manages PRs:
+
+- **Role:** `worker` with GitHub MCP connection
+- **Behavior:** The agent watches for new PRs, reviews code, posts comments,
+  and merges approved PRs. Tool calls appear in the feed: `[tool]
+  github.review_pr repo=agent-hq #42 — looks good, merging.`
+- **Code review skills:** over time the agent accumulates code review skills
+  specific to your codebase — it learns your conventions, your review
+  checklist, your merge criteria.
+
+### The devops agent (already exists, expanded)
+
+- **Role:** `devops` (existing)
+- **MCP servers:** Railway (already integrated) + GitHub + Slack
+- **Behavior:** Deploys services, checks logs, posts deploy status to Slack,
+  opens GitHub issues for failures — all visible as tool calls in the office
+  feed. Hermes's curated MCP catalog makes adding new integrations a
+  one-command operation.
 
 ### The dual-life agent
 
-A regular coding agent that *also* has a platform presence:
+A regular coding agent that *also* has a workplace presence:
 
-- **Role:** `worker` (existing)
-- **Platform:** optional, configured at hire time or later
+- **Role:** `worker` (existing) with optional platform connections
 - **Behavior:** Normal coding agent most of the time. But it's also reachable
-  on Telegram — if someone messages it, the office shows the interruption.
-  The agent responds in character (its personality carries over), then goes
-  back to its coding task.
-
-### The devops agent with MCP tools
-
-- **Role:** `devops` (existing)
-- **MCP servers:** GitHub, Linear, Railway (already partially integrated)
-- **Behavior:** The agent can manage GitHub PRs, check Linear issues, deploy
-  to Railway — all visible as tool calls in the office feed. Hermes's curated
-  MCP catalog makes adding new integrations a one-command operation.
+  on Slack — if someone @mentions it in a channel, the office shows the
+  interruption. The agent responds in character (its personality carries over),
+  then goes back to its coding task.
 
 ---
 
@@ -242,7 +313,7 @@ When a messaging agent receives an external message:
 1. Agent's desk phone sprite flashes (or a phone icon appears above the desk)
 2. Agent stands up, walks to a "phone spot" (like break room spots, but near
    the door — "taking a call")
-3. Speech bubble shows: `[Telegram] @user: hey, is the deploy done?`
+3. Speech bubble shows: `[Slack] #support: getting a 500 on /api/users`
 4. Agent responds (typing animation while composing)
 5. Speech bubble shows the response
 6. Agent walks back to desk, resumes previous state
@@ -252,10 +323,13 @@ When a messaging agent receives an external message:
 External events appear in the office feed with platform tags:
 
 ```
-[Telegram → Pixel] @user: hey, is the deploy done?
-[Pixel → Telegram] @user: Yeah! Just finished. The staging URL is staging.example.com
-[Discord → Mocha] #support: getting a 500 on /api/users
-[Mocha → Discord] #support: Looking into it — can you share the request ID?
+[Slack → Mocha] #support: getting a 500 on /api/users
+[Mocha → Slack] #support: Looking into it — can you share the request ID?
+[Linear → Pixel] New issue BUG-247: auth loop on login
+[Pixel → Linear] Triaged BUG-247: labeled P1, assigned to backend cycle
+[GitHub → Scout] PR #42 opened: fix-auth-loop
+[Scout → GitHub] PR #42 reviewed: looks good, merging
+[Railway → Scout] Deploy succeeded: agent-hq-server v1.4.2 → staging
 ```
 
 ### Status indicator
@@ -264,9 +338,9 @@ Agents with active platform connections show a small platform icon next to
 their name in the HUD:
 
 ```
-Pixel 📟  (Telegram connected, idle)
-Mocha 💬  (Discord connected, on a call)
-Scout     (no platform, coding)
+Pixel �  (Linear connected, triaging)
+Mocha 💬  (Slack connected, on a call)
+Scout 🐙  (GitHub + Railway connected, idle)
 ```
 
 ---
@@ -285,7 +359,8 @@ ag/workspace/pixel-a1b2/
   .hermes/skills/
     debug-auth-loop.md        ← "When auth tests fail in a loop, check JWT expiry first"
     deploy-staging.md         ← "Staging deploy: pnpm build → rsync → restart pm2"
-    discord-support-template.md  ← "For 500 errors: ask for request ID, check logs, paste stack"
+    slack-support-template.md ← "For 500 errors: ask for request ID, check logs, paste stack"
+    linear-triage.md          ← "New bugs: label by component, set P1 if user-facing, assign to active cycle"
 ```
 
 Skills load on demand (progressive disclosure) — when a task matches a skill's
@@ -348,8 +423,8 @@ you expose only the tools you want the agent to see.
 - The Hermes profile is configured with those MCP servers
 - Tool calls from MCP servers appear in the office feed like any other tool
   call: `[tool] github.create_pr repo=agent-hq title="Fix auth loop"`
-- Devops agents get GitHub + Railway. Docs agents get Linear. Messenger
-  agents get the messaging bridge + maybe a search MCP.
+- Devops agents get GitHub + Railway. Linear agents get Linear MCP. Slack
+  agents get the messaging bridge. You compose the toolset per role.
 
 ### Hermes as MCP server
 
@@ -357,7 +432,7 @@ you expose only the tools you want the agent to see.
 Code, Cursor, or Agent HQ itself) interact with Hermes's messaging bridge:
 
 - `conversations_list`, `conversation_get`, `messages_read`
-- `messages_send` (to Telegram/Discord/Slack/etc.)
+- `messages_send` (to Slack/Discord/Telegram/etc.)
 - `events_poll`, `events_wait` (near-real-time event stream)
 - `channels_list`, `permissions_list_open`, `permissions_respond`
 
@@ -490,7 +565,7 @@ export interface HermesSettings {
 17. **Platform status indicators** — icons in the HUD showing which agents
     are connected to which platforms
 18. **Cross-platform personality** — agent personality carries over to
-    platform interactions (the Docs Bard writes dramatic Telegram responses)
+    platform interactions (the Docs Bard writes dramatic Slack responses)
 
 ---
 
@@ -514,28 +589,155 @@ export interface HermesSettings {
 
 ---
 
-## 13. Future Ideas (Not v1)
+## 13. The Hosting Landscape (Or: Don't Build Hosting)
 
-- **Agent-to-agent messaging across platforms** — Pixel on Telegram messages
-  Mocha on Discord. Cross-platform office communication visible in the game.
-- **Platform-specific skills** — an agent that runs a Discord server develops
-  moderation skills that only load when Discord messages come in.
-- **External task assignment** — message your agent on Telegram to give it a
+A common question: should Agent HQ host the agent runtimes itself? The answer
+is **no**. The hosting layer is being commoditized. Agent HQ's value is the
+office, the game loop, and the visualization — not running Python processes.
+
+### Managed Hermes hosting (already emerging)
+
+At least three companies are already offering managed Hermes hosting:
+
+| Service | Price | What they handle |
+|---|---|---|
+| **hermes-agent.net** | $12/mo | Dedicated sandbox, Telegram/Discord/Slack gateway, vector memory, auto-updates. 60-second deploy. |
+| **deploy-hermes.com** | Early access | Isolated runtime, persistent memory, Telegram/Discord/Slack. |
+| **flowengine.cloud** | $12/mo | WhatsApp/Telegram/Slack/Discord, auto-SSL, sandboxed per agent. |
+
+These companies exist because the barrier to running Hermes yourself is real —
+VPS, Docker, Python, gateway config, bot tokens. They're racing to make it
+trivial. Agent HQ should ride that wave, not compete with it.
+
+### General agent hosting platforms
+
+| Platform | What it does | Relationship to Agent HQ |
+|---|---|---|
+| **Cloudflare Agents** | Durable agent runtime on edge. TypeScript-native. SQLite state, WebSockets, MCP, hibernation when idle (free when inactive). Scales to millions. | **Best infrastructure partner.** Same stack (TS), hibernation = cheap, MCP built in. An Agent HQ agent could literally be a Cloudflare Agent with a Phaser sprite. |
+| **Blaxel** | MicroVM sandboxes for agents. <3s boot, ~25ms resume. Persistent filesystems, model gateway, MCP hosting. $7.3M seed. | **Sandbox provider.** Each agent gets a real isolated microVM as its workspace instead of a local folder. |
+| **MCP Cloud** | 24/7 agent hosting on Telegram/Discord/WhatsApp. MCP tools, persistent context. One-click deploy. | **Managed hosting alternative.** Not Hermes-specific but same concept. |
+| **MCPWorks** | Open-source agent runtime. Containerized, cron, webhooks, encrypted state, Discord/Slack. Self-host free, cloud $179/mo. | **Open-source option.** Agent HQ could use MCPWorks as a provider. |
+| **E2B / Daytona** | Secure sandboxed code execution. Cloud-based, isolated. | **Code execution sandboxes.** Agents run code in real sandboxes instead of local folders. |
+| **Railway** | Already integrated for devops agents. Persistent volumes, databases. | **Already in the stack.** Could host Agent HQ itself + agent workspaces. |
+
+### The play
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Agent HQ                           │
+│              (the office, the game)                   │
+│                                                      │
+│  · Hire, assign, fire, watch agents                  │
+│  · Pixel-art office visualization                    │
+│  · Labyrinth, expeditions, personalities             │
+│  · The reason people stay                            │
+│                                                      │
+│  ┌─────────────────────────────────────────────┐     │
+│  │         Agent HQ Server (Node)               │     │
+│  │  · routes tasks to providers                 │     │
+│  │  · streams events to office                  │     │
+│  │  · manages agent lifecycle                   │     │
+│  └──────────────────┬──────────────────────────┘     │
+│                     │                                │
+└─────────────────────┼────────────────────────────────┘
+                      │
+           ┌──────────┼──────────┐
+           ▼          ▼          ▼
+     ┌──────────┐ ┌──────────┐ ┌──────────┐
+     │ Cline    │ │ Hermes   │ │ Cloudflare│
+     │ (local)  │ │ (managed │ │ Agents    │
+     │          │ │  or self)│ │ (edge)    │
+     └──────────┘ └──────────┘ └──────────┘
+                      │
+           ┌──────────┼──────────┐
+           ▼          ▼          ▼
+     ┌──────────┐ ┌──────────┐ ┌──────────┐
+     │ Slack    │ │ Linear   │ │ GitHub   │
+     │ gateway  │ │ MCP      │ │ MCP      │
+     └──────────┘ └──────────┘ └──────────┘
+```
+
+Agent HQ is the **front-end for managed agent hosting**. The hosting
+companies handle the boring part (infrastructure, uptime, updates). Agent HQ
+handles the compelling part (the office, the visualization, the game loop,
+the Labyrinth). People stay because their agents are *visible and alive* in
+the office, not because they're locked into a hosting provider.
+
+### Why embodiment is the differentiator
+
+Every platform in the landscape falls into one of two camps:
+
+- **Infrastructure** (Cloudflare, Blaxel, Railway, E2B) — they give agents
+  compute and storage, but no *identity*. An agent on Cloudflare is a Durable
+  Object with a WebSocket. It's not *a character at a desk*.
+- **Embodiment** (Convai, Inworld, office.xyz, AgentVerse, Thinkroid) — they
+  give agents a place to exist, but most are either thin (office.xyz is a 2D
+  map with REST calls) or not work-focused (Convai/Inworld are about
+  conversation, not coding).
+
+**Agent HQ is the only thing in the middle.** Real work execution (Cline SDK,
+real tools, real workspaces) + spatial embodiment (Phaser 3 office, desks,
+pathfinding, personalities) + a game loop (hire, assign, fire, Labyrinth,
+expeditions) + persistent identity (agents remember, have `tasksDone`, have
+personalities).
+
+The competitors are either infrastructure (no embodiment) or embodiment (no
+real work). Agent HQ does both, and adds a game on top.
+
+### Similar projects in the space
+
+| Project | What it is | How Agent HQ differs |
+|---|---|---|
+| **office.xyz** | 2D virtual office for AI agents. REST + WebSocket API. Agents get desks, claim tasks, chat via @mention. Has an OpenClaw skill. | Agent HQ has a full game engine (Phaser 3), real tool execution, the Labyrinth, expeditions, personalities, fire/recruit. office.xyz is a flat 2D map. |
+| **AgentVerse** | Isometric 3D world (Rust + Bevy) where agents connect via HTTP. TUI mode for headless servers. | 3D but no real work execution — agents are chat participants, not coders. No game loop. |
+| **Thinkroid Space** | Pixel-art office (Phaser 3!) with AI agents. Room editor, item shop. Same stack as Agent HQ. | Closest competitor. Same tech, same concept. Their roadmap (Space → Grid → World) mirrors Agent HQ's office → Labyrinth. Less feature-rich, no Labyrinth, no expeditions. |
+| **BossRoom** | Multiplayer 3D office. Voice chat (Deepgram + Inworld TTS with HRTF spatial audio). Agents do real work (emails, tickets, payments). Hackathon project. | Shows the voice embodiment angle. Spatial audio is interesting — agents have *voices* that get louder as you approach. Agent HQ could add this. |
+| **Peer** | "OS for Agentic AI." Persistent 3D Earth simulation. Every user paired with an AI companion. | Different vision — metaverse for agents. Shows the "agents need a place to live" thesis is gaining traction. |
+
+---
+
+## 14. Future Ideas (Not v1)
+
+- **Slack-to-office pipeline** — a Slack message in `#support` triggers the
+  agent's phone animation. The whole office sees the agent take a call,
+  respond, and hang up. Your team's Slack activity becomes office theater.
+- **Linear board mirroring** — the office task board (`TaskCard` in
+  `shared/types.ts`) mirrors your Linear board. Create a Linear issue → it
+  appears as a task card in the office. Assign it to an agent in the office →
+  the agent is assigned in Linear. Two-way sync.
+- **GitHub PR review theater** — when an agent reviews a PR, the office shows
+  it reading code (typing animation), then posting comments (speech bubbles
+  with the review text). The PR review is real; the visualization is theater.
+- **Agent-to-agent messaging across tools** — Pixel on Slack messages Mocha
+  on Linear. Cross-tool office communication visible in the game.
+- **Tool-specific skills** — an agent that manages GitHub PRs develops review
+  skills that only load when GitHub events come in.
+- **External task assignment** — message your agent on Slack to give it a
   task without opening Agent HQ. The office shows the agent receiving the
   task from "external" and getting to work.
-- **Platform analytics dashboard** — track messages handled, response times,
-  user satisfaction per agent. Turns the office into a real ops dashboard.
-- **Multi-agent platform presence** — one Discord bot backed by multiple
-  Agent HQ agents. Messages are routed to the agent with the right skills.
-- **Agent reputation on platforms** — external users rate interactions. High
-  ratings unlock cosmetic upgrades in the office. The game loop extends
-  beyond the office walls.
+- **Workplace analytics dashboard** — track messages handled, issues triaged,
+  PRs reviewed, deploys run per agent. Turns the office into a real ops
+  dashboard for your agent fleet.
+- **Multi-agent tool presence** — one Slack bot backed by multiple Agent HQ
+  agents. Messages are routed to the agent with the right skills. The office
+  becomes a router for workplace intelligence.
+- **Agent reputation in the workplace** — coworkers rate interactions. High
+  ratings unlock cosmetic upgrades in the office. The game loop extends into
+  your real work environment.
 - **Hermes cron integration** — scheduled tasks appear on the office clock.
-  At 5pm, all agents do a standup. At midnight, the devops agent runs a
-  nightly deploy check. The office has a rhythm.
+  At 9am, the Linear agent does a board sweep. At 5pm, all agents do a
+  standup. At midnight, the devops agent runs a nightly deploy check. The
+  office has a rhythm that matches your workday.
 - **Skill marketplace** — agents publish their best skills to
   `agentskills.io`. Other Agent HQ instances can install them. Your Bug
   Whisperer's debugging skill becomes famous.
-- **Platform-driven hiring** — "Hire a Telegram support agent" → Agent HQ
-  creates the agent, connects it to Telegram, and it starts working
-  immediately. No coding task needed — the platform IS the task.
+- **Tool-driven hiring** — "Hire a Slack support agent" → Agent HQ creates
+  the agent, connects it to Slack, and it starts working immediately. No
+  coding task needed — the tool IS the task.
+- **Voice embodiment** — inspired by BossRoom's spatial audio: agents have
+  voices (TTS) that play when you walk near them. Walk up to an agent on a
+  call and hear both sides of the conversation. The office becomes audible.
+- **Cloudflare Agents backend** — each Agent HQ agent is backed by a
+  Cloudflare Agent that hibernates when idle. Zero cost when nobody's talking
+  to the agent. Instant wake when a Slack message arrives. Scales to
+  millions of agents across the edge.

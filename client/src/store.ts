@@ -4,6 +4,14 @@ import { achievements } from "./game/achievements";
 
 type Listener = () => void;
 
+export interface HelicopterDelivery {
+  name: string;
+  systemPrompt: string;
+  model: string;
+  provider: string;
+  sprite?: number;
+}
+
 export interface FeedItem {
   agentId: string;
   name: string;
@@ -42,6 +50,7 @@ export class Store {
   private listeners = new Set<Listener>();
   private toastListeners = new Set<(text: string) => void>();
   private huddleListeners = new Set<(agentIds: string[]) => void>();
+  private heliListeners = new Set<(agent: HelicopterDelivery) => void>();
 
   subscribe(fn: Listener): void {
     this.listeners.add(fn);
@@ -53,6 +62,14 @@ export class Store {
 
   onHuddle(fn: (agentIds: string[]) => void): void {
     this.huddleListeners.add(fn);
+  }
+
+  onHelicopter(fn: (agent: HelicopterDelivery) => void): void {
+    this.heliListeners.add(fn);
+  }
+
+  triggerHelicopter(agent: HelicopterDelivery): void {
+    for (const fn of this.heliListeners) fn(agent);
   }
 
   private emit(): void {
@@ -227,6 +244,7 @@ export class Store {
         this.toast(msg.message);
         return;
       case "railway_data":
+        console.log("[store] received railway_data:", msg.error ? `error: ${msg.error}` : `data: ${msg.data?.projects.length ?? 0} projects`);
         this.railwayData = msg.data;
         this.railwayError = msg.error;
         this.railwayPanelOpen = true;
