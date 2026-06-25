@@ -56,7 +56,12 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     if (info.isDirectory()) throw new Error("is directory");
     const data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
-    res.writeHead(200, { "Content-Type": mime });
+    const headers: Record<string, string> = { "Content-Type": mime };
+    // Don't cache map/tileset assets or index.html — they change when regenerated
+    if (urlPath.startsWith("/assets/maps/") || urlPath.startsWith("/assets/tilesets/") || urlPath === "/index.html" || urlPath === "/") {
+      headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    }
+    res.writeHead(200, headers);
     res.end(data);
   } catch {
     try {

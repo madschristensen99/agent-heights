@@ -77,6 +77,7 @@ export class AgentNPC {
   private breakFace: Dir | null = null;
   private strollUntil = 0;
   private coolerSpot: Tile | null = null;
+  private assembleUntil = 0;
   private scene: Phaser.Scene;
 
   constructor(
@@ -172,7 +173,7 @@ export class AgentNPC {
       this.breakFace = null;
       this.wanderAt = 0;
       this.hop();
-      if (!this.huddling) this.path = findPath(this.grid, this.tile(), this.seat);
+      if (!this.huddling && this.assembleUntil === 0) this.path = findPath(this.grid, this.tile(), this.seat);
     }
     if (info.status === "done" && wasStatus !== "done") {
       this.pendingBreak = true;
@@ -192,12 +193,13 @@ export class AgentNPC {
   }
 
   /** Assemble at a lineup spot near the entrance during emergency stop. */
-  assemble(spot: Tile): void {
+  assemble(spot: Tile, now: number): void {
     this.huddleUntil = 0;
     this.huddleFace = null;
     this.wanderAt = 0;
     this.breakUntil = 0;
     this.pendingBreak = false;
+    this.assembleUntil = now + 30_000;
     this.path = findPath(this.grid, this.tile(), spot);
   }
 
@@ -241,6 +243,18 @@ export class AgentNPC {
       } else {
         this.bubble.clearTint();
         this.bubble.setFrame(Math.floor(time / 350) % 3);
+      }
+    }
+
+    // --- standing at the entrance during emergency assembly ---
+    if (this.assembleUntil > 0) {
+      if (time >= this.assembleUntil) {
+        this.assembleUntil = 0;
+        this.wanderAt = time + 1500 + Math.random() * 1500;
+      } else if (this.path.length === 0) {
+        this.play(`${c}-idle-${this.dir}`);
+        this.container.setDepth(10 + this.container.y);
+        return;
       }
     }
 

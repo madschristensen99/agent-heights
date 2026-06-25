@@ -295,7 +295,8 @@ export const TILE = {
   DESK_L: 16, DESK_R: 17, CHAIR: 18, FILING: 19, TRASH: 20, PLANT: 21, SHELF_T: 22, SHELF_B: 23,
   COUNTER: 24, FRIDGE: 25, COFFEE: 26, COOLER: 27, SOFA_L: 28, SOFA_R: 29, PAPERS: 30, VENDING: 31,
   CHAIR_LEFT: 32,
-  DESK_SIDE_TOP: 36, DESK_SIDE_BOTTOM: 37,
+  SERVER_RACK: 34, SERVER_SCREEN: 35, CHIMNEY: 36,
+  DESK_SIDE_TOP: 37, DESK_SIDE_BOTTOM: 38,
 } as const;
 
 const SOLID_TILES = [
@@ -303,6 +304,7 @@ const SOLID_TILES = [
   TILE.CLOCK, TILE.DESK_L, TILE.DESK_R, TILE.FILING, TILE.TRASH, TILE.PLANT, TILE.SHELF_T,
   TILE.SHELF_B, TILE.COUNTER, TILE.FRIDGE, TILE.COFFEE, TILE.COOLER, TILE.SOFA_L, TILE.SOFA_R,
   TILE.VENDING, TILE.DESK_SIDE_TOP, TILE.DESK_SIDE_BOTTOM,
+  TILE.SERVER_RACK, TILE.SERVER_SCREEN,
 ];
 
 type TileDrawer = (s: Sheet, ox: number, oy: number) => void;
@@ -1095,6 +1097,120 @@ const drawers: Record<number, TileDrawer> = {
     s.rect(ox + 34, oy + 38, 16, 1, "#989080");
   },
   [TILE.VENDING]: vendingTile("#8e2828", "#a83838"),
+  [TILE.DESK_SIDE_TOP]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    // desk surface — left portion (top-down view, the working area)
+    vGrad(s, ox, oy, 44, 64, tp.hi, tp.dk);
+    // left edge highlight (facing entrance)
+    s.rect(ox, oy, 3, 64, tp.hi);
+    s.rect(ox, oy, 1, 64, mix(tp.hi, "#fff", 0.3));
+    // front panel — right portion (facing Yuki on the right)
+    vGrad(s, ox + 44, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 44, oy, 2, 64, sp.dk);
+    s.rect(ox + 60, oy, 2, 64, sp.sh);
+    // top edge
+    s.rect(ox, oy, 64, 2, sp.sh);
+    // cable hole on desk surface
+    s.fillCircle(ox + 22, oy + 10, 3, "#1a1a1a");
+  },
+  [TILE.DESK_SIDE_BOTTOM]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    // desk surface continuation
+    vGrad(s, ox, oy, 44, 64, tp.hi, tp.dk);
+    s.rect(ox, oy, 1, 64, mix(tp.hi, "#fff", 0.2));
+    // front panel continuation
+    vGrad(s, ox + 44, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 44, oy, 2, 64, sp.dk);
+    s.rect(ox + 60, oy, 2, 64, sp.sh);
+    // papers with shadow
+    s.rect(ox + 5, oy + 11, 20, 24, mix("#f7f8fa", "#000", 0.08));
+    s.rect(ox + 6, oy + 10, 20, 24, "#f7f8fa");
+    s.rect(ox + 6, oy + 10, 20, 3, "#ffffff");
+    s.rect(ox + 10, oy + 18, 12, 1, "#9aa0a8");
+    s.rect(ox + 10, oy + 22, 10, 1, "#9aa0a8");
+    // mug
+    s.fillRoundedRect(ox + 26, oy + 14, 12, 12, 2, "#3a6f57");
+    s.rect(ox + 26, oy + 14, 12, 2, mix("#3a6f57", "#fff", 0.15));
+    s.rect(ox + 27, oy + 15, 3, 6, mix("#3a6f57", "#fff", 0.25));
+    s.rect(ox + 38, oy + 18, 4, 6, "#3a6f57");
+    // bottom edge
+    s.rect(ox, oy + 60, 64, 2, sp.sh);
+    // desk legs
+    s.rect(ox + 4, oy + 54, 6, 8, sp.dk);
+    s.rect(ox + 36, oy + 54, 6, 8, sp.dk);
+  },
+  [TILE.SERVER_RACK]: (s, ox, oy) => {
+    const p = shade5("#1a1a22");
+    // tall dark metal cabinet
+    vGrad(s, ox + 2, oy, 60, 64, p.li, p.dk);
+    s.rect(ox + 2, oy, 60, 2, p.hi);
+    s.rect(ox + 2, oy, 2, 64, p.li);
+    s.rect(ox + 60, oy, 2, 64, p.dk);
+    s.rect(ox + 2, oy + 62, 60, 2, p.sh);
+    // rack unit slots (1U each) with ventilation
+    for (let i = 0; i < 6; i++) {
+      const y = oy + 4 + i * 10;
+      // slot border
+      s.rect(ox + 5, y, 54, 8, "#0a0a12");
+      s.rect(ox + 5, y, 54, 1, p.dk);
+      s.rect(ox + 5, y + 7, 54, 1, p.sh);
+      // vent grille
+      s.rect(ox + 8, y + 2, 40, 4, "#050508");
+      for (let v = 0; v < 8; v++) {
+        s.rect(ox + 8 + v * 5, y + 2, 3, 4, "#12121a");
+      }
+      // LED indicators
+      s.rect(ox + 52, y + 2, 2, 2, i % 2 === 0 ? "#3dff7a" : "#ffaa3d");
+      s.rect(ox + 55, y + 2, 2, 2, "#3dff7a");
+      s.rect(ox + 52, y + 5, 2, 1, "#ff4444");
+    }
+  },
+  [TILE.SERVER_SCREEN]: (s, ox, oy) => {
+    const p = shade5("#1a1a22");
+    // matching cabinet frame
+    vGrad(s, ox + 2, oy, 60, 64, p.li, p.dk);
+    s.rect(ox + 2, oy, 60, 2, p.hi);
+    s.rect(ox + 2, oy, 2, 64, p.li);
+    s.rect(ox + 60, oy, 2, 64, p.dk);
+    s.rect(ox + 2, oy + 62, 60, 2, p.sh);
+    // large monitoring screen
+    vGrad(s, ox + 6, oy + 4, 52, 56, "#080a12", "#121620");
+    s.rect(ox + 6, oy + 4, 52, 1, "#2a3040");
+    s.rect(ox + 6, oy + 4, 1, 56, "#2a3040");
+    // terminal text lines
+    s.rect(ox + 10, oy + 10, 36, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 16, 28, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 22, 40, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 28, 24, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 34, 32, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 40, 20, 1, "#ffaa3d");
+    s.rect(ox + 10, oy + 46, 36, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 52, 28, 1, "#3dff7a");
+    // status bar at bottom
+    s.rect(ox + 6, oy + 56, 52, 4, "#0a0a14");
+    s.rect(ox + 8, oy + 57, 12, 2, "#3dff7a");
+    s.rect(ox + 22, oy + 57, 8, 2, "#ffaa3d");
+  },
+  [TILE.CHIMNEY]: (s, ox, oy) => {
+    const p = shade5("#4a3828");
+    // brick base
+    vGrad(s, ox, oy, 64, 64, p.li, p.dk);
+    s.rect(ox, oy, 64, 2, p.hi);
+    // brick pattern
+    for (let r = 0; r < 8; r++) {
+      const y = oy + r * 8;
+      const offset = r % 2 === 0 ? 0 : 16;
+      for (let c = 0; c < 5; c++) {
+        s.rect(ox + offset + c * 16, y, 14, 7, mix(p.base, "#000", 0.1));
+        s.rect(ox + offset + c * 16, y, 14, 1, p.sh);
+      }
+    }
+    // inner darkness
+    s.rect(ox + 20, oy + 4, 24, 56, "#1a0a0a");
+    s.rect(ox + 22, oy + 6, 20, 52, "#0a0505");
+  },
 };
 
 function vendingTile(body: string, bodyLight: string): TileDrawer {
@@ -1322,6 +1438,96 @@ const lumonDrawers: Record<number, TileDrawer> = {
     s.rect(ox + 36, oy + 14, 12, 2, mix("#3a6f57", "#fff", 0.15));
     s.rect(ox + 37, oy + 15, 3, 6, mix("#3a6f57", "#fff", 0.25));
     s.rect(ox + 48, oy + 18, 4, 6, "#3a6f57");
+  },
+  [TILE.DESK_SIDE_TOP]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    // desk surface — left portion (top-down view)
+    vGrad(s, ox, oy, 44, 64, tp.hi, tp.dk);
+    s.rect(ox, oy, 3, 64, tp.hi);
+    s.rect(ox, oy, 1, 64, mix(tp.hi, "#fff", 0.3));
+    // front panel — right portion (facing Yuki on the right)
+    vGrad(s, ox + 44, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 44, oy, 2, 64, sp.dk);
+    s.rect(ox + 60, oy, 2, 64, sp.sh);
+    // top edge
+    s.rect(ox, oy, 64, 2, sp.sh);
+    // cable hole
+    s.fillCircle(ox + 22, oy + 10, 3, "#1a1a1a");
+  },
+  [TILE.DESK_SIDE_BOTTOM]: (s, ox, oy) => {
+    const tp = shade5("#f4f6f8");
+    const sp = shade5("#c3c8cd");
+    // desk surface continuation
+    vGrad(s, ox, oy, 44, 64, tp.hi, tp.dk);
+    s.rect(ox, oy, 1, 64, mix(tp.hi, "#fff", 0.2));
+    // front panel continuation
+    vGrad(s, ox + 44, oy, 18, 64, sp.li, sp.sh);
+    s.rect(ox + 44, oy, 2, 64, sp.dk);
+    s.rect(ox + 60, oy, 2, 64, sp.sh);
+    // bottom edge
+    s.rect(ox, oy + 60, 64, 2, sp.sh);
+    // desk legs
+    s.rect(ox + 4, oy + 54, 6, 8, sp.dk);
+    s.rect(ox + 36, oy + 54, 6, 8, sp.dk);
+  },
+  [TILE.SERVER_RACK]: (s, ox, oy) => {
+    const p = shade5("#1a1a22");
+    vGrad(s, ox + 2, oy, 60, 64, p.li, p.dk);
+    s.rect(ox + 2, oy, 60, 2, p.hi);
+    s.rect(ox + 2, oy, 2, 64, p.li);
+    s.rect(ox + 60, oy, 2, 64, p.dk);
+    s.rect(ox + 2, oy + 62, 60, 2, p.sh);
+    for (let i = 0; i < 6; i++) {
+      const y = oy + 4 + i * 10;
+      s.rect(ox + 5, y, 54, 8, "#0a0a12");
+      s.rect(ox + 5, y, 54, 1, p.dk);
+      s.rect(ox + 5, y + 7, 54, 1, p.sh);
+      s.rect(ox + 8, y + 2, 40, 4, "#050508");
+      for (let v = 0; v < 8; v++) {
+        s.rect(ox + 8 + v * 5, y + 2, 3, 4, "#12121a");
+      }
+      s.rect(ox + 52, y + 2, 2, 2, i % 2 === 0 ? "#3dff7a" : "#ffaa3d");
+      s.rect(ox + 55, y + 2, 2, 2, "#3dff7a");
+      s.rect(ox + 52, y + 5, 2, 1, "#ff4444");
+    }
+  },
+  [TILE.SERVER_SCREEN]: (s, ox, oy) => {
+    const p = shade5("#1a1a22");
+    vGrad(s, ox + 2, oy, 60, 64, p.li, p.dk);
+    s.rect(ox + 2, oy, 60, 2, p.hi);
+    s.rect(ox + 2, oy, 2, 64, p.li);
+    s.rect(ox + 60, oy, 2, 64, p.dk);
+    s.rect(ox + 2, oy + 62, 60, 2, p.sh);
+    vGrad(s, ox + 6, oy + 4, 52, 56, "#080a12", "#121620");
+    s.rect(ox + 6, oy + 4, 52, 1, "#2a3040");
+    s.rect(ox + 6, oy + 4, 1, 56, "#2a3040");
+    s.rect(ox + 10, oy + 10, 36, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 16, 28, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 22, 40, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 28, 24, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 34, 32, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 40, 20, 1, "#ffaa3d");
+    s.rect(ox + 10, oy + 46, 36, 1, "#3dff7a");
+    s.rect(ox + 10, oy + 52, 28, 1, "#3dff7a");
+    s.rect(ox + 6, oy + 56, 52, 4, "#0a0a14");
+    s.rect(ox + 8, oy + 57, 12, 2, "#3dff7a");
+    s.rect(ox + 22, oy + 57, 8, 2, "#ffaa3d");
+  },
+  [TILE.CHIMNEY]: (s, ox, oy) => {
+    const p = shade5("#4a3828");
+    vGrad(s, ox, oy, 64, 64, p.li, p.dk);
+    s.rect(ox, oy, 64, 2, p.hi);
+    for (let r = 0; r < 8; r++) {
+      const y = oy + r * 8;
+      const offset = r % 2 === 0 ? 0 : 16;
+      for (let c = 0; c < 5; c++) {
+        s.rect(ox + offset + c * 16, y, 14, 7, mix(p.base, "#000", 0.1));
+        s.rect(ox + offset + c * 16, y, 14, 1, p.sh);
+      }
+    }
+    s.rect(ox + 20, oy + 4, 24, 56, "#1a0a0a");
+    s.rect(ox + 22, oy + 6, 20, 52, "#0a0505");
   },
 };
 
@@ -2286,7 +2492,7 @@ const CLASSIC: MapTheme = {
     [3, 4], [8, 4], [13, 4], [18, 4],
     [3, 10], [8, 10], [13, 10], [18, 10],
   ],
-  yukiDesk: [24, 9],
+  yukiDesk: [25, 9],
   paint(G, W, F) {
     // --- floors with distinct zones ---
     // Main work area: wood floor
@@ -2372,8 +2578,6 @@ const CLASSIC: MapTheme = {
     // Bookshelves along the west wall
     F(1, 3, TILE.SHELF_T);
     F(1, 4, TILE.SHELF_B);
-    F(1, 12, TILE.SHELF_T);
-    F(1, 13, TILE.SHELF_B);
     // Filing cabinets
     F(1, 6, TILE.FILING);
     F(1, 7, TILE.FILING);
@@ -2398,12 +2602,18 @@ const CLASSIC: MapTheme = {
     F(22, 15, TILE.PAPERS);
     F(26, 16, TILE.PLANT);
     // Lobby clutter
-    F(2, 15, TILE.PAPERS);
     F(19, 17, TILE.TRASH);
     F(5, 17, TILE.PLANT);
     // Yuki's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
+    // Server room (bottom-left corner) — tall racks along the wall
+    F(2, 15, TILE.SERVER_RACK);
+    F(2, 16, TILE.SERVER_RACK);
+    F(3, 15, TILE.SERVER_RACK);
+    F(3, 16, TILE.SERVER_RACK);
+    F(4, 15, TILE.SERVER_SCREEN);
+    F(4, 16, TILE.SERVER_SCREEN);
   },
 };
 
@@ -2415,7 +2625,7 @@ const LUMON: MapTheme = {
     [11, 7], [13, 7], [15, 7], [17, 7],
     [11, 11], [13, 11], [15, 11], [17, 11],
   ],
-  yukiDesk: [24, 9],
+  yukiDesk: [25, 9],
   paint(G, W, F) {
     // --- distinct floor zones ---
     // Work area: green carpet
@@ -2501,13 +2711,10 @@ const LUMON: MapTheme = {
     // --- filing cabinets along walls ---
     F(1, 3, TILE.FILING);
     F(1, 4, TILE.FILING);
-    F(1, 12, TILE.FILING);
-    F(1, 13, TILE.FILING);
     F(20, 3, TILE.FILING);
     F(20, 12, TILE.FILING);
 
     // --- sparse decor ---
-    F(1, 17, TILE.TRASH);
     F(20, 17, TILE.PLANT);
     F(5, 17, TILE.PLANT);
     F(11, 9, TILE.PLANT);
@@ -2515,6 +2722,13 @@ const LUMON: MapTheme = {
     // Yuki's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
+    // Server room (bottom-left corner) — tall racks along the wall
+    F(2, 15, TILE.SERVER_RACK);
+    F(2, 16, TILE.SERVER_RACK);
+    F(3, 15, TILE.SERVER_RACK);
+    F(3, 16, TILE.SERVER_RACK);
+    F(4, 15, TILE.SERVER_SCREEN);
+    F(4, 16, TILE.SERVER_SCREEN);
   },
 };
 
@@ -2536,12 +2750,12 @@ function buildMap(theme: MapTheme): object {
     F(dx, dy + 1, TILE.CHAIR);
   }
 
-  // Yuki's desk + left-facing chair
+  // Yuki's desk — vertical (facing left toward entrance), chair on the right
   if (theme.yukiDesk) {
     const [ydx, ydy] = theme.yukiDesk;
-    F(ydx, ydy, TILE.DESK_L);
-    F(ydx + 1, ydy, TILE.DESK_R);
-    F(ydx + 2, ydy, TILE.CHAIR_LEFT);
+    F(ydx, ydy, TILE.DESK_SIDE_TOP);
+    F(ydx, ydy + 1, TILE.DESK_SIDE_BOTTOM);
+    F(ydx + 1, ydy, TILE.CHAIR_LEFT);
   }
 
   // --- object layer ---
@@ -2564,7 +2778,7 @@ function buildMap(theme: MapTheme): object {
   });
   if (theme.yukiDesk) {
     const [ydx, ydy] = theme.yukiDesk;
-    objects.push(point("yuki-seat", ydx + 2, ydy));
+    objects.push(point("yuki-seat", ydx + 1, ydy));
     objects.push(point("yuki-desk", ydx, ydy));
     objects.push(point("yuki-monitor", ydx, ydy));
   }

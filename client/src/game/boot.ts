@@ -19,11 +19,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    const v = "?v=2x";
-    this.load.tilemapTiledJSON("map-classic", "assets/maps/office.json");
-    this.load.tilemapTiledJSON("map-lumon", "assets/maps/lumon.json");
-    this.load.image("tiles-classic", "assets/tilesets/office.png");
-    this.load.image("tiles-lumon", "assets/tilesets/lumon.png");
+    const v = "?v=4x";
+    this.load.tilemapTiledJSON("map-classic", `assets/maps/office.json${v}`);
+    this.load.tilemapTiledJSON("map-lumon", `assets/maps/lumon.json${v}`);
+    this.load.image("tiles-classic", `assets/tilesets/office.png${v}`);
+    this.load.image("tiles-lumon", `assets/tilesets/lumon.png${v}`);
     for (let i = 0; i < CHAR_VARIANTS; i++) {
       this.load.spritesheet(`char-${i}`, `assets/characters/char-${i}.png${v}`, {
         frameWidth: CHAR_FRAME_W,

@@ -1356,6 +1356,173 @@ function drawToaster(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fill();
 }
 
+/** Side-view desk — top tile (desk surface on left, front panel on right facing Yuki) */
+function drawDeskSideTop(ctx: CanvasRenderingContext2D, s: number): void {
+  const surfaceW = s * 0.7;
+  const panelX = surfaceW;
+  const panelW = s - surfaceW;
+
+  // shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.12);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.35, s * 0.92, s * 0.3, s * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // desk surface — left portion (top-down view, the working area)
+  const surfGrad = linearGrad(ctx, 0, 0, 0, s, [
+    [0, shade(0xf4f6f8, 5)],
+    [0.5, shade(0xe4e6e8, 0)],
+    [1, shade(0xd4d6d8, -5)],
+  ]);
+  ctx.fillStyle = surfGrad;
+  ctx.fillRect(0, 0, surfaceW, s);
+  // left edge highlight (facing entrance)
+  ctx.fillStyle = hexRGBA(0xffffff, 0.3);
+  ctx.fillRect(0, 0, 2, s);
+  // top edge
+  ctx.fillStyle = hexRGBA(0xb8babc, 0.5);
+  ctx.fillRect(0, 0, surfaceW, 2);
+
+  // front panel — right portion (facing Yuki who sits on the right)
+  const panelGrad = linearGrad(ctx, panelX, 0, s, 0, [
+    [0, shade(0xc3c8cd, 0)],
+    [0.5, shade(0xb3b8bd, -5)],
+    [1, shade(0xa3a8ad, -10)],
+  ]);
+  ctx.fillStyle = panelGrad;
+  ctx.fillRect(panelX, 0, panelW, s);
+  // panel left edge (transition from surface)
+  ctx.fillStyle = shade(0x9a9fa4, -10);
+  ctx.fillRect(panelX, 0, 2, s);
+  // panel right edge
+  ctx.fillStyle = shade(0x8a8f94, -15);
+  ctx.fillRect(s - 2, 0, 2, s);
+  // panel top edge
+  ctx.fillStyle = hexRGBA(0xd4d6d8, 0.5);
+  ctx.fillRect(panelX, 0, panelW, 2);
+
+  // cable hole on desk surface
+  ctx.beginPath();
+  ctx.ellipse(s * 0.35, s * 0.15, 4, 3, 0, 0, Math.PI * 2);
+  ctx.fillStyle = hexRGBA(0x1a1a1a, 0.6);
+  ctx.fill();
+}
+
+/** Side-view desk — bottom tile (surface continuation + front panel + items + legs) */
+function drawDeskSideBottom(ctx: CanvasRenderingContext2D, s: number): void {
+  const surfaceW = s * 0.7;
+  const panelX = surfaceW;
+  const panelW = s - surfaceW;
+
+  // desk surface continuation
+  const surfGrad = linearGrad(ctx, 0, 0, 0, s, [
+    [0, shade(0xf4f6f8, 5)],
+    [0.5, shade(0xe4e6e8, 0)],
+    [1, shade(0xd4d6d8, -5)],
+  ]);
+  ctx.fillStyle = surfGrad;
+  ctx.fillRect(0, 0, surfaceW, s);
+  ctx.fillStyle = hexRGBA(0xffffff, 0.2);
+  ctx.fillRect(0, 0, 1, s);
+
+  // front panel continuation
+  const panelGrad = linearGrad(ctx, panelX, 0, s, 0, [
+    [0, shade(0xc3c8cd, 0)],
+    [0.5, shade(0xb3b8bd, -5)],
+    [1, shade(0xa3a8ad, -10)],
+  ]);
+  ctx.fillStyle = panelGrad;
+  ctx.fillRect(panelX, 0, panelW, s);
+  ctx.fillStyle = shade(0x9a9fa4, -10);
+  ctx.fillRect(panelX, 0, 2, s);
+  ctx.fillStyle = shade(0x8a8f94, -15);
+  ctx.fillRect(s - 2, 0, 2, s);
+
+  // papers with shadow on desk surface
+  ctx.fillStyle = hexRGBA(0x000000, 0.08);
+  ctx.fillRect(s * 0.08, s * 0.18, s * 0.3, s * 0.38);
+  ctx.fillStyle = "#f7f8fa";
+  ctx.fillRect(s * 0.09, s * 0.16, s * 0.3, s * 0.38);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(s * 0.09, s * 0.16, s * 0.3, 3);
+  ctx.fillStyle = hexRGBA(0x9aa0a8, 0.6);
+  ctx.fillRect(s * 0.15, s * 0.28, s * 0.18, 1);
+  ctx.fillRect(s * 0.15, s * 0.34, s * 0.15, 1);
+
+  // mug
+  ctx.fillStyle = "#3a6f57";
+  roundRect(ctx, s * 0.42, s * 0.22, s * 0.18, s * 0.18, 2);
+  ctx.fill();
+  ctx.fillStyle = hexRGBA(0x5a9a7a, 0.4);
+  ctx.fillRect(s * 0.42, s * 0.22, s * 0.18, 2);
+  ctx.fillStyle = hexRGBA(0x6aaa8a, 0.3);
+  ctx.fillRect(s * 0.44, s * 0.24, 3, s * 0.1);
+  // handle
+  ctx.fillStyle = "#3a6f57";
+  ctx.fillRect(s * 0.58, s * 0.28, s * 0.06, s * 0.09);
+
+  // bottom edge
+  ctx.fillStyle = shade(0x8a8f94, -10);
+  ctx.fillRect(0, s - 2, s, 2);
+
+  // desk legs under surface
+  ctx.fillStyle = shade(0x5a5a60, 0);
+  ctx.fillRect(s * 0.06, s * 0.85, 6, s * 0.12);
+  ctx.fillRect(s * 0.56, s * 0.85, 6, s * 0.12);
+  ctx.fillStyle = shade(0x3a3a40, -5);
+  ctx.fillRect(s * 0.06, s * 0.95, 10, 3);
+  ctx.fillRect(s * 0.56, s * 0.95, 10, 3);
+}
+
+/** Side-view monitor — thin profile seen from the side, screen faces right toward Yuki */
+function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
+  const cx = s * 0.5;
+
+  // shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.15);
+  ctx.beginPath();
+  ctx.ellipse(cx, s * 0.88, s * 0.12, s * 0.04, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // stand base
+  ctx.fillStyle = shade(0x2a2a30, 0);
+  roundRect(ctx, cx - s * 0.08, s * 0.8, s * 0.16, s * 0.05, 2);
+  ctx.fill();
+
+  // stand neck — short
+  ctx.fillStyle = shade(0x1a1a20, -5);
+  ctx.fillRect(cx - 2, s * 0.62, 4, s * 0.2);
+
+  // monitor body — thin profile seen from the side
+  // The screen faces RIGHT (toward Yuki who sits on the right)
+  const bezelGrad = linearGrad(ctx, 0, s * 0.15, 0, s * 0.62, [
+    [0, shade(0x2a2a30, 5)],
+    [0.5, shade(0x1a1a20, 0)],
+    [1, shade(0x0a0a10, -10)],
+  ]);
+  ctx.fillStyle = bezelGrad;
+  // thin vertical slab representing the side profile
+  roundRect(ctx, cx - 6, s * 0.15, 12, s * 0.47, 3);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x3a3a40, 0.5);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // screen edge glow — on the RIGHT side (facing Yuki)
+  if (lit) {
+    ctx.fillStyle = hexRGBA(0x4affa8, 0.6);
+  } else {
+    ctx.fillStyle = hexRGBA(0x0a0a14, 0.8);
+  }
+  ctx.fillRect(cx + 3, s * 0.18, 2, s * 0.41);
+
+  // power LED
+  ctx.beginPath();
+  ctx.arc(cx - 3, s * 0.58, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = hexRGBA(0x44ff44, 0.7);
+  ctx.fill();
+}
+
 /** Desk monitor (tile 33) */
 function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
   const cx = s * 0.5;
@@ -1445,84 +1612,154 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean 
 /* ---------- server room furniture ---------- */
 
 function drawServerRack(ctx: CanvasRenderingContext2D, s: number): void {
-  // dark metal cabinet body
-  const bodyGrad = linearGrad(ctx, s * 0.1, 0, s * 0.9, 0, [
-    [0, shade(0x2a2a35, 10)],
-    [0.5, shade(0x1a1a22, 0)],
-    [1, shade(0x0a0a12, -10)],
+  // tall dark metal server rack cabinet
+  const bodyGrad = linearGrad(ctx, s * 0.05, 0, s * 0.95, 0, [
+    [0, shade(0x2a2a35, 15)],
+    [0.3, shade(0x1a1a22, 0)],
+    [0.7, shade(0x12121a, -5)],
+    [1, shade(0x08080e, -15)],
   ]);
   ctx.fillStyle = bodyGrad;
-  roundRect(ctx, s * 0.1, s * 0.05, s * 0.8, s * 0.9, 3);
+  roundRect(ctx, s * 0.05, s * 0.02, s * 0.9, s * 0.96, 2);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x3a3a45, 0.6);
-  ctx.lineWidth = 1;
+
+  // frame edges
+  ctx.strokeStyle = hexRGBA(0x3a3a48, 0.7);
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, s * 0.05, s * 0.02, s * 0.9, s * 0.96, 2);
   ctx.stroke();
 
-  // server units (1U strips)
-  const unitH = s * 0.085;
-  const startY = s * 0.1;
-  for (let i = 0; i < 8; i++) {
+  // top vent strip
+  ctx.fillStyle = hexRGBA(0x050508, 0.9);
+  ctx.fillRect(s * 0.08, s * 0.04, s * 0.84, s * 0.03);
+  for (let i = 0; i < 12; i++) {
+    ctx.fillRect(s * 0.08 + i * s * 0.07, s * 0.04, s * 0.04, s * 0.03);
+  }
+
+  // rack units (1U each) — 7 units
+  const unitH = s * 0.1;
+  const startY = s * 0.09;
+  for (let i = 0; i < 7; i++) {
     const y = startY + i * unitH;
-    // unit background
-    ctx.fillStyle = hexRGBA(0x12121a, 0.9);
-    ctx.fillRect(s * 0.14, y, s * 0.72, unitH - 2);
-    // vent slots
+    // unit faceplate
+    ctx.fillStyle = hexRGBA(0x16161e, 0.95);
+    ctx.fillRect(s * 0.08, y, s * 0.84, unitH - 1.5);
+    // unit border
+    ctx.strokeStyle = hexRGBA(0x2a2a35, 0.5);
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(s * 0.08, y, s * 0.84, unitH - 1.5);
+
+    // vent grille pattern on left side
     ctx.fillStyle = hexRGBA(0x08080e, 0.8);
-    for (let j = 0; j < 4; j++) {
-      ctx.fillRect(s * 0.18 + j * s * 0.14, y + 2, s * 0.08, 1.5);
+    for (let j = 0; j < 6; j++) {
+      ctx.fillRect(s * 0.1 + j * s * 0.06, y + 2, s * 0.04, unitH - 5);
     }
-    // LED indicators (alternating colors)
-    const ledColors = [0x44ff44, 0x44ddff, 0xffaa44, 0x44ff44, 0xff4444, 0x44ddff, 0x44ff44, 0xffaa44];
+
+    // LED indicators on right side — blinking activity lights
+    const ledColors = [0x44ff44, 0x44ddff, 0xffaa44, 0x44ff44, 0xff4444, 0x44ddff, 0x44ff44];
+    // green power LED
     ctx.beginPath();
-    ctx.arc(s * 0.82, y + unitH * 0.4, 1.5, 0, Math.PI * 2);
+    ctx.arc(s * 0.82, y + unitH * 0.35, 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = hexRGBA(0x44ff44, 0.9);
+    ctx.fill();
+    // activity LED
+    ctx.beginPath();
+    ctx.arc(s * 0.88, y + unitH * 0.35, 1.5, 0, Math.PI * 2);
     ctx.fillStyle = hexRGBA(ledColors[i % ledColors.length], 0.8);
+    ctx.fill();
+    // small status LED
+    ctx.beginPath();
+    ctx.arc(s * 0.82, y + unitH * 0.7, 1, 0, Math.PI * 2);
+    ctx.fillStyle = hexRGBA(0xffaa44, 0.6);
     ctx.fill();
   }
 
-  // top border highlight
-  ctx.fillStyle = hexRGBA(0x4a4a55, 0.3);
-  ctx.fillRect(s * 0.1, s * 0.05, s * 0.8, 1);
+  // cable management at bottom
+  ctx.fillStyle = hexRGBA(0x08080e, 0.7);
+  ctx.fillRect(s * 0.08, s * 0.82, s * 0.84, s * 0.12);
+  // cables
+  const cableColors = [0x444466, 0x664444, 0x446644, 0x666644];
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = hexRGBA(cableColors[i % cableColors.length], 0.6);
+    ctx.fillRect(s * 0.12 + i * s * 0.15, s * 0.84, s * 0.08, s * 0.08);
+  }
+
+  // rack label strip
+  ctx.fillStyle = hexRGBA(0x44ddff, 0.15);
+  ctx.fillRect(s * 0.08, s * 0.06, s * 0.84, s * 0.015);
 }
 
 function drawServerScreen(ctx: CanvasRenderingContext2D, s: number): void {
-  const cx = s / 2;
-  // mounting arm
-  ctx.fillStyle = hexRGBA(0x2a2a30, 0.6);
-  ctx.fillRect(cx - 2, s * 0.4, 4, s * 0.5);
-
-  // screen bezel
-  const bezelGrad = linearGrad(ctx, 0, s * 0.05, 0, s * 0.45, [
-    [0, shade(0x2a2a35, 5)],
-    [0.5, shade(0x1a1a22, 0)],
-    [1, shade(0x0a0a12, -10)],
+  // matching dark cabinet frame (same as server rack)
+  const bodyGrad = linearGrad(ctx, s * 0.05, 0, s * 0.95, 0, [
+    [0, shade(0x2a2a35, 15)],
+    [0.3, shade(0x1a1a22, 0)],
+    [0.7, shade(0x12121a, -5)],
+    [1, shade(0x08080e, -15)],
   ]);
-  ctx.fillStyle = bezelGrad;
-  roundRect(ctx, s * 0.08, s * 0.05, s * 0.84, s * 0.4, 3);
+  ctx.fillStyle = bodyGrad;
+  roundRect(ctx, s * 0.05, s * 0.02, s * 0.9, s * 0.96, 2);
   ctx.fill();
 
-  // screen — dark with terminal green text
-  ctx.fillStyle = hexRGBA(0x0a0a0e, 0.95);
-  roundRect(ctx, s * 0.11, s * 0.08, s * 0.78, s * 0.34, 2);
+  ctx.strokeStyle = hexRGBA(0x3a3a48, 0.7);
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, s * 0.05, s * 0.02, s * 0.9, s * 0.96, 2);
+  ctx.stroke();
+
+  // large monitoring display — fills most of the cabinet
+  ctx.fillStyle = hexRGBA(0x050508, 0.95);
+  roundRect(ctx, s * 0.08, s * 0.05, s * 0.84, s * 0.72, 2);
   ctx.fill();
 
-  // terminal-style log lines
-  const logColors = [0x44ff66, 0x44ddaa, 0x66ff88, 0x44aaff, 0x44ff66];
-  for (let i = 0; i < 5; i++) {
-    const ly = s * 0.1 + i * s * 0.055;
+  // screen bezel highlight
+  ctx.strokeStyle = hexRGBA(0x2a3040, 0.5);
+  ctx.lineWidth = 1;
+  roundRect(ctx, s * 0.08, s * 0.05, s * 0.84, s * 0.72, 2);
+  ctx.stroke();
+
+  // terminal log lines (top half)
+  const logColors = [0x44ff66, 0x44ddaa, 0x66ff88, 0x44aaff, 0x44ff66, 0xffaa44];
+  for (let i = 0; i < 6; i++) {
+    const ly = s * 0.08 + i * s * 0.04;
     ctx.fillStyle = hexRGBA(logColors[i % logColors.length], 0.5);
-    ctx.fillRect(s * 0.14, ly, s * (0.1 + (i % 3) * 0.15), 2);
+    ctx.fillRect(s * 0.11, ly, s * (0.15 + (i % 3) * 0.18), 1.5);
+  }
+
+  // bar graph (bottom half of screen)
+  const barY = s * 0.38;
+  const barH = s * 0.35;
+  ctx.fillStyle = hexRGBA(0x0a0a14, 0.8);
+  ctx.fillRect(s * 0.11, barY, s * 0.78, barH);
+  // bars
+  const barWidths = [0.5, 0.7, 0.3, 0.85, 0.6, 0.45, 0.75];
+  const barColors = [0x44ff66, 0x44ddff, 0xffaa44, 0x44ff66, 0x44ddff, 0xffaa44, 0x44ff66];
+  for (let i = 0; i < 7; i++) {
+    const bx = s * 0.13 + i * s * 0.1;
+    const bh = barH * barWidths[i];
+    ctx.fillStyle = hexRGBA(barColors[i % barColors.length], 0.6);
+    ctx.fillRect(bx, barY + barH - bh, s * 0.07, bh);
   }
 
   // scanline glow
-  ctx.fillStyle = hexRGBA(0x44ff66, 0.04);
-  roundRect(ctx, s * 0.11, s * 0.08, s * 0.78, s * 0.34, 2);
+  ctx.fillStyle = hexRGBA(0x44ff66, 0.03);
+  roundRect(ctx, s * 0.08, s * 0.05, s * 0.84, s * 0.72, 2);
   ctx.fill();
 
-  // power LED
-  ctx.beginPath();
-  ctx.arc(s * 0.86, s * 0.42, 1.5, 0, Math.PI * 2);
-  ctx.fillStyle = hexRGBA(0x44ff44, 0.8);
-  ctx.fill();
+  // status LEDs at bottom of cabinet
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.arc(s * 0.15 + i * s * 0.08, s * 0.88, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = hexRGBA(i === 3 ? 0xff4444 : 0x44ff44, 0.8);
+    ctx.fill();
+  }
+
+  // label strip
+  ctx.fillStyle = hexRGBA(0x44ddff, 0.1);
+  ctx.fillRect(s * 0.08, s * 0.82, s * 0.84, s * 0.01);
+  ctx.fillStyle = hexRGBA(0x44ddff, 0.3);
+  ctx.font = "bold 4px monospace";
+  ctx.textAlign = "left";
+  ctx.fillText("MONITOR", s * 0.1, s * 0.93);
 }
 
 /* ---------- industrial chimney ---------- */
@@ -1634,15 +1871,18 @@ const FURNITURE_TYPES: FurnitureType[] = [
   { tileIds: [31], draw: drawLargePlant },
   { tileIds: [32], draw: drawToaster },
   { tileIds: [33], draw: drawOfficeChairLeft },
-  { tileIds: [34], draw: drawServerRack },
-  { tileIds: [35], draw: drawServerScreen },
-  { tileIds: [36], draw: drawChimney },
+  { tileIds: [38], draw: drawDeskSideTop },
+  { tileIds: [39], draw: drawDeskSideBottom },
+  { tileIds: [35], draw: drawServerRack },
+  { tileIds: [36], draw: drawServerScreen },
+  { tileIds: [37], draw: drawChimney },
 ];
 
 export const CHAIR_TEX_DOWN = "chair-down";
 export const CHAIR_TEX_UP = "chair-up";
 export const CHAIR_TEX_LEFT = "chair-left";
 export const MONITOR_TEX = "monitor-proc";
+export const MONITOR_SIDE_TEX = "monitor-side-proc";
 
 const CHAIR_TILE_IDS = new Set([19, 33]);
 
@@ -1698,6 +1938,24 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
       ctx.restore();
       canvasTex.refresh();
       const texture = tex.get(MONITOR_TEX);
+      texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
+      texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+    }
+  }
+
+  // Generate side-view monitor texture (2 frames: off / on) — for Yuki's desk
+  if (!tex.exists(MONITOR_SIDE_TEX)) {
+    const canvasTex = tex.createCanvas(MONITOR_SIDE_TEX, TILE_PX * 2, TILE_PX);
+    if (canvasTex) {
+      const ctx = canvasTex.getContext();
+      ctx.clearRect(0, 0, TILE_PX, TILE_PX);
+      drawDeskMonitorSide(ctx, TILE_PX, false);
+      ctx.save();
+      ctx.translate(TILE_PX, 0);
+      drawDeskMonitorSide(ctx, TILE_PX, true);
+      ctx.restore();
+      canvasTex.refresh();
+      const texture = tex.get(MONITOR_SIDE_TEX);
       texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
       texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
     }

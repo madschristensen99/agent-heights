@@ -772,6 +772,10 @@ export class WorldLayer {
   private tennisWallCacheKey = "";
   private tennisWallCache: { wallX: number; wallY: number; foundWall: boolean } | null = null;
 
+  // --- flower picking state ---
+  private flowers = 0;
+  private flowerHint!: Phaser.GameObjects.Text;
+
   /** Current player HP (read-only access for achievement checks). */
   get playerHp(): number { return this.hp; }
   private officeGrid: Grid | null = null;
@@ -868,6 +872,23 @@ export class WorldLayer {
 
     // tennis power bar
     this.tennisPowerBar = scene.add.graphics().setDepth(410).setVisible(false);
+
+    // flower picking hint
+    this.flowerHint = scene.add
+      .text(0, 0, "", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "14px",
+        color: "#ffffff",
+        stroke: "#1a1a22",
+        strokeThickness: 3,
+        backgroundColor: "#1a1a22",
+        padding: { x: 8, y: 6 },
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.8)
+      .setDepth(400)
+      .setVisible(false);
   }
 
   /** Get hostility level at a pixel position (0–5). */
@@ -1422,7 +1443,7 @@ export class WorldLayer {
       this.hud.showHealthBar();
 
       // Audio: play biome music
-      this.audio.playMusic(biomeName);
+      // this.audio.playMusic(biomeName);
 
       // Ambient particles for biome
       this.vfx.startAmbient(biomeName as any);
@@ -2043,6 +2064,50 @@ export class WorldLayer {
         this.tennisBall = null;
         this.tennisBallActive = false;
       }
+    }
+
+    // --- flower picking ---
+    if (outside) {
+      const { tx: ptx, ty: pty } = this.pixelToTile(playerX, playerY);
+      let nearestFlower: { tx: number; ty: number; d: number } | null = null;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const ftx = ptx + dx;
+          const fty = pty + dy;
+          if (this.getTileAt(ftx, fty) === TILE.FLOWER) {
+            const fx = ftx * TILE_PX + TILE_PX / 2 + this.offset.x;
+            const fy = fty * TILE_PX + TILE_PX / 2 + this.offset.y;
+            const d = Math.hypot(playerX - fx, playerY - fy);
+            if (!nearestFlower || d < nearestFlower.d) {
+              nearestFlower = { tx: ftx, ty: fty, d };
+            }
+          }
+        }
+      }
+      if (nearestFlower && nearestFlower.d < 80) {
+        this.flowerHint
+          .setText("E: Pick flower")
+          .setPosition(
+            nearestFlower.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestFlower.ty * TILE_PX + this.offset.y - 10,
+          )
+          .setVisible(true);
+        if (ePressed) {
+          this.setTileAt(nearestFlower.tx, nearestFlower.ty, TILE.GRASS);
+          this.flowers++;
+          this.store.toast(`Picked a flower! 🌸 (${this.flowers})`);
+          this.vfx.sparkBurst(
+            nearestFlower.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestFlower.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0xff88cc, 10, 60,
+          );
+          this.audio.uiClick();
+        }
+      } else {
+        this.flowerHint.setVisible(false);
+      }
+    } else {
+      this.flowerHint.setVisible(false);
     }
 
     // find nearest ghost for dialogue

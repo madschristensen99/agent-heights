@@ -8,7 +8,7 @@ import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, CHAR_FRAMES_PER_ROW } from "./chargen";
-import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, MONITOR_TEX } from "./furniture";
+import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 
 const PLAYER_SPEED = 380;
@@ -217,12 +217,12 @@ export class OfficeScene extends Phaser.Scene {
     // Overlay enhanced procedural furniture on top of the tile-based furniture layer
     upgradeFurniture(this, furniture);
 
-    // Scan for server rack tiles (tile ID 34) for E-interaction
+    // Scan for server rack tiles (GID 35 = tile ID 34) for E-interaction
     this.serverRackTiles = [];
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const t = furniture.getTileAt(x, y);
-        if (t && t.index === 34) {
+        if (t && (t.index === 35 || t.index === 36)) {
           this.serverRackTiles.push({ x, y });
         }
       }
@@ -251,11 +251,11 @@ export class OfficeScene extends Phaser.Scene {
       } else if (obj.name === "yuki-seat") {
         this.yukiSeat = { x: tx, y: ty };
       } else if (obj.name === "yuki-monitor") {
-        // Procedural monitor on Yuki's desk — standing up, facing left
-        const mx = (obj.x ?? 0) + TILE_PX / 2;
-        const my = (obj.y ?? 0) - TILE_PX * 0.35;
+        // Side-view monitor on Yuki's desk — thin profile, screen faces right toward her
+        const mx = (obj.x ?? 0) + TILE_PX * 0.35;
+        const my = (obj.y ?? 0) - TILE_PX * 0.15;
         const spr = this.add
-          .sprite(mx, my, MONITOR_TEX, "0")
+          .sprite(mx, my, MONITOR_SIDE_TEX, "0")
           .setDepth(10 + (obj.y ?? 0) - 10);
         this.yukiMonitor = spr;
       } else if (obj.name.startsWith("seat-")) {
@@ -633,7 +633,7 @@ export class OfficeScene extends Phaser.Scene {
     agentIds.forEach((id, i) => {
       const npc = this.npcs.get(id);
       const spot = spots[i % Math.max(spots.length, 1)];
-      if (npc && spot) npc.assemble(spot);
+      if (npc && spot) npc.assemble(spot, this.time.now);
     });
   }
 
@@ -2431,7 +2431,7 @@ export class OfficeScene extends Phaser.Scene {
         this.store.toggleHallOfFame();
       } else
       // server rack — query Railway data
-      if (this.nearestTile(this.serverRackTiles, 120)) {
+      if (this.nearestTile(this.serverRackTiles, 150)) {
         const net = this.game.registry.get("net") as Net;
         net.send({ type: "railway_query" });
         this.store.toast("Querying Railway...");
@@ -2651,10 +2651,10 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       // server rack proximity hint
-      const rackNear = this.nearestTile(this.serverRackTiles, 120);
+      const rackNear = this.nearestTile(this.serverRackTiles, 150);
       if (rackNear && !this.store.railwayPanelOpen) {
         this.serverRackHint
-          .setPosition(rackNear.x * TILE_PX + 32, rackNear.y * TILE_PX + 64)
+          .setPosition(rackNear.x * TILE_PX + 32, rackNear.y * TILE_PX - 8)
           .setText("E: CHECK SERVERS")
           .setVisible(true);
       } else {
