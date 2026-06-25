@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install dependencies (cached layer)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy source and build the client
 COPY . .
