@@ -2164,10 +2164,14 @@ export class OfficeScene extends Phaser.Scene {
 
     // Generate a custom texture from the delivery's appearance so the
     // cosmetic sprite matches the real NPC that syncAgents() will create.
-    const agentKey = "char-heli-delivery";
+    let agentKey = "char-heli-delivery";
     if (this.heliDelivery?.appearance) {
       generateCharTexture(this, agentKey, this.heliDelivery.appearance);
       this.ensureCharAnimations(agentKey);
+    } else {
+      // No custom appearance — fall back to a pre-generated character spritesheet.
+      const spriteIdx = this.heliDelivery?.sprite ?? 0;
+      agentKey = `char-${spriteIdx}`;
     }
     const label = this.add
       .text(0, -108, this.heliDelivery?.name ?? "AGENT", {
