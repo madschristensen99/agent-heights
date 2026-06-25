@@ -298,6 +298,7 @@ export type ClientMsg =
   | { type: "assign_all"; task: string }
   | { type: "chat"; agentId: string; text: string }
   | { type: "stop"; agentId: string }
+  | { type: "stop_all" }
   | { type: "fire"; agentId: string }
   | { type: "clear"; agentId: string }
   | { type: "clear_all" }
@@ -324,6 +325,7 @@ export type ServerMsg =
   | { type: "agent_removed"; agentId: string }
   | { type: "chat_cleared"; agentId: string }
   | { type: "huddle"; agentIds: string[] }
+  | { type: "assembly"; agentIds: string[] }
   | { type: "log"; agentId: string; entry: LogEntry }
   | { type: "toast"; text: string }
   | { type: "card"; card: TaskCard }

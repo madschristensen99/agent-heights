@@ -517,6 +517,9 @@ export class OfficeScene extends Phaser.Scene {
       this.store.onHelicopter((delivery) => {
         if (this.ready && !this.heliActive) this.triggerHelicopter(delivery);
       });
+      this.store.onAssembly((agentIds) => {
+        if (this.ready) this.startAssembly(agentIds);
+      });
     }
     this.ready = true;
     this.syncAgents();
@@ -613,6 +616,24 @@ export class OfficeScene extends Phaser.Scene {
       const npc = this.npcs.get(id);
       const spot = ring[i % Math.max(ring.length, 1)];
       if (npc && spot) npc.huddle(spot, boss, now);
+    });
+  }
+
+  /** Emergency stop — all agents line up in an organized column by the entrance. */
+  private startAssembly(agentIds: string[]): void {
+    const door = this.doorTile;
+    // Line up in two columns flanking the door, moving inward from the entrance
+    const spots: Tile[] = [];
+    for (let i = 0; i < 16; i++) {
+      const col = i % 2 === 0 ? -1 : 2; // left and right of door
+      const row = Math.floor(i / 2);
+      const t = { x: door.x + col, y: door.y - row - 1 };
+      if (this.grid.ok(t.x, t.y)) spots.push(t);
+    }
+    agentIds.forEach((id, i) => {
+      const npc = this.npcs.get(id);
+      const spot = spots[i % Math.max(spots.length, 1)];
+      if (npc && spot) npc.assemble(spot);
     });
   }
 
@@ -846,16 +867,16 @@ export class OfficeScene extends Phaser.Scene {
       return true;
     }
 
-    // Red Button — summon helicopter
+    // Red Button — EMERGENCY STOP: cease all agent work and assemble by entrance
     const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y) < 160) {
-      if (this.heliActive) {
-        this.store.toast("Helicopter is already on the way!");
-      } else if (time < this.redButtonUntil) {
+      if (time < this.redButtonUntil) {
         this.store.toast("The button is cooling down.");
       } else {
-        this.redButtonUntil = time + 30000;
-        this.triggerHelicopter();
+        this.redButtonUntil = time + 10000;
+        const net = this.game.registry.get("net") as import("../net").Net;
+        net.send({ type: "stop_all" });
+        this.world?.audio.uiClick();
       }
       return true;
     }
@@ -1041,7 +1062,7 @@ export class OfficeScene extends Phaser.Scene {
     if (rbDist < 160) {
       this.redButtonHint
         .setPosition(rbPx.x, rbPx.y + 64)
-        .setText(this.heliActive ? "..." : time < this.redButtonUntil ? "E: COOLING" : "E: PUSH!")
+        .setText(time < this.redButtonUntil ? "E: COOLING" : "E: STOP!")
         .setVisible(true);
     } else {
       this.redButtonHint.setVisible(false);

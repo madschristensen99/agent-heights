@@ -51,6 +51,7 @@ export class Store {
   private toastListeners = new Set<(text: string) => void>();
   private huddleListeners = new Set<(agentIds: string[]) => void>();
   private heliListeners = new Set<(agent: HelicopterDelivery) => void>();
+  private assemblyListeners = new Set<(agentIds: string[]) => void>();
 
   subscribe(fn: Listener): void {
     this.listeners.add(fn);
@@ -66,6 +67,10 @@ export class Store {
 
   onHelicopter(fn: (agent: HelicopterDelivery) => void): void {
     this.heliListeners.add(fn);
+  }
+
+  onAssembly(fn: (agentIds: string[]) => void): void {
+    this.assemblyListeners.add(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -238,6 +243,9 @@ export class Store {
         break;
       case "huddle":
         for (const fn of this.huddleListeners) fn(msg.agentIds);
+        return;
+      case "assembly":
+        for (const fn of this.assemblyListeners) fn(msg.agentIds);
         return;
       case "railway_status":
         this.railwayStatus = { ok: msg.ok, message: msg.message };

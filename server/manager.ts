@@ -347,6 +347,38 @@ export class AgentManager {
     this.broadcast({ type: "agent", agent: rt.info });
   }
 
+  /** Emergency stop — cease all agent work and assemble by the entrance. */
+  stopAll(): void {
+    const stopped: string[] = [];
+    for (const rt of this.agents.values()) {
+      if (rt.info.id === YUKI_ID) continue;
+      if (rt.abort) {
+        rt.abort.abort();
+        if (rt.cardId) {
+          this.revertCard(rt.cardId);
+          rt.cardId = null;
+        }
+        rt.handoffTo = null;
+        this.log(rt, "status", "Emergency stop — all work halted.");
+      }
+      if (rt.doneTimer) {
+        clearTimeout(rt.doneTimer);
+        rt.doneTimer = null;
+      }
+      rt.info.task = null;
+      this.setStatus(rt, "idle");
+      stopped.push(rt.info.id);
+    }
+    if (stopped.length > 0) {
+      this.session.record("stop_all", { agentIds: stopped });
+      this.persist();
+      this.broadcast({ type: "assembly", agentIds: stopped });
+      this.broadcast({ type: "toast", text: "EMERGENCY STOP! All agents assembling at the entrance." });
+    } else {
+      this.broadcast({ type: "toast", text: "No agents to stop." });
+    }
+  }
+
   /** Wipe an agent's chat log and provider session so they start with a fresh memory. */
   clearChat(agentId: string): void {
     const rt = this.agents.get(agentId);

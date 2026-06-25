@@ -191,6 +191,7 @@ const server = createServer((req, res) => {
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", async (ws, req) => {
+  console.log("[server] WebSocket connection from", req.socket.remoteAddress, "url:", req.url);
   let user: AuthUser;
 
   if (isSupabaseConfigured) {
@@ -278,6 +279,9 @@ wss.on("connection", async (ws, req) => {
           break;
         case "stop":
           manager.stop(msg.agentId);
+          break;
+        case "stop_all":
+          manager.stopAll();
           break;
         case "fire":
           manager.fire(msg.agentId);

@@ -191,6 +191,16 @@ export class AgentNPC {
     this.path = findPath(this.grid, this.tile(), spot);
   }
 
+  /** Assemble at a lineup spot near the entrance during emergency stop. */
+  assemble(spot: Tile): void {
+    this.huddleUntil = 0;
+    this.huddleFace = null;
+    this.wanderAt = 0;
+    this.breakUntil = 0;
+    this.pendingBreak = false;
+    this.path = findPath(this.grid, this.tile(), spot);
+  }
+
   private get huddling(): boolean {
     return this.huddleUntil > 0;
   }
