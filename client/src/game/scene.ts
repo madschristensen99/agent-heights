@@ -1749,6 +1749,7 @@ export class OfficeScene extends Phaser.Scene {
               model: this.heliDelivery.model,
               systemPrompt: this.heliDelivery.systemPrompt,
               role: "worker",
+              appearance: this.heliDelivery.appearance,
             });
           }
 
@@ -2432,7 +2433,6 @@ export class OfficeScene extends Phaser.Scene {
       // server rack — query Railway data
       if (this.nearestTile(this.serverRackTiles, 120)) {
         const net = this.game.registry.get("net") as Net;
-        console.log("[scene] server rack E-pressed, sending railway_query, rackTiles:", this.serverRackTiles.length, "net:", !!net);
         net.send({ type: "railway_query" });
         this.store.toast("Querying Railway...");
       } else

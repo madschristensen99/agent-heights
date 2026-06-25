@@ -92,6 +92,23 @@ export const DEFAULT_APPEARANCE: CharAppearance = {
   headFeature: 0,
 };
 
+/** Generate a fully random CharAppearance. */
+export function randomAppearance(): CharAppearance {
+  const ri = (n: number) => Math.floor(Math.random() * n);
+  return {
+    skin: ri(SKIN_TONES.length),
+    hairStyle: ri(HAIR_STYLES.length),
+    hair: ri(HAIR_COLORS.length),
+    shirt: ri(SHIRT_COLORS.length),
+    pants: ri(PANTS_COLORS.length),
+    accessory: ri(ACCESSORIES.length),
+    accent: ri(ACCENT_COLOR_OPTIONS.length),
+    beard: ri(BEARD_STYLES.length),
+    eyeColor: ri(EYE_COLORS.length),
+    headFeature: ri(HEAD_FEATURES.length),
+  };
+}
+
 /** Build a CharAppearance from a legacy sprite index (maps to the 8 pre-baked palettes). */
 export function appearanceFromSprite(sprite: number): CharAppearance {
   const map: CharAppearance[] = [

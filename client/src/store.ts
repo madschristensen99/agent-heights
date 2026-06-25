@@ -1,4 +1,4 @@
-import type { AgentInfo, FiredAgent, GameSettings, LogEntry, PlayerInfo, RailwayData, ServerMsg, TaskCard } from "../../shared/types";
+import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, RailwayData, ServerMsg, TaskCard } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -10,6 +10,7 @@ export interface HelicopterDelivery {
   model: string;
   provider: string;
   sprite?: number;
+  appearance?: CharAppearance;
 }
 
 export interface FeedItem {
@@ -252,7 +253,6 @@ export class Store {
         this.toast(msg.message);
         return;
       case "railway_data":
-        console.log("[store] received railway_data:", msg.error ? `error: ${msg.error}` : `data: ${msg.data?.projects.length ?? 0} projects`);
         this.railwayData = msg.data;
         this.railwayError = msg.error;
         this.railwayPanelOpen = true;

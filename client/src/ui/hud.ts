@@ -3,7 +3,8 @@ import type { FeedItem, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance } from "../../../shared/types";
 import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
-  ACCENT_COLOR_OPTIONS, DEFAULT_APPEARANCE, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
+  ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
+  randomAppearance,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
@@ -461,7 +462,7 @@ export class Hud {
     const modal = document.getElementById("onboard-modal")!;
     modal.hidden = false;
 
-    const builder = new CharBuilder("ob", DEFAULT_APPEARANCE, () => {});
+    const builder = new CharBuilder("ob", randomAppearance(), () => {});
 
     modal.innerHTML = `
       <div class="modal onboard">
@@ -667,15 +668,16 @@ export class Hud {
   private quickHire(provider: Provider): void {
     const name = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
     const models = SWARMS_MODELS;
+    const model = models[Math.floor(Math.random() * models.length)];
     this.net.send({
       type: "hire",
       name,
       provider,
-      model: models[0].id,
+      model: model.id,
       systemPrompt: "",
       role: "worker",
     });
-    this.toast(`${name} is on the way in (${models[0].label}).`);
+    this.toast(`${name} is on the way in (${model.label}).`);
   }
 
   /** Download everything the office knows as one JSON file. */
@@ -702,12 +704,13 @@ export class Hud {
   private openHireModal(): void {
     const modal = document.getElementById("hire-modal")!;
     const suggested = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
+    const randomModelIdx = Math.floor(Math.random() * SWARMS_MODELS.length);
     const modelOptions = () =>
       SWARMS_MODELS
-        .map((m) => `<option value="${m.id}">${m.label}</option>`)
+        .map((m, i) => `<option value="${m.id}"${i === randomModelIdx ? ' selected' : ''}>${m.label}</option>`)
         .join("");
 
-    const builder = new CharBuilder("h", DEFAULT_APPEARANCE, () => {});
+    const builder = new CharBuilder("h", randomAppearance(), () => {});
 
     modal.hidden = false;
     modal.innerHTML = `
@@ -742,6 +745,7 @@ export class Hud {
     builder.mount();
 
     const modelSel = document.getElementById("h-model") as HTMLSelectElement;
+    modelSel.selectedIndex = randomModelIdx;
     document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
     document.getElementById("h-ok")!.addEventListener("click", () => {
       const name = (document.getElementById("h-name") as HTMLInputElement).value.trim();
@@ -767,11 +771,15 @@ export class Hud {
       agent.language ? `\nLanguage: ${agent.language}` : "",
     ].filter(Boolean).join("\n").slice(0, 4000);
 
+    const models = SWARMS_MODELS;
+    const model = models[Math.floor(Math.random() * models.length)];
+
     const delivery = {
       name: agent.name.slice(0, 24) || "Agent",
       systemPrompt,
-      model: "claude-sonnet-4-20250514",
+      model: model.id,
       provider: "cline",
+      appearance: randomAppearance(),
     };
 
     this.store.triggerHelicopter(delivery);

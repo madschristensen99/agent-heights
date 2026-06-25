@@ -37,8 +37,17 @@ export async function initAuth(): Promise<void> {
     return;
   }
 
-  const { data } = await client.auth.getSession();
-  currentState = { session: data.session, loading: false };
+  try {
+    const result = await Promise.race([
+      client.auth.getSession(),
+      new Promise<{ data: { session: null } }>((resolve) =>
+        setTimeout(() => resolve({ data: { session: null } }), 3000),
+      ),
+    ]);
+    currentState = { session: result.data.session, loading: false };
+  } catch {
+    currentState = { session: null, loading: false };
+  }
   notify();
 
   client.auth.onAuthStateChange((_event, session) => {

@@ -95,7 +95,7 @@ async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
   let save: Persistence;
   let saved: SaveState | null;
 
-  if (isSupabaseConfigured) {
+  if (isSupabaseConfigured && user.id !== "dev") {
     const db = new DbPersistence(user.id);
     save = db;
     saved = await db.load();
@@ -191,7 +191,6 @@ const server = createServer((req, res) => {
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", async (ws, req) => {
-  console.log("[server] WebSocket connection from", req.socket.remoteAddress, "url:", req.url);
   let user: AuthUser;
 
   if (isSupabaseConfigured) {
@@ -233,7 +232,6 @@ wss.on("connection", async (ws, req) => {
     } catch {
       return;
     }
-    console.log("[server] msg type:", msg.type);
     try {
       const { manager, session: sessLog, save } = sess;
       switch (msg.type) {
@@ -308,9 +306,7 @@ wss.on("connection", async (ws, req) => {
           manager.recruit(msg.firedAgentId);
           break;
         case "railway_query":
-          console.log("[server] received railway_query");
           queryRailway().then((result) => {
-            console.log("[server] railway_query result:", result.error ? `error: ${result.error}` : `data: ${result.data?.projects.length ?? 0} projects`);
             sess.broadcast({ type: "railway_data", data: result.data, error: result.error });
           }).catch((err) => {
             console.error("[server] railway_query failed:", err);

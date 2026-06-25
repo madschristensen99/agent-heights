@@ -1,6 +1,17 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentTool } from "@cline/sdk";
 import type { RailwayData, RailwayProject } from "../../shared/types.js";
+
+/** Resolve the railway CLI binary — checks local node_modules/.bin first, then PATH. */
+function resolveRailwayBin(): string {
+  const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const localBin = join(rootDir, "node_modules", ".bin", "railway");
+  if (existsSync(localBin)) return localBin;
+  return "railway"; // fall back to PATH (global install)
+}
 
 /** Minimal JSON-RPC types for MCP stdio communication. */
 interface JsonRpcRequest {
@@ -54,40 +65,56 @@ export class RailwayMCPClient {
   }
 
   private async _start(): Promise<void> {
-    const proc = spawn("railway", ["mcp"], {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, MCP_SERVER: "1" },
+    return new Promise<void>((resolve, reject) => {
+      const proc = spawn(resolveRailwayBin(), ["mcp"], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, MCP_SERVER: "1" },
+      });
+      this.proc = proc;
+
+      let settled = false;
+
+      proc.on("error", (err: NodeJS.ErrnoException) => {
+        console.error(`[railway-mcp] spawn error: ${err.message}`);
+        this.proc = null;
+        this.starting = null;
+        for (const [, call] of this.pending) {
+          call.reject(new Error(`Railway CLI not available: ${err.message}. Install it with: npm i -g @railway/cli`));
+        }
+        this.pending.clear();
+        if (!settled) { settled = true; reject(err); }
+      });
+
+      proc.stdout.setEncoding("utf-8");
+      proc.stdout.on("data", (chunk: string) => this.onStdout(chunk));
+      proc.stderr.on("data", (chunk: Buffer) => {
+        const text = chunk.toString().trim();
+        if (text) console.error(`[railway-mcp] stderr: ${text}`);
+      });
+      proc.on("exit", (code) => {
+        console.log(`[railway-mcp] process exited (code ${code})`);
+        this.proc = null;
+        this.toolsCache = null;
+        for (const p of this.pending.values()) {
+          p.reject(new Error("Railway MCP process exited"));
+        }
+        this.pending.clear();
+        if (!settled) { settled = true; reject(new Error(`Railway MCP process exited with code ${code}`)); }
+      });
+
+      // MCP initialize handshake
+      this.rpc("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "agent-hq", version: "0.1.0" },
+      }).then((result) => {
+        this.notify("notifications/initialized", {});
+        console.log("[railway-mcp] connected:", JSON.stringify((result as { capabilities?: unknown })?.capabilities ?? {}));
+        if (!settled) { settled = true; resolve(); }
+      }).catch((err) => {
+        if (!settled) { settled = true; reject(err); }
+      });
     });
-    this.proc = proc;
-
-    proc.stdout.setEncoding("utf-8");
-    proc.stdout.on("data", (chunk: string) => this.onStdout(chunk));
-    proc.stderr.on("data", (chunk: Buffer) => {
-      const text = chunk.toString().trim();
-      if (text) console.error(`[railway-mcp] stderr: ${text}`);
-    });
-    proc.on("exit", (code) => {
-      console.log(`[railway-mcp] process exited (code ${code})`);
-      this.proc = null;
-      this.toolsCache = null;
-      // Reject any pending calls
-      for (const p of this.pending.values()) {
-        p.reject(new Error("Railway MCP process exited"));
-      }
-      this.pending.clear();
-    });
-
-    // MCP initialize handshake
-    const result = await this.rpc("initialize", {
-      protocolVersion: "2024-11-05",
-      capabilities: {},
-      clientInfo: { name: "agent-hq", version: "0.1.0" },
-    }) as { capabilities?: unknown };
-
-    // Send initialized notification (no response expected)
-    this.notify("notifications/initialized", {});
-
-    console.log("[railway-mcp] connected:", JSON.stringify(result?.capabilities ?? {}));
   }
 
   /** Stop the MCP server process. */
