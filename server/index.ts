@@ -1,6 +1,8 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, extname, normalize } from "node:path";
+import { readFile, stat } from "node:fs/promises";
 import type { ClientMsg, PlayerInfo, ServerMsg } from "../shared/types.js";
 import { SERVER_PORT } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
@@ -8,8 +10,71 @@ import { SessionLogger } from "./logger.js";
 import { SaveFile } from "./persistence.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+const distDir = join(rootDir, "dist");
 
-const wss = new WebSocketServer({ port: SERVER_PORT });
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".map": "application/json",
+};
+
+async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let urlPath = req.url?.split("?")[0] ?? "/";
+  if (urlPath === "/") urlPath = "/index.html";
+
+  // Prevent path traversal
+  const filePath = normalize(join(distDir, urlPath));
+  if (!filePath.startsWith(distDir)) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+
+  try {
+    const info = await stat(filePath);
+    if (info.isDirectory()) {
+      // Directory requests fall through to index.html (SPA fallback)
+      throw new Error("is directory");
+    }
+    const data = await readFile(filePath);
+    const mime = MIME[extname(filePath)] ?? "application/octet-stream";
+    res.writeHead(200, { "Content-Type": mime });
+    res.end(data);
+  } catch {
+    // SPA fallback: serve index.html for any non-file route
+    try {
+      const indexPath = join(distDir, "index.html");
+      const data = await readFile(indexPath);
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(data);
+    } catch {
+      res.writeHead(404);
+      res.end("Not found");
+    }
+  }
+}
+
+const server = createServer((req, res) => {
+  serveStatic(req, res).catch(() => {
+    res.writeHead(500);
+    res.end("Internal server error");
+  });
+});
+
+const wss = new WebSocketServer({ server });
 const clients = new Set<WebSocket>();
 
 const save = new SaveFile(rootDir);
@@ -122,6 +187,8 @@ wss.on("connection", (ws) => {
   ws.on("error", () => clients.delete(ws));
 });
 
-console.log(`[agent-hq] server listening on ws://localhost:${SERVER_PORT}`);
-console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (save.json, logs/, workspace/)`);
-console.log(`[agent-hq] session log: ${session.file}`);
+server.listen(SERVER_PORT, () => {
+  console.log(`[agent-hq] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
+  console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (save.json, logs/, workspace/)`);
+  console.log(`[agent-hq] session log: ${session.file}`);
+});

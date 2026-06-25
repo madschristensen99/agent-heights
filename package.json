@@ -9,6 +9,7 @@
     "server": "tsx server/index.ts",
     "client": "vite",
     "build": "vite build",
+    "start": "tsx server/index.ts",
     "assets": "tsx scripts/generate-assets.ts",
     "typecheck": "tsc --noEmit"
   },

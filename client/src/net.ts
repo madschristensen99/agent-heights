@@ -1,5 +1,4 @@
 import type { ClientMsg, ServerMsg } from "../../shared/types";
-import { SERVER_PORT } from "../../shared/types";
 
 export class Net {
   private ws: WebSocket | null = null;
@@ -9,7 +8,8 @@ export class Net {
   onStatus: (connected: boolean) => void = () => {};
 
   connect(): void {
-    const url = `ws://${location.hostname}:${SERVER_PORT}`;
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const url = `${proto}://${location.host}`;
     const ws = new WebSocket(url);
     this.ws = ws;
 
