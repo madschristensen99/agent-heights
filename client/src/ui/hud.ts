@@ -8,6 +8,7 @@ import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
+import { touchInput, isTouchDevice } from "../touch";
 import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
@@ -224,6 +225,23 @@ export class Hud {
       </div>
       <div class="toasts" id="toasts"></div>
       <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · click an agent · ESC close</div>
+      <div class="hint touch">Tap an agent · Use joystick to move · Tap action buttons</div>
+      <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
+      <div class="mobile-panel-toggles">
+        <button class="mpt-btn" id="mpt-roster" title="Roster">👥</button>
+        <button class="mpt-btn" id="mpt-feed" title="Feed">💬</button>
+        <button class="mpt-btn" id="mpt-hire" title="Hire">➕</button>
+        <button class="mpt-btn" id="mpt-board" title="Board">📋</button>
+      </div>
+      <div class="touch-controls">
+        <div class="joystick-base" id="joystick-base">
+          <div class="joystick-knob" id="joystick-knob"></div>
+        </div>
+        <div class="mobile-actions">
+          <button class="mobile-action-btn primary" id="ma-interact" title="Interact / Talk">E</button>
+          <button class="mobile-action-btn" id="ma-teleport" title="Teleport">Q</button>
+        </div>
+      </div>
     `;
 
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
@@ -240,6 +258,7 @@ export class Hud {
     this.bindHallOfFame();
     this.bindRailwayPanel();
     this.bindShortcuts();
+    this.bindMobileControls();
     // agents stream many messages per second — coalesce to one render per frame
     // so DOM work never starves the game loop
     store.subscribe(() => this.scheduleRender());
@@ -414,6 +433,119 @@ export class Hud {
           break;
       }
     });
+  }
+
+  private bindMobileControls(): void {
+    if (!isTouchDevice()) return;
+
+    document.body.classList.add("is-touch");
+
+    const backdrop = document.getElementById("mobile-backdrop")!;
+    const roster = document.getElementById("roster")!;
+    const feed = document.getElementById("feed")!;
+
+    const closeMobilePanels = () => {
+      roster.classList.remove("mobile-show");
+      feed.classList.remove("mobile-show");
+      backdrop.classList.remove("show");
+      document.querySelectorAll(".mpt-btn").forEach((b) => b.classList.remove("active"));
+    };
+
+    backdrop.addEventListener("click", closeMobilePanels);
+
+    const mptRoster = document.getElementById("mpt-roster")!;
+    mptRoster.addEventListener("click", () => {
+      const show = !roster.classList.contains("mobile-show");
+      closeMobilePanels();
+      if (show) {
+        roster.classList.add("mobile-show");
+        backdrop.classList.add("show");
+        mptRoster.classList.add("active");
+      }
+    });
+
+    const mptFeed = document.getElementById("mpt-feed")!;
+    mptFeed.addEventListener("click", () => {
+      const show = !feed.classList.contains("mobile-show");
+      closeMobilePanels();
+      if (show) {
+        feed.classList.add("mobile-show");
+        backdrop.classList.add("show");
+        mptFeed.classList.add("active");
+      }
+    });
+
+    const mptHire = document.getElementById("mpt-hire")!;
+    mptHire.addEventListener("click", () => {
+      closeMobilePanels();
+      this.openHireModal();
+    });
+
+    const mptBoard = document.getElementById("mpt-board")!;
+    mptBoard.addEventListener("click", () => {
+      closeMobilePanels();
+      this.store.toggleBoard();
+    });
+
+    // ── Virtual joystick ──
+    const base = document.getElementById("joystick-base")!;
+    const knob = document.getElementById("joystick-knob")!;
+    const baseRect = () => base.getBoundingClientRect();
+    const maxDist = 40;
+    let active = false;
+
+    const setKnob = (dx: number, dy: number) => {
+      const dist = Math.hypot(dx, dy);
+      const clamped = Math.min(dist, maxDist);
+      const angle = Math.atan2(dy, dx);
+      const kx = Math.cos(angle) * clamped;
+      const ky = Math.sin(angle) * clamped;
+      knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+      touchInput.moveX = clamped / maxDist * (dx / (dist || 1));
+      touchInput.moveY = clamped / maxDist * (dy / (dist || 1));
+    };
+
+    const resetKnob = () => {
+      knob.style.transform = "translate(-50%, -50%)";
+      touchInput.moveX = 0;
+      touchInput.moveY = 0;
+    };
+
+    base.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      active = true;
+      const r = baseRect();
+      const t = e.touches[0];
+      setKnob(t.clientX - r.left - r.width / 2, t.clientY - r.top - r.height / 2);
+    }, { passive: false });
+
+    base.addEventListener("touchmove", (e) => {
+      if (!active) return;
+      e.preventDefault();
+      const r = baseRect();
+      const t = e.touches[0];
+      setKnob(t.clientX - r.left - r.width / 2, t.clientY - r.top - r.height / 2);
+    }, { passive: false });
+
+    const endTouch = () => {
+      active = false;
+      resetKnob();
+    };
+    base.addEventListener("touchend", endTouch);
+    base.addEventListener("touchcancel", endTouch);
+
+    // ── Action buttons ──
+    const interactBtn = document.getElementById("ma-interact")!;
+    interactBtn.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      touchInput.action = "interact";
+    }, { passive: false });
+
+    const teleportBtn = document.getElementById("ma-teleport")!;
+    teleportBtn.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      touchInput.action = "teleport";
+    }, { passive: false });
   }
 
   /** Tiny FPS readout for chasing frame pacing issues. Toggled with P. */

@@ -10,6 +10,7 @@
  */
 
 import Phaser from "phaser";
+import { isTouchDevice } from "../touch";
 
 export class HUDSystem {
   private scene: Phaser.Scene;
@@ -114,8 +115,10 @@ export class HUDSystem {
     g.clear();
     const w = 140;
     const h = 18;
+    // On narrow screens, move health bar below the topbar to avoid overlap
+    const narrow = Math.min(this.scene.scale.width, this.scene.scale.height) < 480;
     const x = this.scene.scale.width - w - 20;
-    const y = 20;
+    const y = narrow ? (isTouchDevice() ? 56 : 56) : 20;
     const pct = Math.max(0, this.hp / this.maxHp);
 
     // outer frame — dark with subtle border
@@ -189,8 +192,10 @@ export class HUDSystem {
     this.compassText.setVisible(visible);
     if (!visible) return;
 
-    const cx = 60;
-    const cy = 50;
+    // On narrow screens, move compass to avoid overlapping with DOM roster panel
+    const narrow = Math.min(this.scene.scale.width, this.scene.scale.height) < 480;
+    const cx = narrow ? this.scene.scale.width - 60 : 60;
+    const cy = narrow ? 90 : 50;
     const g = this.compass;
     g.clear();
 
@@ -242,7 +247,7 @@ export class HUDSystem {
     // text below
     this.compassText
       .setPosition(cx, cy + 32)
-      .setText(`${distTiles} tiles  |  ${biomeName}\nQ: TELEPORT`);
+      .setText(`${distTiles} tiles  |  ${biomeName}\n${isTouchDevice() ? "TAP Q TO TELEPORT" : "Q: TELEPORT"}`);
   }
 
   // ============================================================
@@ -311,34 +316,37 @@ export class HUDSystem {
     g.clear();
 
     const size = 100;
-    const mx = this.scene.scale.width - size - 20;
-    const my = this.scene.scale.height - size - 20;
+    // On narrow screens, shrink minimap and move it to avoid overlap with mobile controls
+    const narrow = Math.min(this.scene.scale.width, this.scene.scale.height) < 480;
+    const ms = narrow ? 70 : size;
+    const mx = this.scene.scale.width - ms - 20;
+    const my = this.scene.scale.height - ms - (narrow ? 180 : 20);
     const range = 800; // pixels shown on minimap
-    const scale = size / range;
+    const scale = ms / range;
 
     // background
     g.fillStyle(0x000000, 0.6);
-    g.fillRoundedRect(mx - 4, my - 4, size + 8, size + 8, 6);
+    g.fillRoundedRect(mx - 4, my - 4, ms + 8, ms + 8, 6);
     g.fillStyle(0x0a0a14, 0.8);
-    g.fillRoundedRect(mx, my, size, size, 4);
+    g.fillRoundedRect(mx, my, ms, ms, 4);
     g.lineStyle(1.5, 0x4a5a7a, 0.4);
-    g.strokeRoundedRect(mx, my, size, size, 4);
+    g.strokeRoundedRect(mx, my, ms, ms, 4);
 
     // grid lines
     g.lineStyle(1, 0x2a3a5a, 0.2);
     for (let i = 1; i < 4; i++) {
-      g.moveTo(mx + (size / 4) * i, my);
-      g.lineTo(mx + (size / 4) * i, my + size);
-      g.moveTo(mx, my + (size / 4) * i);
-      g.lineTo(mx + size, my + (size / 4) * i);
+      g.moveTo(mx + (ms / 4) * i, my);
+      g.lineTo(mx + (ms / 4) * i, my + ms);
+      g.moveTo(mx, my + (ms / 4) * i);
+      g.lineTo(mx + ms, my + (ms / 4) * i);
     }
     g.strokePath();
 
     // door marker
     const ddx = (doorX - playerX) * scale;
     const ddy = (doorY - playerY) * scale;
-    const dpx = mx + size / 2 + Phaser.Math.Clamp(ddx, -size / 2, size / 2);
-    const dpy = my + size / 2 + Phaser.Math.Clamp(ddy, -size / 2, size / 2);
+    const dpx = mx + ms / 2 + Phaser.Math.Clamp(ddx, -ms / 2, ms / 2);
+    const dpy = my + ms / 2 + Phaser.Math.Clamp(ddy, -ms / 2, ms / 2);
     g.fillStyle(0x4cb866, 0.9);
     g.fillCircle(dpx, dpy, 4);
     g.fillStyle(0x88ffaa, 0.4);
@@ -348,18 +356,18 @@ export class HUDSystem {
     for (const e of entities) {
       const ex = (e.x - playerX) * scale;
       const ey = (e.y - playerY) * scale;
-      if (Math.abs(ex) > size / 2 || Math.abs(ey) > size / 2) continue;
-      const px = mx + size / 2 + ex;
-      const py = my + size / 2 + ey;
+      if (Math.abs(ex) > ms / 2 || Math.abs(ey) > ms / 2) continue;
+      const px = mx + ms / 2 + ex;
+      const py = my + ms / 2 + ey;
       g.fillStyle(e.color, 0.9);
       g.fillCircle(px, py, e.size ?? 2);
     }
 
     // player center
     g.fillStyle(0xffffff, 1);
-    g.fillCircle(mx + size / 2, my + size / 2, 3);
+    g.fillCircle(mx + ms / 2, my + ms / 2, 3);
     g.fillStyle(0xffffff, 0.3);
-    g.fillCircle(mx + size / 2, my + size / 2, 5);
+    g.fillCircle(mx + ms / 2, my + ms / 2, 5);
   }
 
   // ============================================================

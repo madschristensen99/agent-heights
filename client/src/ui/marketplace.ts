@@ -21,7 +21,7 @@ export class MarketplaceBrowser {
     this.panel.id = "marketplace-panel";
     this.panel.style.cssText = `
       position: fixed; top: 0; right: 0; bottom: 0;
-      width: 420px; max-width: 90vw; z-index: 8000;
+      width: 420px; max-width: 100vw; z-index: 8000;
       background: #111; border-left: 1px solid #222;
       display: none; flex-direction: column;
       font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
@@ -190,7 +190,7 @@ export class MarketplaceBrowser {
       : "None";
 
     modal.innerHTML = `
-      <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; overflow-y:auto; padding:1.5rem; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
+      <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; overflow-y:auto; padding:1.5rem; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
         <div style="display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:1rem;">
           ${agent.image_url ? `<img src="${agent.image_url}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" />` : ""}
           <div style="flex:1;">

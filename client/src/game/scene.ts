@@ -11,8 +11,13 @@ import { generateCharTexture, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
 import { upgradeWorkshop } from "./workshop";
 import { achievements, ACHIEVEMENTS } from "./achievements";
+import { touchInput, isTouchDevice } from "../touch";
 
 const PLAYER_SPEED = 380;
+
+function hintLabel(text: string): string {
+  return isTouchDevice() ? text.replace(/^E:\s*/, "TAP ") : text;
+}
 
 interface PlatformMailbox {
   platform: string;
@@ -593,8 +598,14 @@ export class OfficeScene extends Phaser.Scene {
           this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
           this.world.setOfficeGrid(this.grid);
 
-          // Fill in the pre-allocated chunk phase slots with actual chunk data
+          // Immediately request all door chunks from the background worker so
+          // generation runs in parallel with the per-chunk phases below.  By the
+          // time each phase fires, the worker will likely have already computed
+          // the tile data — the phase only needs to render (GPU work).
           const doorChunks = this.world.getDoorChunkList();
+          this.world.preGenerateChunks(doorChunks);
+
+          // Fill in the pre-allocated chunk phase slots with actual chunk data
           for (let i = 0; i < doorChunks.length && i < chunkPhases.length; i++) {
             const c = doorChunks[i];
             chunkPhases[i].fn = () => {
@@ -889,6 +900,11 @@ export class OfficeScene extends Phaser.Scene {
     // zoom up until the office covers the whole viewport — the camera
     // follows the boss, so overflow just means you walk to see the rest
     const z = Math.max(this.scale.width / this.mapPx.w, this.scale.height / this.mapPx.h);
+    // On narrow touch screens, don't over-zoom — cap at a reasonable level
+    // so the pixel art doesn't get too large and the player sees enough context
+    if (isTouchDevice() && Math.min(this.scale.width, this.scale.height) < 480) {
+      return Math.max(1, Math.min(z, 2.5));
+    }
     return Math.max(1, Math.ceil(z));
   }
 
@@ -1286,7 +1302,7 @@ export class OfficeScene extends Phaser.Scene {
     if (fridgeDist < 144) {
       this.fridgeHint
         .setPosition(fridgePx.x, fridgePx.y + 64)
-        .setText(time < this.fridgeUntil ? "E: RESTOCKING..." : "E: SNACK")
+        .setText(hintLabel(time < this.fridgeUntil ? "E: RESTOCKING..." : "E: SNACK"))
         .setVisible(true);
     } else {
       this.fridgeHint.setVisible(false);
@@ -1298,7 +1314,7 @@ export class OfficeScene extends Phaser.Scene {
     if (coolerDist < 144) {
       this.coolerHint
         .setPosition(coolerPx.x, coolerPx.y + 64)
-        .setText(time < this.coolerUntil ? "E: ..." : "E: GOSSIP")
+        .setText(hintLabel(time < this.coolerUntil ? "E: ..." : "E: GOSSIP"))
         .setVisible(true);
     } else {
       this.coolerHint.setVisible(false);
@@ -1310,7 +1326,7 @@ export class OfficeScene extends Phaser.Scene {
     if (clockDist < 160) {
       this.clockHint
         .setPosition(clockPx.x, clockPx.y + 64)
-        .setText("E: CHECK TIME")
+        .setText(hintLabel("E: CHECK TIME"))
         .setVisible(true);
     } else {
       this.clockHint.setVisible(false);
@@ -1323,7 +1339,7 @@ export class OfficeScene extends Phaser.Scene {
       if (vDist < 144) {
         this.vendingHint
           .setPosition(vPx.x, vPx.y + 64)
-          .setText(time < this.vendingUntil ? "E: RESTOCKING..." : "E: BUY SNACK")
+          .setText(hintLabel(time < this.vendingUntil ? "E: RESTOCKING..." : "E: BUY SNACK"))
           .setVisible(true);
       } else {
         this.vendingHint.setVisible(false);
@@ -1339,7 +1355,7 @@ export class OfficeScene extends Phaser.Scene {
       if (sDist < 144) {
         this.sofaHint
           .setPosition(sPx.x, sPx.y + 64)
-          .setText(time < this.sofaUntil ? "E: ALREADY RESTED" : "E: POWER NAP")
+          .setText(hintLabel(time < this.sofaUntil ? "E: ALREADY RESTED" : "E: POWER NAP"))
           .setVisible(true);
       } else {
         this.sofaHint.setVisible(false);
@@ -1354,7 +1370,7 @@ export class OfficeScene extends Phaser.Scene {
       const fPx = { x: filingNear.x * TILE_PX + 32, y: filingNear.y * TILE_PX + 32 };
       this.filingHint
         .setPosition(fPx.x, fPx.y + 64)
-        .setText(time < this.filingUntil ? "E: BROWSING..." : "E: BROWSE FILES")
+        .setText(hintLabel(time < this.filingUntil ? "E: BROWSING..." : "E: BROWSE FILES"))
         .setVisible(true);
     } else {
       this.filingHint.setVisible(false);
@@ -1363,7 +1379,7 @@ export class OfficeScene extends Phaser.Scene {
     // Wardrobe proximity hint
     const wdHintPx = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wdHintPx.x, wdHintPx.y) < 144) {
-      this.wardrobeHint.setPosition(wdHintPx.x, wdHintPx.y + 64).setText("E: WARDROBE").setVisible(true);
+      this.wardrobeHint.setPosition(wdHintPx.x, wdHintPx.y + 64).setText(hintLabel("E: WARDROBE")).setVisible(true);
     } else {
       this.wardrobeHint.setVisible(false);
     }
@@ -1372,7 +1388,7 @@ export class OfficeScene extends Phaser.Scene {
     const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
     const wtDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y);
     if (wtDist < 144) {
-      this.warTableHint.setPosition(wtPx.x, wtPx.y + 64).setText("E: WAR TABLE").setVisible(true);
+      this.warTableHint.setPosition(wtPx.x, wtPx.y + 64).setText(hintLabel("E: WAR TABLE")).setVisible(true);
     } else {
       this.warTableHint.setVisible(false);
     }
@@ -1380,7 +1396,7 @@ export class OfficeScene extends Phaser.Scene {
     const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
     const sbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y);
     if (sbDist < 144) {
-      this.scrapBinHint.setPosition(sbPx.x, sbPx.y + 64).setText("E: SCRAP BIN").setVisible(true);
+      this.scrapBinHint.setPosition(sbPx.x, sbPx.y + 64).setText(hintLabel("E: SCRAP BIN")).setVisible(true);
     } else {
       this.scrapBinHint.setVisible(false);
     }
@@ -1388,7 +1404,7 @@ export class OfficeScene extends Phaser.Scene {
     const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
     const rdDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y);
     if (rdDist < 144) {
-      this.radioHint.setPosition(rdPx.x, rdPx.y + 64).setText("E: RADIO").setVisible(true);
+      this.radioHint.setPosition(rdPx.x, rdPx.y + 64).setText(hintLabel("E: RADIO")).setVisible(true);
     } else {
       this.radioHint.setVisible(false);
     }
@@ -1396,7 +1412,7 @@ export class OfficeScene extends Phaser.Scene {
     const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
     const wbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y);
     if (wbDist < 144) {
-      this.workbenchHint.setPosition(wbPx.x, wbPx.y + 64).setText("E: WORKBENCH").setVisible(true);
+      this.workbenchHint.setPosition(wbPx.x, wbPx.y + 64).setText(hintLabel("E: WORKBENCH")).setVisible(true);
     } else {
       this.workbenchHint.setVisible(false);
     }
@@ -1404,7 +1420,7 @@ export class OfficeScene extends Phaser.Scene {
     const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
     const rsDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y);
     if (rsDist < 144) {
-      this.researchHint.setPosition(rsPx.x, rsPx.y + 64).setText("E: RESEARCH").setVisible(true);
+      this.researchHint.setPosition(rsPx.x, rsPx.y + 64).setText(hintLabel("E: RESEARCH")).setVisible(true);
     } else {
       this.researchHint.setVisible(false);
     }
@@ -1415,7 +1431,7 @@ export class OfficeScene extends Phaser.Scene {
       const pPx = { x: plantNear.x * TILE_PX + 32, y: plantNear.y * TILE_PX + 32 };
       this.plantHint
         .setPosition(pPx.x, pPx.y + 64)
-        .setText(time < this.plantUntil ? "E: BOOSTED!" : time < this.plantCooldownUntil ? "E: STILL MOIST" : "E: WATER PLANTS")
+        .setText(hintLabel(time < this.plantUntil ? "E: BOOSTED!" : time < this.plantCooldownUntil ? "E: STILL MOIST" : "E: WATER PLANTS"))
         .setVisible(true);
     } else {
       this.plantHint.setVisible(false);
@@ -1426,7 +1442,7 @@ export class OfficeScene extends Phaser.Scene {
     if (mbDist < 120) {
       this.mailboxHint
         .setPosition(this.mailboxPx.x, this.mailboxPx.y + 64)
-        .setText(this.mailboxHasMail ? "E: CHECK MAIL" : "E: EMPTY")
+        .setText(hintLabel(this.mailboxHasMail ? "E: CHECK MAIL" : "E: EMPTY"))
         .setVisible(true);
     } else {
       this.mailboxHint.setVisible(false);
@@ -1447,7 +1463,7 @@ export class OfficeScene extends Phaser.Scene {
       const pmPx = { x: nearestPm.tile.x * TILE_PX + TILE_PX / 2, y: nearestPm.tile.y * TILE_PX + TILE_PX / 2 };
       this.platformMailboxHint
         .setPosition(pmPx.x, pmPx.y + 64)
-        .setText(nearestPm.flagUp ? `E: CHECK ${nearestPm.platform.toUpperCase()}` : "E: EMPTY")
+        .setText(hintLabel(nearestPm.flagUp ? `E: CHECK ${nearestPm.platform.toUpperCase()}` : "E: EMPTY"))
         .setVisible(true);
     } else {
       this.platformMailboxHint.setVisible(false);
@@ -1459,7 +1475,7 @@ export class OfficeScene extends Phaser.Scene {
     if (rbDist < 160) {
       this.redButtonHint
         .setPosition(rbPx.x, rbPx.y + 64)
-        .setText(time < this.redButtonUntil ? "E: COOLING" : "E: STOP!")
+        .setText(hintLabel(time < this.redButtonUntil ? "E: COOLING" : "E: STOP!"))
         .setVisible(true);
     } else {
       this.redButtonHint.setVisible(false);
@@ -2926,7 +2942,14 @@ export class OfficeScene extends Phaser.Scene {
     const down = this.cursors.down.isDown || this.keys.S.isDown;
     let vx = (right ? 1 : 0) - (left ? 1 : 0);
     let vy = (down ? 1 : 0) - (up ? 1 : 0);
-    if (vx !== 0 && vy !== 0) {
+
+    // Touch joystick input — analog values from -1 to 1
+    if (touchInput.moveX !== 0 || touchInput.moveY !== 0) {
+      vx = touchInput.moveX;
+      vy = touchInput.moveY;
+    }
+
+    if (vx !== 0 && vy !== 0 && (left || right || up || down)) {
       vx *= 0.7071;
       vy *= 0.7071;
     }
@@ -2986,7 +3009,11 @@ export class OfficeScene extends Phaser.Scene {
     this.playerLabel.setColor(time < this.coffeeUntil ? "#b0741f" : time < this.sofaUntil ? "#9a7acb" : "#1d2126");
 
     // E: grab coffee, talk to the nearest agent, open the task board, or recruit a ghost
-    const ePressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
+    let ePressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
+    if (touchInput.action === "interact") {
+      ePressed = true;
+      touchInput.action = null;
+    }
     if (ePressed) {
       // trophy case check — before other interactables
       const trophyPx = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
@@ -3110,7 +3137,12 @@ export class OfficeScene extends Phaser.Scene {
     this.world.vfx.updateSmoke();
 
     // Q: teleport back to office when outside
-    if (outside && Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
+    let qPressed = Phaser.Input.Keyboard.JustDown(this.keys.Q);
+    if (touchInput.action === "teleport") {
+      qPressed = true;
+      touchInput.action = null;
+    }
+    if (outside && qPressed) {
       const spawn = feetOf(this.spawnTile);
       this.cameras.main.fadeOut(200, 10, 10, 30);
       this.cameras.main.once("camerafadeoutcomplete", () => {
@@ -3139,7 +3171,7 @@ export class OfficeScene extends Phaser.Scene {
       if (boardDist < 160 && !this.store.boardOpen) {
         this.boardHint
           .setPosition(boardPx.x, boardPx.y + 64)
-          .setText("E: TASK BOARD")
+          .setText(hintLabel("E: TASK BOARD"))
           .setVisible(true);
       } else {
         this.boardHint.setVisible(false);
@@ -3151,7 +3183,7 @@ export class OfficeScene extends Phaser.Scene {
       if (coffeeDist < 144) {
         this.coffeeHint
           .setPosition(coffeePx.x, coffeePx.y + 64)
-          .setText(time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE")
+          .setText(hintLabel(time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE"))
           .setVisible(true);
       } else {
         this.coffeeHint.setVisible(false);
@@ -3220,7 +3252,7 @@ export class OfficeScene extends Phaser.Scene {
       if (trophyDist2 < 120 && !this.store.achievementsOpen) {
         this.trophyHint
           .setPosition(trophyPx2.x, trophyPx2.y + 64)
-          .setText("E: TROPHY CASE")
+          .setText(hintLabel("E: TROPHY CASE"))
           .setVisible(true);
       } else {
         this.trophyHint.setVisible(false);
@@ -3232,7 +3264,7 @@ export class OfficeScene extends Phaser.Scene {
       if (hofDist2 < 120 && !this.store.hallOfFameOpen) {
         this.hallOfFameHint
           .setPosition(hofPx2.x + 48, hofPx2.y)
-          .setText("E: HALL OF FAME")
+          .setText(hintLabel("E: HALL OF FAME"))
           .setVisible(true);
       } else {
         this.hallOfFameHint.setVisible(false);
@@ -3243,7 +3275,7 @@ export class OfficeScene extends Phaser.Scene {
       if (rackNear && !this.store.railwayPanelOpen) {
         this.serverRackHint
           .setPosition(rackNear.x * TILE_PX + 32, rackNear.y * TILE_PX - 8)
-          .setText("E: CHECK SERVERS")
+          .setText(hintLabel("E: CHECK SERVERS"))
           .setVisible(true);
       } else {
         this.serverRackHint.setVisible(false);

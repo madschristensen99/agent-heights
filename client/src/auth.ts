@@ -114,7 +114,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   }
 
   overlay.innerHTML = `
-    <div style="text-align:center; max-width: 380px; padding: 2rem;">
+    <div style="text-align:center; max-width: 380px; width: 90vw; padding: 2rem 1.5rem; box-sizing: border-box;">
       <h1 style="font-size: 2rem; font-weight: 800; margin-bottom: 0.25rem; letter-spacing: 0.05em;">AGENT HQ</h1>
       <p style="color: #888; font-size: 0.85rem; margin-bottom: 1.5rem;">Sign in to manage your AI agent office</p>
       <div id="auth-form" style="display:flex; flex-direction:column; gap:0.75rem;">

@@ -44,6 +44,7 @@ body {
 
 #game canvas {
   image-rendering: auto;
+  touch-action: none;
 }
 
 #hud {
@@ -543,6 +544,7 @@ input.invalid {
   box-shadow: var(--shadow-lg);
   padding: 24px;
   width: 400px;
+  max-width: 92vw;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -610,6 +612,7 @@ input.invalid {
   max-height: 86vh;
   overflow-y: auto;
   width: 450px;
+  max-width: 92vw;
 }
 
 .modal .tabs {
@@ -1728,4 +1731,507 @@ kbd {
   font-size: 10px;
   color: var(--dim);
   white-space: nowrap;
+}
+
+/* ============================================================= */
+/* === MOBILE / TOUCH RESPONSIVE                              === */
+/* ============================================================= */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* ── Touch device detection helper ── */
+.touch-controls {
+  display: none;
+}
+
+/* ── Virtual joystick ── */
+.joystick-base {
+  position: fixed;
+  bottom: calc(80px + var(--safe-bottom));
+  left: calc(20px + var(--safe-left));
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 50;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  transition: transform 0.05s linear;
+  pointer-events: none;
+}
+
+/* ── Mobile action buttons ── */
+.mobile-actions {
+  position: fixed;
+  bottom: calc(20px + var(--safe-bottom));
+  right: calc(20px + var(--safe-right));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.mobile-action-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.mobile-action-btn:active {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(0.92);
+}
+
+.mobile-action-btn.primary {
+  background: rgba(58, 140, 212, 0.5);
+  border-color: rgba(58, 140, 212, 0.6);
+}
+
+.mobile-action-btn.primary:active {
+  background: rgba(58, 140, 212, 0.7);
+}
+
+/* ── Mobile panel toggle buttons ── */
+.mobile-panel-toggles {
+  display: none;
+  position: fixed;
+  top: calc(52px + var(--safe-top));
+  left: calc(8px + var(--safe-left));
+  gap: 6px;
+  z-index: 45;
+  pointer-events: auto;
+}
+
+.mobile-panel-toggles .mpt-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--dim);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.mobile-panel-toggles .mpt-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent-dark);
+}
+
+/* ── Backdrop for mobile panel overlays ── */
+.mobile-panel-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(42, 56, 72, 0.3);
+  z-index: 39;
+  pointer-events: auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLET BREAKPOINT — ≤ 768px
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .roster {
+    width: 180px;
+    max-height: 30vh;
+  }
+
+  .roster.collapsed {
+    width: 140px;
+  }
+
+  .feed {
+    width: 280px;
+  }
+
+  .feed.collapsed {
+    width: 170px;
+  }
+
+  .feed.expanded {
+    width: min(480px, calc(100vw - 24px));
+  }
+
+  .detail {
+    width: 300px;
+    max-height: calc(100vh - 160px);
+  }
+
+  .modal.onboard,
+  .modal.hire-modal {
+    width: 92vw;
+  }
+
+  .hire-appearance {
+    width: 200px;
+  }
+
+  .onboard-builder .char-builder {
+    width: 200px;
+  }
+
+  .board-panel {
+    width: min(700px, calc(100vw - 16px));
+  }
+
+  .ach-modal-content {
+    width: 90vw;
+  }
+
+  .hof-modal-content {
+    width: 90vw;
+  }
+
+  .railway-modal-content {
+    width: 90vw;
+  }
+
+  .hint {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PHONE BREAKPOINT — ≤ 480px
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  /* ── Topbar ── */
+  .topbar {
+    padding: 6px 10px;
+    gap: 8px;
+    padding-top: calc(6px + var(--safe-top));
+    font-size: 12px;
+  }
+
+  .logo {
+    font-size: 11px;
+  }
+
+  .topbar .mini {
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+
+  #workspace-name {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Roster: hidden by default, toggle via mobile panel button ── */
+  .roster {
+    position: fixed;
+    top: calc(96px + var(--safe-top));
+    left: calc(8px + var(--safe-left));
+    right: auto;
+    width: calc(100vw - 16px);
+    max-width: 320px;
+    max-height: 40vh;
+    z-index: 40;
+  }
+
+  .roster:not(.mobile-show) {
+    display: none;
+  }
+
+  .roster.collapsed {
+    width: calc(100vw - 16px);
+    max-width: 320px;
+  }
+
+  /* ── Feed: bottom sheet style ── */
+  .feed {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100% !important;
+    max-height: 45vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 12px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+    z-index: 40;
+  }
+
+  .feed:not(.mobile-show) {
+    display: none;
+  }
+
+  .feed.collapsed,
+  .feed.expanded {
+    width: 100% !important;
+  }
+
+  .feed.expanded .feed-logs {
+    height: 40vh;
+  }
+
+  .feed-logs {
+    height: 20vh;
+  }
+
+  /* ── Detail: full-width overlay ── */
+  .detail {
+    position: fixed;
+    top: calc(48px + var(--safe-top));
+    left: calc(8px + var(--safe-left));
+    right: calc(8px + var(--safe-right));
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 120px);
+    z-index: 40;
+  }
+
+  /* ── Hire button: move to be part of mobile actions ── */
+  .hire-btn {
+    display: none;
+  }
+
+  /* ── Board panel: full width ── */
+  .board-panel {
+    top: calc(48px + var(--safe-top));
+    left: 4px;
+    right: 4px;
+    width: auto;
+    transform: none;
+    max-height: calc(100vh - 80px);
+    padding: 10px;
+  }
+
+  /* ── Board columns: stack vertically ── */
+  .board-columns {
+    flex-direction: column;
+    gap: 8px;
+    max-height: none;
+  }
+
+  .board-col {
+    max-height: 200px;
+  }
+
+  .board-col-cards {
+    max-height: 140px;
+  }
+
+  /* ── Modals: full width, less padding ── */
+  .modal {
+    width: 92vw !important;
+    max-width: 92vw !important;
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .modal h1 { font-size: 22px; }
+  .modal h2 { font-size: 14px; }
+
+  .modal.onboard,
+  .modal.hire-modal,
+  .modal.wardrobe-modal,
+  .modal.settings {
+    width: 92vw !important;
+    max-width: 92vw !important;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+
+  /* ── Stack side-by-side layouts vertically ── */
+  .hire-layout,
+  .onboard-layout {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .hire-appearance,
+  .onboard-builder {
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .hire-appearance .char-builder,
+  .onboard-builder .char-builder {
+    width: 100%;
+  }
+
+  .hire-appearance .builder-preview,
+  .onboard-builder .builder-preview {
+    width: 72px;
+    height: 108px;
+  }
+
+  .wardrobe-layout {
+    flex-direction: column;
+  }
+
+  /* ── Touch target sizing ── */
+  .btn {
+    padding: 12px 18px;
+    font-size: 13px;
+  }
+
+  .btn.mini {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .builder-arrow {
+    padding: 8px 14px;
+    font-size: 14px;
+    min-width: 40px;
+  }
+
+  .builder-label {
+    font-size: 11px;
+  }
+
+  /* ── Hide keyboard hint, show touch hint ── */
+  .hint {
+    display: none;
+  }
+
+  .hint.touch {
+    display: block;
+    font-size: 10px;
+    padding: 4px 10px;
+    bottom: calc(6px + var(--safe-bottom));
+  }
+
+  /* ── Show touch controls ── */
+  .touch-controls {
+    display: block;
+  }
+
+  .mobile-panel-toggles {
+    display: flex;
+  }
+
+  .mobile-panel-backdrop.show {
+    display: block;
+  }
+
+  /* ── Achievement grid: single column ── */
+  .ach-tier-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ach-modal-content,
+  .hof-modal-content,
+  .railway-modal-content {
+    width: 94vw;
+    padding: 14px 16px;
+  }
+
+  /* ── Toasts: position above mobile controls ── */
+  .toasts {
+    bottom: calc(160px + var(--safe-bottom));
+  }
+
+  /* ── Perf overlay ── */
+  .perf {
+    top: calc(48px + var(--safe-top));
+    right: calc(8px + var(--safe-right));
+    font-size: 10px;
+  }
+
+  /* ── Marketplace: full width on phone ── */
+  #marketplace-panel {
+    width: 100vw !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LANDSCAPE PHONE — height ≤ 400px & orientation landscape
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-height: 400px) and (orientation: landscape) {
+  .roster {
+    top: calc(48px + var(--safe-top));
+    max-height: 50vh;
+  }
+
+  .feed {
+    max-height: 50vh;
+  }
+
+  .feed-logs {
+    height: 15vh;
+  }
+
+  .detail {
+    top: calc(44px + var(--safe-top));
+    max-height: calc(100vh - 60px);
+  }
+
+  .joystick-base {
+    bottom: calc(10px + var(--safe-bottom));
+    width: 90px;
+    height: 90px;
+  }
+
+  .joystick-knob {
+    width: 40px;
+    height: 40px;
+  }
+
+  .mobile-actions {
+    bottom: calc(10px + var(--safe-bottom));
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .mobile-action-btn {
+    width: 48px;
+    height: 48px;
+  }
 }
