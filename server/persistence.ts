@@ -18,6 +18,7 @@ export interface Persistence {
   setBoard(board: TaskCard[]): void;
   setWorld(world: WorldState): void;
   getWorld(): WorldState;
+  flushNow(): void;
 }
 
 /**
@@ -90,6 +91,14 @@ export class SaveFile implements Persistence {
       this.timer = null;
       this.flush();
     }, 400);
+  }
+
+  flushNow(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.flush();
   }
 
   private flush(): void {

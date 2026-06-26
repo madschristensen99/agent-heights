@@ -83,6 +83,14 @@ export class DbPersistence {
     }, 400);
   }
 
+  flushNow(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    void this.flush();
+  }
+
   private async flush(): Promise<void> {
     if (!isSupabaseConfigured) return;
     try {

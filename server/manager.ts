@@ -302,6 +302,7 @@ export class AgentManager {
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
+    this.save.flushNow();
     this.broadcast({ type: "agent", agent: info });
     console.log(`[manager] hired ${cleanName} (id=${info.id}) desk=${deskIndex} — broadcast sent to ${this.agents.size} total agents`);
     this.log(rt, "status", `${cleanName} the ${info.title} joined the office. (${provider} / ${model})`);
@@ -502,6 +503,7 @@ export class AgentManager {
     this.agents.delete(agentId);
     this.session.record("fire", { agentId, agentName: rt.info.name });
     this.persist();
+    this.save.flushNow();
     this.broadcast({ type: "agent_removed", agentId });
     this.broadcast({ type: "fired_agent", agent: fired });
     this.broadcast({ type: "toast", text: `${rt.info.name} cleaned out their desk and wandered into the Labyrinth.` });
@@ -544,6 +546,7 @@ export class AgentManager {
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
+    this.save.flushNow();
     this.broadcast({ type: "agent", agent: info });
     this.broadcast({ type: "fired_agent_removed", agentId: fa.id });
     this.log(rt, "status", `${info.name} came back from the Labyrinth and rejoined the office.`);

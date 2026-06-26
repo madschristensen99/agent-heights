@@ -350,11 +350,13 @@ server.listen(SERVER_PORT, () => {
   console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
 });
 
-process.on("SIGINT", () => {
+function shutdown(): void {
   stopRailwayMCP();
+  for (const sess of sessions.values()) {
+    sess.save.flushNow();
+  }
   process.exit(0);
-});
-process.on("SIGTERM", () => {
-  stopRailwayMCP();
-  process.exit(0);
-});
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
