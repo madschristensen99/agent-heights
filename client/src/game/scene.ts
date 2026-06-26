@@ -102,7 +102,7 @@ export class OfficeScene extends Phaser.Scene {
   // mailboxHint declared above with mailbox fields
 
   // --- wardrobe (break room) ---
-  private wardrobeTile: Tile = { x: 21, y: 17 };
+  private wardrobeTile: Tile = { x: 21, y: 18 };
   private wardrobeHint!: Phaser.GameObjects.Text;
   private wardrobeGfx!: Phaser.GameObjects.Graphics;
 
@@ -956,7 +956,7 @@ export class OfficeScene extends Phaser.Scene {
       this.vendingTile = { x: 27, y: 2 };
       this.sofaTile = null;
       this.hallOfFameTile = { x: 1, y: 2 };
-      this.wardrobeTile = { x: 21, y: 17 };
+      this.wardrobeTile = { x: 21, y: 18 };
       this.filingTiles = [
         { x: 1, y: 3 }, { x: 1, y: 4 }, { x: 1, y: 12 }, { x: 1, y: 13 },
         { x: 20, y: 3 }, { x: 20, y: 12 }, { x: 22, y: 11 },
@@ -972,7 +972,7 @@ export class OfficeScene extends Phaser.Scene {
       this.vendingTile = null;
       this.sofaTile = { x: 23, y: 13 };
       this.hallOfFameTile = { x: 1, y: 5 };
-      this.wardrobeTile = { x: 21, y: 17 };
+      this.wardrobeTile = { x: 21, y: 18 };
       this.filingTiles = [
         { x: 20, y: 3 },
         { x: 20, y: 4 }, { x: 22, y: 11 },
