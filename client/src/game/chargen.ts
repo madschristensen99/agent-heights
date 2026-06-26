@@ -1047,7 +1047,19 @@ export function generateCharTexture(scene: Phaser.Scene, key: string, ap: CharAp
   const sheet = buildCharSheet(pal);
   const canvas = sheet.toCanvas();
 
+  // If the texture already exists as a CanvasTexture, redraw it in place.
+  // This preserves the TextureSource so existing frame references and
+  // animations stay valid — destroying/recreating the texture leaves stale
+  // frame references that crash Phaser's renderer.
   if (scene.textures.exists(key)) {
+    const existing = scene.textures.get(key);
+    if (existing && typeof (existing as any).context !== "undefined") {
+      const ctx = (existing as any).context as CanvasRenderingContext2D;
+      ctx.clearRect(0, 0, (existing as any).width, (existing as any).height);
+      ctx.drawImage(canvas, 0, 0);
+      (existing as any).refresh();
+      return;
+    }
     scene.textures.remove(key);
   }
   const tex = scene.textures.addCanvas(key, canvas);
