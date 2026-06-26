@@ -724,8 +724,8 @@ export class OfficeScene extends Phaser.Scene {
               }
               // refresh boss texture if player appearance changed
               const prevKey = this.playerTexKey;
-              this.refreshBossTexture();
-              if (prevKey !== this.playerTexKey && this.player) {
+              const regenerated = this.refreshBossTexture();
+              if ((regenerated || prevKey !== this.playerTexKey) && this.player) {
                 this.player.setTexture(this.playerTexKey, 0).setScale(1);
               }
               this.syncAgents();
@@ -2792,8 +2792,9 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Generate or refresh the boss texture from the player's appearance. */
-  private refreshBossTexture(): void {
+/** Generate or refresh the boss texture from the player's appearance.
+   * Returns true if the texture was regenerated (caller should refresh the sprite). */
+  private refreshBossTexture(): boolean {
     const ap = this.store.player?.appearance;
     if (ap) {
       const key = "boss-custom";
@@ -2803,10 +2804,14 @@ export class OfficeScene extends Phaser.Scene {
         (this as any)._lastBossAp = ap;
         generateCharTexture(this, key, ap);
         this.ensureCharAnimations(key);
+        this.playerTexKey = key;
+        return true;
       }
       this.playerTexKey = key;
+      return false;
     } else {
       this.playerTexKey = "boss";
+      return false;
     }
   }
 
