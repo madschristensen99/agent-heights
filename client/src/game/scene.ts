@@ -727,6 +727,7 @@ export class OfficeScene extends Phaser.Scene {
               const regenerated = this.refreshBossTexture();
               if ((regenerated || prevKey !== this.playerTexKey) && this.player) {
                 this.player.setTexture(this.playerTexKey, 0).setScale(1);
+                this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
               }
               this.syncAgents();
               this.world.syncGhosts();
@@ -2709,7 +2710,15 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Create walk/idle/work animations for a custom character texture key. */
   private ensureCharAnimations(key: string): void {
-    if (this.anims.exists(`${key}-work`)) return;
+    // Remove stale animations so frame references point to the new texture
+    if (this.anims.exists(`${key}-work`)) {
+      const dirs: Dir[] = ["down", "left", "right", "up"];
+      for (const dir of dirs) {
+        this.anims.remove(`${key}-walk-${dir}`);
+        this.anims.remove(`${key}-idle-${dir}`);
+      }
+      this.anims.remove(`${key}-work`);
+    }
     const dirs: Dir[] = ["down", "left", "right", "up"];
     const FRAMES_PER_ROW = 8;
     dirs.forEach((dir, row) => {
