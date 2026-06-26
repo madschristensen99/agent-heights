@@ -28,10 +28,10 @@ Hire an agent, give it a name and a model, type a task, and watch it walk to its
 
 - **Hire as many agents as you want** — the first 8 get desks, the rest work standing. Each gets a name, a random job title (Code Gremlin, Bug Whisperer, Refactor Goblin…), a sprite, and an optional custom system prompt set at hire time.
 - **Persistent memory** — each agent is one continuous conversation (Cline Agent instance with message history, resumed on every task), so it remembers every order you've given it and everything it did, across server restarts.
-- **One provider, nine models** via Swarms API:
-  - Claude: Sonnet 4 (balanced), Haiku 3.5 (fast), Opus 4 (deep)
-  - OpenAI: GPT-4.1, o3-mini
-  - Groq: Llama 3.3 70B, DeepSeek R1 Distill Llama 70B
+- **One provider, eight models** via Swarms API:
+  - Claude: Sonnet 4 (balanced), 3.7 Sonnet (fast), Opus 4 (deep)
+  - OpenAI: GPT-4o (balanced), GPT-4.1 Mini (fast), GPT-4.1 Nano (cheapest), o3-mini (reasoning)
+  - Google: Gemini 1.5 Pro (fast)
 - **Assign tasks** to one agent or broadcast the same task to everyone who's free ("ASSIGN TO ALL").
 - **Live activity feed** — assistant text, tool calls, results, and errors stream into the office feed and per-agent log panels.
 - **Stop and fire** — abort a running task, or remove an agent entirely (their desk frees up).

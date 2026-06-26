@@ -358,11 +358,11 @@ export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },
   { id: "claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet (fast)" },
   { id: "claude-opus-4", label: "Claude Opus 4 (deep)" },
-  { id: "gpt-4.1", label: "GPT-4.1 (balanced)" },
+  { id: "gpt-4o", label: "GPT-4o (balanced)" },
   { id: "gpt-4.1-mini", label: "GPT-4.1 Mini (fast)" },
   { id: "gpt-4.1-nano", label: "GPT-4.1 Nano (cheapest)" },
   { id: "o3-mini", label: "o3-mini (reasoning)" },
-  { id: "groq/llama3-70b-8192", label: "Llama 3 70B via Groq (fast)" },
+  { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (fast)" },
 ] as const;
 
 export const SERVER_PORT = (typeof process !== "undefined" && Number(process.env?.PORT)) || 3001;
