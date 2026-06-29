@@ -23,7 +23,9 @@ export class Net {
     // the backend port directly.  The Vite dev server doesn't proxy WS, so
     // any localhost port that isn't 3001 needs to be redirected there.
     const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-    const fallback = wsHost || (isLocal && location.port !== "3001"
+    // Ignore wsHost that points to localhost when we're in production
+    const effectiveWsHost = wsHost && (!wsHost.includes("localhost") || isLocal) ? wsHost : undefined;
+    const fallback = effectiveWsHost || (isLocal && location.port !== "3001"
       ? "localhost:3001"
       : location.host);
     const url = this.token
