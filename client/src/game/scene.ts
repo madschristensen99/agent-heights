@@ -2982,8 +2982,9 @@ export class OfficeScene extends Phaser.Scene {
     if (typing) {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
       for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
-      const isOfficeOwnerTyping = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role === "owner" : true;
-      if (isOfficeOwnerTyping) {
+      const myRoleTyping = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
+      const isVisitorTyping = (myRoleTyping === "member" || myRoleTyping === "guest") && this.store.roomId !== "hq2";
+      if (!isVisitorTyping) {
         this.yuki?.update(time, dt, false, this.player.x, this.player.y);
         this.hermes?.update(time, dt);
       }
@@ -3178,9 +3179,10 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
-    // Only run Yuki/Hermes state machine if we're the office owner; visitors receive remote state
-    const isOfficeOwner = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role === "owner" : true;
-    if (isOfficeOwner) {
+    // Run Yuki/Hermes state machine unless we're a visitor in someone else's private office
+    const myRole = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
+    const isVisitor = (myRole === "member" || myRole === "guest") && this.store.roomId !== "hq2";
+    if (!isVisitor) {
       this.yuki?.update(time, dt, false, this.player.x, this.player.y);
       this.hermes?.update(time, dt);
     }
@@ -3370,7 +3372,8 @@ export class OfficeScene extends Phaser.Scene {
     this.syncRemotePlayers();
 
     // ── Multiplayer: broadcast NPC state (owner only, 5Hz) ─────────────
-    const isOwnerForNpc = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role === "owner" : true;
+    const myRoleForNpc = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
+    const isOwnerForNpc = myRoleForNpc === "owner" || myRoleForNpc === undefined || this.store.roomId === "hq2";
     if (isOwnerForNpc && now - this.lastNpcSyncSent > 200) {
       this.lastNpcSyncSent = now;
       if (this.yuki) {
