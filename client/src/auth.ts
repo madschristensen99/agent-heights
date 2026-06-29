@@ -1,7 +1,9 @@
 import { createClient, type SupabaseClient, type Session } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Read env vars from runtime injection (window.__ENV__) with fallback to build-time (import.meta.env)
+const runtimeEnv = (typeof window !== "undefined" && (window as any).__ENV__) || {};
+const url = runtimeEnv.VITE_SUPABASE_URL ?? import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const anonKey = runtimeEnv.VITE_SUPABASE_ANON_KEY ?? import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const isAuthEnabled = Boolean(url && anonKey);
 

@@ -40,6 +40,18 @@ const MIME: Record<string, string> = {
   ".map": "application/json",
 };
 
+function getEnvScript(): string {
+  const envVars: Record<string, string> = {};
+  // Inject VITE_* vars from process.env so the client gets them at runtime
+  // instead of requiring them at Vite build time.
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith("VITE_")) {
+      envVars[key] = process.env[key]!;
+    }
+  }
+  return `<script>window.__ENV__=${JSON.stringify(envVars)};</script>`;
+}
+
 async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
   let urlPath = req.url?.split("?")[0] ?? "/";
   if (urlPath === "/") urlPath = "/index.html";
@@ -54,19 +66,28 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
   try {
     const info = await stat(filePath);
     if (info.isDirectory()) throw new Error("is directory");
-    const data = await readFile(filePath);
+    let data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
     const headers: Record<string, string> = { "Content-Type": mime };
     // Don't cache map/tileset assets or index.html — they change when regenerated
     if (urlPath.startsWith("/assets/maps/") || urlPath.startsWith("/assets/tilesets/") || urlPath === "/index.html" || urlPath === "/") {
       headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
     }
+    // Inject runtime env vars into index.html
+    if (urlPath === "/index.html" || urlPath === "/") {
+      const html = data.toString("utf-8");
+      const injected = html.replace("<head>", `<head>\n    ${getEnvScript()}`);
+      data = Buffer.from(injected, "utf-8");
+    }
     res.writeHead(200, headers);
     res.end(data);
   } catch {
     try {
       const indexPath = join(distDir, "index.html");
-      const data = await readFile(indexPath);
+      let data = await readFile(indexPath);
+      const html = data.toString("utf-8");
+      const injected = html.replace("<head>", `<head>\n    ${getEnvScript()}`);
+      data = Buffer.from(injected, "utf-8");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(data);
     } catch {

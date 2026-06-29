@@ -17,7 +17,8 @@ export class Net {
   connect(): void {
     this.manuallyDisconnected = false;
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const wsHost = import.meta.env.VITE_WS_HOST as string | undefined;
+    const runtimeEnv = (typeof window !== "undefined" && (window as any).__ENV__) || {};
+    const wsHost = (runtimeEnv.VITE_WS_HOST ?? import.meta.env.VITE_WS_HOST) as string | undefined;
     // When VITE_WS_HOST isn't loaded (e.g. Vite root mismatch), fall back to
     // the backend port directly.  The Vite dev server doesn't proxy WS, so
     // any localhost port that isn't 3001 needs to be redirected there.
