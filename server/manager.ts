@@ -94,6 +94,12 @@ export class AgentManager {
   private workspaceRoot: string;
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   bossName = "the boss";
+  private apiKey: string | null;
+
+  /** Update the API key used for agent tasks (e.g. when user sets a new key). */
+  setApiKey(key: string | null): void {
+    this.apiKey = key;
+  }
 
   constructor(
     rootDir: string,
@@ -101,9 +107,11 @@ export class AgentManager {
     private session: SessionLogger,
     private save: Persistence,
     saved: SaveState | null,
+    apiKey: string | null = null,
   ) {
     this.workspaceRoot = join(rootDir, "workspace");
     mkdirSync(this.workspaceRoot, { recursive: true });
+    this.apiKey = apiKey;
 
     // reload the office from the save file
     for (const info of saved?.agents ?? []) {
@@ -730,6 +738,7 @@ export class AgentManager {
           }
         },
         railway: this.settings.railway.enabled && rt.info.role === "devops",
+        apiKey: this.apiKey,
       });
 
       for await (const ev of events) {
@@ -926,6 +935,7 @@ export class AgentManager {
           }
         },
         railway: false,
+        apiKey: this.apiKey,
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;

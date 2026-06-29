@@ -15,6 +15,8 @@ import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
+import { rateLimit } from "./ratelimit.js";
+import { getUserApiKey, setUserApiKey, deleteUserApiKey } from "./apikeys.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
@@ -85,6 +87,7 @@ interface UserSession {
   session: SessionLogger;
   player: PlayerInfo | null;
   clients: Set<WebSocket>;
+  apiKey: string | null;
   broadcast: (msg: ServerMsg) => void;
 }
 
@@ -113,6 +116,7 @@ async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
   const session = new SessionLogger(userDir);
   const clients = new Set<WebSocket>();
   const player = saved?.player ?? null;
+  const apiKey = isSupabaseConfigured ? await getUserApiKey(user.id) : null;
 
   const sess: UserSession = {
     user,
@@ -120,6 +124,7 @@ async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
     session,
     player,
     clients,
+    apiKey,
     manager: null as unknown as AgentManager,
     broadcast: () => {},
   };
@@ -131,7 +136,7 @@ async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
     }
   };
 
-  sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved);
+  sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey);
   if (player) sess.manager.bossName = player.name;
 
   sessions.set(user.id, sess);
@@ -202,16 +207,15 @@ wss.on("connection", async (ws, req) => {
     const url = new URL(req.url ?? "", "http://localhost");
     const token = url.searchParams.get("token");
     if (!token) {
-      // Dev fallback: allow connection without auth for local development
-      user = { id: "dev", email: null };
-    } else {
-      const verified = await verifyToken(token);
-      if (!verified) {
-        ws.close(4003, "Invalid or expired token");
-        return;
-      }
-      user = verified;
+      ws.close(4001, "No token provided");
+      return;
     }
+    const verified = await verifyToken(token);
+    if (!verified) {
+      ws.close(4003, "Invalid or expired token");
+      return;
+    }
+    user = verified;
   } else {
     user = { id: "dev", email: null };
   }
@@ -230,7 +234,10 @@ wss.on("connection", async (ws, req) => {
     } satisfies ServerMsg),
   );
 
-  ws.on("message", (raw) => {
+  // Tell the client whether they have an API key set
+  ws.send(JSON.stringify({ type: "api_key_status", hasKey: sess.apiKey != null } satisfies ServerMsg));
+
+  ws.on("message", async (raw) => {
     let msg: ClientMsg;
     try {
       msg = JSON.parse(raw.toString());
@@ -239,6 +246,13 @@ wss.on("connection", async (ws, req) => {
     }
     try {
       const { manager, session: sessLog, save } = sess;
+
+      if (!rateLimit(sess.user.id, msg.type)) {
+        const data = JSON.stringify({ type: "toast", text: "Too many requests — slow down." });
+        if (ws.readyState === WebSocket.OPEN) ws.send(data);
+        return;
+      }
+
       switch (msg.type) {
         case "setup": {
           const name = String(msg.player?.name ?? "").trim().slice(0, 24);
@@ -325,6 +339,31 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "railway_data", data: null, error: err instanceof Error ? err.message : String(err) });
           });
           break;
+        case "set_api_key": {
+          const trimmed = msg.apiKey.trim();
+          if (trimmed) {
+            const { error } = await setUserApiKey(sess.user.id, trimmed);
+            if (error) {
+              sess.broadcast({ type: "toast", text: `Failed to save API key: ${error}` });
+            } else {
+              sess.apiKey = trimmed;
+              sess.manager.setApiKey(sess.apiKey);
+              sess.broadcast({ type: "api_key_status", hasKey: true });
+              sess.broadcast({ type: "toast", text: "API key saved — your agents will use it now." });
+            }
+          } else {
+            const { error } = await deleteUserApiKey(sess.user.id);
+            if (error) {
+              sess.broadcast({ type: "toast", text: `Failed to clear API key: ${error}` });
+            } else {
+              sess.apiKey = null;
+              sess.manager.setApiKey(null);
+              sess.broadcast({ type: "api_key_status", hasKey: false });
+              sess.broadcast({ type: "toast", text: "API key cleared — using the server's shared key." });
+            }
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error("[server] error handling message:", err);

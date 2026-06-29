@@ -60,10 +60,21 @@ export function getToken(): string | null {
   return currentState.session?.access_token ?? null;
 }
 
-export async function signInWithEmail(email: string): Promise<{ error: string | null }> {
+export function getUserEmail(): string | null {
+  return currentState.session?.user?.email ?? null;
+}
+
+export async function signInWithPassword(email: string, password: string): Promise<{ error: string | null }> {
   if (!client) return { error: "Auth not configured" };
-  const { error } = await client.auth.signInWithOtp({
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  return { error: error?.message ?? null };
+}
+
+export async function signUpWithEmail(email: string, password: string): Promise<{ error: string | null }> {
+  if (!client) return { error: "Auth not configured" };
+  const { error } = await client.auth.signUp({
     email,
+    password,
     options: { emailRedirectTo: window.location.origin },
   });
   return { error: error?.message ?? null };
@@ -120,9 +131,11 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
       <div id="auth-form" style="display:flex; flex-direction:column; gap:0.75rem;">
         <input id="auth-email" type="email" placeholder="you@example.com"
           style="padding:0.75rem 1rem; border-radius:0.5rem; border:1px solid #333; background:#1a1a1a; color:#e0e0e0; font-size:0.95rem; outline:none;" />
-        <button id="auth-magic"
+        <input id="auth-password" type="password" placeholder="Password"
+          style="padding:0.75rem 1rem; border-radius:0.5rem; border:1px solid #333; background:#1a1a1a; color:#e0e0e0; font-size:0.95rem; outline:none;" />
+        <button id="auth-submit"
           style="padding:0.75rem 1rem; border-radius:0.5rem; border:none; background:#e0e0e0; color:#0d0d0d; font-size:0.95rem; font-weight:600; cursor:pointer;">
-          Send magic link
+          Sign in
         </button>
         <div style="height:1px; background:#222; margin:0.5rem 0;"></div>
         <button id="auth-github"
@@ -134,24 +147,60 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
           Continue with Google
         </button>
       </div>
-      <div id="auth-status" style="margin-top:1rem; font-size:0.85rem; min-height:1.2em;"></div>
+      <p id="auth-toggle" style="margin-top:1rem; font-size:0.85rem; color:#888; cursor:pointer;">
+        Don't have an account? <span style="color:#4f9dde;">Sign up</span>
+      </p>
+      <div id="auth-status" style="margin-top:0.5rem; font-size:0.85rem; min-height:1.2em;"></div>
     </div>
   `;
   document.body.appendChild(overlay);
 
   const status = overlay.querySelector("#auth-status") as HTMLDivElement;
   const emailInput = overlay.querySelector("#auth-email") as HTMLInputElement;
-  const magicBtn = overlay.querySelector("#auth-magic") as HTMLButtonElement;
+  const passwordInput = overlay.querySelector("#auth-password") as HTMLInputElement;
+  const submitBtn = overlay.querySelector("#auth-submit") as HTMLButtonElement;
+  const toggleEl = overlay.querySelector("#auth-toggle") as HTMLParagraphElement;
   const githubBtn = overlay.querySelector("#auth-github") as HTMLButtonElement;
   const googleBtn = overlay.querySelector("#auth-google") as HTMLButtonElement;
 
-  magicBtn.addEventListener("click", async () => {
+  let isSignUp = false;
+
+  function updateMode(): void {
+    if (isSignUp) {
+      submitBtn.textContent = "Sign up";
+      toggleEl.innerHTML = `Already have an account? <span style="color:#4f9dde;">Sign in</span>`;
+    } else {
+      submitBtn.textContent = "Sign in";
+      toggleEl.innerHTML = `Don't have an account? <span style="color:#4f9dde;">Sign up</span>`;
+    }
+    status.textContent = "";
+  }
+
+  toggleEl.addEventListener("click", () => {
+    isSignUp = !isSignUp;
+    updateMode();
+  });
+
+  submitBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
-    if (!email) { status.textContent = "Please enter your email."; status.style.color = "#e05d5d"; return; }
-    status.textContent = "Sending magic link…"; status.style.color = "#888";
-    const { error } = await signInWithEmail(email);
-    if (error) { status.textContent = error; status.style.color = "#e05d5d"; }
-    else { status.textContent = "Check your email for a magic link!"; status.style.color = "#53b86b"; }
+    const password = passwordInput.value;
+    if (!email || !password) {
+      status.textContent = "Please enter your email and password.";
+      status.style.color = "#e05d5d";
+      return;
+    }
+    status.textContent = isSignUp ? "Creating account…" : "Signing in…";
+    status.style.color = "#888";
+    const { error } = isSignUp
+      ? await signUpWithEmail(email, password)
+      : await signInWithPassword(email, password);
+    if (error) {
+      status.textContent = error;
+      status.style.color = "#e05d5d";
+    } else if (isSignUp) {
+      status.textContent = "Check your email to confirm your account.";
+      status.style.color = "#53b86b";
+    }
   });
 
   githubBtn.addEventListener("click", async () => {
@@ -165,7 +214,10 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   });
 
   emailInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") magicBtn.click();
+    if (e.key === "Enter") passwordInput.focus();
+  });
+  passwordInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitBtn.click();
   });
 
   return {

@@ -12,7 +12,7 @@ import { touchInput, isTouchDevice } from "../touch";
 import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
-import { getToken } from "../auth";
+import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -166,6 +166,10 @@ export class Hud {
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
+        <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
+          <span id="user-email" style="font-size:0.75rem; color:#888; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+          <button class="btn mini" id="signout-btn" title="Sign out" style="font-size:0.75rem;">⏻</button>
+        </span>
         <span id="conn" class="conn">●</span>
       </div>
       <div class="panel roster" id="roster"></div>
@@ -246,6 +250,43 @@ export class Hud {
 
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
     document.getElementById("settings-btn")!.addEventListener("click", () => this.openSettings());
+
+    // User menu: show email + sign-out button (reactive to auth state)
+    if (isAuthEnabled) {
+      const userMenu = document.getElementById("user-menu")!;
+      const emailEl = document.getElementById("user-email")!;
+      const signoutBtn = document.getElementById("signout-btn")!;
+      signoutBtn.addEventListener("click", () => {
+        const modal = document.createElement("div");
+        modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+        modal.innerHTML = `
+          <div style="background:#1a1a1a;border:1px solid #333;border-radius:0.75rem;padding:1.5rem;max-width:340px;width:90vw;text-align:center;">
+            <h3 style="margin:0 0 0.5rem;font-size:1.1rem;">Sign out of your office?</h3>
+            <p style="color:#888;font-size:0.85rem;margin:0 0 1.25rem;">Your agents will keep working, but you'll need to sign back in to manage them.</p>
+            <div style="display:flex;gap:0.75rem;justify-content:center;">
+              <button id="signout-cancel" class="btn" style="padding:0.6rem 1.2rem;border-radius:0.5rem;border:1px solid #333;background:#222;color:#e0e0e0;cursor:pointer;">Cancel</button>
+              <button id="signout-confirm" class="btn danger" style="padding:0.6rem 1.2rem;border-radius:0.5rem;border:none;background:#e05d5d;color:#fff;font-weight:600;cursor:pointer;">Sign out</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.querySelector("#signout-cancel")!.addEventListener("click", () => modal.remove());
+        modal.querySelector("#signout-confirm")!.addEventListener("click", async () => {
+          modal.remove();
+          await signOut();
+          location.reload();
+        });
+        modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+      });
+      onAuthChange((state) => {
+        if (state.session) {
+          emailEl.textContent = getUserEmail() ?? "";
+          userMenu.style.display = "inline-flex";
+        } else {
+          userMenu.style.display = "none";
+        }
+      });
+    }
 
     const mqBrowser = new MarketplaceBrowser();
     mqBrowser.onHireAgent = (agent: MarketplaceAgent) => this.hireFromMarketplace(agent);
@@ -656,6 +697,7 @@ export class Hud {
         <div class="tabs">
           <button class="tab active" data-tab="agents">AGENTS</button>
           <button class="tab" data-tab="game">GAME</button>
+          <button class="tab" data-tab="api">API KEY</button>
           <button class="tab" data-tab="controls">CONTROLS</button>
           <button class="tab" data-tab="data">DATA</button>
         </div>
@@ -687,6 +729,21 @@ export class Hud {
             <input type="checkbox" id="s-wander" ${s.game.idleWander ? "checked" : ""} />
             <span>AGENTS WANDER WHEN IDLE</span>
           </label>
+        </div>
+        <div class="tabpanel" data-panel="api" hidden>
+          <div class="sec">SWARMS API KEY</div>
+          <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">Bring your own key — your agents will use it instead of the server's shared key. Get one at <a href="https://swarms.world/platform/api-keys" target="_blank" style="color:#4f9dde;">swarms.world</a>.</p>
+          <div id="api-key-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.hasApiKey ? "#53b86b" : "#e05d5d"};">
+            ${this.store.hasApiKey ? "✓ You have a personal API key set." : "⚠ No personal API key — using the server's shared key."}
+          </div>
+          <label>SWARMS API KEY
+            <input id="s-api-key" type="password" placeholder="sk-..." autocomplete="off"
+              style="width:100%;padding:0.6rem 0.8rem;border-radius:0.5rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.9rem;" />
+          </label>
+          <div class="row" style="margin-top:0.75rem;">
+            <button class="btn primary" id="s-save-key">SAVE KEY</button>
+            <button class="btn danger" id="s-clear-key" ${this.store.hasApiKey ? "" : "disabled"}>CLEAR KEY</button>
+          </div>
         </div>
         <div class="tabpanel" data-panel="controls" hidden>
           <div class="sec">QUICK COMMANDS</div>
@@ -755,6 +812,18 @@ export class Hud {
     });
     document.getElementById("s-quick-cline")!.addEventListener("click", () => {
       this.quickHire("cline");
+      modal.hidden = true;
+    });
+    document.getElementById("s-save-key")!.addEventListener("click", () => {
+      const key = (document.getElementById("s-api-key") as HTMLInputElement).value.trim();
+      if (!key) { this.toast("Enter an API key first."); return; }
+      this.net.send({ type: "set_api_key", apiKey: key });
+      (document.getElementById("s-api-key") as HTMLInputElement).value = "";
+      modal.hidden = true;
+    });
+    document.getElementById("s-clear-key")!.addEventListener("click", () => {
+      if (!confirm("Remove your stored API key? Your agents will fall back to the server's shared key.")) return;
+      this.net.send({ type: "set_api_key", apiKey: "" });
       modal.hidden = true;
     });
     document.getElementById("s-cancel")!.addEventListener("click", () => (modal.hidden = true));

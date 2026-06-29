@@ -19,6 +19,8 @@ export interface RunContext {
   onSession: (id: string) => void;
   /** Whether to inject Railway MCP tools (devops agents when railway is enabled). */
   railway: boolean;
+  /** Per-user API key. Falls back to global SWARMS_API_KEY if null. */
+  apiKey: string | null;
 }
 
 export type ProviderRunner = (

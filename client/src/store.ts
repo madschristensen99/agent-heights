@@ -48,6 +48,7 @@ export class Store {
   railwayData: RailwayData | null = null;
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
+  hasApiKey = false;
 
   private listeners = new Set<Listener>();
   private toastListeners = new Set<(text: string) => void>();
@@ -273,6 +274,9 @@ export class Store {
         this.railwayData = msg.data;
         this.railwayError = msg.error;
         this.railwayPanelOpen = true;
+        break;
+      case "api_key_status":
+        this.hasApiKey = msg.hasKey;
         break;
     }
     this.emit();

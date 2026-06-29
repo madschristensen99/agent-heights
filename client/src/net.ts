@@ -58,6 +58,16 @@ export class Net {
     };
   }
 
+  disconnect(): void {
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+      this.onStatus(false);
+    }
+  }
+
   send(msg: ClientMsg): void {
     console.log(`[net] sending: type=${msg.type} name=${(msg as any).name ?? ""}`);
     if (this.ws?.readyState === WebSocket.OPEN) {

@@ -325,7 +325,8 @@ export type ClientMsg =
   | { type: "delete_card"; cardId: string }
   | { type: "recruit"; firedAgentId: string }
   | { type: "railway_query" }
-  | { type: "update_appearance"; appearance: CharAppearance };
+  | { type: "update_appearance"; appearance: CharAppearance }
+  | { type: "set_api_key"; apiKey: string };
 
 export type ServerMsg =
   | {
@@ -352,7 +353,8 @@ export type ServerMsg =
   | { type: "fired_agent"; agent: FiredAgent }
   | { type: "fired_agent_removed"; agentId: string }
   | { type: "railway_status"; ok: boolean; message: string }
-  | { type: "railway_data"; data: RailwayData | null; error: string | null };
+  | { type: "railway_data"; data: RailwayData | null; error: string | null }
+  | { type: "api_key_status"; hasKey: boolean };
 
 export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },

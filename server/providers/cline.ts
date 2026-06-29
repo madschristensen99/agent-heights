@@ -1,14 +1,14 @@
-import { Agent } from "@cline/sdk";
+import {
+  Agent,
+  createDefaultTools,
+  createDefaultExecutors,
+} from "@cline/sdk";
 import type { AgentTool } from "@cline/sdk";
-import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
+import { writeFile, mkdir, readdir } from "node:fs/promises";
 import { resolve, relative, dirname } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
-
-const execFileAsync = promisify(execFile);
 
 const SWARMS_BASE_URL = "https://api.swarms.world/v1";
 const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
@@ -27,34 +27,27 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
     return resolved;
   };
 
-  const readFilesTool: AgentTool<any, any> = {
-    name: "read_files",
-    description:
-      "Read the contents of one or more files. Returns each file's path and content.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        paths: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of file paths relative to workspace root",
-        },
-      },
-      required: ["paths"],
-    },
-    async execute(input: any) {
-      const results: string[] = [];
-      for (const p of input.paths as string[]) {
-        try {
-          const content = await readFile(safe(p), "utf-8");
-          results.push(`--- ${p} ---\n${content}`);
-        } catch (err) {
-          results.push(`--- ${p} ---\nERROR: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-      return results.join("\n\n");
-    },
-  };
+  // ── SDK built-in tools with default executors ──────────────────────
+  const executors = createDefaultExecutors();
+
+  // Custom submit executor — the SDK doesn't ship one in createDefaultExecutors
+  executors.submit = async (summary: string) => summary;
+
+  const builtinTools = createDefaultTools({
+    executors,
+    cwd,
+    enableReadFiles: true,
+    enableSearch: true,
+    enableBash: true,
+    enableWebFetch: true,
+    enableEditor: true,
+    enableApplyPatch: false,
+    enableSkills: false,
+    enableAskQuestion: false,
+    enableSubmitAndExit: true,
+  });
+
+  // ── Custom tools not provided by the SDK ───────────────────────────
 
   const writeFilesTool: AgentTool<any, any> = {
     name: "write_files",
@@ -107,61 +100,7 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
     },
   };
 
-  const runCommandsTool: AgentTool<any, any> = {
-    name: "run_commands",
-    description:
-      "Execute one or more shell commands in the workspace. Commands run with cwd set to the workspace root. Returns stdout+stderr for each.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        commands: {
-          type: "array",
-          items: { type: "string" },
-          description: "Shell commands to execute sequentially",
-        },
-      },
-      required: ["commands"],
-    },
-    async execute(input: any, ctx: any) {
-      const results: string[] = [];
-      for (const cmd of input.commands as string[]) {
-        if (ctx.signal?.aborted) break;
-        try {
-          const { stdout, stderr } = await execFileAsync(
-            "bash",
-            ["-c", cmd],
-            { cwd, maxBuffer: 1024 * 1024 * 10, signal: ctx.signal },
-          );
-          const out = (stdout + (stderr ? `\n[stderr]\n${stderr}` : "")).trim();
-          results.push(`$ ${cmd}\n${out || "(no output)"}`);
-        } catch (err: any) {
-          const msg = err.stdout
-            ? `$ ${cmd}\n${err.stdout}\n[exit ${err.code ?? "?"}] ${err.stderr ?? err.message}`
-            : `$ ${cmd}\n[exit ${err.code ?? "?"}] ${err.message}`;
-          results.push(msg);
-        }
-      }
-      return results.join("\n\n");
-    },
-  };
-
-  const submitTool: AgentTool<any, any> = {
-    name: "submit_and_exit",
-    description: "Call this when the task is complete. Provide a brief summary of what was done.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        summary: { type: "string", description: "Brief summary of what was accomplished" },
-      },
-      required: ["summary"],
-    },
-    lifecycle: { completesRun: true },
-    async execute(input: any) {
-      return input.summary;
-    },
-  };
-
-  const base = [readFilesTool, writeFilesTool, listFilesTool, runCommandsTool, submitTool];
+  const base = [...builtinTools, writeFilesTool, listFilesTool];
 
   if (opts?.railway) {
     const railwayTools = await wrapRailwayTools();
@@ -183,6 +122,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   }
 
   const { agentId } = ctx;
+  const apiKey = ctx.apiKey ?? SWARMS_API_KEY;
 
   try {
     let agent = agents.get(agentId);
@@ -190,9 +130,9 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       agent = new Agent({
         providerId: "openai-compatible",
         modelId: ctx.model,
-        apiKey: SWARMS_API_KEY,
+        apiKey,
         baseUrl: SWARMS_BASE_URL,
-        headers: { "x-api-key": SWARMS_API_KEY },
+        headers: { "x-api-key": apiKey },
         systemPrompt: ctx.systemPrompt,
         tools: await makeTools(ctx.cwd, { railway: ctx.railway }),
         maxIterations: ctx.settings.cline.maxIterations,
