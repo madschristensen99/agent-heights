@@ -1,9 +1,9 @@
 /**
  * Authors all pixel art for Agent HQ:
  *   client/public/assets/tilesets/office.png   - 64x64 office tileset (32 tiles)
- *   client/public/assets/tilesets/lumon.png    - Lumon-theme recolor of the tileset
+ *   client/public/assets/tilesets/agenthq.png  - Agent HQ-theme recolor of the tileset
  *   client/public/assets/maps/office.json      - Tiled-format map (open it in Tiled!)
- *   client/public/assets/maps/lumon.json       - Lumon-theme map (severed floor layout)
+ *   client/public/assets/maps/agenthq.json     - Agent HQ-theme map (carpeted office layout)
  *   client/public/assets/characters/char-N.png - 64x96 4-dir walk sheets, 8 variants
  *   client/public/assets/characters/boss.png   - the player character
  *   client/public/assets/sprites/monitor.png   - 2-frame monitor (off/on)
@@ -299,6 +299,11 @@ export const TILE = {
   DESK_SIDE_TOP: 37, DESK_SIDE_BOTTOM: 38,
   DESK_SIDE_TOP_MIRROR: 39, DESK_SIDE_BOTTOM_MIRROR: 40, CHAIR_RIGHT: 41,
   RED_CARPET_A: 42, RED_CARPET_B: 43,
+  LOGO_00: 44, LOGO_01: 45, LOGO_02: 46, LOGO_03: 47, LOGO_04: 48, LOGO_05: 49, LOGO_06: 50, LOGO_07: 51, LOGO_08: 52, LOGO_09: 53,
+  LOGO_10: 54, LOGO_11: 55, LOGO_12: 56, LOGO_13: 57, LOGO_14: 58, LOGO_15: 59, LOGO_16: 60, LOGO_17: 61, LOGO_18: 62, LOGO_19: 63,
+  LOGO_20: 64, LOGO_21: 65, LOGO_22: 66, LOGO_23: 67, LOGO_24: 68, LOGO_25: 69, LOGO_26: 70, LOGO_27: 71, LOGO_28: 72, LOGO_29: 73,
+  LOGO_30: 74, LOGO_31: 75, LOGO_32: 76, LOGO_33: 77, LOGO_34: 78, LOGO_35: 79, LOGO_36: 80, LOGO_37: 81, LOGO_38: 82, LOGO_39: 83,
+  LOGO_40: 84, LOGO_41: 85, LOGO_42: 86, LOGO_43: 87, LOGO_44: 88, LOGO_45: 89, LOGO_46: 90, LOGO_47: 91, LOGO_48: 92, LOGO_49: 93,
 } as const;
 
 const SOLID_TILES = [
@@ -1329,329 +1334,197 @@ function vendingTile(body: string, bodyLight: string): TileDrawer {
   };
 }
 
-// Lumon theme: green carpet, white walls, white desks — the severed floor.
+// Agent HQ theme: blue carpet everywhere, classic office styling with branded floor logo.
 
-function lumonCounter(s: Sheet, ox: number, oy: number): void {
-  const tp = shade5("#f2f4f2");
-  const cp = shade5("#d4d8db");
-  vGrad(s, ox, oy, T, 24, tp.hi, tp.dk);
-  s.rect(ox, oy, T, 3, tp.hi);
-  s.rect(ox, oy, T, 1, mix(tp.hi, "#fff", 0.2));
-  s.rect(ox, oy + 22, T, 2, tp.sh);
-  vGrad(s, ox, oy + 24, T, 36, cp.li, cp.sh);
-  s.rect(ox, oy + 24, T, 2, cp.dk);
-  s.rect(ox, oy + 58, T, 2, cp.sh);
-  s.rect(ox + 28, oy + 32, 2, 24, cp.dk);
-  s.rect(ox + 28, oy + 32, 1, 24, cp.sh);
-  s.rect(ox + 30, oy + 32, 1, 24, cp.li);
-  s.rect(ox + 20, oy + 40, 8, 2, cp.dk);
-  s.rect(ox + 36, oy + 40, 8, 2, cp.dk);
-  s.fillRoundedRect(ox + 24, oy + 38, 4, 2, 1, cp.sh);
-  s.fillRoundedRect(ox + 40, oy + 38, 4, 2, 1, cp.sh);
+// 5×7 pixel bitmap font (same as generate-og-image.ts)
+const PIXEL_FONT: Record<string, string[]> = {
+  A: ["01110","10001","10001","11111","10001","10001","10001"],
+  B: ["11110","10001","10001","11110","10001","10001","11110"],
+  C: ["01111","10000","10000","10000","10000","10000","01111"],
+  D: ["11110","10001","10001","10001","10001","10001","11110"],
+  E: ["11111","10000","10000","11110","10000","10000","11111"],
+  F: ["11111","10000","10000","11110","10000","10000","10000"],
+  G: ["01111","10000","10000","10011","10001","10001","01111"],
+  H: ["10001","10001","10001","11111","10001","10001","10001"],
+  I: ["11111","00100","00100","00100","00100","00100","11111"],
+  J: ["00111","00010","00010","00010","00010","10010","01100"],
+  K: ["10001","10010","10100","11000","10100","10010","10001"],
+  L: ["10000","10000","10000","10000","10000","10000","11111"],
+  M: ["10001","11011","10101","10101","10001","10001","10001"],
+  N: ["10001","11001","10101","10011","10001","10001","10001"],
+  O: ["01110","10001","10001","10001","10001","10001","01110"],
+  P: ["11110","10001","10001","11110","10000","10000","10000"],
+  Q: ["01110","10001","10001","10001","10101","10010","01101"],
+  R: ["11110","10001","10001","11110","10100","10010","10001"],
+  S: ["01111","10000","10000","01110","00001","00001","11110"],
+  T: ["11111","00100","00100","00100","00100","00100","00100"],
+  U: ["10001","10001","10001","10001","10001","10001","01110"],
+  V: ["10001","10001","10001","10001","10001","01010","00100"],
+  W: ["10001","10001","10001","10101","10101","11011","10001"],
+  X: ["10001","10001","01010","00100","01010","10001","10001"],
+  Y: ["10001","10001","10001","01010","00100","00100","00100"],
+  Z: ["11111","00001","00010","00100","01000","10000","11111"],
+  " ": ["00000","00000","00000","00000","00000","00000","00000"],
+};
+
+function pixelFontWidth(text: string, scale: number): number {
+  return text.length * (5 + 1) * scale - scale;
 }
 
-function lumonWallFace(s: Sheet, ox: number, oy: number): void {
-  const p = shade5("#f6f7f4");
-  vGrad(s, ox, oy, T, T, p.hi, p.dk);
-  s.rect(ox, oy, T, 3, p.hi);
-  s.rect(ox, oy, T, 1, mix(p.hi, "#fff", 0.3));
-  s.rect(ox + 31, oy + 4, 1, 48, p.dk);
-  s.rect(ox + 32, oy + 4, 1, 48, p.li);
-  // baseboard with 5-tone
-  s.rect(ox, oy + 50, T, 14, p.dk);
-  s.rect(ox, oy + 50, T, 2, p.sh);
-  s.rect(ox, oy + 52, T, 1, p.hi);
-  s.rect(ox, oy + 62, T, 2, p.li);
+function drawPixelText(s: Sheet, text: string, startX: number, startY: number, scale: number, hex: string): void {
+  let x = startX;
+  for (const ch of text.toUpperCase()) {
+    const glyph = PIXEL_FONT[ch] ?? PIXEL_FONT[" "];
+    for (let gy = 0; gy < 7; gy++) {
+      for (let gx = 0; gx < 5; gx++) {
+        if (glyph[gy][gx] === "1") {
+          s.rect(x + gx * scale, startY + gy * scale, scale, scale, hex);
+        }
+      }
+    }
+    x += (5 + 1) * scale;
+  }
 }
 
-const lumonDrawers: Record<number, TileDrawer> = {
+// Agent HQ logo — drawn as a 10×5 tile grid (640×320px), sublimated into the carpet.
+// No plate background; green pixel text + accent line blend directly onto the floor.
+const LOGO_W = 640; // 10 * 64
+const LOGO_H = 320; // 5 * 64
+
+function drawAgentHQLogo(s: Sheet, ox: number, oy: number): void {
+  const cx = ox + LOGO_W / 2;
+  const cy = oy + LOGO_H / 2 + 16; // shifted down slightly
+
+  const accent = "#58c866";
+  const accentDk = "#3a8848";
+
+  // --- "AGENT HQ HQ" in pixel font ---
+  const title = "AGENT HQ HQ";
+  const titleScale = 9; // 12 chars × (5+1)*9 - 9 = 639px, fits in 640px canvas
+  const titleW = pixelFontWidth(title, titleScale);
+  const titleX = Math.round(cx - titleW / 2);
+  const titleY = Math.round(cy - 63 / 2) - 12; // shift up for accent line below
+
+  // Shadow (offset by 4px, very dark, barely visible)
+  drawPixelTextAlpha(s, title, titleX + 4, titleY + 4, titleScale, "#0a0e14", 0.15);
+  // Main text — bright green, very transparent so carpet dominates
+  drawPixelTextAlpha(s, title, titleX, titleY, titleScale, accent, 0.3);
+
+  // Accent line below text
+  const lineY = titleY + 7 * titleScale + 16;
+  const lineW = Math.min(titleW + 60, LOGO_W - 80);
+  const lineX = Math.round(cx - lineW / 2);
+  for (let x = lineX; x < lineX + lineW; x++) {
+    s.setAlpha(x, lineY, accent, 0.25);
+    s.setAlpha(x, lineY + 1, accent, 0.25);
+    s.setAlpha(x, lineY + 2, accentDk, 0.2);
+  }
+
+  // Small decorative dots flanking the accent line
+  for (let i = 0; i < 4; i++) {
+    s.setAlpha(lineX - 10 - i * 5, lineY + 1, accent, 0.2);
+    s.setAlpha(lineX + lineW + 6 + i * 5, lineY + 1, accent, 0.2);
+  }
+}
+
+// Alpha-blended version of drawPixelText
+function drawPixelTextAlpha(s: Sheet, text: string, startX: number, startY: number, scale: number, hex: string, alpha: number): void {
+  let x = startX;
+  for (const ch of text.toUpperCase()) {
+    const glyph = PIXEL_FONT[ch] ?? PIXEL_FONT[" "];
+    for (let gy = 0; gy < 7; gy++) {
+      for (let gx = 0; gx < 5; gx++) {
+        if (glyph[gy][gx] === "1") {
+          for (let dy = 0; dy < scale; dy++) {
+            for (let dx = 0; dx < scale; dx++) {
+              s.setAlpha(x + gx * scale + dx, startY + gy * scale + dy, hex, alpha);
+            }
+          }
+        }
+      }
+    }
+    x += (5 + 1) * scale;
+  }
+}
+
+// Create a logo fragment drawer for tile (row, col) in the 10×5 grid.
+function logoFragment(row: number, col: number): TileDrawer {
+  const carpetA = carpetTile("#4a6a8a", "#3a5a7a");
+  const carpetB = carpetTile("#446484", "#365474");
+  return (s, ox, oy) => {
+    // Draw carpet base first so alpha-blended text has something to blend onto
+    const checker = (col + row) % 2 === 0 ? carpetA : carpetB;
+    checker(s, ox, oy);
+    // Now draw the logo fragment on top
+    const baseX = ox - col * T;
+    const baseY = oy - row * T;
+    s.clip = { x: ox, y: oy, w: T, h: T };
+    drawAgentHQLogo(s, baseX, baseY);
+    s.clip = null;
+  };
+}
+
+const agenthqDrawers: Record<number, TileDrawer> = {
   ...drawers,
-  [TILE.CARPET_A]: carpetTile("#5e8b50", "#537e46"),
-  [TILE.CARPET_B]: carpetTile("#578349", "#4d7740"),
-  [TILE.TILE_A]: kitchenTile("#e4e8e4", "#c4ccc4"),
-  [TILE.TILE_B]: kitchenTile("#dbe0db", "#bac2ba"),
-  [TILE.VENDING]: vendingTile("#3a6f57", "#4c8a6e"),
-  [TILE.COUNTER]: lumonCounter,
-  [TILE.COFFEE]: (s, ox, oy) => {
-    lumonCounter(s, ox, oy);
-    const p = shade5("#3a4458");
-    vGrad(s, ox + 16, oy, 32, 24, p.hi, p.dk);
-    s.rect(ox + 16, oy, 32, 2, p.hi);
-    s.rect(ox + 16, oy, 2, 24, p.li);
-    s.rect(ox + 46, oy, 2, 24, p.dk);
-    s.fillRoundedRect(ox + 24, oy + 8, 16, 12, 2, "#10141c");
-    s.rect(ox + 24, oy + 8, 16, 1, "#1a1e28");
-    s.rect(ox + 28, oy + 12, 8, 4, "#080c14");
-    s.fillCircle(ox + 32, oy + 14, 1, "#e0b84a");
-  },
-  [TILE.WALL_TOP]: (s, ox, oy) => {
-    const p = shade5("#aeb4ba");
-    vGrad(s, ox, oy, T, T, p.li, p.dk);
-    noiseAlpha(s, ox, oy, T, T, p.dk, 0.05, 0.4);
-    s.rect(ox, oy, T, 2, p.hi);
-    vGrad(s, ox, oy + 54, T, 10, p.dk, p.sh);
-    s.rect(ox, oy + 58, T, 6, p.sh);
-  },
-  [TILE.WALL_FACE]: lumonWallFace,
-  [TILE.CLOCK]: (s, ox, oy) => {
-    lumonWallFace(s, ox, oy);
-    const fp = shade5("#33373d");
-    s.fillCircle(ox + 32, oy + 22, 15, fp.base);
-    s.fillCircle(ox + 32, oy + 22, 15, fp.dk);
-    s.fillCircle(ox + 31, oy + 21, 14, fp.li);
-    s.fillCircle(ox + 32, oy + 22, 12, "#f6f6fa");
-    rGrad(s, ox + 32, oy + 22, 12, "#ffffff", "#e0e0e4");
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-      const r1 = i % 3 === 0 ? 9 : 10;
-      const x1 = 32 + Math.cos(a) * r1;
-      const y1 = 22 + Math.sin(a) * r1;
-      const x2 = 32 + Math.cos(a) * 11;
-      const y2 = 22 + Math.sin(a) * 11;
-      s.lineThick(ox + x1, oy + y1, ox + x2, oy + y2, i % 3 === 0 ? "#555" : "#888", i % 3 === 0 ? 2 : 1);
-    }
-    s.lineThick(ox + 32, oy + 22, ox + 32, oy + 14, "#33373d", 2);
-    s.lineThick(ox + 32, oy + 22, ox + 40, oy + 22, "#d65d5d", 2);
-    s.fillCircle(ox + 32, oy + 22, 2, "#33373d");
-    s.line(ox + 24, oy + 14, ox + 28, oy + 12, "#ffffff");
-  },
-  [TILE.POSTER]: (s, ox, oy) => {
-    lumonWallFace(s, ox, oy);
-    const fp = shade5("#2e3547");
-    s.rect(ox + 10, oy + 6, 44, 44, fp.base);
-    s.rect(ox + 10, oy + 6, 44, 2, fp.hi);
-    s.rect(ox + 10, oy + 6, 2, 44, fp.li);
-    s.rect(ox + 52, oy + 6, 2, 44, fp.dk);
-    s.rect(ox + 10, oy + 48, 44, 2, fp.sh);
-    vGrad(s, ox + 12, oy + 8, 40, 40, "#d8d2b8", "#c0baa0");
-    // portrait with 5-tone
-    vGrad(s, ox + 22, oy + 14, 20, 16, "#f2c39b", "#d8a87a");
-    s.rect(ox + 22, oy + 14, 20, 3, mix("#f2c39b", "#fff", 0.12));
-    s.rect(ox + 22, oy + 14, 1, 16, mix("#f2c39b", "#fff", 0.08));
-    // suit
-    vGrad(s, ox + 18, oy + 30, 28, 16, "#3a4458", "#23283a");
-    s.rect(ox + 30, oy + 30, 4, 8, "#f2c39b");
-    s.rect(ox + 18, oy + 30, 28, 2, mix("#3a4458", "#fff", 0.06));
-  },
-  [TILE.DOOR]: (s, ox, oy) => {
-    const fp = shade5("#aeb4ba");
-    const dp = shade5("#f0f2f4");
-    const pp = shade5("#dde0e3");
-    s.rect(ox, oy, T, T, fp.base);
-    s.rect(ox, oy, T, 2, fp.hi);
-    s.rect(ox, oy + 62, T, 2, fp.sh);
-    vGrad(s, ox + 6, oy + 4, 52, 58, dp.hi, dp.dk);
-    s.rect(ox + 6, oy + 4, 52, 2, dp.hi);
-    s.rect(ox + 6, oy + 4, 2, 58, dp.li);
-    s.rect(ox + 56, oy + 4, 2, 58, dp.dk);
-    s.rect(ox + 6, oy + 61, 52, 1, dp.sh);
-    // panels with bevel
-    s.rect(ox + 14, oy + 12, 36, 18, pp.base);
-    s.rect(ox + 14, oy + 12, 36, 2, pp.hi);
-    s.rect(ox + 14, oy + 12, 2, 18, pp.li);
-    s.rect(ox + 48, oy + 12, 2, 18, pp.dk);
-    s.rect(ox + 14, oy + 28, 36, 2, pp.sh);
-    s.rect(ox + 14, oy + 36, 36, 18, pp.base);
-    s.rect(ox + 14, oy + 36, 36, 2, pp.hi);
-    s.rect(ox + 14, oy + 36, 2, 18, pp.li);
-    s.rect(ox + 48, oy + 36, 2, 18, pp.dk);
-    s.rect(ox + 14, oy + 52, 36, 2, pp.sh);
-    // handle
-    s.fillCircle(ox + 51, oy + 34, 2, "#5a626e");
-    s.set(ox + 50, oy + 33, "#6a727e");
-  },
-  [TILE.DOORMAT]: (s, ox, oy) => {
-    const p = shade5("#46683c");
-    const lp = shade5("#527a45");
-    s.rect(ox, oy, T, T, p.base);
-    s.rect(ox, oy, T, 3, p.sh);
-    s.rect(ox, oy, T, 1, p.dk);
-    s.rect(ox, oy + 61, T, 3, p.sh);
-    s.rect(ox, oy + 63, T, 1, p.dk);
-    s.rect(ox, oy, 3, T, p.sh);
-    s.rect(ox, oy, 1, T, p.dk);
-    s.rect(ox + 61, oy, 3, T, p.sh);
-    s.rect(ox + 63, oy, 1, T, p.dk);
-    for (let y = 6; y < 58; y += 5) {
-      s.rect(ox + 4, oy + y, 56, 2, lp.base);
-      s.rect(ox + 4, oy + y, 56, 1, lp.li);
-      s.rect(ox + 4, oy + y + 2, 56, 1, p.dk);
-    }
-    noiseAlpha(s, ox + 4, oy + 4, 56, 56, p.sh, 0.12, 0.4);
-  },
-  [TILE.DESK_L]: (s, ox, oy) => {
-    const tp = shade5("#f4f6f8");
-    const sp = shade5("#c3c8cd");
-    vGrad(s, ox + 2, oy, 60, 44, tp.hi, tp.dk);
-    s.rect(ox + 2, oy, 60, 3, tp.hi);
-    s.rect(ox + 2, oy, 60, 1, mix(tp.hi, "#fff", 0.3));
-    vGrad(s, ox + 2, oy + 44, 60, 16, sp.li, sp.sh);
-    s.rect(ox + 2, oy + 44, 60, 2, sp.dk);
-    s.rect(ox + 2, oy + 58, 60, 2, sp.sh);
-    s.rect(ox + 2, oy, 2, 60, sp.sh);
-  },
-  [TILE.DESK_R]: (s, ox, oy) => {
-    const tp = shade5("#f4f6f8");
-    const sp = shade5("#c3c8cd");
-    vGrad(s, ox, oy, 60, 44, tp.hi, tp.dk);
-    s.rect(ox, oy, 60, 3, tp.hi);
-    s.rect(ox, oy, 60, 1, mix(tp.hi, "#fff", 0.3));
-    vGrad(s, ox, oy + 44, 60, 16, sp.li, sp.sh);
-    s.rect(ox, oy + 44, 60, 2, sp.dk);
-    s.rect(ox, oy + 58, 60, 2, sp.sh);
-    s.rect(ox + 58, oy, 2, 60, sp.sh);
-    // papers with shadow
-    s.rect(ox + 5, oy + 11, 20, 24, mix("#f7f8fa", "#000", 0.08));
-    s.rect(ox + 6, oy + 10, 20, 24, "#f7f8fa");
-    s.rect(ox + 6, oy + 10, 20, 3, "#ffffff");
-    s.rect(ox + 10, oy + 18, 12, 1, "#9aa0a8");
-    s.rect(ox + 10, oy + 22, 10, 1, "#9aa0a8");
-    // mug — rounded with shine
-    s.fillRoundedRect(ox + 36, oy + 14, 12, 12, 2, "#3a6f57");
-    s.rect(ox + 36, oy + 14, 12, 2, mix("#3a6f57", "#fff", 0.15));
-    s.rect(ox + 37, oy + 15, 3, 6, mix("#3a6f57", "#fff", 0.25));
-    s.rect(ox + 48, oy + 18, 4, 6, "#3a6f57");
-  },
-  [TILE.DESK_SIDE_TOP]: (s, ox, oy) => {
-    const tp = shade5("#f4f6f8");
-    const sp = shade5("#c3c8cd");
-    // desk surface — left portion (top-down view)
-    vGrad(s, ox, oy, 44, 64, tp.hi, tp.dk);
-    s.rect(ox, oy, 3, 64, tp.hi);
-    s.rect(ox, oy, 1, 64, mix(tp.hi, "#fff", 0.3));
-    // front panel — right portion (facing Yuki on the right)
-    vGrad(s, ox + 44, oy, 18, 64, sp.li, sp.sh);
-    s.rect(ox + 44, oy, 2, 64, sp.dk);
-    s.rect(ox + 60, oy, 2, 64, sp.sh);
-    // top edge
-    s.rect(ox, oy, 64, 2, sp.sh);
-    // cable hole
-    s.fillCircle(ox + 22, oy + 10, 3, "#1a1a1a");
-  },
-  [TILE.DESK_SIDE_BOTTOM]: (s, ox, oy) => {
-    const tp = shade5("#f4f6f8");
-    const sp = shade5("#c3c8cd");
-    // desk surface continuation
-    vGrad(s, ox, oy, 44, 64, tp.hi, tp.dk);
-    s.rect(ox, oy, 1, 64, mix(tp.hi, "#fff", 0.2));
-    // front panel continuation
-    vGrad(s, ox + 44, oy, 18, 64, sp.li, sp.sh);
-    s.rect(ox + 44, oy, 2, 64, sp.dk);
-    s.rect(ox + 60, oy, 2, 64, sp.sh);
-    // bottom edge
-    s.rect(ox, oy + 60, 64, 2, sp.sh);
-    // desk legs
-    s.rect(ox + 4, oy + 54, 6, 8, sp.dk);
-    s.rect(ox + 36, oy + 54, 6, 8, sp.dk);
-  },
-  [TILE.DESK_SIDE_TOP_MIRROR]: (s, ox, oy) => {
-    const tp = shade5("#f4f6f8");
-    const sp = shade5("#c3c8cd");
-    vGrad(s, ox + 2, oy, 18, 64, sp.li, sp.sh);
-    s.rect(ox + 18, oy, 2, 64, sp.dk);
-    s.rect(ox + 2, oy, 2, 64, sp.sh);
-    vGrad(s, ox + 20, oy, 44, 64, tp.hi, tp.dk);
-    s.rect(ox + 61, oy, 3, 64, tp.hi);
-    s.rect(ox + 63, oy, 1, 64, mix(tp.hi, "#fff", 0.3));
-    s.rect(ox, oy, 64, 2, sp.sh);
-    s.fillCircle(ox + 42, oy + 10, 3, "#1a1a1a");
-  },
-  [TILE.DESK_SIDE_BOTTOM_MIRROR]: (s, ox, oy) => {
-    const tp = shade5("#f4f6f8");
-    const sp = shade5("#c3c8cd");
-    vGrad(s, ox + 2, oy, 18, 64, sp.li, sp.sh);
-    s.rect(ox + 18, oy, 2, 64, sp.dk);
-    s.rect(ox + 2, oy, 2, 64, sp.sh);
-    vGrad(s, ox + 20, oy, 44, 64, tp.hi, tp.dk);
-    s.rect(ox + 63, oy, 1, 64, mix(tp.hi, "#fff", 0.2));
-    s.rect(ox, oy + 60, 64, 2, sp.sh);
-    s.rect(ox + 54, oy + 54, 6, 8, sp.dk);
-    s.rect(ox + 22, oy + 54, 6, 8, sp.dk);
-  },
-  [TILE.CHAIR_RIGHT]: (s, ox, oy) => {
-    const bp = shade5("#3c4458");
-    const sp = shade5("#2e3547");
-    vGrad(s, ox + 8, oy + 8, 28, 36, bp.hi, bp.dk);
-    s.rect(ox + 8, oy + 8, 28, 2, bp.hi);
-    s.rect(ox + 8, oy + 8, 2, 36, bp.dk);
-    s.rect(ox + 34, oy + 8, 2, 36, bp.li);
-    s.rect(ox + 8, oy + 42, 28, 2, bp.sh);
-    s.rect(ox + 22, oy + 12, 2, 28, bp.dk);
-    s.rect(ox + 21, oy + 12, 1, 28, bp.sh);
-    vGrad(s, ox + 28, oy + 26, 28, 44, sp.li, sp.dk);
-    s.rect(ox + 28, oy + 26, 28, 2, sp.hi);
-    s.rect(ox + 28, oy + 68, 28, 2, sp.sh);
-    s.rect(ox + 48, oy + 26, 8, 4, sp.sh);
-    s.rect(ox + 48, oy + 38, 8, 6, sp.sh);
-    s.rect(ox + 48, oy + 52, 8, 6, sp.sh);
-    s.fillCircle(ox + 54, oy + 28, 2, sp.dk);
-    s.fillCircle(ox + 54, oy + 56, 2, sp.dk);
-  },
-  [TILE.SERVER_RACK]: (s, ox, oy) => {
-    const p = shade5("#1a1a22");
-    vGrad(s, ox + 2, oy, 60, 64, p.li, p.dk);
-    s.rect(ox + 2, oy, 60, 2, p.hi);
-    s.rect(ox + 2, oy, 2, 64, p.li);
-    s.rect(ox + 60, oy, 2, 64, p.dk);
-    s.rect(ox + 2, oy + 62, 60, 2, p.sh);
-    for (let i = 0; i < 6; i++) {
-      const y = oy + 4 + i * 10;
-      s.rect(ox + 5, y, 54, 8, "#0a0a12");
-      s.rect(ox + 5, y, 54, 1, p.dk);
-      s.rect(ox + 5, y + 7, 54, 1, p.sh);
-      s.rect(ox + 8, y + 2, 40, 4, "#050508");
-      for (let v = 0; v < 8; v++) {
-        s.rect(ox + 8 + v * 5, y + 2, 3, 4, "#12121a");
-      }
-      s.rect(ox + 52, y + 2, 2, 2, i % 2 === 0 ? "#3dff7a" : "#ffaa3d");
-      s.rect(ox + 55, y + 2, 2, 2, "#3dff7a");
-      s.rect(ox + 52, y + 5, 2, 1, "#ff4444");
-    }
-  },
-  [TILE.SERVER_SCREEN]: (s, ox, oy) => {
-    const p = shade5("#1a1a22");
-    vGrad(s, ox + 2, oy, 60, 64, p.li, p.dk);
-    s.rect(ox + 2, oy, 60, 2, p.hi);
-    s.rect(ox + 2, oy, 2, 64, p.li);
-    s.rect(ox + 60, oy, 2, 64, p.dk);
-    s.rect(ox + 2, oy + 62, 60, 2, p.sh);
-    vGrad(s, ox + 6, oy + 4, 52, 56, "#080a12", "#121620");
-    s.rect(ox + 6, oy + 4, 52, 1, "#2a3040");
-    s.rect(ox + 6, oy + 4, 1, 56, "#2a3040");
-    s.rect(ox + 10, oy + 10, 36, 1, "#3dff7a");
-    s.rect(ox + 10, oy + 16, 28, 1, "#3dff7a");
-    s.rect(ox + 10, oy + 22, 40, 1, "#3dff7a");
-    s.rect(ox + 10, oy + 28, 24, 1, "#3dff7a");
-    s.rect(ox + 10, oy + 34, 32, 1, "#3dff7a");
-    s.rect(ox + 10, oy + 40, 20, 1, "#ffaa3d");
-    s.rect(ox + 10, oy + 46, 36, 1, "#3dff7a");
-    s.rect(ox + 10, oy + 52, 28, 1, "#3dff7a");
-    s.rect(ox + 6, oy + 56, 52, 4, "#0a0a14");
-    s.rect(ox + 8, oy + 57, 12, 2, "#3dff7a");
-    s.rect(ox + 22, oy + 57, 8, 2, "#ffaa3d");
-  },
-  [TILE.CHIMNEY]: (s, ox, oy) => {
-    const p = shade5("#4a3828");
-    vGrad(s, ox, oy, 64, 64, p.li, p.dk);
-    s.rect(ox, oy, 64, 2, p.hi);
-    for (let r = 0; r < 8; r++) {
-      const y = oy + r * 8;
-      const offset = r % 2 === 0 ? 0 : 16;
-      for (let c = 0; c < 5; c++) {
-        s.rect(ox + offset + c * 16, y, 14, 7, mix(p.base, "#000", 0.1));
-        s.rect(ox + offset + c * 16, y, 14, 1, p.sh);
-      }
-    }
-    s.rect(ox + 20, oy + 4, 24, 56, "#1a0a0a");
-    s.rect(ox + 22, oy + 6, 20, 52, "#0a0505");
-  },
+  [TILE.CARPET_A]: carpetTile("#4a6a8a", "#3a5a7a"),
+  [TILE.CARPET_B]: carpetTile("#446484", "#365474"),
+  [TILE.LOGO_00]: logoFragment(0, 0),
+  [TILE.LOGO_01]: logoFragment(0, 1),
+  [TILE.LOGO_02]: logoFragment(0, 2),
+  [TILE.LOGO_03]: logoFragment(0, 3),
+  [TILE.LOGO_04]: logoFragment(0, 4),
+  [TILE.LOGO_05]: logoFragment(0, 5),
+  [TILE.LOGO_06]: logoFragment(0, 6),
+  [TILE.LOGO_07]: logoFragment(0, 7),
+  [TILE.LOGO_08]: logoFragment(0, 8),
+  [TILE.LOGO_09]: logoFragment(0, 9),
+  [TILE.LOGO_10]: logoFragment(1, 0),
+  [TILE.LOGO_11]: logoFragment(1, 1),
+  [TILE.LOGO_12]: logoFragment(1, 2),
+  [TILE.LOGO_13]: logoFragment(1, 3),
+  [TILE.LOGO_14]: logoFragment(1, 4),
+  [TILE.LOGO_15]: logoFragment(1, 5),
+  [TILE.LOGO_16]: logoFragment(1, 6),
+  [TILE.LOGO_17]: logoFragment(1, 7),
+  [TILE.LOGO_18]: logoFragment(1, 8),
+  [TILE.LOGO_19]: logoFragment(1, 9),
+  [TILE.LOGO_20]: logoFragment(2, 0),
+  [TILE.LOGO_21]: logoFragment(2, 1),
+  [TILE.LOGO_22]: logoFragment(2, 2),
+  [TILE.LOGO_23]: logoFragment(2, 3),
+  [TILE.LOGO_24]: logoFragment(2, 4),
+  [TILE.LOGO_25]: logoFragment(2, 5),
+  [TILE.LOGO_26]: logoFragment(2, 6),
+  [TILE.LOGO_27]: logoFragment(2, 7),
+  [TILE.LOGO_28]: logoFragment(2, 8),
+  [TILE.LOGO_29]: logoFragment(2, 9),
+  [TILE.LOGO_30]: logoFragment(3, 0),
+  [TILE.LOGO_31]: logoFragment(3, 1),
+  [TILE.LOGO_32]: logoFragment(3, 2),
+  [TILE.LOGO_33]: logoFragment(3, 3),
+  [TILE.LOGO_34]: logoFragment(3, 4),
+  [TILE.LOGO_35]: logoFragment(3, 5),
+  [TILE.LOGO_36]: logoFragment(3, 6),
+  [TILE.LOGO_37]: logoFragment(3, 7),
+  [TILE.LOGO_38]: logoFragment(3, 8),
+  [TILE.LOGO_39]: logoFragment(3, 9),
+  [TILE.LOGO_40]: logoFragment(4, 0),
+  [TILE.LOGO_41]: logoFragment(4, 1),
+  [TILE.LOGO_42]: logoFragment(4, 2),
+  [TILE.LOGO_43]: logoFragment(4, 3),
+  [TILE.LOGO_44]: logoFragment(4, 4),
+  [TILE.LOGO_45]: logoFragment(4, 5),
+  [TILE.LOGO_46]: logoFragment(4, 6),
+  [TILE.LOGO_47]: logoFragment(4, 7),
+  [TILE.LOGO_48]: logoFragment(4, 8),
+  [TILE.LOGO_49]: logoFragment(4, 9),
 };
 
 function buildTileset(set: Record<number, TileDrawer>): Sheet {
   const cols = 8;
-  const rows = 6;
+  const rows = 12;
   const s = new Sheet(cols * T, rows * T);
-  for (let id = 0; id < 44; id++) {
+  for (let id = 0; id < 96; id++) {
     const drawer = set[id];
     if (drawer) drawer(s, (id % cols) * T, Math.floor(id / cols) * T);
   }
@@ -2772,42 +2645,73 @@ const CLASSIC: MapTheme = {
   },
 };
 
-// The severed floor: a sea of green carpet, white walls, and every desk pushed
-// together into one block in the middle of the room.
-const LUMON: MapTheme = {
-  tileset: "lumon",
+// Agent HQ theme: same layout as classic but the entire floor is blue carpet.
+const AGENTHQ: MapTheme = {
+  tileset: "agenthq",
   desks: [
-    [11, 7], [13, 7], [15, 7], [17, 7],
-    [11, 11], [13, 11], [15, 11], [17, 11],
+    [3, 4], [8, 4], [13, 4], [18, 4],
+    [3, 10], [8, 10], [13, 10], [18, 10],
   ],
   yukiDesk: [25, 9],
-  hermesDesk: [2, 17],
+  hermesDesk: [2, 16],
   paint(G, W, F) {
-    // --- distinct floor zones ---
-    // Work area: green carpet
-    for (let y = 1; y <= 13; y++) {
-      for (let x = 1; x <= 20; x++) {
+    // --- floors: all carpet ---
+    for (let y = 1; y <= 18; y++) {
+      for (let x = 1; x <= 28; x++) {
         G(x, y, (x + y) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
       }
     }
-    // Lobby / entrance: tile
-    for (let y = 14; y <= 18; y++) {
-      for (let x = 1; x <= 20; x++) {
-        G(x, y, (x + y) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
-      }
-    }
-    // Break room (top right): tile
-    for (let y = 1; y <= 6; y++) {
-      for (let x = 22; x <= 28; x++) G(x, y, (x + y) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
-    }
-    // Meeting corner (bottom right): carpet
-    for (let y = 14; y <= 18; y++) {
-      for (let x = 22; x <= 28; x++) G(x, y, (x + y) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
-    }
-    // Central pathway between desk rows (darker carpet)
-    for (let y = 9; y <= 10; y++) {
-      for (let x = 1; x <= 20; x++) G(x, y, TILE.CARPET_B);
-    }
+    // Agent HQ logo — 10×5 tile grid sublimated into the carpet, centered in work area
+    G(5, 5, TILE.LOGO_00);
+    G(6, 5, TILE.LOGO_01);
+    G(7, 5, TILE.LOGO_02);
+    G(8, 5, TILE.LOGO_03);
+    G(9, 5, TILE.LOGO_04);
+    G(10, 5, TILE.LOGO_05);
+    G(11, 5, TILE.LOGO_06);
+    G(12, 5, TILE.LOGO_07);
+    G(13, 5, TILE.LOGO_08);
+    G(14, 5, TILE.LOGO_09);
+    G(5, 6, TILE.LOGO_10);
+    G(6, 6, TILE.LOGO_11);
+    G(7, 6, TILE.LOGO_12);
+    G(8, 6, TILE.LOGO_13);
+    G(9, 6, TILE.LOGO_14);
+    G(10, 6, TILE.LOGO_15);
+    G(11, 6, TILE.LOGO_16);
+    G(12, 6, TILE.LOGO_17);
+    G(13, 6, TILE.LOGO_18);
+    G(14, 6, TILE.LOGO_19);
+    G(5, 7, TILE.LOGO_20);
+    G(6, 7, TILE.LOGO_21);
+    G(7, 7, TILE.LOGO_22);
+    G(8, 7, TILE.LOGO_23);
+    G(9, 7, TILE.LOGO_24);
+    G(10, 7, TILE.LOGO_25);
+    G(11, 7, TILE.LOGO_26);
+    G(12, 7, TILE.LOGO_27);
+    G(13, 7, TILE.LOGO_28);
+    G(14, 7, TILE.LOGO_29);
+    G(5, 8, TILE.LOGO_30);
+    G(6, 8, TILE.LOGO_31);
+    G(7, 8, TILE.LOGO_32);
+    G(8, 8, TILE.LOGO_33);
+    G(9, 8, TILE.LOGO_34);
+    G(10, 8, TILE.LOGO_35);
+    G(11, 8, TILE.LOGO_36);
+    G(12, 8, TILE.LOGO_37);
+    G(13, 8, TILE.LOGO_38);
+    G(14, 8, TILE.LOGO_39);
+    G(5, 9, TILE.LOGO_40);
+    G(6, 9, TILE.LOGO_41);
+    G(7, 9, TILE.LOGO_42);
+    G(8, 9, TILE.LOGO_43);
+    G(9, 9, TILE.LOGO_44);
+    G(10, 9, TILE.LOGO_45);
+    G(11, 9, TILE.LOGO_46);
+    G(12, 9, TILE.LOGO_47);
+    G(13, 9, TILE.LOGO_48);
+    G(14, 9, TILE.LOGO_49);
     // Doormat
     G(14, 18, TILE.DOORMAT);
     G(15, 18, TILE.DOORMAT);
@@ -2821,47 +2725,38 @@ const LUMON: MapTheme = {
       W(0, y, TILE.WALL_TOP);
       W(MAP_W - 1, y, TILE.WALL_TOP);
     }
-    // Bare white north wall — clock + founder portraits
+    // North wall face with decorations
     for (let x = 1; x < MAP_W - 1; x++) W(x, 1, TILE.WALL_FACE);
-    W(14, 1, TILE.CLOCK);
-    W(6, 1, TILE.POSTER);
+    for (const wx of [3, 4, 8, 9, 13, 14, 26, 27]) W(wx, 1, TILE.WINDOW);
+    W(16, 1, TILE.WB_L);
+    W(17, 1, TILE.WB_R);
+    W(6, 1, TILE.CLOCK);
     W(19, 1, TILE.POSTER);
+    W(24, 1, TILE.POSTER);
     // Door in the south wall
     W(14, MAP_H - 1, TILE.DOOR);
     W(15, MAP_H - 1, TILE.DOOR);
-    // Break room divider (partial — leaves an opening at y=5)
+    // Break room divider wall (partial — leaves an opening at y=5)
     for (let y = 2; y <= 3; y++) W(21, y, TILE.WALL_TOP);
     W(21, 4, TILE.WALL_FACE);
-    G(21, 5, (21 + 5) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
+    G(21, 5, (21 + 5) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
     // Meeting corner partial wall
-    W(21, 15, TILE.WALL_TOP);
-    W(21, 16, TILE.WALL_FACE);
+    W(21, 14, TILE.WALL_TOP);
+    W(21, 15, TILE.WALL_FACE);
 
-    // --- Mail room (bottom-left, x=1-10, y=14-18) ---
-    // East wall with opening at y=16 (entrance from lobby)
-    W(11, 14, TILE.WALL_TOP);
-    W(11, 15, TILE.WALL_FACE);
-    W(11, 17, TILE.WALL_FACE);
-    W(11, 18, TILE.WALL_TOP);
-    // North wall (along y=13 — boundary between work area and mail room)
-    for (let x = 1; x <= 10; x++) W(x, 13, TILE.WALL_TOP);
+    // --- Mail room (bottom-left, x=1-10, y=13-17) ---
+    // East wall with opening at y=15 (entrance from lobby)
+    W(11, 13, TILE.WALL_TOP);
+    W(11, 14, TILE.WALL_FACE);
+    W(11, 16, TILE.WALL_FACE);
+    W(11, 17, TILE.WALL_TOP);
+    // North wall (along y=12 — boundary between work area and mail room)
+    for (let x = 1; x <= 10; x++) W(x, 12, TILE.WALL_TOP);
     // Re-open the passage from the work area to the lobby at x=14-15 (the aisle)
-    G(14, 13, TILE.CARPET_B);
-    G(15, 13, TILE.CARPET_B);
-    // Mail room floor — distinct tile to set it apart from lobby
-    for (let y = 14; y <= 18; y++) {
-      for (let x = 1; x <= 10; x++) G(x, y, (x + y) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
-    }
+    G(14, 12, (14 + 12) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
+    G(15, 12, (15 + 12) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
 
     // --- Yuki's office (right side, between break room and meeting corner) ---
-    // Floor — red carpet
-    for (let y = 8; y <= 11; y++) {
-      for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.RED_CARPET_A : TILE.RED_CARPET_B);
-    }
-    // Entrance floor (3-tile opening at y=8,9,10) — grey carpet top two, wood bottom
-    G(21, 8, (21 + 8) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
-    G(21, 9, (21 + 9) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
-    G(21, 10, (21 + 10) % 2 === 0 ? TILE.WOOD_A : TILE.WOOD_B);
     // North wall
     for (let x = 22; x <= 27; x++) W(x, 7, TILE.WALL_TOP);
     // South wall
@@ -2870,37 +2765,44 @@ const LUMON: MapTheme = {
     for (let y = 6; y <= 7; y++) W(21, y, TILE.WALL_TOP);
     W(21, 11, TILE.WALL_FACE);
     W(21, 12, TILE.WALL_FACE);
-    W(21, 13, TILE.WALL_FACE);
-    W(21, 14, TILE.WALL_TOP);
+    W(21, 13, TILE.WALL_TOP);
 
-    // --- break room gear ---
+    // --- furniture ---
+    // Filing cabinets
+    F(20, 3, TILE.FILING);
+    F(20, 4, TILE.FILING);
+    // Plants scattered organically
+    F(1, 9, TILE.PLANT);
+    F(20, 2, TILE.PLANT);
+    F(28, 7, TILE.PLANT);
+    F(27, 13, TILE.PLANT);
+    // Break room
     F(22, 2, TILE.COUNTER);
     F(23, 2, TILE.COFFEE);
     F(24, 2, TILE.COUNTER);
     F(26, 2, TILE.FRIDGE);
-    F(27, 2, TILE.VENDING);
     F(28, 4, TILE.COOLER);
     F(27, 6, TILE.TRASH);
-
-    // --- filing cabinets along walls ---
-    F(1, 3, TILE.FILING);
-    F(1, 4, TILE.FILING);
-    F(20, 3, TILE.FILING);
-    F(20, 12, TILE.FILING);
-
-    // --- sparse decor ---
-    F(20, 17, TILE.PLANT);
+    // Meeting corner
+    F(23, 13, TILE.SOFA_L);
+    F(24, 13, TILE.SOFA_R);
+    F(22, 15, TILE.PAPERS);
     F(26, 16, TILE.PLANT);
+    // Lobby clutter
+    F(19, 17, TILE.TRASH);
     // Yuki's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
     // Server room (inside mail room, bottom-left corner)
+    F(5, 17, TILE.SERVER_RACK);
     F(5, 18, TILE.SERVER_RACK);
+    F(6, 17, TILE.SERVER_RACK);
     F(6, 18, TILE.SERVER_RACK);
+    F(7, 17, TILE.SERVER_SCREEN);
     F(7, 18, TILE.SERVER_SCREEN);
     // Mail room — filing cabinets for archived messages
+    F(10, 16, TILE.FILING);
     F(10, 17, TILE.FILING);
-    F(10, 18, TILE.FILING);
   },
 };
 
@@ -3018,10 +2920,10 @@ function buildMap(theme: MapTheme): object {
         name: theme.tileset,
         image: `../tilesets/${theme.tileset}.png`,
         imagewidth: 512,
-        imageheight: 384,
+        imageheight: 768,
         tilewidth: T,
         tileheight: T,
-        tilecount: 44,
+        tilecount: 94,
         columns: 8,
         margin: 0,
         spacing: 0,
@@ -3595,9 +3497,9 @@ const tileset = buildTileset(drawers);
 tileset.save(join(ASSETS, "tilesets", "office.png"));
 tileset.preview(join(PREVIEWS, "tileset.png"), 2);
 
-const lumonTileset = buildTileset(lumonDrawers);
-lumonTileset.save(join(ASSETS, "tilesets", "lumon.png"));
-lumonTileset.preview(join(PREVIEWS, "tileset-lumon.png"), 2);
+const agenthqTileset = buildTileset(agenthqDrawers);
+agenthqTileset.save(join(ASSETS, "tilesets", "agenthq.png"));
+agenthqTileset.preview(join(PREVIEWS, "tileset-agenthq.png"), 2);
 
 CHAR_PALETTES.forEach((pal, i) => {
   const sheet = buildCharSheet(pal);
@@ -3617,6 +3519,6 @@ buildBubble().save(join(ASSETS, "sprites", "bubble.png"));
 
 mkdirSync(join(ASSETS, "maps"), { recursive: true });
 writeFileSync(join(ASSETS, "maps", "office.json"), JSON.stringify(buildMap(CLASSIC)));
-writeFileSync(join(ASSETS, "maps", "lumon.json"), JSON.stringify(buildMap(LUMON)));
+writeFileSync(join(ASSETS, "maps", "agenthq.json"), JSON.stringify(buildMap(AGENTHQ)));
 
 console.log("assets written to", ASSETS);

@@ -64,6 +64,23 @@ export function getUserEmail(): string | null {
   return currentState.session?.user?.email ?? null;
 }
 
+export function getUserId(): string | null {
+  return currentState.session?.user?.id ?? null;
+}
+
+export async function refreshSession(): Promise<string | null> {
+  if (!client) return null;
+  try {
+    const { data, error } = await client.auth.refreshSession();
+    if (error || !data.session) return null;
+    currentState = { session: data.session, loading: false };
+    notify();
+    return data.session.access_token;
+  } catch {
+    return null;
+  }
+}
+
 export async function signInWithPassword(email: string, password: string): Promise<{ error: string | null }> {
   if (!client) return { error: "Auth not configured" };
   const { error } = await client.auth.signInWithPassword({ email, password });

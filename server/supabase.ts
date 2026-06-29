@@ -24,3 +24,14 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
     return null;
   }
 }
+
+export function getTokenExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return typeof decoded.exp === "number" ? decoded.exp : null;
+  } catch {
+    return null;
+  }
+}

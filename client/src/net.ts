@@ -5,14 +5,17 @@ export class Net {
   private retryMs = 500;
   private queue: ClientMsg[] = [];
   private token: string | null = null;
+  private manuallyDisconnected = false;
   onMessage: (msg: ServerMsg) => void = () => {};
   onStatus: (connected: boolean) => void = () => {};
+  onRefreshToken: () => Promise<string | null> = async () => null;
 
   setToken(token: string | null): void {
     this.token = token;
   }
 
   connect(): void {
+    this.manuallyDisconnected = false;
     const proto = location.protocol === "https:" ? "wss" : "ws";
     const wsHost = import.meta.env.VITE_WS_HOST as string | undefined;
     // When VITE_WS_HOST isn't loaded (e.g. Vite root mismatch), fall back to
@@ -41,6 +44,10 @@ export class Net {
       try {
         const msg = JSON.parse(ev.data) as ServerMsg;
         console.log(`[net] received: type=${msg.type}`);
+        if (msg.type === "refresh_token") {
+          void this.handleRefreshToken();
+          return;
+        }
         this.onMessage(msg);
       } catch {
         // ignore malformed frames
@@ -49,6 +56,21 @@ export class Net {
     ws.onclose = (ev) => {
       console.log(`[net] WebSocket CLOSED: code=${ev.code} reason="${ev.reason}" wasClean=${ev.wasClean} — retrying in ${this.retryMs}ms`);
       this.onStatus(false);
+      if (this.manuallyDisconnected) return;
+      // On 4003 (expired token), refresh the session before reconnecting
+      if (ev.code === 4003) {
+        void this.onRefreshToken().then((newToken) => {
+          if (newToken) {
+            this.token = newToken;
+            this.retryMs = 500;
+            setTimeout(() => this.connect(), this.retryMs);
+          } else {
+            // No fresh token — reload to show login overlay
+            location.reload();
+          }
+        });
+        return;
+      }
       this.retryMs = Math.min(this.retryMs * 2, 8000);
       setTimeout(() => this.connect(), this.retryMs);
     };
@@ -58,7 +80,16 @@ export class Net {
     };
   }
 
+  private async handleRefreshToken(): Promise<void> {
+    const newToken = await this.onRefreshToken();
+    if (newToken && this.ws?.readyState === WebSocket.OPEN) {
+      this.token = newToken;
+      this.send({ type: "renew_token", token: newToken });
+    }
+  }
+
   disconnect(): void {
+    this.manuallyDisconnected = true;
     if (this.ws) {
       this.ws.onclose = null;
       this.ws.onerror = null;

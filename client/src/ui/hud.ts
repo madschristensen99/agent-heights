@@ -1,5 +1,5 @@
 import type { Net } from "../net";
-import type { FeedItem, Store } from "../store";
+import type { FeedItem, PendingInvite, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance } from "../../../shared/types";
 import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
@@ -165,6 +165,7 @@ export class Hud {
         <span class="logo">AGENT&nbsp;HQ</span>
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
+        <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
           <span id="user-email" style="font-size:0.75rem; color:#888; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
@@ -250,6 +251,7 @@ export class Hud {
 
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
     document.getElementById("settings-btn")!.addEventListener("click", () => this.openSettings());
+    document.getElementById("rooms-btn")!.addEventListener("click", () => this.openRoomsPanel());
 
     // User menu: show email + sign-out button (reactive to auth state)
     if (isAuthEnabled) {
@@ -306,6 +308,15 @@ export class Hud {
     store.onToast((text) => this.toast(text));
     achievements.onUnlock((def) => {
       this.toast(`🏆 ${def.name} — ${def.desc}`);
+    });
+
+    // Show invite modal when a pending invite arrives
+    store.subscribe(() => {
+      if (store.pendingInvite) {
+        const invite = store.pendingInvite;
+        store.pendingInvite = null;
+        this.showInviteModal(invite);
+      }
     });
 
     this.maybeOnboard();
@@ -683,6 +694,153 @@ export class Hud {
         if ((e as KeyboardEvent).key === "Enter") go();
       }),
     );
+  }
+
+  // --------------------------------------------------------------- rooms
+
+  private openRoomsPanel(): void {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+    overlay.id = "rooms-overlay";
+
+    const players = Array.from(this.store.roomPlayers.values());
+    const playerListHtml = players.length === 0
+      ? '<p style="color:#888;font-size:0.85rem;">No players in room.</p>'
+      : players.map(p => `
+        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${p.role === 'owner' ? '#4f9dde' : p.role === 'guest' ? '#e8a838' : '#666'};"></span>
+          <span style="font-size:0.85rem;">${p.name}</span>
+          <span style="font-size:0.7rem;color:#888;">${p.role}</span>
+        </div>
+      `).join("");
+
+    const isHq2 = this.store.roomId === "hq2";
+
+    overlay.innerHTML = `
+      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin:0;font-size:1.1rem;">🚪 Rooms</h2>
+          <button class="x" id="rooms-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.3rem;">CURRENT ROOM</div>
+          <div style="font-size:0.9rem;font-weight:bold;margin-bottom:0.3rem;">${this.store.roomName || "—"}</div>
+          ${!isHq2 ? `<div style="font-size:0.7rem;color:#666;margin-bottom:0.5rem;word-break:break-all;">Room ID: <span id="room-id-display" style="color:#4f9dde;cursor:pointer;text-decoration:underline;">${this.store.roomId ?? "—"}</span></div>` : ""}
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.3rem;">PLAYERS (${players.length})</div>
+          <div>${playerListHtml}</div>
+        </div>
+
+        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">SWITCH ROOM</div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 HQ2 LOBBY</button>
+            <button class="btn" id="room-office-btn" style="font-size:0.8rem;">🏠 MY OFFICE</button>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">CREATE NEW ROOM</div>
+          <div style="display:flex;gap:0.5rem;">
+            <input id="room-name-input" placeholder="Room name…" style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
+            <button class="btn primary" id="room-create-btn" style="font-size:0.8rem;">CREATE</button>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #333;padding-top:1rem;">
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">INVITE PLAYER TO CURRENT ROOM</div>
+          <div style="display:flex;gap:0.5rem;">
+            <input id="room-invite-input" placeholder="User ID…" style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
+            <button class="btn" id="room-invite-btn" style="font-size:0.8rem;">INVITE</button>
+          </div>
+          <div style="font-size:0.7rem;color:#666;margin-top:0.3rem;">Tip: Find user IDs of players in the room from the player list above.</div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    document.getElementById("rooms-close")!.addEventListener("click", close);
+
+    // Click room ID to copy
+    const roomIdEl = document.getElementById("room-id-display");
+    if (roomIdEl && this.store.roomId) {
+      roomIdEl.addEventListener("click", () => {
+        navigator.clipboard.writeText(this.store.roomId!).then(() => {
+          roomIdEl.textContent = "COPIED!";
+          setTimeout(() => { roomIdEl.textContent = this.store.roomId ?? "—"; }, 1500);
+        });
+      });
+    }
+
+    // Switch to HQ2
+    document.getElementById("room-hq2-btn")!.addEventListener("click", () => {
+      this.net.send({ type: "switch_room", roomId: "hq2" });
+      close();
+    });
+
+    // Switch to My Office
+    document.getElementById("room-office-btn")!.addEventListener("click", () => {
+      if (this.store.privateOfficeId) {
+        this.net.send({ type: "switch_room", roomId: this.store.privateOfficeId });
+      } else {
+        this.toast("No private office found.");
+      }
+      close();
+    });
+
+    // Create room
+    document.getElementById("room-create-btn")!.addEventListener("click", () => {
+      const input = document.getElementById("room-name-input") as HTMLInputElement;
+      const name = input.value.trim();
+      if (!name) return;
+      this.net.send({ type: "create_room", name });
+      close();
+    });
+
+    // Invite
+    document.getElementById("room-invite-btn")!.addEventListener("click", () => {
+      const input = document.getElementById("room-invite-input") as HTMLInputElement;
+      const userId = input.value.trim();
+      if (!userId || !this.store.roomId) return;
+      this.net.send({ type: "invite_to_room", roomId: this.store.roomId, userId, role: "member" });
+      this.toast(`Invite sent to ${userId}`);
+      close();
+    });
+  }
+
+  private showInviteModal(invite: PendingInvite): void {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10001;";
+    overlay.id = "invite-overlay";
+
+    overlay.innerHTML = `
+      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:380px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:0.5rem;">📨</div>
+        <h2 style="margin:0 0 0.5rem;font-size:1rem;">Room Invitation</h2>
+        <p style="margin:0 0 1rem;font-size:0.9rem;color:#ccc;">
+          <strong>${invite.fromName}</strong> invited you to join<br/>
+          <strong>${invite.roomName}</strong>
+        </p>
+        <div style="display:flex;gap:0.5rem;justify-content:center;">
+          <button class="btn" id="invite-decline" style="font-size:0.85rem;">DECLINE</button>
+          <button class="btn primary" id="invite-accept" style="font-size:0.85rem;">ACCEPT</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    document.getElementById("invite-accept")!.addEventListener("click", () => {
+      this.net.send({ type: "respond_invite", roomId: invite.roomId, accept: true });
+      overlay.remove();
+    });
+    document.getElementById("invite-decline")!.addEventListener("click", () => {
+      this.net.send({ type: "respond_invite", roomId: invite.roomId, accept: false });
+      overlay.remove();
+    });
   }
 
   // --------------------------------------------------------------- settings

@@ -3,20 +3,18 @@ import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize } from "node:path";
 import { readFile, stat } from "node:fs/promises";
-import { mkdirSync } from "node:fs";
-import type { ClientMsg, PlayerInfo, ServerMsg } from "../shared/types.js";
+import type { ClientMsg, ServerMsg } from "../shared/types.js";
 import { SERVER_PORT } from "../shared/types.js";
-import { AgentManager } from "./manager.js";
-import { SessionLogger } from "./logger.js";
-import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
-import { DbPersistence } from "./db.js";
-import { isSupabaseConfigured, verifyToken, type AuthUser } from "./supabase.js";
+import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
 import { rateLimit } from "./ratelimit.js";
-import { getUserApiKey, setUserApiKey, deleteUserApiKey } from "./apikeys.js";
+import { setUserApiKey, deleteUserApiKey } from "./apikeys.js";
+import { TenantManager, HQ2_ROOM_ID } from "./tenant.js";
+import { startLogMaintenance } from "./log-retention.js";
+import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
@@ -78,71 +76,9 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
   }
 }
 
-// ── per-user session management ───────────────────────────────────────────
+// ── tenant management ─────────────────────────────────────────────────────
 
-interface UserSession {
-  user: AuthUser;
-  manager: AgentManager;
-  save: Persistence;
-  session: SessionLogger;
-  player: PlayerInfo | null;
-  clients: Set<WebSocket>;
-  apiKey: string | null;
-  broadcast: (msg: ServerMsg) => void;
-}
-
-const sessions = new Map<string, UserSession>();
-
-async function getOrCreateSession(user: AuthUser): Promise<UserSession> {
-  const existing = sessions.get(user.id);
-  if (existing) return existing;
-
-  const userDir = join(rootDir, "ag", "users", user.id);
-  mkdirSync(userDir, { recursive: true });
-
-  let save: Persistence;
-  let saved: SaveState | null;
-
-  if (isSupabaseConfigured && user.id !== "dev") {
-    const db = new DbPersistence(user.id);
-    save = db;
-    saved = await db.load();
-  } else {
-    const file = new SaveFile(userDir);
-    save = file;
-    saved = file.load();
-  }
-
-  const session = new SessionLogger(userDir);
-  const clients = new Set<WebSocket>();
-  const player = saved?.player ?? null;
-  const apiKey = isSupabaseConfigured ? await getUserApiKey(user.id) : null;
-
-  const sess: UserSession = {
-    user,
-    save,
-    session,
-    player,
-    clients,
-    apiKey,
-    manager: null as unknown as AgentManager,
-    broadcast: () => {},
-  };
-
-  sess.broadcast = (msg: ServerMsg): void => {
-    const data = JSON.stringify(msg);
-    for (const ws of sess.clients) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(data);
-    }
-  };
-
-  sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey);
-  if (player) sess.manager.bossName = player.name;
-
-  sessions.set(user.id, sess);
-  console.log(`[agent-hq] created session for user ${user.id} (${user.email ?? "no email"})`);
-  return sess;
-}
+const tenants = new TenantManager(rootDir);
 
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
@@ -154,13 +90,13 @@ const server = createServer((req, res) => {
       if (isSupabaseConfigured) {
         // Extract token from the request to find the session
         // For now, use the first session (single-user for Yuki context)
-        const sess = sessions.values().next().value;
+        const sess = tenants.values().next().value;
         if (!sess) return null;
         const snap = sess.manager.snapshot();
         return { agents: snap.agents, board: snap.board, bossName: sess.manager.bossName };
       }
       // Dev mode — use dev session
-      const sess = sessions.get("dev");
+      const sess = tenants.get("dev");
       if (!sess) return null;
       const snap = sess.manager.snapshot();
       return { agents: snap.agents, board: snap.board, bossName: sess.manager.bossName };
@@ -220,22 +156,108 @@ wss.on("connection", async (ws, req) => {
     user = { id: "dev", email: null };
   }
 
-  const sess = await getOrCreateSession(user);
+  const existingBefore = tenants.get(user.id);
+  const sess = await tenants.getOrCreate(user);
+  // If this is a reconnect for an existing session, cancel any pending disconnect timer
+  if (existingBefore) {
+    tenants.handleClientReconnect(user.id);
+  }
   sess.clients.add(ws);
 
-  const snap = sess.manager.snapshot();
-  ws.send(
-    JSON.stringify({
+  // Send snapshot based on which room the user is in
+  const currentRoom = sess.roomId ? tenants.getRoom(sess.roomId) : null;
+  if (currentRoom && currentRoom.isPrivate && currentRoom.ownerId === sess.user.id) {
+    // Own office — full agent snapshot
+    const snap = sess.manager.snapshot();
+    ws.send(JSON.stringify({
       type: "snapshot",
-      ...snap,
+      agents: snap.agents,
+      logs: snap.logs,
       player: sess.player,
       settings: sess.manager.settings,
+      board: snap.board,
       world: sess.manager.worldState(),
-    } satisfies ServerMsg),
-  );
+    } satisfies ServerMsg));
+  } else if (currentRoom && currentRoom.isPrivate && currentRoom.ownerId !== sess.user.id) {
+    // Visitor in someone else's office — owner's snapshot
+    const ownerSess = tenants.get(currentRoom.ownerId);
+    if (ownerSess) {
+      const snap = ownerSess.manager.snapshot();
+      ws.send(JSON.stringify({
+        type: "snapshot",
+        agents: snap.agents,
+        logs: snap.logs,
+        player: ownerSess.player,
+        settings: ownerSess.manager.settings,
+        board: snap.board,
+        world: ownerSess.manager.worldState(),
+      } satisfies ServerMsg));
+    } else {
+      ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], player: sess.player, settings: sess.manager.settings, world: null } satisfies ServerMsg));
+    }
+  } else {
+    // HQ2 or no room — empty snapshot
+    ws.send(JSON.stringify({
+      type: "snapshot",
+      agents: [],
+      logs: {},
+      board: [],
+      player: sess.player,
+      settings: sess.manager.settings,
+      world: null,
+    } satisfies ServerMsg));
+  }
 
   // Tell the client whether they have an API key set
   ws.send(JSON.stringify({ type: "api_key_status", hasKey: sess.apiKey != null } satisfies ServerMsg));
+
+  // Send initial room state for whatever room the user is in
+  if (sess.roomId && currentRoom) {
+    ws.send(JSON.stringify({
+      type: "room_state",
+      roomId: sess.roomId,
+      name: currentRoom.name,
+      players: tenants.getRoomPlayers(sess.roomId),
+      privateOfficeId: sess.privateOfficeId ?? undefined,
+    } satisfies ServerMsg));
+  }
+
+  // ── Token refresh timer ──────────────────────────────────────────────
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleTokenRefresh(token: string): void {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    if (expiryTimer) clearTimeout(expiryTimer);
+    if (!isSupabaseConfigured) return;
+
+    const exp = getTokenExpiry(token);
+    if (!exp) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const ttl = exp - now; // seconds until expiry
+
+    // Send refresh_token 5 min before expiry (or immediately if < 5 min left)
+    const refreshIn = Math.max((ttl - 300) * 1000, 0);
+
+    refreshTimer = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "refresh_token" } satisfies ServerMsg));
+        // Close connection if not renewed within 60s
+        expiryTimer = setTimeout(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(4003, "Token expired — not renewed");
+          }
+        }, 60_000);
+      }
+    }, refreshIn);
+  }
+
+  if (isSupabaseConfigured) {
+    const url = new URL(req.url ?? "", "http://localhost");
+    const initialToken = url.searchParams.get("token");
+    if (initialToken) scheduleTokenRefresh(initialToken);
+  }
 
   ws.on("message", async (raw) => {
     let msg: ClientMsg;
@@ -252,6 +274,25 @@ wss.on("connection", async (ws, req) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(data);
         return;
       }
+
+      // Permission check: only private office owners can manage agents
+      // HQ2 is a social lobby — no hiring, assigning, etc.
+      const isVisitor = tenants.isRoomVisitor(sess.user.id);
+      const isInHq2 = sess.roomId === "hq2";
+      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "update_appearance", "clear", "clear_all"]);
+      if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
+        sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
+        return;
+      }
+      // Chat is allowed in HQ2 and as a visitor, but only works in private rooms
+      if (isInHq2 && msg.type === "chat") {
+        sess.broadcast({ type: "toast", text: "No agents in HQ2 — visit an office to chat." });
+        return;
+      }
+
+      // For visitors: use the owner's AgentManager instead of their own
+      const ownerSess = isVisitor ? tenants.getRoomOwnerSession(sess.user.id) : null;
+      const activeManager = ownerSess ? ownerSess.manager : manager;
 
       switch (msg.type) {
         case "setup": {
@@ -296,7 +337,7 @@ wss.on("connection", async (ws, req) => {
           manager.assign(msg.agentId, msg.task, msg.handoffTo);
           break;
         case "chat":
-          manager.chat(msg.agentId, msg.text);
+          activeManager.chat(msg.agentId, msg.text);
           break;
         case "assign_all":
           manager.assignAll(msg.task);
@@ -364,6 +405,266 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         }
+        case "renew_token": {
+          const verified = await verifyToken(msg.token);
+          if (!verified) {
+            ws.close(4003, "Invalid renewal token");
+            break;
+          }
+          scheduleTokenRefresh(msg.token);
+          break;
+        }
+        case "create_room": {
+          const roomId = tenants.createRoom(sess.user.id, msg.name, msg.theme, true);
+          // Switch the creator into the new room
+          const room = tenants.switchRoom(sess.user.id, roomId);
+          if (room) {
+            sess.broadcast({
+              type: "room_state",
+              roomId,
+              name: room.name,
+              players: tenants.getRoomPlayers(roomId),
+              privateOfficeId: sess.privateOfficeId ?? undefined,
+            });
+          }
+          break;
+        }
+        case "join_room": {
+          const room = tenants.getRoom(msg.roomId);
+          if (!room) {
+            sess.broadcast({ type: "toast", text: "Room not found." });
+            break;
+          }
+          // Can't join private rooms directly — need an invite
+          if (room.isPrivate && room.ownerId !== sess.user.id) {
+            sess.broadcast({ type: "toast", text: "This is a private office. You need an invite." });
+            break;
+          }
+          const joined = tenants.switchRoom(sess.user.id, msg.roomId);
+          if (!joined) {
+            sess.broadcast({ type: "toast", text: "Failed to join room." });
+            break;
+          }
+          const players = tenants.getRoomPlayers(msg.roomId);
+          // Send full room state to the joining player
+          sess.broadcast({
+            type: "room_state",
+            roomId: msg.roomId,
+            name: room.name,
+            players,
+            privateOfficeId: sess.privateOfficeId ?? undefined,
+          });
+          // Notify all other players in the room
+          const me = players.find((p) => p.userId === sess.user.id);
+          for (const p of players) {
+            if (p.userId === sess.user.id) continue;
+            const otherSess = tenants.get(p.userId);
+            if (otherSess && me) {
+              otherSess.broadcast({
+                type: "player_joined",
+                roomId: msg.roomId,
+                player: me,
+              });
+            }
+          }
+          break;
+        }
+        case "switch_room": {
+          const room = tenants.switchRoom(sess.user.id, msg.roomId);
+          if (!room) {
+            sess.broadcast({ type: "toast", text: "Room not found." });
+            break;
+          }
+          // Send new room state to the switching player
+          sess.broadcast({
+            type: "room_state",
+            roomId: msg.roomId,
+            name: room.name,
+            players: tenants.getRoomPlayers(msg.roomId),
+            privateOfficeId: sess.privateOfficeId ?? undefined,
+          });
+          // If switching to a private room they don't own, send the owner's agent snapshot
+          if (room.isPrivate && room.ownerId !== sess.user.id) {
+            const ownerSess = tenants.get(room.ownerId);
+            if (ownerSess) {
+              const snap = ownerSess.manager.snapshot();
+              sess.broadcast({
+                type: "snapshot",
+                agents: snap.agents,
+                logs: snap.logs,
+                player: ownerSess.player,
+                settings: ownerSess.manager.settings,
+                board: snap.board,
+                world: ownerSess.manager.worldState(),
+              });
+            }
+          } else if (room.isPrivate && room.ownerId === sess.user.id) {
+            // Back to own office — send own snapshot
+            const snap = sess.manager.snapshot();
+            sess.broadcast({
+              type: "snapshot",
+              agents: snap.agents,
+              logs: snap.logs,
+              player: sess.player,
+              settings: sess.manager.settings,
+              board: snap.board,
+              world: sess.manager.worldState(),
+            });
+          } else {
+            // HQ2 lobby — no agents, just players
+            sess.broadcast({
+              type: "snapshot",
+              agents: [],
+              logs: {},
+              player: sess.player,
+              settings: sess.manager.settings,
+              board: [],
+              world: null,
+            });
+          }
+          // Notify players in the new room
+          for (const p of tenants.getRoomPlayers(msg.roomId)) {
+            if (p.userId === sess.user.id) continue;
+            const otherSess = tenants.get(p.userId);
+            if (otherSess) {
+              otherSess.broadcast({
+                type: "player_joined",
+                roomId: msg.roomId,
+                player: {
+                  userId: sess.user.id,
+                  name: sess.player?.name ?? "Boss",
+                  appearance: sess.player?.appearance ?? null,
+                  role: room.ownerId === sess.user.id ? "owner" : "member",
+                  x: 400,
+                  y: 300,
+                  dir: "down" as const,
+                },
+              });
+            }
+          }
+          break;
+        }
+        case "leave_room": {
+          const left = tenants.leaveRoom(msg.roomId, sess.user.id);
+          if (left) {
+            // Notify remaining players
+            const remaining = tenants.getRoomPlayers(msg.roomId);
+            for (const p of remaining) {
+              const otherSess = tenants.get(p.userId);
+              if (otherSess) {
+                otherSess.broadcast({
+                  type: "player_left",
+                  roomId: msg.roomId,
+                  userId: sess.user.id,
+                });
+              }
+            }
+          }
+          break;
+        }
+        case "invite_to_room": {
+          const room = tenants.getRoom(msg.roomId);
+          if (!room || room.ownerId !== sess.user.id) {
+            sess.broadcast({ type: "toast", text: "You can only invite to your own rooms." });
+            break;
+          }
+          const invitedSess = tenants.get(msg.userId);
+          if (invitedSess) {
+            invitedSess.broadcast({
+              type: "room_invite",
+              roomId: msg.roomId,
+              roomName: room.name,
+              fromUserId: sess.user.id,
+              fromName: sess.player?.name ?? "Someone",
+              role: msg.role,
+            });
+          }
+          break;
+        }
+        case "respond_invite": {
+          // Find the room owner to notify
+          const room = tenants.getRoom(msg.roomId);
+          if (room) {
+            const ownerSess = tenants.get(room.ownerId);
+            if (ownerSess) {
+              ownerSess.broadcast({
+                type: "invite_response",
+                roomId: msg.roomId,
+                accepted: msg.accept,
+                byUserId: sess.user.id,
+                byName: sess.player?.name ?? "Someone",
+              });
+            }
+            if (msg.accept) {
+              // Switch the accepter into the room
+              const joined = tenants.switchRoom(sess.user.id, msg.roomId);
+              if (joined) {
+                sess.broadcast({
+                  type: "room_state",
+                  roomId: msg.roomId,
+                  name: room.name,
+                  players: tenants.getRoomPlayers(msg.roomId),
+                  privateOfficeId: sess.privateOfficeId ?? undefined,
+                });
+                // Send the owner's agent snapshot to the visitor
+                if (ownerSess) {
+                  const snap = ownerSess.manager.snapshot();
+                  sess.broadcast({
+                    type: "snapshot",
+                    agents: snap.agents,
+                    logs: snap.logs,
+                    player: ownerSess.player,
+                    settings: ownerSess.manager.settings,
+                    board: snap.board,
+                    world: ownerSess.manager.worldState(),
+                  });
+                }
+                // Notify others in the room
+                for (const p of tenants.getRoomPlayers(msg.roomId)) {
+                  if (p.userId === sess.user.id) continue;
+                  const otherSess = tenants.get(p.userId);
+                  if (otherSess) {
+                    otherSess.broadcast({
+                      type: "player_joined",
+                      roomId: msg.roomId,
+                      player: {
+                        userId: sess.user.id,
+                        name: sess.player?.name ?? "Boss",
+                        appearance: sess.player?.appearance ?? null,
+                        role: "member",
+                        x: 400,
+                        y: 300,
+                        dir: "down" as const,
+                      },
+                    });
+                  }
+                }
+              }
+            }
+          }
+          break;
+        }
+        case "player_move": {
+          const room = tenants.updatePlayerPosition(sess.user.id, msg.x, msg.y, msg.dir);
+          if (room) {
+            // Broadcast to all other players in the room
+            for (const [pid] of room.players) {
+              if (pid === sess.user.id) continue;
+              const otherSess = tenants.get(pid);
+              if (otherSess) {
+                otherSess.broadcast({
+                  type: "player_moved",
+                  roomId: room.id,
+                  userId: sess.user.id,
+                  x: msg.x,
+                  y: msg.y,
+                  dir: msg.dir,
+                });
+              }
+            }
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error("[server] error handling message:", err);
@@ -372,11 +673,23 @@ wss.on("connection", async (ws, req) => {
     }
   });
 
-  ws.on("close", () => sess.clients.delete(ws));
-  ws.on("error", () => sess.clients.delete(ws));
+  ws.on("close", () => {
+    sess.clients.delete(ws);
+    if (refreshTimer) clearTimeout(refreshTimer);
+    if (expiryTimer) clearTimeout(expiryTimer);
+    tenants.handleClientDisconnect(sess.user.id);
+  });
+  ws.on("error", () => {
+    sess.clients.delete(ws);
+    if (refreshTimer) clearTimeout(refreshTimer);
+    if (expiryTimer) clearTimeout(expiryTimer);
+    tenants.handleClientDisconnect(sess.user.id);
+  });
 });
 
 // ── start ─────────────────────────────────────────────────────────────────
+
+const logMaintenanceInterval = startLogMaintenance();
 
 server.listen(SERVER_PORT, () => {
   console.log(`[agent-hq] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
@@ -387,11 +700,20 @@ server.listen(SERVER_PORT, () => {
     console.log(`[agent-hq]   Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable auth`);
   }
   console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
+  if (isRedisConfigured) {
+    console.log(`[agent-hq] Redis enabled — pub/sub + presence (server ${serverId})`);
+  } else {
+    console.log(`[agent-hq] Redis not configured — single-server mode`);
+    console.log(`[agent-hq]   Set REDIS_URL to enable pub/sub + presence`);
+  }
+  console.log(`[agent-hq] global multiplayer room: ${HQ2_ROOM_ID}`);
 });
 
 function shutdown(): void {
   stopRailwayMCP();
-  for (const sess of sessions.values()) {
+  stopRedis();
+  clearInterval(logMaintenanceInterval);
+  for (const sess of tenants.values()) {
     sess.save.flushNow();
   }
   process.exit(0);

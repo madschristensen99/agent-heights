@@ -6,12 +6,53 @@ import {
 import type { AgentTool } from "@cline/sdk";
 import { writeFile, mkdir, readdir } from "node:fs/promises";
 import { resolve, relative, dirname } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
 
+const execFileAsync = promisify(execFile);
+
 const SWARMS_BASE_URL = "https://api.swarms.world/v1";
 const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
+
+/** Whether bubblewrap sandboxing is available (checked at startup). */
+let bwrapAvailable: boolean | null = null;
+
+async function checkBwrap(): Promise<boolean> {
+  if (bwrapAvailable !== null) return bwrapAvailable;
+  try {
+    await execFileAsync("bwrap", ["--version"]);
+    bwrapAvailable = true;
+  } catch {
+    bwrapAvailable = false;
+  }
+  return bwrapAvailable;
+}
+
+/** Wrap a shell command with bubblewrap to restrict filesystem + network access. */
+function bwrapCommand(cmd: string, workspace: string, allowNetwork: boolean): { executable: string; args: string[] } {
+  const args = [
+    "--ro-bind", "/usr", "/usr",
+    "--ro-bind", "/lib", "/lib",
+    "--ro-bind", "/lib64", "/lib64",
+    "--ro-bind", "/bin", "/bin",
+    "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
+    "--bind", workspace, workspace,
+    "--dev", "/dev",
+    "--proc", "/proc",
+    "--tmpfs", "/tmp",
+    "--unshare-all",
+  ];
+  if (allowNetwork) {
+    // Re-share the network namespace instead of unsharing it
+    args.splice(args.indexOf("--unshare-all"), 1);
+    args.push("--unshare-pid", "--unshare-uts", "--unshare-ipc");
+  }
+  args.push("/bin/bash", "-c", cmd);
+  return { executable: "bwrap", args };
+}
 
 /** Active Cline Agent instances keyed by agentId, for conversation continuity. */
 const agents = new Map<string, Agent>();
@@ -33,6 +74,31 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
   // Custom submit executor — the SDK doesn't ship one in createDefaultExecutors
   executors.submit = async (summary: string) => summary;
 
+  // Override bash executor with bubblewrap sandboxing
+  const allowNetwork = opts?.railway ?? false;
+  const useBwrap = await checkBwrap();
+  const originalBash = executors.bash;
+  (executors as any).bash = async (input: any, ctxCwd: string, context: any) => {
+    const cmd = typeof input === "string" ? input : input.command;
+    const abortSignal: AbortSignal | undefined = context?.signal ?? context?.abortSignal;
+    if (useBwrap) {
+      const { executable, args } = bwrapCommand(cmd, cwd, allowNetwork);
+      try {
+        const { stdout, stderr } = await execFileAsync(executable, args, {
+          cwd,
+          maxBuffer: 10 * 1024 * 1024,
+          signal: abortSignal,
+        });
+        return stderr ? `${stdout}\n[stderr]\n${stderr}` : stdout;
+      } catch (err: any) {
+        if (err.killed || abortSignal?.aborted) return "[Command aborted]";
+        return `[Command failed: ${err.message}]\n${err.stdout ?? ""}\n${err.stderr ?? ""}`;
+      }
+    }
+    // Fallback: use the original executor when bwrap is not available
+    return originalBash?.(input, ctxCwd, context) ?? "[No bash executor available]";
+  };
+
   const builtinTools = createDefaultTools({
     executors,
     cwd,
@@ -44,8 +110,31 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
     enableApplyPatch: false,
     enableSkills: false,
     enableAskQuestion: false,
-    enableSubmitAndExit: true,
+    enableSubmitAndExit: false,
   });
+
+  // Custom submit_and_exit with a general-purpose description (not coding-challenge oriented)
+  const submitTool: AgentTool<any, any> = {
+    name: "submit_and_exit",
+    description:
+      "Submit your final answer and end the task. Call this when you have completed the requested work. Provide a brief summary of what you did and what you found.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          minLength: 10,
+          description: "A brief summary of what you did, what you found, and the outcome of the task.",
+        },
+      },
+      required: ["summary"],
+      additionalProperties: false,
+    },
+    lifecycle: { completesRun: true },
+    async execute(input: any) {
+      return input.summary;
+    },
+  };
 
   // ── Custom tools not provided by the SDK ───────────────────────────
 
@@ -100,7 +189,7 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
     },
   };
 
-  const base = [...builtinTools, writeFilesTool, listFilesTool];
+  const base = [...builtinTools, submitTool, writeFilesTool, listFilesTool];
 
   if (opts?.railway) {
     const railwayTools = await wrapRailwayTools();
@@ -136,6 +225,9 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         systemPrompt: ctx.systemPrompt,
         tools: await makeTools(ctx.cwd, { railway: ctx.railway }),
         maxIterations: ctx.settings.cline.maxIterations,
+        completionPolicy: {
+          completionGuard: () => "You haven't called submit_and_exit yet. If you have completed the task, call submit_and_exit with a summary of what you did. If you still need to do work, use your tools to do it.",
+        },
       });
 
       const stored = messageStore.get(agentId);
@@ -162,27 +254,41 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
     const unsub = agentInstance.subscribe((event) => {
       if (ctx.abort.signal.aborted) return;
-      switch (event.type) {
+      console.log(`[cline:${agentId}] event:`, event.type, JSON.stringify(event).slice(0, 300));
+      const ev: any = event;
+      switch (ev.type) {
         case "assistant-text-delta":
           // Accumulate text deltas — we yield the full message when it completes
           break;
         case "assistant-message":
-          for (const part of event.message.content) {
+          for (const part of ev.message.content) {
             if (part.type === "text" && part.text.trim()) {
               lastText = part.text.trim();
               enqueue({ kind: "text", text: lastText });
             }
+            if ((part as any).type === "tool_use") {
+              console.log(`[cline:${agentId}] tool_use: ${(part as any).name} input=${JSON.stringify((part as any).input).slice(0, 200)}`);
+            }
           }
           break;
         case "tool-started": {
-          const tc = event.toolCall;
+          const tc = ev.toolCall;
           const inputStr = truncate(JSON.stringify(tc.input ?? ""), 120);
           enqueue({ kind: "tool", text: `${tc.toolName} ${inputStr}` });
           break;
         }
-        case "run-failed":
-          enqueue({ kind: "error", text: truncate(event.error?.message ?? "Run failed", 300) });
+        case "tool-completed": {
+          console.log(`[cline:${agentId}] tool-completed: ${ev.toolCall?.toolName} result=${JSON.stringify(ev.result ?? "").slice(0, 200)}`);
           break;
+        }
+        case "run-failed":
+          console.log(`[cline:${agentId}] run-failed:`, ev.error?.message);
+          enqueue({ kind: "error", text: truncate(ev.error?.message ?? "Run failed", 300) });
+          break;
+        case "run-completed": {
+          console.log(`[cline:${agentId}] run-completed: status=${ev.result?.status} output=${ev.result?.outputText?.slice(0, 200)}`);
+          break;
+        }
       }
     });
 
@@ -193,6 +299,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
     // Yield events as they arrive while the run is in progress
     runPromise.finally(() => {
+      console.log(`[cline:${agentId}] runPromise settled, done=true, queue=${queue.length}`);
       done = true;
       resolveQueue?.();
       resolveQueue = null;
@@ -218,8 +325,8 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     let result;
     try {
       result = await runPromise;
-    } catch {
-      // Error was already yielded via run-failed event
+    } catch (err) {
+      console.log(`[cline:${agentId}] runPromise rejected:`, err instanceof Error ? err.message : String(err));
       return;
     }
 

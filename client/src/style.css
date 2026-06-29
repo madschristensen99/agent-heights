@@ -119,6 +119,10 @@ body {
   pointer-events: none !important;
 }
 
+.hint.touch {
+  display: none;
+}
+
 /* ---------------------------------------------------------------- panels */
 
 .panel {
@@ -286,7 +290,7 @@ body {
 .dot.thinking { background: var(--amber); animation: pulse 1s infinite; }
 .dot.working { background: var(--green); animation: pulse 0.7s infinite; }
 .dot.done { background: var(--blue); }
-.dot.error { background: var(--red); }
+.dot.error { background: var(--red); animation: pulse 0.5s infinite; }
 
 @keyframes pulse {
   50% { opacity: 0.3; transform: scale(0.85); }

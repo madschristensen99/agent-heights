@@ -75,6 +75,12 @@ const PERSONALITIES: Record<string, string> = {
 
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
+interface QueuedTask {
+  task: string;
+  handoffTo: string | null;
+  cardId: string | null;
+}
+
 interface AgentRuntime {
   info: AgentInfo;
   logs: LogEntry[];
@@ -84,6 +90,8 @@ interface AgentRuntime {
   handoffTo: string | null;
   /** Task card this run came from, if any (for auto-moving cards on done/error). */
   cardId: string | null;
+  /** Pending tasks waiting to run after the current one finishes. */
+  taskQueue: QueuedTask[];
 }
 
 export class AgentManager {
@@ -127,7 +135,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-hq] restored ${this.agents.size} agent(s) from save`);
@@ -174,7 +182,7 @@ export class AgentManager {
       },
       game: {
         idleWander: s?.game?.idleWander !== false,
-        theme: s?.game?.theme === "lumon" ? "lumon" : "classic",
+        theme: s?.game?.theme === "agenthq" ? "agenthq" : "classic",
       },
       railway: {
         enabled: s?.railway?.enabled === true,
@@ -208,7 +216,7 @@ export class AgentManager {
       tasksDone: 0,
     };
     mkdirSync(this.cwdFor("yuki", YUKI_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
     this.agents.set(YUKI_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -235,7 +243,7 @@ export class AgentManager {
       tasksDone: 0,
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -306,7 +314,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -319,17 +327,34 @@ export class AgentManager {
   assign(agentId: string, task: string, handoffTo?: string, cardId?: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
-    if (rt.info.status === "thinking" || rt.info.status === "working") {
-      this.broadcast({ type: "toast", text: `${rt.info.name} is already busy.` });
+    const cleanTask = task.trim();
+    if (!cleanTask) return;
+
+    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done") {
+      const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
+      rt.taskQueue.push({
+        task: cleanTask,
+        handoffTo: target ? target.info.id : null,
+        cardId: cardId ?? null,
+      });
+      const pos = rt.taskQueue.length;
+      this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task queued (#${pos}).` });
+      this.log(rt, "status", `Queued task: ${cleanTask}`);
       return;
     }
+
+    this.startTask(rt, cleanTask, handoffTo, cardId);
+  }
+
+  /** Begin executing a task immediately (assumes agent is idle). */
+  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string): void {
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
     rt.doneTimer = null;
     rt.info.task = cleanTask;
-    const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
+    const target = handoffTo && handoffTo !== rt.info.id ? this.agents.get(handoffTo) : undefined;
     rt.handoffTo = target ? target.info.id : null;
     this.session.record("assign", {
       agentId: rt.info.id,
@@ -342,6 +367,14 @@ export class AgentManager {
     if (target) this.log(rt, "status", `Will hand the result to ${target.info.name} when done.`);
     rt.cardId = cardId ?? null;
     void this.runTask(rt, cleanTask);
+  }
+
+  /** Drain the next queued task after the current one finishes. */
+  private drainQueue(rt: AgentRuntime): void {
+    if (rt.taskQueue.length === 0) return;
+    const next = rt.taskQueue.shift()!;
+    this.log(rt, "status", `Starting queued task: ${next.task}`);
+    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined);
   }
 
   /** Hand the same task to every agent that isn't already busy. */
@@ -372,7 +405,15 @@ export class AgentManager {
 
   stop(agentId: string): void {
     const rt = this.agents.get(agentId);
-    if (!rt || !rt.abort) return;
+    if (!rt) return;
+    const hadQueue = rt.taskQueue.length;
+    rt.taskQueue = [];
+    if (!rt.abort) {
+      if (hadQueue) {
+        this.broadcast({ type: "toast", text: `Cleared ${hadQueue} queued task${hadQueue > 1 ? "s" : ""}.` });
+      }
+      return;
+    }
     rt.abort.abort();
     if (rt.cardId) {
       this.revertCard(rt.cardId);
@@ -384,6 +425,9 @@ export class AgentManager {
     this.setStatus(rt, "idle");
     rt.info.task = null;
     this.broadcast({ type: "agent", agent: rt.info });
+    if (hadQueue) {
+      this.broadcast({ type: "toast", text: `Cleared ${hadQueue} queued task${hadQueue > 1 ? "s" : ""}.` });
+    }
   }
 
   /** Emergency stop — cease all agent work and assemble by the entrance. */
@@ -400,6 +444,7 @@ export class AgentManager {
         rt.handoffTo = null;
         this.log(rt, "status", "Emergency stop — all work halted.");
       }
+      rt.taskQueue = [];
       if (rt.doneTimer) {
         clearTimeout(rt.doneTimer);
         rt.doneTimer = null;
@@ -550,7 +595,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -675,9 +720,9 @@ export class AgentManager {
       PERSONALITIES[rt.info.title] ?? "",
       `Stay in character — let that personality color your replies and summaries (but never at the expense of doing the work well).`,
       `Your boss is ${this.bossName}. This is one ongoing conversation — remember your boss's previous orders and what you did.`,
-      `Work only inside your workspace directory. Be effective and concise.`,
+      `Your workspace directory is ${this.cwdFor(this.slugFor(rt), rt.info.id)}. Work only inside this directory. Use absolute paths when calling tools. Be effective and concise.`,
       devopsLine,
-      `When you finish, summarize what you did in a few short lines.`,
+      `When you finish your task, you MUST call the submit_and_exit tool with a summary of what you did. Do not just reply with text — always use submit_and_exit to complete the task.`,
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
     ].join(" ");
   }
@@ -744,6 +789,7 @@ export class AgentManager {
       for await (const ev of events) {
         if (abort.signal.aborted) return;
         if (rt.info.status === "thinking") this.setStatus(rt, "working");
+        console.log(`[manager:${rt.info.id}] event: kind=${ev.kind} text=${ev.text?.slice(0, 100)}`);
 
         if (ev.kind === "error") {
           sawError = true;
@@ -778,22 +824,32 @@ export class AgentManager {
         this.log(rt, "error", err instanceof Error ? err.message : String(err));
       }
     } finally {
+      console.log(`[manager:${rt.info.id}] finally: sawError=${sawError} aborted=${abort.signal.aborted} exists=${this.agents.has(rt.info.id)}`);
       rt.abort = null;
       rt.handoffTo = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         if (sawError) {
           this.setStatus(rt, "error");
           if (rt.cardId) this.revertCard(rt.cardId);
+          rt.cardId = null;
+          rt.doneTimer = setTimeout(() => {
+            rt.info.task = null;
+            this.setStatus(rt, "idle");
+          }, DONE_LINGER_MS);
         } else {
           rt.info.tasksDone += 1;
           this.setStatus(rt, "done");
           if (rt.cardId) this.completeCard(rt.cardId);
+          rt.cardId = null;
+          if (rt.taskQueue.length > 0) {
+            this.drainQueue(rt);
+          } else {
+            rt.doneTimer = setTimeout(() => {
+              rt.info.task = null;
+              this.setStatus(rt, "idle");
+            }, DONE_LINGER_MS);
+          }
         }
-        rt.cardId = null;
-        rt.doneTimer = setTimeout(() => {
-          rt.info.task = null;
-          this.setStatus(rt, "idle");
-        }, DONE_LINGER_MS);
       }
     }
   }

@@ -131,7 +131,7 @@ export class OfficeScene extends Phaser.Scene {
   private heliDelivery: HelicopterDelivery | null = null;
 
   private world!: WorldLayer;
-  private theme: "classic" | "lumon" = "classic";
+  private theme: "classic" | "agenthq" = "classic";
   /** Pixel positions of chimney tiles — for smoke when devops agents work. */
   private chimneyPositions: { x: number; y: number }[] = [];
   /** Server rack tile positions for E-interaction. */
@@ -169,13 +169,25 @@ export class OfficeScene extends Phaser.Scene {
   private dayNightTint!: Phaser.GameObjects.Rectangle;
   private brightnessBoost!: Phaser.GameObjects.Rectangle;
 
+  /** Multiplayer: remote player sprites keyed by userId. */
+  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; }>();
+  /** Tracks the last roomId the scene rendered — used to detect room changes. */
+  private lastRoomId: string | null = null;
+  private lastPosSent = 0;
+  private lastSentX = 0;
+  private lastSentY = 0;
+
   constructor() {
     super("office");
   }
 
   create(): void {
     this.store = this.game.registry.get("store") as Store;
-    this.theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
+    this.net = this.game.registry.get("net") as import("../net").Net;
+    this._myUserId = (this.game.registry.get("userId") as string) ?? null;
+    // HQ2 uses the agenthq (big open office) theme; private offices use user's chosen theme
+    const isHq2 = this.store.roomId === "hq2";
+    this.theme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
     this.ready = false;
 
     // Remove any stale overlay from a previous scene restart
@@ -314,17 +326,17 @@ export class OfficeScene extends Phaser.Scene {
         fn: () => {
           map = this.make.tilemap({ key: `map-${this.theme}` });
           const tiles = map.addTilesetImage(
-            this.theme === "lumon" ? "lumon" : "office",
+            this.theme === "agenthq" ? "agenthq" : "office",
             `tiles-${this.theme}`,
           )!;
 
           // draw a floor-colored backdrop so empty map tiles aren't white
-          const floorColor = this.theme === "lumon" ? 0xe8e8ec : 0xd4d0c8;
+          const floorColor = this.theme === "agenthq" ? 0x4a6a8a : 0xd4d0c8;
           const bg = this.add.graphics().setDepth(-1);
           bg.fillStyle(floorColor, 1);
           bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
           // subtle grid lines for texture
-          bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0xd8d8dc, 0.3);
+          bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0x3a5a7a, 0.3);
           for (let x = 0; x <= map.width; x++) {
             bg.moveTo(x * TILE_PX, 0);
             bg.lineTo(x * TILE_PX, map.heightInPixels);
@@ -336,6 +348,7 @@ export class OfficeScene extends Phaser.Scene {
           bg.strokePath();
 
           map.createLayer("Ground", tiles)!.setDepth(0);
+
           const walls = map.createLayer("Walls", tiles)!.setDepth(1);
           const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
           walls.setCollisionByProperty({ solid: true });
@@ -494,9 +507,11 @@ export class OfficeScene extends Phaser.Scene {
           // Generate boss texture from player appearance (if set)
           this.refreshBossTexture();
 
-          // the boss (you)
-          const feet = feetOf(this.spawnTile);
-          this.player = this.add.sprite(feet.x, feet.y, this.playerTexKey, 0)
+          // the boss (you) — spawn at last known position if available
+          const myPresence = this._myUserId ? this.store.roomPlayers.get(this._myUserId) : null;
+          const spawnX = myPresence?.x ?? feetOf(this.spawnTile).x;
+          const spawnY = myPresence?.y ?? feetOf(this.spawnTile).y;
+          this.player = this.add.sprite(spawnX, spawnY, this.playerTexKey, 0)
             .setOrigin(0.5, 1)
             .setScale(1);
           // no physics body — we do manual movement for smoothness
@@ -573,7 +588,7 @@ export class OfficeScene extends Phaser.Scene {
           this.setupInteractables();
 
           // Initialize platform mailboxes in the mail room
-          const mailRoomY = this.theme === "lumon" ? 14 : 13;
+          const mailRoomY = 13;
           this.platformMailboxes = PLATFORM_CONFIG.map((cfg) => ({
             platform: cfg.platform,
             color: cfg.color,
@@ -708,16 +723,27 @@ export class OfficeScene extends Phaser.Scene {
 
           if (!this.wired) {
             this.wired = true;
+            this.lastRoomId = this.store.roomId;
             this.store.subscribe(() => {
               if (!this.ready) {
                 console.log("[scene] store emit but scene not ready — skipping syncAgents");
                 return;
               }
+              // Room changed — restart scene with appropriate theme
+              if (this.store.roomId !== this.lastRoomId) {
+                console.log(`[scene] room changed: ${this.lastRoomId} → ${this.store.roomId}`);
+                this.lastRoomId = this.store.roomId;
+                this.ready = false;
+                this.remotePlayers.clear();
+                this.scene.restart();
+                return;
+              }
               console.log("[scene] store emit fired — calling syncAgents. agents in store:", [...this.store.agents.keys()]);
-              const theme = this.store.settings.game.theme === "lumon" ? "lumon" : "classic";
-              if (theme !== this.theme) {
+              const isHq2 = this.store.roomId === "hq2";
+              const desiredTheme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
+              if (desiredTheme !== this.theme) {
                 console.log("[scene] theme changed — restarting scene");
-                if (theme === "lumon") achievements.unlock("lumon_mode");
+                if (desiredTheme === "agenthq") achievements.unlock("agenthq_mode");
                 this.ready = false;
                 this.scene.restart();
                 return;
@@ -743,6 +769,25 @@ export class OfficeScene extends Phaser.Scene {
             });
           }
           this.ready = true;
+
+          // If room_state arrived while scene was loading, restart to match
+          if (this.store.roomId !== this.lastRoomId) {
+            console.log(`[scene] ready but room mismatch: lastRoomId=${this.lastRoomId} store.roomId=${this.store.roomId} — restarting`);
+            this.lastRoomId = this.store.roomId;
+            this.ready = false;
+            this.remotePlayers.clear();
+            this.scene.restart();
+            return;
+          }
+
+          // Sync player position from room_state if it arrived after sprite creation
+          if (this._myUserId) {
+            const me = this.store.roomPlayers.get(this._myUserId);
+            if (me && this.player) {
+              this.player.setPosition(me.x, me.y);
+            }
+          }
+
           this.syncAgents();
           this.world.syncGhosts();
 
@@ -951,21 +996,21 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Set interactable tile positions based on the current theme. */
   private setupInteractables(): void {
-    if (this.theme === "lumon") {
-      this.clockTile = { x: 14, y: 1 };
-      this.vendingTile = { x: 27, y: 2 };
-      this.sofaTile = null;
-      this.hallOfFameTile = { x: 1, y: 2 };
+    if (this.theme === "agenthq") {
+      this.clockTile = { x: 6, y: 1 };
+      this.vendingTile = null;
+      this.sofaTile = { x: 23, y: 13 };
+      this.hallOfFameTile = { x: 1, y: 5 };
       this.wardrobeTile = { x: 21, y: 18 };
       this.filingTiles = [
-        { x: 1, y: 3 }, { x: 1, y: 4 }, { x: 1, y: 12 }, { x: 1, y: 13 },
-        { x: 20, y: 3 }, { x: 20, y: 12 }, { x: 22, y: 11 },
-        { x: 10, y: 17 }, { x: 10, y: 18 },
+        { x: 20, y: 3 },
+        { x: 20, y: 4 }, { x: 22, y: 11 },
+        { x: 10, y: 16 }, { x: 10, y: 17 },
       ];
       this.plantTiles = [
-        { x: 20, y: 17 }, { x: 12, y: 18 },
-        { x: 27, y: 11 }, { x: 16, y: 18 },
-        { x: 6, y: 18 },
+        { x: 1, y: 9 }, { x: 12, y: 18 }, { x: 20, y: 2 }, { x: 28, y: 7 },
+        { x: 29, y: 13 },
+        { x: 16, y: 18 }, { x: 27, y: 11 }, { x: 6, y: 17 },
       ];
     } else {
       this.clockTile = { x: 6, y: 1 };
@@ -1499,9 +1544,9 @@ export class OfficeScene extends Phaser.Scene {
     g.fillStyle(0x4a3a1a, 1);
     g.fillRect(mbX + 2, mbY + 20, 3, 32);
     // mailbox body — blue, rounded top
-    const mbBlue = this.theme === "lumon" ? 0x3a6f57 : 0x2a5cb8;
-    const mbBlueLi = this.theme === "lumon" ? 0x4c8a6e : 0x3a78d8;
-    const mbBlueDk = this.theme === "lumon" ? 0x2a5440 : 0x1a4090;
+    const mbBlue = 0x2a5cb8;
+    const mbBlueLi = 0x3a78d8;
+    const mbBlueDk = 0x1a4090;
     g.fillStyle(mbBlueDk, 1);
     g.fillRoundedRect(mbX - 22, mbY - 12, 44, 36, 6);
     g.fillStyle(mbBlue, 1);
@@ -3290,7 +3335,114 @@ export class OfficeScene extends Phaser.Scene {
       this.hallOfFameHint.setVisible(false);
       this.serverRackHint.setVisible(false);
     }
+
+    // ── Multiplayer: send boss position to server (10Hz) ────────────────
+    const now = time;
+    if (now - this.lastPosSent > 100) {
+      const dx = Math.abs(this.player.x - this.lastSentX);
+      const dy = Math.abs(this.player.y - this.lastSentY);
+      if (dx > 2 || dy > 2 || this.playerDir !== this._lastSentDir) {
+        this.net?.send({ type: "player_move", x: this.player.x, y: this.player.y, dir: this.playerDir });
+        this.lastSentX = this.player.x;
+        this.lastSentY = this.player.y;
+        this._lastSentDir = this.playerDir;
+      }
+      this.lastPosSent = now;
+    }
+
+    // ── Multiplayer: sync remote player sprites from store ──────────────
+    this.syncRemotePlayers();
   }
+
+  private _lastSentDir: Dir = "down";
+
+  private syncRemotePlayers(): void {
+    const storePlayers = this.store.roomPlayers;
+    const seen = new Set<string>();
+
+    for (const [userId, p] of storePlayers) {
+      // Don't render ourselves
+      if (userId === this._myUserId) continue;
+      seen.add(userId);
+
+      let entry = this.remotePlayers.get(userId);
+      if (!entry) {
+        // Create sprite for remote player — use boss texture as default
+        const texKey = "boss";
+        const sprite = this.add.sprite(p.x, p.y, texKey, 0)
+          .setOrigin(0.5, 1)
+          .setScale(1)
+          .setDepth(10 + p.y);
+        const nameBg = this.add.graphics();
+        const label = this.add
+          .text(0, 0, p.name.toUpperCase(), {
+            fontFamily: "'M Plus Rounded 1c', sans-serif",
+            fontSize: "16px",
+            color: "#1d2126",
+            stroke: "#f4f6f8",
+            strokeThickness: 3,
+          })
+          .setResolution(4)
+          .setOrigin(0.5, 1)
+          .setScale(0.7)
+          .setDepth(10 + p.y + 0.1);
+        entry = { sprite, label, nameBg };
+        this.remotePlayers.set(userId, entry);
+      }
+
+      // Smoothly interpolate remote player position
+      const target = entry.sprite;
+      const lerp = 0.15;
+      target.x += (p.x - target.x) * lerp;
+      target.y += (p.y - target.y) * lerp;
+      target.setDepth(10 + target.y);
+
+      // Play walk/idle animation based on whether they're moving
+      const moving = Math.abs(p.x - target.x) > 1 || Math.abs(p.y - target.y) > 1;
+      const animKey = `boss-${moving ? "walk" : "idle"}-${p.dir}`;
+      if (target.anims.currentAnim?.key !== animKey) {
+        target.play(animKey, true);
+      }
+
+      // Update name label
+      entry.label
+        .setPosition(target.x, target.y - 108)
+        .setDepth(10 + target.y + 0.1);
+      entry.nameBg
+        .clear()
+        .setPosition(target.x, target.y - 108)
+        .setDepth(10 + target.y);
+    }
+
+    // Remove sprites for players who left — play exit animation first
+    for (const [userId, entry] of this.remotePlayers) {
+      if (!seen.has(userId)) {
+        this.remotePlayers.delete(userId);
+        const { sprite, label, nameBg } = entry;
+        // Disable label/nameBg, fade them out quickly
+        this.tweens.add({ targets: [label, nameBg], alpha: 0, duration: 300 });
+        // Spin + levitate + fade out
+        this.tweens.add({
+          targets: sprite,
+          y: sprite.y - 200,
+          rotation: Math.PI * 6,
+          alpha: 0,
+          scaleX: 0.3,
+          scaleY: 0.3,
+          duration: 1200,
+          ease: "Quad.in",
+          onComplete: () => {
+            sprite.destroy();
+            label.destroy();
+            nameBg.destroy();
+          },
+        });
+      }
+    }
+  }
+
+  private _myUserId: string | null = null;
+  private net: import("../net").Net | null = null;
 }
 
 export { tileOf };

@@ -240,7 +240,7 @@ export class AgentNPC {
         this.bubble.setFrame(0);
       } else if (this.info.status === "error") {
         this.bubble.setTint(0xe05858);
-        this.bubble.setFrame(0);
+        this.bubble.setFrame(Math.floor(time / 200) % 2 === 0 ? 0 : 2);
       } else {
         this.bubble.clearTint();
         this.bubble.setFrame(Math.floor(time / 350) % 3);

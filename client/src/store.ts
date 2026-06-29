@@ -1,4 +1,4 @@
-import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, RailwayData, ServerMsg, TaskCard } from "../../shared/types";
+import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -23,6 +23,14 @@ export interface FeedItem {
 }
 
 const FEED_MAX = 300;
+
+export interface PendingInvite {
+  roomId: string;
+  roomName: string;
+  fromUserId: string;
+  fromName: string;
+  role: "member" | "guest";
+}
 
 /** Client-side mirror of server state; HUD and the Phaser scene subscribe. */
 export class Store {
@@ -49,12 +57,41 @@ export class Store {
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
   hasApiKey = false;
+  roomId: string | null = null;
+  roomName: string = "";
+  roomPlayers = new Map<string, PlayerPresence>();
+  pendingInvite: PendingInvite | null = null;
+  privateOfficeId: string | null = null;
 
   private listeners = new Set<Listener>();
   private toastListeners = new Set<(text: string) => void>();
   private huddleListeners = new Set<(agentIds: string[]) => void>();
   private heliListeners = new Set<(agent: HelicopterDelivery) => void>();
   private assemblyListeners = new Set<(agentIds: string[]) => void>();
+
+  /** Clear all user-specific state — called when switching accounts. */
+  reset(): void {
+    this.agents.clear();
+    this.logs.clear();
+    this.board.clear();
+    this.firedAgents.clear();
+    this.feed = [];
+    this.feedVersion++;
+    this.player = null;
+    this.settings = structuredClone(DEFAULT_SETTINGS);
+    this.selectedId = null;
+    this.roomId = null;
+    this.roomName = "";
+    this.roomPlayers.clear();
+    this.pendingInvite = null;
+    this.privateOfficeId = null;
+    this.hasApiKey = false;
+    this.railwayData = null;
+    this.railwayError = null;
+    this.railwayStatus = null;
+    this.worldSeed = 0;
+    this.emit();
+  }
 
   subscribe(fn: Listener): void {
     this.listeners.add(fn);
@@ -139,6 +176,8 @@ export class Store {
         if (msg.world) {
           this.worldSeed = msg.world.seed;
           this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
+        } else {
+          this.firedAgents.clear();
         }
         if (this.selectedId && !this.agents.has(this.selectedId)) this.selectedId = null;
         // rebuild the feed from the per-agent logs
@@ -278,6 +317,54 @@ export class Store {
       case "api_key_status":
         this.hasApiKey = msg.hasKey;
         break;
+      case "room_state":
+        this.roomId = msg.roomId;
+        this.roomName = msg.name;
+        if (msg.privateOfficeId) this.privateOfficeId = msg.privateOfficeId;
+        this.roomPlayers.clear();
+        for (const p of msg.players) {
+          this.roomPlayers.set(p.userId, p);
+        }
+        break;
+      case "player_joined":
+        this.roomPlayers.set(msg.player.userId, msg.player);
+        this.toast(`${msg.player.name} joined the room`);
+        break;
+      case "player_left":
+        const left = this.roomPlayers.get(msg.userId);
+        if (left) {
+          this.roomPlayers.delete(msg.userId);
+          this.toast(`${left.name} left the room`);
+        }
+        break;
+      case "player_moved": {
+        const existing = this.roomPlayers.get(msg.userId);
+        if (existing) {
+          existing.x = msg.x;
+          existing.y = msg.y;
+          existing.dir = msg.dir;
+        }
+        break;
+      }
+      case "room_invite": {
+        this.pendingInvite = {
+          roomId: msg.roomId,
+          roomName: msg.roomName,
+          fromUserId: msg.fromUserId,
+          fromName: msg.fromName,
+          role: msg.role,
+        };
+        this.toast(`${msg.fromName} invited you to ${msg.roomName}`);
+        break;
+      }
+      case "invite_response": {
+        if (msg.accepted) {
+          this.toast(`${msg.byName} accepted your invite!`);
+        } else {
+          this.toast(`${msg.byName} declined your invite.`);
+        }
+        break;
+      }
     }
     this.emit();
   }

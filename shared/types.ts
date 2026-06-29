@@ -252,12 +252,26 @@ export interface PlayerInfo {
   appearance?: CharAppearance | null;
 }
 
+/** Direction a player/agent is facing. */
+export type Dir = "up" | "down" | "left" | "right";
+
+/** A player visible in a shared room — used for multiplayer presence. */
+export interface PlayerPresence {
+  userId: string;
+  name: string;
+  appearance: CharAppearance | null;
+  role: "owner" | "member" | "guest";
+  x: number;
+  y: number;
+  dir: Dir;
+}
+
 /** Visual theme for the office map + tileset. */
-export type OfficeTheme = "classic" | "lumon";
+export type OfficeTheme = "classic" | "agenthq";
 
 export const OFFICE_THEMES: Array<{ id: OfficeTheme; label: string }> = [
   { id: "classic", label: "Classic — wood floors, cozy office" },
-  { id: "lumon", label: "Lumon — green carpet, white walls, shared desk block" },
+  { id: "agenthq", label: "Agent HQ — blue carpet, branded floor logo" },
 ];
 
 export interface GameSettings {
@@ -326,7 +340,15 @@ export type ClientMsg =
   | { type: "recruit"; firedAgentId: string }
   | { type: "railway_query" }
   | { type: "update_appearance"; appearance: CharAppearance }
-  | { type: "set_api_key"; apiKey: string };
+  | { type: "set_api_key"; apiKey: string }
+  | { type: "renew_token"; token: string }
+  | { type: "create_room"; name: string; theme?: OfficeTheme }
+  | { type: "join_room"; roomId: string }
+  | { type: "leave_room"; roomId: string }
+  | { type: "switch_room"; roomId: string }
+  | { type: "invite_to_room"; roomId: string; userId: string; role: "member" | "guest" }
+  | { type: "respond_invite"; roomId: string; accept: boolean }
+  | { type: "player_move"; x: number; y: number; dir: Dir };
 
 export type ServerMsg =
   | {
@@ -354,7 +376,14 @@ export type ServerMsg =
   | { type: "fired_agent_removed"; agentId: string }
   | { type: "railway_status"; ok: boolean; message: string }
   | { type: "railway_data"; data: RailwayData | null; error: string | null }
-  | { type: "api_key_status"; hasKey: boolean };
+  | { type: "api_key_status"; hasKey: boolean }
+  | { type: "refresh_token" }
+  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string }
+  | { type: "player_joined"; roomId: string; player: PlayerPresence }
+  | { type: "player_left"; roomId: string; userId: string }
+  | { type: "player_moved"; roomId: string; userId: string; x: number; y: number; dir: Dir }
+  | { type: "room_invite"; roomId: string; roomName: string; fromUserId: string; fromName: string; role: "member" | "guest" }
+  | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string };
 
 export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },
