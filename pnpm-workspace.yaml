@@ -2,3 +2,6 @@ ignoredBuiltDependencies:
   - esbuild
   - "@railway/cli"
   - protobufjs
+
+overrides:
+  es-module-lexer: 2.1.0
