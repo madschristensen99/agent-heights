@@ -768,7 +768,7 @@ export class OfficeScene extends Phaser.Scene {
               if (this.ready) this.startAssembly(agentIds);
             });
             this.store.onNpcState((npcId, x, y, dir, state) => {
-              if (!this.ready) return;
+              if (!this.ready || this.store.roomId === "hq2") return;
               if (npcId === YUKI_ID) this.yuki?.remoteUpdate(x, y, dir, state);
               else if (npcId === HERMES_ID) this.hermes?.remoteUpdate(x, y, dir, state);
             });
@@ -3371,9 +3371,9 @@ export class OfficeScene extends Phaser.Scene {
     // ── Multiplayer: sync remote player sprites from store ──────────────
     this.syncRemotePlayers();
 
-    // ── Multiplayer: broadcast NPC state (owner only, 5Hz) ─────────────
+    // ── Multiplayer: broadcast NPC state (owner only, private rooms only, 5Hz) ──
     const myRoleForNpc = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
-    const isOwnerForNpc = myRoleForNpc === "owner" || myRoleForNpc === undefined || this.store.roomId === "hq2";
+    const isOwnerForNpc = myRoleForNpc === "owner" && this.store.roomId !== "hq2";
     if (isOwnerForNpc && now - this.lastNpcSyncSent > 200) {
       this.lastNpcSyncSent = now;
       if (this.yuki) {

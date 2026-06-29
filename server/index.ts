@@ -728,10 +728,10 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "npc_update": {
-          // Relay NPC position/state to other players in the same room
+          // Relay NPC position/state to other players — only in private rooms (not HQ2)
           if (sess.roomId) {
             const room = tenants.getRoom(sess.roomId);
-            if (room) {
+            if (room && room.isPrivate) {
               for (const [pid] of room.players) {
                 if (pid === sess.user.id) continue;
                 const otherSess = tenants.get(pid);
