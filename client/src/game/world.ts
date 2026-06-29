@@ -998,7 +998,13 @@ export class WorldLayer {
     if (!chunk) return;
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    chunk.tiles[localY * CHUNK_SIZE + localX] = newTile;
+    const tileIndex = localY * CHUNK_SIZE + localX;
+    chunk.tiles[tileIndex] = newTile;
+    // Persist the override via the server
+    this.net.send({ type: "tile_update", cx, cy, tileIndex, tile: newTile });
+    // Also track locally in the store
+    if (!this.store.chunkOverrides[key]) this.store.chunkOverrides[key] = {};
+    this.store.chunkOverrides[key][tileIndex] = newTile;
     // re-render the chunk to reflect the change
     const oldContainer = this.chunkGraphics.get(key);
     if (oldContainer) {
@@ -1007,6 +1013,26 @@ export class WorldLayer {
     }
     this.removeChunkLights(key);
     this.renderChunk(chunk);
+  }
+
+  /** Apply a tile update received from another player via the server. */
+  applyRemoteTileUpdate(cx: number, cy: number, tileIndex: number, tile: number): void {
+    const key = `${cx},${cy}`;
+    // Track in local store
+    if (!this.store.chunkOverrides[key]) this.store.chunkOverrides[key] = {};
+    this.store.chunkOverrides[key][tileIndex] = tile;
+    // If the chunk is currently loaded, apply the override and re-render
+    const chunk = this.chunks.get(key);
+    if (chunk) {
+      chunk.tiles[tileIndex] = tile;
+      const oldContainer = this.chunkGraphics.get(key);
+      if (oldContainer) {
+        oldContainer.destroy(true);
+        this.chunkGraphics.delete(key);
+      }
+      this.removeChunkLights(key);
+      this.renderChunk(chunk);
+    }
   }
 
   /** Check if a world tile is walkable. Generates the chunk if needed. */
@@ -1251,6 +1277,7 @@ export class WorldLayer {
     const pending = this.pendingChunks.get(key);
     if (pending) {
       this.pendingChunks.delete(key);
+      this.applyChunkOverrides(pending);
       this.chunks.set(key, pending);
       this.scanTennisTiles(pending);
       this.renderChunk(pending);
@@ -1259,9 +1286,20 @@ export class WorldLayer {
 
     // Fallback: generate synchronously on the main thread
     const chunk = generateChunk(this.store.worldSeed, cx, cy);
+    this.applyChunkOverrides(chunk);
     this.chunks.set(key, chunk);
     this.scanTennisTiles(chunk);
     this.renderChunk(chunk);
+  }
+
+  /** Apply persisted tile overrides to a chunk after generation. */
+  private applyChunkOverrides(chunk: Chunk): void {
+    const key = `${chunk.cx},${chunk.cy}`;
+    const overrides = this.store.chunkOverrides[key];
+    if (!overrides) return;
+    for (const [idx, tile] of Object.entries(overrides)) {
+      chunk.tiles[Number(idx)] = tile;
+    }
   }
 
   /** Request background generation of a chunk via the Web Worker.

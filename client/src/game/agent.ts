@@ -495,6 +495,28 @@ export class YukiNPC {
     this.dot.setFillStyle(STATUS_COLORS[info.status]);
   }
 
+  /** Get current state for broadcasting to other clients. */
+  getState(): { x: number; y: number; dir: Dir; state: string } {
+    return {
+      x: this.container.x,
+      y: this.container.y,
+      dir: this.dir,
+      state: this.state,
+    };
+  }
+
+  /** Apply remote state from the owner's client — used by visitors. */
+  remoteUpdate(x: number, y: number, dir: Dir, state: string): void {
+    this.container.setPosition(x, y);
+    this.dir = dir;
+    this.state = state as YukiState;
+    // Clear path — visitors don't run the pathfinding state machine
+    this.path = [];
+    const c = "char-yuki";
+    this.play(`${c}-idle-${this.dir}`);
+    this.container.setDepth(10 + this.container.y);
+  }
+
   private drawNameBg(): void {
     const g = this.nameBg;
     g.clear();
@@ -654,6 +676,24 @@ export class HermesNPC {
   sync(info: AgentInfo): void {
     this.info = info;
     this.dot.setFillStyle(STATUS_COLORS[info.status]);
+  }
+
+  /** Get current state for broadcasting to other clients. */
+  getState(): { x: number; y: number; dir: Dir; state: string } {
+    return {
+      x: this.container.x,
+      y: this.container.y,
+      dir: "right",
+      state: "sitting",
+    };
+  }
+
+  /** Apply remote state from the owner's client — used by visitors. */
+  remoteUpdate(x: number, y: number, dir: Dir, _state: string): void {
+    this.container.setPosition(x, y);
+    const c = "char-hermes";
+    this.sprite.play(`${c}-idle-${dir}`, true);
+    this.container.setDepth(10 + this.container.y);
   }
 
   private drawNameBg(): void {

@@ -39,6 +39,7 @@ export class Store {
   board = new Map<string, TaskCard>();
   firedAgents = new Map<string, FiredAgent>();
   worldSeed = 0;
+  chunkOverrides: Record<string, Record<number, number>> = {};
   /** Every agent's messages merged chronologically, for the office feed. */
   feed: FeedItem[] = [];
   /** Bumped when the feed is rebuilt or items vanish mid-list (not appended). */
@@ -68,6 +69,8 @@ export class Store {
   private huddleListeners = new Set<(agentIds: string[]) => void>();
   private heliListeners = new Set<(agent: HelicopterDelivery) => void>();
   private assemblyListeners = new Set<(agentIds: string[]) => void>();
+  private npcStateListeners = new Set<(npcId: string, x: number, y: number, dir: import("../../shared/types").Dir, state: string) => void>();
+  private tileUpdatedListeners = new Set<(cx: number, cy: number, tileIndex: number, tile: number) => void>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -90,6 +93,7 @@ export class Store {
     this.railwayError = null;
     this.railwayStatus = null;
     this.worldSeed = 0;
+    this.chunkOverrides = {};
     this.emit();
   }
 
@@ -111,6 +115,14 @@ export class Store {
 
   onAssembly(fn: (agentIds: string[]) => void): void {
     this.assemblyListeners.add(fn);
+  }
+
+  onNpcState(fn: (npcId: string, x: number, y: number, dir: import("../../shared/types").Dir, state: string) => void): void {
+    this.npcStateListeners.add(fn);
+  }
+
+  onTileUpdated(fn: (cx: number, cy: number, tileIndex: number, tile: number) => void): void {
+    this.tileUpdatedListeners.add(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -175,6 +187,7 @@ export class Store {
         this.settings = msg.settings;
         if (msg.world) {
           this.worldSeed = msg.world.seed;
+          this.chunkOverrides = msg.world.chunkOverrides ?? {};
           this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
         } else {
           this.firedAgents.clear();
@@ -280,6 +293,7 @@ export class Store {
         break;
       case "world":
         this.worldSeed = msg.world.seed;
+        this.chunkOverrides = msg.world.chunkOverrides ?? {};
         this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
         break;
       case "fired_agent":
@@ -363,6 +377,21 @@ export class Store {
         } else {
           this.toast(`${msg.byName} declined your invite.`);
         }
+        break;
+      }
+      case "player_appearance": {
+        const existing = this.roomPlayers.get(msg.userId);
+        if (existing) {
+          existing.appearance = msg.appearance;
+        }
+        break;
+      }
+      case "npc_state": {
+        for (const fn of this.npcStateListeners) fn(msg.npcId, msg.x, msg.y, msg.dir, msg.state);
+        break;
+      }
+      case "tile_updated": {
+        for (const fn of this.tileUpdatedListeners) fn(msg.cx, msg.cy, msg.tileIndex, msg.tile);
         break;
       }
     }

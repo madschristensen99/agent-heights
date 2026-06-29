@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
-import { YUKI_ID, HERMES_ID } from "../../../shared/types";
+import { YUKI_ID, HERMES_ID, type CharAppearance } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -170,7 +170,7 @@ export class OfficeScene extends Phaser.Scene {
   private brightnessBoost!: Phaser.GameObjects.Rectangle;
 
   /** Multiplayer: remote player sprites keyed by userId. */
-  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; }>();
+  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
   /** Tracks the last roomId the scene rendered — used to detect room changes. */
   private lastRoomId: string | null = null;
   private lastPosSent = 0;
@@ -766,6 +766,15 @@ export class OfficeScene extends Phaser.Scene {
             });
             this.store.onAssembly((agentIds) => {
               if (this.ready) this.startAssembly(agentIds);
+            });
+            this.store.onNpcState((npcId, x, y, dir, state) => {
+              if (!this.ready) return;
+              if (npcId === YUKI_ID) this.yuki?.remoteUpdate(x, y, dir, state);
+              else if (npcId === HERMES_ID) this.hermes?.remoteUpdate(x, y, dir, state);
+            });
+            this.store.onTileUpdated((cx, cy, tileIndex, tile) => {
+              if (!this.ready) return;
+              this.world.applyRemoteTileUpdate(cx, cy, tileIndex, tile);
             });
           }
           this.ready = true;
@@ -2973,8 +2982,11 @@ export class OfficeScene extends Phaser.Scene {
     if (typing) {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
       for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
-      this.yuki?.update(time, dt, false, this.player.x, this.player.y);
-      this.hermes?.update(time, dt);
+      const isOfficeOwnerTyping = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role === "owner" : true;
+      if (isOfficeOwnerTyping) {
+        this.yuki?.update(time, dt, false, this.player.x, this.player.y);
+        this.hermes?.update(time, dt);
+      }
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
       const selYuki = this.store.selectedId === YUKI_ID ? this.yuki : null;
       const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
@@ -3166,8 +3178,12 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
-    this.yuki?.update(time, dt, false, this.player.x, this.player.y);
-    this.hermes?.update(time, dt);
+    // Only run Yuki/Hermes state machine if we're the office owner; visitors receive remote state
+    const isOfficeOwner = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role === "owner" : true;
+    if (isOfficeOwner) {
+      this.yuki?.update(time, dt, false, this.player.x, this.player.y);
+      this.hermes?.update(time, dt);
+    }
 
     // selection ring
     const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
@@ -3352,9 +3368,24 @@ export class OfficeScene extends Phaser.Scene {
 
     // ── Multiplayer: sync remote player sprites from store ──────────────
     this.syncRemotePlayers();
+
+    // ── Multiplayer: broadcast NPC state (owner only, 5Hz) ─────────────
+    const isOwnerForNpc = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role === "owner" : true;
+    if (isOwnerForNpc && now - this.lastNpcSyncSent > 200) {
+      this.lastNpcSyncSent = now;
+      if (this.yuki) {
+        const s = this.yuki.getState();
+        this.net?.send({ type: "npc_update", npcId: YUKI_ID, ...s });
+      }
+      if (this.hermes) {
+        const s = this.hermes.getState();
+        this.net?.send({ type: "npc_update", npcId: HERMES_ID, ...s });
+      }
+    }
   }
 
   private _lastSentDir: Dir = "down";
+  private lastNpcSyncSent = 0;
 
   private syncRemotePlayers(): void {
     const storePlayers = this.store.roomPlayers;
@@ -3366,14 +3397,34 @@ export class OfficeScene extends Phaser.Scene {
       seen.add(userId);
 
       let entry = this.remotePlayers.get(userId);
+
+      // Determine the correct texture key for this player
+      let texKey = "boss";
+      if (p.appearance) {
+        texKey = `remote-${userId}`;
+      }
+
+      // If appearance changed, regenerate the texture
+      if (entry && p.appearance && JSON.stringify(entry.appearance) !== JSON.stringify(p.appearance)) {
+        generateCharTexture(this, texKey, p.appearance);
+        this.ensureCharAnimations(texKey);
+        entry.appearance = p.appearance;
+        entry.texKey = texKey;
+        entry.sprite.setTexture(texKey, 0);
+      }
+
       if (!entry) {
-        // Create sprite for remote player — use boss texture as default
-        const texKey = "boss";
-        const sprite = this.add.sprite(p.x, p.y, texKey, 0)
+        // Generate custom texture if player has an appearance
+        if (p.appearance) {
+          generateCharTexture(this, texKey, p.appearance);
+          this.ensureCharAnimations(texKey);
+        }
+        const sprite = this.add.sprite(p.x, p.y - 200, texKey, 0)
           .setOrigin(0.5, 1)
           .setScale(1)
+          .setAlpha(0)
           .setDepth(10 + p.y);
-        const nameBg = this.add.graphics();
+        const nameBg = this.add.graphics().setAlpha(0);
         const label = this.add
           .text(0, 0, p.name.toUpperCase(), {
             fontFamily: "'M Plus Rounded 1c', sans-serif",
@@ -3385,23 +3436,56 @@ export class OfficeScene extends Phaser.Scene {
           .setResolution(4)
           .setOrigin(0.5, 1)
           .setScale(0.7)
+          .setAlpha(0)
           .setDepth(10 + p.y + 0.1);
-        entry = { sprite, label, nameBg };
+        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null };
         this.remotePlayers.set(userId, entry);
+
+        // Intro animation: descend from above while cycling through
+        // directional profile views (front → side left → back → side right → front)
+        // to simulate a 3D spin during the landing.
+        const spinDirs: Dir[] = ["down", "left", "up", "right", "down"];
+        const introDuration = 1200;
+        const stepMs = introDuration / spinDirs.length;
+        spinDirs.forEach((dir, i) => {
+          this.time.delayedCall(stepMs * i, () => {
+            if (entry!.intro) sprite.play(`${texKey}-idle-${dir}`, true);
+          });
+        });
+        // Fade in name label/bg shortly after descent begins
+        this.tweens.add({
+          targets: [label, nameBg],
+          alpha: { from: 0, to: 1 },
+          duration: 400,
+          delay: 400,
+        });
+        // Descend + fade in the sprite
+        this.tweens.add({
+          targets: sprite,
+          y: p.y,
+          alpha: { from: 0, to: 1 },
+          duration: introDuration,
+          ease: "Cubic.out",
+          onComplete: () => {
+            entry!.intro = false;
+          },
+        });
       }
 
-      // Smoothly interpolate remote player position
+      // Smoothly interpolate remote player position (skip during intro)
       const target = entry.sprite;
-      const lerp = 0.15;
-      target.x += (p.x - target.x) * lerp;
-      target.y += (p.y - target.y) * lerp;
-      target.setDepth(10 + target.y);
+      if (!entry.intro) {
+        const lerp = 0.15;
+        target.x += (p.x - target.x) * lerp;
+        target.y += (p.y - target.y) * lerp;
+        target.setDepth(10 + target.y);
 
-      // Play walk/idle animation based on whether they're moving
-      const moving = Math.abs(p.x - target.x) > 1 || Math.abs(p.y - target.y) > 1;
-      const animKey = `boss-${moving ? "walk" : "idle"}-${p.dir}`;
-      if (target.anims.currentAnim?.key !== animKey) {
-        target.play(animKey, true);
+        // Play walk/idle animation based on whether they're moving
+        const moving = Math.abs(p.x - target.x) > 1 || Math.abs(p.y - target.y) > 1;
+        const animKey = `${entry.texKey}-${moving ? "walk" : "idle"}-${p.dir}`;
+        if (target.anims.currentAnim?.key !== animKey) {
+          target.play(animKey, true);
+        }
       }
 
       // Update name label

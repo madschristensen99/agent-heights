@@ -77,6 +77,7 @@ class CharBuilder {
         <div class="builder-preview-wrap">
           <div class="sprite-preview builder-preview" id="${p}-preview"></div>
         </div>
+        <button class="builder-randomize" id="${p}-randomize">🎲 RANDOMIZE</button>
         <div class="builder-controls">
           ${rows}
         </div>
@@ -102,6 +103,19 @@ class CharBuilder {
         });
       });
     });
+
+    const randBtn = document.getElementById(`${p}-randomize`);
+    if (randBtn) {
+      randBtn.addEventListener("click", () => {
+        this.appearance = randomAppearance();
+        root.querySelectorAll<HTMLElement>(".builder-row").forEach((row) => {
+          const partKey = row.dataset.part as keyof CharAppearance;
+          const part = BUILDER_PARTS.find((b) => b.key === partKey)!;
+          this.updateRow(row, part);
+        });
+        this.refreshPreview();
+      });
+    }
 
     this.refreshPreview();
   }

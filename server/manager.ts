@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
   AgentInfo,
@@ -99,6 +99,7 @@ export class AgentManager {
   private board = new Map<string, TaskCard>();
   private firedAgents = new Map<string, FiredAgent>();
   private worldSeed = 0;
+  private chunkOverrides: Record<string, Record<number, number>> = {};
   private workspaceRoot: string;
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   bossName = "the boss";
@@ -119,6 +120,7 @@ export class AgentManager {
   ) {
     this.workspaceRoot = join(rootDir, "workspace");
     mkdirSync(this.workspaceRoot, { recursive: true });
+    mkdirSync(join(this.workspaceRoot, "shared"), { recursive: true });
     this.apiKey = apiKey;
 
     // reload the office from the save file
@@ -140,11 +142,12 @@ export class AgentManager {
     if (this.agents.size > 0) {
       console.log(`[agent-hq] restored ${this.agents.size} agent(s) from save`);
     }
-    // reload the world state (seed + fired agents) from the save file
+    // reload the world state (seed + fired agents + chunk overrides) from the save file
     const world = this.save.getWorld();
     this.worldSeed = world.seed || Math.floor(Math.random() * 0xffffffff);
+    this.chunkOverrides = world.chunkOverrides ?? {};
     if (!world.seed) {
-      this.save.setWorld({ seed: this.worldSeed, firedAgents: [] });
+      this.save.setWorld({ seed: this.worldSeed, firedAgents: [], chunkOverrides: {} });
     }
     for (const fa of world.firedAgents) {
       this.firedAgents.set(fa.id, fa);
@@ -263,11 +266,24 @@ export class AgentManager {
   }
 
   worldState(): WorldState {
-    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()] };
+    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], chunkOverrides: this.chunkOverrides };
   }
 
   private persistWorld(): void {
     this.save.setWorld(this.worldState());
+  }
+
+  /** Apply a tile override from a client and persist it. */
+  applyTileOverride(cx: number, cy: number, tileIndex: number, tile: number): void {
+    const key = `${cx},${cy}`;
+    if (!this.chunkOverrides[key]) this.chunkOverrides[key] = {};
+    this.chunkOverrides[key][tileIndex] = tile;
+    this.persistWorld();
+  }
+
+  /** Get chunk overrides for a specific chunk (or undefined if none). */
+  getChunkOverrides(cx: number, cy: number): Record<number, number> | undefined {
+    return this.chunkOverrides[`${cx},${cy}`];
   }
 
   hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null): void {
@@ -322,6 +338,7 @@ export class AgentManager {
     this.broadcast({ type: "agent", agent: info });
     console.log(`[manager] hired ${cleanName} (id=${info.id}) desk=${deskIndex} — broadcast sent to ${this.agents.size} total agents`);
     this.log(rt, "status", `${cleanName} the ${info.title} joined the office. (${provider} / ${model})`);
+    this.logEvent("hire", `${cleanName} the ${info.title} joined the office.`);
   }
 
   assign(agentId: string, task: string, handoffTo?: string, cardId?: string): void {
@@ -711,17 +728,54 @@ export class AgentManager {
     );
   }
 
+  /** Append an event to the shared office event feed. */
+  private logEvent(type: string, text: string): void {
+    const feedPath = join(this.workspaceRoot, "events.jsonl");
+    const entry = JSON.stringify({ ts: Date.now(), type, text }) + "\n";
+    import("node:fs/promises").then(({ appendFile }) =>
+      appendFile(feedPath, entry, "utf-8").catch(() => {}),
+    ).catch(() => {});
+  }
+
   private buildSystemPrompt(rt: AgentRuntime): string {
     const devopsLine = rt.info.role === "devops"
       ? "You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. Use them when asked about deployments or infrastructure."
       : "";
+
+    // ── Office context: who's here and what they're doing ──
+    const colleagues = [...this.agents.values()]
+      .filter((a) => a.info.id !== rt.info.id && a.info.id !== YUKI_ID)
+      .map((a) => {
+        const status = a.info.status === "idle" ? "idle" : `working on: ${a.info.task ?? "something"}`;
+        return `  - ${a.info.name} (${a.info.title}): ${status}`;
+      });
+    const rosterLine = colleagues.length > 0
+      ? `\nYour colleagues in the office today:\n${colleagues.join("\n")}`
+      : "\nYou're the only worker in the office right now.";
+
+    // ── Task board ──
+    const cards = [...this.board.values()];
+    const boardLine = cards.length > 0
+      ? `\nTask board:\n${cards.map((c) => {
+          const assignee = c.assignedAgentId ? this.agents.get(c.assignedAgentId)?.info.name ?? "someone" : "unassigned";
+          return `  - [${c.status}] ${c.title} (assigned to: ${assignee})`;
+        }).join("\n")}`
+      : "";
+
+    // ── Shared workspace ──
+    const sharedLine = `\nThere is a shared workspace at ${join(this.workspaceRoot, "shared")} where you can collaborate with other agents on shared files.`;
+
     return [
       `You are ${rt.info.name}, job title "${rt.info.title}", an agent employed in a pixel-art office game called Agent HQ.`,
       PERSONALITIES[rt.info.title] ?? "",
       `Stay in character — let that personality color your replies and summaries (but never at the expense of doing the work well).`,
       `Your boss is ${this.bossName}. This is one ongoing conversation — remember your boss's previous orders and what you did.`,
       `Your workspace directory is ${this.cwdFor(this.slugFor(rt), rt.info.id)}. Work only inside this directory. Use absolute paths when calling tools. Be effective and concise.`,
+      sharedLine,
       devopsLine,
+      rosterLine,
+      boardLine,
+      `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
       `When you finish your task, you MUST call the submit_and_exit tool with a summary of what you did. Do not just reply with text — always use submit_and_exit to complete the task.`,
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
     ].join(" ");
@@ -747,7 +801,8 @@ export class AgentManager {
       `The boss has given the office this goal:\n"${goal}"`,
       `Free staff right now:\n${roster}`,
       `Break the goal into one clear, self-contained subtask per worker you want to involve. Use only the workers listed; not everyone needs a subtask. Subtasks run in separate workspaces, so each must stand alone.`,
-      `Do not use any tools and do not do the work yourself. Reply with ONLY a JSON array, no markdown fences, like:\n[{"name":"Pixel","task":"..."}]`,
+      `If a subtask depends on another subtask's output, set "dependsOn" to the name of the worker whose output is needed. Dependent tasks will be queued until the prerequisite finishes.`,
+      `Do not use any tools and do not do the work yourself. Reply with ONLY a JSON array, no markdown fences, like:\n[{"name":"Pixel","task":"...","dependsOn":""}]`,
       `If nobody is free, reply [].`,
     ].join("\n\n");
   }
@@ -760,7 +815,27 @@ export class AgentManager {
     const slug = this.slugFor(rt);
     const systemPrompt = this.buildSystemPrompt(rt);
     const isManager = rt.info.role === "manager";
-    const prompt = isManager ? this.managerBrief(task, rt) : task;
+
+    // ── Inject unread inbox messages into the prompt ──
+    let promptPrefix = "";
+    try {
+      const { readFile, unlink } = await import("node:fs/promises");
+      const inboxPath = join(this.cwdFor(slug, rt.info.id), "inbox.jsonl");
+      const content = await readFile(inboxPath, "utf-8").catch(() => "");
+      if (content.trim()) {
+        const msgs = content.trim().split("\n").filter(Boolean).map((l) => {
+          try { return JSON.parse(l); } catch { return null; }
+        }).filter(Boolean) as { ts: number; from: string; message: string }[];
+        if (msgs.length > 0) {
+          promptPrefix = `You have ${msgs.length} message(s) from colleagues:\n` +
+            msgs.map((m) => `From ${m.from}: ${m.message}`).join("\n") +
+            "\n\nKeep these in mind as you work on your task.\n\n";
+          await unlink(inboxPath).catch(() => {});
+        }
+      }
+    } catch { /* ignore inbox errors */ }
+
+    const prompt = promptPrefix + (isManager ? this.managerBrief(task, rt) : task);
 
     let sawError = false;
     let gotEvents = false;
@@ -770,6 +845,7 @@ export class AgentManager {
     try {
       const events = runner(prompt, {
         cwd: this.cwdFor(slug, rt.info.id),
+        sharedCwd: join(this.workspaceRoot, "shared"),
         model: rt.info.model,
         systemPrompt,
         abort,
@@ -784,6 +860,17 @@ export class AgentManager {
         },
         railway: this.settings.railway.enabled && rt.info.role === "devops",
         apiKey: this.apiKey,
+        getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
+        claimCard: (cardId: string, agentId: string) => {
+          const card = this.board.get(cardId);
+          if (!card || card.status !== "backlog" || card.assignedAgentId) return false;
+          card.assignedAgentId = agentId;
+          card.status = "in_progress";
+          this.persistBoard();
+          this.broadcast({ type: "card", card });
+          return true;
+        },
+        eventFeedPath: join(this.workspaceRoot, "events.jsonl"),
       });
 
       for await (const ev of events) {
@@ -817,6 +904,11 @@ export class AgentManager {
       if (!sawError && !abort.signal.aborted) {
         if (isManager) this.delegate(rt, task, finalText);
         this.completeHandoff(rt, task, finalText);
+        this.notifyManagersOfCompletion(rt, task, finalText, false);
+        this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
+      } else if (sawError && !abort.signal.aborted) {
+        this.notifyManagersOfCompletion(rt, task, "Task failed.", true);
+        this.logEvent("task_error", `${rt.info.name} failed: "${task.slice(0, 100)}" — ${firstErrorText.slice(0, 100)}`);
       }
     } catch (err) {
       if (!abort.signal.aborted) {
@@ -874,11 +966,24 @@ export class AgentManager {
       return;
     }
 
+    // Track which workers are being assigned in this round (for dependency resolution)
+    const assigned = new Map<string, string>(); // workerName -> agentId
     let sent = 0;
+    const deferred: { name: string; subtask: string; dependsOn: string }[] = [];
+
     for (const item of plan) {
       const name = String((item as { name?: unknown })?.name ?? "").trim();
       const subtask = String((item as { task?: unknown })?.task ?? "").trim();
+      const dependsOn = String((item as { dependsOn?: unknown })?.dependsOn ?? "").trim();
       if (!name || !subtask) continue;
+
+      // If this task depends on another task in this round, defer it
+      if (dependsOn && assigned.has(dependsOn.toLowerCase())) {
+        deferred.push({ name, subtask, dependsOn });
+        this.log(mgr, "status", `Deferred ${name}'s task — depends on ${dependsOn} completing first.`);
+        continue;
+      }
+
       const target = [...this.agents.values()].find(
         (rt) =>
           rt.info.name.toLowerCase() === name.toLowerCase() &&
@@ -889,16 +994,48 @@ export class AgentManager {
         this.log(mgr, "status", `Skipped a subtask for "${name}" — nobody by that name.`);
         continue;
       }
-      if (target.info.status === "thinking" || target.info.status === "working") {
-        this.log(mgr, "status", `Skipped ${target.info.name} — they got busy in the meantime.`);
+      if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "done") {
+        // Queue it — the agent is busy
+        this.assign(
+          target.info.id,
+          `${subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`,
+        );
+        sent++;
         continue;
       }
       this.assign(
         target.info.id,
         `${subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`,
       );
+      assigned.set(name.toLowerCase(), target.info.id);
       sent++;
     }
+
+    // Queue deferred tasks — they'll be assigned after their dependency completes
+    // via the completeHandoff mechanism (the prerequisite worker hands off to the dependent)
+    for (const d of deferred) {
+      const target = [...this.agents.values()].find(
+        (rt) => rt.info.name.toLowerCase() === d.name.toLowerCase() &&
+          rt.info.id !== mgr.info.id &&
+          rt.info.role !== "manager",
+      );
+      const prereq = [...this.agents.values()].find(
+        (rt) => rt.info.name.toLowerCase() === d.dependsOn.toLowerCase(),
+      );
+      if (target && prereq) {
+        // Queue the dependent task on the target, with handoff from the prerequisite
+        this.assign(
+          target.info.id,
+          `${d.subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`,
+          prereq.info.id,
+        );
+        this.log(mgr, "status", `Queued ${d.name}'s task — will start after ${d.dependsOn} completes.`);
+        sent++;
+      } else {
+        this.log(mgr, "status", `Couldn't queue deferred task for ${d.name} — missing worker or dependency.`);
+      }
+    }
+
     this.log(mgr, "status", `Delegated ${sent} subtask${sent === 1 ? "" : "s"}.`);
     if (sent > 0) {
       this.broadcast({
@@ -934,6 +1071,30 @@ export class AgentManager {
     this.log(rt, "status", `Handed the result to ${target.info.name}.`);
     this.broadcast({ type: "toast", text: `${rt.info.name} handed off to ${target.info.name}.` });
     this.assign(target.info.id, handoffTask);
+  }
+
+  /** Notify any manager agents about a worker's task completion/failure. */
+  private notifyManagersOfCompletion(rt: AgentRuntime, task: string, result: string, failed: boolean): void {
+    const managers = [...this.agents.values()].filter(
+      (m) => m.info.role === "manager" && m.info.id !== rt.info.id,
+    );
+    for (const mgr of managers) {
+      // Post a message to the manager's inbox
+      const slug = this.slugFor(mgr);
+      const mgrInbox = join(this.cwdFor(slug, mgr.info.id), "inbox.jsonl");
+      const entry = JSON.stringify({
+        ts: Date.now(),
+        from: rt.info.name,
+        message: failed
+          ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}`
+          : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}`,
+      }) + "\n";
+      import("node:fs/promises").then(({ appendFile, mkdir }) => {
+        mkdir(dirname(mgrInbox), { recursive: true }).then(() =>
+          appendFile(mgrInbox, entry, "utf-8").catch(() => {}),
+        );
+      }).catch(() => {});
+    }
   }
 
   /** The boss walks up for a quick word — same session, but not a work task. */
@@ -978,6 +1139,7 @@ export class AgentManager {
     try {
       const events = runner(prompt, {
         cwd: this.cwdFor(this.slugFor(rt), rt.info.id),
+        sharedCwd: join(this.workspaceRoot, "shared"),
         model: rt.info.model,
         systemPrompt: this.buildSystemPrompt(rt),
         abort,
@@ -992,6 +1154,17 @@ export class AgentManager {
         },
         railway: false,
         apiKey: this.apiKey,
+        getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
+        claimCard: (cardId: string, agentId: string) => {
+          const card = this.board.get(cardId);
+          if (!card || card.status !== "backlog" || card.assignedAgentId) return false;
+          card.assignedAgentId = agentId;
+          card.status = "in_progress";
+          this.persistBoard();
+          this.broadcast({ type: "card", card });
+          return true;
+        },
+        eventFeedPath: join(this.workspaceRoot, "events.jsonl"),
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;

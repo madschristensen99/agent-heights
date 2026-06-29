@@ -157,12 +157,12 @@ export class RelationalPersistence {
       // Load world state
       const { data: worldRow } = await supabaseAdmin
         .from("agent_hq_world_state")
-        .select("seed, fired_agents")
+        .select("seed, fired_agents, chunk_overrides")
         .eq("room_id", this.roomId)
         .maybeSingle();
 
       const world: WorldState = worldRow
-        ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [] }
+        ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {} }
         : { seed: room.seed, firedAgents: [] };
 
       this.state = { player, agents, logs, settings, board, world };
@@ -271,6 +271,7 @@ export class RelationalPersistence {
             owner_id: this.userId,
             seed: this.state.world.seed,
             fired_agents: this.state.world.firedAgents,
+            chunk_overrides: this.state.world.chunkOverrides ?? {},
           });
       } catch (err) {
         console.error("[db-rel] setWorld failed:", err);

@@ -181,6 +181,8 @@ export interface FiredAgent {
 export interface WorldState {
   seed: number;
   firedAgents: FiredAgent[];
+  /** Tile overrides per chunk: { "cx,cy" -> { tileIndex -> newTile } } */
+  chunkOverrides?: Record<string, Record<number, number>>;
 }
 
 /** Chunk side length in tiles. */
@@ -348,7 +350,9 @@ export type ClientMsg =
   | { type: "switch_room"; roomId: string }
   | { type: "invite_to_room"; roomId: string; userId: string; role: "member" | "guest" }
   | { type: "respond_invite"; roomId: string; accept: boolean }
-  | { type: "player_move"; x: number; y: number; dir: Dir };
+  | { type: "player_move"; x: number; y: number; dir: Dir }
+  | { type: "npc_update"; npcId: string; x: number; y: number; dir: Dir; state: string }
+  | { type: "tile_update"; cx: number; cy: number; tileIndex: number; tile: number };
 
 export type ServerMsg =
   | {
@@ -383,7 +387,10 @@ export type ServerMsg =
   | { type: "player_left"; roomId: string; userId: string }
   | { type: "player_moved"; roomId: string; userId: string; x: number; y: number; dir: Dir }
   | { type: "room_invite"; roomId: string; roomName: string; fromUserId: string; fromName: string; role: "member" | "guest" }
-  | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string };
+  | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string }
+  | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
+  | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }
+  | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null };
 
 export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },

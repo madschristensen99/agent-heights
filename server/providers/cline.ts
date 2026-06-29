@@ -4,7 +4,7 @@ import {
   createDefaultExecutors,
 } from "@cline/sdk";
 import type { AgentTool } from "@cline/sdk";
-import { writeFile, mkdir, readdir } from "node:fs/promises";
+import { writeFile, mkdir, readdir, readFile, appendFile, unlink } from "node:fs/promises";
 import { resolve, relative, dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -60,13 +60,69 @@ const agents = new Map<string, Agent>();
 /** Persisted message snapshots keyed by agentId, for restore after restart. */
 const messageStore = new Map<string, unknown[]>();
 
-async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<AgentTool<any, any>[]> {
+/** Max messages before we summarize older ones to save context window. */
+const MAX_MESSAGES = 50;
+/** Messages to keep verbatim after summarization. */
+const KEEP_RECENT = 15;
+
+/** Summarize older messages into a compact text block to save context window. */
+function compactMessages(messages: any[]): any[] {
+  if (messages.length <= MAX_MESSAGES) return messages;
+  const oldMessages = messages.slice(0, messages.length - KEEP_RECENT);
+  const recentMessages = messages.slice(messages.length - KEEP_RECENT);
+
+  const summaryParts: string[] = [];
+  for (const msg of oldMessages) {
+    const role = msg.role ?? "unknown";
+    const content = msg.content;
+    if (typeof content === "string") {
+      summaryParts.push(`[${role}] ${content.slice(0, 200)}`);
+    } else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part.type === "text" && part.text) {
+          summaryParts.push(`[${role}] ${part.text.slice(0, 200)}`);
+        } else if (part.type === "tool_use") {
+          summaryParts.push(`[${role}] called ${part.name}(${JSON.stringify(part.input ?? {}).slice(0, 100)})`);
+        } else if (part.type === "tool_result") {
+          const resultText = typeof part.content === "string" ? part.content.slice(0, 100) : "[tool result]";
+          summaryParts.push(`[${role}] tool result: ${resultText}`);
+        }
+      }
+    }
+  }
+
+  const summaryMsg = {
+    role: "user",
+    content: [{ type: "text", text: `[Previous conversation summary — ${oldMessages.length} messages compacted]\n${summaryParts.join("\n")}` }],
+  };
+
+  return [summaryMsg, ...recentMessages];
+}
+
+async function makeTools(cwd: string, opts?: {
+  railway?: boolean;
+  sharedCwd?: string;
+  workspaceRoot?: string;
+  agentId?: string;
+  getBoard?: () => { id: string; title: string; status: string; assignedAgentId: string | null }[];
+  claimCard?: (cardId: string, agentId: string) => boolean;
+  eventFeedPath?: string;
+}): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
     const rel = relative(cwd, resolved);
     if (rel.startsWith("..")) throw new Error(`Path outside workspace: ${p}`);
     return resolved;
   };
+  const sharedCwd = opts?.sharedCwd ?? resolve(cwd, "..", "shared");
+  const safeShared = (p: string) => {
+    const resolved = resolve(sharedCwd, p);
+    const rel = relative(sharedCwd, resolved);
+    if (rel.startsWith("..")) throw new Error(`Path outside shared workspace: ${p}`);
+    return resolved;
+  };
+  const workspaceRoot = opts?.workspaceRoot ?? resolve(cwd, "..");
+  const inboxPath = resolve(cwd, "inbox.jsonl");
 
   // ── SDK built-in tools with default executors ──────────────────────
   const executors = createDefaultExecutors();
@@ -108,7 +164,7 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
     enableWebFetch: true,
     enableEditor: true,
     enableApplyPatch: false,
-    enableSkills: false,
+    enableSkills: true,
     enableAskQuestion: false,
     enableSubmitAndExit: false,
   });
@@ -117,7 +173,7 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
   const submitTool: AgentTool<any, any> = {
     name: "submit_and_exit",
     description:
-      "Submit your final answer and end the task. Call this when you have completed the requested work. Provide a brief summary of what you did and what you found.",
+      "Submit your final answer and end the task. Call this when you have completed the requested work. Provide a brief summary of what you did and what you found. Before calling this, verify your work: read back any files you created or edited to confirm they exist and contain what you intended.",
     inputSchema: {
       type: "object",
       properties: {
@@ -126,12 +182,20 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
           minLength: 10,
           description: "A brief summary of what you did, what you found, and the outcome of the task.",
         },
+        verified: {
+          type: "boolean",
+          description: "Whether you have verified your work by reading back files or running checks. Set to true if you have confirmed your work is correct.",
+        },
       },
       required: ["summary"],
       additionalProperties: false,
     },
     lifecycle: { completesRun: true },
     async execute(input: any) {
+      if (!input.verified) {
+        // Don't hard-block, but note it in the output
+        return `${input.summary}\n\n[Note: agent did not set verified=true]`;
+      }
       return input.summary;
     },
   };
@@ -191,14 +255,175 @@ async function makeTools(cwd: string, opts?: { railway?: boolean }): Promise<Age
 
   const base = [...builtinTools, submitTool, writeFilesTool, listFilesTool];
 
+  // ── Shared workspace tools ─────────────────────────────────────────
+  const sharedReadTool: AgentTool<any, any> = {
+    name: "read_shared",
+    description: "Read a file from the shared workspace (collaborative area). Use for files multiple agents contribute to.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "File path relative to shared workspace root" },
+      },
+      required: ["path"],
+    },
+    async execute(input: any) {
+      const { readFile } = await import("node:fs/promises");
+      const full = safeShared(input.path);
+      return readFile(full, "utf-8");
+    },
+  };
+
+  const sharedWriteTool: AgentTool<any, any> = {
+    name: "write_shared",
+    description: "Write a file to the shared workspace (collaborative area). Creates parent directories as needed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "File path relative to shared workspace root" },
+        content: { type: "string", description: "Full file content to write" },
+      },
+      required: ["path", "content"],
+    },
+    async execute(input: any) {
+      const full = safeShared(input.path);
+      await mkdir(dirname(full), { recursive: true });
+      await writeFile(full, input.content, "utf-8");
+      return `Wrote ${input.path} to shared workspace (${input.content.length} chars)`;
+    },
+  };
+
+  const sharedListTool: AgentTool<any, any> = {
+    name: "list_shared",
+    description: "List files and directories in the shared workspace (collaborative area).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Directory path relative to shared workspace root", default: "." },
+      },
+    },
+    async execute(input: any) {
+      const dir = safeShared(input.path ?? ".");
+      const entries = await readdir(dir, { withFileTypes: true });
+      return entries
+        .map((e) => `${e.isDirectory() ? "[DIR] " : "      "}${e.name}`)
+        .join("\n");
+    },
+  };
+
+  const baseWithShared = [...base, sharedReadTool, sharedWriteTool, sharedListTool];
+
+  // ── Inter-agent messaging tools ────────────────────────────────────
+  const postMessageTool: AgentTool<any, any> = {
+    name: "post_message",
+    description: "Send a message to a colleague. Specify their workspace directory name (e.g. 'beep-6ccfc256'). The message will appear in their inbox for their next task.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Recipient's workspace directory name (the folder name under workspace/)" },
+        message: { type: "string", description: "The message text to send" },
+      },
+      required: ["to", "message"],
+    },
+    async execute(input: any) {
+      const recipientInbox = resolve(workspaceRoot, input.to, "inbox.jsonl");
+      const entry = JSON.stringify({ ts: Date.now(), from: cwd.split("/").pop(), message: input.message }) + "\n";
+      await mkdir(dirname(recipientInbox), { recursive: true });
+      await appendFile(recipientInbox, entry, "utf-8");
+      return `Message sent to ${input.to}`;
+    },
+  };
+
+  const readMessagesTool: AgentTool<any, any> = {
+    name: "read_messages",
+    description: "Read messages from your inbox (sent by colleagues). Returns all messages and marks them as read.",
+    inputSchema: { type: "object", properties: {} },
+    async execute() {
+      try {
+        const content = await readFile(inboxPath, "utf-8");
+        const lines = content.trim().split("\n").filter(Boolean);
+        if (lines.length === 0) return "No messages in your inbox.";
+        const messages = lines.map((line) => {
+          try { return JSON.parse(line); } catch { return null; }
+        }).filter(Boolean);
+        // Clear inbox after reading
+        await unlink(inboxPath).catch(() => {});
+        return messages.map((m: any) => `[${new Date(m.ts).toISOString()}] From ${m.from}: ${m.message}`).join("\n");
+      } catch {
+        return "No messages in your inbox.";
+      }
+    },
+  };
+
+  const baseWithMessaging = [...baseWithShared, postMessageTool, readMessagesTool];
+
+  // ── Task board tools (world awareness) ─────────────────────────────
+  const boardTools: AgentTool<any, any>[] = [];
+  if (opts?.getBoard) {
+    const readBoardTool: AgentTool<any, any> = {
+      name: "read_board",
+      description: "Read the office task board. Returns all task cards with their status and assignee.",
+      inputSchema: { type: "object", properties: {} },
+      async execute() {
+        const cards = opts.getBoard!();
+        if (cards.length === 0) return "The task board is empty.";
+        return cards.map((c) => `[${c.status}] ${c.id}: ${c.title} (assigned: ${c.assignedAgentId ?? "unassigned"})`).join("\n");
+      },
+    };
+    boardTools.push(readBoardTool);
+  }
+  if (opts?.claimCard && opts?.agentId) {
+    const claimCardTool: AgentTool<any, any> = {
+      name: "claim_card",
+      description: "Claim an unassigned task card from the board for yourself. The card must be in 'backlog' status and unassigned.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          cardId: { type: "string", description: "The ID of the card to claim" },
+        },
+        required: ["cardId"],
+      },
+      async execute(input: any) {
+        const ok = opts.claimCard!(input.cardId, opts.agentId!);
+        return ok ? `Claimed card ${input.cardId}.` : `Could not claim card ${input.cardId} — it may already be assigned or not in backlog.`;
+      },
+    };
+    boardTools.push(claimCardTool);
+  }
+
+  // ── Event feed tool ────────────────────────────────────────────────
+  const eventFeedPath = opts?.eventFeedPath;
+  const eventTools: AgentTool<any, any>[] = [];
+  if (eventFeedPath) {
+    const readEventsTool: AgentTool<any, any> = {
+      name: "read_events",
+      description: "Read recent office events (task completions, errors, hires, etc.). Returns the last 10 events.",
+      inputSchema: { type: "object", properties: {} },
+      async execute() {
+        try {
+          const content = await readFile(eventFeedPath, "utf-8");
+          const lines = content.trim().split("\n").filter(Boolean).slice(-10);
+          if (lines.length === 0) return "No recent office events.";
+          return lines.map((l) => {
+            try { const e = JSON.parse(l); return `[${new Date(e.ts).toISOString()}] ${e.type}: ${e.text}`; } catch { return l; }
+          }).join("\n");
+        } catch {
+          return "No recent office events.";
+        }
+      },
+    };
+    eventTools.push(readEventsTool);
+  }
+
+  const baseWithWorld = [...baseWithMessaging, ...boardTools, ...eventTools];
+
   if (opts?.railway) {
     const railwayTools = await wrapRailwayTools();
     if (railwayTools.length > 0) {
-      return [...base, ...railwayTools];
+      return [...baseWithWorld, ...railwayTools];
     }
   }
 
-  return base;
+  return baseWithWorld;
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
@@ -216,6 +441,16 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   try {
     let agent = agents.get(agentId);
     if (!agent) {
+      const tools = await makeTools(ctx.cwd, {
+        railway: ctx.railway,
+        sharedCwd: ctx.sharedCwd,
+        workspaceRoot: resolve(ctx.cwd, ".."),
+        agentId,
+        getBoard: ctx.getBoard,
+        claimCard: ctx.claimCard,
+        eventFeedPath: ctx.eventFeedPath,
+      });
+      console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model}`);
       agent = new Agent({
         providerId: "openai-compatible",
         modelId: ctx.model,
@@ -223,7 +458,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         baseUrl: SWARMS_BASE_URL,
         headers: { "x-api-key": apiKey },
         systemPrompt: ctx.systemPrompt,
-        tools: await makeTools(ctx.cwd, { railway: ctx.railway }),
+        tools,
         maxIterations: ctx.settings.cline.maxIterations,
         completionPolicy: {
           completionGuard: () => "You haven't called submit_and_exit yet. If you have completed the task, call submit_and_exit with a summary of what you did. If you still need to do work, use your tools to do it.",
@@ -232,7 +467,11 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
       const stored = messageStore.get(agentId);
       if (stored && stored.length > 0) {
-        agent.restore(stored as any);
+        const compacted = compactMessages(stored);
+        if (compacted.length !== stored.length) {
+          console.log(`[cline:${agentId}] compacted ${stored.length} → ${compacted.length} messages`);
+        }
+        agent.restore(compacted as any);
       }
 
       agents.set(agentId, agent);
@@ -261,6 +500,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           // Accumulate text deltas — we yield the full message when it completes
           break;
         case "assistant-message":
+          console.log(`[cline:${agentId}] assistant-message: content types=[${ev.message.content.map((p: any) => p.type).join(",")}] content=${JSON.stringify(ev.message.content).slice(0, 500)}`);
           for (const part of ev.message.content) {
             if (part.type === "text" && part.text.trim()) {
               lastText = part.text.trim();

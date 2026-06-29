@@ -7,6 +7,8 @@ import type { GameSettings } from "../../shared/types.js";
 
 export interface RunContext {
   cwd: string;
+  /** Path to the shared workspace for multi-agent collaboration. */
+  sharedCwd: string;
   model: string;
   systemPrompt: string;
   abort: AbortController;
@@ -21,6 +23,12 @@ export interface RunContext {
   railway: boolean;
   /** Per-user API key. Falls back to global SWARMS_API_KEY if null. */
   apiKey: string | null;
+  /** Returns the current task board as JSON (for read_board tool). */
+  getBoard?: () => { id: string; title: string; status: string; assignedAgentId: string | null }[];
+  /** Claim a task card for this agent. Returns true if successful. */
+  claimCard?: (cardId: string, agentId: string) => boolean;
+  /** Path to the shared event feed (events.jsonl). */
+  eventFeedPath?: string;
 }
 
 export type ProviderRunner = (

@@ -300,7 +300,7 @@ wss.on("connection", async (ws, req) => {
       // HQ2 is a social lobby — no hiring, assigning, etc.
       const isVisitor = tenants.isRoomVisitor(sess.user.id);
       const isInHq2 = sess.roomId === "hq2";
-      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "update_appearance", "clear", "clear_all"]);
+      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "clear", "clear_all"]);
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
         return;
@@ -323,6 +323,7 @@ wss.on("connection", async (ws, req) => {
           const appearance = msg.player?.appearance ?? null;
           const changed =
             !sess.player || sess.player.name !== name || sess.player.workspace !== workspace;
+          const appearanceChanged = appearance && (!sess.player || !sess.player.appearance || JSON.stringify(sess.player.appearance) !== JSON.stringify(appearance));
           if (changed) {
             sess.player = { name, workspace, appearance };
             manager.bossName = name;
@@ -333,6 +334,26 @@ wss.on("connection", async (ws, req) => {
             sess.player = { name: sess.player.name, workspace: sess.player.workspace, appearance };
             save.setPlayer(sess.player);
             sess.broadcast({ type: "player", player: sess.player });
+          }
+          // Broadcast appearance change to room peers
+          if (appearanceChanged && sess.roomId) {
+            const room = tenants.getRoom(sess.roomId);
+            if (room) {
+              const rp = room.players.get(sess.user.id);
+              if (rp) rp.appearance = appearance;
+              for (const [pid] of room.players) {
+                if (pid === sess.user.id) continue;
+                const otherSess = tenants.get(pid);
+                if (otherSess) {
+                  otherSess.broadcast({
+                    type: "player_appearance",
+                    roomId: sess.roomId,
+                    userId: sess.user.id,
+                    appearance,
+                  });
+                }
+              }
+            }
           }
           break;
         }
@@ -352,6 +373,26 @@ wss.on("connection", async (ws, req) => {
           sess.player = { ...sess.player, appearance: msg.appearance };
           save.setPlayer(sess.player);
           sess.broadcast({ type: "player", player: sess.player });
+          // Update RoomPlayer appearance and notify others in the room
+          if (sess.roomId) {
+            const room = tenants.getRoom(sess.roomId);
+            if (room) {
+              const rp = room.players.get(sess.user.id);
+              if (rp) rp.appearance = msg.appearance;
+              for (const [pid] of room.players) {
+                if (pid === sess.user.id) continue;
+                const otherSess = tenants.get(pid);
+                if (otherSess) {
+                  otherSess.broadcast({
+                    type: "player_appearance",
+                    roomId: sess.roomId,
+                    userId: sess.user.id,
+                    appearance: msg.appearance,
+                  });
+                }
+              }
+            }
+          }
           break;
         }
         case "assign":
@@ -681,6 +722,52 @@ wss.on("connection", async (ws, req) => {
                   y: msg.y,
                   dir: msg.dir,
                 });
+              }
+            }
+          }
+          break;
+        }
+        case "npc_update": {
+          // Relay NPC position/state to other players in the same room
+          if (sess.roomId) {
+            const room = tenants.getRoom(sess.roomId);
+            if (room) {
+              for (const [pid] of room.players) {
+                if (pid === sess.user.id) continue;
+                const otherSess = tenants.get(pid);
+                if (otherSess) {
+                  otherSess.broadcast({
+                    type: "npc_state",
+                    npcId: msg.npcId,
+                    x: msg.x,
+                    y: msg.y,
+                    dir: msg.dir,
+                    state: msg.state,
+                  });
+                }
+              }
+            }
+          }
+          break;
+        }
+        case "tile_update": {
+          // Persist tile override and broadcast to other players in the room
+          activeManager.applyTileOverride(msg.cx, msg.cy, msg.tileIndex, msg.tile);
+          if (sess.roomId) {
+            const room = tenants.getRoom(sess.roomId);
+            if (room) {
+              for (const [pid] of room.players) {
+                if (pid === sess.user.id) continue;
+                const otherSess = tenants.get(pid);
+                if (otherSess) {
+                  otherSess.broadcast({
+                    type: "tile_updated",
+                    cx: msg.cx,
+                    cy: msg.cy,
+                    tileIndex: msg.tileIndex,
+                    tile: msg.tile,
+                  });
+                }
               }
             }
           }
