@@ -745,6 +745,7 @@ export class OfficeScene extends Phaser.Scene {
                 console.log("[scene] theme changed — restarting scene");
                 if (desiredTheme === "agenthq") achievements.unlock("agenthq_mode");
                 this.ready = false;
+                this.remotePlayers.clear();
                 this.scene.restart();
                 return;
               }
@@ -3400,6 +3401,12 @@ export class OfficeScene extends Phaser.Scene {
       seen.add(userId);
 
       let entry = this.remotePlayers.get(userId);
+
+      // If the sprite was destroyed (e.g. scene restart), drop the stale entry
+      if (entry && !entry.sprite.active) {
+        this.remotePlayers.delete(userId);
+        entry = undefined;
+      }
 
       // Determine the correct texture key for this player
       let texKey = "boss";

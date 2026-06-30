@@ -3,6 +3,7 @@ import { CHAR_VARIANTS } from "../../../shared/types";
 import { CHAR_FRAME_W, CHAR_FRAME_H, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
+import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
@@ -104,7 +105,23 @@ export class BootScene extends Phaser.Scene {
 
     const processNextStep = () => {
       if (stepIndex >= allSteps.length) {
-        this.scene.start("office");
+        updateBar(1, "Ready!");
+        // Don't start the office scene until auth is resolved.
+        // If auth is enabled, wait for a session; otherwise start immediately.
+        if (isAuthEnabled) {
+          const tryStart = (state: AuthState) => {
+            if (state.loading) return;
+            if (state.session) {
+              offAuth();
+              this.scene.start("office");
+            }
+            // If no session, the auth overlay is showing — don't start office.
+            // When the user logs in, onAuthChange fires again and we start.
+          };
+          const offAuth = onAuthChange(tryStart);
+        } else {
+          this.scene.start("office");
+        }
         return;
       }
 

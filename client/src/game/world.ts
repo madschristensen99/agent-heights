@@ -28,6 +28,14 @@ export interface WorldOffset {
 
 export const LOAD_RADIUS = 2;
 const UNLOAD_RADIUS = 3;
+
+/**
+ * Global cache of generated chunk data, keyed by `${worldSeed}:${cx},${cy}`.
+ * Survives scene restarts (room changes, theme switches) so chunks are only
+ * generated once per world.  Stores raw generated tiles (before overrides);
+ * overrides are re-applied on each loadChunk call.
+ */
+const globalChunkCache = new Map<string, Chunk>();
 const MAX_CHUNKS_PER_FRAME = 3;
 const MAX_LIGHTS_PER_CHUNK = 8;
 const MAX_HP = 100;
@@ -905,7 +913,10 @@ export class WorldLayer {
       this.worker.onmessage = (e: MessageEvent) => {
         const { cx, cy, biome, tiles } = e.data;
         const key = `${cx},${cy}`;
-        this.pendingChunks.set(key, { cx, cy, biome, tiles });
+        const chunk: Chunk = { cx, cy, biome, tiles };
+        // Cache raw generated data globally (before overrides)
+        globalChunkCache.set(`${this.store.worldSeed}:${key}`, chunk);
+        this.pendingChunks.set(key, chunk);
         this.workerRequested.delete(key);
       };
     } catch {
@@ -1187,8 +1198,9 @@ export class WorldLayer {
     for (const n of needed) {
       if (loaded >= MAX_CHUNKS_PER_FRAME) break;
       const key = `${n.cx},${n.cy}`;
-      if (this.pendingChunks.has(key)) {
-        // Worker has pre-generated the tiles — render only (no CPU spike)
+      const cacheKey = `${this.store.worldSeed}:${key}`;
+      if (this.pendingChunks.has(key) || globalChunkCache.has(cacheKey)) {
+        // Worker pre-generated or globally cached — render only (no CPU spike)
         this.loadChunk(n.cx, n.cy);
         loaded++;
       } else if (!this.workerRequested.has(key) && !this.worker) {
@@ -1273,10 +1285,25 @@ export class WorldLayer {
     const key = `${cx},${cy}`;
     if (this.chunks.has(key)) return;
 
+    // Check global cache first — chunk data persists across scene restarts
+    const cacheKey = `${this.store.worldSeed}:${key}`;
+    const cached = globalChunkCache.get(cacheKey);
+    if (cached) {
+      // Clone tiles so overrides don't mutate the cached copy
+      const chunk: Chunk = { cx, cy, biome: cached.biome, tiles: [...cached.tiles] };
+      this.applyChunkOverrides(chunk);
+      this.chunks.set(key, chunk);
+      this.scanTennisTiles(chunk);
+      this.renderChunk(chunk);
+      return;
+    }
+
     // Use pre-generated tiles from the worker if available
     const pending = this.pendingChunks.get(key);
     if (pending) {
       this.pendingChunks.delete(key);
+      // Cache raw data before overrides
+      globalChunkCache.set(cacheKey, { cx, cy, biome: pending.biome, tiles: pending.tiles });
       this.applyChunkOverrides(pending);
       this.chunks.set(key, pending);
       this.scanTennisTiles(pending);
@@ -1286,6 +1313,8 @@ export class WorldLayer {
 
     // Fallback: generate synchronously on the main thread
     const chunk = generateChunk(this.store.worldSeed, cx, cy);
+    // Cache raw data before overrides
+    globalChunkCache.set(cacheKey, { cx, cy, biome: chunk.biome, tiles: chunk.tiles });
     this.applyChunkOverrides(chunk);
     this.chunks.set(key, chunk);
     this.scanTennisTiles(chunk);
@@ -1309,6 +1338,9 @@ export class WorldLayer {
     if (!this.worker) return;
     const key = `${cx},${cy}`;
     if (this.chunks.has(key) || this.pendingChunks.has(key) || this.workerRequested.has(key)) return;
+    // Skip worker request if already cached globally — loadChunk will use it
+    const cacheKey = `${this.store.worldSeed}:${key}`;
+    if (globalChunkCache.has(cacheKey)) return;
     this.workerRequested.add(key);
     this.worker.postMessage({ worldSeed: this.store.worldSeed, cx, cy });
   }
