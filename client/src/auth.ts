@@ -154,9 +154,9 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   for (let i = 0; i < 4; i++) {
     const sprite = document.createElement("div");
     sprite.style.cssText = `
-      width: 48px; height: 48px;
+      width: 56px; height: 84px;
       background-image: url(/assets/characters/char-${i}.png);
-      background-size: 384px 288px;
+      background-size: 448px 336px;
       background-position: 0 0;
       background-repeat: no-repeat;
       image-rendering: pixelated;
