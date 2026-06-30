@@ -156,7 +156,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
     sprite.style.cssText = `
       width: 48px; height: 48px;
       background-image: url(/assets/characters/char-${i}.png);
-      background-size: 288px 216px;
+      background-size: 384px 288px;
       background-position: 0 0;
       background-repeat: no-repeat;
       image-rendering: pixelated;
