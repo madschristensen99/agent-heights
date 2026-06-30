@@ -145,24 +145,22 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
     };
   }
 
-  // Character sprites row (matches OG image: char-0 through char-4)
+  // Character sprites row (matches OG image: char-0 through char-3)
   const charRow = document.createElement("div");
   charRow.style.cssText = `
-    display: flex; gap: 20px; justify-content: center; margin-bottom: 1.8rem;
+    display: flex; gap: 12px; justify-content: center; margin-bottom: 1.2rem;
     position: relative; z-index: 1;
   `;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 4; i++) {
     const sprite = document.createElement("div");
     sprite.style.cssText = `
-      width: 64px; height: 64px;
+      width: 48px; height: 48px;
       background-image: url(/assets/characters/char-${i}.png);
-      background-size: 384px 288px;
+      background-size: 288px 216px;
       background-position: 0 0;
       background-repeat: no-repeat;
       image-rendering: pixelated;
-      transform: scale(2);
-      transform-origin: center;
-      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
     `;
     charRow.appendChild(sprite);
   }
