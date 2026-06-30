@@ -307,7 +307,7 @@ wss.on("connection", async (ws, req) => {
       }
       // Chat is allowed in HQ2 and as a visitor, but only works in private rooms
       if (isInHq2 && msg.type === "chat") {
-        sess.broadcast({ type: "toast", text: "No agents in HQ2 — visit an office to chat." });
+        sess.broadcast({ type: "toast", text: "No agents in HQ² — visit an office to chat." });
         return;
       }
 

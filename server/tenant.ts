@@ -67,7 +67,7 @@ export class TenantManager {
     // Create the global HQ2 room on startup
     this.rooms.set(HQ2_ROOM_ID, {
       id: HQ2_ROOM_ID,
-      name: "HQ2 — Multiplayer Lobby",
+      name: "HQ² — Multiplayer Lobby",
       ownerId: "system",
       players: new Map(),
       isPrivate: false,
