@@ -729,6 +729,7 @@ export class Hud {
       `).join("");
 
     const isHq2 = this.store.roomId === "hq2";
+    const isInOffice = this.store.privateOfficeId != null && this.store.roomId === this.store.privateOfficeId;
 
     overlay.innerHTML = `
       <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;">
@@ -749,9 +750,23 @@ export class Hud {
           <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">SWITCH ROOM</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 HQ² LOBBY</button>
-            <button class="btn" id="room-office-btn" style="font-size:0.8rem;">🏠 MY OFFICE</button>
+            <button class="btn ${isInOffice ? 'primary' : ''}" id="room-office-btn" style="font-size:0.8rem;${isInOffice ? 'opacity:0.6;pointer-events:none;' : ''}">🏠 MY OFFICE</button>
           </div>
         </div>
+
+        ${this.store.roomsList.filter(r => r.roomId !== "hq2" && r.roomId !== this.store.privateOfficeId).length > 0 ? `
+        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">YOUR ROOMS</div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            ${this.store.roomsList
+              .filter(r => r.roomId !== "hq2" && r.roomId !== this.store.privateOfficeId)
+              .map(r => {
+                const isCurrent = this.store.roomId === r.roomId;
+                return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">${r.name}</button>`;
+              }).join("")}
+          </div>
+        </div>
+        ` : ""}
 
         <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
           <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">CREATE NEW ROOM</div>
@@ -804,6 +819,15 @@ export class Hud {
       }
       close();
     });
+
+    // Switch to a room from the rooms list
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-room-id]")) {
+      btn.addEventListener("click", () => {
+        const roomId = btn.dataset.roomId!;
+        this.net.send({ type: "switch_room", roomId });
+        close();
+      });
+    }
 
     // Create room
     document.getElementById("room-create-btn")!.addEventListener("click", () => {
@@ -1376,6 +1400,16 @@ export class Hud {
     this.lastSelected = agent.id;
     this.lastLogCount = logs.length;
     this.lastLogTail = logs.length ? logs[logs.length - 1] : null;
+
+    // Disable chat input when agent is busy — prevents rate-limit toast spam
+    const chatInput = document.getElementById("d-chat") as HTMLInputElement | null;
+    const sayBtn = document.getElementById("d-say") as HTMLButtonElement | null;
+    const isBusy = agent.status === "thinking" || agent.status === "working";
+    if (chatInput) {
+      chatInput.disabled = isBusy;
+      chatInput.placeholder = isBusy ? `${agent.name} is busy…` : "Say something… (chat, not a task)";
+    }
+    if (sayBtn) sayBtn.disabled = isBusy;
   }
 
   private renderFeed(): void {

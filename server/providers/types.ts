@@ -29,6 +29,8 @@ export interface RunContext {
   claimCard?: (cardId: string, agentId: string) => boolean;
   /** Path to the shared event feed (events.jsonl). */
   eventFeedPath?: string;
+  /** If true, this is a casual chat — no tools, 1 iteration, short timeout. */
+  isChat?: boolean;
 }
 
 export type ProviderRunner = (

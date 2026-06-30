@@ -63,6 +63,7 @@ export class Store {
   roomPlayers = new Map<string, PlayerPresence>();
   pendingInvite: PendingInvite | null = null;
   privateOfficeId: string | null = null;
+  roomsList: { roomId: string; name: string; isPrivate: boolean }[] = [];
 
   private listeners = new Set<Listener>();
   private toastListeners = new Set<(text: string) => void>();
@@ -88,6 +89,7 @@ export class Store {
     this.roomPlayers.clear();
     this.pendingInvite = null;
     this.privateOfficeId = null;
+    this.roomsList = [];
     this.hasApiKey = false;
     this.railwayData = null;
     this.railwayError = null;
@@ -392,6 +394,10 @@ export class Store {
       }
       case "tile_updated": {
         for (const fn of this.tileUpdatedListeners) fn(msg.cx, msg.cy, msg.tileIndex, msg.tile);
+        break;
+      }
+      case "rooms_list": {
+        this.roomsList = msg.rooms;
         break;
       }
     }

@@ -19,6 +19,16 @@ import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
 
+// ── Global error handlers ────────────────────────────────────────────────
+// Stray promise rejections from the Cline SDK or fetch calls should not
+// crash the server. Log them and continue.
+process.on("unhandledRejection", (err) => {
+  console.error("[fatal] Unhandled promise rejection:", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[fatal] Uncaught exception:", err);
+});
+
 // ── static file serving ──────────────────────────────────────────────────
 
 const MIME: Record<string, string> = {
@@ -232,6 +242,12 @@ wss.on("connection", async (ws, req) => {
   // Tell the client whether they have an API key set
   ws.send(JSON.stringify({ type: "api_key_status", hasKey: sess.apiKey != null } satisfies ServerMsg));
 
+  // Helper: send the user's list of rooms they own or have joined
+  const sendRoomsList = () => {
+    const rooms = tenants.getRoomsForUser(sess.user.id).map(r => ({ roomId: r.id, name: r.name, isPrivate: r.isPrivate }));
+    ws.send(JSON.stringify({ type: "rooms_list", rooms } satisfies ServerMsg));
+  };
+
   // Send initial room state for whatever room the user is in
   if (sess.roomId && currentRoom) {
     ws.send(JSON.stringify({
@@ -242,6 +258,7 @@ wss.on("connection", async (ws, req) => {
       privateOfficeId: sess.privateOfficeId ?? undefined,
     } satisfies ServerMsg));
   }
+  sendRoomsList();
 
   // ── Token refresh timer ──────────────────────────────────────────────
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -290,16 +307,29 @@ wss.on("connection", async (ws, req) => {
     try {
       const { manager, session: sessLog, save } = sess;
 
+      // Permission check: only private office owners can manage agents
+      // HQ2 is a social lobby — no hiring, assigning, etc.
+      const isVisitor = tenants.isRoomVisitor(sess.user.id);
+      const isInHq2 = sess.roomId === "hq2";
+
+      // Pre-check: if this is a chat message to a busy agent, reject before
+      // consuming a rate-limit token (prevents "too many requests" spam).
+      if (msg.type === "chat" && !isInHq2) {
+        const ownerSess0 = isVisitor ? tenants.getRoomOwnerSession(sess.user.id) : null;
+        const mgr0 = ownerSess0 ? ownerSess0.manager : manager;
+        const agent0 = mgr0.getAgentInfo(msg.agentId);
+        if (agent0 && (agent0.status === "thinking" || agent0.status === "working")) {
+          sess.broadcast({ type: "toast", text: `${agent0.name} is heads-down right now.` });
+          return;
+        }
+      }
+
       if (!rateLimit(sess.user.id, msg.type)) {
         const data = JSON.stringify({ type: "toast", text: "Too many requests — slow down." });
         if (ws.readyState === WebSocket.OPEN) ws.send(data);
         return;
       }
 
-      // Permission check: only private office owners can manage agents
-      // HQ2 is a social lobby — no hiring, assigning, etc.
-      const isVisitor = tenants.isRoomVisitor(sess.user.id);
-      const isInHq2 = sess.roomId === "hq2";
       const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "clear", "clear_all"]);
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
@@ -478,6 +508,17 @@ wss.on("connection", async (ws, req) => {
         }
         case "create_room": {
           const roomId = tenants.createRoom(sess.user.id, msg.name, msg.theme, true);
+          // Notify old room that the player left
+          const oldRoomId = sess.roomId;
+          if (oldRoomId) {
+            for (const p of tenants.getRoomPlayers(oldRoomId)) {
+              if (p.userId === sess.user.id) continue;
+              const otherSess = tenants.get(p.userId);
+              if (otherSess) {
+                otherSess.broadcast({ type: "player_left", roomId: oldRoomId, userId: sess.user.id });
+              }
+            }
+          }
           // Switch the creator into the new room
           const room = tenants.switchRoom(sess.user.id, roomId);
           if (room) {
@@ -488,6 +529,7 @@ wss.on("connection", async (ws, req) => {
               players: tenants.getRoomPlayers(roomId),
               privateOfficeId: sess.privateOfficeId ?? undefined,
             });
+            sendRoomsList();
           }
           break;
         }
@@ -501,6 +543,17 @@ wss.on("connection", async (ws, req) => {
           if (room.isPrivate && room.ownerId !== sess.user.id) {
             sess.broadcast({ type: "toast", text: "This is a private office. You need an invite." });
             break;
+          }
+          // Notify old room that the player left
+          const oldRoomId = sess.roomId;
+          if (oldRoomId && oldRoomId !== msg.roomId) {
+            for (const p of tenants.getRoomPlayers(oldRoomId)) {
+              if (p.userId === sess.user.id) continue;
+              const otherSess = tenants.get(p.userId);
+              if (otherSess) {
+                otherSess.broadcast({ type: "player_left", roomId: oldRoomId, userId: sess.user.id });
+              }
+            }
           }
           const joined = tenants.switchRoom(sess.user.id, msg.roomId);
           if (!joined) {
@@ -516,6 +569,7 @@ wss.on("connection", async (ws, req) => {
             players,
             privateOfficeId: sess.privateOfficeId ?? undefined,
           });
+          sendRoomsList();
           // Notify all other players in the room
           const me = players.find((p) => p.userId === sess.user.id);
           for (const p of players) {
@@ -532,6 +586,17 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "switch_room": {
+          // Notify old room that the player left
+          const oldRoomId = sess.roomId;
+          if (oldRoomId && oldRoomId !== msg.roomId) {
+            for (const p of tenants.getRoomPlayers(oldRoomId)) {
+              if (p.userId === sess.user.id) continue;
+              const otherSess = tenants.get(p.userId);
+              if (otherSess) {
+                otherSess.broadcast({ type: "player_left", roomId: oldRoomId, userId: sess.user.id });
+              }
+            }
+          }
           const room = tenants.switchRoom(sess.user.id, msg.roomId);
           if (!room) {
             sess.broadcast({ type: "toast", text: "Room not found." });
@@ -545,6 +610,7 @@ wss.on("connection", async (ws, req) => {
             players: tenants.getRoomPlayers(msg.roomId),
             privateOfficeId: sess.privateOfficeId ?? undefined,
           });
+          sendRoomsList();
           // If switching to a private room they don't own, send the owner's agent snapshot
           if (room.isPrivate && room.ownerId !== sess.user.id) {
             const ownerSess = tenants.get(room.ownerId);
@@ -658,6 +724,17 @@ wss.on("connection", async (ws, req) => {
               });
             }
             if (msg.accept) {
+              // Notify old room that the player left
+              const oldRoomId = sess.roomId;
+              if (oldRoomId && oldRoomId !== msg.roomId) {
+                for (const p of tenants.getRoomPlayers(oldRoomId)) {
+                  if (p.userId === sess.user.id) continue;
+                  const otherSess = tenants.get(p.userId);
+                  if (otherSess) {
+                    otherSess.broadcast({ type: "player_left", roomId: oldRoomId, userId: sess.user.id });
+                  }
+                }
+              }
               // Switch the accepter into the room
               const joined = tenants.switchRoom(sess.user.id, msg.roomId);
               if (joined) {
@@ -668,6 +745,7 @@ wss.on("connection", async (ws, req) => {
                   players: tenants.getRoomPlayers(msg.roomId),
                   privateOfficeId: sess.privateOfficeId ?? undefined,
                 });
+                sendRoomsList();
                 // Send the owner's agent snapshot to the visitor
                 if (ownerSess) {
                   const snap = ownerSess.manager.snapshot();

@@ -265,6 +265,11 @@ export class AgentManager {
     return { agents, logs, board };
   }
 
+  /** Get a single agent's info by ID, or null if not found. */
+  getAgentInfo(agentId: string): AgentInfo | null {
+    return this.agents.get(agentId)?.info ?? null;
+  }
+
   worldState(): WorldState {
     return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], chunkOverrides: this.chunkOverrides };
   }
@@ -1128,6 +1133,14 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
+    // Chat should be quick — abort after 30s to prevent hangs
+    const chatTimeout = setTimeout(() => {
+      if (!abort.signal.aborted) {
+        abort.abort();
+        this.log(rt, "error", "Chat timed out after 30s — try again.");
+      }
+    }, 30_000);
+
     const runner: ProviderRunner = runCline;
     const prompt = [
       `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
@@ -1145,25 +1158,11 @@ export class AgentManager {
         abort,
         settings: this.settings,
         agentId: rt.info.id,
-        sessionId: rt.info.sessionId ?? null,
-        onSession: (id) => {
-          if (rt.info.sessionId !== id) {
-            rt.info.sessionId = id;
-            this.persist();
-          }
-        },
+        sessionId: null, // Chat uses a separate agent instance — don't resume task session
+        onSession: () => {}, // Don't persist chat session ID over task session ID
         railway: false,
         apiKey: this.apiKey,
-        getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
-        claimCard: (cardId: string, agentId: string) => {
-          const card = this.board.get(cardId);
-          if (!card || card.status !== "backlog" || card.assignedAgentId) return false;
-          card.assignedAgentId = agentId;
-          card.status = "in_progress";
-          this.persistBoard();
-          this.broadcast({ type: "card", card });
-          return true;
-        },
+        isChat: true,
         eventFeedPath: join(this.workspaceRoot, "events.jsonl"),
       });
       for await (const ev of events) {
@@ -1176,6 +1175,7 @@ export class AgentManager {
         this.log(rt, "error", err instanceof Error ? err.message : String(err));
       }
     } finally {
+      clearTimeout(chatTimeout);
       rt.abort = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         this.setStatus(rt, "idle");
@@ -1187,6 +1187,14 @@ export class AgentManager {
   private async runYukiChat(rt: AgentRuntime, text: string): Promise<void> {
     const abort = new AbortController();
     rt.abort = abort;
+
+    // Yuki chat should also be quick — abort after 30s
+    const chatTimeout = setTimeout(() => {
+      if (!abort.signal.aborted) {
+        abort.abort();
+        this.log(rt, "error", "Chat timed out after 30s — try again.");
+      }
+    }, 30_000);
 
     const marketplaceUrl = process.env.MARKETPLACE_URL || "http://localhost:3000";
 
@@ -1264,6 +1272,7 @@ export class AgentManager {
       // Marketplace unreachable — fall back to regular cline chat
       await this.runClineChat(rt, text);
     } finally {
+      clearTimeout(chatTimeout);
       rt.abort = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         this.setStatus(rt, "idle");

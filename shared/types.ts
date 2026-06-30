@@ -390,7 +390,8 @@ export type ServerMsg =
   | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string }
   | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }
-  | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null };
+  | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
+  | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean }[] };
 
 export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },

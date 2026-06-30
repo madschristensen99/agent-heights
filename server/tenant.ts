@@ -353,8 +353,12 @@ export class TenantManager {
     const privateOfficeId = this.createRoom(user.id, `${player?.name ?? "Boss"}'s Office`, undefined, true);
     sess.privateOfficeId = privateOfficeId;
 
-    // Auto-join HQ2 (the global multiplayer lobby)
+    // Join HQ2 first (so the player exists in the global lobby), then
+    // immediately switch to their private office where their agents live.
+    // This ensures returning users land in their office, not HQ2, after a
+    // server restart.
     this.joinRoom(HQ2_ROOM_ID, user, player);
+    this.switchRoom(user.id, privateOfficeId);
     console.log(
       `[agent-hq] created session for user ${user.id} (${user.email ?? "no email"})` +
       (isRedisConfigured ? " [redis]" : ""),
@@ -407,21 +411,21 @@ export class TenantManager {
       clearTimeout(sess.disconnectTimer);
       sess.disconnectTimer = null;
     }
-    // Determine which room to rejoin — prefer current roomId, fall back to lastRoomIds
-    const targetRoomId = sess.roomId ?? this.lastRoomIds.get(userId);
-    if (targetRoomId) {
-      const room = this.rooms.get(targetRoomId);
-      if (room && !room.players.has(userId)) {
-        this.joinRoom(targetRoomId, sess.user, sess.player);
-        // Broadcast rejoin to others
-        const me = room.players.get(userId);
-        if (me) {
-          for (const [pid] of room.players) {
-            if (pid === userId) continue;
-            const peerSess = this.sessions.get(pid);
-            if (peerSess) {
-              peerSess.broadcast({ type: "player_joined", roomId: targetRoomId, player: me });
-            }
+    // Reconnect to the room the user was in. If the grace period expired and
+    // roomId is null, fall back to their private office (where agents live)
+    // rather than HQ2.
+    const targetRoomId = sess.roomId ?? sess.privateOfficeId ?? HQ2_ROOM_ID;
+    const room = this.rooms.get(targetRoomId);
+    if (room && !room.players.has(userId)) {
+      this.joinRoom(targetRoomId, sess.user, sess.player);
+      // Broadcast rejoin to others
+      const me = room.players.get(userId);
+      if (me) {
+        for (const [pid] of room.players) {
+          if (pid === userId) continue;
+          const peerSess = this.sessions.get(pid);
+          if (peerSess) {
+            peerSess.broadcast({ type: "player_joined", roomId: targetRoomId, player: me });
           }
         }
       }

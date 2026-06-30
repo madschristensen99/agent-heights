@@ -435,13 +435,16 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     return;
   }
 
-  const { agentId } = ctx;
+  const { agentId: rawAgentId } = ctx;
   const apiKey = ctx.apiKey ?? SWARMS_API_KEY;
+  const isChat = ctx.isChat ?? false;
+  // Use a separate agent instance for chat so it doesn't inherit task tools/iterations
+  const agentId = isChat ? `${rawAgentId}:chat` : rawAgentId;
 
   try {
     let agent = agents.get(agentId);
     if (!agent) {
-      const tools = await makeTools(ctx.cwd, {
+      const tools = isChat ? [] : await makeTools(ctx.cwd, {
         railway: ctx.railway,
         sharedCwd: ctx.sharedCwd,
         workspaceRoot: resolve(ctx.cwd, ".."),
@@ -450,7 +453,8 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         claimCard: ctx.claimCard,
         eventFeedPath: ctx.eventFeedPath,
       });
-      console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model}`);
+      const maxIter = isChat ? 1 : ctx.settings.cline.maxIterations;
+      console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
         providerId: "openai-compatible",
         modelId: ctx.model,
@@ -459,8 +463,8 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         headers: { "x-api-key": apiKey },
         systemPrompt: ctx.systemPrompt,
         tools,
-        maxIterations: ctx.settings.cline.maxIterations,
-        completionPolicy: {
+        maxIterations: maxIter,
+        completionPolicy: isChat ? undefined : {
           completionGuard: () => "You haven't called submit_and_exit yet. If you have completed the task, call submit_and_exit with a summary of what you did. If you still need to do work, use your tools to do it.",
         },
       });

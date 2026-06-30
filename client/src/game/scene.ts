@@ -185,8 +185,10 @@ export class OfficeScene extends Phaser.Scene {
     this.store = this.game.registry.get("store") as Store;
     this.net = this.game.registry.get("net") as import("../net").Net;
     this._myUserId = (this.game.registry.get("userId") as string) ?? null;
-    // HQ2 uses the agenthq (big open office) theme; private offices use user's chosen theme
-    const isHq2 = this.store.roomId === "hq2";
+    // HQ2 uses the agenthq (big open office) theme; private offices use user's chosen theme.
+    // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
+    // players start. This prevents a brief flash of the wrong room layout.
+    const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null;
     this.theme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
     this.ready = false;
 
@@ -739,6 +741,7 @@ export class OfficeScene extends Phaser.Scene {
                 return;
               }
               console.log("[scene] store emit fired — calling syncAgents. agents in store:", [...this.store.agents.keys()]);
+              if (this.store.roomId === null) return; // room_state not yet received — skip theme check
               const isHq2 = this.store.roomId === "hq2";
               const desiredTheme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
               if (desiredTheme !== this.theme) {
