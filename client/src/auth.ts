@@ -129,13 +129,15 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   overlay.id = "auth-overlay";
   overlay.style.cssText = `
     position: fixed; inset: 0; z-index: 9999;
-    display: flex; align-items: center; justify-content: center;
-    background: #0d0d0d; color: #e0e0e0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #121420 0%, #1a1e32 100%);
+    color: #e0e0e0;
     font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+    overflow-y: auto; padding: 2rem 1rem;
   `;
 
   if (!isAuthEnabled) {
-    overlay.innerHTML = `<p style="color:#666">Auth not configured — connecting in dev mode…</p>`;
+    overlay.innerHTML = `<p style="color:#666;position:relative;z-index:1;">Auth not configured — connecting in dev mode…</p>`;
     document.body.appendChild(overlay);
     return {
       show: () => { overlay.style.display = "flex"; },
@@ -143,36 +145,85 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
     };
   }
 
+  // Character sprites row (matches OG image: char-0 through char-4)
+  const charRow = document.createElement("div");
+  charRow.style.cssText = `
+    display: flex; gap: 20px; justify-content: center; margin-bottom: 1.8rem;
+    position: relative; z-index: 1;
+  `;
+  for (let i = 0; i < 5; i++) {
+    const sprite = document.createElement("div");
+    sprite.style.cssText = `
+      width: 64px; height: 64px;
+      background-image: url(/assets/characters/char-${i}.png);
+      background-size: 384px 288px;
+      background-position: 0 0;
+      background-repeat: no-repeat;
+      image-rendering: pixelated;
+      transform: scale(2);
+      transform-origin: center;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    `;
+    charRow.appendChild(sprite);
+  }
+
   overlay.innerHTML = `
-    <div style="text-align:center; max-width: 380px; width: 90vw; padding: 2rem 1.5rem; box-sizing: border-box;">
-      <h1 style="font-size: 2rem; font-weight: 800; margin-bottom: 0.25rem; letter-spacing: 0.05em;">AGENT HQ</h1>
-      <p style="color: #888; font-size: 0.85rem; margin-bottom: 1.5rem;">Sign in to manage your AI agent office</p>
-      <div id="auth-form" style="display:flex; flex-direction:column; gap:0.75rem;">
+    <div style="position:relative;z-index:1;text-align:center;max-width:400px;width:90vw;">
+      <h1 style="font-size:2.6rem;font-weight:800;margin:0 0 0.3rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HQ</h1>
+      <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 0.5rem;letter-spacing:0.15em;text-transform:uppercase;">Manage AI Agents in a Pixel-Art Office</p>
+      <div id="auth-sprites"></div>
+      <p id="auth-welcome" style="color:#7a8090;font-size:0.9rem;margin:0 0 1.5rem;">Welcome! Sign in to enter your office.</p>
+      <div id="auth-form" style="display:flex;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;">
         <input id="auth-email" type="email" placeholder="you@example.com"
-          style="padding:0.75rem 1rem; border-radius:0.5rem; border:1px solid #333; background:#1a1a1a; color:#e0e0e0; font-size:0.95rem; outline:none;" />
+          style="padding:0.75rem 1rem;border-radius:8px;border:1px solid #2a2e42;background:#121420;color:#e0e0e0;font-size:0.95rem;outline:none;transition:border-color 0.15s;" />
         <input id="auth-password" type="password" placeholder="Password"
-          style="padding:0.75rem 1rem; border-radius:0.5rem; border:1px solid #333; background:#1a1a1a; color:#e0e0e0; font-size:0.95rem; outline:none;" />
+          style="padding:0.75rem 1rem;border-radius:8px;border:1px solid #2a2e42;background:#121420;color:#e0e0e0;font-size:0.95rem;outline:none;transition:border-color 0.15s;" />
         <button id="auth-submit"
-          style="padding:0.75rem 1rem; border-radius:0.5rem; border:none; background:#e0e0e0; color:#0d0d0d; font-size:0.95rem; font-weight:600; cursor:pointer;">
+          style="padding:0.8rem 1rem;border-radius:8px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.03em;transition:filter 0.15s,transform 0.1s;">
           Sign in
         </button>
-        <div style="height:1px; background:#222; margin:0.5rem 0;"></div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin:0.25rem 0;">
+          <div style="flex:1;height:1px;background:#2a2e42;"></div>
+          <span style="color:#555;font-size:0.75rem;">or</span>
+          <div style="flex:1;height:1px;background:#2a2e42;"></div>
+        </div>
         <button id="auth-github"
-          style="padding:0.75rem 1rem; border-radius:0.5rem; border:1px solid #333; background:#1a1a1a; color:#e0e0e0; font-size:0.95rem; cursor:pointer;">
+          style="padding:0.75rem 1rem;border-radius:8px;border:1px solid #2a2e42;background:#1a1e2e;color:#e0e0e0;font-size:0.9rem;cursor:pointer;transition:border-color 0.15s;">
           Continue with GitHub
         </button>
         <button id="auth-google"
-          style="padding:0.75rem 1rem; border-radius:0.5rem; border:1px solid #333; background:#1a1a1a; color:#e0e0e0; font-size:0.95rem; cursor:pointer;">
+          style="padding:0.75rem 1rem;border-radius:8px;border:1px solid #2a2e42;background:#1a1e2e;color:#e0e0e0;font-size:0.9rem;cursor:pointer;transition:border-color 0.15s;">
           Continue with Google
         </button>
       </div>
-      <p id="auth-toggle" style="margin-top:1rem; font-size:0.85rem; color:#888; cursor:pointer;">
-        Don't have an account? <span style="color:#4f9dde;">Sign up</span>
+      <p id="auth-toggle" style="margin-top:1rem;font-size:0.85rem;color:#7a8090;cursor:pointer;">
+        Don't have an account? <span style="color:#58c866;">Sign up</span>
       </p>
-      <div id="auth-status" style="margin-top:0.5rem; font-size:0.85rem; min-height:1.2em;"></div>
+      <div id="auth-status" style="margin-top:0.5rem;font-size:0.85rem;min-height:1.2em;"></div>
     </div>
   `;
   document.body.appendChild(overlay);
+
+  // Office floor tiles at the bottom (matches OG image)
+  const floor = document.createElement("div");
+  floor.style.cssText = `
+    position: absolute; bottom: 0; left: 0; right: 0; height: 28%;
+    background-image: url(/assets/tilesets/office.png);
+    background-size: 128px 128px;
+    background-repeat: repeat;
+    opacity: 0.15;
+    pointer-events: none;
+    mask-image: linear-gradient(180deg, transparent 0%, #000 40%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 40%);
+  `;
+  overlay.appendChild(floor);
+
+  // Insert character sprites into the placeholder
+  const spritesContainer = overlay.querySelector("#auth-sprites") as HTMLDivElement;
+  if (spritesContainer) {
+    spritesContainer.style.cssText = `display:flex;justify-content:center;margin-bottom:1.5rem;`;
+    spritesContainer.appendChild(charRow);
+  }
 
   const status = overlay.querySelector("#auth-status") as HTMLDivElement;
   const emailInput = overlay.querySelector("#auth-email") as HTMLInputElement;
@@ -183,14 +234,17 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   const googleBtn = overlay.querySelector("#auth-google") as HTMLButtonElement;
 
   let isSignUp = false;
+  const welcomeText = overlay.querySelector("#auth-welcome") as HTMLParagraphElement;
 
   function updateMode(): void {
     if (isSignUp) {
       submitBtn.textContent = "Sign up";
-      toggleEl.innerHTML = `Already have an account? <span style="color:#4f9dde;">Sign in</span>`;
+      toggleEl.innerHTML = `Already have an account? <span style="color:#58c866;">Sign in</span>`;
+      if (welcomeText) welcomeText.textContent = "New here? Create an account to get started.";
     } else {
       submitBtn.textContent = "Sign in";
-      toggleEl.innerHTML = `Don't have an account? <span style="color:#4f9dde;">Sign up</span>`;
+      toggleEl.innerHTML = `Don't have an account? <span style="color:#58c866;">Sign up</span>`;
+      if (welcomeText) welcomeText.textContent = "Welcome! Sign in to enter your office.";
     }
     status.textContent = "";
   }
@@ -209,7 +263,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
       return;
     }
     status.textContent = isSignUp ? "Creating account…" : "Signing in…";
-    status.style.color = "#888";
+    status.style.color = "#7a8090";
     const { error } = isSignUp
       ? await signUpWithEmail(email, password)
       : await signInWithPassword(email, password);
@@ -218,7 +272,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
       status.style.color = "#e05d5d";
     } else if (isSignUp) {
       status.textContent = "Check your email to confirm your account.";
-      status.style.color = "#53b86b";
+      status.style.color = "#58c866";
     }
   });
 
@@ -238,6 +292,20 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   passwordInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submitBtn.click();
   });
+
+  // Hover/focus effects for dark theme
+  for (const input of [emailInput, passwordInput]) {
+    input.addEventListener("focus", () => { input.style.borderColor = "#58c866"; });
+    input.addEventListener("blur", () => { input.style.borderColor = "#2a2e42"; });
+  }
+  submitBtn.addEventListener("mouseenter", () => { submitBtn.style.filter = "brightness(1.1)"; });
+  submitBtn.addEventListener("mouseleave", () => { submitBtn.style.filter = "none"; });
+  submitBtn.addEventListener("mousedown", () => { submitBtn.style.transform = "scale(0.97)"; });
+  submitBtn.addEventListener("mouseup", () => { submitBtn.style.transform = "scale(1)"; });
+  for (const btn of [githubBtn, googleBtn]) {
+    btn.addEventListener("mouseenter", () => { btn.style.borderColor = "#58c866"; });
+    btn.addEventListener("mouseleave", () => { btn.style.borderColor = "#2a2e42"; });
+  }
 
   return {
     show: () => { overlay.style.display = "flex"; },
