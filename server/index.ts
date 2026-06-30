@@ -651,22 +651,16 @@ wss.on("connection", async (ws, req) => {
             });
           }
           // Notify players in the new room
-          for (const p of tenants.getRoomPlayers(msg.roomId)) {
+          const switchedPlayers = tenants.getRoomPlayers(msg.roomId);
+          const switchedMe = switchedPlayers.find((p) => p.userId === sess.user.id);
+          for (const p of switchedPlayers) {
             if (p.userId === sess.user.id) continue;
             const otherSess = tenants.get(p.userId);
-            if (otherSess) {
+            if (otherSess && switchedMe) {
               otherSess.broadcast({
                 type: "player_joined",
                 roomId: msg.roomId,
-                player: {
-                  userId: sess.user.id,
-                  name: sess.player?.name ?? "Boss",
-                  appearance: sess.player?.appearance ?? null,
-                  role: room.ownerId === sess.user.id ? "owner" : "member",
-                  x: 400,
-                  y: 300,
-                  dir: "down" as const,
-                },
+                player: switchedMe,
               });
             }
           }
@@ -760,22 +754,16 @@ wss.on("connection", async (ws, req) => {
                   });
                 }
                 // Notify others in the room
-                for (const p of tenants.getRoomPlayers(msg.roomId)) {
+                const invitedPlayers = tenants.getRoomPlayers(msg.roomId);
+                const invitedMe = invitedPlayers.find((p) => p.userId === sess.user.id);
+                for (const p of invitedPlayers) {
                   if (p.userId === sess.user.id) continue;
                   const otherSess = tenants.get(p.userId);
-                  if (otherSess) {
+                  if (otherSess && invitedMe) {
                     otherSess.broadcast({
                       type: "player_joined",
                       roomId: msg.roomId,
-                      player: {
-                        userId: sess.user.id,
-                        name: sess.player?.name ?? "Boss",
-                        appearance: sess.player?.appearance ?? null,
-                        role: "member",
-                        x: 400,
-                        y: 300,
-                        dir: "down" as const,
-                      },
+                      player: invitedMe,
                     });
                   }
                 }
