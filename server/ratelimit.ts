@@ -17,6 +17,7 @@ const LIMITS: Record<string, { max: number; refillPerSec: number }> = {
   assign_all: { max: 20, refillPerSec: 20 / 60 },
   chat: { max: 60, refillPerSec: 60 / 60 },
   player_move: { max: 600, refillPerSec: 10 },
+  npc_update: { max: 600, refillPerSec: 10 },
 };
 
 /** Default limit for any message type not explicitly listed. */
