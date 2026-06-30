@@ -109,16 +109,17 @@ export class BootScene extends Phaser.Scene {
         // Don't start the office scene until auth is resolved.
         // If auth is enabled, wait for a session; otherwise start immediately.
         if (isAuthEnabled) {
+          let started = false;
           const tryStart = (state: AuthState) => {
-            if (state.loading) return;
+            if (started || state.loading) return;
             if (state.session) {
-              offAuth();
+              started = true;
               this.scene.start("office");
             }
             // If no session, the auth overlay is showing — don't start office.
             // When the user logs in, onAuthChange fires again and we start.
           };
-          const offAuth = onAuthChange(tryStart);
+          onAuthChange(tryStart);
         } else {
           this.scene.start("office");
         }
