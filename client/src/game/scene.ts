@@ -304,7 +304,7 @@ export class OfficeScene extends Phaser.Scene {
     })();
 
     // Pre-allocate chunk phase slots (filled in by the "world layer" phase)
-    const chunkPhases: Array<{ name: string; fn: () => void }> = [];
+    const chunkPhases: Array<{ name: string; fn: () => void; skip?: boolean }> = [];
     for (let i = 0; i < doorChunkCount; i++) {
       chunkPhases.push({
         name: `world chunk ${i + 1}/${doorChunkCount}`,
@@ -312,7 +312,7 @@ export class OfficeScene extends Phaser.Scene {
       });
     }
 
-    const phases: Array<{ name: string; fn: () => void }> = [
+    const phases: Array<{ name: string; fn: () => void; skip?: boolean }> = [
       {
         name: "textures & animations",
         fn: () => {
@@ -622,12 +622,30 @@ export class OfficeScene extends Phaser.Scene {
           const doorChunks = this.world.getDoorChunkList();
           this.world.preGenerateChunks(doorChunks);
 
-          // Fill in the pre-allocated chunk phase slots with actual chunk data
-          for (let i = 0; i < doorChunks.length && i < chunkPhases.length; i++) {
-            const c = doorChunks[i];
-            chunkPhases[i].fn = () => {
-              this.world.loadSingleChunk(c.cx, c.cy);
+          // Check if all door chunks already have cached canvas textures.
+          // If so, load them all in a single phase and skip the rest — this
+          // makes re-entering a lobby near-instant instead of showing N
+          // "Building world chunk…" phases.
+          const allCached = doorChunks.every(c =>
+            this.textures.exists(`chunk-rt-${this.store.worldSeed}:${c.cx},${c.cy}`),
+          );
+
+          if (allCached) {
+            chunkPhases[0].name = `cached chunks (×${doorChunks.length})`;
+            chunkPhases[0].fn = () => {
+              for (const c of doorChunks) this.world.loadSingleChunk(c.cx, c.cy);
             };
+            for (let i = 1; i < chunkPhases.length; i++) {
+              chunkPhases[i].skip = true;
+            }
+          } else {
+            // Fill in the pre-allocated chunk phase slots with actual chunk data
+            for (let i = 0; i < doorChunks.length && i < chunkPhases.length; i++) {
+              const c = doorChunks[i];
+              chunkPhases[i].fn = () => {
+                this.world.loadSingleChunk(c.cx, c.cy);
+              };
+            }
           }
         },
       },
@@ -835,6 +853,15 @@ export class OfficeScene extends Phaser.Scene {
       if (phaseIndex >= phases.length) return;
 
       const phase = phases[phaseIndex];
+
+      // Skip phases marked as skip (e.g. cached chunk phases) — process
+      // them instantly without a frame delay.
+      if (phase.skip) {
+        phaseIndex++;
+        processNextPhase();
+        return;
+      }
+
       const progress = phaseIndex / totalPhases;
       updateLoadBar(progress, `Building ${phase.name}…`);
 

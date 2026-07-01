@@ -922,6 +922,10 @@ export class WorldLayer {
     } catch {
       this.worker = null;
     }
+
+    // Clean up on scene shutdown (restart) — terminates worker, destroys
+    // lights/vfx/audio/hud, and clears per-instance chunk state.
+    this.scene.events.once("shutdown", () => this.destroy());
   }
 
   /** Get hostility level at a pixel position (0–5). */
@@ -1016,6 +1020,8 @@ export class WorldLayer {
     // Also track locally in the store
     if (!this.store.chunkOverrides[key]) this.store.chunkOverrides[key] = {};
     this.store.chunkOverrides[key][tileIndex] = newTile;
+    // Invalidate cached canvas texture so renderChunk redraws with the new tile
+    this.invalidateChunkTexture(cx, cy);
     // re-render the chunk to reflect the change
     const oldContainer = this.chunkGraphics.get(key);
     if (oldContainer) {
@@ -1036,6 +1042,7 @@ export class WorldLayer {
     const chunk = this.chunks.get(key);
     if (chunk) {
       chunk.tiles[tileIndex] = tile;
+      this.invalidateChunkTexture(cx, cy);
       const oldContainer = this.chunkGraphics.get(key);
       if (oldContainer) {
         oldContainer.destroy(true);
@@ -1366,9 +1373,23 @@ export class WorldLayer {
     }
   }
 
+  /** Texture cache key for a chunk's static tile rendering. */
+  private chunkTexKey(cx: number, cy: number): string {
+    return `chunk-rt-${this.store.worldSeed}:${cx},${cy}`;
+  }
+
+  /** Remove a cached chunk canvas texture so the next renderChunk redraws it. */
+  private invalidateChunkTexture(cx: number, cy: number): void {
+    const texKey = this.chunkTexKey(cx, cy);
+    if (this.scene.textures.exists(texKey)) {
+      this.scene.textures.remove(texKey);
+    }
+  }
+
   private renderChunk(chunk: Chunk): void {
     const key = `${chunk.cx},${chunk.cy}`;
     const chunkPxSize = CHUNK_SIZE * TILE_PX;
+    const texKey = this.chunkTexKey(chunk.cx, chunk.cy);
     const container = this.scene.add.container(0, 0).setDepth(-1);
     const ox = chunk.cx * CHUNK_SIZE * TILE_PX + this.offset.x;
     const oy = chunk.cy * CHUNK_SIZE * TILE_PX + this.offset.y;
@@ -1395,39 +1416,79 @@ export class WorldLayer {
       return tile;
     };
 
-    // Single RenderTexture for all static tiles — one draw call instead of ~1024 sprites
-    const rt = this.scene.add.renderTexture(ox, oy, chunkPxSize, chunkPxSize);
-    rt.setOrigin(0, 0);
+    // Render static tiles to a persistent canvas texture (survives scene restarts).
+    // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
+    if (!this.scene.textures.exists(texKey)) {
+      const canvasTex = this.scene.textures.createCanvas(texKey, chunkPxSize, chunkPxSize);
+      if (canvasTex) {
+        const ctx = canvasTex.getContext();
+        const worldTilesTex = this.scene.textures.get("world-tiles");
 
+        const drawTexToCanvas = (textureKey: string, px: number, py: number) => {
+          if (!this.scene.textures.exists(textureKey)) return;
+          const tex = this.scene.textures.get(textureKey);
+          const fr = tex.get(0);
+          if (fr) {
+            ctx.drawImage(
+              fr.source.image as CanvasImageSource,
+              fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+              px, py, TILE_PX, TILE_PX,
+            );
+          }
+        };
+
+        for (let y = 0; y < CHUNK_SIZE; y++) {
+          for (let x = 0; x < CHUNK_SIZE; x++) {
+            const tile = chunk.tiles[y * CHUNK_SIZE + x];
+            const px = x * TILE_PX;
+            const py = y * TILE_PX;
+            const frame = tileToFrame(tile);
+
+            // Draw base tile
+            const fr = worldTilesTex.get(frame);
+            if (fr) {
+              ctx.drawImage(
+                fr.source.image as CanvasImageSource,
+                fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+                px, py, TILE_PX, TILE_PX,
+              );
+            }
+
+            // Tennis objects (ball/racket/net) sit on court surface, not grass
+            if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
+              drawTexToCanvas("tennis-court", px, py);
+            }
+
+            // Draw overlay textures (golf items, trees, etc.)
+            const overlayKey = overlayTextures[tile];
+            if (overlayKey) {
+              drawTexToCanvas(overlayKey, px, py);
+            }
+          }
+        }
+        canvasTex.refresh();
+      }
+    }
+
+    // Create an Image from the (now cached) canvas texture — one GPU draw call
+    const img = this.scene.add.image(ox, oy, texKey);
+    img.setOrigin(0, 0);
+    container.add(img);
+
+    // Water animation sprites and light sources are dynamic — always recreated.
+    // Water: only create sprites for a subset of tiles to limit per-frame overhead.
+    // The static frame is already baked into the canvas texture.
     for (let y = 0; y < CHUNK_SIZE; y++) {
       for (let x = 0; x < CHUNK_SIZE; x++) {
         const tile = chunk.tiles[y * CHUNK_SIZE + x];
         const px = x * TILE_PX;
         const py = y * TILE_PX;
-        const frame = tileToFrame(tile);
 
-        // Draw base tile onto the RenderTexture
-        rt.drawFrame("world-tiles", frame, px, py);
-
-        // Tennis objects (ball/racket/net) sit on court surface, not grass
-        if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
-          rt.draw("tennis-court", px, py);
-        }
-
-        // Water tiles: keep a separate animated sprite on top of the RT
-        // Only create sprites for a subset of water tiles to limit per-frame
-        // animation overhead. The static frame is already on the RT.
         if (tile === TILE.WATER && (x % 3 === 0) && (y % 3 === 0)) {
           const waterSprite = this.scene.add.sprite(ox + px, oy + py, "world-tiles", 21);
           waterSprite.setOrigin(0, 0);
           waterSprite.play({ key: "water-anim", repeat: -1 }, true);
           container.add(waterSprite);
-        }
-
-        // Draw overlay textures onto the RT (golf items, trees, etc.)
-        const overlayKey = overlayTextures[tile];
-        if (overlayKey) {
-          rt.draw(overlayKey, px, py);
         }
 
         // Add tile-based light sources for special tiles (capped per chunk for perf)
@@ -1445,7 +1506,6 @@ export class WorldLayer {
       }
     }
 
-    container.add(rt);
     this.chunkGraphics.set(key, container);
     this.chunkLights.set(key, chunkLightList);
   }
@@ -1539,6 +1599,7 @@ export class WorldLayer {
           this.chunkGraphics.delete(key);
         }
         this.removeChunkLights(key);
+        this.invalidateChunkTexture(chunk.cx, chunk.cy);
         this.renderChunk(chunk);
       }
     }
@@ -2405,7 +2466,11 @@ export class WorldLayer {
     return pool[seed];
   }
 
+  private _destroyed = false;
+
   destroy(): void {
+    if (this._destroyed) return;
+    this._destroyed = true;
     this.worker?.terminate();
     this.worker = null;
     for (const key of this.chunkLights.keys()) this.removeChunkLights(key);

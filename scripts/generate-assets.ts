@@ -2103,8 +2103,8 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
   // ===== ROUNDED CHIBI (64x96) — detailed, crisp edges =====
 
   if (d === "down") {
-    // ---- HEAD: round dome with solid outline ----
-    ci(hx(32), hy(18), 17, OUTLINE);
+    // ---- HEAD: round dome with outlined circle ----
+    ciO(hx(32), hy(18), 17, pal.skin);
     // Face
     el(hx(32), hy(22), 13, 12, pal.skin);
     // Hair (per-style)
@@ -2235,8 +2235,8 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
     }
 
   } else if (d === "up") {
-    // ---- HEAD: all hair, solid outline ----
-    ci(hx(32), hy(18), 17, OUTLINE);
+    // ---- HEAD: all hair, outlined circle ----
+    ciO(hx(32), hy(18), 17, pal.hair);
     drawHairUp();
     drawHeadFeature("up");
     // Accessory
@@ -2314,7 +2314,7 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
 
   } else {
     // ---- RIGHT PROFILE ----
-    ci(hx(32), hy(18), 17, OUTLINE);
+    ciO(hx(32), hy(18), 17, pal.skin);
     // Face
     el(hx(35), hy(24), 11, 9, pal.skin);
     // Hair (per-style)
