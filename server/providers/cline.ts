@@ -454,6 +454,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
   try {
     let agent = agents.get(agentId);
+    const isExisting = !!agent;
     if (!agent) {
       const submitState = { called: false, verified: false, callCount: 0 };
       const tools = isChat ? [] : await makeTools(ctx.cwd, {
@@ -560,8 +561,9 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       }
     });
 
-    // Start the run (continue if session exists, otherwise fresh run)
-    const runPromise = ctx.sessionId
+    // Start the run — use continue() if the agent already exists (has prior messages),
+    // or if a sessionId was explicitly provided. Otherwise start fresh with run().
+    const runPromise = (ctx.sessionId || isExisting)
       ? agentInstance.continue(task)
       : agentInstance.run(task);
 

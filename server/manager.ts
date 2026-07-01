@@ -25,6 +25,7 @@ import type { Persistence, SaveState } from "./persistence.js";
 
 const MAX_LOG = 500;
 const DONE_LINGER_MS = 6000;
+const TASK_IDLE_TIMEOUT_MS = 90 * 1000; // Abort if no events arrive for 90s (model hung or rate-limited)
 
 const TITLES = [
   "Code Gremlin",
@@ -816,6 +817,21 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
+    // Abort the task if no events arrive for 90s — the model is hung or rate-limited.
+    // The timer resets on every event, so long tasks with active output are fine.
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const idleAbort = () => {
+      if (!abort.signal.aborted) {
+        abort.abort();
+        this.log(rt, "error", `No response from model for ${TASK_IDLE_TIMEOUT_MS / 1000}s — aborted (possible rate limit or API hang).`);
+      }
+    };
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(idleAbort, TASK_IDLE_TIMEOUT_MS);
+    };
+    resetIdleTimer();
+
     const runner: ProviderRunner = runCline;
     const slug = this.slugFor(rt);
     const systemPrompt = this.buildSystemPrompt(rt);
@@ -880,6 +896,7 @@ export class AgentManager {
 
       for await (const ev of events) {
         if (abort.signal.aborted) return;
+        resetIdleTimer();
         if (rt.info.status === "thinking") this.setStatus(rt, "working");
         console.log(`[manager:${rt.info.id}] event: kind=${ev.kind} text=${ev.text?.slice(0, 100)}`);
 
@@ -921,6 +938,7 @@ export class AgentManager {
         this.log(rt, "error", err instanceof Error ? err.message : String(err));
       }
     } finally {
+      if (idleTimer) clearTimeout(idleTimer);
       console.log(`[manager:${rt.info.id}] finally: sawError=${sawError} aborted=${abort.signal.aborted} exists=${this.agents.has(rt.info.id)}`);
       rt.abort = null;
       rt.handoffTo = null;
