@@ -1571,11 +1571,11 @@ const BOSS_PALETTE: CharPalette = {
 };
 
 const YUKI_PALETTE: CharPalette = {
-  skin: "#f2c39b", hair: "#1a1a2a", shirt: "#c44a4a", shirtShade: "#a83a3a", pants: "#c44a4a", eyeColor: "#3a9a4e", hairStyle: "long", accessory: "headband", headFeature: "none", beard: "none",
+  skin: "#f2c39b", hair: "#1a1a2a", shirt: "#c44a4a", shirtShade: "#a83a3a", pants: "#c44a4a", eyeColor: "#3a9a4e", hairStyle: "ponytail", accessory: "headband", headFeature: "none", beard: "none",
 };
 
 const HERMES_PALETTE: CharPalette = {
-  skin: "#e8c5a0", hair: "#3a2a1a", shirt: "#4a5a3a", shirtShade: "#3a4a2a", pants: "#2a2a3a", eyeColor: "#6a8a3a", hairStyle: "long", accessory: "glasses", headFeature: "none", beard: "full_beard", bodyType: "fat",
+  skin: "#e8c5a0", hair: "#3a2a1a", shirt: "#4a5a3a", shirtShade: "#3a4a2a", pants: "#2a2a3a", eyeColor: "#6a8a3a", hairStyle: "balding", accessory: "glasses", headFeature: "none", beard: "full_beard", bodyType: "fat",
 };
 
 const CW = 64;
@@ -2103,8 +2103,8 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
   // ===== ROUNDED CHIBI (64x96) — detailed, crisp edges =====
 
   if (d === "down") {
-    // ---- HEAD: round dome with outlined circle ----
-    ciO(hx(32), hy(18), 17, pal.skin);
+    // ---- HEAD: round dome ----
+    ci(hx(32), hy(18), 16, pal.skin);
     // Face
     el(hx(32), hy(22), 13, 12, pal.skin);
     // Hair (per-style)
@@ -2235,8 +2235,8 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
     }
 
   } else if (d === "up") {
-    // ---- HEAD: all hair, outlined circle ----
-    ciO(hx(32), hy(18), 17, pal.hair);
+    // ---- HEAD: all hair ----
+    ci(hx(32), hy(18), 16, pal.hair);
     drawHairUp();
     drawHeadFeature("up");
     // Accessory
@@ -2314,7 +2314,7 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
 
   } else {
     // ---- RIGHT PROFILE ----
-    ciO(hx(32), hy(18), 17, pal.skin);
+    ci(hx(32), hy(18), 16, pal.skin);
     // Face
     el(hx(35), hy(24), 11, 9, pal.skin);
     // Hair (per-style)
