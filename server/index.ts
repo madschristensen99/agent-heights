@@ -62,6 +62,26 @@ function getEnvScript(): string {
   return `<script>window.__ENV__=${JSON.stringify(envVars)};</script>`;
 }
 
+function absoluteUrl(req: IncomingMessage, path: string): string {
+  const proto = (req.headers["x-forwarded-proto"] as string) || "https";
+  const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "localhost";
+  return `${proto}://${host}${path}`;
+}
+
+async function injectMeta(html: string, req: IncomingMessage): Promise<string> {
+  let result = html.replace("<head>", `<head>\n    ${getEnvScript()}`);
+  // Rewrite relative og:image / twitter:image to absolute URLs with cache-busting
+  try {
+    const ogStat = await stat(join(distDir, "og-image.png"));
+    const v = Math.floor(ogStat.mtimeMs);
+    const absUrl = absoluteUrl(req, `/og-image.png?v=${v}`);
+    result = result.replace(/content="\/og-image\.png"/g, `content="${absUrl}"`);
+  } catch {
+    // og-image.png missing — leave relative URLs as-is
+  }
+  return result;
+}
+
 async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
   let urlPath = req.url?.split("?")[0] ?? "/";
   if (urlPath === "/") urlPath = "/index.html";
@@ -79,14 +99,14 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     let data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
     const headers: Record<string, string> = { "Content-Type": mime };
-    // Don't cache map/tileset assets or index.html — they change when regenerated
-    if (urlPath.startsWith("/assets/maps/") || urlPath.startsWith("/assets/tilesets/") || urlPath === "/index.html" || urlPath === "/") {
+    // Don't cache map/tileset assets, og-image, or index.html — they change when regenerated
+    if (urlPath.startsWith("/assets/maps/") || urlPath.startsWith("/assets/tilesets/") || urlPath === "/og-image.png" || urlPath === "/index.html" || urlPath === "/") {
       headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
     }
-    // Inject runtime env vars into index.html
+    // Inject runtime env vars and absolute OG image URLs into index.html
     if (urlPath === "/index.html" || urlPath === "/") {
       const html = data.toString("utf-8");
-      const injected = html.replace("<head>", `<head>\n    ${getEnvScript()}`);
+      const injected = await injectMeta(html, req);
       data = Buffer.from(injected, "utf-8");
     }
     res.writeHead(200, headers);
@@ -96,7 +116,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
       const indexPath = join(distDir, "index.html");
       let data = await readFile(indexPath);
       const html = data.toString("utf-8");
-      const injected = html.replace("<head>", `<head>\n    ${getEnvScript()}`);
+      const injected = await injectMeta(html, req);
       data = Buffer.from(injected, "utf-8");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(data);

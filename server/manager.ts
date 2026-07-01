@@ -781,7 +781,7 @@ export class AgentManager {
       rosterLine,
       boardLine,
       `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
-      `When you finish your task, you MUST call the submit_and_exit tool with a summary of what you did. Do not just reply with text — always use submit_and_exit to complete the task.`,
+      `IMPORTANT: You must actually DO the work first using your tools (write_files, bash, read_files, etc.) before calling submit_and_exit. Do not just talk about doing the work — use the tools to create files, run commands, etc. After doing the work, read back any files you created to verify they exist and contain what you intended. Only then call submit_and_exit with verified=true and a summary of what you did. Calling submit_and_exit without having done the work is a failure. Do not just reply with text — always use submit_and_exit to complete the task.`,
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
     ].join(" ");
   }

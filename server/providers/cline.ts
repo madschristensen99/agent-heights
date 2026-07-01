@@ -112,6 +112,7 @@ async function makeTools(cwd: string, opts?: {
   getBoard?: () => { id: string; title: string; status: string; assignedAgentId: string | null }[];
   claimCard?: (cardId: string, agentId: string) => boolean;
   eventFeedPath?: string;
+  submitState?: { called: boolean; verified: boolean; callCount: number };
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -198,9 +199,13 @@ async function makeTools(cwd: string, opts?: {
     },
     lifecycle: { completesRun: true },
     async execute(input: any) {
+      if (opts?.submitState) {
+        opts.submitState.called = true;
+        opts.submitState.callCount++;
+        opts.submitState.verified = !!input.verified;
+      }
       if (!input.verified) {
-        // Don't hard-block, but note it in the output
-        return `${input.summary}\n\n[Note: agent did not set verified=true]`;
+        return `Your submission was NOT verified. You must actually DO the work first using your tools (write_files, bash, etc.), then read back the files to confirm they exist, and THEN call submit_and_exit with verified=true. Do not call submit_and_exit again until you have completed and verified the work.`;
       }
       return input.summary;
     },
@@ -450,6 +455,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   try {
     let agent = agents.get(agentId);
     if (!agent) {
+      const submitState = { called: false, verified: false, callCount: 0 };
       const tools = isChat ? [] : await makeTools(ctx.cwd, {
         railway: ctx.railway,
         sharedCwd: ctx.sharedCwd,
@@ -458,6 +464,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         getBoard: ctx.getBoard,
         claimCard: ctx.claimCard,
         eventFeedPath: ctx.eventFeedPath,
+        submitState: isChat ? undefined : submitState,
       });
       const maxIter = isChat ? 1 : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
@@ -471,7 +478,18 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         tools,
         maxIterations: maxIter,
         completionPolicy: isChat ? undefined : {
-          completionGuard: () => "You haven't called submit_and_exit yet. If you have completed the task, call submit_and_exit with a summary of what you did. If you still need to do work, use your tools to do it.",
+          completionGuard: () => {
+            // If submit_and_exit was already called, don't prompt for it again —
+            // this prevents infinite loops where the model keeps calling submit_and_exit
+            if (submitState.called) {
+              if (!submitState.verified && submitState.callCount <= 2) {
+                return `You called submit_and_exit but did not set verified=true. Use your tools (write_files, bash, read_files, etc.) to actually DO the work, then read back the files to confirm they exist, and call submit_and_exit again with verified=true.`;
+              }
+              // Either verified, or already called too many times — let the run end
+              return undefined as any;
+            }
+            return "You haven't called submit_and_exit yet. If you have completed the task, call submit_and_exit with a summary of what you did. If you still need to do work, use your tools to do it.";
+          },
         },
       });
 
