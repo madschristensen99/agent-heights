@@ -56,7 +56,7 @@ export const EYE_COLORS = [
   "#ffaa00", "#cc44ff", "#ffffff",
 ];
 
-export const HEAD_FEATURES = ["none", "cat_ears", "horns", "antennae", "elf_ears"];
+export const HEAD_FEATURES = ["none", "cat ears", "horns", "antennae", "elf ears"];
 
 export const ACCENT_COLOR_OPTIONS = [
   "#c44a4a", "#3a7cb5", "#3d9152", "#b0741f",

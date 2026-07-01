@@ -666,7 +666,7 @@ function drawChar(s: PixelSheet, ox: number, oy: number, pal: CharPalette, dir: 
   const drawHeadFeature = (dir2: Dir) => {
     const hf = pal.headFeature;
     if (hf === "none") return;
-    if (hf === "cat_ears") {
+    if (hf === "cat ears") {
       const inner = mix(pal.hair, "#ffaaaa", 0.4);
       if (dir2 === "down") {
         s.fillTriangle(hx(22), hy(10), hx(17), hy(2), hx(27), hy(5), pal.hair);
@@ -709,7 +709,7 @@ function drawChar(s: PixelSheet, ox: number, oy: number, pal: CharPalette, dir: 
         s.lineThick(hx(37), hy(8), hx(40), hy(0), pal.hair, 1);
         s.set(hx(40), hy(0), tip); s.set(hx(41), hy(1), tip);
       }
-    } else if (hf === "elf_ears") {
+    } else if (hf === "elf ears") {
       if (dir2 === "down") {
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
         s.set(hx(14), hy(22), skinDk);
@@ -719,8 +719,8 @@ function drawChar(s: PixelSheet, ox: number, oy: number, pal: CharPalette, dir: 
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.hair);
         s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.hair);
       } else if (dir2 === "right") {
-        s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.skin);
-        s.set(hx(50), hy(22), skinDk);
+        s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
+        s.set(hx(14), hy(22), skinDk);
       }
     }
   };

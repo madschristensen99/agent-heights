@@ -2048,7 +2048,7 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
         s.line(hx(37), hy(8), hx(40), hy(0), pal.hair);
         s.set(hx(40), hy(0), tip); s.set(hx(41), hy(1), tip);
       }
-    } else if (hf === "elf_ears") {
+    } else if (hf === "elf ears") {
       if (dir2 === "down") {
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
         s.set(hx(14), hy(22), skinDk);
@@ -2058,8 +2058,8 @@ function drawChar(s: Sheet, ox: number, oy: number, pal: CharPalette, dir: Dir, 
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.hair);
         s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.hair);
       } else if (dir2 === "right") {
-        s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.skin);
-        s.set(hx(50), hy(22), skinDk);
+        s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
+        s.set(hx(14), hy(22), skinDk);
       }
     }
   };
