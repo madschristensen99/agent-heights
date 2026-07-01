@@ -575,6 +575,10 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       resolveQueue = null;
     });
 
+    // If abort fires while we're blocked waiting for events, unblock the queue
+    const onAbort = () => { resolveQueue?.(); resolveQueue = null; };
+    ctx.abort.signal.addEventListener("abort", onAbort, { once: true });
+
     while (!done || queue.length > 0) {
       if (queue.length === 0) {
         await new Promise<void>((r) => { resolveQueue = r; });
@@ -589,6 +593,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       }
     }
 
+    ctx.abort.signal.removeEventListener("abort", onAbort);
     unsub();
 
     // Get the final result

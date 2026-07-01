@@ -811,6 +811,22 @@ export class OfficeScene extends Phaser.Scene {
             return;
           }
 
+          // Theme consistency check: room_state may have arrived during the
+          // phased init (before the store listener was wired), so lastRoomId
+          // already matches but the theme was set from a null roomId default
+          // to "agenthq".  Restart if the current room requires a different theme.
+          if (this.store.roomId !== null) {
+            const isHq2 = this.store.roomId === "hq2";
+            const desiredTheme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
+            if (desiredTheme !== this.theme) {
+              console.log(`[scene] ready but theme mismatch: theme=${this.theme} desired=${desiredTheme} (roomId=${this.store.roomId}) — restarting`);
+              this.ready = false;
+              this.remotePlayers.clear();
+              this.scene.restart();
+              return;
+            }
+          }
+
           // Sync player position from room_state if it arrived after sprite creation
           if (this._myUserId) {
             const me = this.store.roomPlayers.get(this._myUserId);

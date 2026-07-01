@@ -1155,15 +1155,31 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
-    // If no events arrive within 15s, the API call likely failed (rate limit, auth error, etc.)
-    // Abort early with a descriptive error instead of waiting the full 30s.
+    // If no events arrive within 15s, the API call likely failed. Do a quick
+    // health check to give a specific error (rate limit vs auth vs API down).
     let firstEventTimer: ReturnType<typeof setTimeout> | null = null;
     let gotFirstEvent = false;
-    const firstEventTimeout = setTimeout(() => {
-      if (!abort.signal.aborted && !gotFirstEvent) {
-        abort.abort();
-        this.log(rt, "error", "No response from model within 15s — API may be down or rate-limited. Check your SWARMS_API_KEY.");
+    const firstEventTimeout = setTimeout(async () => {
+      if (abort.signal.aborted || gotFirstEvent) return;
+      // Quick API check — 5s timeout to not block too long
+      let reason = "No response from model within 15s";
+      try {
+        const controller = new AbortController();
+        const to = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch("https://api.swarms.world/v1/health", {
+          signal: controller.signal,
+          headers: { "x-api-key": this.apiKey ?? "" },
+        });
+        clearTimeout(to);
+        if (res.status === 429) reason = "Rate limited by Swarms API (429) — too many requests";
+        else if (res.status === 401 || res.status === 403) reason = `Auth error (${res.status}) — check your SWARMS_API_KEY`;
+        else if (res.ok) reason = "API is up but model is not responding — try a different model";
+        else reason = `API returned status ${res.status}`;
+      } catch {
+        reason = "Swarms API is not responding — check your network or if api.swarms.world is down";
       }
+      abort.abort();
+      this.log(rt, "error", reason);
     }, 15_000);
 
     // Hard cap at 30s for the full chat response
