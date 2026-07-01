@@ -83,12 +83,12 @@ export class DbPersistence {
     }, 400);
   }
 
-  flushNow(): void {
+  flushNow(): Promise<void> {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    void this.flush();
+    return this.flush();
   }
 
   private async flush(): Promise<void> {

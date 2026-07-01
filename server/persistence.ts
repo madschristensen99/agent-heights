@@ -18,7 +18,7 @@ export interface Persistence {
   setBoard(board: TaskCard[]): void;
   setWorld(world: WorldState): void;
   getWorld(): WorldState;
-  flushNow(): void;
+  flushNow(): void | Promise<void>;
 }
 
 /**

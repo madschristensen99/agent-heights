@@ -801,6 +801,15 @@ export class OfficeScene extends Phaser.Scene {
             }
           }
 
+          // Refresh boss texture now that scene is ready — the snapshot
+          // (carrying player.appearance) may have arrived during scene init,
+          // before the store subscriber was active (guarded by this.ready).
+          const prevKey = this.playerTexKey;
+          const regenerated = this.refreshBossTexture();
+          if ((regenerated || prevKey !== this.playerTexKey) && this.player) {
+            this.player.setTexture(this.playerTexKey, 0).setScale(1);
+          }
+
           this.syncAgents();
           this.world.syncGhosts();
 

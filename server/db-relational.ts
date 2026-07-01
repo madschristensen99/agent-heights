@@ -208,12 +208,12 @@ export class RelationalPersistence {
     return this.state.world ?? { seed: 0, firedAgents: [] };
   }
 
-  flushNow(): void {
+  flushNow(): Promise<void> {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    void this.flush();
+    return this.flush();
   }
 
   private schedule(): void {
@@ -331,7 +331,7 @@ export class RelationalPersistence {
           .from("agent_hq_agents")
           .delete()
           .eq("owner_id", this.userId)
-          .not("id", "in", `(${currentIds.map((id) => `'${id}'`).join(",")})`);
+          .not("id", "in", currentIds.join(","));
       } catch (err) {
         console.error("[db-rel] delete stale agents failed:", err);
       }
@@ -428,7 +428,7 @@ export class RelationalPersistence {
           .from("agent_hq_task_cards")
           .delete()
           .eq("owner_id", this.userId)
-          .not("id", "in", `(${currentIds.map((id) => `\'${id}\'`).join(",")})`);
+          .not("id", "in", currentIds.join(","));
       } catch (err) {
         console.error("[db-rel] delete stale cards failed:", err);
       }

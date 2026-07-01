@@ -883,13 +883,16 @@ server.listen(SERVER_PORT, () => {
   console.log(`[agent-hq] global multiplayer room: ${HQ2_ROOM_ID}`);
 });
 
-function shutdown(): void {
+async function shutdown(): Promise<void> {
   stopRailwayMCP();
   stopRedis();
   clearInterval(logMaintenanceInterval);
+  const flushes: Promise<void>[] = [];
   for (const sess of tenants.values()) {
-    sess.save.flushNow();
+    const f = sess.save.flushNow();
+    if (f && typeof (f as any).then === "function") flushes.push((f as Promise<void>).catch(() => {}));
   }
+  await Promise.all(flushes);
   process.exit(0);
 }
 
