@@ -596,7 +596,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     try {
       result = await runPromise;
     } catch (err) {
-      console.log(`[cline:${agentId}] runPromise rejected:`, err instanceof Error ? err.message : String(err));
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.log(`[cline:${agentId}] runPromise rejected:`, errMsg);
+      // Yield the error if we haven't already via run-failed event
+      if (!queue.some(e => e.kind === "error")) {
+        yield { kind: "error", text: truncate(errMsg, 300) };
+      }
       return;
     }
 

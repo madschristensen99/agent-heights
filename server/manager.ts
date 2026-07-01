@@ -1155,7 +1155,18 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
-    // Chat should be quick — abort after 30s to prevent hangs
+    // If no events arrive within 15s, the API call likely failed (rate limit, auth error, etc.)
+    // Abort early with a descriptive error instead of waiting the full 30s.
+    let firstEventTimer: ReturnType<typeof setTimeout> | null = null;
+    let gotFirstEvent = false;
+    const firstEventTimeout = setTimeout(() => {
+      if (!abort.signal.aborted && !gotFirstEvent) {
+        abort.abort();
+        this.log(rt, "error", "No response from model within 15s — API may be down or rate-limited. Check your SWARMS_API_KEY.");
+      }
+    }, 15_000);
+
+    // Hard cap at 30s for the full chat response
     const chatTimeout = setTimeout(() => {
       if (!abort.signal.aborted) {
         abort.abort();
@@ -1189,6 +1200,10 @@ export class AgentManager {
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;
+        if (!gotFirstEvent) {
+          gotFirstEvent = true;
+          if (firstEventTimer) clearTimeout(firstEventTimer);
+        }
         if (ev.kind === "result") continue;
         this.log(rt, ev.kind, ev.text);
       }
@@ -1197,9 +1212,16 @@ export class AgentManager {
         this.log(rt, "error", err instanceof Error ? err.message : String(err));
       }
     } finally {
+      clearTimeout(firstEventTimeout);
       clearTimeout(chatTimeout);
       rt.abort = null;
-      if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
+      // If the chat was aborted (timeout or error), clear the chat agent instance
+      // so the next chat gets a fresh agent instead of reusing a broken one.
+      if (abort.signal.aborted) {
+        clearAgentMemory(`${rt.info.id}:chat`);
+      }
+      // Always reset to idle, even on timeout/abort — otherwise the agent is stuck forever
+      if (this.agents.has(rt.info.id)) {
         this.setStatus(rt, "idle");
       }
     }
