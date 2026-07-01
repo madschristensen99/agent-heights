@@ -32,7 +32,7 @@ async function checkBwrap(): Promise<boolean> {
 }
 
 /** Wrap a shell command with bubblewrap to restrict filesystem + network access. */
-function bwrapCommand(cmd: string, workspace: string, allowNetwork: boolean): { executable: string; args: string[] } {
+function bwrapCommand(cmd: string, workspace: string, allowNetwork: boolean, extraRoBinds: string[] = []): { executable: string; args: string[] } {
   const args = [
     "--ro-bind", "/usr", "/usr",
     "--ro-bind", "/lib", "/lib",
@@ -40,11 +40,16 @@ function bwrapCommand(cmd: string, workspace: string, allowNetwork: boolean): { 
     "--ro-bind", "/bin", "/bin",
     "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
     "--bind", workspace, workspace,
+  ];
+  for (const path of extraRoBinds) {
+    args.push("--ro-bind", path, path);
+  }
+  args.push(
     "--dev", "/dev",
     "--proc", "/proc",
     "--tmpfs", "/tmp",
     "--unshare-all",
-  ];
+  );
   if (allowNetwork) {
     // Re-share the network namespace instead of unsharing it
     args.splice(args.indexOf("--unshare-all"), 1);
@@ -138,7 +143,8 @@ async function makeTools(cwd: string, opts?: {
     const cmd = typeof input === "string" ? input : input.command;
     const abortSignal: AbortSignal | undefined = context?.signal ?? context?.abortSignal;
     if (useBwrap) {
-      const { executable, args } = bwrapCommand(cmd, cwd, allowNetwork);
+      const roBinds = opts?.railway && workspaceRoot !== cwd ? [workspaceRoot] : [];
+      const { executable, args } = bwrapCommand(cmd, cwd, allowNetwork, roBinds);
       try {
         const { stdout, stderr } = await execFileAsync(executable, args, {
           cwd,

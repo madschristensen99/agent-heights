@@ -296,7 +296,7 @@ export interface GameSettings {
 export const DEFAULT_SETTINGS: GameSettings = {
   cline: { maxIterations: 60, autoApproveCommands: true },
   game: { idleWander: true, theme: "classic" },
-  railway: { enabled: false },
+  railway: { enabled: true },
 };
 
 export interface RailwayProject {

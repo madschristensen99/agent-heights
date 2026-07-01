@@ -1064,12 +1064,16 @@ export class AgentManager {
       this.log(rt, "status", `Wanted to hand off to ${target.info.name}, but they're busy.`);
       return;
     }
+    const workerWs = this.cwdFor(this.slugFor(rt), rt.info.id);
+    const isDevopsTarget = target.info.role === "devops";
     const handoffTask = [
       `${rt.info.name} (${rt.info.title}) finished a task and handed the result to you.`,
       `Their task was: ${task}`,
       result ? `Their report:\n${result.slice(0, 2000)}` : "",
-      `Their workspace, for reference: ${this.cwdFor(this.slugFor(rt), rt.info.id)}`,
-      `You may READ files from their workspace, but do your own work inside your own workspace. Review what they did and build on it.`,
+      `Their workspace: ${workerWs}`,
+      isDevopsTarget
+        ? `You have read access to their workspace. If you need to deploy their code, you can deploy directly from ${workerWs} using your Railway tools or bash commands. Do not copy files unless necessary — deploy from their workspace path.`
+        : `You may READ files from their workspace, but do your own work inside your own workspace. Review what they did and build on it.`,
     ]
       .filter(Boolean)
       .join("\n\n");

@@ -102,7 +102,7 @@ export class MarketplaceBrowser {
       const data: MarketplaceResult = await res.json();
       this.render(data);
     } catch (err) {
-      this.content.innerHTML = `<div style="text-align:center;color:#e05d5d;padding:2rem;">Failed to load: ${err instanceof Error ? err.message : "unknown error"}</div>`;
+      this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Unable to reach the marketplace. Please try again later.</div>`;
     }
   }
 

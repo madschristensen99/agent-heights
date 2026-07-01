@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import type {
   MarketplaceAgent,
   MarketplacePrompt,
@@ -7,13 +6,43 @@ import type {
   MarketplaceItemType,
 } from "../shared/marketplace.js";
 
+const SWARMS_MARKETPLACE_URL = "https://swarms.world";
+const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
+
 function json(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
 }
 
-function parseArray(val: unknown): string[] {
+function parseUseCases(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  return val.map((u) => {
+    if (typeof u === "string") return u;
+    if (u && typeof u === "object") {
+      const title = String((u as Record<string, unknown>).title ?? "");
+      const desc = String((u as Record<string, unknown>).description ?? "");
+      return desc ? `${title}: ${desc}` : title;
+    }
+    return String(u);
+  });
+}
+
+function parseRequirements(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  return val.map((r) => {
+    if (typeof r === "string") return r;
+    if (r && typeof r === "object") {
+      const pkg = String((r as Record<string, unknown>).package ?? "");
+      const install = String((r as Record<string, unknown>).installation ?? "");
+      return install ? `${pkg} (${install})` : pkg;
+    }
+    return String(r);
+  });
+}
+
+function parseCategory(val: unknown): string[] {
   if (Array.isArray(val)) return val.map(String);
+  if (typeof val === "string" && val) return [val];
   return [];
 }
 
@@ -21,7 +50,90 @@ function parseLinks(val: unknown): { label: string; url: string }[] {
   if (!Array.isArray(val)) return [];
   return val
     .filter((v) => v && typeof v === "object" && "url" in v)
-    .map((v) => ({ label: String((v as Record<string, unknown>).label ?? ""), url: String((v as Record<string, unknown>).url) }));
+    .map((v) => ({
+      label: String((v as Record<string, unknown>).label ?? (v as Record<string, unknown>).name ?? ""),
+      url: String((v as Record<string, unknown>).url),
+    }));
+}
+
+function mapAgent(r: Record<string, unknown>): MarketplaceAgent {
+  return {
+    id: String(r.id ?? ""),
+    name: String(r.name ?? ""),
+    description: String(r.description ?? ""),
+    summary: String(r.summary ?? r.description ?? "").slice(0, 120),
+    agent: String(r.agent ?? ""),
+    language: String(r.language ?? ""),
+    use_cases: parseUseCases(r.use_cases),
+    tags: String(r.tags ?? ""),
+    image_url: r.image_url ? String(r.image_url) : null,
+    is_free: Boolean(r.is_free),
+    price: r.price != null ? Number(r.price) : null,
+    price_usd: r.price_usd != null ? Number(r.price_usd) : null,
+    category: parseCategory(r.category),
+    requirements: parseRequirements(r.requirements),
+    links: parseLinks(r.links),
+    user_id: r.user_id ? String(r.user_id) : null,
+    created_at: String(r.created_at ?? ""),
+  };
+}
+
+function mapPrompt(r: Record<string, unknown>): MarketplacePrompt {
+  return {
+    id: String(r.id ?? ""),
+    name: String(r.name ?? ""),
+    description: String(r.description ?? ""),
+    summary: String(r.summary ?? r.description ?? "").slice(0, 120),
+    prompt: String(r.prompt ?? ""),
+    tags: String(r.tags ?? ""),
+    image_url: r.image_url ? String(r.image_url) : null,
+    is_free: Boolean(r.is_free),
+    price: r.price != null ? Number(r.price) : null,
+    price_usd: r.price_usd != null ? Number(r.price_usd) : null,
+    category: parseCategory(r.category),
+    use_cases: parseUseCases(r.use_cases),
+    user_id: r.user_id ? String(r.user_id) : null,
+    created_at: String(r.created_at ?? ""),
+  };
+}
+
+async function queryMarketplace(
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (SWARMS_API_KEY) headers["Authorization"] = `Bearer ${SWARMS_API_KEY}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const res = await fetch(`${SWARMS_MARKETPLACE_URL}${endpoint}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      console.error(`[marketplace] ${endpoint} returned ${res.status}`);
+      return [];
+    }
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      console.error(`[marketplace] ${endpoint} returned non-JSON content-type: ${contentType}`);
+      return [];
+    }
+
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error(`[marketplace] ${endpoint} fetch failed:`, err instanceof Error ? err.message : err);
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function handleMarketplaceRequest(
@@ -30,11 +142,10 @@ export async function handleMarketplaceRequest(
 ): Promise<boolean> {
   const url = req.url?.split("?")[0] ?? "";
 
-  // Only handle /api/marketplace/* routes
   if (!url.startsWith("/api/marketplace")) return false;
 
-  if (!isSupabaseConfigured) {
-    json(res, 503, { error: "Marketplace not configured — Supabase not set up" });
+  if (!SWARMS_API_KEY) {
+    json(res, 503, { error: "Marketplace not configured — SWARMS_API_KEY not set" });
     return true;
   }
 
@@ -47,111 +158,35 @@ export async function handleMarketplaceRequest(
 
   try {
     if (url === "/api/marketplace/agents" || (url === "/api/marketplace" && type === "agent")) {
-      let q = supabaseAdmin
-        .from("swarms_cloud_agents")
-        .select("*")
-        .eq("status", "approved")
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
+      const results = await queryMarketplace("/api/query-agents", {
+        search,
+        priceFilter: "all",
+        sortBy: "newest",
+        limit,
+        offset,
+      });
 
-      if (search) {
-        q = q.or(`name.ilike.%${search}%,description.ilike.%${search}%,summary.ilike.%${search}%,tags.ilike.%${search}%`);
-      }
-
-      const { data, error } = await q;
-      if (error) { json(res, 500, { error: error.message }); return true; }
-
-      const agents: MarketplaceAgent[] = (data ?? []).map((r: Record<string, unknown>) => ({
-        id: String(r.id),
-        name: String(r.name ?? ""),
-        description: String(r.description ?? ""),
-        summary: String(r.summary ?? ""),
-        agent: String(r.agent ?? ""),
-        language: String(r.language ?? ""),
-        use_cases: parseArray(r.use_cases),
-        tags: String(r.tags ?? ""),
-        image_url: r.image_url ? String(r.image_url) : null,
-        is_free: Boolean(r.is_free),
-        price: r.price != null ? Number(r.price) : null,
-        price_usd: r.price_usd != null ? Number(r.price_usd) : null,
-        category: parseArray(r.category),
-        requirements: parseArray(r.requirements),
-        links: parseLinks(r.links),
-        user_id: r.user_id ? String(r.user_id) : null,
-        created_at: String(r.created_at ?? ""),
-      }));
-
+      const agents = results.map(mapAgent);
       json(res, 200, { agents, count: agents.length });
       return true;
     }
 
     if (url === "/api/marketplace/prompts" || (url === "/api/marketplace" && type === "prompt")) {
-      let q = supabaseAdmin
-        .from("swarms_cloud_prompts")
-        .select("*")
-        .eq("status", "approved")
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
+      const results = await queryMarketplace("/api/query-prompts", {
+        search,
+        priceFilter: "all",
+        sortBy: "newest",
+        limit,
+        offset,
+      });
 
-      if (search) {
-        q = q.or(`name.ilike.%${search}%,description.ilike.%${search}%,summary.ilike.%${search}%,tags.ilike.%${search}%`);
-      }
-
-      const { data, error } = await q;
-      if (error) { json(res, 500, { error: error.message }); return true; }
-
-      const prompts: MarketplacePrompt[] = (data ?? []).map((r: Record<string, unknown>) => ({
-        id: String(r.id),
-        name: String(r.name ?? ""),
-        description: String(r.description ?? ""),
-        summary: String(r.summary ?? ""),
-        prompt: String(r.prompt ?? ""),
-        tags: String(r.tags ?? ""),
-        image_url: r.image_url ? String(r.image_url) : null,
-        is_free: Boolean(r.is_free),
-        price: r.price != null ? Number(r.price) : null,
-        price_usd: r.price_usd != null ? Number(r.price_usd) : null,
-        category: parseArray(r.category),
-        use_cases: parseArray(r.use_cases),
-        user_id: r.user_id ? String(r.user_id) : null,
-        created_at: String(r.created_at ?? ""),
-      }));
-
+      const prompts = results.map(mapPrompt);
       json(res, 200, { prompts, count: prompts.length });
       return true;
     }
 
     if (url === "/api/marketplace/tools" || (url === "/api/marketplace" && type === "tool")) {
-      let q = supabaseAdmin
-        .from("swarms_cloud_tools")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
-
-      if (search) {
-        q = q.or(`name.ilike.%${search}%,description.ilike.%${search}%,summary.ilike.%${search}%,tags.ilike.%${search}%`);
-      }
-
-      const { data, error } = await q;
-      if (error) { json(res, 500, { error: error.message }); return true; }
-
-      const tools: MarketplaceTool[] = (data ?? []).map((r: Record<string, unknown>) => ({
-        id: String(r.id),
-        name: String(r.name ?? ""),
-        description: String(r.description ?? ""),
-        summary: String(r.summary ?? ""),
-        tags: String(r.tags ?? ""),
-        image_url: r.image_url ? String(r.image_url) : null,
-        is_free: Boolean(r.is_free),
-        price: r.price != null ? Number(r.price) : null,
-        price_usd: r.price_usd != null ? Number(r.price_usd) : null,
-        category: parseArray(r.category),
-        use_cases: parseArray(r.use_cases),
-        user_id: r.user_id ? String(r.user_id) : null,
-        created_at: String(r.created_at ?? ""),
-      }));
-
-      json(res, 200, { tools, count: tools.length });
+      json(res, 200, { tools: [] as MarketplaceTool[], count: 0 });
       return true;
     }
 
@@ -159,36 +194,17 @@ export async function handleMarketplaceRequest(
       const id = params.get("id");
       if (!id) { json(res, 400, { error: "Missing id parameter" }); return true; }
 
-      const { data, error } = await supabaseAdmin
-        .from("swarms_cloud_agents")
-        .select("*")
-        .eq("id", id)
-        .single();
+      const results = await queryMarketplace("/api/query-agents", {
+        limit: 100,
+        offset: 0,
+        priceFilter: "all",
+        sortBy: "newest",
+      });
 
-      if (error || !data) { json(res, 404, { error: "Agent not found" }); return true; }
+      const found = results.find((r) => String(r.id) === id);
+      if (!found) { json(res, 404, { error: "Agent not found" }); return true; }
 
-      const r = data as Record<string, unknown>;
-      const agent: MarketplaceAgent = {
-        id: String(r.id),
-        name: String(r.name ?? ""),
-        description: String(r.description ?? ""),
-        summary: String(r.summary ?? ""),
-        agent: String(r.agent ?? ""),
-        language: String(r.language ?? ""),
-        use_cases: parseArray(r.use_cases),
-        tags: String(r.tags ?? ""),
-        image_url: r.image_url ? String(r.image_url) : null,
-        is_free: Boolean(r.is_free),
-        price: r.price != null ? Number(r.price) : null,
-        price_usd: r.price_usd != null ? Number(r.price_usd) : null,
-        category: parseArray(r.category),
-        requirements: parseArray(r.requirements),
-        links: parseLinks(r.links),
-        user_id: r.user_id ? String(r.user_id) : null,
-        created_at: String(r.created_at ?? ""),
-      };
-
-      json(res, 200, agent);
+      json(res, 200, mapAgent(found));
       return true;
     }
 
