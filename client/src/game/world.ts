@@ -914,8 +914,7 @@ export class WorldLayer {
         const { cx, cy, biome, tiles } = e.data;
         const key = `${cx},${cy}`;
         const chunk: Chunk = { cx, cy, biome, tiles };
-        // Cache raw generated data globally (before overrides)
-        globalChunkCache.set(`${this.store.worldSeed}:${key}`, chunk);
+        // Store in pendingChunks — loadChunk will cache globally and apply overrides
         this.pendingChunks.set(key, chunk);
         this.workerRequested.delete(key);
       };
@@ -979,10 +978,9 @@ export class WorldLayer {
     const key = `${cx},${cy}`;
     let chunk = this.chunks.get(key);
     if (!chunk) {
-      chunk = generateChunk(this.store.worldSeed, cx, cy);
-      this.chunks.set(key, chunk);
-      this.scanTennisTiles(chunk);
-      this.renderChunk(chunk);
+      this.loadChunk(cx, cy);
+      chunk = this.chunks.get(key);
+      if (!chunk) return TILE.WALL;
     }
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -1061,10 +1059,9 @@ export class WorldLayer {
     const key = `${cx},${cy}`;
     let chunk = this.chunks.get(key);
     if (!chunk) {
-      chunk = generateChunk(this.store.worldSeed, cx, cy);
-      this.chunks.set(key, chunk);
-      this.scanTennisTiles(chunk);
-      this.renderChunk(chunk);
+      this.loadChunk(cx, cy);
+      chunk = this.chunks.get(key);
+      if (!chunk) return false;
     }
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -1223,6 +1220,7 @@ export class WorldLayer {
         this.removeChunkLights(key);
         this.chunkGraphics.get(key)?.destroy();
         this.chunkGraphics.delete(key);
+        this.invalidateChunkTexture(chunk.cx, chunk.cy);
         this.chunks.delete(key);
         this.tennisChunks.delete(key);
       }
@@ -1309,8 +1307,8 @@ export class WorldLayer {
     const pending = this.pendingChunks.get(key);
     if (pending) {
       this.pendingChunks.delete(key);
-      // Cache raw data before overrides
-      globalChunkCache.set(cacheKey, { cx, cy, biome: pending.biome, tiles: pending.tiles });
+      // Cache raw data before overrides (clone so overrides don't mutate the cache)
+      globalChunkCache.set(cacheKey, { cx, cy, biome: pending.biome, tiles: [...pending.tiles] });
       this.applyChunkOverrides(pending);
       this.chunks.set(key, pending);
       this.scanTennisTiles(pending);
@@ -1320,8 +1318,8 @@ export class WorldLayer {
 
     // Fallback: generate synchronously on the main thread
     const chunk = generateChunk(this.store.worldSeed, cx, cy);
-    // Cache raw data before overrides
-    globalChunkCache.set(cacheKey, { cx, cy, biome: chunk.biome, tiles: chunk.tiles });
+    // Cache raw data before overrides (clone so overrides don't mutate the cache)
+    globalChunkCache.set(cacheKey, { cx, cy, biome: chunk.biome, tiles: [...chunk.tiles] });
     this.applyChunkOverrides(chunk);
     this.chunks.set(key, chunk);
     this.scanTennisTiles(chunk);
@@ -1607,7 +1605,7 @@ export class WorldLayer {
 
   /** Find the next golf flag (not at sunkTx/sunkTy) and spawn a ball on its tee box. */
   private spawnBallAtNextHole(sunkTx: number, sunkTy: number): boolean {
-    // search loaded chunks first, then generate nearby chunks if needed
+    // search loaded chunks first, then load nearby chunks if needed
     let bestFlag: { tx: number; ty: number; dist: number } | null = null;
 
     // search a 5x5 chunk area around the sunk flag
@@ -1619,10 +1617,9 @@ export class WorldLayer {
         const key = `${cx},${cy}`;
         let chunk = this.chunks.get(key);
         if (!chunk) {
-          // generate the chunk to search it
-          chunk = generateChunk(this.store.worldSeed, cx, cy);
-          this.chunks.set(key, chunk);
-          this.renderChunk(chunk);
+          this.loadChunk(cx, cy);
+          chunk = this.chunks.get(key);
+          if (!chunk) continue;
         }
         for (let y = 0; y < CHUNK_SIZE; y++) {
           for (let x = 0; x < CHUNK_SIZE; x++) {
@@ -1643,13 +1640,13 @@ export class WorldLayer {
 
     if (!bestFlag) return false;
 
-    // find the tee box nearest to this flag
+    // find the tee box nearest to this flag (loaded-only to avoid chunk gen spikes)
     let bestTee: { tx: number; ty: number; dist: number } | null = null;
     for (let dy = -20; dy <= 20; dy++) {
       for (let dx = -20; dx <= 20; dx++) {
         const tx = bestFlag.tx + dx;
         const ty = bestFlag.ty + dy;
-        const tile = this.getTileAt(tx, ty);
+        const tile = this.getTileAtLoaded(tx, ty);
         if (tile === TILE.TEE_BOX) {
           const d = Math.hypot(dx, dy);
           if (!bestTee || d < bestTee.dist) {
@@ -2003,7 +2000,7 @@ export class WorldLayer {
         } else {
           for (let sy = -20; sy <= 20 && !foundFlag; sy++) {
             for (let sx = -20; sx <= 20 && !foundFlag; sx++) {
-              if (this.getTileAt(nearestBall.tx + sx, nearestBall.ty + sy) === TILE.GOLF_FLAG) {
+              if (this.getTileAtLoaded(nearestBall.tx + sx, nearestBall.ty + sy) === TILE.GOLF_FLAG) {
                 flagX = (nearestBall.tx + sx) * TILE_PX + TILE_PX / 2 + this.offset.x;
                 flagY = (nearestBall.ty + sy) * TILE_PX + TILE_PX / 2 + this.offset.y;
                 foundFlag = true;
@@ -2227,7 +2224,7 @@ export class WorldLayer {
         } else {
           for (let sy = -15; sy <= 15 && !foundWall; sy++) {
             for (let sx = -15; sx <= 15 && !foundWall; sx++) {
-              if (this.getTileAt(nearestTennisBall.tx + sx, nearestTennisBall.ty + sy) === TILE.TENNIS_WALL) {
+              if (this.getTileAtLoaded(nearestTennisBall.tx + sx, nearestTennisBall.ty + sy) === TILE.TENNIS_WALL) {
                 wallX = (nearestTennisBall.tx + sx) * TILE_PX + TILE_PX / 2 + this.offset.x;
                 wallY = (nearestTennisBall.ty + sy) * TILE_PX + TILE_PX / 2 + this.offset.y;
                 foundWall = true;
@@ -2477,6 +2474,10 @@ export class WorldLayer {
     for (const g of this.chunkGraphics.values()) g.destroy();
     for (const g of this.ghosts.values()) g.destroy();
     for (const f of this.friendlies) f.destroy();
+    // Clean up cached canvas textures to free GPU memory
+    for (const chunk of this.chunks.values()) {
+      this.invalidateChunkTexture(chunk.cx, chunk.cy);
+    }
     this.chunks.clear();
     this.chunkGraphics.clear();
     this.ghosts.clear();
