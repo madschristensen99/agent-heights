@@ -15,6 +15,7 @@ import { setUserApiKey, deleteUserApiKey } from "./apikeys.js";
 import { TenantManager, HQ2_ROOM_ID } from "./tenant.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
+import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
@@ -175,6 +176,19 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // Stripe payment routes (checkout, webhook, portal, status)
+  if (req.url?.split("?")[0]?.startsWith("/api/stripe")) {
+    void handleStripeRequest(req, res).then((handled) => {
+      if (!handled) {
+        serveStatic(req, res).catch(() => {
+          res.writeHead(500);
+          res.end("Internal server error");
+        });
+      }
+    });
+    return;
+  }
+
   handleMarketplaceRequest(req, res).then((handled) => {
     if (!handled) {
       serveStatic(req, res).catch(() => {
@@ -261,6 +275,18 @@ wss.on("connection", async (ws, req) => {
 
   // Tell the client whether they have an API key set
   ws.send(JSON.stringify({ type: "api_key_status", hasKey: sess.apiKey != null } satisfies ServerMsg));
+
+  // Send payment status so the client can gate UI (entrance fee + subscription)
+  if (isSupabaseConfigured && isStripeConfigured) {
+    const payStatus = await getUserPaymentStatus(user.id);
+    ws.send(JSON.stringify({
+      type: "payment_status",
+      entrancePaid: payStatus.entrancePaid,
+      subscriptionActive: payStatus.subscriptionActive,
+      subscriptionStatus: payStatus.subscriptionStatus,
+      currentPeriodEnd: payStatus.currentPeriodEnd,
+    } satisfies ServerMsg));
+  }
 
   // Helper: send the user's list of rooms they own or have joined
   const sendRoomsList = () => {
@@ -354,6 +380,15 @@ wss.on("connection", async (ws, req) => {
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
         return;
+      }
+
+      // Stripe gating: hiring agents requires an active $20/mo subscription
+      if (msg.type === "hire" && isSupabaseConfigured && isStripeConfigured) {
+        const payStatus = await getUserPaymentStatus(sess.user.id);
+        if (!payStatus.subscriptionActive) {
+          sess.broadcast({ type: "payment_required", reason: "subscription", message: "You need an active $20/month subscription to hire agents." });
+          return;
+        }
       }
       // Chat is allowed in HQ2 and as a visitor, but only works in private rooms
       if (isInHq2 && msg.type === "chat") {

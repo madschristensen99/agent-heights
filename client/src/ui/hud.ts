@@ -13,6 +13,7 @@ import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
+import { startSubscriptionCheckout, openCustomerPortal } from "../payment";
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -894,6 +895,7 @@ export class Hud {
           <button class="tab active" data-tab="agents">AGENTS</button>
           <button class="tab" data-tab="game">GAME</button>
           <button class="tab" data-tab="api">API KEY</button>
+          <button class="tab" data-tab="billing">BILLING</button>
           <button class="tab" data-tab="controls">CONTROLS</button>
           <button class="tab" data-tab="data">DATA</button>
         </div>
@@ -939,6 +941,19 @@ export class Hud {
           <div class="row" style="margin-top:0.75rem;">
             <button class="btn primary" id="s-save-key">SAVE KEY</button>
             <button class="btn danger" id="s-clear-key" ${this.store.hasApiKey ? "" : "disabled"}>CLEAR KEY</button>
+          </div>
+        </div>
+        <div class="tabpanel" data-panel="billing" hidden>
+          <div class="sec">SUBSCRIPTION</div>
+          <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "#53b86b" : "#e05d5d"};">
+            ${this.store.subscriptionActive ? "✓ Active — you can hire agents." : "⚠ No active subscription — $20/month to hire agents."}
+          </div>
+          ${this.store.subscriptionActive
+            ? `<button class="btn" id="s-manage-sub">MANAGE SUBSCRIPTION</button>`
+            : `<button class="btn primary" id="s-subscribe">SUBSCRIBE — $20/MONTH</button>`}
+          <div class="sec" style="margin-top:1rem;">ENTRANCE FEE</div>
+          <div style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.entrancePaid ? "#53b86b" : "#e05d5d"};">
+            ${this.store.entrancePaid ? "✓ Paid — you have access to the world." : "⚠ Not paid — $1 one-time fee required."}
           </div>
         </div>
         <div class="tabpanel" data-panel="controls" hidden>
@@ -1022,6 +1037,14 @@ export class Hud {
       this.net.send({ type: "set_api_key", apiKey: "" });
       modal.hidden = true;
     });
+    const subscribeBtn = document.getElementById("s-subscribe");
+    if (subscribeBtn) {
+      subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout());
+    }
+    const manageSubBtn = document.getElementById("s-manage-sub");
+    if (manageSubBtn) {
+      manageSubBtn.addEventListener("click", () => void openCustomerPortal());
+    }
     document.getElementById("s-cancel")!.addEventListener("click", () => (modal.hidden = true));
     document.getElementById("s-save")!.addEventListener("click", () => {
       this.net.send({
@@ -1111,9 +1134,15 @@ export class Hud {
     const builder = new CharBuilder("h", randomAppearance(), () => {});
 
     modal.hidden = false;
+    const subNotice = this.store.subscriptionActive ? "" : `
+      <div style="margin-bottom:0.8rem;padding:0.6rem 0.8rem;border-radius:8px;background:rgba(229,93,93,0.15);border:1px solid rgba(229,93,93,0.3);color:#e05d5d;font-size:0.82rem;line-height:1.3;">
+        <strong>Subscription required.</strong> You need a $20/month subscription to hire agents.
+        <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:#58c866;color:#0d0d0d;font-size:0.8rem;font-weight:700;cursor:pointer;">Subscribe now →</button>
+      </div>`;
     modal.innerHTML = `
       <div class="modal hire-modal">
         <h2>HIRE AGENT</h2>
+        ${subNotice}
         <div class="hire-layout">
           <div class="hire-appearance">
             ${builder.html()}
@@ -1145,6 +1174,10 @@ export class Hud {
     const modelSel = document.getElementById("h-model") as HTMLSelectElement;
     modelSel.selectedIndex = randomModelIdx;
     document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
+    const subscribeBtn = document.getElementById("h-subscribe");
+    if (subscribeBtn) {
+      subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout());
+    }
     document.getElementById("h-ok")!.addEventListener("click", () => {
       const name = (document.getElementById("h-name") as HTMLInputElement).value.trim();
       if (!name) return;

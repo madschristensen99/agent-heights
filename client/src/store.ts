@@ -58,6 +58,11 @@ export class Store {
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
   hasApiKey = false;
+  entrancePaid = true;
+  subscriptionActive = true;
+  subscriptionStatus = "none";
+  currentPeriodEnd: number | null = null;
+  paymentRequired: { reason: "entrance" | "subscription"; message: string } | null = null;
   roomId: string | null = null;
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
@@ -91,6 +96,11 @@ export class Store {
     this.privateOfficeId = null;
     this.roomsList = [];
     this.hasApiKey = false;
+    this.entrancePaid = true;
+    this.subscriptionActive = true;
+    this.subscriptionStatus = "none";
+    this.currentPeriodEnd = null;
+    this.paymentRequired = null;
     this.railwayData = null;
     this.railwayError = null;
     this.railwayStatus = null;
@@ -332,6 +342,16 @@ export class Store {
         break;
       case "api_key_status":
         this.hasApiKey = msg.hasKey;
+        break;
+      case "payment_status":
+        this.entrancePaid = msg.entrancePaid;
+        this.subscriptionActive = msg.subscriptionActive;
+        this.subscriptionStatus = msg.subscriptionStatus;
+        this.currentPeriodEnd = msg.currentPeriodEnd;
+        break;
+      case "payment_required":
+        this.paymentRequired = { reason: msg.reason, message: msg.message };
+        this.toast(msg.message);
         break;
       case "room_state":
         this.roomId = msg.roomId;

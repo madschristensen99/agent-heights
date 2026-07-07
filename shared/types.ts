@@ -391,7 +391,9 @@ export type ServerMsg =
   | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }
   | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
-  | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean }[] };
+  | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean }[] }
+  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; currentPeriodEnd: number | null }
+  | { type: "payment_required"; reason: "entrance" | "subscription"; message: string };
 
 export const SWARMS_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },

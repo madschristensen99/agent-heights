@@ -5,10 +5,23 @@ import { Net } from "./net";
 import { Store } from "./store";
 import { Hud } from "./ui/hud";
 import { initAuth, onAuthChange, getToken, isAuthEnabled, createAuthOverlay, refreshSession, getUserId } from "./auth";
+import { createPaymentOverlay, updatePaymentState, refreshPaymentStatus, onPaymentChange } from "./payment";
 
 const store = new Store();
 const net = new Net();
-net.onMessage = (msg) => store.apply(msg);
+net.onMessage = (msg) => {
+  if (msg.type === "payment_status") {
+    updatePaymentState({
+      entrancePaid: msg.entrancePaid,
+      subscriptionActive: msg.subscriptionActive,
+      subscriptionStatus: msg.subscriptionStatus,
+      currentPeriodEnd: msg.currentPeriodEnd,
+    });
+  } else if (msg.type === "payment_required") {
+    paymentOverlay.show();
+  }
+  store.apply(msg);
+};
 net.onStatus = (connected) => store.setConnected(connected);
 net.onRefreshToken = async () => {
   const token = await refreshSession();
@@ -17,6 +30,14 @@ net.onRefreshToken = async () => {
 };
 
 const authOverlay = createAuthOverlay();
+const paymentOverlay = createPaymentOverlay();
+
+// Auto-show payment overlay if entrance fee isn't paid
+onPaymentChange((state) => {
+  if (state && !state.entrancePaid) {
+    paymentOverlay.show();
+  }
+});
 
 new Hud(store, net);
 
@@ -66,6 +87,8 @@ onAuthChange((state) => {
     net.setToken(token);
     game.registry.set("userId", newUserId);
     if (!connected) { net.connect(); connected = true; }
+    // Check payment status after login
+    void refreshPaymentStatus();
   } else {
     // Auth is enabled but no session — show login overlay, don't connect
     authOverlay.show();
@@ -74,3 +97,13 @@ onAuthChange((state) => {
 });
 
 void initAuth();
+
+// Handle Stripe checkout redirect — refresh payment status and clean URL
+const params = new URLSearchParams(window.location.search);
+const paymentResult = params.get("payment");
+if (paymentResult) {
+  history.replaceState({}, "", window.location.pathname);
+  if (paymentResult.endsWith("success")) {
+    setTimeout(() => void refreshPaymentStatus(), 1000);
+  }
+}

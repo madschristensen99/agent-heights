@@ -1,0 +1,386 @@
+import Stripe from "stripe";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
+
+const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+
+export const isStripeConfigured = Boolean(secretKey);
+
+export const stripe: Stripe | null = isStripeConfigured
+  ? new Stripe(secretKey)
+  : null;
+
+const ENTRANCE_FEE = 100;
+const SUBSCRIPTION_PRICE = 2000;
+const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
+
+export interface PaymentStatus {
+  entrancePaid: boolean;
+  subscriptionStatus: string;
+  subscriptionActive: boolean;
+  currentPeriodEnd: number | null;
+}
+
+export async function getUserPaymentStatus(userId: string): Promise<PaymentStatus> {
+  if (!isSupabaseConfigured || !isStripeConfigured) {
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, currentPeriodEnd: null };
+  }
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("user_payments")
+      .select("entrance_paid, subscription_status, current_period_end")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null };
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const subscriptionActive =
+      data.subscription_status === "active" ||
+      (data.subscription_status === "trialing") ||
+      (data.subscription_status === "past_due" && data.current_period_end && data.current_period_end > now);
+
+    return {
+      entrancePaid: data.entrance_paid ?? false,
+      subscriptionStatus: data.subscription_status ?? "none",
+      subscriptionActive,
+      currentPeriodEnd: data.current_period_end ?? null,
+    };
+  } catch {
+    return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null };
+  }
+}
+
+async function getOrCreateStripeCustomer(userId: string, email: string): Promise<string> {
+  if (!stripe) throw new Error("Stripe not configured");
+
+  const { data } = await supabaseAdmin
+    .from("user_payments")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (data?.stripe_customer_id) return data.stripe_customer_id;
+
+  const customer = await stripe.customers.create({
+    email,
+    metadata: { userId },
+  });
+
+  await supabaseAdmin
+    .from("user_payments")
+    .upsert({ user_id: userId, stripe_customer_id: customer.id }, { onConflict: "user_id" });
+
+  return customer.id;
+}
+
+export async function createEntranceCheckoutSession(
+  userId: string,
+  email: string,
+): Promise<{ url: string } | { error: string }> {
+  if (!stripe) return { error: "Stripe not configured" };
+  if (!APP_URL) return { error: "APP_URL not configured" };
+
+  try {
+    const customerId = await getOrCreateStripeCustomer(userId, email);
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "payment",
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: ENTRANCE_FEE,
+            product_data: {
+              name: "Agent HQ — World Entrance Fee",
+              description: "One-time fee to enter the Agent HQ world",
+            },
+          },
+        },
+      ],
+      metadata: { userId, type: "entrance" },
+      success_url: `${APP_URL}/?payment=entrance_success`,
+      cancel_url: `${APP_URL}/?payment=entrance_cancel`,
+    });
+
+    return { url: session.url! };
+  } catch (err) {
+    console.error("[stripe] entrance checkout error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to create checkout session" };
+  }
+}
+
+export async function createSubscriptionCheckoutSession(
+  userId: string,
+  email: string,
+): Promise<{ url: string } | { error: string }> {
+  if (!stripe) return { error: "Stripe not configured" };
+  if (!APP_URL) return { error: "APP_URL not configured" };
+
+  try {
+    const customerId = await getOrCreateStripeCustomer(userId, email);
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: SUBSCRIPTION_PRICE,
+            recurring: { interval: "month" },
+            product_data: {
+              name: "Agent HQ — Agent Hire Subscription",
+              description: "$20/month to hire and manage agents in your own room",
+            },
+          },
+        },
+      ],
+      metadata: { userId, type: "subscription" },
+      subscription_data: { metadata: { userId } },
+      success_url: `${APP_URL}/?payment=subscription_success`,
+      cancel_url: `${APP_URL}/?payment=subscription_cancel`,
+    });
+
+    return { url: session.url! };
+  } catch (err) {
+    console.error("[stripe] subscription checkout error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to create checkout session" };
+  }
+}
+
+export async function createCustomerPortalSession(
+  userId: string,
+): Promise<{ url: string } | { error: string }> {
+  if (!stripe) return { error: "Stripe not configured" };
+  if (!APP_URL) return { error: "APP_URL not configured" };
+
+  try {
+    const { data } = await supabaseAdmin
+      .from("user_payments")
+      .select("stripe_customer_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!data?.stripe_customer_id) {
+      return { error: "No Stripe customer found. Please complete a payment first." };
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: data.stripe_customer_id,
+      return_url: APP_URL,
+    });
+
+    return { url: session.url };
+  } catch (err) {
+    console.error("[stripe] portal session error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to create portal session" };
+  }
+}
+
+export async function handleStripeWebhook(
+  rawBody: Buffer,
+  signature: string,
+): Promise<{ received: boolean; error?: string }> {
+  if (!stripe || !webhookSecret) return { received: false, error: "Stripe webhook not configured" };
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+  } catch (err) {
+    return { received: false, error: `Webhook signature verification failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId;
+        if (!userId) break;
+
+        if (session.metadata?.type === "entrance") {
+          await supabaseAdmin
+            .from("user_payments")
+            .upsert({
+              user_id: userId,
+              entrance_paid: true,
+              entrance_paid_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "user_id" });
+          console.log(`[stripe] entrance fee paid for user ${userId}`);
+        }
+
+        if (session.metadata?.type === "subscription" && session.subscription) {
+          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          await supabaseAdmin
+            .from("user_payments")
+            .upsert({
+              user_id: userId,
+              subscription_id: sub.id,
+              subscription_status: sub.status,
+              current_period_end: (sub as any).current_period_end ?? null,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "user_id" });
+          console.log(`[stripe] subscription started for user ${userId}, status=${sub.status}`);
+        }
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const sub = event.data.object as Stripe.Subscription;
+        const userId = sub.metadata?.userId;
+        if (!userId) break;
+
+        await supabaseAdmin
+          .from("user_payments")
+          .update({
+            subscription_status: sub.status,
+            current_period_end: (sub as any).current_period_end ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId);
+        console.log(`[stripe] subscription updated for user ${userId}, status=${sub.status}`);
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const sub = event.data.object as Stripe.Subscription;
+        const userId = sub.metadata?.userId;
+        if (!userId) break;
+
+        await supabaseAdmin
+          .from("user_payments")
+          .update({
+            subscription_status: "canceled",
+            subscription_id: null,
+            current_period_end: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId);
+        console.log(`[stripe] subscription canceled for user ${userId}`);
+        break;
+      }
+
+      default:
+        break;
+    }
+
+    return { received: true };
+  } catch (err) {
+    console.error("[stripe] webhook handler error:", err);
+    return { received: false, error: err instanceof Error ? err.message : "Internal error" };
+  }
+}
+
+// ── HTTP route handler ──────────────────────────────────────────────────────
+
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { verifyToken, type AuthUser } from "./supabase.js";
+
+function json(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+async function readBody(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks);
+}
+
+async function authenticate(req: IncomingMessage): Promise<AuthUser | null> {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) return null;
+  return verifyToken(token);
+}
+
+export async function handleStripeRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<boolean> {
+  const url = req.url?.split("?")[0] ?? "";
+  if (!url.startsWith("/api/stripe")) return false;
+
+  // Webhook — needs raw body, no auth
+  if (url === "/api/stripe/webhook" && req.method === "POST") {
+    if (!isStripeConfigured) {
+      json(res, 503, { error: "Stripe not configured" });
+      return true;
+    }
+    const rawBody = await readBody(req);
+    const signature = req.headers["stripe-signature"] as string | undefined;
+    if (!signature) {
+      json(res, 400, { error: "Missing stripe-signature header" });
+      return true;
+    }
+    const result = await handleStripeWebhook(rawBody, signature);
+    json(res, result.received ? 200 : 400, result.received ? { received: true } : { error: result.error });
+    return true;
+  }
+
+  // All other Stripe routes require auth
+  if (!isSupabaseConfigured) {
+    json(res, 503, { error: "Supabase not configured" });
+    return true;
+  }
+
+  const user = await authenticate(req);
+  if (!user) {
+    json(res, 401, { error: "Authentication required" });
+    return true;
+  }
+
+  // GET /api/stripe/status — check payment status
+  if (url === "/api/stripe/status" && req.method === "GET") {
+    const status = await getUserPaymentStatus(user.id);
+    json(res, 200, status);
+    return true;
+  }
+
+  if (!isStripeConfigured) {
+    json(res, 503, { error: "Stripe not configured" });
+    return true;
+  }
+
+  // POST /api/stripe/checkout-entrance — create $1 entrance fee checkout
+  if (url === "/api/stripe/checkout-entrance" && req.method === "POST") {
+    const result = await createEntranceCheckoutSession(user.id, user.email ?? "");
+    if ("error" in result) {
+      json(res, 400, result);
+    } else {
+      json(res, 200, result);
+    }
+    return true;
+  }
+
+  // POST /api/stripe/checkout-subscription — create $20/mo subscription checkout
+  if (url === "/api/stripe/checkout-subscription" && req.method === "POST") {
+    const result = await createSubscriptionCheckoutSession(user.id, user.email ?? "");
+    if ("error" in result) {
+      json(res, 400, result);
+    } else {
+      json(res, 200, result);
+    }
+    return true;
+  }
+
+  // POST /api/stripe/portal — customer portal for managing subscription
+  if (url === "/api/stripe/portal" && req.method === "POST") {
+    const result = await createCustomerPortalSession(user.id);
+    if ("error" in result) {
+      json(res, 400, result);
+    } else {
+      json(res, 200, result);
+    }
+    return true;
+  }
+
+  json(res, 404, { error: "Unknown Stripe endpoint" });
+  return true;
+}
