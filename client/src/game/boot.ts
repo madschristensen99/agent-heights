@@ -107,13 +107,11 @@ export class BootScene extends Phaser.Scene {
     const processNextStep = () => {
       if (stepIndex >= allSteps.length) {
         updateBar(1, "Ready!");
-        // Don't start the office scene until:
-        //   1. Auth is resolved (if enabled)
-        //   2. The server has delivered all initial data (snapshot, room_state, rooms_list)
-        // This prevents a brief flash of the default boss character in HQ2
-        // before the real player data and room arrive over the WebSocket.
+        console.log("[boot] all loading steps complete, checking auth + initial data");
         const store = this.game.registry.get("store") as Store | undefined;
+        console.log("[boot] store exists:", !!store, "initialDataReady:", store?.initialDataReady);
         const startOffice = () => {
+          console.log("[boot] startOffice called, office active:", this.scene.isActive("office"), "visible:", this.scene.isVisible("office"));
           if (this.scene.isActive("office") || this.scene.isVisible("office")) return;
           console.log("[boot] starting office scene");
           this.scene.start("office");
@@ -122,23 +120,28 @@ export class BootScene extends Phaser.Scene {
         if (isAuthEnabled) {
           let officeStarted = false;
           const startOfficeOnce = () => {
+            console.log("[boot] startOfficeOnce called, already started:", officeStarted);
             if (officeStarted) return;
             officeStarted = true;
             startOffice();
           };
           const tryStart = (state: AuthState) => {
+            console.log("[boot] tryStart called: loading=", state.loading, "hasSession=", !!state.session);
             if (state.loading) return;
             if (state.session) {
+              console.log("[boot] session found, initialDataReady:", store?.initialDataReady);
               if (!store || store.initialDataReady) {
                 startOfficeOnce();
               } else {
                 updateBar(1, "Connecting to server…");
                 this.time.delayedCall(10000, () => startOfficeOnce());
-                store.onInitialData(() => startOfficeOnce());
+                store.onInitialData(() => {
+                  console.log("[boot] onInitialData callback fired");
+                  startOfficeOnce();
+                });
               }
             } else {
-              // No session — auth overlay is showing, but add a fallback
-              // in case the session is restored later
+              console.log("[boot] no session, waiting for auth...");
               this.time.delayedCall(15000, () => {
                 if (!officeStarted) {
                   console.log("[boot] fallback: starting office after 15s timeout (no session)");
@@ -148,9 +151,12 @@ export class BootScene extends Phaser.Scene {
             }
           };
           onAuthChange(tryStart);
-          // Safety net: if auth listener never fires with a session, start after 15s
-          this.time.delayedCall(15000, () => startOfficeOnce());
+          this.time.delayedCall(15000, () => {
+            console.log("[boot] 15s safety net fired, officeStarted:", officeStarted);
+            startOfficeOnce();
+          });
         } else {
+          console.log("[boot] auth not enabled, starting office directly");
           if (!store || store.initialDataReady) {
             startOffice();
           } else {
