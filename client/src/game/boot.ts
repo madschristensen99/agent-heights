@@ -119,21 +119,36 @@ export class BootScene extends Phaser.Scene {
         };
 
         if (isAuthEnabled) {
+          let officeStarted = false;
+          const startOfficeOnce = () => {
+            if (officeStarted) return;
+            officeStarted = true;
+            startOffice();
+          };
           const tryStart = (state: AuthState) => {
             if (state.loading) return;
             if (state.session) {
               if (!store || store.initialDataReady) {
-                startOffice();
+                startOfficeOnce();
               } else {
                 updateBar(1, "Connecting to server…");
-                this.time.delayedCall(10000, () => startOffice());
-                store.onInitialData(() => startOffice());
+                this.time.delayedCall(10000, () => startOfficeOnce());
+                store.onInitialData(() => startOfficeOnce());
               }
+            } else {
+              // No session — auth overlay is showing, but add a fallback
+              // in case the session is restored later
+              this.time.delayedCall(15000, () => {
+                if (!officeStarted) {
+                  console.log("[boot] fallback: starting office after 15s timeout (no session)");
+                  startOfficeOnce();
+                }
+              });
             }
-            // If no session, the auth overlay is showing — don't start office.
-            // When the user logs in, onAuthChange fires again and we start.
           };
           onAuthChange(tryStart);
+          // Safety net: if auth listener never fires with a session, start after 15s
+          this.time.delayedCall(15000, () => startOfficeOnce());
         } else {
           if (!store || store.initialDataReady) {
             startOffice();

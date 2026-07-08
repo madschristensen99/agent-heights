@@ -23,7 +23,9 @@ const listeners = new Set<AuthListener>();
 let currentState: AuthState = { session: null, loading: isAuthEnabled };
 
 function notify() {
-  for (const fn of listeners) fn(currentState);
+  for (const fn of listeners) {
+    try { fn(currentState); } catch (err) { console.error("[auth] listener error:", err); }
+  }
 }
 
 export function onAuthChange(fn: AuthListener): () => void {

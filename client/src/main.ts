@@ -98,25 +98,24 @@ onAuthChange((state) => {
   }
 });
 
+// Clean Stripe redirect params BEFORE initAuth so Supabase doesn't see them
+const _params = new URLSearchParams(window.location.search);
+const _paymentResult = _params.get("payment");
+if (_paymentResult) {
+  history.replaceState({}, "", window.location.pathname);
+}
+
 void initAuth();
 
-// Handle Stripe checkout redirect — poll payment status until webhook processes
-const params = new URLSearchParams(window.location.search);
-const paymentResult = params.get("payment");
-if (paymentResult) {
-  history.replaceState({}, "", window.location.pathname);
-  if (paymentResult.endsWith("success")) {
-    // Webhook may take a few seconds to process — retry up to 10 times
-    let attempts = 0;
-    const poll = async () => {
-      attempts++;
-      await refreshPaymentStatus();
-      // refreshPaymentStatus calls updatePaymentState which triggers
-      // the onPaymentChange listener that hides the overlay when paid
-      if (attempts < 10) {
-        setTimeout(() => void poll(), 2000);
-      }
-    };
-    setTimeout(() => void poll(), 1500);
-  }
+// If we returned from a successful Stripe checkout, poll payment status
+if (_paymentResult && _paymentResult.endsWith("success")) {
+  let attempts = 0;
+  const poll = async () => {
+    attempts++;
+    await refreshPaymentStatus();
+    if (attempts < 10) {
+      setTimeout(() => void poll(), 2000);
+    }
+  };
+  setTimeout(() => void poll(), 1500);
 }
