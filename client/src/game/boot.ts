@@ -111,8 +111,8 @@ export class BootScene extends Phaser.Scene {
         const store = this.game.registry.get("store") as Store | undefined;
         console.log("[boot] store exists:", !!store, "initialDataReady:", store?.initialDataReady);
         const startOffice = () => {
-          console.log("[boot] startOffice called, office active:", this.scene.isActive("office"), "visible:", this.scene.isVisible("office"));
-          if (this.scene.isActive("office") || this.scene.isVisible("office")) return;
+          console.log("[boot] startOffice called, office active:", this.scene.isActive("office"));
+          if (this.scene.isActive("office")) return;
           console.log("[boot] starting office scene");
           this.scene.start("office");
         };
