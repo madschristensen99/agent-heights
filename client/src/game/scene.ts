@@ -182,6 +182,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   create(): void {
+    console.log("[scene] OfficeScene.create() called");
     this.store = this.game.registry.get("store") as Store;
     this.net = this.game.registry.get("net") as import("../net").Net;
     this._myUserId = (this.game.registry.get("userId") as string) ?? null;
@@ -866,7 +867,11 @@ export class OfficeScene extends Phaser.Scene {
     const totalPhases = phases.length;
 
     const processNextPhase = () => {
-      if (phaseIndex >= phases.length) return;
+      if (phaseIndex >= phases.length) {
+        // All phases done — clean up loading overlay regardless of crashes
+        document.getElementById("office-loading")?.remove();
+        return;
+      }
 
       const phase = phases[phaseIndex];
 
@@ -896,6 +901,15 @@ export class OfficeScene extends Phaser.Scene {
 
     // Start processing on the next frame
     this.time.delayedCall(0, processNextPhase);
+
+    // Safety net: remove loading overlay after 20s no matter what
+    this.time.delayedCall(20000, () => {
+      const ov = document.getElementById("office-loading");
+      if (ov) {
+        console.warn("[scene] loading overlay still present after 20s — force removing");
+        ov.remove();
+      }
+    });
   }
 
   /** Draw rounded background behind player nameplate. */
