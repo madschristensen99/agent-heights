@@ -4,6 +4,7 @@ import { CHAR_FRAME_W, CHAR_FRAME_H, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
+import { Store } from "../store";
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
@@ -106,22 +107,41 @@ export class BootScene extends Phaser.Scene {
     const processNextStep = () => {
       if (stepIndex >= allSteps.length) {
         updateBar(1, "Ready!");
-        // Don't start the office scene until auth is resolved.
-        // If auth is enabled, wait for a session; otherwise start immediately.
+        // Don't start the office scene until:
+        //   1. Auth is resolved (if enabled)
+        //   2. The server has delivered all initial data (snapshot, room_state, rooms_list)
+        // This prevents a brief flash of the default boss character in HQ2
+        // before the real player data and room arrive over the WebSocket.
+        const store = this.game.registry.get("store") as Store | undefined;
+        const startOffice = () => {
+          if (this.scene.isActive("office") || this.scene.isVisible("office")) return;
+          this.scene.start("office");
+        };
+
         if (isAuthEnabled) {
-          let started = false;
           const tryStart = (state: AuthState) => {
-            if (started || state.loading) return;
+            if (state.loading) return;
             if (state.session) {
-              started = true;
-              this.scene.start("office");
+              if (!store || store.initialDataReady) {
+                startOffice();
+              } else {
+                updateBar(1, "Connecting to server…");
+                this.time.delayedCall(10000, () => startOffice());
+                store.onInitialData(() => startOffice());
+              }
             }
             // If no session, the auth overlay is showing — don't start office.
             // When the user logs in, onAuthChange fires again and we start.
           };
           onAuthChange(tryStart);
         } else {
-          this.scene.start("office");
+          if (!store || store.initialDataReady) {
+            startOffice();
+          } else {
+            updateBar(1, "Connecting to server…");
+            this.time.delayedCall(10000, () => startOffice());
+            store.onInitialData(() => startOffice());
+          }
         }
         return;
       }

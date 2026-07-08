@@ -32,10 +32,12 @@ net.onRefreshToken = async () => {
 const authOverlay = createAuthOverlay();
 const paymentOverlay = createPaymentOverlay();
 
-// Auto-show payment overlay if entrance fee isn't paid
+// Auto-show/hide payment overlay based on entrance fee status
 onPaymentChange((state) => {
   if (state && !state.entrancePaid) {
     paymentOverlay.show();
+  } else if (state && state.entrancePaid) {
+    paymentOverlay.hide();
   }
 });
 
@@ -98,12 +100,23 @@ onAuthChange((state) => {
 
 void initAuth();
 
-// Handle Stripe checkout redirect — refresh payment status and clean URL
+// Handle Stripe checkout redirect — poll payment status until webhook processes
 const params = new URLSearchParams(window.location.search);
 const paymentResult = params.get("payment");
 if (paymentResult) {
   history.replaceState({}, "", window.location.pathname);
   if (paymentResult.endsWith("success")) {
-    setTimeout(() => void refreshPaymentStatus(), 1000);
+    // Webhook may take a few seconds to process — retry up to 10 times
+    let attempts = 0;
+    const poll = async () => {
+      attempts++;
+      await refreshPaymentStatus();
+      // refreshPaymentStatus calls updatePaymentState which triggers
+      // the onPaymentChange listener that hides the overlay when paid
+      if (attempts < 10) {
+        setTimeout(() => void poll(), 2000);
+      }
+    };
+    setTimeout(() => void poll(), 1500);
   }
 }

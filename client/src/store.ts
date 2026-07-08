@@ -69,6 +69,9 @@ export class Store {
   pendingInvite: PendingInvite | null = null;
   privateOfficeId: string | null = null;
   roomsList: { roomId: string; name: string; isPrivate: boolean }[] = [];
+  /** True once the server has delivered all initial data (snapshot, room_state, rooms_list). */
+  initialDataReady = false;
+  private initialDataCallbacks = new Set<() => void>();
 
   private listeners = new Set<Listener>();
   private toastListeners = new Set<(text: string) => void>();
@@ -106,6 +109,7 @@ export class Store {
     this.railwayStatus = null;
     this.worldSeed = 0;
     this.chunkOverrides = {};
+    this.initialDataReady = false;
     this.emit();
   }
 
@@ -181,7 +185,14 @@ export class Store {
 
   setConnected(connected: boolean): void {
     this.connected = connected;
+    if (!connected) this.initialDataReady = false;
     this.emit();
+  }
+
+  /** Register a one-shot callback fired when initial server data has arrived. */
+  onInitialData(cb: () => void): void {
+    if (this.initialDataReady) { cb(); return; }
+    this.initialDataCallbacks.add(cb);
   }
 
   selected(): AgentInfo | null {
@@ -418,6 +429,11 @@ export class Store {
       }
       case "rooms_list": {
         this.roomsList = msg.rooms;
+        if (!this.initialDataReady) {
+          this.initialDataReady = true;
+          for (const cb of this.initialDataCallbacks) cb();
+          this.initialDataCallbacks.clear();
+        }
         break;
       }
     }
