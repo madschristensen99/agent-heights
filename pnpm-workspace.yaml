@@ -1,6 +1,5 @@
 ignoredBuiltDependencies:
   - esbuild
-  - "@railway/cli"
   - protobufjs
 
 overrides:
