@@ -1,5 +1,5 @@
 onlyBuiltDependencies:
-  - "@railway/cli"
+  - '@railway/cli'
 
 ignoredBuiltDependencies:
   - esbuild
