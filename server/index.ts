@@ -278,14 +278,18 @@ wss.on("connection", async (ws, req) => {
 
   // Send payment status so the client can gate UI (entrance fee + subscription)
   if (isSupabaseConfigured && isStripeConfigured) {
-    const payStatus = await getUserPaymentStatus(user.id);
-    ws.send(JSON.stringify({
-      type: "payment_status",
-      entrancePaid: payStatus.entrancePaid,
-      subscriptionActive: payStatus.subscriptionActive,
-      subscriptionStatus: payStatus.subscriptionStatus,
-      currentPeriodEnd: payStatus.currentPeriodEnd,
-    } satisfies ServerMsg));
+    try {
+      const payStatus = await getUserPaymentStatus(user.id);
+      ws.send(JSON.stringify({
+        type: "payment_status",
+        entrancePaid: payStatus.entrancePaid,
+        subscriptionActive: payStatus.subscriptionActive,
+        subscriptionStatus: payStatus.subscriptionStatus,
+        currentPeriodEnd: payStatus.currentPeriodEnd,
+      } satisfies ServerMsg));
+    } catch (err) {
+      console.error("[server] failed to get payment status:", err);
+    }
   }
 
   // Helper: send the user's list of rooms they own or have joined
