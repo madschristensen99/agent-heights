@@ -396,6 +396,7 @@ export type ServerMsg =
   | { type: "payment_required"; reason: "entrance" | "subscription"; message: string };
 
 export const SWARMS_MODELS = [
+  { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },
   { id: "claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet (fast)" },
   { id: "claude-opus-4", label: "Claude Opus 4 (deep)" },

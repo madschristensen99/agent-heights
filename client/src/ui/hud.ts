@@ -1088,8 +1088,7 @@ export class Hud {
   /** One-click hire: random name, default model, worker role. */
   private quickHire(provider: Provider): void {
     const name = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
-    const models = SWARMS_MODELS;
-    const model = models[Math.floor(Math.random() * models.length)];
+    const model = SWARMS_MODELS[0];
     this.net.send({
       type: "hire",
       name,
@@ -1125,10 +1124,9 @@ export class Hud {
   private openHireModal(): void {
     const modal = document.getElementById("hire-modal")!;
     const suggested = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
-    const randomModelIdx = Math.floor(Math.random() * SWARMS_MODELS.length);
     const modelOptions = () =>
       SWARMS_MODELS
-        .map((m, i) => `<option value="${m.id}"${i === randomModelIdx ? ' selected' : ''}>${m.label}</option>`)
+        .map((m, i) => `<option value="${m.id}"${i === 0 ? ' selected' : ''}>${m.label}</option>`)
         .join("");
 
     const builder = new CharBuilder("h", randomAppearance(), () => {});
@@ -1172,7 +1170,7 @@ export class Hud {
     builder.mount();
 
     const modelSel = document.getElementById("h-model") as HTMLSelectElement;
-    modelSel.selectedIndex = randomModelIdx;
+    modelSel.selectedIndex = 0;
     document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
     const subscribeBtn = document.getElementById("h-subscribe");
     if (subscribeBtn) {
@@ -1202,8 +1200,7 @@ export class Hud {
       agent.language ? `\nLanguage: ${agent.language}` : "",
     ].filter(Boolean).join("\n").slice(0, 4000);
 
-    const models = SWARMS_MODELS;
-    const model = models[Math.floor(Math.random() * models.length)];
+    const model = SWARMS_MODELS[0];
 
     const delivery = {
       name: agent.name.slice(0, 24) || "Agent",
