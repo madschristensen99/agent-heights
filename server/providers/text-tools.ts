@@ -216,6 +216,7 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
     const maxIter = isChat ? 1 : ctx.settings.cline.maxIterations;
     let submitted = false;
     let lastText = "";
+    let lastCallsSig = "";
 
     for (let iter = 0; iter < maxIter; iter++) {
       if (ctx.abort.signal.aborted) return;
@@ -272,6 +273,21 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
         continue;
       }
 
+      // Loop detection: if the model calls the exact same tools with the same inputs as last iteration,
+      // nudge it to try something different instead of repeating.
+      const callsSig = calls.map((c) => `${c.name}:${JSON.stringify(c.input)}`).join("|");
+      if (callsSig === lastCallsSig) {
+        console.log(`[text-tools:${agentId}] loop detected — same tool calls as last iteration`);
+        history.push({
+          role: "user",
+          content:
+            "You are repeating the same tool calls as the previous turn. You already have those results — do not call the same tools again. " +
+            "Move forward with the task: use write_files to create files, bash to run commands, or submit_and_exit if you are done.",
+        });
+        continue;
+      }
+      lastCallsSig = callsSig;
+
       // Execute tool calls
       for (const call of calls) {
         if (ctx.abort.signal.aborted) return;
@@ -307,12 +323,21 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
 
         // Execute the tool
         try {
-          const toolResult = await tool.execute(call.input, {
+          const rawResult = await tool.execute(call.input, {
             agentId,
             iteration: iter,
             signal: ctx.abort.signal,
           });
-          const resultStr = typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult);
+          // Normalize result: SDK built-in tools return {output, isError}, custom tools return strings
+          let resultStr: string;
+          if (typeof rawResult === "string") {
+            resultStr = rawResult;
+          } else if (rawResult && typeof rawResult === "object" && "output" in rawResult) {
+            const out = (rawResult as any).output;
+            resultStr = typeof out === "string" ? out : JSON.stringify(out);
+          } else {
+            resultStr = JSON.stringify(rawResult);
+          }
           const truncated = truncate(resultStr, 2000);
           history.push({ role: "tool", name: call.name, content: truncated });
           console.log(`[text-tools:${agentId}] tool ${call.name} result: ${truncated.slice(0, 100)}`);
