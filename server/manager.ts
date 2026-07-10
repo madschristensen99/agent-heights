@@ -20,8 +20,25 @@ import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID, HERMES_ID, ACCENT_CO
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory } from "./providers/cline.js";
+import { runTextTools, clearTextToolMemory } from "./providers/text-tools.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
+
+/** Models that don't support native function calling and need text-based tool parsing. */
+const TEXT_TOOL_MODELS = new Set([
+  "openrouter/tencent/hy3:free",
+]);
+
+/** Pick the right provider runner based on the model's capabilities. */
+function pickRunner(model: string): ProviderRunner {
+  return TEXT_TOOL_MODELS.has(model) ? runTextTools : runCline;
+}
+
+/** Clear memory for both runner types. */
+function clearAllMemory(agentId: string): void {
+  clearAgentMemory(agentId);
+  clearTextToolMemory(agentId);
+}
 
 const MAX_LOG = 500;
 const DONE_LINGER_MS = 6000;
@@ -496,7 +513,7 @@ export class AgentManager {
     }
     rt.logs = [];
     rt.info.sessionId = null;
-    clearAgentMemory(agentId);
+    clearAllMemory(agentId);
     this.session.record("clear", { agentId: rt.info.id, agentName: rt.info.name });
     this.persist();
     this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
@@ -518,7 +535,7 @@ export class AgentManager {
     for (const rt of free) {
       rt.logs = [];
       rt.info.sessionId = null;
-      clearAgentMemory(rt.info.id);
+      clearAllMemory(rt.info.id);
       this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
       this.log(rt, "status", `Fresh start — chat cleared and memory wiped.`);
     }
@@ -832,7 +849,7 @@ export class AgentManager {
     };
     resetIdleTimer();
 
-    const runner: ProviderRunner = runCline;
+    const runner: ProviderRunner = pickRunner(rt.info.model);
     const slug = this.slugFor(rt);
     const systemPrompt = this.buildSystemPrompt(rt);
     const isManager = rt.info.role === "manager";
@@ -1190,7 +1207,7 @@ export class AgentManager {
       }
     }, 30_000);
 
-    const runner: ProviderRunner = runCline;
+    const runner: ProviderRunner = pickRunner(rt.info.model);
     const prompt = [
       `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
       `This is NOT a work task — do not use tools or touch files.`,
@@ -1234,7 +1251,7 @@ export class AgentManager {
       // If the chat was aborted (timeout or error), clear the chat agent instance
       // so the next chat gets a fresh agent instead of reusing a broken one.
       if (abort.signal.aborted) {
-        clearAgentMemory(`${rt.info.id}:chat`);
+        clearAllMemory(`${rt.info.id}:chat`);
       }
       // Always reset to idle, even on timeout/abort — otherwise the agent is stuck forever
       if (this.agents.has(rt.info.id)) {

@@ -104,7 +104,7 @@ function compactMessages(messages: any[]): any[] {
   return [summaryMsg, ...recentMessages];
 }
 
-async function makeTools(cwd: string, opts?: {
+export async function makeTools(cwd: string, opts?: {
   railway?: boolean;
   sharedCwd?: string;
   workspaceRoot?: string;
