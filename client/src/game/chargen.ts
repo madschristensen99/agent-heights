@@ -616,19 +616,36 @@ function drawChar(s: PixelSheet, ox: number, oy: number, pal: CharPalette, dir: 
       else if (dir2 === "right") { s.set(hx(28), hy(27), ec); }
     } else if (ac === "cap") {
       const cc = mix(pal.shirt, "#000000", 0.1);
+      const ccLi = mix(cc, "#ffffff", 0.2);
+      const ccDk = mix(cc, "#000000", 0.25);
       if (dir2 === "down") {
-        rr(hx(18), hy(8), 28, 6, 3, cc);
-        s.rect(hx(18), hy(11), 28, 1, mix(cc, "#000", 0.2));
-        s.rect(hx(38), hy(11), 14, 2, cc);
-        s.set(hx(20), hy(8), mix(cc, "#fff", 0.2));
+        // Dome — taller, more rounded
+        rr(hx(17), hy(4), 30, 10, 5, cc);
+        // Brim shadow under dome
+        s.rect(hx(17), hy(12), 30, 1, ccDk);
+        // Visor — extends forward-right (3/4 view)
+        s.rect(hx(34), hy(12), 20, 3, cc);
+        s.rect(hx(34), hy(14), 20, 1, ccDk);
+        // Button on top
+        s.set(hx(32), hy(4), ccLi);
+        // Highlight on dome
+        s.set(hx(22), hy(6), ccLi);
+        s.set(hx(23), hy(5), mix(cc, "#fff", 0.1));
       } else if (dir2 === "up") {
-        rr(hx(18), hy(8), 28, 6, 3, cc);
-        s.rect(hx(18), hy(11), 28, 1, mix(cc, "#000", 0.2));
+        rr(hx(17), hy(4), 30, 10, 5, cc);
+        s.rect(hx(17), hy(12), 30, 1, ccDk);
+        s.set(hx(32), hy(4), ccLi);
       } else if (dir2 === "right") {
-        rr(hx(22), hy(8), 22, 6, 3, cc);
-        s.rect(hx(22), hy(11), 22, 1, mix(cc, "#000", 0.2));
-        s.rect(hx(38), hy(11), 12, 2, cc);
-        s.set(hx(24), hy(8), mix(cc, "#fff", 0.2));
+        // Dome — narrower for side view
+        rr(hx(21), hy(4), 24, 10, 5, cc);
+        s.rect(hx(21), hy(12), 24, 1, ccDk);
+        // Visor extends forward (right)
+        s.rect(hx(38), hy(12), 16, 3, cc);
+        s.rect(hx(38), hy(14), 16, 1, ccDk);
+        // Button
+        s.set(hx(26), hy(4), ccLi);
+        // Highlight
+        s.set(hx(25), hy(6), mix(cc, "#fff", 0.15));
       }
     } else if (ac === "beanie") {
       const bc = mix(pal.shirt, "#000000", 0.05);

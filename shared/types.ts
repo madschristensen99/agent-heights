@@ -40,6 +40,7 @@ export const SHIRT_COLORS = [
   "#e05d5d", "#4f9dde", "#53b86b", "#c9852c",
   "#5b7d9e", "#36b5b0", "#d65db1", "#7d8597",
   "#2e3547", "#c44a4a", "#9b59b6", "#e67e22",
+  "#00c853",
 ];
 
 export const PANTS_COLORS = [
@@ -62,6 +63,7 @@ export const ACCENT_COLOR_OPTIONS = [
   "#c44a4a", "#3a7cb5", "#3d9152", "#b0741f",
   "#5b7d9e", "#2a8f8b", "#b54a93", "#6b7280",
   "#e05d5d", "#4f9dde", "#53b86b", "#c9852c",
+  "#00c853",
 ];
 
 /** Piece-by-piece character appearance selected via the character builder. */
