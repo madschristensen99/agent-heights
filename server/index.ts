@@ -12,7 +12,7 @@ import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
 import { rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
-import { startOAuthFlow, handleOAuthCallback } from "./mcp-oauth.js";
+import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { TenantManager, HQ2_ROOM_ID } from "./tenant.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
@@ -427,7 +427,7 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "clear", "clear_all"]);
+      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all"]);
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
         return;
@@ -618,10 +618,37 @@ wss.on("connection", async (ws, req) => {
           console.log(`[mcp-oauth] startOAuthFlow baseUrl=${baseUrl} (PUBLIC_URL=${publicUrl ?? "unset"}, proto=${proto}, host=${host})`);
           try {
             const { authUrl } = await startOAuthFlow(msg.serverUrl, sess.user.id, baseUrl);
-            sess.broadcast({ type: "mcp_oauth_required", serverUrl: msg.serverUrl, authUrl });
+            sess.broadcast({ type: "mcp_oauth_code_needed", serverUrl: msg.serverUrl, authUrl });
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
             sess.broadcast({ type: "mcp_oauth_complete", serverUrl: msg.serverUrl, success: false, error: msg2 });
+          }
+          break;
+        }
+        case "submit_mcp_oauth_code": {
+          const result = await exchangeOAuthCode(msg.callbackUrl);
+          if (result.userId) {
+            const sess2 = tenants.get(result.userId);
+            if (sess2) {
+              if (result.success) {
+                const mcpKeys = await getUserMcpKeys(sess2.user.id);
+                sess2.manager.setMcpKeys(mcpKeys);
+              }
+              sess2.broadcast({
+                type: "mcp_oauth_complete",
+                serverUrl: result.serverUrl ?? msg.serverUrl,
+                success: result.success,
+                error: result.error,
+              });
+            }
+          } else {
+            // No userId means state wasn't found — broadcast error to current session
+            sess.broadcast({
+              type: "mcp_oauth_complete",
+              serverUrl: msg.serverUrl,
+              success: false,
+              error: result.error ?? "OAuth state not found. Please try again.",
+            });
           }
           break;
         }

@@ -122,7 +122,11 @@ export async function startOAuthFlow(
   }
 
   // 3. Dynamic client registration
-  const redirectUri = `${baseUrl}/oauth/callback`;
+  // Use a localhost redirect URI — Robinhood's authorize endpoint only accepts
+  // localhost callbacks (like Claude Code uses). Since we're a web app, we can't
+  // listen on localhost, so we'll have the user manually copy the redirect URL
+  // which contains the auth code.
+  const redirectUri = `http://localhost:1/callback`;
   console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
   let clientId: string;
 
@@ -176,6 +180,39 @@ export async function startOAuthFlow(
   });
 
   return { authUrl: authUrl.toString() };
+}
+
+/**
+ * Exchange an OAuth code from a pasted callback URL.
+ * The user authenticates on Robinhood, gets redirected to localhost (which fails),
+ * then copies the URL and pastes it back to us.
+ */
+export async function exchangeOAuthCode(
+  callbackUrl: string,
+): Promise<{ success: boolean; error?: string; serverUrl?: string; userId?: string }> {
+  cleanupExpired();
+
+  // Parse the callback URL to extract code and state
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(callbackUrl.trim());
+  } catch {
+    return { success: false, error: "Invalid URL format. Paste the full URL from your browser's address bar." };
+  }
+
+  const code = parsedUrl.searchParams.get("code");
+  const state = parsedUrl.searchParams.get("state");
+  const errorParam = parsedUrl.searchParams.get("error");
+
+  if (errorParam) {
+    return { success: false, error: `Robinhood error: ${errorParam}` };
+  }
+  if (!code || !state) {
+    return { success: false, error: "No code or state found in URL. Make sure you copied the full URL." };
+  }
+
+  // Reuse the existing handleOAuthCallback logic
+  return handleOAuthCallback(code, state);
 }
 
 /**

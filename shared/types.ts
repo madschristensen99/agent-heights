@@ -446,6 +446,7 @@ export type ClientMsg =
   | { type: "set_mcp_key"; serverUrl: string; apiKey: string }
   | { type: "check_mcp_keys"; serverUrls: string[] }
   | { type: "start_mcp_oauth"; serverUrl: string }
+  | { type: "submit_mcp_oauth_code"; serverUrl: string; callbackUrl: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme }
   | { type: "join_room"; roomId: string }
@@ -487,6 +488,7 @@ export type ServerMsg =
   | { type: "mcp_key_status"; serverUrl: string; hasKey: boolean }
   | { type: "mcp_keys_status"; results: { serverUrl: string; hasKey: boolean }[] }
   | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string }
+  | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string }

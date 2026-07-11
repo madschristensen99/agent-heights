@@ -1,4 +1,4 @@
-import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig } from "../../shared/types";
+import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -35,6 +35,8 @@ export interface PendingInvite {
 
 /** Client-side mirror of server state; HUD and the Phaser scene subscribe. */
 export class Store {
+  /** Set by main.ts so the store can send WS messages (e.g. for OAuth). */
+  sendFn: ((msg: ClientMsg) => void) | null = null;
   agents = new Map<string, AgentInfo>();
   logs = new Map<string, LogEntry[]>();
   board = new Map<string, TaskCard>();
@@ -377,7 +379,52 @@ export class Store {
         // Full-page redirect (popups block third-party cookies causing 403 after 2FA)
         window.location.href = msg.authUrl;
         break;
+      case "mcp_oauth_code_needed": {
+        // Robinhood requires localhost redirect URIs. Show instructions + input.
+        const modal = document.createElement("div");
+        modal.id = "mcp-oauth-modal";
+        modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;";
+        modal.innerHTML = `
+          <div style="background:#111;border:1px solid #333;border-radius:0.75rem;max-width:480px;width:90vw;padding:1.5rem;color:#e0e0e0;font-family:system-ui,sans-serif;">
+            <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to ${msg.serverUrl}</h3>
+            <p style="font-size:0.8rem;color:#888;margin:0 0 1rem;">
+              1. Click "Open Robinhood Login" below<br>
+              2. Log in and complete 2FA<br>
+              3. You'll be redirected to a localhost URL that won't load — that's OK!<br>
+              4. Copy the full URL from your browser's address bar<br>
+              5. Paste it below and click "Submit Code"
+            </p>
+            <a id="mcp-oauth-link" href="${msg.authUrl}" target="_blank" rel="noopener"
+              style="display:block;text-align:center;padding:0.6rem;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;text-decoration:none;font-size:0.85rem;font-weight:600;margin-bottom:1rem;">
+              🔗 Open Robinhood Login
+            </a>
+            <input id="mcp-oauth-input" type="text" placeholder="Paste the localhost URL here..."
+              style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.75rem;box-sizing:border-box;" />
+            <div style="display:flex;gap:0.5rem;">
+              <button id="mcp-oauth-submit" style="flex:1;padding:0.5rem;border:none;border-radius:0.5rem;background:#e0e0e0;color:#0d0d0d;font-size:0.85rem;font-weight:600;cursor:pointer;">Submit Code</button>
+              <button id="mcp-oauth-cancel" style="padding:0.5rem 1rem;border:1px solid #222;border-radius:0.5rem;background:#1a1a1a;color:#888;font-size:0.85rem;cursor:pointer;">Cancel</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        const input = modal.querySelector("#mcp-oauth-input") as HTMLInputElement;
+        const submitBtn = modal.querySelector("#mcp-oauth-submit") as HTMLButtonElement;
+        const cancelBtn = modal.querySelector("#mcp-oauth-cancel") as HTMLButtonElement;
+        const close = () => modal.remove();
+        cancelBtn.addEventListener("click", close);
+        modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+        submitBtn.addEventListener("click", () => {
+          const url = input.value.trim();
+          if (!url) { input.focus(); return; }
+          this.sendFn?.({ type: "submit_mcp_oauth_code", serverUrl: msg.serverUrl, callbackUrl: url });
+          submitBtn.textContent = "Exchanging...";
+          submitBtn.disabled = true;
+        });
+        break;
+      }
       case "mcp_oauth_complete":
+        // Close OAuth modal if open
+        document.getElementById("mcp-oauth-modal")?.remove();
         if (msg.success) {
           this.toast("MCP server connected! You can now hire this agent.");
         } else {

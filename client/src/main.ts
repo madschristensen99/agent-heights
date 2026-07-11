@@ -9,6 +9,7 @@ import { createPaymentOverlay, updatePaymentState, refreshPaymentStatus, onPayme
 
 const store = new Store();
 const net = new Net();
+store.sendFn = (msg) => net.send(msg);
 net.onMessage = (msg) => {
   if (msg.type === "payment_status") {
     updatePaymentState({
