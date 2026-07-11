@@ -244,6 +244,8 @@ export interface MCPServerConfig {
   headers?: Record<string, string>;
   /** Bearer token — if set, sent as "Authorization: Bearer <token>". */
   authToken?: string;
+  /** Auth method: "oauth" for OAuth 2.0 PKCE flow, "apikey" (default) for paste-a-key. */
+  authType?: "oauth" | "apikey";
   /** Human-readable label for logging. */
   name?: string;
 }
@@ -443,6 +445,7 @@ export type ClientMsg =
   | { type: "set_api_key"; apiKey: string }
   | { type: "set_mcp_key"; serverUrl: string; apiKey: string }
   | { type: "check_mcp_keys"; serverUrls: string[] }
+  | { type: "start_mcp_oauth"; serverUrl: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme }
   | { type: "join_room"; roomId: string }
@@ -483,6 +486,8 @@ export type ServerMsg =
   | { type: "api_key_status"; hasKey: boolean }
   | { type: "mcp_key_status"; serverUrl: string; hasKey: boolean }
   | { type: "mcp_keys_status"; results: { serverUrl: string; hasKey: boolean }[] }
+  | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string }
+  | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }

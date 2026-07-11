@@ -373,6 +373,20 @@ export class Store {
       case "mcp_keys_status":
         for (const fn of this.mcpKeysStatusListeners) fn(msg.results);
         break;
+      case "mcp_oauth_required":
+        // Open OAuth popup window
+        window.open(msg.authUrl, "mcp-oauth", "width=600,height=700,scrollbars=yes");
+        this.toast(`Opening ${msg.serverUrl} authentication...`);
+        break;
+      case "mcp_oauth_complete":
+        if (msg.success) {
+          this.toast("MCP server connected! You can now hire this agent.");
+        } else {
+          this.toast(`OAuth failed: ${msg.error ?? "Unknown error"}`);
+        }
+        // Notify any listeners (marketplace/detail panel) so they can update UI
+        for (const fn of this.mcpKeysStatusListeners) fn([{ serverUrl: msg.serverUrl, hasKey: msg.success }]);
+        break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;
         this.subscriptionActive = msg.subscriptionActive;

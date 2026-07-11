@@ -315,6 +315,9 @@ export class Hud {
     mqBrowser.onCheckMcpKeys = (serverUrls: string[]) => {
       this.net.send({ type: "check_mcp_keys", serverUrls });
     };
+    mqBrowser.onStartMcpOAuth = (serverUrl: string) => {
+      this.net.send({ type: "start_mcp_oauth", serverUrl });
+    };
     const mcpKeysListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
       if (mqBrowser.onMcpKeysStatusHandler) mqBrowser.onMcpKeysStatusHandler(results);
     };
@@ -1509,25 +1512,30 @@ export class Hud {
       const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
       mcpSection.innerHTML = `
         <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
-          <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.4rem;">MCP SERVER KEYS</div>
-          ${mcpServers.map((s, i) => `
+          <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.4rem;">MCP SERVER AUTH</div>
+          ${mcpServers.map((s, i) => {
+            const isOAuth = s.authType === "oauth";
+            return `
             <div style="margin-bottom:0.4rem;">
-              <div style="font-size:0.7rem; color:#888; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")}</div>
+              <div style="font-size:0.7rem; color:#888; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.6rem;">OAuth</span>' : '<span style="color:#666;font-size:0.6rem;">API Key</span>'}</div>
               <div style="display:flex; gap:0.25rem; align-items:center;">
-                <input id="d-mcp-key-${i}" type="password" placeholder="Paste new API key..." autocomplete="off"
-                  style="flex:1; padding:0.35rem 0.5rem; border-radius:0.3rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.75rem;" />
-                <button id="d-mcp-save-${i}" style="padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#333; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">Save</button>
+                ${isOAuth
+                  ? `<button id="d-mcp-connect-${i}" style="flex:1; padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#2a4a6a; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">🔗 Reconnect via OAuth</button>`
+                  : `<input id="d-mcp-key-${i}" type="password" placeholder="Paste new API key..." autocomplete="off"
+                      style="flex:1; padding:0.35rem 0.5rem; border-radius:0.3rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.75rem;" />
+                    <button id="d-mcp-save-${i}" style="padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#333; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">Save</button>`
+                }
                 <span id="d-mcp-status-${i}" style="font-size:0.65rem; color:#888; min-width:1.5rem;"></span>
               </div>
-            </div>
-          `).join("")}
+            </div>`;
+          }).join("")}
         </div>
       `;
       // Check existing key status
       if (serverUrls.length > 0) {
         this.net.send({ type: "check_mcp_keys", serverUrls });
       }
-      // Wire up save buttons
+      // Wire up save buttons (API key auth)
       mcpServers.forEach((s, i) => {
         const saveBtn = mcpSection.querySelector(`#d-mcp-save-${i}`) as HTMLButtonElement | null;
         if (saveBtn && s.url) {
@@ -1542,6 +1550,18 @@ export class Hud {
             setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
             const statusEl = mcpSection.querySelector(`#d-mcp-status-${i}`) as HTMLSpanElement | null;
             if (statusEl) { statusEl.textContent = "✓"; statusEl.style.color = "#53b86b"; }
+          });
+        }
+      });
+      // Wire up OAuth connect buttons
+      mcpServers.forEach((s, i) => {
+        const connectBtn = mcpSection.querySelector(`#d-mcp-connect-${i}`) as HTMLButtonElement | null;
+        if (connectBtn && s.url) {
+          connectBtn.addEventListener("click", () => {
+            this.net.send({ type: "start_mcp_oauth", serverUrl: s.url! });
+            connectBtn.textContent = "Opening login...";
+            connectBtn.disabled = true;
+            setTimeout(() => { connectBtn.textContent = "🔗 Reconnect via OAuth"; connectBtn.disabled = false; }, 5000);
           });
         }
       });

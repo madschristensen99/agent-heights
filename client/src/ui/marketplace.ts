@@ -17,6 +17,7 @@ export class MarketplaceBrowser {
   onHireAgent: (agent: MarketplaceAgent) => void = () => {};
   onSetMcpKey: (serverUrl: string, apiKey: string) => void = () => {};
   onCheckMcpKeys: (serverUrls: string[]) => void = () => {};
+  onStartMcpOAuth: (serverUrl: string) => void = () => {};
   /** Internal handler set by showAgentDetail to receive key status from store. */
   onMcpKeysStatusHandler: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
 
@@ -193,8 +194,8 @@ export class MarketplaceBrowser {
       ? agent.requirements.map((r: string) => `• ${r}`).join("\n")
       : "None";
 
-    // Parse agent config to detect MCP servers that need API keys
-    let mcpServers: { url?: string; name?: string }[] = [];
+    // Parse agent config to detect MCP servers that need auth
+    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey" }[] = [];
     try {
       const config = agent.agent ? JSON.parse(agent.agent) : {};
       if (config.mcpServers && Array.isArray(config.mcpServers)) {
@@ -205,18 +206,23 @@ export class MarketplaceBrowser {
     const mcpKeyHtml = mcpServers.length > 0
       ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
           <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.5rem;">⚠ MCP SERVER AUTH REQUIRED</div>
-          <div id="mq-mcp-warning" style="font-size:0.75rem; color:#e05d5d; margin-bottom:0.5rem;">Paste your API key for each server before hiring.</div>
-          ${mcpServers.map((s, i) => `
+          <div id="mq-mcp-warning" style="font-size:0.75rem; color:#e05d5d; margin-bottom:0.5rem;">Connect each server before hiring.</div>
+          ${mcpServers.map((s, i) => {
+            const isOAuth = s.authType === "oauth";
+            return `
             <div style="margin-bottom:0.5rem;">
-              <div style="font-size:0.75rem; color:#888; margin-bottom:0.25rem;">${this.escape(s.name ?? s.url ?? "MCP Server")}</div>
+              <div style="font-size:0.75rem; color:#888; margin-bottom:0.25rem;">${this.escape(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.65rem;">OAuth</span>' : '<span style="color:#666;font-size:0.65rem;">API Key</span>'}</div>
               <div style="display:flex; gap:0.25rem; align-items:center;">
-                <input id="mq-mcp-key-${i}" type="password" placeholder="Paste API key..." autocomplete="off"
-                  style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />
-                <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>
+                ${isOAuth
+                  ? `<button id="mq-mcp-connect-${i}" style="flex:1; padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#2a4a6a; color:#e0e0e0; font-size:0.8rem; cursor:pointer;">🔗 Connect via OAuth</button>`
+                  : `<input id="mq-mcp-key-${i}" type="password" placeholder="Paste API key..." autocomplete="off"
+                      style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />
+                    <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>`
+                }
                 <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
               </div>
-            </div>
-          `).join("")}
+            </div>`;
+          }).join("")}
         </div>`
       : "";
 
@@ -271,7 +277,7 @@ export class MarketplaceBrowser {
         warning.style.display = allHaveKeys ? "none" : "block";
         if (!allHaveKeys) {
           const missing = serverUrls.filter((u) => !mcpKeyState[u]).length;
-          warning.textContent = `${missing} server(s) still need an API key before you can hire.`;
+          warning.textContent = `${missing} server(s) still need authentication before you can hire.`;
         }
       }
     };
@@ -281,7 +287,7 @@ export class MarketplaceBrowser {
       this.onCheckMcpKeys(serverUrls);
     }
 
-    // Wire up MCP key save buttons
+    // Wire up MCP key save buttons (API key auth)
     mcpServers.forEach((s, i) => {
       const saveBtn = modal.querySelector(`#mq-mcp-save-${i}`) as HTMLButtonElement | null;
       if (saveBtn && s.url) {
@@ -299,6 +305,19 @@ export class MarketplaceBrowser {
           const statusEl = modal.querySelector(`#mq-mcp-status-${i}`) as HTMLSpanElement | null;
           if (statusEl) { statusEl.textContent = "✓"; statusEl.style.color = "#53b86b"; }
           updateHireButton();
+        });
+      }
+    });
+
+    // Wire up OAuth connect buttons
+    mcpServers.forEach((s, i) => {
+      const connectBtn = modal.querySelector(`#mq-mcp-connect-${i}`) as HTMLButtonElement | null;
+      if (connectBtn && s.url) {
+        connectBtn.addEventListener("click", () => {
+          this.onStartMcpOAuth(s.url!);
+          connectBtn.textContent = "Opening login...";
+          connectBtn.disabled = true;
+          setTimeout(() => { connectBtn.textContent = "🔗 Connect via OAuth"; connectBtn.disabled = false; }, 5000);
         });
       }
     });

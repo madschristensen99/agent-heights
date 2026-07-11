@@ -12,6 +12,7 @@ import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
 import { rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
+import { startOAuthFlow, handleOAuthCallback } from "./mcp-oauth.js";
 import { TenantManager, HQ2_ROOM_ID } from "./tenant.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
@@ -184,6 +185,52 @@ const server = createServer((req, res) => {
           res.writeHead(500);
           res.end("Internal server error");
         });
+      }
+    });
+    return;
+  }
+
+  // OAuth callback for MCP servers (e.g. Robinhood)
+  if (req.url?.split("?")[0] === "/oauth/callback") {
+    const urlObj = new URL(req.url, `http://${req.headers.host}`);
+    const code = urlObj.searchParams.get("code");
+    const state = urlObj.searchParams.get("state");
+    const errorParam = urlObj.searchParams.get("error");
+
+    if (errorParam) {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(`<html><body><h2>Authentication failed</h2><p>${errorParam}</p><script>window.close();</script></body></html>`);
+      return;
+    }
+    if (!code || !state) {
+      res.writeHead(400, { "Content-Type": "text/html" });
+      res.end("<html><body><h2>Missing code or state</h2></body></html>");
+      return;
+    }
+
+    void handleOAuthCallback(code, state).then(async (result) => {
+      // Notify the user's WS session if they're online
+      if (result.userId) {
+        const sess = tenants.get(result.userId);
+        if (sess) {
+          if (result.success) {
+            // Refresh manager keys
+            const mcpKeys = await getUserMcpKeys(sess.user.id);
+            sess.manager.setMcpKeys(mcpKeys);
+          }
+          sess.broadcast({
+            type: "mcp_oauth_complete",
+            serverUrl: result.serverUrl ?? "",
+            success: result.success,
+            error: result.error,
+          });
+        }
+      }
+      res.writeHead(200, { "Content-Type": "text/html" });
+      if (result.success) {
+        res.end(`<html><body><h2>✓ Connected!</h2><p>You can close this window and return to AgentHQ.</p><script>window.close();</script></body></html>`);
+      } else {
+        res.end(`<html><body><h2>Authentication failed</h2><p>${result.error ?? "Unknown error"}</p><script>window.close();</script></body></html>`);
       }
     });
     return;
@@ -380,7 +427,7 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "clear", "clear_all"]);
+      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "clear", "clear_all"]);
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
         return;
@@ -560,6 +607,20 @@ wss.on("connection", async (ws, req) => {
           const keyUrls = await getUserMcpKeyUrls(sess.user.id);
           const results = msg.serverUrls.map((u) => ({ serverUrl: u, hasKey: keyUrls.has(u) }));
           sess.broadcast({ type: "mcp_keys_status", results });
+          break;
+        }
+        case "start_mcp_oauth": {
+          // Build base URL from the request headers
+          const proto = (req.headers["x-forwarded-proto"] as string) || "http";
+          const host = (req.headers["host"] as string) || "localhost:8080";
+          const baseUrl = `${proto}://${host}`;
+          try {
+            const { authUrl } = await startOAuthFlow(msg.serverUrl, sess.user.id, baseUrl);
+            sess.broadcast({ type: "mcp_oauth_required", serverUrl: msg.serverUrl, authUrl });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "mcp_oauth_complete", serverUrl: msg.serverUrl, success: false, error: msg2 });
+          }
           break;
         }
         case "set_mcp_key": {
