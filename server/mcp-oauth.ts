@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { setUserMcpKey } from "./apikeys.js";
+import { KNOWN_OAUTH_CONFIGS } from "./oauth-config.js";
 
 /**
  * MCP OAuth 2.0 flow with PKCE (S256).
@@ -109,21 +110,28 @@ export async function startOAuthFlow(
 ): Promise<{ authUrl: string }> {
   cleanupExpired();
 
-  // Check cache first to avoid rate limiting (429)
+  // 1. Check known configs first (no network calls needed)
+  const known = KNOWN_OAUTH_CONFIGS[serverUrl];
   const cached = registrationCache.get(serverUrl);
   let clientId: string;
   let tokenEndpoint: string;
   let authorizationEndpoint: string;
   let scopes: string[];
 
-  if (cached && Date.now() - cached.cachedAt < REGISTRATION_CACHE_MS) {
+  if (known) {
+    clientId = known.clientId;
+    tokenEndpoint = known.tokenEndpoint;
+    authorizationEndpoint = known.authorizationEndpoint;
+    scopes = known.scopes;
+    console.log(`[mcp-oauth] Using known OAuth config for ${serverUrl}`);
+  } else if (cached && Date.now() - cached.cachedAt < REGISTRATION_CACHE_MS) {
     clientId = cached.clientId;
     tokenEndpoint = cached.tokenEndpoint;
     authorizationEndpoint = cached.authorizationEndpoint;
     scopes = cached.scopes;
     console.log(`[mcp-oauth] Using cached registration for ${serverUrl}`);
   } else {
-    // 1. Fetch protected resource metadata
+    // Unknown server — fetch metadata + register dynamically
     const protectedMetadataUrl = `${new URL(serverUrl).origin}/.well-known/oauth-protected-resource${new URL(serverUrl).pathname}`;
     let authServerUrl: string;
 
@@ -137,7 +145,6 @@ export async function startOAuthFlow(
       authServerUrl = serverUrl;
     }
 
-    // 2. Fetch authorization server metadata
     const metadataUrl = deriveAuthServerMetadataUrl(authServerUrl);
     const metadata = await fetchJson<AuthServerMetadata>(metadataUrl);
 
@@ -145,7 +152,6 @@ export async function startOAuthFlow(
       throw new Error("Missing authorization_endpoint or token_endpoint in metadata");
     }
 
-    // 3. Dynamic client registration (localhost redirect — Robinhood requires it)
     const redirectUri = `http://localhost:1/callback`;
     console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
 
@@ -173,7 +179,6 @@ export async function startOAuthFlow(
     authorizationEndpoint = metadata.authorization_endpoint;
     scopes = metadata.scopes_supported || [];
 
-    // Cache it
     registrationCache.set(serverUrl, {
       clientId,
       tokenEndpoint,
