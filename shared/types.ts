@@ -109,6 +109,29 @@ export function randomAppearance(): CharAppearance {
   };
 }
 
+/** Validate that an unknown object is a valid CharAppearance (all indices in range). */
+export function isValidAppearance(obj: unknown): obj is CharAppearance {
+  if (!obj || typeof obj !== "object") return false;
+  const o = obj as Record<string, unknown>;
+  const checks: [string, number][] = [
+    ["skin", SKIN_TONES.length],
+    ["hairStyle", HAIR_STYLES.length],
+    ["hair", HAIR_COLORS.length],
+    ["shirt", SHIRT_COLORS.length],
+    ["pants", PANTS_COLORS.length],
+    ["accessory", ACCESSORIES.length],
+    ["accent", ACCENT_COLOR_OPTIONS.length],
+    ["beard", BEARD_STYLES.length],
+    ["eyeColor", EYE_COLORS.length],
+    ["headFeature", HEAD_FEATURES.length],
+  ];
+  for (const [key, max] of checks) {
+    const v = o[key];
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v >= max) return false;
+  }
+  return true;
+}
+
 /** Build a CharAppearance from a legacy sprite index (maps to the 8 pre-baked palettes). */
 export function appearanceFromSprite(sprite: number): CharAppearance {
   const map: CharAppearance[] = [

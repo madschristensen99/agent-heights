@@ -4,7 +4,7 @@ import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, 
 import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
-  randomAppearance, DEFAULT_APPEARANCE,
+  randomAppearance, DEFAULT_APPEARANCE, isValidAppearance,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
@@ -1193,21 +1193,36 @@ export class Hud {
   }
 
   private hireFromMarketplace(agent: MarketplaceAgent): void {
+    // Parse the agent config JSON — may contain a custom appearance, model,
+    // and systemPrompt for premium/curated marketplace agents.
+    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance } = {};
+    try {
+      if (agent.agent) config = JSON.parse(agent.agent);
+    } catch { /* not JSON or missing — fall back to defaults */ }
+
     const systemPrompt = [
-      agent.description ? agent.description : "",
+      config.systemPrompt || (agent.description ? agent.description : ""),
       agent.use_cases.length > 0 ? `\nUse cases:\n${agent.use_cases.map((u) => `- ${u}`).join("\n")}` : "",
       agent.requirements.length > 0 ? `\nRequirements:\n${agent.requirements.map((r) => `- ${r}`).join("\n")}` : "",
       agent.language ? `\nLanguage: ${agent.language}` : "",
     ].filter(Boolean).join("\n").slice(0, 4000);
 
-    const model = SWARMS_MODELS[0];
+    const model = SWARMS_MODELS.find((m) => m.id === config.model) ?? SWARMS_MODELS[0];
+
+    // Use custom appearance from the agent config if valid, otherwise random.
+    let appearance: CharAppearance;
+    if (config.appearance && isValidAppearance(config.appearance)) {
+      appearance = config.appearance;
+    } else {
+      appearance = randomAppearance();
+    }
 
     const delivery = {
       name: agent.name.slice(0, 24) || "Agent",
       systemPrompt,
       model: model.id,
       provider: "cline",
-      appearance: randomAppearance(),
+      appearance,
     };
 
     // Trigger the helicopter delivery animation. The hire WS message is
