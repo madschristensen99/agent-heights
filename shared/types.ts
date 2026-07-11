@@ -388,6 +388,7 @@ export type ClientMsg =
   | { type: "railway_query" }
   | { type: "update_appearance"; appearance: CharAppearance }
   | { type: "set_api_key"; apiKey: string }
+  | { type: "set_mcp_key"; serverUrl: string; apiKey: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme }
   | { type: "join_room"; roomId: string }
@@ -426,6 +427,7 @@ export type ServerMsg =
   | { type: "railway_status"; ok: boolean; message: string }
   | { type: "railway_data"; data: RailwayData | null; error: string | null }
   | { type: "api_key_status"; hasKey: boolean }
+  | { type: "mcp_key_status"; serverUrl: string; hasKey: boolean }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }

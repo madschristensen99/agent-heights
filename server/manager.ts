@@ -123,10 +123,28 @@ export class AgentManager {
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   bossName = "the boss";
   private apiKey: string | null;
+  private mcpKeys: Record<string, string> = {};
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
   setApiKey(key: string | null): void {
     this.apiKey = key;
+  }
+
+  /** Update the user's MCP server API keys (serverUrl -> decrypted key). */
+  setMcpKeys(keys: Record<string, string>): void {
+    this.mcpKeys = keys;
+  }
+
+  /** Inject the user's stored MCP API keys into the server configs at task time. */
+  private injectMcpKeys(servers?: MCPServerConfig[]): MCPServerConfig[] | undefined {
+    if (!servers || servers.length === 0) return servers;
+    return servers.map((s) => {
+      const key = s.url ? this.mcpKeys[s.url] : undefined;
+      if (key) {
+        return { ...s, authToken: key };
+      }
+      return s;
+    });
   }
 
   constructor(
@@ -900,7 +918,7 @@ export class AgentManager {
         },
         railway: this.settings.railway.enabled && rt.info.role === "devops",
         apiKey: this.apiKey,
-        mcpServers: rt.info.mcpServers,
+        mcpServers: this.injectMcpKeys(rt.info.mcpServers),
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);

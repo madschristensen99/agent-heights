@@ -307,6 +307,9 @@ export class Hud {
 
     const mqBrowser = new MarketplaceBrowser();
     mqBrowser.onHireAgent = (agent: MarketplaceAgent) => this.hireFromMarketplace(agent);
+    mqBrowser.onSetMcpKey = (serverUrl: string, apiKey: string) => {
+      this.net.send({ type: "set_mcp_key", serverUrl, apiKey });
+    };
     document.getElementById("marketplace-btn")!.addEventListener("click", () => mqBrowser.toggle());
 
     document.getElementById("d-publish")!.addEventListener("click", () => this.openPublishModal());

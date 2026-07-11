@@ -6,7 +6,7 @@ import { SessionLogger } from "./logger.js";
 import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
 import { RelationalPersistence } from "./db-relational.js";
 import { isSupabaseConfigured, type AuthUser } from "./supabase.js";
-import { getUserApiKey } from "./apikeys.js";
+import { getUserApiKey, getUserMcpKeys } from "./apikeys.js";
 import {
   isRedisConfigured,
   publish,
@@ -282,6 +282,7 @@ export class TenantManager {
     const clients = new Set<WebSocket>();
     const player = saved?.player ?? null;
     const apiKey = isSupabaseConfigured ? await getUserApiKey(user.id) : null;
+    const mcpKeys = isSupabaseConfigured ? await getUserMcpKeys(user.id) : {};
 
     const sess: UserSession = {
       user,
@@ -344,6 +345,7 @@ export class TenantManager {
     }
 
     sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey);
+    sess.manager.setMcpKeys(mcpKeys);
     if (player) sess.manager.bossName = player.name;
 
     // Register session before joining rooms so joinRoom can update sess.roomId

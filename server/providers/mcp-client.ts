@@ -49,8 +49,12 @@ export interface MCPServerConfig {
   command?: string;
   /** Arguments for the spawned command. */
   args?: string[];
-  /** Environment variables for the spawned command. */
+  /** Environment variables for the spawned command (e.g. API keys). */
   env?: Record<string, string>;
+  /** HTTP headers to send with MCP requests (e.g. Authorization, X-API-Key). */
+  headers?: Record<string, string>;
+  /** Bearer token — if set, sent as "Authorization: Bearer <token>". */
+  authToken?: string;
   /** Human-readable label for logging. */
   name?: string;
 }
@@ -264,9 +268,22 @@ class HttpMCPClient {
     const timeout = setTimeout(() => controller.abort(), 30_000);
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+      };
+      // Inject auth token as Bearer
+      if (this.config.authToken) {
+        headers["Authorization"] = `Bearer ${this.config.authToken}`;
+      }
+      // Merge any custom headers from config
+      if (this.config.headers) {
+        Object.assign(headers, this.config.headers);
+      }
+
       const res = await fetch(this.baseUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -325,9 +342,12 @@ class HttpMCPClient {
 
   private async notify(method: string, params: unknown): Promise<void> {
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (this.config.authToken) headers["Authorization"] = `Bearer ${this.config.authToken}`;
+      if (this.config.headers) Object.assign(headers, this.config.headers);
       await fetch(this.baseUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ jsonrpc: "2.0", method, params }),
       });
     } catch { /* notifications are fire-and-forget */ }

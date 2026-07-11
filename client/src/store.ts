@@ -355,6 +355,9 @@ export class Store {
       case "api_key_status":
         this.hasApiKey = msg.hasKey;
         break;
+      case "mcp_key_status":
+        // MCP key status is handled via toast — no persistent UI state needed
+        break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;
         this.subscriptionActive = msg.subscriptionActive;

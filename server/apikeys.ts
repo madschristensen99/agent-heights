@@ -118,3 +118,111 @@ export async function hasUserApiKey(userId: string): Promise<boolean> {
     return false;
   }
 }
+
+// ── Per-user MCP server API keys ─────────────────────────────────────────
+
+/**
+ * Get a user's decrypted MCP key for a specific server URL.
+ * Returns null if the user has no key stored for that server.
+ */
+export async function getUserMcpKey(userId: string, serverUrl: string): Promise<string | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("user_mcp_keys")
+      .select("encrypted_key")
+      .eq("user_id", userId)
+      .eq("server_url", serverUrl)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return decrypt(data.encrypted_key as string);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get all MCP keys for a user, keyed by server URL.
+ */
+export async function getUserMcpKeys(userId: string): Promise<Record<string, string>> {
+  if (!isSupabaseConfigured) return {};
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("user_mcp_keys")
+      .select("server_url, encrypted_key")
+      .eq("user_id", userId);
+
+    if (error || !data) return {};
+    const result: Record<string, string> = {};
+    for (const row of data) {
+      try {
+        result[row.server_url as string] = decrypt(row.encrypted_key as string);
+      } catch { /* skip corrupted entries */ }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Store (or update) a user's MCP key for a specific server URL, encrypted at rest.
+ */
+export async function setUserMcpKey(userId: string, serverUrl: string, apiKey: string): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured) return { error: "Database not configured" };
+  try {
+    const encrypted = encrypt(apiKey.trim());
+    const { error } = await supabaseAdmin
+      .from("user_mcp_keys")
+      .upsert({
+        user_id: userId,
+        server_url: serverUrl,
+        encrypted_key: encrypted,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Delete a user's MCP key for a specific server URL.
+ */
+export async function deleteUserMcpKey(userId: string, serverUrl: string): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured) return { error: "Database not configured" };
+  try {
+    const { error } = await supabaseAdmin
+      .from("user_mcp_keys")
+      .delete()
+      .eq("user_id", userId)
+      .eq("server_url", serverUrl);
+
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Check which MCP server URLs a user has keys for (without decrypting).
+ * Returns a Set of server URLs.
+ */
+export async function getUserMcpKeyUrls(userId: string): Promise<Set<string>> {
+  if (!isSupabaseConfigured) return new Set();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("user_mcp_keys")
+      .select("server_url")
+      .eq("user_id", userId);
+
+    if (error || !data) return new Set();
+    return new Set(data.map((r: any) => r.server_url as string));
+  } catch {
+    return new Set();
+  }
+}

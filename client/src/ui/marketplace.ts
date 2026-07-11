@@ -15,6 +15,7 @@ export class MarketplaceBrowser {
   private currentTab: MarketplaceItemType = "agent";
   private items: MarketplaceAgent[] | MarketplacePrompt[] | MarketplaceTool[] = [];
   onHireAgent: (agent: MarketplaceAgent) => void = () => {};
+  onSetMcpKey: (serverUrl: string, apiKey: string) => void = () => {};
 
   constructor() {
     this.panel = document.createElement("div");
@@ -189,6 +190,31 @@ export class MarketplaceBrowser {
       ? agent.requirements.map((r: string) => `• ${r}`).join("\n")
       : "None";
 
+    // Parse agent config to detect MCP servers that need API keys
+    let mcpServers: { url?: string; name?: string }[] = [];
+    try {
+      const config = agent.agent ? JSON.parse(agent.agent) : {};
+      if (config.mcpServers && Array.isArray(config.mcpServers)) {
+        mcpServers = config.mcpServers;
+      }
+    } catch { /* not JSON */ }
+
+    const mcpKeyHtml = mcpServers.length > 0
+      ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
+          <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.5rem;">⚠ MCP SERVER AUTH REQUIRED</div>
+          ${mcpServers.map((s, i) => `
+            <div style="margin-bottom:0.5rem;">
+              <div style="font-size:0.75rem; color:#888; margin-bottom:0.25rem;">${this.escape(s.name ?? s.url ?? "MCP Server")}</div>
+              <div style="display:flex; gap:0.25rem;">
+                <input id="mq-mcp-key-${i}" type="password" placeholder="Paste API key..." autocomplete="off"
+                  style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />
+                <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>`
+      : "";
+
     modal.innerHTML = `
       <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; overflow-y:auto; padding:1.5rem; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
         <div style="display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:1rem;">
@@ -211,6 +237,7 @@ export class MarketplaceBrowser {
           <div style="font-size:0.75rem; font-weight:600; color:#666; margin-bottom:0.25rem;">REQUIREMENTS</div>
           <div style="font-size:0.8rem; color:#aaa; white-space:pre-wrap;">${this.escape(requirements)}</div>
         </div>
+        ${mcpKeyHtml}
         <div style="display:flex; gap:0.5rem;">
           <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;">Hire into HQ</button>
           <button id="mq-cancel" style="padding:0.6rem 1rem; border:1px solid #222; border-radius:0.5rem; background:#1a1a1a; color:#888; font-size:0.9rem; cursor:pointer;">Close</button>
@@ -222,6 +249,23 @@ export class MarketplaceBrowser {
 
     modal.querySelector("#mq-cancel")!.addEventListener("click", () => modal.remove());
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+
+    // Wire up MCP key save buttons
+    mcpServers.forEach((s, i) => {
+      const saveBtn = modal.querySelector(`#mq-mcp-save-${i}`) as HTMLButtonElement | null;
+      if (saveBtn && s.url) {
+        saveBtn.addEventListener("click", () => {
+          const input = modal.querySelector(`#mq-mcp-key-${i}`) as HTMLInputElement | null;
+          if (!input) return;
+          const key = input.value.trim();
+          if (!key) { input.focus(); return; }
+          this.onSetMcpKey(s.url!, key);
+          input.value = "";
+          saveBtn.textContent = "✓ Saved";
+          setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
+        });
+      }
+    });
 
     modal.querySelector("#mq-hire")!.addEventListener("click", () => {
       this.onHireAgent(agent);
