@@ -376,7 +376,7 @@ export class Store {
         for (const fn of this.mcpKeysStatusListeners) fn(msg.results);
         break;
       case "mcp_oauth_code_needed": {
-        // Robinhood requires localhost redirect URIs. Show modal with auto-opened popup.
+        // Robinhood requires localhost redirect URIs. Show modal with link + paste input.
         const modal = document.createElement("div");
         modal.id = "mcp-oauth-modal";
         modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;";
@@ -384,15 +384,20 @@ export class Store {
           <div style="background:#111;border:1px solid #333;border-radius:0.75rem;max-width:480px;width:90vw;padding:1.5rem;color:#e0e0e0;font-family:system-ui,sans-serif;">
             <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to Robinhood</h3>
             <div id="mcp-oauth-hint" style="font-size:0.8rem;color:#888;margin:0 0 1rem;">
-              A login window should have opened. After you log in and complete 2FA,
-              you'll be redirected to a localhost URL that won't load — that's normal.
-              Just copy the URL from that page's address bar and paste it below.
+              1. Click "Open Robinhood Login" below<br>
+              2. Log in and complete 2FA<br>
+              3. You'll be redirected to a localhost URL that won't load — that's OK<br>
+              4. Copy the full URL from that page's address bar<br>
+              5. Paste it below and click "Submit Code"
             </div>
+            <a id="mcp-oauth-link" href="${msg.authUrl}" target="_blank" rel="noopener"
+              style="display:block;text-align:center;padding:0.6rem;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;text-decoration:none;font-size:0.85rem;font-weight:600;margin-bottom:1rem;">
+              🔗 Open Robinhood Login
+            </a>
             <input id="mcp-oauth-input" type="text" placeholder="Paste the localhost URL here..."
               style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.5rem;box-sizing:border-box;" />
             <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
               <button id="mcp-oauth-paste" style="padding:0.4rem 0.8rem;border:1px solid #333;border-radius:0.375rem;background:#1a1a1a;color:#888;font-size:0.75rem;cursor:pointer;">📋 Paste</button>
-              <button id="mcp-oauth-reopen" style="padding:0.4rem 0.8rem;border:1px solid #333;border-radius:0.375rem;background:#1a1a1a;color:#888;font-size:0.75rem;cursor:pointer;">↻ Reopen login</button>
             </div>
             <div style="display:flex;gap:0.5rem;">
               <button id="mcp-oauth-submit" style="flex:1;padding:0.5rem;border:none;border-radius:0.5rem;background:#e0e0e0;color:#0d0d0d;font-size:0.85rem;font-weight:600;cursor:pointer;">Submit Code</button>
@@ -401,55 +406,14 @@ export class Store {
           </div>
         `;
         document.body.appendChild(modal);
-        const hint = modal.querySelector("#mcp-oauth-hint") as HTMLDivElement;
         const input = modal.querySelector("#mcp-oauth-input") as HTMLInputElement;
         const submitBtn = modal.querySelector("#mcp-oauth-submit") as HTMLButtonElement;
         const cancelBtn = modal.querySelector("#mcp-oauth-cancel") as HTMLButtonElement;
         const pasteBtn = modal.querySelector("#mcp-oauth-paste") as HTMLButtonElement;
-        const reopenBtn = modal.querySelector("#mcp-oauth-reopen") as HTMLButtonElement;
-        const close = () => { if (pollTimer) clearInterval(pollTimer); modal.remove(); };
+        const close = () => modal.remove();
 
         cancelBtn.addEventListener("click", close);
         modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
-
-        // Auto-open popup and poll for redirect
-        let popup: Window | null = null;
-        let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-        const openPopup = () => {
-          popup = window.open(msg.authUrl, "robinhood-oauth", "width=600,height=700,scrollbars=yes");
-          if (pollTimer) clearInterval(pollTimer);
-          pollTimer = setInterval(() => {
-            if (!popup) return;
-            if (popup.closed) {
-              if (pollTimer) clearInterval(pollTimer);
-              hint.innerHTML = "Login window closed. If you completed authentication, copy the localhost URL from your browser and paste it below.";
-              hint.style.color = "#c9852c";
-              input.focus();
-              return;
-            }
-            try {
-              const popupUrl = popup.location.href;
-              // If we can read it and it has code=, auto-fill
-              if (popupUrl.includes("code=")) {
-                input.value = popupUrl;
-                if (pollTimer) clearInterval(pollTimer);
-                hint.textContent = "✓ Code captured! Click Submit Code.";
-                hint.style.color = "#53b86b";
-                input.focus();
-              }
-            } catch {
-              // Cross-origin error = popup left robinhood.com (redirected to localhost)
-              if (pollTimer) clearInterval(pollTimer);
-              hint.innerHTML = "↳ Robinhood redirected! Copy the URL from the popup's address bar (it starts with <code>http://localhost</code>) and paste it below.";
-              hint.style.color = "#4f9dde";
-              input.focus();
-            }
-          }, 500);
-        };
-
-        openPopup();
-        reopenBtn.addEventListener("click", openPopup);
 
         // Paste from clipboard
         pasteBtn.addEventListener("click", async () => {
