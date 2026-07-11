@@ -103,7 +103,6 @@ export class Net {
   }
 
   send(msg: ClientMsg): void {
-    console.log(`[net] sending: type=${msg.type} name=${(msg as any).name ?? ""}`);
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     } else {
