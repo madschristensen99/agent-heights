@@ -35,7 +35,7 @@ Supported platforms: Claude Code, Claude Desktop, ChatGPT, Codex, Cursor, Grok, 
     '["trading","finance","automation"]',
     '["Robinhood Agentic account","MCP-compatible AI platform","Robinhood Trading MCP connection"]',
     '[{"label":"Robinhood Agentic Trading","url":"https://robinhood.com/us/en/support/articles/agentic-trading-overview/"},{"label":"Connect via MCP","url":"https://agent.robinhood.com/mcp/trading"}]',
-    'https://robinhood.com/assets/robinhood-logo.png'
+    'https://www.google.com/s2/favicons?domain=robinhood.com&sz=128'
   ),
   (
     'Code Review Sentinel',
