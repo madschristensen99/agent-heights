@@ -164,6 +164,7 @@ export class Hud {
   private lastRosterSig = "";
   private lastHandoffSig = "";
   private lastBoardSig = "";
+  private detailMcpListener: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
   private feedCollapsed = false;
   private feedExpanded = false;
   private rosterCollapsed = false;
@@ -206,6 +207,7 @@ export class Hud {
         </div>
         <div class="meta" id="d-meta"></div>
         <div class="task" id="d-task" hidden></div>
+        <div id="d-mcp-section" hidden></div>
         <div class="logs" id="logs"></div>
         <div class="row chat-row">
           <input id="d-chat" placeholder="Say something… (chat, not a task)" />
@@ -313,9 +315,10 @@ export class Hud {
     mqBrowser.onCheckMcpKeys = (serverUrls: string[]) => {
       this.net.send({ type: "check_mcp_keys", serverUrls });
     };
-    this.store.onMcpKeysStatus = (results) => {
+    const mcpKeysListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
       if (mqBrowser.onMcpKeysStatusHandler) mqBrowser.onMcpKeysStatusHandler(results);
     };
+    this.store.mcpKeysStatusListeners.push(mcpKeysListener);
     document.getElementById("marketplace-btn")!.addEventListener("click", () => mqBrowser.toggle());
 
     document.getElementById("d-publish")!.addEventListener("click", () => this.openPublishModal());
@@ -1436,6 +1439,75 @@ export class Hud {
     const taskEl = document.getElementById("d-task")!;
     taskEl.hidden = !agent.task;
     taskEl.textContent = agent.task ? `▸ ${agent.task}` : "";
+
+    // MCP key management for agents with MCP servers
+    const mcpSection = document.getElementById("d-mcp-section")!;
+    // Remove previous detail MCP listener to prevent leaks
+    if (this.detailMcpListener) {
+      const idx = this.store.mcpKeysStatusListeners.indexOf(this.detailMcpListener);
+      if (idx >= 0) this.store.mcpKeysStatusListeners.splice(idx, 1);
+      this.detailMcpListener = null;
+    }
+    const mcpServers = agent.mcpServers;
+    if (mcpServers && mcpServers.length > 0) {
+      mcpSection.hidden = false;
+      const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
+      mcpSection.innerHTML = `
+        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
+          <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.4rem;">MCP SERVER KEYS</div>
+          ${mcpServers.map((s, i) => `
+            <div style="margin-bottom:0.4rem;">
+              <div style="font-size:0.7rem; color:#888; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")}</div>
+              <div style="display:flex; gap:0.25rem; align-items:center;">
+                <input id="d-mcp-key-${i}" type="password" placeholder="Paste new API key..." autocomplete="off"
+                  style="flex:1; padding:0.35rem 0.5rem; border-radius:0.3rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.75rem;" />
+                <button id="d-mcp-save-${i}" style="padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#333; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">Save</button>
+                <span id="d-mcp-status-${i}" style="font-size:0.65rem; color:#888; min-width:1.5rem;"></span>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+      // Check existing key status
+      if (serverUrls.length > 0) {
+        this.net.send({ type: "check_mcp_keys", serverUrls });
+      }
+      // Wire up save buttons
+      mcpServers.forEach((s, i) => {
+        const saveBtn = mcpSection.querySelector(`#d-mcp-save-${i}`) as HTMLButtonElement | null;
+        if (saveBtn && s.url) {
+          saveBtn.addEventListener("click", () => {
+            const input = mcpSection.querySelector(`#d-mcp-key-${i}`) as HTMLInputElement | null;
+            if (!input) return;
+            const key = input.value.trim();
+            if (!key) { input.focus(); return; }
+            this.net.send({ type: "set_mcp_key", serverUrl: s.url!, apiKey: key });
+            input.value = "";
+            saveBtn.textContent = "✓ Saved";
+            setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
+            const statusEl = mcpSection.querySelector(`#d-mcp-status-${i}`) as HTMLSpanElement | null;
+            if (statusEl) { statusEl.textContent = "✓"; statusEl.style.color = "#53b86b"; }
+          });
+        }
+      });
+      // Listen for key status response
+      this.detailMcpListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
+        for (const r of results) {
+          const idx = serverUrls.indexOf(r.serverUrl);
+          if (idx >= 0) {
+            const statusEl = mcpSection.querySelector(`#d-mcp-status-${idx}`) as HTMLSpanElement | null;
+            if (statusEl) {
+              statusEl.textContent = r.hasKey ? "✓" : "✗";
+              statusEl.style.color = r.hasKey ? "#53b86b" : "#e05d5d";
+            }
+          }
+        }
+      };
+      this.store.mcpKeysStatusListeners.push(this.detailMcpListener);
+    } else {
+      mcpSection.hidden = true;
+      mcpSection.innerHTML = "";
+    }
 
     const logs = this.store.logs.get(agent.id) ?? [];
     const logsEl = document.getElementById("logs")!;

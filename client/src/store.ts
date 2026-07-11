@@ -59,8 +59,8 @@ export class Store {
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
   hasApiKey = false;
-  /** Called when server responds with MCP key status batch. */
-  onMcpKeysStatus: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
+  /** Listeners called when server responds with MCP key status batch. */
+  mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
   entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
@@ -83,6 +83,8 @@ export class Store {
   private assemblyListeners = new Set<(agentIds: string[]) => void>();
   private npcStateListeners = new Set<(npcId: string, x: number, y: number, dir: import("../../shared/types").Dir, state: string) => void>();
   private tileUpdatedListeners = new Set<(cx: number, cy: number, tileIndex: number, tile: number) => void>();
+  private emoteListeners = new Set<(agentId: string, emote: string) => void>();
+  private agentChatListeners = new Set<(fromId: string, toId: string, fromName: string, toName: string, text: string) => void>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -142,6 +144,14 @@ export class Store {
 
   onTileUpdated(fn: (cx: number, cy: number, tileIndex: number, tile: number) => void): void {
     this.tileUpdatedListeners.add(fn);
+  }
+
+  onEmote(fn: (agentId: string, emote: string) => void): void {
+    this.emoteListeners.add(fn);
+  }
+
+  onAgentChat(fn: (fromId: string, toId: string, fromName: string, toName: string, text: string) => void): void {
+    this.agentChatListeners.add(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -361,7 +371,7 @@ export class Store {
         // MCP key status is handled via toast — no persistent UI state needed
         break;
       case "mcp_keys_status":
-        if (this.onMcpKeysStatus) this.onMcpKeysStatus(msg.results);
+        for (const fn of this.mcpKeysStatusListeners) fn(msg.results);
         break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;
@@ -444,6 +454,14 @@ export class Store {
           this.initialDataCallbacks.clear();
         }
         break;
+      }
+      case "emote": {
+        for (const fn of this.emoteListeners) fn(msg.agentId, msg.emote);
+        return;
+      }
+      case "agent_chat": {
+        for (const fn of this.agentChatListeners) fn(msg.fromId, msg.toId, msg.fromName, msg.toName, msg.text);
+        return;
       }
     }
     this.emit();
