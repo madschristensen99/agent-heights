@@ -799,6 +799,16 @@ export class OfficeScene extends Phaser.Scene {
               if (!this.ready) return;
               this.world.applyRemoteTileUpdate(cx, cy, tileIndex, tile);
             });
+            this.store.onEmote((agentId, emote) => {
+              if (!this.ready) return;
+              const npc = this.npcs.get(agentId);
+              if (npc) npc.showEmote(emote);
+            });
+            this.store.onAgentChat((fromId, _toId, _fromName, _toName, _text) => {
+              if (!this.ready) return;
+              const npc = this.npcs.get(fromId);
+              if (npc) npc.showEmote("💬", 4000);
+            });
           }
           this.ready = true;
 

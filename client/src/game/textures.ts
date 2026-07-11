@@ -3193,6 +3193,232 @@ function drawTennisNet(ctx: CanvasRenderingContext2D, size: number): void {
 }
 
 // ============================================================
+// EMOTE ICONS — pixel-art style spritesheet for agent emote bubbles
+// ============================================================
+
+const EMOTE_FRAME_SIZE = 32;
+const EMOTE_FRAMES = 8; // lightbulb, coffee, zzz, clipboard, chat, thought, check, exclamation
+
+/** Draw a pixel-art lightbulb icon. */
+function drawEmoteLightbulb(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  // bulb (yellow circle)
+  ctx.fillStyle = "#f5d042";
+  ctx.beginPath();
+  ctx.arc(16 * u, 13 * u, 7 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // highlight
+  ctx.fillStyle = "#fff6b0";
+  ctx.beginPath();
+  ctx.arc(13 * u, 10 * u, 2.5 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // base (gray)
+  ctx.fillStyle = "#888";
+  ctx.fillRect(13 * u, 19 * u, 6 * u, 3 * u);
+  ctx.fillRect(14 * u, 22 * u, 4 * u, 2 * u);
+  // outline
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(16 * u, 13 * u, 7 * u, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Draw a pixel-art coffee mug icon. */
+function drawEmoteCoffee(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  // mug body
+  ctx.fillStyle = "#d4a464";
+  ctx.fillRect(9 * u, 12 * u, 12 * u, 12 * u);
+  // handle
+  ctx.strokeStyle = "#d4a464";
+  ctx.lineWidth = 2.5 * u;
+  ctx.beginPath();
+  ctx.arc(23 * u, 18 * u, 3.5 * u, -Math.PI / 2, Math.PI / 2);
+  ctx.stroke();
+  // coffee surface
+  ctx.fillStyle = "#5c3a1e";
+  ctx.fillRect(10 * u, 13 * u, 10 * u, 2 * u);
+  // steam
+  ctx.strokeStyle = "#ccc";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(13 * u, 8 * u);
+  ctx.quadraticCurveTo(15 * u, 6 * u, 13 * u, 4 * u);
+  ctx.moveTo(18 * u, 8 * u);
+  ctx.quadraticCurveTo(20 * u, 6 * u, 18 * u, 4 * u);
+  ctx.stroke();
+  // outline
+  ctx.strokeStyle = "#8a6a3a";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(9 * u, 12 * u, 12 * u, 12 * u);
+}
+
+/** Draw a pixel-art ZZZ sleep icon. */
+function drawEmoteZzz(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  ctx.fillStyle = "#7a8caa";
+  ctx.font = `bold ${10 * u}px 'M PLUS Rounded 1c', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Z", 10 * u, 22 * u);
+  ctx.fillStyle = "#9aabc4";
+  ctx.font = `bold ${8 * u}px 'M PLUS Rounded 1c', sans-serif`;
+  ctx.fillText("z", 18 * u, 14 * u);
+  ctx.fillStyle = "#bacae0";
+  ctx.font = `bold ${6 * u}px 'M PLUS Rounded 1c', sans-serif`;
+  ctx.fillText("z", 24 * u, 8 * u);
+}
+
+/** Draw a pixel-art clipboard icon. */
+function drawEmoteClipboard(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  // board
+  ctx.fillStyle = "#c4a878";
+  ctx.fillRect(8 * u, 8 * u, 16 * u, 20 * u);
+  // clip
+  ctx.fillStyle = "#999";
+  ctx.fillRect(12 * u, 6 * u, 8 * u, 4 * u);
+  // paper
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(10 * u, 12 * u, 12 * u, 14 * u);
+  // lines on paper
+  ctx.fillStyle = "#4a8cd4";
+  ctx.fillRect(12 * u, 14 * u, 8 * u, 1.5 * u);
+  ctx.fillRect(12 * u, 17 * u, 8 * u, 1.5 * u);
+  ctx.fillRect(12 * u, 20 * u, 6 * u, 1.5 * u);
+  // outline
+  ctx.strokeStyle = "#8a7a5a";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(8 * u, 8 * u, 16 * u, 20 * u);
+}
+
+/** Draw a pixel-art chat bubble icon. */
+function drawEmoteChat(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  // bubble
+  ctx.fillStyle = "#4a9cd8";
+  ctx.beginPath();
+  ctx.roundRect(6 * u, 6 * u, 20 * u, 16 * u, 4 * u);
+  ctx.fill();
+  // tail
+  ctx.beginPath();
+  ctx.moveTo(10 * u, 22 * u);
+  ctx.lineTo(8 * u, 27 * u);
+  ctx.lineTo(14 * u, 22 * u);
+  ctx.fill();
+  // dots
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(12 * u, 14 * u, 2 * u, 0, Math.PI * 2);
+  ctx.arc(18 * u, 14 * u, 2 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // outline
+  ctx.strokeStyle = "#2a7ab8";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(6 * u, 6 * u, 20 * u, 16 * u, 4 * u);
+  ctx.stroke();
+}
+
+/** Draw a pixel-art thought bubble icon. */
+function drawEmoteThought(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  // main cloud
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(14 * u, 14 * u, 6 * u, 0, Math.PI * 2);
+  ctx.arc(20 * u, 12 * u, 5 * u, 0, Math.PI * 2);
+  ctx.arc(22 * u, 17 * u, 4 * u, 0, Math.PI * 2);
+  ctx.arc(13 * u, 19 * u, 4 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // small bubbles
+  ctx.beginPath();
+  ctx.arc(9 * u, 24 * u, 2.5 * u, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(6 * u, 28 * u, 1.5 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // outline
+  ctx.strokeStyle = "#bbb";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(14 * u, 14 * u, 6 * u, 0, Math.PI * 2);
+  ctx.arc(20 * u, 12 * u, 5 * u, 0, Math.PI * 2);
+  ctx.arc(22 * u, 17 * u, 4 * u, 0, Math.PI * 2);
+  ctx.arc(13 * u, 19 * u, 4 * u, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Draw a pixel-art checkmark icon. */
+function drawEmoteCheck(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  // green circle
+  ctx.fillStyle = "#4cb866";
+  ctx.beginPath();
+  ctx.arc(16 * u, 16 * u, 11 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // check
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 3 * u;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(10 * u, 16 * u);
+  ctx.lineTo(14 * u, 20 * u);
+  ctx.lineTo(22 * u, 11 * u);
+  ctx.stroke();
+  // outline
+  ctx.strokeStyle = "#2a8848";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(16 * u, 16 * u, 11 * u, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Draw a pixel-art exclamation icon. */
+function drawEmoteExclamation(ctx: CanvasRenderingContext2D, s: number): void {
+  const u = s / 32;
+  // red circle
+  ctx.fillStyle = "#e05858";
+  ctx.beginPath();
+  ctx.arc(16 * u, 16 * u, 11 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // exclamation
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(14.5 * u, 8 * u, 3 * u, 10 * u);
+  ctx.beginPath();
+  ctx.arc(16 * u, 22 * u, 1.8 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // outline
+  ctx.strokeStyle = "#b03838";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(16 * u, 16 * u, 11 * u, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Draw the full emote spritesheet with all icons. */
+function drawEmoteSheet(ctx: CanvasRenderingContext2D, frameSize: number): void {
+  const drawers = [
+    drawEmoteLightbulb,
+    drawEmoteCoffee,
+    drawEmoteZzz,
+    drawEmoteClipboard,
+    drawEmoteChat,
+    drawEmoteThought,
+    drawEmoteCheck,
+    drawEmoteExclamation,
+  ];
+  for (let i = 0; i < drawers.length; i++) {
+    ctx.save();
+    ctx.translate(i * frameSize, 0);
+    // transparent background — only draw the icon
+    drawers[i](ctx, frameSize);
+    ctx.restore();
+  }
+}
+
+// ============================================================
 // MAIN TEXTURE GENERATION ENTRY POINT
 // ============================================================
 
@@ -3212,6 +3438,7 @@ const ALL_PROC_KEYS = [
   "golf-club", "golf-ball", "axe", "net",
   "big-tree", "tee-box", "leprechaun", "fountain",
   "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
+  "emote-icons",
 ];
 
 /**
@@ -3455,6 +3682,19 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         drawTennisNet(ct.getContext(), 64);
         ct.refresh();
       }
+    },
+  });
+
+  // --- Emote icons ---
+  steps.push({
+    name: "Emote icons",
+    fn: () => {
+      if (tex.exists("emote-icons")) return;
+      const sheetW = EMOTE_FRAME_SIZE * EMOTE_FRAMES;
+      const ct = createCanvasTexture(tex, "emote-icons", sheetW, EMOTE_FRAME_SIZE);
+      drawEmoteSheet(ct.getContext(), EMOTE_FRAME_SIZE);
+      ct.refresh();
+      registerFrames(tex.get("emote-icons")!, EMOTE_FRAMES, EMOTE_FRAME_SIZE);
     },
   });
 

@@ -63,6 +63,8 @@ export class AgentNPC {
   private nameBg: Phaser.GameObjects.Graphics;
   private dot: Phaser.GameObjects.Arc;
   private bubble: Phaser.GameObjects.Sprite;
+  private emoteSprite: Phaser.GameObjects.Sprite;
+  private emoteUntil = 0;
   private shadow: Phaser.GameObjects.Ellipse;
 
   info: AgentInfo;
@@ -113,6 +115,10 @@ export class AgentNPC {
     this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS[info.status]).setStrokeStyle(1, 0x000000, 0.3);
     this.bubble = scene.add.sprite(32, -104, "bubble", 0).setVisible(false);
 
+    this.emoteSprite = scene.add.sprite(0, -140, "emote-icons", 0)
+      .setVisible(false)
+      .setScale(1.5);
+
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
       this.sprite,
@@ -120,6 +126,7 @@ export class AgentNPC {
       this.label,
       this.dot,
       this.bubble,
+      this.emoteSprite,
     ]);
     this.positionDot();
 
@@ -186,6 +193,26 @@ export class AgentNPC {
     return tileOf(this.container.x, this.container.y);
   }
 
+  /** Emote name → frame index in the emote-icons spritesheet. */
+  private static readonly EMOTE_MAP: Record<string, number> = {
+    "💡": 0, // lightbulb
+    "☕": 1, // coffee
+    "💤": 2, // zzz
+    "📋": 3, // clipboard
+    "💬": 4, // chat
+    "💭": 5, // thought
+    "✓": 6,  // check
+    "!": 7,  // exclamation
+  };
+
+  /** Show an emote bubble above the agent for a few seconds. */
+  showEmote(emote: string, duration = 3000): void {
+    const frame = AgentNPC.EMOTE_MAP[emote] ?? 5; // default to thought
+    this.emoteSprite.setFrame(frame);
+    this.emoteSprite.setVisible(true);
+    this.emoteUntil = this.scene.time.now + duration;
+  }
+
   /** Gather around the boss for a briefing before heading to the desk. */
   huddle(spot: Tile, boss: Tile, now: number): void {
     this.huddleUntil = now + 3200 + Math.random() * 1800;
@@ -219,6 +246,13 @@ export class AgentNPC {
     // 100ms keeps speed truthful down to 10fps while still preventing teleports
     dt = Math.min(dt, 100);
     const c = agentTextureKey(this.info);
+
+    // hide expired emote bubble
+    if (this.emoteUntil > 0 && time >= this.emoteUntil) {
+      this.emoteUntil = 0;
+      this.emoteSprite.setVisible(false);
+    }
+
     if (this.huddling && time >= this.huddleUntil) {
       this.huddleUntil = 0;
       this.huddleFace = null;

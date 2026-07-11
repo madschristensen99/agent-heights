@@ -1,10 +1,10 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
-import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig } from "../../../shared/types";
+import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig, PersonalityTraits } from "../../../shared/types";
 import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
-  randomAppearance, DEFAULT_APPEARANCE, isValidAppearance,
+  randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
@@ -1142,6 +1142,7 @@ export class Hud {
         .join("");
 
     const builder = new CharBuilder("h", randomAppearance(), () => {});
+    const personality = randomPersonality();
 
     modal.hidden = false;
     const subNotice = this.store.subscriptionActive ? "" : `
@@ -1149,6 +1150,24 @@ export class Hud {
         <strong>Subscription required.</strong> You need a $20/month subscription to hire agents.
         <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:#58c866;color:#0d0d0d;font-size:0.8rem;font-weight:700;cursor:pointer;">Subscribe now →</button>
       </div>`;
+
+    const traitSliders = ([
+      { key: "openness", label: "Openness", desc: "Creative vs conventional" },
+      { key: "conscientiousness", label: "Conscientiousness", desc: "Organized vs spontaneous" },
+      { key: "extraversion", label: "Extraversion", desc: "Outgoing vs reserved" },
+      { key: "agreeableness", label: "Agreeableness", desc: "Warm vs blunt" },
+      { key: "neuroticism", label: "Neuroticism", desc: "Sensitive vs calm" },
+    ] as const).map(({ key, label, desc }) => `
+      <div class="trait-row" style="margin-bottom:0.5rem;">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:#ccc;margin-bottom:0.2rem;">
+          <span>${label} <span style="color:#666;font-size:0.7rem;">${desc}</span></span>
+          <span id="h-${key}-val" style="color:#4f9dde;font-weight:600;">${Math.round(personality[key] * 100)}</span>
+        </div>
+        <input type="range" id="h-${key}" min="0" max="100" value="${Math.round(personality[key] * 100)}"
+          style="width:100%;accent-color:#4f9dde;" />
+      </div>
+    `).join("");
+
     modal.innerHTML = `
       <div class="modal hire-modal">
         <h2>HIRE AGENT</h2>
@@ -1168,9 +1187,14 @@ export class Hud {
             </label>
             <label>MODEL <select id="h-model">${modelOptions()}</select></label>
             <label>SYSTEM PROMPT <span class="opt">(optional)</span>
-              <textarea id="h-prompt" rows="4"
+              <textarea id="h-prompt" rows="3"
                 placeholder="Standing instructions for this agent, e.g. 'You are a senior TypeScript reviewer. Always write tests first.'"></textarea>
             </label>
+            <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:#888;">PERSONALITY</div>
+            <div id="h-traits" style="padding:0.4rem 0;">
+              ${traitSliders}
+              <button class="btn" id="h-rand-personality" style="font-size:0.75rem;padding:0.3rem 0.6rem;margin-top:0.3rem;">🎲 RANDOMIZE</button>
+            </div>
           </div>
         </div>
         <div class="row">
@@ -1188,9 +1212,39 @@ export class Hud {
     if (subscribeBtn) {
       subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout());
     }
+
+    // Wire up trait slider value displays
+    const traitKeys = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"] as const;
+    for (const key of traitKeys) {
+      const slider = document.getElementById(`h-${key}`) as HTMLInputElement;
+      const valSpan = document.getElementById(`h-${key}-val`)!;
+      slider.addEventListener("input", () => {
+        valSpan.textContent = slider.value;
+      });
+    }
+
+    // Randomize personality button
+    document.getElementById("h-rand-personality")!.addEventListener("click", () => {
+      const newP = randomPersonality();
+      for (const key of traitKeys) {
+        const slider = document.getElementById(`h-${key}`) as HTMLInputElement;
+        const valSpan = document.getElementById(`h-${key}-val`)!;
+        const val = Math.round(newP[key] * 100);
+        slider.value = String(val);
+        valSpan.textContent = String(val);
+      }
+    });
+
     document.getElementById("h-ok")!.addEventListener("click", () => {
       const name = (document.getElementById("h-name") as HTMLInputElement).value.trim();
       if (!name) return;
+      const traits: PersonalityTraits = {
+        openness: parseInt((document.getElementById("h-openness") as HTMLInputElement).value) / 100,
+        conscientiousness: parseInt((document.getElementById("h-conscientiousness") as HTMLInputElement).value) / 100,
+        extraversion: parseInt((document.getElementById("h-extraversion") as HTMLInputElement).value) / 100,
+        agreeableness: parseInt((document.getElementById("h-agreeableness") as HTMLInputElement).value) / 100,
+        neuroticism: parseInt((document.getElementById("h-neuroticism") as HTMLInputElement).value) / 100,
+      };
       this.net.send({
         type: "hire",
         name,
@@ -1199,6 +1253,7 @@ export class Hud {
         systemPrompt: (document.getElementById("h-prompt") as HTMLTextAreaElement).value,
         role: (document.getElementById("h-role") as HTMLSelectElement).value as AgentRole,
         appearance: builder.getAppearance(),
+        personality: traits,
       });
       modal.hidden = true;
     });

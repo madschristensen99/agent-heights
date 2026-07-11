@@ -7,6 +7,55 @@ export type AgentStatus = "idle" | "thinking" | "working" | "done" | "error";
 /** Workers do tasks; a manager splits a goal into subtasks for the team. */
 export type AgentRole = "worker" | "manager" | "devops";
 
+/** Big Five personality traits, each 0–1. */
+export interface PersonalityTraits {
+  openness: number;
+  conscientiousness: number;
+  extraversion: number;
+  agreeableness: number;
+  neuroticism: number;
+}
+
+/** Current emotional state — influenced by personality + recent events. */
+export type AgentMood =
+  | "content"
+  | "focused"
+  | "bored"
+  | "excited"
+  | "frustrated"
+  | "curious"
+  | "social";
+
+export const DEFAULT_PERSONALITY: PersonalityTraits = {
+  openness: 0.5,
+  conscientiousness: 0.5,
+  extraversion: 0.5,
+  agreeableness: 0.5,
+  neuroticism: 0.3,
+};
+
+export function randomPersonality(): PersonalityTraits {
+  const r = () => Math.round(Math.random() * 100) / 100;
+  return {
+    openness: r(),
+    conscientiousness: r(),
+    extraversion: r(),
+    agreeableness: r(),
+    neuroticism: r(),
+  };
+}
+
+export function isValidPersonality(obj: unknown): obj is PersonalityTraits {
+  if (!obj || typeof obj !== "object") return false;
+  const o = obj as Record<string, unknown>;
+  const keys = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"];
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v !== "number" || v < 0 || v > 1) return false;
+  }
+  return true;
+}
+
 /** Number of pre-generated character sprite-sheet variants (char-0..N-1). */
 export const CHAR_VARIANTS = 8;
 
@@ -175,6 +224,10 @@ export interface AgentInfo {
   tasksDone: number;
   /** MCP servers this agent can connect to (e.g. Robinhood Trading MCP). */
   mcpServers?: MCPServerConfig[];
+  /** Big Five personality traits (0–1 each). */
+  personality?: PersonalityTraits;
+  /** Current mood — influenced by personality and recent events. */
+  mood?: AgentMood;
 }
 
 /** Configuration for an external MCP server an agent can connect to. */
@@ -371,7 +424,7 @@ export interface RailwayData {
 export type ClientMsg =
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[] }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
   | { type: "chat"; agentId: string; text: string }
@@ -442,7 +495,9 @@ export type ServerMsg =
   | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
   | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean }[] }
   | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; currentPeriodEnd: number | null }
-  | { type: "payment_required"; reason: "entrance" | "subscription"; message: string };
+  | { type: "payment_required"; reason: "entrance" | "subscription"; message: string }
+  | { type: "emote"; agentId: string; emote: string }
+  | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

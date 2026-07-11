@@ -301,9 +301,9 @@ export class TenantManager {
 
     // ── Broadcast: Redis pub/sub (with in-memory fallback) ──────────────
     // Also forwards agent-related messages to visitors in the owner's room.
-    const FORWARD_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "toast"]);
+    const FORWARD_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "toast", "emote", "agent_chat"]);
     // Agent-related types that should only be delivered when the user is in a private office
-    const AGENT_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "chat_cleared", "assembly"]);
+    const AGENT_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "chat_cleared", "assembly", "emote", "agent_chat"]);
 
     const deliverLocal = (data: string) => {
       for (const ws of sess.clients) {
@@ -347,6 +347,7 @@ export class TenantManager {
     sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey);
     sess.manager.setMcpKeys(mcpKeys);
     if (player) sess.manager.bossName = player.name;
+    sess.manager.startThinkLoop();
 
     // Register session before joining rooms so joinRoom can update sess.roomId
     this.sessions.set(user.id, sess);
@@ -441,6 +442,7 @@ export class TenantManager {
       this.leaveRoom(sess.roomId, userId);
     }
     sess?.cleanup();
+    sess?.manager.stopThinkLoop();
     this.sessions.delete(userId);
   }
 

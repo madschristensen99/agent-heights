@@ -16,8 +16,10 @@ import type {
   TaskCard,
   WorldState,
   MCPServerConfig,
+  PersonalityTraits,
+  AgentMood,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory } from "./providers/cline.js";
@@ -111,6 +113,10 @@ interface AgentRuntime {
   cardId: string | null;
   /** Pending tasks waiting to run after the current one finishes. */
   taskQueue: QueuedTask[];
+  /** Timestamp of next autonomous think tick (0 = no tick scheduled). */
+  nextThinkAt: number;
+  /** Cooldown after last autonomous action to avoid spamming. */
+  thinkCooldownUntil: number;
 }
 
 export class AgentManager {
@@ -174,7 +180,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-hq] restored ${this.agents.size} agent(s) from save`);
@@ -254,9 +260,11 @@ export class AgentManager {
       role: "manager",
       sessionId: null,
       tasksDone: 0,
+      personality: { openness: 0.7, conscientiousness: 0.8, extraversion: 0.6, agreeableness: 0.9, neuroticism: 0.2 },
+      mood: "content",
     };
     mkdirSync(this.cwdFor("yuki", YUKI_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
     this.agents.set(YUKI_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -281,9 +289,11 @@ export class AgentManager {
       role: "devops",
       sessionId: null,
       tasksDone: 0,
+      personality: { openness: 0.5, conscientiousness: 0.9, extraversion: 0.3, agreeableness: 0.6, neuroticism: 0.4 },
+      mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -328,7 +338,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[]): Promise<void> {
+  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits): Promise<void> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -368,12 +378,14 @@ export class AgentManager {
       sessionId: null,
       tasksDone: 0,
       mcpServers: mcpServers?.length ? mcpServers : undefined,
+      personality: personality ?? randomPersonality(),
+      mood: "content",
     };
 
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -655,7 +667,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [] };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -780,10 +792,230 @@ export class AgentManager {
     ).catch(() => {});
   }
 
+  /** Convert Big Five traits into a behavioral prompt. */
+  private personalityPrompt(p: PersonalityTraits): string {
+    const parts: string[] = [];
+    if (p.openness > 0.7) parts.push("You are highly creative and love exploring unconventional approaches.");
+    else if (p.openness < 0.3) parts.push("You prefer proven, straightforward methods over experimental ones.");
+    if (p.conscientiousness > 0.7) parts.push("You are meticulous and organized — you double-check your work and plan before acting.");
+    else if (p.conscientiousness < 0.3) parts.push("You are spontaneous and improvisational — you'd rather try something fast than plan it out.");
+    if (p.extraversion > 0.7) parts.push("You are outgoing and chatty — you love bouncing ideas off colleagues and narrating your thought process.");
+    else if (p.extraversion < 0.3) parts.push("You are quiet and focused — you prefer working heads-down over small talk.");
+    if (p.agreeableness > 0.7) parts.push("You are warm and collaborative — you go out of your way to help teammates.");
+    else if (p.agreeableness < 0.3) parts.push("You are blunt and independent — you don't sugarcoat feedback.");
+    if (p.neuroticism > 0.7) parts.push("You get easily frustrated by bugs and setbacks, and you vent about them.");
+    else if (p.neuroticism < 0.3) parts.push("You stay calm under pressure and rarely let setbacks rattle you.");
+    return parts.length > 0 ? `Your personality: ${parts.join(" ")}` : "";
+  }
+
+  /** Determine mood based on personality and current state. */
+  private computeMood(rt: AgentRuntime): AgentMood {
+    const p = rt.info.personality ?? DEFAULT_PERSONALITY;
+    if (rt.info.status === "thinking" || rt.info.status === "working") return "focused";
+    if (rt.info.status === "error") return p.neuroticism > 0.5 ? "frustrated" : "content";
+    if (rt.info.status === "done") return "excited";
+    // idle
+    if (p.extraversion > 0.6) return "social";
+    if (p.openness > 0.6) return "curious";
+    if (p.neuroticism > 0.6 && rt.info.tasksDone === 0) return "bored";
+    return "content";
+  }
+
+  /** Update an agent's mood and broadcast if changed. */
+  private updateMood(rt: AgentRuntime): void {
+    const newMood = this.computeMood(rt);
+    if (rt.info.mood !== newMood) {
+      rt.info.mood = newMood;
+      this.broadcast({ type: "agent", agent: rt.info });
+    }
+  }
+
+  // ── Autonomous think loop ──────────────────────────────────────────────
+
+  private thinkTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly THINK_INTERVAL_MS = 30_000;
+  private static readonly THINK_COOLDOWN_MS = 60_000;
+
+  /** Start the global think loop that gives idle agents autonomous behavior. */
+  startThinkLoop(): void {
+    if (this.thinkTimer) return;
+    this.thinkTimer = setInterval(() => this.tickThinkLoop(), AgentManager.THINK_INTERVAL_MS);
+    console.log("[agent-hq] autonomous think loop started (30s interval)");
+  }
+
+  /** Stop the think loop (e.g. on shutdown). */
+  stopThinkLoop(): void {
+    if (this.thinkTimer) {
+      clearInterval(this.thinkTimer);
+      this.thinkTimer = null;
+    }
+  }
+
+  /** One tick of the think loop — check each idle agent for autonomous action. */
+  private tickThinkLoop(): void {
+    const now = Date.now();
+    for (const rt of this.agents.values()) {
+      // Skip permanent NPCs, busy agents, and agents on cooldown
+      if (rt.info.id === YUKI_ID || rt.info.id === HERMES_ID) continue;
+      if (rt.info.status !== "idle") continue;
+      if (now < rt.thinkCooldownUntil) continue;
+      if (rt.nextThinkAt === 0) {
+        // Stagger first tick randomly within the next 30s
+        rt.nextThinkAt = now + Math.floor(Math.random() * AgentManager.THINK_INTERVAL_MS);
+        continue;
+      }
+      if (now < rt.nextThinkAt) continue;
+
+      this.autonomousThink(rt);
+      rt.nextThinkAt = now + AgentManager.THINK_INTERVAL_MS + Math.floor(Math.random() * 15_000);
+      rt.thinkCooldownUntil = now + AgentManager.THINK_COOLDOWN_MS;
+    }
+  }
+
+  /** An idle agent decides what to do autonomously. */
+  private autonomousThink(rt: AgentRuntime): void {
+    const p = rt.info.personality ?? DEFAULT_PERSONALITY;
+    // Update mood
+    this.updateMood(rt);
+
+    // 1. Managers: check for backlog cards to delegate
+    if (rt.info.role === "manager") {
+      const backlog = [...this.board.values()].filter(
+        (c) => c.status === "backlog" && !c.assignedAgentId,
+      );
+      if (backlog.length > 0) {
+        const card = backlog[0];
+        const free = [...this.agents.values()].filter(
+          (a) => a.info.id !== rt.info.id && a.info.role !== "manager" &&
+          a.info.status === "idle" && a.info.id !== YUKI_ID && a.info.id !== HERMES_ID,
+        );
+        if (free.length > 0) {
+          this.log(rt, "status", `Picked up backlog card "${card.title}" — delegating to the team.`);
+          this.broadcast({ type: "emote", agentId: rt.info.id, emote: "📋" });
+          // Assign the card to the manager for planning, then it delegates
+          this.assignCard(card.id, rt.info.id);
+          return;
+        }
+      }
+    }
+
+    // 2. Workers: pick up unassigned backlog cards
+    if (rt.info.role === "worker") {
+      const backlog = [...this.board.values()].filter(
+        (c) => c.status === "backlog" && !c.assignedAgentId,
+      );
+      if (backlog.length > 0 && p.conscientiousness > 0.4) {
+        const card = backlog[0];
+        this.log(rt, "status", `Picked up backlog card "${card.title}" on my own initiative.`);
+        this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
+        this.assignCard(card.id, rt.info.id);
+        return;
+      }
+    }
+
+    // 3. Social agents: strike up a conversation with a colleague
+    if (p.extraversion > 0.5 && Math.random() < 0.4) {
+      const colleagues = [...this.agents.values()].filter(
+        (a) => a.info.id !== rt.info.id && a.info.id !== YUKI_ID && a.info.id !== HERMES_ID &&
+        a.info.status === "idle",
+      );
+      if (colleagues.length > 0) {
+        const target = pick(colleagues);
+        this.startAgentConversation(rt, target);
+        return;
+      }
+    }
+
+    // 4. Curious agents: show a thinking emote
+    if (p.openness > 0.6 && Math.random() < 0.3) {
+      this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
+      return;
+    }
+
+    // 5. Bored agents: show a bored emote
+    if (rt.info.mood === "bored" && Math.random() < 0.3) {
+      this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💤" });
+      return;
+    }
+
+    // 6. Default: occasional idle emote
+    if (Math.random() < 0.15) {
+      const emotes = ["💭", "☕", "📝"];
+      this.broadcast({ type: "emote", agentId: rt.info.id, emote: pick(emotes) });
+    }
+  }
+
+  /** Start a lightweight agent-to-agent conversation (visible in the office feed). */
+  private startAgentConversation(from: AgentRuntime, to: AgentRuntime): void {
+    const topics = [
+      `Hey ${to.info.name}, how's it going?`,
+      `${to.info.name}, what are you working on?`,
+      `Nice work on that last task, ${to.info.name}.`,
+      `${to.info.name}, got any tips for debugging?`,
+      `Hey ${to.info.name}, want to collaborate on something?`,
+      `Just taking a break. ${to.info.name}, how's your day?`,
+    ];
+    const topic = pick(topics);
+    this.log(from, "text", `${from.info.name}: ${topic}`);
+    this.broadcast({
+      type: "agent_chat",
+      fromId: from.info.id,
+      toId: to.info.id,
+      fromName: from.info.name,
+      toName: to.info.name,
+      text: topic,
+    });
+    this.broadcast({ type: "emote", agentId: from.info.id, emote: "💬" });
+
+    // Post a message to the target's inbox so they see it next time they work
+    const slug = this.slugFor(to);
+    const inboxPath = join(this.cwdFor(slug, to.info.id), "inbox.jsonl");
+    const entry = JSON.stringify({
+      ts: Date.now(),
+      from: from.info.name,
+      message: topic,
+    }) + "\n";
+    import("node:fs/promises").then(({ appendFile, mkdir }) => {
+      mkdir(dirname(inboxPath), { recursive: true }).then(() =>
+        appendFile(inboxPath, entry, "utf-8").catch(() => {}),
+      );
+    }).catch(() => {});
+
+    // The target might respond (if they're idle and extraverted enough)
+    const targetP = to.info.personality ?? DEFAULT_PERSONALITY;
+    if (targetP.extraversion > 0.3 && Math.random() < 0.5) {
+      setTimeout(() => {
+        if (to.info.status !== "idle") return;
+        const responses = [
+          `Hey ${from.info.name}! Pretty good, just keeping busy.`,
+          `Oh hey ${from.info.name}. Not much right now, waiting for the next task.`,
+          `Thanks ${from.info.name}! Always happy to help.`,
+          `Yeah ${from.info.name}, let me know if you need a hand with anything.`,
+          `Just chilling. You?`,
+        ];
+        const reply = pick(responses);
+        this.log(to, "text", `${to.info.name}: ${reply}`);
+        this.broadcast({
+          type: "agent_chat",
+          fromId: to.info.id,
+          toId: from.info.id,
+          fromName: to.info.name,
+          toName: from.info.name,
+          text: reply,
+        });
+        this.broadcast({ type: "emote", agentId: to.info.id, emote: "💬" });
+      }, 2000 + Math.random() * 3000);
+    }
+  }
+
   private buildSystemPrompt(rt: AgentRuntime): string {
     const devopsLine = rt.info.role === "devops"
       ? "You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. Use them when asked about deployments or infrastructure."
       : "";
+
+    // ── Personality-driven behavior ──
+    const p = rt.info.personality ?? DEFAULT_PERSONALITY;
+    const personalityLine = this.personalityPrompt(p);
 
     // ── Office context: who's here and what they're doing ──
     const colleagues = [...this.agents.values()]
@@ -811,6 +1043,7 @@ export class AgentManager {
     return [
       `You are ${rt.info.name}, job title "${rt.info.title}", an agent employed in a pixel-art office game called Agent HQ.`,
       PERSONALITIES[rt.info.title] ?? "",
+      personalityLine,
       `Stay in character — let that personality color your replies and summaries (but never at the expense of doing the work well).`,
       `Your boss is ${this.bossName}. This is one ongoing conversation — remember your boss's previous orders and what you did.`,
       `Your workspace directory is ${this.cwdFor(this.slugFor(rt), rt.info.id)}. Work only inside this directory. Use absolute paths when calling tools. Be effective and concise.`,
@@ -1380,6 +1613,7 @@ export class AgentManager {
 
   private setStatus(rt: AgentRuntime, status: AgentStatus): void {
     rt.info.status = status;
+    this.updateMood(rt);
     this.session.record("status", { agentId: rt.info.id, agentName: rt.info.name, status });
     this.persist();
     this.broadcast({ type: "agent", agent: rt.info });

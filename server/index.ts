@@ -455,7 +455,7 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         case "hire":
-          await manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers);
+          await manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality);
           break;
         case "update_appearance": {
           if (!sess.player) break;
