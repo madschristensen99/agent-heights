@@ -18,7 +18,7 @@ export interface ProviderConfig {
   headers: Record<string, string>;
 }
 
-const KIMI_BASE_URL = "https://api.moonshot.cn/v1";
+const KIMI_BASE_URL = "https://api.moonshot.ai/v1";
 const KIMI_API_KEY = process.env.KIMI_BACKUP_KEY ?? "";
 
 const SWARMS_BASE_URL = "https://api.swarms.world/v1";
