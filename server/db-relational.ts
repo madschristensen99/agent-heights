@@ -348,7 +348,7 @@ export class RelationalPersistence {
           .from("agent_hq_agents")
           .delete()
           .eq("owner_id", this.userId)
-          .not("id", "in", currentIds);
+          .not("id", "in", `(${currentIds.join(",")})`);
       } catch (err) {
         console.error("[db-rel] delete stale agents failed:", err);
       }
@@ -445,7 +445,7 @@ export class RelationalPersistence {
           .from("agent_hq_task_cards")
           .delete()
           .eq("owner_id", this.userId)
-          .not("id", "in", currentIds);
+          .not("id", "in", `(${currentIds.join(",")})`);
       } catch (err) {
         console.error("[db-rel] delete stale cards failed:", err);
       }
