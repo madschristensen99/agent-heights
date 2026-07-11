@@ -1,4 +1,4 @@
-import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard } from "../../shared/types";
+import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -11,6 +11,7 @@ export interface HelicopterDelivery {
   provider: string;
   sprite?: number;
   appearance?: CharAppearance;
+  mcpServers?: MCPServerConfig[];
 }
 
 export interface FeedItem {

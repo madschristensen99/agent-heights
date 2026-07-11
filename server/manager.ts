@@ -15,6 +15,7 @@ import type {
   ServerMsg,
   TaskCard,
   WorldState,
+  MCPServerConfig,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
@@ -309,7 +310,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null): void {
+  hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[]): void {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -348,6 +349,7 @@ export class AgentManager {
       role,
       sessionId: null,
       tasksDone: 0,
+      mcpServers: mcpServers?.length ? mcpServers : undefined,
     };
 
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
@@ -898,6 +900,7 @@ export class AgentManager {
         },
         railway: this.settings.railway.enabled && rt.info.role === "devops",
         apiKey: this.apiKey,
+        mcpServers: rt.info.mcpServers,
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);

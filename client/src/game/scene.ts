@@ -2402,6 +2402,7 @@ export class OfficeScene extends Phaser.Scene {
             systemPrompt: this.heliDelivery.systemPrompt,
             role: "worker",
             appearance: this.heliDelivery.appearance,
+            mcpServers: this.heliDelivery.mcpServers,
           });
         }
         if (this.heliAgent && sprite.active) {

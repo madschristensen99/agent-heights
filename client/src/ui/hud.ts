@@ -1,6 +1,6 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
-import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance } from "../../../shared/types";
+import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig } from "../../../shared/types";
 import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
@@ -1195,7 +1195,7 @@ export class Hud {
   private hireFromMarketplace(agent: MarketplaceAgent): void {
     // Parse the agent config JSON — may contain a custom appearance, model,
     // and systemPrompt for premium/curated marketplace agents.
-    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance } = {};
+    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[] } = {};
     try {
       if (agent.agent) config = JSON.parse(agent.agent);
     } catch { /* not JSON or missing — fall back to defaults */ }
@@ -1223,6 +1223,7 @@ export class Hud {
       model: model.id,
       provider: "cline",
       appearance,
+      mcpServers: config.mcpServers,
     };
 
     // Trigger the helicopter delivery animation. The hire WS message is

@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
+import { loadMCPTools } from "./mcp-client.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -113,6 +114,7 @@ export async function makeTools(cwd: string, opts?: {
   claimCard?: (cardId: string, agentId: string) => boolean;
   eventFeedPath?: string;
   submitState?: { called: boolean; verified: boolean; callCount: number };
+  mcpServers?: import("../../shared/types.js").MCPServerConfig[];
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -434,6 +436,14 @@ export async function makeTools(cwd: string, opts?: {
     }
   }
 
+  // Load tools from any MCP servers declared in the agent config (e.g. Robinhood Trading MCP)
+  if (opts?.mcpServers && opts.mcpServers.length > 0) {
+    const mcpTools = await loadMCPTools(opts.mcpServers);
+    if (mcpTools.length > 0) {
+      return [...baseWithWorld, ...mcpTools];
+    }
+  }
+
   return baseWithWorld;
 }
 
@@ -466,6 +476,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         claimCard: ctx.claimCard,
         eventFeedPath: ctx.eventFeedPath,
         submitState: isChat ? undefined : submitState,
+        mcpServers: ctx.mcpServers,
       });
       const maxIter = isChat ? 1 : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);

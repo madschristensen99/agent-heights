@@ -3,7 +3,7 @@ export interface TaskEvent {
   text: string;
 }
 
-import type { GameSettings } from "../../shared/types.js";
+import type { GameSettings, MCPServerConfig } from "../../shared/types.js";
 
 export interface RunContext {
   cwd: string;
@@ -31,6 +31,8 @@ export interface RunContext {
   eventFeedPath?: string;
   /** If true, this is a casual chat — no tools, 1 iteration, short timeout. */
   isChat?: boolean;
+  /** MCP servers this agent can connect to (e.g. Robinhood Trading MCP). */
+  mcpServers?: MCPServerConfig[];
 }
 
 export type ProviderRunner = (

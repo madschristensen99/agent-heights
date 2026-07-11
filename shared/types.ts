@@ -173,6 +173,22 @@ export interface AgentInfo {
    */
   sessionId: string | null;
   tasksDone: number;
+  /** MCP servers this agent can connect to (e.g. Robinhood Trading MCP). */
+  mcpServers?: MCPServerConfig[];
+}
+
+/** Configuration for an external MCP server an agent can connect to. */
+export interface MCPServerConfig {
+  /** Remote HTTP/SSE URL (e.g. "https://agent.robinhood.com/mcp/trading"). */
+  url?: string;
+  /** Command to spawn for stdio transport (e.g. "npx"). */
+  command?: string;
+  /** Arguments for the spawned command. */
+  args?: string[];
+  /** Environment variables for the spawned command. */
+  env?: Record<string, string>;
+  /** Human-readable label for logging. */
+  name?: string;
 }
 
 // ----------------------------------------------------------- Labyrinth ---
@@ -351,7 +367,7 @@ export interface RailwayData {
 export type ClientMsg =
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[] }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
   | { type: "chat"; agentId: string; text: string }
