@@ -173,7 +173,8 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
     return;
   }
 
-  const apiKey = ctx.apiKey ?? providerConfig.apiKey;
+  // When using Kimi, ignore per-user Swarms keys — they won't work with the Kimi API.
+  const apiKey = (ctx.apiKey && providerConfig.name === "swarms") ? ctx.apiKey : providerConfig.apiKey;
   const model = resolveModel(ctx.model, providerConfig.name);
   const isChat = ctx.isChat ?? false;
   const agentId = isChat ? `${ctx.agentId}:chat` : ctx.agentId;

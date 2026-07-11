@@ -457,7 +457,11 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   }
 
   const { agentId: rawAgentId } = ctx;
-  const apiKey = ctx.apiKey ?? providerConfig.apiKey;
+  // When using Kimi, ignore per-user Swarms keys — they won't work with the Kimi API.
+  if (ctx.apiKey && providerConfig.name === "swarms") {
+    providerConfig.apiKey = ctx.apiKey;
+    providerConfig.headers = { "x-api-key": ctx.apiKey };
+  }
   const model = resolveModel(ctx.model, providerConfig.name);
   const isChat = ctx.isChat ?? false;
   // Use a separate agent instance for chat so it doesn't inherit task tools/iterations
@@ -484,7 +488,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       agent = new Agent({
         providerId: "openai-compatible",
         modelId: model,
-        apiKey,
+        apiKey: providerConfig.apiKey,
         baseUrl: providerConfig.baseUrl,
         headers: providerConfig.headers,
         systemPrompt: ctx.systemPrompt,
