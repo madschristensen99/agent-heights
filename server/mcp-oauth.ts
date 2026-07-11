@@ -87,6 +87,17 @@ function deriveAuthServerMetadataUrl(mcpServerUrl: string): string {
   return `${url.origin}/.well-known/oauth-authorization-server${path}`;
 }
 
+/** Cached OAuth metadata + client registration per server URL (avoids 429s). */
+interface CachedRegistration {
+  clientId: string;
+  tokenEndpoint: string;
+  authorizationEndpoint: string;
+  scopes: string[];
+  cachedAt: number;
+}
+const registrationCache = new Map<string, CachedRegistration>();
+const REGISTRATION_CACHE_MS = 10 * 60 * 1000; // 10 minutes
+
 /**
  * Start an OAuth flow for an MCP server.
  * Returns the authorization URL the user should open in their browser.
@@ -94,43 +105,54 @@ function deriveAuthServerMetadataUrl(mcpServerUrl: string): string {
 export async function startOAuthFlow(
   serverUrl: string,
   userId: string,
-  baseUrl: string,
+  _baseUrl: string,
 ): Promise<{ authUrl: string }> {
   cleanupExpired();
 
-  // 1. Fetch protected resource metadata (from WWW-Authenticate or derive it)
-  const protectedMetadataUrl = `${new URL(serverUrl).origin}/.well-known/oauth-protected-resource${new URL(serverUrl).pathname}`;
-  let authServerUrl: string;
-
-  try {
-    const protectedMetadata = await fetchJson<ProtectedResourceMetadata>(protectedMetadataUrl);
-    if (!protectedMetadata.authorization_servers || protectedMetadata.authorization_servers.length === 0) {
-      throw new Error("No authorization_servers in protected resource metadata");
-    }
-    authServerUrl = protectedMetadata.authorization_servers[0];
-  } catch {
-    // Fallback: derive from MCP server URL
-    authServerUrl = serverUrl;
-  }
-
-  // 2. Fetch authorization server metadata
-  const metadataUrl = deriveAuthServerMetadataUrl(authServerUrl);
-  const metadata = await fetchJson<AuthServerMetadata>(metadataUrl);
-
-  if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
-    throw new Error("Missing authorization_endpoint or token_endpoint in metadata");
-  }
-
-  // 3. Dynamic client registration
-  // Use a localhost redirect URI — Robinhood's authorize endpoint only accepts
-  // localhost callbacks (like Claude Code uses). Since we're a web app, we can't
-  // listen on localhost, so we'll have the user manually copy the redirect URL
-  // which contains the auth code.
-  const redirectUri = `http://localhost:1/callback`;
-  console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
+  // Check cache first to avoid rate limiting (429)
+  const cached = registrationCache.get(serverUrl);
   let clientId: string;
+  let tokenEndpoint: string;
+  let authorizationEndpoint: string;
+  let scopes: string[];
 
-  if (metadata.registration_endpoint) {
+  if (cached && Date.now() - cached.cachedAt < REGISTRATION_CACHE_MS) {
+    clientId = cached.clientId;
+    tokenEndpoint = cached.tokenEndpoint;
+    authorizationEndpoint = cached.authorizationEndpoint;
+    scopes = cached.scopes;
+    console.log(`[mcp-oauth] Using cached registration for ${serverUrl}`);
+  } else {
+    // 1. Fetch protected resource metadata
+    const protectedMetadataUrl = `${new URL(serverUrl).origin}/.well-known/oauth-protected-resource${new URL(serverUrl).pathname}`;
+    let authServerUrl: string;
+
+    try {
+      const protectedMetadata = await fetchJson<ProtectedResourceMetadata>(protectedMetadataUrl);
+      if (!protectedMetadata.authorization_servers || protectedMetadata.authorization_servers.length === 0) {
+        throw new Error("No authorization_servers in protected resource metadata");
+      }
+      authServerUrl = protectedMetadata.authorization_servers[0];
+    } catch {
+      authServerUrl = serverUrl;
+    }
+
+    // 2. Fetch authorization server metadata
+    const metadataUrl = deriveAuthServerMetadataUrl(authServerUrl);
+    const metadata = await fetchJson<AuthServerMetadata>(metadataUrl);
+
+    if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
+      throw new Error("Missing authorization_endpoint or token_endpoint in metadata");
+    }
+
+    // 3. Dynamic client registration (localhost redirect — Robinhood requires it)
+    const redirectUri = `http://localhost:1/callback`;
+    console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
+
+    if (!metadata.registration_endpoint) {
+      throw new Error("No registration_endpoint available — cannot register OAuth client");
+    }
+
     const registration = await fetch(`${metadata.registration_endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -142,12 +164,23 @@ export async function startOAuthFlow(
       }),
     });
     if (!registration.ok) {
-      throw new Error(`Dynamic client registration failed: ${registration.status}`);
+      const errText = await registration.text().catch(() => "");
+      throw new Error(`Dynamic client registration failed: ${registration.status} ${errText}`);
     }
     const regData = await registration.json() as { client_id: string };
     clientId = regData.client_id;
-  } else {
-    throw new Error("No registration_endpoint available — cannot register OAuth client");
+    tokenEndpoint = metadata.token_endpoint;
+    authorizationEndpoint = metadata.authorization_endpoint;
+    scopes = metadata.scopes_supported || [];
+
+    // Cache it
+    registrationCache.set(serverUrl, {
+      clientId,
+      tokenEndpoint,
+      authorizationEndpoint,
+      scopes,
+      cachedAt: Date.now(),
+    });
   }
 
   // 4. Generate PKCE
@@ -155,9 +188,9 @@ export async function startOAuthFlow(
 
   // 5. Build authorization URL
   const state = randomUUID();
-  const scopes = metadata.scopes_supported || [];
+  const redirectUri = `http://localhost:1/callback`;
 
-  const authUrl = new URL(metadata.authorization_endpoint);
+  const authUrl = new URL(authorizationEndpoint);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -174,7 +207,7 @@ export async function startOAuthFlow(
     serverUrl,
     clientId,
     codeVerifier: verifier,
-    tokenEndpoint: metadata.token_endpoint,
+    tokenEndpoint,
     redirectUri,
     createdAt: Date.now(),
   });

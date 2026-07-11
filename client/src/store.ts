@@ -375,10 +375,6 @@ export class Store {
       case "mcp_keys_status":
         for (const fn of this.mcpKeysStatusListeners) fn(msg.results);
         break;
-      case "mcp_oauth_required":
-        // Full-page redirect (popups block third-party cookies causing 403 after 2FA)
-        window.location.href = msg.authUrl;
-        break;
       case "mcp_oauth_code_needed": {
         // Robinhood requires localhost redirect URIs. Show instructions + input.
         const modal = document.createElement("div");
