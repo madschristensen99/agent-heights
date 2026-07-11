@@ -131,7 +131,7 @@ export async function startOAuthFlow(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_name: "AgentHQ",
+        client_name: "Claude Code",
         redirect_uris: [redirectUri],
         grant_types: ["authorization_code", "refresh_token"],
         token_endpoint_auth_method: "none",
