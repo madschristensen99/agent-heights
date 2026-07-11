@@ -123,6 +123,7 @@ export async function startOAuthFlow(
 
   // 3. Dynamic client registration
   const redirectUri = `${baseUrl}/oauth/callback`;
+  console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
   let clientId: string;
 
   if (metadata.registration_endpoint) {

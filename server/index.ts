@@ -610,10 +610,12 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "start_mcp_oauth": {
-          // Build base URL from the request headers
+          // Build base URL: prefer PUBLIC_URL/VITE_APP_URL env vars, then headers
+          const publicUrl = process.env.PUBLIC_URL || process.env.VITE_APP_URL;
           const proto = (req.headers["x-forwarded-proto"] as string) || "http";
           const host = (req.headers["host"] as string) || "localhost:8080";
-          const baseUrl = `${proto}://${host}`;
+          const baseUrl = publicUrl || `${proto}://${host}`;
+          console.log(`[mcp-oauth] startOAuthFlow baseUrl=${baseUrl} (PUBLIC_URL=${publicUrl ?? "unset"}, proto=${proto}, host=${host})`);
           try {
             const { authUrl } = await startOAuthFlow(msg.serverUrl, sess.user.id, baseUrl);
             sess.broadcast({ type: "mcp_oauth_required", serverUrl: msg.serverUrl, authUrl });
