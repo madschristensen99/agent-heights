@@ -391,10 +391,9 @@ export class Store {
               4. Copy the full URL from that page's address bar<br>
               5. Paste it below and click "Submit Code"
             </div>
-            <a id="mcp-oauth-link" href="${msg.authUrl}" target="_blank" rel="noopener"
-              style="display:block;text-align:center;padding:0.6rem;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;text-decoration:none;font-size:0.85rem;font-weight:600;margin-bottom:1rem;">
+            <button id="mcp-oauth-open" style="display:block;width:100%;text-align:center;padding:0.6rem;border:none;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;font-size:0.85rem;font-weight:600;margin-bottom:1rem;cursor:pointer;">
               🔗 Open Robinhood Login
-            </a>
+            </button>
             <input id="mcp-oauth-input" type="text" placeholder="Paste the localhost URL here..."
               style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.5rem;box-sizing:border-box;" />
             <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
@@ -407,6 +406,7 @@ export class Store {
           </div>
         `;
         document.body.appendChild(modal2);
+        const openBtn2 = modal2.querySelector("#mcp-oauth-open") as HTMLButtonElement;
         const input2 = modal2.querySelector("#mcp-oauth-input") as HTMLInputElement;
         const submitBtn2 = modal2.querySelector("#mcp-oauth-submit") as HTMLButtonElement;
         const cancelBtn2 = modal2.querySelector("#mcp-oauth-cancel") as HTMLButtonElement;
@@ -414,6 +414,9 @@ export class Store {
         const close2 = () => modal2.remove();
         cancelBtn2.addEventListener("click", close2);
         modal2.addEventListener("click", (e) => { if (e.target === modal2) close2(); });
+        openBtn2.addEventListener("click", () => {
+          window.open(msg.authUrl, "robinhood-oauth", "width=600,height=700,scrollbars=yes");
+        });
         pasteBtn2.addEventListener("click", async () => {
           try {
             const text = await navigator.clipboard.readText();
@@ -453,10 +456,9 @@ export class Store {
               4. Copy the full URL from that page's address bar<br>
               5. Paste it below and click "Submit Code"
             </div>
-            <a id="mcp-oauth-link" href="${msg.authUrl}" target="_blank" rel="noopener"
-              style="display:block;text-align:center;padding:0.6rem;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;text-decoration:none;font-size:0.85rem;font-weight:600;margin-bottom:1rem;">
+            <button id="mcp-oauth-open" style="display:block;width:100%;text-align:center;padding:0.6rem;border:none;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;font-size:0.85rem;font-weight:600;margin-bottom:1rem;cursor:pointer;">
               🔗 Open Robinhood Login
-            </a>
+            </button>
             <input id="mcp-oauth-input" type="text" placeholder="Paste the localhost URL here..."
               style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.5rem;box-sizing:border-box;" />
             <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
@@ -469,6 +471,7 @@ export class Store {
           </div>
         `;
         document.body.appendChild(modal);
+        const openBtn = modal.querySelector("#mcp-oauth-open") as HTMLButtonElement;
         const input = modal.querySelector("#mcp-oauth-input") as HTMLInputElement;
         const submitBtn = modal.querySelector("#mcp-oauth-submit") as HTMLButtonElement;
         const cancelBtn = modal.querySelector("#mcp-oauth-cancel") as HTMLButtonElement;
@@ -477,6 +480,11 @@ export class Store {
 
         cancelBtn.addEventListener("click", close);
         modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+
+        // Open popup (window.open forces a popup, target=_blank can navigate current page)
+        openBtn.addEventListener("click", () => {
+          window.open(msg.authUrl, "robinhood-oauth", "width=600,height=700,scrollbars=yes");
+        });
 
         // Paste from clipboard
         pasteBtn.addEventListener("click", async () => {
