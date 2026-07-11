@@ -388,6 +388,127 @@ function generateNPCSprite(tex: TextureManager, key: string, params: NPCSpritePa
 This is very doable. The `chargen.ts` system already generates humanoid
 characters. The NPC system extends it with body type variants and accessories.
 
+### Character sprites — going fully generative
+
+The existing `chargen.ts` character generator is already procedural — it
+composes pixel-art spritesheets from parameters at runtime. However,
+`CharAppearance` in `shared/types.ts` currently stores **indices** into fixed
+preset arrays (e.g., `shirt: 2` → `"#53b86b"`). The underlying renderer
+(`CharPalette` in `chargen.ts`) already works with raw hex strings — the preset
+arrays are a UI convenience for the character builder, not a rendering
+constraint.
+
+To support fully generative character customization (premium marketplace
+agents, transmogrifier output, LLM-generated NPCs that need to look like
+specific characters), we extend the system to accept **raw hex values**
+alongside indices:
+
+```typescript
+/** Raw appearance — uses hex strings instead of preset indices.
+ *  Used by: marketplace premium agents, transmogrifier output, generated NPCs. */
+export interface RawCharAppearance {
+  skin: string;       // "#ffdbac"
+  hairStyle: string;  // "swept"
+  hair: string;       // "#2b1d0e"
+  shirt: string;      // "#00c853"
+  pants: string;      // "#454545"
+  accessory: string;  // "cap" | "beanie" | "glasses" | ...
+  accent: string;     // "#3d9152"
+  beard: string;      // "none" | "stubble" | ...
+  eyeColor: string;   // "#2a2040"
+  headFeature: string; // "none" | "horns" | ...
+}
+```
+
+`appearanceToPalette()` gains a branch: if the input is a `RawCharAppearance`
+(strings), it passes them through directly; if it's a `CharAppearance`
+(indices), it maps via the preset arrays as today. The rendering pipeline
+(`buildCharSheet` → `drawChar` → `PixelSheet`) is unchanged — it already
+consumes `CharPalette` which uses hex strings.
+
+This means:
+- **Marketplace premium agents** can ship exact brand colors (Robinhood green
+  `#00c853`, etc.) in their `agent` config JSON
+- **The transmogrifier** (see below) can generate accessories with any color
+- **LLM-generated NPCs** can use arbitrary colors without being limited to the
+  preset palette
+- **The character builder UI** continues to use indices for simplicity — both
+  representations coexist
+
+### The Transmogrifier
+
+A copy/printer-looking object in the office. Walk up, press E, type anything,
+and it generates a wearable accessory you can carry around.
+
+**Concept**: The wardrobe (existing, tile 21,18) lets you carefully customize
+your appearance piece by piece. The transmogrifier is the chaotic, generative
+counterpart — you don't pick parameters, you type a prompt and get a result.
+
+**Two modes**:
+
+1. **Procedural (free)** — Hash the input text to deterministically derive
+   colors and style. Same input always produces the same accessory. No LLM
+   cost, feels magical:
+   ```
+   Player types: "robinhood"
+   → hash("robinhood") → { accessory: "cap", baseColor: "#00c853",
+                            accentColor: "#ffd700", label: "Robinhood Cap" }
+   → generateAccessorySprite() draws a green cap with gold trim
+   → stored in inventory, can be equipped/unequipped
+   ```
+
+2. **LLM-driven (premium)** — Send the text to the LLM, get back structured
+   JSON with accessory type, colors, and a custom name. Allows arbitrary
+   creative input:
+   ```
+   Player types: "a hat made of stars with a comet trail"
+   → LLM returns: { accessory: "custom", baseColor: "#1a1a2a",
+                     accentColor: "#ffd700", glow: "#ffaa00",
+                     label: "Star Hat", features: ["glow", "sparkle"] }
+   → generateAccessorySprite() draws a dark hat with golden star details
+     and a glow aura
+   ```
+
+**New accessory types needed** beyond the existing 7 (glasses, headband,
+earrings, cap, beanie, headphones, none): scarf, mask, badge, lanyard, cape,
+backpack, umbrella, coffee cup, crown, visor, bow tie, flower crown. Each is
+a new branch in `drawAccessory()` — simple pixel drawing, same as the existing
+accessories.
+
+**Carried accessory data model**:
+
+```typescript
+interface CarriedAccessory {
+  id: string;           // generated UUID
+  name: string;         // "Robinhood Cap", "Star Hat", etc.
+  source: string;       // the original input text
+  accessory: string;    // "cap" | "crown" | "custom" | ...
+  baseColor: string;    // hex
+  accentColor: string;  // hex
+  glow?: string;        // optional aura color
+  features?: string[];  // ["glow", "sparkle", "trail"]
+  createdAt: number;
+}
+```
+
+Stored in `SaveState` as `accessories: CarriedAccessory[]`. The player can
+equip one accessory at a time, which overrides the `accessory` field in their
+`CharAppearance` and regenerates the sprite texture. Unequipping reverts to
+the wardrobe-selected accessory.
+
+**Office placement**: The transmogrifier sits in the break room near the
+wardrobe — visually a copy/printer machine (gray box with paper tray, green
+status LED, paper output slot). Press E → text input modal appears → type
+anything → machine whirs (animation + sound) → accessory pops out → toast:
+*"Transmogrified! Got: Robinhood Cap"*. The accessory is added to inventory
+and can be equipped from the wardrobe or a quick-equip slot.
+
+**Premium tier**: Free players get procedural mode (hash-based). Premium
+players get LLM-driven mode for truly custom, creative accessories. This is
+the first example of the generative customization economy — the same pattern
+extends to generative character presets, generative office decor, and
+generative agent appearances in the marketplace.
+
 ### Creature sprites (harder — phase 2)
 
 Creatures need 4 animation frames and come in varied body plans:
@@ -754,3 +875,19 @@ generates ~10 calls = ~$0.10. Very affordable.
   a creature variant, it's gone. If you help an NPC, they remember. If you ignore
   a mission, the situation gets worse. The world changes based on what you do
   and what you don't do.
+- **Generative character presets** — premium marketplace agents ship with
+  `RawCharAppearance` (raw hex colors + string style names) in their `agent`
+  config JSON, allowing exact brand colors and custom looks that go beyond the
+  preset palette. The Robinhood Trading Agent (green cap, green shirt) is the
+  first example. Future premium agents could have entirely custom sprite
+  compositions.
+- **Generative office decor** — the transmogrifier pattern extends to office
+  items. Type a description, get a custom plant, rug, or wall art with
+  LLM-chosen colors and style. Premium decor is generated, not picked from a
+  catalog. See `OFFICE_CUSTOMIZATION.md` for the integration point.
+- **Transmogrifier as creative hub** — the transmogrifier becomes the central
+  object for all generative customization in the office. Beyond accessories,
+  future versions could generate: custom desk skins, custom chair styles,
+  custom floor patterns, even custom agent outfits for premium marketplace
+  listings. The hash-based procedural mode is always free; the LLM-driven mode
+  is premium.

@@ -197,6 +197,7 @@ placement**.
 | Arcade Cabinet | 100 | Retro game cabinet, glowing screen |
 | Espresso Machine | 45 | Replaces drip coffee maker |
 | Mini Fridge | 35 | Personal beverage cooler |
+| Transmogrifier | 100 | Copy/printer machine that generates custom accessories from text input (see §4.6) |
 
 **Implementation**: Each decor item has a tile ID, a draw function, and a
 `solid` collision flag. The player's customization data stores an array of
@@ -225,6 +226,77 @@ defines wall positions; the player picks the color.
 tiles after the tilemap is created, or as a separate set of wall tile drawers
 in `generate-assets.ts` that use the player's chosen palette. The simpler
 approach is tinting; the richer approach is dedicated tile art.
+
+### 4.6 The Transmogrifier
+
+A copy/printer-looking object placed in the break room near the wardrobe. Walk
+up, press E, type anything, and it generates a wearable accessory you can
+carry around. This is the **generative counterpart** to the wardrobe — instead
+of carefully picking parameters, you type a prompt and get a result.
+
+**Two modes**:
+
+1. **Procedural (free)** — Hash the input text to deterministically derive
+   colors and accessory style. Same input always produces the same result.
+   No LLM cost, feels magical:
+   ```
+   Player types: "robinhood"
+   → hash("robinhood") → { accessory: "cap", baseColor: "#00c853",
+                            accentColor: "#ffd700", label: "Robinhood Cap" }
+   → generateAccessorySprite() draws a green cap with gold trim
+   → stored in inventory, can be equipped/unequipped
+   ```
+
+2. **LLM-driven (premium)** — Send the text to the LLM, get back structured
+   JSON with accessory type, colors, and a custom name. Allows arbitrary
+   creative input:
+   ```
+   Player types: "a hat made of stars with a comet trail"
+   → LLM returns: { accessory: "custom", baseColor: "#1a1a2a",
+                     accentColor: "#ffd700", glow: "#ffaa00",
+                     label: "Star Hat", features: ["glow", "sparkle"] }
+   → generateAccessorySprite() draws a dark hat with golden star details
+     and a glow aura
+   ```
+
+**Carried accessory data model**:
+
+```typescript
+interface CarriedAccessory {
+  id: string;           // generated UUID
+  name: string;         // "Robinhood Cap", "Star Hat", etc.
+  source: string;       // the original input text
+  accessory: string;    // "cap" | "crown" | "custom" | ...
+  baseColor: string;    // hex
+  accentColor: string;  // hex
+  glow?: string;        // optional aura color
+  features?: string[];  // ["glow", "sparkle", "trail"]
+  createdAt: number;
+}
+```
+
+Stored in `SaveState` as `accessories: CarriedAccessory[]`. The player can
+equip one accessory at a time, which overrides the `accessory` field in their
+`CharAppearance` and regenerates the sprite texture. Unequipping reverts to
+the wardrobe-selected accessory.
+
+**Visual**: A gray copy/printer machine — paper tray at the bottom, green
+status LED, paper output slot at the top. When activated, the machine whirs
+(animation + sound), a piece of "paper" emerges with the accessory sprite
+drawn on it, then the accessory pops out and is added to inventory. Toast:
+*"Transmogrified! Got: Robinhood Cap"*.
+
+**Premium tier**: Free players get procedural mode (hash-based). Premium
+players get LLM-driven mode for truly custom, creative accessories. This is
+the first example of the generative customization economy — the same pattern
+extends to generative character presets, generative office decor, and
+generative agent appearances in the marketplace. See `GENERATIVE.md` for the
+full parametric sprite system design.
+
+**Future expansion**: The transmogrifier could eventually generate more than
+accessories — custom desk skins, chair styles, floor patterns, even full
+agent outfits for premium marketplace listings. The hash-based procedural
+mode is always free; the LLM-driven mode is premium.
 
 ---
 
@@ -475,6 +547,22 @@ client uses it to render the shop UI.
 - Add layout-specific decor placement validation (some items may not fit in
   certain layouts)
 
+### Phase 5 — The Transmogrifier
+
+- Add `CarriedAccessory` type to `shared/types.ts`
+- Add `accessories: CarriedAccessory[]` to `SaveState` + persistence
+- Implement `generateAccessorySprite()` in `chargen.ts` — draws an accessory
+  from `CarriedAccessory` params (type, baseColor, accentColor, glow, features)
+- Add new accessory types to `drawAccessory()` (scarf, mask, crown, cape, etc.)
+- Add the transmogrifier as an office interactable (copy/printer visual, E-press)
+- Build text input modal for the transmogrifier
+- Implement procedural (hash-based) mode — free for all players
+- Implement LLM-driven mode — premium only, gated by subscription check
+- Add equip/unequip UI for carried accessories (in wardrobe or quick-equip slot)
+- Wire up `RawCharAppearance` support in `appearanceToPalette()` so equipped
+  accessories with custom colors render correctly
+- Toast: *"Transmogrified! Got: [name]"* on success
+
 ---
 
 ## 10. Relationship to Existing Systems
@@ -499,6 +587,13 @@ Three "Coming Soon" achievements become activatable:
 The office customization follows the same pattern as character appearance:
 index-based style selections, procedural rendering, persisted in save data.
 The Wardrobe modal is the UI template for the shop modal.
+
+The character system also has a **generative path** — the transmogrifier
+(§4.6) and premium marketplace agents use `RawCharAppearance` (raw hex
+colors + string style names) instead of preset indices. The underlying
+renderer (`chargen.ts` → `CharPalette`) already works with hex strings, so
+both representations coexist. See `GENERATIVE.md` §5 for the full
+`RawCharAppearance` design and parametric sprite system.
 
 ### Theme System (`OfficeTheme` in `shared/types.ts`)
 
