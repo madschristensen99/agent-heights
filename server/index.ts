@@ -228,9 +228,9 @@ const server = createServer((req, res) => {
       }
       res.writeHead(200, { "Content-Type": "text/html" });
       if (result.success) {
-        res.end(`<html><body><h2>✓ Connected!</h2><p>You can close this window and return to AgentHQ.</p><script>window.close();</script></body></html>`);
+        res.end(`<html><body><h2>✓ Connected!</h2><p>Redirecting back to AgentHQ...</p><script>setTimeout(function(){window.location.href='/';},1500);</script></body></html>`);
       } else {
-        res.end(`<html><body><h2>Authentication failed</h2><p>${result.error ?? "Unknown error"}</p><script>window.close();</script></body></html>`);
+        res.end(`<html><body><h2>Authentication failed</h2><p>${result.error ?? "Unknown error"}</p><script>setTimeout(function(){window.location.href='/';},3000);</script></body></html>`);
       }
     });
     return;

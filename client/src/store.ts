@@ -374,9 +374,8 @@ export class Store {
         for (const fn of this.mcpKeysStatusListeners) fn(msg.results);
         break;
       case "mcp_oauth_required":
-        // Open OAuth popup window
-        window.open(msg.authUrl, "mcp-oauth", "width=600,height=700,scrollbars=yes");
-        this.toast(`Opening ${msg.serverUrl} authentication...`);
+        // Full-page redirect (popups block third-party cookies causing 403 after 2FA)
+        window.location.href = msg.authUrl;
         break;
       case "mcp_oauth_complete":
         if (msg.success) {
