@@ -23,6 +23,6 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
     clientId: "LtLiNmbs9owbYfWgBlC68Z2V-claude",
     tokenEndpoint: "https://api.robinhood.com/oauth2/token/",
     authorizationEndpoint: "https://robinhood.com/oauth",
-    scopes: [],
+    scopes: ["internal"],
   },
 };
