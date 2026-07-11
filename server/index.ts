@@ -101,10 +101,8 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     let data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
     const headers: Record<string, string> = { "Content-Type": mime };
-    // Don't cache map/tileset assets, og-image, or index.html — they change when regenerated
-    if (urlPath.startsWith("/assets/maps/") || urlPath.startsWith("/assets/tilesets/") || urlPath === "/og-image.png" || urlPath === "/index.html" || urlPath === "/") {
-      headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-    }
+    // Force no-cache on everything during OAuth debugging
+    headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
     // Inject runtime env vars and absolute OG image URLs into index.html
     if (urlPath === "/index.html" || urlPath === "/") {
       const html = data.toString("utf-8");
