@@ -185,8 +185,12 @@ export interface MCPServerConfig {
   command?: string;
   /** Arguments for the spawned command. */
   args?: string[];
-  /** Environment variables for the spawned command. */
+  /** Environment variables for the spawned command (e.g. API keys). */
   env?: Record<string, string>;
+  /** HTTP headers to send with MCP requests (e.g. Authorization, X-API-Key). */
+  headers?: Record<string, string>;
+  /** Bearer token — if set, sent as "Authorization: Bearer <token>". */
+  authToken?: string;
   /** Human-readable label for logging. */
   name?: string;
 }

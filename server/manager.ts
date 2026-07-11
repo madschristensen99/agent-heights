@@ -310,7 +310,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[]): void {
+  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[]): Promise<void> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -360,7 +360,7 @@ export class AgentManager {
     this.session.record("hire", { agent: info });
     this.persist();
     this.broadcast({ type: "agent", agent: info });
-    void this.save.flushNow();
+    await this.save.flushNow();
     console.log(`[manager] hired ${cleanName} (id=${info.id}) desk=${deskIndex} — broadcast sent to ${this.agents.size} total agents`);
     this.log(rt, "status", `${cleanName} the ${info.title} joined the office. (${provider} / ${model})`);
     this.logEvent("hire", `${cleanName} the ${info.title} joined the office.`);
@@ -552,7 +552,7 @@ export class AgentManager {
     });
   }
 
-  fire(agentId: string): void {
+  async fire(agentId: string): Promise<void> {
     if (agentId === YUKI_ID) {
       this.broadcast({ type: "toast", text: "You can't fire Yuki — she runs this office." });
       return;
@@ -601,11 +601,11 @@ export class AgentManager {
     this.broadcast({ type: "agent_removed", agentId });
     this.broadcast({ type: "fired_agent", agent: fired });
     this.broadcast({ type: "toast", text: `${rt.info.name} cleaned out their desk and wandered into the Labyrinth.` });
-    void this.save.flushNow();
+    await this.save.flushNow();
   }
 
   /** Re-hire a fired agent from the Labyrinth — memory intact. */
-  recruit(firedAgentId: string): void {
+  async recruit(firedAgentId: string): Promise<void> {
     const fa = this.firedAgents.get(firedAgentId);
     if (!fa) return;
     this.firedAgents.delete(firedAgentId);
@@ -643,7 +643,7 @@ export class AgentManager {
     this.persist();
     this.broadcast({ type: "agent", agent: info });
     this.broadcast({ type: "fired_agent_removed", agentId: fa.id });
-    void this.save.flushNow();
+    await this.save.flushNow();
     this.log(rt, "status", `${info.name} came back from the Labyrinth and rejoined the office.`);
     this.broadcast({ type: "toast", text: `${info.name} returned from the Labyrinth!` });
   }
