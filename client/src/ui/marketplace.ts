@@ -16,6 +16,9 @@ export class MarketplaceBrowser {
   private items: MarketplaceAgent[] | MarketplacePrompt[] | MarketplaceTool[] = [];
   onHireAgent: (agent: MarketplaceAgent) => void = () => {};
   onSetMcpKey: (serverUrl: string, apiKey: string) => void = () => {};
+  onCheckMcpKeys: (serverUrls: string[]) => void = () => {};
+  /** Internal handler set by showAgentDetail to receive key status from store. */
+  onMcpKeysStatusHandler: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
 
   constructor() {
     this.panel = document.createElement("div");
@@ -202,13 +205,15 @@ export class MarketplaceBrowser {
     const mcpKeyHtml = mcpServers.length > 0
       ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
           <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.5rem;">⚠ MCP SERVER AUTH REQUIRED</div>
+          <div id="mq-mcp-warning" style="font-size:0.75rem; color:#e05d5d; margin-bottom:0.5rem;">Paste your API key for each server before hiring.</div>
           ${mcpServers.map((s, i) => `
             <div style="margin-bottom:0.5rem;">
               <div style="font-size:0.75rem; color:#888; margin-bottom:0.25rem;">${this.escape(s.name ?? s.url ?? "MCP Server")}</div>
-              <div style="display:flex; gap:0.25rem;">
+              <div style="display:flex; gap:0.25rem; align-items:center;">
                 <input id="mq-mcp-key-${i}" type="password" placeholder="Paste API key..." autocomplete="off"
                   style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />
                 <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>
+                <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
               </div>
             </div>
           `).join("")}
@@ -239,7 +244,7 @@ export class MarketplaceBrowser {
         </div>
         ${mcpKeyHtml}
         <div style="display:flex; gap:0.5rem;">
-          <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;">Hire into HQ</button>
+          <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;"${mcpServers.length > 0 ? " disabled" : ""}>Hire into HQ</button>
           <button id="mq-cancel" style="padding:0.6rem 1rem; border:1px solid #222; border-radius:0.5rem; background:#1a1a1a; color:#888; font-size:0.9rem; cursor:pointer;">Close</button>
         </div>
       </div>
@@ -249,6 +254,32 @@ export class MarketplaceBrowser {
 
     modal.querySelector("#mq-cancel")!.addEventListener("click", () => modal.remove());
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+
+    // Track which MCP servers have keys saved
+    const mcpKeyState: Record<string, boolean> = {};
+    const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
+
+    const updateHireButton = () => {
+      const hireBtn = modal.querySelector("#mq-hire") as HTMLButtonElement | null;
+      const warning = modal.querySelector("#mq-mcp-warning") as HTMLDivElement | null;
+      if (!hireBtn) return;
+      const allHaveKeys = serverUrls.every((u) => mcpKeyState[u]);
+      hireBtn.disabled = !allHaveKeys;
+      hireBtn.style.opacity = allHaveKeys ? "1" : "0.4";
+      hireBtn.style.cursor = allHaveKeys ? "pointer" : "not-allowed";
+      if (warning) {
+        warning.style.display = allHaveKeys ? "none" : "block";
+        if (!allHaveKeys) {
+          const missing = serverUrls.filter((u) => !mcpKeyState[u]).length;
+          warning.textContent = `${missing} server(s) still need an API key before you can hire.`;
+        }
+      }
+    };
+
+    // Ask server which MCP servers already have keys
+    if (serverUrls.length > 0) {
+      this.onCheckMcpKeys(serverUrls);
+    }
 
     // Wire up MCP key save buttons
     mcpServers.forEach((s, i) => {
@@ -263,9 +294,38 @@ export class MarketplaceBrowser {
           input.value = "";
           saveBtn.textContent = "✓ Saved";
           setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
+          // Optimistically mark as having a key
+          mcpKeyState[s.url!] = true;
+          const statusEl = modal.querySelector(`#mq-mcp-status-${i}`) as HTMLSpanElement | null;
+          if (statusEl) { statusEl.textContent = "✓"; statusEl.style.color = "#53b86b"; }
+          updateHireButton();
         });
       }
     });
+
+    // Listen for server response about existing keys
+    const origCallback = this.onMcpKeysStatusHandler;
+    this.onMcpKeysStatusHandler = (results: { serverUrl: string; hasKey: boolean }[]) => {
+      for (const r of results) {
+        mcpKeyState[r.serverUrl] = r.hasKey;
+        const idx = serverUrls.indexOf(r.serverUrl);
+        if (idx >= 0) {
+          const statusEl = modal.querySelector(`#mq-mcp-status-${idx}`) as HTMLSpanElement | null;
+          if (statusEl) {
+            statusEl.textContent = r.hasKey ? "✓" : "✗";
+            statusEl.style.color = r.hasKey ? "#53b86b" : "#e05d5d";
+          }
+        }
+      }
+      updateHireButton();
+    };
+
+    // Restore callback when modal closes
+    modal.addEventListener("remove", () => {
+      this.onMcpKeysStatusHandler = origCallback;
+    });
+
+    updateHireButton();
 
     modal.querySelector("#mq-hire")!.addEventListener("click", () => {
       this.onHireAgent(agent);

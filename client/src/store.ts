@@ -59,6 +59,8 @@ export class Store {
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
   hasApiKey = false;
+  /** Called when server responds with MCP key status batch. */
+  onMcpKeysStatus: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
   entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
@@ -357,6 +359,9 @@ export class Store {
         break;
       case "mcp_key_status":
         // MCP key status is handled via toast — no persistent UI state needed
+        break;
+      case "mcp_keys_status":
+        if (this.onMcpKeysStatus) this.onMcpKeysStatus(msg.results);
         break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;

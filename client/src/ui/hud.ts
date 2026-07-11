@@ -310,6 +310,12 @@ export class Hud {
     mqBrowser.onSetMcpKey = (serverUrl: string, apiKey: string) => {
       this.net.send({ type: "set_mcp_key", serverUrl, apiKey });
     };
+    mqBrowser.onCheckMcpKeys = (serverUrls: string[]) => {
+      this.net.send({ type: "check_mcp_keys", serverUrls });
+    };
+    this.store.onMcpKeysStatus = (results) => {
+      if (mqBrowser.onMcpKeysStatusHandler) mqBrowser.onMcpKeysStatusHandler(results);
+    };
     document.getElementById("marketplace-btn")!.addEventListener("click", () => mqBrowser.toggle());
 
     document.getElementById("d-publish")!.addEventListener("click", () => this.openPublishModal());

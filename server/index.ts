@@ -11,7 +11,7 @@ import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
 import { rateLimit } from "./ratelimit.js";
-import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys } from "./apikeys.js";
+import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { TenantManager, HQ2_ROOM_ID } from "./tenant.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
@@ -380,7 +380,7 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "set_mcp_key", "clear", "clear_all"]);
+      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "clear", "clear_all"]);
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
         return;
@@ -554,6 +554,12 @@ wss.on("connection", async (ws, req) => {
               sess.broadcast({ type: "toast", text: "API key cleared — using the server's shared key." });
             }
           }
+          break;
+        }
+        case "check_mcp_keys": {
+          const keyUrls = await getUserMcpKeyUrls(sess.user.id);
+          const results = msg.serverUrls.map((u) => ({ serverUrl: u, hasKey: keyUrls.has(u) }));
+          sess.broadcast({ type: "mcp_keys_status", results });
           break;
         }
         case "set_mcp_key": {
