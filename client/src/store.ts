@@ -375,7 +375,70 @@ export class Store {
       case "mcp_keys_status":
         for (const fn of this.mcpKeysStatusListeners) fn(msg.results);
         break;
+      case "mcp_oauth_required": {
+        // Fallback: treat same as mcp_oauth_code_needed
+        console.log("[mcp-oauth] received mcp_oauth_required (fallback), showing modal", msg);
+        const modal2 = document.createElement("div");
+        modal2.id = "mcp-oauth-modal";
+        modal2.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;";
+        modal2.innerHTML = `
+          <div style="background:#111;border:1px solid #333;border-radius:0.75rem;max-width:480px;width:90vw;padding:1.5rem;color:#e0e0e0;font-family:system-ui,sans-serif;">
+            <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to Robinhood</h3>
+            <div style="font-size:0.8rem;color:#888;margin:0 0 1rem;">
+              1. Click "Open Robinhood Login" below<br>
+              2. Log in and complete 2FA<br>
+              3. You'll be redirected to a localhost URL that won't load — that's OK<br>
+              4. Copy the full URL from that page's address bar<br>
+              5. Paste it below and click "Submit Code"
+            </div>
+            <a id="mcp-oauth-link" href="${msg.authUrl}" target="_blank" rel="noopener"
+              style="display:block;text-align:center;padding:0.6rem;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;text-decoration:none;font-size:0.85rem;font-weight:600;margin-bottom:1rem;">
+              🔗 Open Robinhood Login
+            </a>
+            <input id="mcp-oauth-input" type="text" placeholder="Paste the localhost URL here..."
+              style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.5rem;box-sizing:border-box;" />
+            <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+              <button id="mcp-oauth-paste" style="padding:0.4rem 0.8rem;border:1px solid #333;border-radius:0.375rem;background:#1a1a1a;color:#888;font-size:0.75rem;cursor:pointer;">📋 Paste</button>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+              <button id="mcp-oauth-submit" style="flex:1;padding:0.5rem;border:none;border-radius:0.5rem;background:#e0e0e0;color:#0d0d0d;font-size:0.85rem;font-weight:600;cursor:pointer;">Submit Code</button>
+              <button id="mcp-oauth-cancel" style="padding:0.5rem 1rem;border:1px solid #222;border-radius:0.5rem;background:#1a1a1a;color:#888;font-size:0.85rem;cursor:pointer;">Cancel</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal2);
+        const input2 = modal2.querySelector("#mcp-oauth-input") as HTMLInputElement;
+        const submitBtn2 = modal2.querySelector("#mcp-oauth-submit") as HTMLButtonElement;
+        const cancelBtn2 = modal2.querySelector("#mcp-oauth-cancel") as HTMLButtonElement;
+        const pasteBtn2 = modal2.querySelector("#mcp-oauth-paste") as HTMLButtonElement;
+        const close2 = () => modal2.remove();
+        cancelBtn2.addEventListener("click", close2);
+        modal2.addEventListener("click", (e) => { if (e.target === modal2) close2(); });
+        pasteBtn2.addEventListener("click", async () => {
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) { input2.value = text.trim(); input2.focus(); }
+          } catch { input2.focus(); }
+        });
+        input2.addEventListener("focus", async () => {
+          if (!input2.value) {
+            try {
+              const text = await navigator.clipboard.readText();
+              if (text && text.includes("code=")) { input2.value = text.trim(); }
+            } catch {}
+          }
+        });
+        submitBtn2.addEventListener("click", () => {
+          const url = input2.value.trim();
+          if (!url) { input2.focus(); return; }
+          this.sendFn?.({ type: "submit_mcp_oauth_code", serverUrl: msg.serverUrl, callbackUrl: url });
+          submitBtn2.textContent = "Exchanging...";
+          submitBtn2.disabled = true;
+        });
+        break;
+      }
       case "mcp_oauth_code_needed": {
+        console.log("[mcp-oauth] received mcp_oauth_code_needed, showing modal", msg);
         // Robinhood requires localhost redirect URIs. Show modal with link + paste input.
         const modal = document.createElement("div");
         modal.id = "mcp-oauth-modal";

@@ -180,7 +180,7 @@ export async function setUserMcpKey(userId: string, serverUrl: string, apiKey: s
         server_url: serverUrl,
         encrypted_key: encrypted,
         updated_at: new Date().toISOString(),
-      });
+      }, { onConflict: "user_id,server_url" });
 
     if (error) return { error: error.message };
     return { error: null };
