@@ -344,7 +344,7 @@ export class TenantManager {
       };
     }
 
-    sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey);
+    sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey, user.id);
     sess.manager.setMcpKeys(mcpKeys);
     if (player) sess.manager.bossName = player.name;
     sess.manager.startThinkLoop();

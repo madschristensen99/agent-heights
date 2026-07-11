@@ -27,6 +27,7 @@ import { runTextTools, clearTextToolMemory } from "./providers/text-tools.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
+import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 
 /** Models that don't support native function calling and need text-based tool parsing. */
 const TEXT_TOOL_MODELS = new Set([
@@ -142,16 +143,31 @@ export class AgentManager {
     this.mcpKeys = keys;
   }
 
-  /** Inject the user's stored MCP API keys into the server configs at task time. */
-  private injectMcpKeys(servers?: MCPServerConfig[]): MCPServerConfig[] | undefined {
+  /** Inject the user's stored MCP API keys into the server configs at task time.
+   *  Also refreshes expired OAuth tokens automatically. */
+  private async injectMcpKeys(servers?: MCPServerConfig[]): Promise<MCPServerConfig[] | undefined> {
     if (!servers || servers.length === 0) return servers;
-    return servers.map((s) => {
-      const key = s.url ? this.mcpKeys[s.url] : undefined;
-      if (key) {
-        return { ...s, authToken: key };
+    const result: MCPServerConfig[] = [];
+    for (const s of servers) {
+      const raw = s.url ? this.mcpKeys[s.url] : undefined;
+      if (!raw) { result.push(s); continue; }
+      const stored = parseStoredToken(raw);
+      let token = stored.access_token;
+      // Check if token is expired (or will expire in the next 60s)
+      if (stored.expires_at && stored.expires_at < Date.now() + 60_000) {
+        console.log(`[mcp] Token for ${s.url} expired, attempting refresh...`);
+        const refreshed = await refreshMcpToken(this.userId, s.url!, stored);
+        if (refreshed) {
+          token = refreshed;
+          // Update in-memory cache
+          this.mcpKeys[s.url!] = JSON.stringify({ ...stored, access_token: token });
+        } else {
+          console.warn(`[mcp] Token refresh failed for ${s.url} — using old token (may fail)`);
+        }
       }
-      return s;
-    });
+      result.push({ ...s, authToken: token });
+    }
+    return result;
   }
 
   constructor(
@@ -161,6 +177,7 @@ export class AgentManager {
     private save: Persistence,
     saved: SaveState | null,
     apiKey: string | null = null,
+    private userId: string = "",
   ) {
     this.workspaceRoot = join(rootDir, "workspace");
     mkdirSync(this.workspaceRoot, { recursive: true });
@@ -1152,7 +1169,7 @@ export class AgentManager {
         },
         railway: this.settings.railway.enabled && rt.info.role === "devops",
         apiKey: this.apiKey,
-        mcpServers: this.injectMcpKeys(rt.info.mcpServers),
+        mcpServers: await this.injectMcpKeys(rt.info.mcpServers),
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);

@@ -2,6 +2,71 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { setUserMcpKey } from "./apikeys.js";
 import { KNOWN_OAUTH_CONFIGS } from "./oauth-config.js";
 
+/** Shape of the token blob stored in user_mcp_keys. */
+export interface StoredToken {
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+  client_id?: string;
+  token_endpoint?: string;
+}
+
+/** Parse a stored MCP key — might be a plain token (old format) or JSON blob (new format). */
+export function parseStoredToken(raw: string): StoredToken {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.access_token) return parsed as StoredToken;
+  } catch { /* not JSON — old format, plain access token */ }
+  return { access_token: raw };
+}
+
+/**
+ * Refresh an expired OAuth token using the stored refresh token.
+ * Returns the new access token, or null if refresh failed.
+ */
+export async function refreshMcpToken(
+  userId: string,
+  serverUrl: string,
+  stored: StoredToken,
+): Promise<string | null> {
+  if (!stored.refresh_token || !stored.token_endpoint || !stored.client_id) {
+    return null;
+  }
+
+  console.log(`[mcp-oauth] Refreshing token for ${serverUrl}`);
+  try {
+    const res = await fetch(stored.token_endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: stored.refresh_token,
+        client_id: stored.client_id,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`[mcp-oauth] Token refresh failed: ${res.status}`);
+      return null;
+    }
+
+    const data = await res.json() as { access_token: string; refresh_token?: string; expires_in?: number };
+    const newBlob = JSON.stringify({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token ?? stored.refresh_token,
+      expires_at: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
+      client_id: stored.client_id,
+      token_endpoint: stored.token_endpoint,
+    });
+    await setUserMcpKey(userId, serverUrl, newBlob);
+    console.log(`[mcp-oauth] Token refreshed for ${serverUrl}`);
+    return data.access_token;
+  } catch (err) {
+    console.error(`[mcp-oauth] Token refresh error:`, err);
+    return null;
+  }
+}
+
 /**
  * MCP OAuth 2.0 flow with PKCE (S256).
  *
@@ -292,13 +357,21 @@ export async function handleOAuthCallback(
 
     const tokenData = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in?: number };
 
-    // Store the access token encrypted in user_mcp_keys
-    const { error } = await setUserMcpKey(flow.userId, flow.serverUrl, tokenData.access_token);
+    // Store access token + refresh token + expiry as JSON blob
+    const tokenBlob = JSON.stringify({
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token,
+      expires_at: tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : undefined,
+      client_id: flow.clientId,
+      token_endpoint: flow.tokenEndpoint,
+    });
+    const { error } = await setUserMcpKey(flow.userId, flow.serverUrl, tokenBlob);
     if (error) {
       return { success: false, error: `Failed to store token: ${error}`, serverUrl: flow.serverUrl, userId: flow.userId };
     }
 
-    return { success: true, serverUrl: flow.serverUrl, userId: flow.userId };
+    console.log(`[mcp-oauth] Token exchange success for ${flow.serverUrl}, expires_in=${tokenData.expires_in ?? "unknown"}s`);
+  return { success: true, serverUrl: flow.serverUrl, userId: flow.userId };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { success: false, error: msg, serverUrl: flow.serverUrl, userId: flow.userId };

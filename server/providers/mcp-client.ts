@@ -373,7 +373,9 @@ function createClient(config: MCPServerConfig): MCPClient {
 const clientCache = new Map<string, MCPClient>();
 
 function clientKey(config: MCPServerConfig): string {
-  return config.url ?? `${config.command}:${(config.args ?? []).join(" ")}`;
+  // Include authToken in key so token refresh creates a fresh client
+  const authPart = config.authToken ? `:${config.authToken.slice(0, 8)}` : "";
+  return (config.url ?? `${config.command}:${(config.args ?? []).join(" ")}`) + authPart;
 }
 
 /**
