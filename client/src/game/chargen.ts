@@ -619,33 +619,33 @@ function drawChar(s: PixelSheet, ox: number, oy: number, pal: CharPalette, dir: 
       const ccLi = mix(cc, "#ffffff", 0.2);
       const ccDk = mix(cc, "#000000", 0.25);
       if (dir2 === "down") {
-        // Dome — taller, more rounded
-        rr(hx(17), hy(4), 30, 10, 5, cc);
+        // Dome — taller and wider to cover hair
+        rr(hx(15), hy(0), 34, 14, 5, cc);
         // Brim shadow under dome
-        s.rect(hx(17), hy(12), 30, 1, ccDk);
+        s.rect(hx(15), hy(13), 34, 1, ccDk);
         // Visor — extends forward-right (3/4 view)
-        s.rect(hx(34), hy(12), 20, 3, cc);
-        s.rect(hx(34), hy(14), 20, 1, ccDk);
+        s.rect(hx(34), hy(13), 20, 3, cc);
+        s.rect(hx(34), hy(15), 20, 1, ccDk);
         // Button on top
-        s.set(hx(32), hy(4), ccLi);
+        s.set(hx(32), hy(0), ccLi);
         // Highlight on dome
-        s.set(hx(22), hy(6), ccLi);
-        s.set(hx(23), hy(5), mix(cc, "#fff", 0.1));
+        s.set(hx(22), hy(3), ccLi);
+        s.set(hx(23), hy(2), mix(cc, "#fff", 0.1));
       } else if (dir2 === "up") {
-        rr(hx(17), hy(4), 30, 10, 5, cc);
-        s.rect(hx(17), hy(12), 30, 1, ccDk);
-        s.set(hx(32), hy(4), ccLi);
+        rr(hx(15), hy(0), 34, 14, 5, cc);
+        s.rect(hx(15), hy(13), 34, 1, ccDk);
+        s.set(hx(32), hy(0), ccLi);
       } else if (dir2 === "right") {
-        // Dome — narrower for side view
-        rr(hx(21), hy(4), 24, 10, 5, cc);
-        s.rect(hx(21), hy(12), 24, 1, ccDk);
+        // Dome — narrower for side view, but taller
+        rr(hx(19), hy(0), 28, 14, 5, cc);
+        s.rect(hx(19), hy(13), 28, 1, ccDk);
         // Visor extends forward (right)
-        s.rect(hx(38), hy(12), 16, 3, cc);
-        s.rect(hx(38), hy(14), 16, 1, ccDk);
+        s.rect(hx(38), hy(13), 16, 3, cc);
+        s.rect(hx(38), hy(15), 16, 1, ccDk);
         // Button
-        s.set(hx(26), hy(4), ccLi);
+        s.set(hx(26), hy(0), ccLi);
         // Highlight
-        s.set(hx(25), hy(6), mix(cc, "#fff", 0.15));
+        s.set(hx(25), hy(3), mix(cc, "#fff", 0.15));
       }
     } else if (ac === "beanie") {
       const bc = mix(pal.shirt, "#000000", 0.05);
