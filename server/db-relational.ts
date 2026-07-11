@@ -26,6 +26,7 @@ export class RelationalPersistence {
   private roomId: string | null = null;
   private state: SaveState;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private flushInFlight: Promise<void> | null = null;
   private pendingAgents: boolean = false;
   private pendingBoard: boolean = false;
   private pendingSettings: boolean = false;
@@ -213,14 +214,30 @@ export class RelationalPersistence {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    return this.flush();
+    // If a debounced flush is already running, await it first, then run
+    // our own flush to ensure the latest state is written.
+    if (this.flushInFlight) {
+      const prev = this.flushInFlight;
+      this.flushInFlight = (async () => {
+        await prev.catch(() => {});
+        await this.flush();
+      })();
+      return this.flushInFlight;
+    }
+    this.flushInFlight = this.flush();
+    return this.flushInFlight;
   }
 
   private schedule(): void {
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      void this.flush();
+      this.flushInFlight = this.flush();
+      void this.flushInFlight.then(() => {
+        this.flushInFlight = null;
+      }).catch(() => {
+        this.flushInFlight = null;
+      });
     }, 400);
   }
 
