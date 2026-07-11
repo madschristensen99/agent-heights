@@ -5,9 +5,7 @@ import type {
   MarketplaceTool,
   MarketplaceItemType,
 } from "../shared/marketplace.js";
-
-const SWARMS_MARKETPLACE_URL = "https://swarms.world";
-const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 function json(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -97,43 +95,8 @@ function mapPrompt(r: Record<string, unknown>): MarketplacePrompt {
   };
 }
 
-async function queryMarketplace(
-  endpoint: string,
-  body: Record<string, unknown>,
-): Promise<Record<string, unknown>[]> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (SWARMS_API_KEY) headers["Authorization"] = `Bearer ${SWARMS_API_KEY}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-
-  try {
-    const res = await fetch(`${SWARMS_MARKETPLACE_URL}${endpoint}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      console.error(`[marketplace] ${endpoint} returned ${res.status}`);
-      return [];
-    }
-
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) {
-      console.error(`[marketplace] ${endpoint} returned non-JSON content-type: ${contentType}`);
-      return [];
-    }
-
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    console.error(`[marketplace] ${endpoint} fetch failed:`, err instanceof Error ? err.message : err);
-    return [];
-  } finally {
-    clearTimeout(timeout);
-  }
+function sanitizeSearch(s: string): string {
+  return s.replace(/[,()]/g, " ").trim();
 }
 
 export async function handleMarketplaceRequest(
@@ -144,49 +107,88 @@ export async function handleMarketplaceRequest(
 
   if (!url.startsWith("/api/marketplace")) return false;
 
-  if (!SWARMS_API_KEY) {
-    json(res, 503, { error: "Marketplace not configured — SWARMS_API_KEY not set" });
+  if (!isSupabaseConfigured) {
+    json(res, 503, { error: "Marketplace not configured — Supabase not set up" });
     return true;
   }
 
   const queryStr = req.url?.split("?")[1] ?? "";
   const params = new URLSearchParams(queryStr);
   const type = (params.get("type") ?? "agent") as MarketplaceItemType;
-  const search = params.get("search") ?? "";
+  const search = sanitizeSearch(params.get("search") ?? "");
   const limit = Math.min(parseInt(params.get("limit") ?? "50", 10) || 50, 100);
   const offset = parseInt(params.get("offset") ?? "0", 10) || 0;
 
   try {
     if (url === "/api/marketplace/agents" || (url === "/api/marketplace" && type === "agent")) {
-      const results = await queryMarketplace("/api/query-agents", {
-        search,
-        priceFilter: "all",
-        sortBy: "newest",
-        limit,
-        offset,
-      });
+      let query = supabaseAdmin
+        .from("swarms_cloud_agents")
+        .select("*")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
 
-      const agents = results.map(mapAgent);
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,tags.ilike.%${search}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error("[marketplace] Supabase agents query error:", error.message);
+        json(res, 500, { error: error.message });
+        return true;
+      }
+
+      const agents = (data ?? []).map((r) => mapAgent(r as Record<string, unknown>));
       json(res, 200, { agents, count: agents.length });
       return true;
     }
 
     if (url === "/api/marketplace/prompts" || (url === "/api/marketplace" && type === "prompt")) {
-      const results = await queryMarketplace("/api/query-prompts", {
-        search,
-        priceFilter: "all",
-        sortBy: "newest",
-        limit,
-        offset,
-      });
+      let query = supabaseAdmin
+        .from("swarms_cloud_prompts")
+        .select("*")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
 
-      const prompts = results.map(mapPrompt);
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,tags.ilike.%${search}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error("[marketplace] Supabase prompts query error:", error.message);
+        json(res, 500, { error: error.message });
+        return true;
+      }
+
+      const prompts = (data ?? []).map((r) => mapPrompt(r as Record<string, unknown>));
       json(res, 200, { prompts, count: prompts.length });
       return true;
     }
 
     if (url === "/api/marketplace/tools" || (url === "/api/marketplace" && type === "tool")) {
-      json(res, 200, { tools: [] as MarketplaceTool[], count: 0 });
+      let query = supabaseAdmin
+        .from("swarms_cloud_tools")
+        .select("*")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,tags.ilike.%${search}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error("[marketplace] Supabase tools query error:", error.message);
+        json(res, 500, { error: error.message });
+        return true;
+      }
+
+      const tools = (data ?? []).map((r) => mapAgent(r as Record<string, unknown>)) as MarketplaceTool[];
+      json(res, 200, { tools, count: tools.length });
       return true;
     }
 
@@ -194,17 +196,18 @@ export async function handleMarketplaceRequest(
       const id = params.get("id");
       if (!id) { json(res, 400, { error: "Missing id parameter" }); return true; }
 
-      const results = await queryMarketplace("/api/query-agents", {
-        limit: 100,
-        offset: 0,
-        priceFilter: "all",
-        sortBy: "newest",
-      });
+      const { data, error } = await supabaseAdmin
+        .from("swarms_cloud_agents")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-      const found = results.find((r) => String(r.id) === id);
-      if (!found) { json(res, 404, { error: "Agent not found" }); return true; }
+      if (error || !data) {
+        json(res, 404, { error: "Agent not found" });
+        return true;
+      }
 
-      json(res, 200, mapAgent(found));
+      json(res, 200, mapAgent(data as Record<string, unknown>));
       return true;
     }
 
