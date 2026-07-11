@@ -455,7 +455,7 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         case "hire":
-          await manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance);
+          manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance);
           break;
         case "update_appearance": {
           if (!sess.player) break;
@@ -500,7 +500,7 @@ wss.on("connection", async (ws, req) => {
           manager.stopAll();
           break;
         case "fire":
-          await manager.fire(msg.agentId);
+          manager.fire(msg.agentId);
           break;
         case "clear":
           manager.clearChat(msg.agentId);
@@ -521,7 +521,7 @@ wss.on("connection", async (ws, req) => {
           manager.deleteCard(msg.cardId);
           break;
         case "recruit":
-          await manager.recruit(msg.firedAgentId);
+          manager.recruit(msg.firedAgentId);
           break;
         case "railway_query":
           queryRailway().then((result) => {
