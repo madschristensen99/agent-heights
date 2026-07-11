@@ -3,9 +3,9 @@ import { resolve } from "node:path";
 import type { ProviderRunner } from "./types.js";
 import { truncate } from "./types.js";
 import { makeTools } from "./cline.js";
+import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
 
-const SWARMS_BASE_URL = "https://api.swarms.world/v1";
-const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
+const providerConfig = getProviderConfig();
 
 // ── Conversation store (keyed by agentId) ────────────────────────────────
 interface ChatMessage {
@@ -127,17 +127,17 @@ function escapeRegex(s: string): string {
 
 // ── Swarms API call ───────────────────────────────────────────────────────
 
-async function callSwarms(
+async function callLLM(
   model: string,
   messages: ChatMessage[],
   apiKey: string,
   signal: AbortSignal,
 ): Promise<{ content: string; usage: { inputTokens: number; outputTokens: number } }> {
-  const response = await fetch(`${SWARMS_BASE_URL}/chat/completions`, {
+  const response = await fetch(`${providerConfig.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
+      ...providerConfig.headers,
     },
     body: JSON.stringify({
       model,
@@ -150,7 +150,7 @@ async function callSwarms(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error");
-    throw new Error(`Swarms API error ${response.status}: ${errorText.slice(0, 200)}`);
+    throw new Error(`${providerConfig.name} API error ${response.status}: ${errorText.slice(0, 200)}`);
   }
 
   const data = await response.json() as any;
@@ -165,15 +165,16 @@ async function callSwarms(
 // ── Provider runner ───────────────────────────────────────────────────────
 
 export const runTextTools: ProviderRunner = async function* (task, ctx) {
-  if (!SWARMS_API_KEY) {
+  if (!hasApiKey()) {
     yield {
       kind: "error",
-      text: "SWARMS_API_KEY not set. Get a key at https://swarms.world/platform/api-keys and set it in your environment.",
+      text: "No API key set. Set KIMI_BACKUP_KEY or SWARMS_API_KEY in your environment.",
     };
     return;
   }
 
-  const apiKey = ctx.apiKey ?? SWARMS_API_KEY;
+  const apiKey = ctx.apiKey ?? providerConfig.apiKey;
+  const model = resolveModel(ctx.model, providerConfig.name);
   const isChat = ctx.isChat ?? false;
   const agentId = isChat ? `${ctx.agentId}:chat` : ctx.agentId;
 
@@ -226,7 +227,7 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
       // Call the API
       let result: { content: string; usage: { inputTokens: number; outputTokens: number } };
       try {
-        result = await callSwarms(ctx.model, history, apiKey, ctx.abort.signal);
+        result = await callLLM(model, history, apiKey, ctx.abort.signal);
       } catch (err) {
         if (ctx.abort.signal.aborted) return;
         const msg = err instanceof Error ? err.message : String(err);

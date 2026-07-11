@@ -21,7 +21,7 @@ export interface RunContext {
   onSession: (id: string) => void;
   /** Whether to inject Railway MCP tools (devops agents when railway is enabled). */
   railway: boolean;
-  /** Per-user API key. Falls back to global SWARMS_API_KEY if null. */
+  /** Per-user API key. Falls back to global KIMI_BACKUP_KEY or SWARMS_API_KEY if null. */
   apiKey: string | null;
   /** Returns the current task board as JSON (for read_board tool). */
   getBoard?: () => { id: string; title: string; status: string; assignedAgentId: string | null }[];

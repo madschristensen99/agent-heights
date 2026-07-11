@@ -26,6 +26,7 @@ import { clearAgentMemory } from "./providers/cline.js";
 import { runTextTools, clearTextToolMemory } from "./providers/text-tools.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
+import { getProviderConfig } from "./providers/api-config.js";
 
 /** Models that don't support native function calling and need text-based tool parsing. */
 const TEXT_TOOL_MODELS = new Set([
@@ -1437,17 +1438,19 @@ export class AgentManager {
       try {
         const controller = new AbortController();
         const to = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch("https://api.swarms.world/v1/health", {
+        const pc = getProviderConfig();
+        const res = await fetch(`${pc.baseUrl}/models`, {
           signal: controller.signal,
-          headers: { "x-api-key": this.apiKey ?? "" },
+          headers: pc.headers,
         });
         clearTimeout(to);
-        if (res.status === 429) reason = "Rate limited by Swarms API (429) — too many requests";
-        else if (res.status === 401 || res.status === 403) reason = `Auth error (${res.status}) — check your SWARMS_API_KEY`;
+        if (res.status === 429) reason = `Rate limited by ${pc.name} API (429) — too many requests`;
+        else if (res.status === 401 || res.status === 403) reason = `Auth error (${res.status}) — check your ${pc.name === "kimi" ? "KIMI_BACKUP_KEY" : "SWARMS_API_KEY"}`;
         else if (res.ok) reason = "API is up but model is not responding — try a different model";
         else reason = `API returned status ${res.status}`;
       } catch {
-        reason = "Swarms API is not responding — check your network or if api.swarms.world is down";
+        const pc = getProviderConfig();
+        reason = `${pc.name} API is not responding — check your network or if the API is down`;
       }
       abort.abort();
       this.log(rt, "error", reason);

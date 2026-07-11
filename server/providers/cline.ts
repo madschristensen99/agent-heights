@@ -12,11 +12,11 @@ import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
 import { loadMCPTools } from "./mcp-client.js";
+import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
 
 const execFileAsync = promisify(execFile);
 
-const SWARMS_BASE_URL = "https://api.swarms.world/v1";
-const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
+const providerConfig = getProviderConfig();
 
 /** Whether bubblewrap sandboxing is available (checked at startup). */
 let bwrapAvailable: boolean | null = null;
@@ -448,16 +448,17 @@ export async function makeTools(cwd: string, opts?: {
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
-  if (!SWARMS_API_KEY) {
+  if (!hasApiKey()) {
     yield {
       kind: "error",
-      text: "SWARMS_API_KEY not set. Get a key at https://swarms.world/platform/api-keys and set it in your environment.",
+      text: "No API key set. Set KIMI_BACKUP_KEY or SWARMS_API_KEY in your environment.",
     };
     return;
   }
 
   const { agentId: rawAgentId } = ctx;
-  const apiKey = ctx.apiKey ?? SWARMS_API_KEY;
+  const apiKey = ctx.apiKey ?? providerConfig.apiKey;
+  const model = resolveModel(ctx.model, providerConfig.name);
   const isChat = ctx.isChat ?? false;
   // Use a separate agent instance for chat so it doesn't inherit task tools/iterations
   const agentId = isChat ? `${rawAgentId}:chat` : rawAgentId;
@@ -482,10 +483,10 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
         providerId: "openai-compatible",
-        modelId: ctx.model,
+        modelId: model,
         apiKey,
-        baseUrl: SWARMS_BASE_URL,
-        headers: { "x-api-key": apiKey },
+        baseUrl: providerConfig.baseUrl,
+        headers: providerConfig.headers,
         systemPrompt: ctx.systemPrompt,
         tools,
         maxIterations: maxIter,
