@@ -1037,7 +1037,7 @@ export class OfficeScene extends Phaser.Scene {
     // On narrow touch screens, don't over-zoom — cap at a reasonable level
     // so the pixel art doesn't get too large and the player sees enough context
     if (isTouchDevice() && Math.min(this.scale.width, this.scale.height) < 480) {
-      return Math.max(1, Math.min(z, 2.0));
+      return Math.max(1, Math.min(z, 1.0));
     }
     return Math.max(1, Math.ceil(z));
   }
