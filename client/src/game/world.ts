@@ -795,8 +795,11 @@ export class WorldLayer {
 
   /** Current player HP (read-only access for achievement checks). */
   get playerHp(): number { return this.hp; }
+  /** Clear death state — called by scene after teleport completes. */
+  clearDeath(): void { this.isDying = false; }
   private officeGrid: Grid | null = null;
   private invulnUntil = 0;
+  private isDying = false;
 
   constructor(scene: Phaser.Scene, store: Store, net: Net, officeW: number, officeH: number) {
     this.scene = scene;
@@ -1815,7 +1818,7 @@ export class WorldLayer {
     // --- update creatures ---
     for (const c of this.creatures) {
       const hit = c.update(dt, playerX, playerY);
-      if (hit && time > this.invulnUntil) {
+      if (hit && time > this.invulnUntil && !this.isDying) {
         this.takeDamage(hit.damage, playerX, playerY, time);
       }
     }
@@ -1832,7 +1835,7 @@ export class WorldLayer {
     let nearestBeastDist = Infinity;
     for (const b of this.beasts) {
       const hit = b.update(dt, playerX, playerY);
-      if (hit && time > this.invulnUntil) {
+      if (hit && time > this.invulnUntil && !this.isDying) {
         this.takeDamage(hit.damage, playerX, playerY, time);
       }
       const bd = Math.hypot(playerX - b.container.x, playerY - b.container.y);
@@ -1853,7 +1856,7 @@ export class WorldLayer {
     // --- update stones ---
     for (const s of this.stones) {
       const hit = s.update(dt, playerX, playerY);
-      if (hit && time > this.invulnUntil) {
+      if (hit && time > this.invulnUntil && !this.isDying) {
         this.takeDamage(hit.damage, playerX, playerY, time);
       }
     }
@@ -1864,7 +1867,7 @@ export class WorldLayer {
       const { tx, ty } = this.pixelToTile(playerX, playerY);
       const tile = this.getTileAt(tx, ty);
       const dmg = tileDamage(tile) * (dt / 1000);
-      if (dmg > 0 && (dmg === Infinity || time > this.invulnUntil)) {
+      if (dmg > 0 && !this.isDying && (dmg === Infinity || time > this.invulnUntil)) {
         const isVoid = dmg === Infinity;
         this.takeDamage(isVoid ? MAX_HP : dmg, playerX, playerY, time);
         if (isVoid) {
@@ -2412,6 +2415,7 @@ export class WorldLayer {
     if (this.hp <= 0) {
       this.hp = MAX_HP * 0.5;
       this.hud.setHealth(this.hp, MAX_HP);
+      this.isDying = true;
       achievements.unlock("knocked_out");
       for (const c of this.creatures) c.destroy();
       this.creatures = [];

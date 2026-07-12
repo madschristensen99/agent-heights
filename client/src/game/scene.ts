@@ -3303,12 +3303,13 @@ export class OfficeScene extends Phaser.Scene {
     // check for death teleport from world layer
     const teleportTo = this.registry.get("teleportTo") as { x: number; y: number } | undefined;
     if (teleportTo) {
+      this.registry.remove("teleportTo"); // remove immediately so it doesn't re-trigger next frame
       this.cameras.main.fadeOut(300, 10, 10, 30);
       this.cameras.main.once("camerafadeoutcomplete", () => {
         this.player.setPosition(teleportTo.x, teleportTo.y);
         this.cameras.main.fadeIn(400, 10, 10, 30);
+        this.world.clearDeath(); // re-enable damage now that player is safe
       });
-      this.registry.remove("teleportTo");
       this.store.toast("You were knocked out and dragged back to the office!");
     }
 
