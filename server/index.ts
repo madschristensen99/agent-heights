@@ -7,6 +7,7 @@ import type { ClientMsg, ServerMsg } from "../shared/types.js";
 import { SERVER_PORT } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
+import { handleMcpCatalogRequest } from "./mcp-store.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
@@ -231,6 +232,12 @@ const server = createServer((req, res) => {
         res.end(`<html><body><h2>Authentication failed</h2><p>${result.error ?? "Unknown error"}</p><script>setTimeout(function(){window.location.href='/';},3000);</script></body></html>`);
       }
     });
+    return;
+  }
+
+  // MCP catalog — curated server directory
+  if (req.url?.split("?")[0]?.startsWith("/api/mcp-catalog")) {
+    handleMcpCatalogRequest(req, res);
     return;
   }
 

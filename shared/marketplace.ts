@@ -51,7 +51,7 @@ export interface MarketplaceTool {
   created_at: string;
 }
 
-export type MarketplaceItemType = "agent" | "prompt" | "tool";
+export type MarketplaceItemType = "agent" | "prompt" | "tool" | "server";
 
 export interface MarketplaceQuery {
   type: MarketplaceItemType;
