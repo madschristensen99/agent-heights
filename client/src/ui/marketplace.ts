@@ -599,6 +599,9 @@ export class MarketplaceBrowser {
     if (icon.startsWith("http")) {
       return `<img src="${icon}" width="${size}" height="${size}" alt="" style="display:block;" />`;
     }
+    if (icon.startsWith("<svg")) {
+      return icon.replace(/<svg/, `<svg width="${size}" height="${size}"`);
+    }
     return this.escape(icon);
   }
 
