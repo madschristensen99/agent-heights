@@ -177,7 +177,7 @@ export class MarketplaceBrowser {
 
       card.innerHTML = `
         <div style="display:flex; align-items:flex-start; gap:0.5rem;">
-          <div style="font-size:1.5rem; flex-shrink:0; width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:#1a1a1a; border-radius:0.375rem;">${this.renderIcon(server.icon, 24)}</div>
+          <div style="font-size:1.5rem; flex-shrink:0; width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:#1a1a1a; border-radius:0.375rem;">${this.renderIcon(server.icon, 24, server.name)}</div>
           <div style="flex:1; min-width:0;">
             <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.15rem;">${this.escape(server.name)}</div>
             <div style="font-size:0.75rem; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.escape(server.summary.slice(0, 80))}</div>
@@ -315,7 +315,7 @@ export class MarketplaceBrowser {
     modal.innerHTML = `
       <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; overflow-y:auto; padding:1.5rem; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
         <div style="display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:1rem;">
-          <div style="font-size:2rem; flex-shrink:0; width:56px; height:56px; display:flex; align-items:center; justify-content:center; background:#1a1a1a; border-radius:0.5rem;">${this.renderIcon(server.icon, 32)}</div>
+          <div style="font-size:2rem; flex-shrink:0; width:56px; height:56px; display:flex; align-items:center; justify-content:center; background:#1a1a1a; border-radius:0.5rem;">${this.renderIcon(server.icon, 32, server.name)}</div>
           <div style="flex:1;">
             <h3 style="font-size:1.1rem; font-weight:700; margin:0 0 0.25rem;">${this.escape(server.name)}</h3>
             <div style="font-size:0.8rem; color:#888;">${this.escape(server.summary)}</div>
@@ -595,12 +595,14 @@ export class MarketplaceBrowser {
     });
   }
 
-  private renderIcon(icon: string, size: number): string {
+  private renderIcon(icon: string, size: number, name?: string): string {
     if (icon.startsWith("http")) {
-      return `<img src="${icon}" width="${size}" height="${size}" alt="" style="display:block;" />`;
+      const fallbackText = (name ?? "?").charAt(0).toUpperCase();
+      return `<img src="${icon}" width="${size}" height="${size}" alt="" style="display:block;" onerror="this.style.display='none';this.parentElement.style.fontSize='1rem';this.parentElement.style.fontWeight='700';this.parentElement.style.color='#e0e0e0';this.parentElement.textContent='${fallbackText}'" />`;
     }
     if (icon.startsWith("<svg")) {
-      return icon.replace(/<svg/, `<svg width="${size}" height="${size}"`);
+      const withNs = icon.includes("xmlns") ? icon : icon.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+      return withNs.replace(/<svg/, `<svg width="${size}" height="${size}"`);
     }
     return this.escape(icon);
   }
