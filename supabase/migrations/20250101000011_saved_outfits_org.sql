@@ -3,7 +3,7 @@
 -- or to an individual user (personal wardrobe).
 
 ALTER TABLE public.agent_hq_saved_outfits
-  ADD COLUMN IF NOT EXISTS org_id UUID NULL;
+  ADD COLUMN IF NOT EXISTS org_id TEXT NULL;
 
 -- Index for org-scoped outfit lookups
 CREATE INDEX IF NOT EXISTS idx_saved_outfits_org
