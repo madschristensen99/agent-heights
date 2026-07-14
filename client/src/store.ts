@@ -1,4 +1,4 @@
-import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember } from "../../shared/types";
+import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -57,6 +57,7 @@ export class Store {
   hallOfFameOpen = false;
   railwayPanelOpen = false;
   wardrobeOpen = false;
+  outfits: SavedOutfit[] = [];
   railwayData: RailwayData | null = null;
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
@@ -444,6 +445,9 @@ export class Store {
         break;
       case "api_key_status":
         this.hasApiKey = msg.hasKey;
+        break;
+      case "outfits":
+        this.outfits = msg.outfits;
         break;
       case "mcp_key_status":
         // MCP key status is handled via toast — no persistent UI state needed

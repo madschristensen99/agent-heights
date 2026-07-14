@@ -158,50 +158,6 @@ class CharBuilder {
   }
 }
 
-// ----------------------------------------------------------- saved outfits
-
-const OUTFITS_KEY = "agent-hq-outfits";
-
-interface SavedOutfit {
-  id: string;
-  name: string;
-  appearance: CharAppearance;
-  createdAt: number;
-}
-
-function loadOutfits(): SavedOutfit[] {
-  try {
-    const raw = localStorage.getItem(OUTFITS_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw) as SavedOutfit[];
-    return arr.filter((o) => isValidAppearance(o.appearance));
-  } catch {
-    return [];
-  }
-}
-
-function saveOutfits(outfits: SavedOutfit[]): void {
-  localStorage.setItem(OUTFITS_KEY, JSON.stringify(outfits));
-}
-
-function addOutfit(name: string, appearance: CharAppearance): SavedOutfit {
-  const outfits = loadOutfits();
-  const outfit: SavedOutfit = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    name: name.trim().slice(0, 24) || "Outfit",
-    appearance,
-    createdAt: Date.now(),
-  };
-  outfits.unshift(outfit);
-  saveOutfits(outfits);
-  return outfit;
-}
-
-function removeOutfit(id: string): void {
-  const outfits = loadOutfits().filter((o) => o.id !== id);
-  saveOutfits(outfits);
-}
-
 /* Crisp inline icons — font glyphs like ⛶ render as tofu in the pixel font. */
 const ICON = {
   expand: `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -1509,7 +1465,7 @@ export class Hud {
               <button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;">💾 SAVE OUTFIT</button>
               <select class="outfit-select" id="h-load-outfit">
                 <option value="">Load outfit…</option>
-                ${loadOutfits().map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}
+                ${this.store.outfits.map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}
               </select>
             </div>
           </div>
@@ -1565,11 +1521,7 @@ export class Hud {
     document.getElementById("h-save-outfit")!.addEventListener("click", () => {
       const name = prompt("Name this outfit:", "");
       if (name === null) return;
-      addOutfit(name, builder.getAppearance());
-      // Refresh the load dropdown
-      const sel = document.getElementById("h-load-outfit") as HTMLSelectElement;
-      sel.innerHTML = `<option value="">Load outfit…</option>` +
-        loadOutfits().map((o) => `<option value="${o.id}">${o.name}</option>`).join("");
+      this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
       this.toast("Outfit saved!");
     });
 
@@ -1577,7 +1529,7 @@ export class Hud {
     document.getElementById("h-load-outfit")!.addEventListener("change", (e) => {
       const id = (e.target as HTMLSelectElement).value;
       if (!id) return;
-      const outfit = loadOutfits().find((o) => o.id === id);
+      const outfit = this.store.outfits.find((o) => o.id === id);
       if (outfit) builder.setAppearance(outfit.appearance);
       (e.target as HTMLSelectElement).value = "";
     });
@@ -2337,7 +2289,7 @@ export class Hud {
     const builder = new CharBuilder("wd", current, () => {});
 
     const renderOutfitList = (): string => {
-      const outfits = loadOutfits();
+      const outfits = this.store.outfits;
       if (outfits.length === 0) {
         return `<p class="outfit-empty">No saved outfits yet. Randomize and save one!</p>`;
       }
@@ -2377,18 +2329,12 @@ export class Hud {
     modal.hidden = false;
     builder.mount();
 
-    const refreshOutfitList = (): void => {
-      const listEl = document.getElementById("wd-outfit-list");
-      if (listEl) listEl.innerHTML = renderOutfitList();
-      wireOutfitItems();
-    };
-
     const wireOutfitItems = (): void => {
       document.querySelectorAll<HTMLElement>(".outfit-load").forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           const id = btn.dataset.id;
-          const outfit = loadOutfits().find((o) => o.id === id);
+          const outfit = this.store.outfits.find((o) => o.id === id);
           if (outfit) {
             builder.setAppearance(outfit.appearance);
             this.toast(`Loaded "${outfit.name}"`);
@@ -2398,8 +2344,7 @@ export class Hud {
       document.querySelectorAll<HTMLElement>(".outfit-delete").forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
-          removeOutfit(btn.dataset.id!);
-          refreshOutfitList();
+          this.net.send({ type: "delete_outfit", id: btn.dataset.id! });
         });
       });
     };
@@ -2409,8 +2354,7 @@ export class Hud {
     document.getElementById("wd-save-outfit")!.addEventListener("click", () => {
       const name = prompt("Name this outfit:", "");
       if (name === null) return;
-      addOutfit(name, builder.getAppearance());
-      refreshOutfitList();
+      this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
       this.toast("Outfit saved!");
     });
 

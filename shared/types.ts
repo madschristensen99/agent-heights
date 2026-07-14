@@ -530,7 +530,6 @@ export type ServerMsg =
       settings: GameSettings;
       board: TaskCard[];
       world: WorldState | null;
-      outfits: SavedOutfit[];
     }
   | { type: "player"; player: PlayerInfo }
   | { type: "settings"; settings: GameSettings }

@@ -3,9 +3,9 @@ import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize } from "node:path";
 import { readFile, stat } from "node:fs/promises";
-import type { ClientMsg, ServerMsg } from "../shared/types.js";
-import { SERVER_PORT } from "../shared/types.js";
-import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser } from "./supabase.js";
+import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance } from "../shared/types.js";
+import { SERVER_PORT, isValidAppearance } from "../shared/types.js";
+import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleMcpCatalogRequest } from "./mcp-store.js";
 import { handleYukiRequest } from "./yuki.js";
@@ -22,6 +22,34 @@ import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from ".
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
+
+// ── Saved outfits helpers ────────────────────────────────────────────────
+async function loadOutfits(userId: string): Promise<SavedOutfit[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("agent_hq_saved_outfits")
+      .select("id, name, appearance, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data
+      .filter((r: any) => isValidAppearance(r.appearance))
+      .map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        appearance: r.appearance as CharAppearance,
+        createdAt: r.created_at,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function sendOutfits(ws: WebSocket, userId: string): Promise<void> {
+  const outfits = await loadOutfits(userId);
+  ws.send(JSON.stringify({ type: "outfits", outfits } satisfies ServerMsg));
+}
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
@@ -332,6 +360,9 @@ wss.on("connection", async (ws, req) => {
 
   // Tell the client whether they have an API key set
   ws.send(JSON.stringify({ type: "api_key_status", hasKey: sess.apiKey != null } satisfies ServerMsg));
+
+  // Send saved outfits
+  void sendOutfits(ws, sess.user.id);
 
   // Send payment status so the client can gate UI (entrance fee + subscription)
   if (isSupabaseConfigured && isStripeConfigured) {
@@ -691,6 +722,38 @@ wss.on("connection", async (ws, req) => {
           // Refresh the manager's MCP key cache
           const mcpKeys = await getUserMcpKeys(sess.user.id);
           sess.manager.setMcpKeys(mcpKeys);
+          break;
+        }
+        case "save_outfit": {
+          if (!isValidAppearance(msg.appearance)) break;
+          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const name = msg.name.trim().slice(0, 24) || "Outfit";
+          const createdAt = Date.now();
+          if (isSupabaseConfigured) {
+            try {
+              await supabaseAdmin
+                .from("agent_hq_saved_outfits")
+                .insert({ id, user_id: sess.user.id, name, appearance: msg.appearance, created_at: createdAt });
+            } catch (err) {
+              console.error("[outfits] save failed:", err);
+            }
+          }
+          await sendOutfits(ws, sess.user.id);
+          break;
+        }
+        case "delete_outfit": {
+          if (isSupabaseConfigured) {
+            try {
+              await supabaseAdmin
+                .from("agent_hq_saved_outfits")
+                .delete()
+                .eq("id", msg.id)
+                .eq("user_id", sess.user.id);
+            } catch (err) {
+              console.error("[outfits] delete failed:", err);
+            }
+          }
+          await sendOutfits(ws, sess.user.id);
           break;
         }
         case "renew_token": {
