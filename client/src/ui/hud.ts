@@ -2345,6 +2345,7 @@ export class Hud {
         <div class="outfit-item" data-id="${o.id}">
           <div class="outfit-thumb" style="background-image:url('${generateCharPreviewDataURL(o.appearance, 2)}')"></div>
           <span class="outfit-name">${o.name}</span>
+          <button class="outfit-load" data-id="${o.id}" title="Load into builder">▶ LOAD</button>
           <button class="outfit-delete" data-id="${o.id}" title="Delete">✕</button>
         </div>`).join("");
     };
@@ -2383,12 +2384,15 @@ export class Hud {
     };
 
     const wireOutfitItems = (): void => {
-      document.querySelectorAll<HTMLElement>(".outfit-item").forEach((item) => {
-        item.addEventListener("click", (e) => {
-          if ((e.target as HTMLElement).classList.contains("outfit-delete")) return;
-          const id = item.dataset.id;
+      document.querySelectorAll<HTMLElement>(".outfit-load").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
           const outfit = loadOutfits().find((o) => o.id === id);
-          if (outfit) builder.setAppearance(outfit.appearance);
+          if (outfit) {
+            builder.setAppearance(outfit.appearance);
+            this.toast(`Loaded "${outfit.name}"`);
+          }
         });
       });
       document.querySelectorAll<HTMLElement>(".outfit-delete").forEach((btn) => {
