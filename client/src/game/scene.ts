@@ -1230,8 +1230,14 @@ export class OfficeScene extends Phaser.Scene {
     const spkPx = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, spkPx.x, spkPx.y) < 160) {
       this.projectorMuted = !this.projectorMuted;
-      // Force iframe reload to apply mute change
-      this.projectorVideoId = null;
+      // Send mute/unmute command via YouTube IFrame postMessage API (no reload)
+      if (this.projectorIframe?.contentWindow) {
+        const cmd = this.projectorMuted ? "mute" : "unMute";
+        this.projectorIframe.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: cmd, args: [] }),
+          "*",
+        );
+      }
       this.store.toast(this.projectorMuted ? "Projector muted" : "Projector unmuted");
       this.world?.audio.uiClick();
       return true;
@@ -2798,13 +2804,13 @@ export class OfficeScene extends Phaser.Scene {
       document.body.appendChild(this.projectorIframe);
     }
 
-    // Video changed — update src with autoplay + loop + mute
+    // Video changed — update src with autoplay + loop + mute + JS API
     if (this.projectorVideoId !== videoId) {
       this.projectorVideoId = videoId;
       const muteParam = this.projectorMuted ? 1 : 0;
       this.projectorIframe.src =
         `https://www.youtube.com/embed/${videoId}` +
-        `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=${muteParam}&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3`;
+        `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=${muteParam}&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&enablejsapi=1`;
     }
 
     // Convert world position to screen position using canvas bounding rect
