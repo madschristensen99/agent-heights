@@ -5,6 +5,7 @@ import type { Store } from "../store";
 import type { Net } from "../net";
 import { isTouchDevice } from "../touch";
 import { TILE_PX, type Dir } from "./agent";
+import { hexToPixel, pixelToHex, HEX_SIZE, HEX_COL_SPACING, HEX_ROW_SPACING, HEX_COL_OFFSET, HEX_WIDTH, HEX_HEIGHT } from "../../../shared/hex";
 import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
@@ -477,11 +478,13 @@ class FriendlyCreature {
       for (let tries = 0; tries < 8; tries++) {
         const wdx = Math.floor((Math.random() - 0.5) * range * 2);
         const wdy = Math.floor((Math.random() - 0.5) * range * 2);
-        const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + wdx;
-        const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + wdy;
+        const { col: wcol, row: wrow } = pixelToHex(this.container.x - this.world.offset.x, this.container.y - this.world.offset.y);
+        const tx = wcol + wdx;
+        const ty = wrow + wdy;
         if (this.world.isCreatureWalkable(tx, ty)) {
-          this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
-          this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
+          const tp = this.world.tileToPixel(tx, ty);
+          this.targetX = tp.x;
+          this.targetY = tp.y;
           this.moving = true;
           break;
         }
@@ -617,8 +620,9 @@ class GhostNPC {
     this.world = world;
     this.info = info;
     const scene = world.scene;
-    const px = info.worldX * TILE_PX + TILE_PX / 2 + world.offset.x;
-    const py = info.worldY * TILE_PX + TILE_PX / 2 + world.offset.y;
+    const tp = world.tileToPixel(info.worldX, info.worldY);
+    const px = tp.x;
+    const py = tp.y;
 
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.2).setDepth(0);
     const texKey = info.appearance ? `char-ghost-${info.id}` : `char-${info.sprite}`;
@@ -667,11 +671,13 @@ class GhostNPC {
       for (let tries = 0; tries < 10; tries++) {
         const dx = Math.floor((Math.random() - 0.5) * range * 2);
         const dy = Math.floor((Math.random() - 0.5) * range * 2);
-        const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + dx;
-        const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + dy;
+        const { col: gcol, row: grow } = pixelToHex(this.container.x - this.world.offset.x, this.container.y - this.world.offset.y);
+        const tx = gcol + dx;
+        const ty = grow + dy;
         if (this.world.isCreatureWalkable(tx, ty)) {
-          this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
-          this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
+          const tp = this.world.tileToPixel(tx, ty);
+          this.targetX = tp.x;
+          this.targetY = tp.y;
           this.moving = true;
           break;
         }
@@ -965,12 +971,16 @@ export class WorldLayer {
     return Math.min(1, distOutside / rampPx);
   }
 
-  /** Convert world pixels to world tile coordinates. */
+  /** Convert world pixels to world tile coordinates (hex offset). */
   pixelToTile(px: number, py: number): { tx: number; ty: number } {
-    return {
-      tx: Math.floor((px - this.offset.x) / TILE_PX),
-      ty: Math.floor((py - this.offset.y) / TILE_PX),
-    };
+    const { col, row } = pixelToHex(px - this.offset.x, py - this.offset.y);
+    return { tx: col, ty: row };
+  }
+
+  /** Convert world tile coordinates (hex offset) to world pixel center. */
+  tileToPixel(tx: number, ty: number): { x: number; y: number } {
+    const { x, y } = hexToPixel(tx, ty);
+    return { x: x + this.offset.x, y: y + this.offset.y };
   }
 
   /** Get the tile type at world tile coordinates. Generates the chunk if needed. */
@@ -1389,11 +1399,15 @@ export class WorldLayer {
 
   private renderChunk(chunk: Chunk): void {
     const key = `${chunk.cx},${chunk.cy}`;
-    const chunkPxSize = CHUNK_SIZE * TILE_PX;
+    const chunkPxW = CHUNK_SIZE * HEX_COL_SPACING + HEX_SIZE;
+    const chunkPxH = CHUNK_SIZE * HEX_ROW_SPACING + HEX_COL_OFFSET + HEX_SIZE;
     const texKey = this.chunkTexKey(chunk.cx, chunk.cy);
     const container = this.scene.add.container(0, 0).setDepth(-1);
-    const ox = chunk.cx * CHUNK_SIZE * TILE_PX + this.offset.x;
-    const oy = chunk.cy * CHUNK_SIZE * TILE_PX + this.offset.y;
+    const chunkOriginCol = chunk.cx * CHUNK_SIZE;
+    const chunkOriginRow = chunk.cy * CHUNK_SIZE;
+    const originPx = hexToPixel(chunkOriginCol, chunkOriginRow);
+    const ox = originPx.x - HEX_SIZE + this.offset.x;
+    const oy = originPx.y - HEX_SIZE + this.offset.y;
     const chunkLightList: LightSource[] = [];
 
     const overlayTextures: Record<number, string> = {
@@ -1420,7 +1434,7 @@ export class WorldLayer {
     // Render static tiles to a persistent canvas texture (survives scene restarts).
     // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
     if (!this.scene.textures.exists(texKey)) {
-      const canvasTex = this.scene.textures.createCanvas(texKey, chunkPxSize, chunkPxSize);
+      const canvasTex = this.scene.textures.createCanvas(texKey, Math.ceil(chunkPxW), Math.ceil(chunkPxH));
       if (canvasTex) {
         const ctx = canvasTex.getContext();
         const worldTilesTex = this.scene.textures.get("world-tiles");
@@ -1433,16 +1447,19 @@ export class WorldLayer {
             ctx.drawImage(
               fr.source.image as CanvasImageSource,
               fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-              px, py, TILE_PX, TILE_PX,
+              px - HEX_SIZE, py - HEX_SIZE, HEX_WIDTH, HEX_HEIGHT,
             );
           }
         };
 
-        for (let y = 0; y < CHUNK_SIZE; y++) {
-          for (let x = 0; x < CHUNK_SIZE; x++) {
-            const tile = chunk.tiles[y * CHUNK_SIZE + x];
-            const px = x * TILE_PX;
-            const py = y * TILE_PX;
+        for (let row = 0; row < CHUNK_SIZE; row++) {
+          for (let col = 0; col < CHUNK_SIZE; col++) {
+            const tile = chunk.tiles[row * CHUNK_SIZE + col];
+            const worldCol = chunkOriginCol + col;
+            const worldRow = chunkOriginRow + row;
+            const tilePx = hexToPixel(worldCol, worldRow);
+            const px = tilePx.x - originPx.x + HEX_SIZE;
+            const py = tilePx.y - originPx.y + HEX_SIZE;
             const frame = tileToFrame(tile);
 
             // Draw base tile
@@ -1451,7 +1468,7 @@ export class WorldLayer {
               ctx.drawImage(
                 fr.source.image as CanvasImageSource,
                 fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-                px, py, TILE_PX, TILE_PX,
+                px - HEX_SIZE, py - HEX_SIZE, HEX_WIDTH, HEX_HEIGHT,
               );
             }
 
@@ -1479,14 +1496,17 @@ export class WorldLayer {
     // Water animation sprites and light sources are dynamic — always recreated.
     // Water: only create sprites for a subset of tiles to limit per-frame overhead.
     // The static frame is already baked into the canvas texture.
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-      for (let x = 0; x < CHUNK_SIZE; x++) {
-        const tile = chunk.tiles[y * CHUNK_SIZE + x];
-        const px = x * TILE_PX;
-        const py = y * TILE_PX;
+    for (let row = 0; row < CHUNK_SIZE; row++) {
+      for (let col = 0; col < CHUNK_SIZE; col++) {
+        const tile = chunk.tiles[row * CHUNK_SIZE + col];
+        const worldCol = chunkOriginCol + col;
+        const worldRow = chunkOriginRow + row;
+        const tilePx = hexToPixel(worldCol, worldRow);
+        const px = tilePx.x - originPx.x + HEX_SIZE;
+        const py = tilePx.y - originPx.y + HEX_SIZE;
 
-        if (tile === TILE.WATER && (x % 3 === 0) && (y % 3 === 0)) {
-          const waterSprite = this.scene.add.sprite(ox + px, oy + py, "world-tiles", 21);
+        if (tile === TILE.WATER && (col % 3 === 0) && (row % 3 === 0)) {
+          const waterSprite = this.scene.add.sprite(ox + px - HEX_SIZE, oy + py - HEX_SIZE, "world-tiles", 21);
           waterSprite.setOrigin(0, 0);
           waterSprite.play({ key: "water-anim", repeat: -1 }, true);
           container.add(waterSprite);
@@ -1494,14 +1514,16 @@ export class WorldLayer {
 
         // Add tile-based light sources for special tiles (capped per chunk for perf)
         if (chunkLightList.length < MAX_LIGHTS_PER_CHUNK) {
+          const lightX = ox + px;
+          const lightY = oy + py;
           if (tile === TILE.LAVA) {
-            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 80, 0xff6600, 0.4, 0.1, 0.005));
+            chunkLightList.push(this.lighting.addLight(lightX, lightY, 80, 0xff6600, 0.4, 0.1, 0.005));
           } else if (tile === TILE.CRYSTAL) {
-            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 60, 0x44aaff, 0.3, 0.05, 0.003));
+            chunkLightList.push(this.lighting.addLight(lightX, lightY, 60, 0x44aaff, 0.3, 0.05, 0.003));
           } else if (tile === TILE.VOID) {
-            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 70, 0xaa00ff, 0.25, 0.08, 0.004));
+            chunkLightList.push(this.lighting.addLight(lightX, lightY, 70, 0xaa00ff, 0.25, 0.08, 0.004));
           } else if (tile === TILE.FOUNTAIN) {
-            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 50, 0x88ccff, 0.2, 0.03, 0.002));
+            chunkLightList.push(this.lighting.addLight(lightX, lightY, 50, 0x88ccff, 0.2, 0.03, 0.002));
           }
         }
       }
@@ -1662,9 +1684,8 @@ export class WorldLayer {
     if (bestTee) {
       this.setTileAt(bestTee.tx, bestTee.ty, TILE.GOLF_BALL);
       // spawn effect
-      const px = bestTee.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
-      const py = bestTee.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
-      this.vfx.sparkBurst(px, py, 0xffffff, 16, 60);
+      const tp = this.tileToPixel(bestTee.tx, bestTee.ty);
+      this.vfx.sparkBurst(tp.x, tp.y, 0xffffff, 16, 60);
       return true;
     }
     return false;
@@ -1965,9 +1986,8 @@ export class WorldLayer {
           const cty2 = pty + dy;
           const t = this.getTileAtLoaded(ctx2, cty2);
           if (t < 0) continue;
-          const cx2 = ctx2 * TILE_PX + TILE_PX / 2 + this.offset.x;
-          const cy2 = cty2 * TILE_PX + TILE_PX / 2 + this.offset.y;
-          const d = Math.hypot(playerX - cx2, playerY - cy2);
+          const cp = this.tileToPixel(ctx2, cty2);
+          const d = Math.hypot(playerX - cp.x, playerY - cp.y);
           if (t === TILE.GOLF_CLUB && (!nearestClub || d < nearestClub.d)) {
             nearestClub = { tx: ctx2, ty: cty2, d };
           }
@@ -1979,19 +1999,16 @@ export class WorldLayer {
 
       // show hint and handle E press
       if (nearestClub && nearestClub.d < 100 && !this.hasGolfClub) {
+        const clubP = this.tileToPixel(nearestClub.tx, nearestClub.ty);
         this.golfHint
           .setText(isTouchDevice() ? "TAP Pick up golf club" : "E: Pick up golf club")
-          .setPosition(nearestClub.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestClub.ty * TILE_PX + this.offset.y - 10)
+          .setPosition(clubP.x, clubP.y - 30)
           .setVisible(true);
         if (ePressed) {
           this.hasGolfClub = true;
           this.setTileAt(nearestClub.tx, nearestClub.ty, TILE.TEE_BOX);
           this.store.toast("Picked up golf club! ⛳");
-          this.vfx.sparkBurst(
-            nearestClub.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
-            nearestClub.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
-            0x88cc88, 10, 60,
-          );
+          this.vfx.sparkBurst(clubP.x, clubP.y, 0x88cc88, 10, 60);
           achievements.unlock("club_pickup");
         }
       } else if (nearestBall && nearestBall.d < 100 && this.hasGolfClub && !this.golfBallActive) {
@@ -2004,8 +2021,9 @@ export class WorldLayer {
           for (let sy = -20; sy <= 20 && !foundFlag; sy++) {
             for (let sx = -20; sx <= 20 && !foundFlag; sx++) {
               if (this.getTileAtLoaded(nearestBall.tx + sx, nearestBall.ty + sy) === TILE.GOLF_FLAG) {
-                flagX = (nearestBall.tx + sx) * TILE_PX + TILE_PX / 2 + this.offset.x;
-                flagY = (nearestBall.ty + sy) * TILE_PX + TILE_PX / 2 + this.offset.y;
+                const fp = this.tileToPixel(nearestBall.tx + sx, nearestBall.ty + sy);
+                flagX = fp.x;
+                flagY = fp.y;
                 foundFlag = true;
               }
             }
@@ -2013,8 +2031,9 @@ export class WorldLayer {
           this.golfFlagCacheKey = ballKey;
           this.golfFlagCache = { flagX, flagY, foundFlag };
         }
-        const ballPx = nearestBall.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
-        const ballPy = nearestBall.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
+        const ballP = this.tileToPixel(nearestBall.tx, nearestBall.ty);
+        const ballPx = ballP.x;
+        const ballPy = ballP.y;
 
         // power bar is active — oscillate and show above player
         this.golfPowerActive = true;
@@ -2189,9 +2208,8 @@ export class WorldLayer {
           const cty2 = tpty + dy;
           const t = this.getTileAtLoaded(ctx2, cty2);
           if (t < 0) continue;
-          const cx2 = ctx2 * TILE_PX + TILE_PX / 2 + this.offset.x;
-          const cy2 = cty2 * TILE_PX + TILE_PX / 2 + this.offset.y;
-          const d = Math.hypot(playerX - cx2, playerY - cy2);
+          const rp = this.tileToPixel(ctx2, cty2);
+          const d = Math.hypot(playerX - rp.x, playerY - rp.y);
           if (t === TILE.TENNIS_RACKET && (!nearestRacket || d < nearestRacket.d)) {
             nearestRacket = { tx: ctx2, ty: cty2, d };
           }
@@ -2203,19 +2221,16 @@ export class WorldLayer {
 
       // show hint and handle E press for racket pickup
       if (nearestRacket && nearestRacket.d < 100 && !this.hasTennisRacket) {
+        const racketP = this.tileToPixel(nearestRacket.tx, nearestRacket.ty);
         this.tennisHint
           .setText(isTouchDevice() ? "TAP Pick up tennis racket" : "E: Pick up tennis racket")
-          .setPosition(nearestRacket.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestRacket.ty * TILE_PX + this.offset.y - 10)
+          .setPosition(racketP.x, racketP.y - 30)
           .setVisible(true);
         if (ePressed) {
           this.hasTennisRacket = true;
           this.setTileAt(nearestRacket.tx, nearestRacket.ty, TILE.TENNIS_COURT);
           this.store.toast("Picked up tennis racket! 🎾");
-          this.vfx.sparkBurst(
-            nearestRacket.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
-            nearestRacket.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
-            0xeeff44, 10, 60,
-          );
+          this.vfx.sparkBurst(racketP.x, racketP.y, 0xeeff44, 10, 60);
           achievements.unlock("tennis_pickup");
         }
       } else if (nearestTennisBall && nearestTennisBall.d < 100 && this.hasTennisRacket && !this.tennisBallActive) {
@@ -2228,8 +2243,9 @@ export class WorldLayer {
           for (let sy = -15; sy <= 15 && !foundWall; sy++) {
             for (let sx = -15; sx <= 15 && !foundWall; sx++) {
               if (this.getTileAtLoaded(nearestTennisBall.tx + sx, nearestTennisBall.ty + sy) === TILE.TENNIS_WALL) {
-                wallX = (nearestTennisBall.tx + sx) * TILE_PX + TILE_PX / 2 + this.offset.x;
-                wallY = (nearestTennisBall.ty + sy) * TILE_PX + TILE_PX / 2 + this.offset.y;
+                const wp = this.tileToPixel(nearestTennisBall.tx + sx, nearestTennisBall.ty + sy);
+                wallX = wp.x;
+                wallY = wp.y;
                 foundWall = true;
               }
             }
@@ -2237,8 +2253,9 @@ export class WorldLayer {
           this.tennisWallCacheKey = ballKey;
           this.tennisWallCache = { wallX, wallY, foundWall };
         }
-        const ballPx = nearestTennisBall.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
-        const ballPy = nearestTennisBall.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
+        const tballP = this.tileToPixel(nearestTennisBall.tx, nearestTennisBall.ty);
+        const ballPx = tballP.x;
+        const ballPy = tballP.y;
 
         // power bar is active — oscillate and show above player
         this.tennisPowerActive = true;
@@ -2333,9 +2350,8 @@ export class WorldLayer {
           const fty = pty + dy;
           const ft = this.getTileAtLoaded(ftx, fty);
           if (ft === TILE.FLOWER) {
-            const fx = ftx * TILE_PX + TILE_PX / 2 + this.offset.x;
-            const fy = fty * TILE_PX + TILE_PX / 2 + this.offset.y;
-            const d = Math.hypot(playerX - fx, playerY - fy);
+            const fp = this.tileToPixel(ftx, fty);
+            const d = Math.hypot(playerX - fp.x, playerY - fp.y);
             if (!nearestFlower || d < nearestFlower.d) {
               nearestFlower = { tx: ftx, ty: fty, d };
             }
@@ -2343,22 +2359,16 @@ export class WorldLayer {
         }
       }
       if (nearestFlower && nearestFlower.d < 80) {
+        const flowerP = this.tileToPixel(nearestFlower.tx, nearestFlower.ty);
         this.flowerHint
           .setText(isTouchDevice() ? "TAP Pick flower" : "E: Pick flower")
-          .setPosition(
-            nearestFlower.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
-            nearestFlower.ty * TILE_PX + this.offset.y - 10,
-          )
+          .setPosition(flowerP.x, flowerP.y - 30)
           .setVisible(true);
         if (ePressed) {
           this.setTileAt(nearestFlower.tx, nearestFlower.ty, TILE.GRASS);
           this.flowers++;
           this.store.toast(`Picked a flower! 🌸 (${this.flowers})`);
-          this.vfx.sparkBurst(
-            nearestFlower.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
-            nearestFlower.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
-            0xff88cc, 10, 60,
-          );
+          this.vfx.sparkBurst(flowerP.x, flowerP.y, 0xff88cc, 10, 60);
           this.audio.uiClick();
         }
       } else {
@@ -2426,8 +2436,9 @@ export class WorldLayer {
       const scene = this.scene as Phaser.Scene;
       const spawn = scene.registry.get("spawnTile") as { x: number; y: number } | undefined;
       if (spawn) {
-        const px = spawn.x * TILE_PX + TILE_PX / 2;
-        const py = spawn.y * TILE_PX + TILE_PX / 2;
+        const sp = hexToPixel(spawn.x, spawn.y);
+        const px = sp.x;
+        const py = sp.y;
         scene.registry.set("teleportTo", { x: px, y: py });
       }
     }
