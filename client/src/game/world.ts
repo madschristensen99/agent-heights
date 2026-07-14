@@ -624,7 +624,7 @@ class GhostNPC {
     const texKey = info.appearance ? `char-ghost-${info.id}` : `char-${info.sprite}`;
     if (info.appearance) {
       generateCharTexture(scene, texKey, info.appearance);
-      const dirs: Dir[] = ["down", "left", "right", "up"];
+      const dirs: Dir[] = ["down", "left", "right", "up", "ne", "nw", "se", "sw"];
       const FPR = 8;
       if (!scene.anims.exists(`${texKey}-work`)) {
         dirs.forEach((dir, row) => {

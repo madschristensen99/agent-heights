@@ -355,7 +355,7 @@ export interface PlayerInfo {
 }
 
 /** Direction a player/agent is facing. */
-export type Dir = "up" | "down" | "left" | "right";
+export type Dir = "up" | "down" | "left" | "right" | "ne" | "nw" | "se" | "sw";
 
 /** A player visible in a shared room — used for multiplayer presence. */
 export interface PlayerPresence {

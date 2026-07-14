@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
+import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, dirFromVelocity, type Dir } from "./agent";
 import { YUKI_ID, HERMES_ID, type CharAppearance } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
@@ -3277,7 +3277,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Create walk/idle/work animations for a custom character texture key. */
   private ensureCharAnimations(key: string): void {
     if (this.anims.exists(`${key}-work`)) return;
-    const dirs: Dir[] = ["down", "left", "right", "up"];
+    const dirs: Dir[] = ["down", "left", "right", "up", "ne", "nw", "se", "sw"];
     const FRAMES_PER_ROW = 8;
     dirs.forEach((dir, row) => {
       const base = row * FRAMES_PER_ROW;
@@ -3340,7 +3340,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     const sheets = ["boss", "char-yuki", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
-    const dirs: Dir[] = ["down", "left", "right", "up"];
+    const dirs: Dir[] = ["down", "left", "right", "up", "ne", "nw", "se", "sw"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
       dirs.forEach((dir, row) => {
@@ -3564,8 +3564,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     if (vx !== 0 || vy !== 0) {
-      this.playerDir =
-        Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
+      this.playerDir = dirFromVelocity(vx, vy);
       this.player.play(`${this.playerTexKey}-walk-${this.playerDir}`, true);
     } else {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);

@@ -57,16 +57,16 @@ export const CW = 64;
 export const CH = 96;
 export const SHOE = "#3a3548";
 
-export type Dir = "down" | "left" | "right" | "up";
-export const DIRS: Dir[] = ["down", "left", "right", "up"];
+export type Dir = "down" | "left" | "right" | "up" | "ne" | "nw" | "se" | "sw";
+export const DIRS: Dir[] = ["down", "left", "right", "up", "ne", "nw", "se", "sw"];
 
 // ------------------------------------------------------------- draw char
 
 export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalette, dir: Dir, pose: number): void {
   const prevClip = s.clip;
   s.clip = { x: ox, y: oy, w: CW, h: CH };
-  const mirror = dir === "left";
-  const d: Dir = mirror ? "right" : dir;
+  const mirror = dir === "left" || dir === "nw" || dir === "sw";
+  const d: Dir = mirror ? (dir === "left" ? "right" : dir === "nw" ? "ne" : "se") : dir;
   const isFat = pal.bodyType === "fat";
 
   const isIdle = pose === 6;
@@ -410,6 +410,193 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     }
   };
 
+  // ===== DIAGONAL HAIR: SE (3/4 front-right) =====
+  const drawHairSE = () => {
+    const hs = pal.hairStyle;
+    const hb = hairBounce;
+    if (hs === "bald" || hs === "balding") {
+      ci(hx(32), hy(18), 16, pal.skin);
+      if (hs === "balding") {
+        el(hx(19), hy(21), 5, 6 + hb, pal.hair);
+        el(hx(32), hy(15), 6, 2, pal.hair);
+        s.set(hx(28), hy(16), pal.skin);
+        el(hx(26), hy(10), 3, 2, hairLi); el(hx(21), hy(19), 3, 7, hairDk);
+      }
+      el(hx(32), hy(15), 10, 2, skinDk);
+    } else if (hs === "spiky") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      for (let i = -2; i <= 2; i++) { const sx = hx(31 + i * 5); s.set(sx, hy(4 + Math.abs(i) * 2), pal.hair); s.set(sx + 1, hy(5 + Math.abs(i) * 2), pal.hair); }
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(8), 5, 2, hairLi); el(hx(32), hy(10), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "long") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      el(hx(17), hy(21), 5, 13 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+      el(hx(17), hy(28), 3, 7, hairDk);
+    } else if (hs === "buzz") {
+      el(hx(33), hy(9), 17, 9, pal.hair); el(hx(20), hy(21), 4, 6, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair);
+      el(hx(26), hy(11), 5, 2, hairLi); el(hx(32), hy(13), 5, 2, hairMid); el(hx(21), hy(19), 3, 6, hairDk);
+    } else if (hs === "ponytail") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      el(hx(16), hy(18), 4, 9 + hb, pal.hair); s.set(hx(15), hy(20 + hb), pal.hair); s.set(hx(15), hy(22 + hb), pal.hair);
+      el(hx(19), hy(21), 5, 8, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(5), 5, 2, hairLi); el(hx(32), hy(8), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "swept") {
+      el(hx(33), hy(9), 17, 9, pal.hair); el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(36), hy(16), 9, 2, pal.hair); rr(hx(27), hy(16), 17, 2, 3, pal.hair);
+      s.set(hx(26), hy(15), pal.skin);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "curly") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      ci(hx(24), hy(8), 4, pal.hair); ci(hx(32), hy(6), 5, pal.hair); ci(hx(38), hy(8), 4, pal.hair);
+      el(hx(18), hy(21), 5, 9 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); ci(hx(28), hy(16), 3, pal.hair);
+      ci(hx(26), hy(8), 2, hairLi); el(hx(32), hy(10), 5, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "bun") {
+      el(hx(33), hy(9), 17, 9, pal.hair); ci(hx(28), hy(5), 5, pal.hair); ci(hx(28), hy(5), 3, hairMid);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "mohawk") {
+      s.rect(hx(30), hy(2), 4, 16, pal.hair);
+      s.set(hx(29), hy(0), pal.hair); s.set(hx(30), hy(0), pal.hair); s.set(hx(31), hy(0), pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair);
+      s.set(hx(30), hy(6), hairLi); s.set(hx(31), hy(10), hairMid);
+    } else if (hs === "afro") {
+      el(hx(32), hy(13), 15, 13, pal.hair);
+      ci(hx(20), hy(10), 4, pal.hair); ci(hx(44), hy(10), 4, pal.hair);
+      ci(hx(24), hy(5), 4, pal.hair); ci(hx(40), hy(5), 4, pal.hair);
+      ci(hx(32), hy(2), 4, pal.hair);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair);
+      ci(hx(28), hy(8), 3, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "braids") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      el(hx(17), hy(21), 4, 17 + hb, pal.hair);
+      for (let i = 0; i < 4; i++) s.set(hx(17), hy(23 + i * 4), hairDk);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "pigtails") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      ci(hx(16), hy(20), 4, pal.hair); ci(hx(16), hy(20), 2, hairMid);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "bob") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      el(hx(17), hy(21), 5, 11 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+      el(hx(17), hy(28), 3, 5, hairDk);
+    } else if (hs === "dreadlocks") {
+      el(hx(33), hy(9), 17, 9, pal.hair);
+      for (const dlx of [17, 23, 29]) { el(hx(dlx), hy(20), 3, 15 + hb, pal.hair); }
+      for (const dlx of [17, 23, 29]) { for (let i = 0; i < 3; i++) s.set(hx(dlx), hy(23 + i * 5), hairDk); }
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(32), hy(11), 6, 3, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else {
+      el(hx(33), hy(9), 17, 9, pal.hair); el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(32), hy(16), 12, 2, pal.hair); rr(hx(25), hy(16), 17, 2, 3, pal.hair);
+      el(hx(26), hy(9), 5, 2, hairLi); el(hx(24), hy(10), 3, 2, hairRim); el(hx(32), hy(11), 6, 3, hairMid);
+      el(hx(21), hy(19), 4, 8, hairDk); s.set(hx(22), hy(17), hairDk); s.set(hx(23), hy(15), hairDk);
+    }
+  };
+
+  // ===== DIAGONAL HAIR: NE (3/4 back-right) =====
+  const drawHairNE = () => {
+    const hs = pal.hairStyle;
+    const hb = hairBounce;
+    if (hs === "bald" || hs === "balding") {
+      ci(hx(32), hy(18), 16, pal.skin);
+      if (hs === "balding") {
+        el(hx(18), hy(20), 4, 7, pal.hair); el(hx(32), hy(27), 10, 5, pal.hair);
+        el(hx(32), hy(16), 6, 2, pal.hair);
+        el(hx(28), hy(14), 3, 2, hairLi); el(hx(40), hy(20), 5, 8, hairDk);
+      }
+      el(hx(32), hy(18), 14, 3, skinDk);
+    } else if (hs === "spiky") {
+      el(hx(32), hy(17), 16, 13, pal.hair);
+      for (let i = -2; i <= 2; i++) { const sx = hx(31 + i * 5); s.set(sx, hy(8 + Math.abs(i) * 2), pal.hair); s.set(sx + 1, hy(9 + Math.abs(i) * 2), pal.hair); }
+      el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "long") {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(18), hy(24), 5, 15 + hb, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+      el(hx(18), hy(30), 3, 7, hairDk);
+    } else if (hs === "buzz") {
+      el(hx(32), hy(18), 15, 9, pal.hair); el(hx(32), hy(27), 13, 5, pal.hair);
+      el(hx(20), hy(21), 4, 6, pal.hair);
+      el(hx(28), hy(13), 5, 2, hairLi); el(hx(34), hy(14), 5, 2, hairMid); el(hx(21), hy(19), 3, 6, hairDk);
+    } else if (hs === "ponytail") {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(48), hy(20), 4, 9 + hb, pal.hair);
+      el(hx(19), hy(21), 5, 8, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "swept") {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "curly") {
+      el(hx(32), hy(17), 16, 13, pal.hair);
+      ci(hx(22), hy(12), 4, pal.hair); ci(hx(32), hy(10), 5, pal.hair); ci(hx(42), hy(12), 4, pal.hair);
+      el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(19), hy(21), 5, 9 + hb, pal.hair);
+      ci(hx(26), hy(12), 2, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "bun") {
+      el(hx(32), hy(17), 16, 13, pal.hair); ci(hx(32), hy(8), 5, pal.hair); ci(hx(32), hy(8), 3, hairMid);
+      el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "mohawk") {
+      s.rect(hx(30), hy(6), 4, 20, pal.hair);
+      s.set(hx(29), hy(4), pal.hair); s.set(hx(34), hy(4), pal.hair);
+      el(hx(32), hy(27), 13, 7, pal.hair);
+      s.set(hx(30), hy(8), hairLi); s.set(hx(31), hy(12), hairMid);
+    } else if (hs === "afro") {
+      el(hx(32), hy(15), 16, 14, pal.hair);
+      ci(hx(18), hy(12), 4, pal.hair); ci(hx(46), hy(12), 4, pal.hair);
+      ci(hx(22), hy(7), 4, pal.hair); ci(hx(42), hy(7), 4, pal.hair);
+      ci(hx(32), hy(4), 4, pal.hair);
+      el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      ci(hx(26), hy(12), 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "braids") {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(18), hy(24), 4, 17 + hb, pal.hair);
+      for (let i = 0; i < 4; i++) { s.set(hx(18), hy(26 + i * 4), hairDk); }
+      el(hx(19), hy(21), 5, 8, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "pigtails") {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      ci(hx(16), hy(22), 4, pal.hair); ci(hx(16), hy(22), 2, hairMid);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "bob") {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(18), hy(24), 5, 11 + hb, pal.hair);
+      el(hx(19), hy(21), 5, 8, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else if (hs === "dreadlocks") {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      for (const dlx of [18, 24, 40, 46]) { el(hx(dlx), hy(24), 3, 15 + hb, pal.hair); }
+      for (const dlx of [18, 24, 40, 46]) { for (let i = 0; i < 3; i++) s.set(hx(dlx), hy(27 + i * 5), hairDk); }
+      el(hx(19), hy(21), 5, 8, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(34), hy(13), 7, 4, hairMid); el(hx(21), hy(19), 4, 8, hairDk);
+    } else {
+      el(hx(32), hy(17), 16, 13, pal.hair); el(hx(32), hy(27), 13, 7, pal.hair);
+      el(hx(19), hy(21), 5, 8 + hb, pal.hair);
+      el(hx(28), hy(11), 6, 3, hairLi); el(hx(26), hy(12), 3, 2, hairRim); el(hx(34), hy(13), 7, 4, hairMid);
+      el(hx(21), hy(19), 4, 8, hairDk); rr(hx(23), hy(29), 16, 4, 3, hairDk);
+      s.set(hx(42), hy(18), hairDk); s.set(hx(43), hy(22), hairDk);
+    }
+  };
+
   // ===== ACCESSORIES =====
   const drawAccessory = (dir2: Dir) => {
     const ac = pal.accessory;
@@ -419,18 +606,18 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.rect(hx(24), hy(21), 6, 1, gc); s.rect(hx(24), hy(25), 6, 1, gc); s.rect(hx(24), hy(21), 1, 5, gc); s.rect(hx(29), hy(21), 1, 5, gc);
         s.rect(hx(33), hy(21), 6, 1, gc); s.rect(hx(33), hy(25), 6, 1, gc); s.rect(hx(33), hy(21), 1, 5, gc); s.rect(hx(38), hy(21), 1, 5, gc);
         s.rect(hx(30), hy(23), 3, 1, gc);
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         s.rect(hx(34), hy(21), 6, 1, gc); s.rect(hx(34), hy(25), 6, 1, gc); s.rect(hx(34), hy(21), 1, 5, gc); s.rect(hx(39), hy(21), 1, 5, gc);
       }
     } else if (ac === "headband") {
       const hc = pal.shirt;
       if (dir2 === "down") { rr(hx(19), hy(13), 26, 3, 1, hc); s.set(hx(20), hy(12), hc); s.set(hx(44), hy(12), hc); }
-      else if (dir2 === "up") { rr(hx(18), hy(13), 28, 3, 1, hc); }
-      else if (dir2 === "right") { rr(hx(22), hy(13), 22, 3, 1, hc); }
+      else if (dir2 === "up" || dir2 === "ne") { rr(hx(18), hy(13), 28, 3, 1, hc); }
+      else if (dir2 === "right" || dir2 === "se") { rr(hx(22), hy(13), 22, 3, 1, hc); }
     } else if (ac === "earrings") {
       const ec = "#ffd700";
       if (dir2 === "down") { s.set(hx(18), hy(28), ec); s.set(hx(46), hy(28), ec); }
-      else if (dir2 === "right") { s.set(hx(28), hy(27), ec); }
+      else if (dir2 === "right" || dir2 === "se") { s.set(hx(28), hy(27), ec); }
     } else if (ac === "cap") {
       const cc = mix(pal.shirt, "#000000", 0.1);
       const ccLi = mix(cc, "#ffffff", 0.2);
@@ -443,11 +630,11 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.set(hx(32), hy(0), ccLi);
         s.set(hx(22), hy(3), ccLi);
         s.set(hx(23), hy(2), mix(cc, "#fff", 0.1));
-      } else if (dir2 === "up") {
+      } else if (dir2 === "up" || dir2 === "ne") {
         rr(hx(15), hy(0), 34, 14, 5, cc);
         s.rect(hx(15), hy(13), 34, 1, ccDk);
         s.set(hx(32), hy(0), ccLi);
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         rr(hx(19), hy(0), 28, 14, 5, cc);
         s.rect(hx(19), hy(13), 28, 1, ccDk);
         s.rect(hx(38), hy(13), 16, 3, cc);
@@ -462,10 +649,10 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.rect(hx(16), hy(13), 32, 2, mix(bc, "#000", 0.2));
         s.set(hx(32), hy(4), mix(bc, "#fff", 0.3));
         s.set(hx(32), hy(5), mix(bc, "#fff", 0.15));
-      } else if (dir2 === "up") {
+      } else if (dir2 === "up" || dir2 === "ne") {
         rr(hx(16), hy(6), 32, 10, 4, bc);
         s.rect(hx(16), hy(13), 32, 2, mix(bc, "#000", 0.2));
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         rr(hx(20), hy(6), 28, 10, 4, bc);
         s.rect(hx(20), hy(13), 28, 2, mix(bc, "#000", 0.2));
         s.set(hx(28), hy(4), mix(bc, "#fff", 0.3));
@@ -477,10 +664,10 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.rect(hx(18), hy(6), 28, 2, hc);
         ci(hx(16), hy(20), 3, hc); ci(hx(16), hy(20), 2, hcLi);
         ci(hx(48), hy(20), 3, hc); ci(hx(48), hy(20), 2, hcLi);
-      } else if (dir2 === "up") {
+      } else if (dir2 === "up" || dir2 === "ne") {
         s.rect(hx(18), hy(6), 28, 2, hc);
         ci(hx(16), hy(20), 3, hc); ci(hx(48), hy(20), 3, hc);
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         s.rect(hx(22), hy(6), 22, 2, hc);
         ci(hx(16), hy(20), 3, hc); ci(hx(16), hy(20), 2, hcLi);
       }
@@ -498,10 +685,10 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.fillTriangle(hx(23), hy(9), hx(20), hy(5), hx(26), hy(6), inner);
         s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), pal.hair);
         s.fillTriangle(hx(41), hy(9), hx(38), hy(6), hx(44), hy(5), inner);
-      } else if (dir2 === "up") {
+      } else if (dir2 === "up" || dir2 === "ne") {
         s.fillTriangle(hx(22), hy(10), hx(17), hy(2), hx(27), hy(5), pal.hair);
         s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), pal.hair);
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), pal.hair);
         s.fillTriangle(hx(41), hy(9), hx(38), hy(6), hx(44), hy(5), inner);
       }
@@ -511,10 +698,10 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.fillTriangle(hx(21), hy(9), hx(18), hy(3), hx(23), hy(7), "#8a7a6a");
         s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), "#6a5a4a");
         s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), "#8a7a6a");
-      } else if (dir2 === "up") {
+      } else if (dir2 === "up" || dir2 === "ne") {
         s.fillTriangle(hx(20), hy(10), hx(16), hy(0), hx(24), hy(6), "#6a5a4a");
         s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), "#6a5a4a");
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), "#6a5a4a");
         s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), "#8a7a6a");
       }
@@ -525,12 +712,12 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.set(hx(24), hy(0), tip); s.set(hx(23), hy(1), tip);
         s.line(hx(37), hy(8), hx(40), hy(0), pal.hair);
         s.set(hx(40), hy(0), tip); s.set(hx(41), hy(1), tip);
-      } else if (dir2 === "up") {
+      } else if (dir2 === "up" || dir2 === "ne") {
         s.line(hx(27), hy(8), hx(24), hy(0), pal.hair);
         s.set(hx(24), hy(0), tip);
         s.line(hx(37), hy(8), hx(40), hy(0), pal.hair);
         s.set(hx(40), hy(0), tip);
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         s.line(hx(37), hy(8), hx(40), hy(0), pal.hair);
         s.set(hx(40), hy(0), tip); s.set(hx(41), hy(1), tip);
       }
@@ -540,10 +727,10 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.set(hx(14), hy(22), skinDk);
         s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.skin);
         s.set(hx(50), hy(22), skinDk);
-      } else if (dir2 === "up") {
+      } else if (dir2 === "up" || dir2 === "ne") {
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.hair);
         s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.hair);
-      } else if (dir2 === "right") {
+      } else if (dir2 === "right" || dir2 === "se") {
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
         s.set(hx(14), hy(22), skinDk);
       }
@@ -574,7 +761,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         el(hx(32), hy(33), 10, 3, hairDk);
         s.set(hx(26), hy(28), pal.hair); s.set(hx(38), hy(28), pal.hair);
       }
-    } else if (dir2 === "right") {
+    } else if (dir2 === "right" || dir2 === "se") {
       if (bd === "stubble") {
         for (let i = 0; i < 5; i++) {
           s.set(hx(38 + i), hy(30 + (i % 2)), hairDk);
@@ -770,6 +957,187 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(uarmRX + 1 + armSwingR), by(54), skinDk);
 
     // ---- LEGS & SHOES with soles ----
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
+      const fx = leftUp ? 33 : 23;
+      const rx2 = leftUp ? 23 : 33;
+      rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
+      rr(lx(fx), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(fx + 3), ly(58), 2, 14, 2, pantsMid);
+      el(lx(fx + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(fx + 2), ly(73), shoeLi);
+      s.set(lx(fx + 3), ly(73), shoeMid);
+      s.set(lx(fx + 6), ly(76), shoeDk);
+      rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
+      el(lx(rx2 + 4), ly(72), 6, 4, SHOE);
+      s.set(lx(rx2 + 2), ly(71), shoeLi);
+    } else {
+      rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
+      rrO(lx(33), ly(58), 8, 14, 3, pal.pants);
+      rr(lx(23), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(23) + 3, ly(58), 2, 14, 2, pantsMid);
+      rr(lx(33), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(33) + 3, ly(58), 2, 14, 2, pantsMid);
+      el(lx(27), ly(74), 6, 4, SHOE);
+      el(lx(37), ly(74), 6, 4, SHOE);
+      s.set(lx(25), ly(73), shoeLi);
+      s.set(lx(26), ly(73), shoeMid);
+      s.set(lx(35), ly(73), shoeLi);
+      s.set(lx(36), ly(73), shoeMid);
+      s.set(lx(29), ly(76), shoeDk);
+      s.set(lx(39), ly(76), shoeDk);
+    }
+
+  } else if (d === "se") {
+    // ---- SE: 3/4 FRONT-RIGHT (diagonal) ----
+    ciO(hx(32), hy(18), 17, pal.skin);
+    el(hx(34), hy(24), 10, 9, pal.skin);
+    drawHairSE();
+    drawHeadFeature("se");
+    s.set(hx(32), hy(19), pal.skin);
+    // Ear (left side, partially visible)
+    s.set(hx(28), hy(24), skinDk);
+    s.set(hx(28), hy(25), pal.skin);
+    // Face 3-tone — shifted right for 3/4 view
+    el(hx(31), hy(24), 3, 4, skinLi);
+    el(hx(30), hy(21), 2, 3, skinRim);
+    el(hx(38), hy(24), 3, 5, skinMid);
+    el(hx(41), hy(26), 2, 4, skinDk);
+    // Chin/jaw shadow
+    el(hx(36), hy(31), 7, 2, skinDk);
+    // Eyebrow
+    s.set(hx(37), hy(19), hairDk);
+    s.set(hx(38), hy(19), hairDk);
+    // Eye — 3/4 view shows one eye clearly, hint of other
+    if (eyesClosed) {
+      rr(hx(36), hy(23), 4, 2, 2, eyeColor);
+      rr(hx(28), hy(23), 3, 2, 2, eyeColor);
+    } else {
+      el(hx(38), hy(23), 2, 5, eyeColor);
+      s.set(hx(37), hy(21), "#ffffff");
+      s.set(hx(38), hy(22), mix(eyeColor, "#ffffff", 0.5));
+      // Hint of left eye (smaller, partially hidden)
+      el(hx(28), hy(23), 1, 4, eyeColor);
+      s.set(hx(28), hy(22), mix(eyeColor, "#ffffff", 0.3));
+    }
+    // Nose
+    s.set(hx(45), hy(25), skinDk);
+    s.set(hx(46), hy(25), skinDk);
+    s.set(hx(46), hy(24), skinLi);
+    // Mouth
+    s.set(hx(40), hy(29), skinDk);
+    s.set(hx(41), hy(30), skinDk);
+    s.set(hx(42), hy(30), skinDk);
+    s.set(hx(43), hy(29), skinDk);
+    // Blush
+    s.fillCircleAlpha(hx(34), hy(27), 3, blush, 0.35);
+    drawAccessory("se");
+    drawBeard("se");
+
+    // ---- NECK ----
+    rr(bx(29), by(34), 6, 4, 2, skinDk);
+    s.set(bx(29), by(34), skinOutline);
+    s.set(bx(34), by(34), skinOutline);
+    s.set(bx(30), by(36), skinDk);
+    s.set(bx(31), by(36), skinDk);
+    s.set(bx(32), by(36), skinDk);
+    s.set(bx(33), by(36), skinDk);
+
+    // ---- TORSO (3/4 profile) ----
+    const setw = isFat ? 22 : 18;
+    const setx = isFat ? 21 : 23;
+    rr(bx(setx), by(38), setw, 18, 5, pal.shirt);
+    rr(bx(setx + 2), by(38), setw - 4, 3, 3, shirtLi);
+    rr(bx(setx + 4), by(38), setw - 8, 2, 2, shirtMid);
+    rr(bx(setx), by(38), 2, 18, 2, shirtLi);
+    rr(bx(setx + 2), by(38), 2, 18, 2, shirtMid);
+    rr(bx(setx + setw - 2), by(38), 2, 18, 2, shirtDk);
+    for (let xx = setx + 2; xx < setx + setw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
+    s.set(bx(setx + 2), by(40), shirtDk);
+    s.set(bx(setx + 3), by(41), shirtDk);
+    s.rect(bx(setx), by(55), setw, 1, pantsDk);
+
+    // ---- ARM (front, profile-ish) ----
+    const searmX = 35;
+    elO(bx(searmX + armSwing), by(45), 4, 8, pal.shirt);
+    el(bx(searmX - 1 + armSwing), by(43), 2, 3, shirtLi);
+    el(bx(searmX + armSwing), by(44), 2, 4, shirtMid);
+    ciO(bx(searmX + armSwing), by(54), 3, pal.skin);
+    s.set(bx(searmX - 1 + armSwing), by(53), skinLi);
+    s.set(bx(searmX + 1 + armSwing), by(55), skinDk);
+
+    // ---- LEGS (3/4 profile) ----
+    const selegW = isFat ? 10 : 8;
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
+      const frontX = leftUp ? 29 : 25;
+      const backX = leftUp ? 25 : 29;
+      rrO(lx(frontX), ly(58), selegW, 14, 3, pal.pants);
+      rr(lx(frontX), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(frontX) + 3, ly(58), 2, 14, 2, pantsMid);
+      el(lx(frontX + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(frontX + 2), ly(73), shoeLi);
+      s.set(lx(frontX + 3), ly(73), shoeMid);
+      s.set(lx(frontX + 6), ly(76), shoeDk);
+      rrO(lx(backX), ly(60), selegW, 10, 3, pantsDk);
+      el(lx(backX + 4), ly(72), 6, 4, shoeDk);
+    } else {
+      rrO(lx(25), ly(58), selegW, 14, 3, pal.pants);
+      rrO(lx(33), ly(58), selegW, 14, 3, pantsDk);
+      rr(lx(25), ly(58), 2, 14, 2, pantsLi);
+      rr(lx(25) + 3, ly(58), 2, 14, 2, pantsMid);
+      el(lx(29), ly(74), 6, 4, SHOE);
+      el(lx(37), ly(74), 6, 4, shoeDk);
+      s.set(lx(27), ly(73), shoeLi);
+      s.set(lx(28), ly(73), shoeMid);
+      s.set(lx(31), ly(76), shoeDk);
+    }
+
+  } else if (d === "ne") {
+    // ---- NE: 3/4 BACK-RIGHT (diagonal) ----
+    ciO(hx(32), hy(18), 17, pal.hair);
+    drawHairNE();
+    drawHeadFeature("ne");
+    drawAccessory("ne");
+
+    // ---- NECK ----
+    rr(bx(29), by(34), 6, 4, 2, skinDk);
+    s.set(bx(29), by(34), skinOutline);
+    s.set(bx(34), by(34), skinOutline);
+    s.set(bx(30), by(36), skinDk);
+    s.set(bx(31), by(36), skinDk);
+    s.set(bx(32), by(36), skinDk);
+    s.set(bx(33), by(36), skinDk);
+
+    // ---- TORSO (3/4 back) ----
+    const netw = isFat ? 22 : 18;
+    const netx = isFat ? 21 : 23;
+    rr(bx(netx), by(38), netw, 18, 5, pal.shirt);
+    rr(bx(netx + 2), by(38), netw - 4, 3, 3, shirtLi);
+    rr(bx(netx + 4), by(38), netw - 8, 2, 2, shirtMid);
+    rr(bx(netx), by(38), 2, 18, 2, shirtLi);
+    rr(bx(netx + 2), by(38), 2, 18, 2, shirtMid);
+    rr(bx(netx + netw - 2), by(38), 2, 18, 2, shirtDk);
+    for (let xx = netx + 2; xx < netx + netw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
+    // Back seam
+    s.set(bx(netx + 4), by(40), shirtDk);
+    s.set(bx(netx + 5), by(42), shirtDk);
+    s.set(bx(netx + 4), by(44), shirtDk);
+    s.rect(bx(netx), by(55), netw, 1, pantsDk);
+
+    // ---- ARMS (both visible from back 3/4) ----
+    const nearmLX = isFat ? 14 : 17;
+    const nearmRX = isFat ? 48 : 45;
+    elO(bx(nearmLX + armSwingL), by(45), 4, 7, pal.shirt);
+    elO(bx(nearmRX + armSwingR), by(45), 4, 7, pal.shirt);
+    el(bx(nearmLX - 1 + armSwingL), by(43), 2, 3, shirtLi);
+    el(bx(nearmLX + armSwingL), by(44), 2, 4, shirtMid);
+    el(bx(nearmRX + 1 + armSwingR), by(48), 2, 3, shirtDk);
+    ciO(bx(nearmLX + armSwingL), by(53), 3, pal.skin);
+    ciO(bx(nearmRX + armSwingR), by(53), 3, pal.skin);
+    s.set(bx(nearmRX + 1 + armSwingR), by(54), skinDk);
+
+    // ---- LEGS (3/4 back, same as up but slightly turned) ----
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
       const fx = leftUp ? 33 : 23;

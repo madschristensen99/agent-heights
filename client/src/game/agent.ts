@@ -19,7 +19,7 @@ export const STATUS_COLORS: Record<AgentInfo["status"], number> = {
   error: 0xe05858,
 };
 
-export type Dir = "down" | "left" | "right" | "up";
+export type Dir = "down" | "left" | "right" | "up" | "ne" | "nw" | "se" | "sw";
 
 export function feetOf(tile: Tile): { x: number; y: number } {
   return { x: tile.x * TILE_PX + 32, y: tile.y * TILE_PX + 52 };
@@ -27,6 +27,20 @@ export function feetOf(tile: Tile): { x: number; y: number } {
 
 export function tileOf(x: number, y: number): Tile {
   return { x: Math.floor(x / TILE_PX), y: Math.floor(y / TILE_PX) };
+}
+
+export function dirFromVelocity(vx: number, vy: number): Dir {
+  if (vx === 0 && vy === 0) return "down";
+  const angle = Math.atan2(vy, vx);
+  const deg = (angle * 180) / Math.PI;
+  if (deg >= -22.5 && deg < 22.5) return "right";
+  if (deg >= 22.5 && deg < 67.5) return "se";
+  if (deg >= 67.5 && deg < 112.5) return "down";
+  if (deg >= 112.5 && deg < 157.5) return "sw";
+  if (deg >= 157.5 || deg < -157.5) return "left";
+  if (deg >= -157.5 && deg < -112.5) return "nw";
+  if (deg >= -112.5 && deg < -67.5) return "up";
+  return "ne";
 }
 
 const WALK_SPEED = 220;
@@ -306,8 +320,7 @@ export class AgentNPC {
       } else {
         this.container.x += (dx / dist) * step;
         this.container.y += (dy / dist) * step;
-        this.dir =
-          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        this.dir = dirFromVelocity(dx, dy);
       }
       this.play(`${c}-walk-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
@@ -319,8 +332,7 @@ export class AgentNPC {
       if (this.huddleFace) {
         const dx = this.huddleFace.x - this.tile().x;
         const dy = this.huddleFace.y - this.tile().y;
-        this.dir =
-          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        this.dir = dirFromVelocity(dx, dy);
       }
       this.play(`${c}-idle-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
@@ -378,8 +390,7 @@ export class AgentNPC {
         const pdx = playerX - this.container.x;
         const pdy = playerY - this.container.y;
         if (Math.hypot(pdx, pdy) < 192) {
-          this.dir =
-            Math.abs(pdx) > Math.abs(pdy) ? (pdx > 0 ? "right" : "left") : pdy > 0 ? "down" : "up";
+          this.dir = dirFromVelocity(pdx, pdy);
         } else {
           this.dir = "up";
         }
@@ -604,8 +615,7 @@ export class YukiNPC {
       } else {
         this.container.x += (dx / dist) * step;
         this.container.y += (dy / dist) * step;
-        this.dir =
-          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        this.dir = dirFromVelocity(dx, dy);
       }
       this.play(`${c}-walk-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
@@ -617,8 +627,7 @@ export class YukiNPC {
       // face the player
       const pdx = playerX - this.container.x;
       const pdy = playerY - this.container.y;
-      this.dir =
-        Math.abs(pdx) > Math.abs(pdy) ? (pdx > 0 ? "right" : "left") : pdy > 0 ? "down" : "up";
+      this.dir = dirFromVelocity(pdx, pdy);
       this.play(`${c}-idle-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
 
