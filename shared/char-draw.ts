@@ -693,12 +693,12 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
       rr(lx(fx), ly(58), 2, 14, 2, pantsLi);
       rr(lx(fx + 3), ly(58), 2, 14, 2, pantsMid);
-      elO(lx(fx + 4), ly(74), 6, 4, SHOE);
+      el(lx(fx + 4), ly(74), 6, 4, SHOE);
       s.set(lx(fx + 2), ly(73), shoeLi);
       s.set(lx(fx + 3), ly(73), shoeMid);
       s.set(lx(fx + 6), ly(76), shoeDk);
       rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
-      elO(lx(rx2 + 4), ly(72), 6, 4, SHOE);
+      el(lx(rx2 + 4), ly(72), 6, 4, SHOE);
       s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
       const legLX = isFat ? 21 : 23;
@@ -710,8 +710,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       rr(lx(legLX) + 3, ly(58), 2, 14, 2, pantsMid);
       rr(lx(legRX), ly(58), 2, 14, 2, pantsLi);
       rr(lx(legRX) + 3, ly(58), 2, 14, 2, pantsMid);
-      elO(lx(legLX + 4), ly(74), 6, 4, SHOE);
-      elO(lx(legRX + 4), ly(74), 6, 4, SHOE);
+      el(lx(legLX + 4), ly(74), 6, 4, SHOE);
+      el(lx(legRX + 4), ly(74), 6, 4, SHOE);
       s.set(lx(legLX + 2), ly(73), shoeLi);
       s.set(lx(legLX + 3), ly(73), shoeMid);
       s.set(lx(legRX + 2), ly(73), shoeLi);
@@ -775,12 +775,12 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
       rr(lx(fx), ly(58), 2, 14, 2, pantsLi);
       rr(lx(fx + 3), ly(58), 2, 14, 2, pantsMid);
-      elO(lx(fx + 4), ly(74), 6, 4, SHOE);
+      el(lx(fx + 4), ly(74), 6, 4, SHOE);
       s.set(lx(fx + 2), ly(73), shoeLi);
       s.set(lx(fx + 3), ly(73), shoeMid);
       s.set(lx(fx + 6), ly(76), shoeDk);
       rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
-      elO(lx(rx2 + 4), ly(72), 6, 4, SHOE);
+      el(lx(rx2 + 4), ly(72), 6, 4, SHOE);
       s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
       rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
@@ -789,8 +789,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       rr(lx(23) + 3, ly(58), 2, 14, 2, pantsMid);
       rr(lx(33), ly(58), 2, 14, 2, pantsLi);
       rr(lx(33) + 3, ly(58), 2, 14, 2, pantsMid);
-      elO(lx(27), ly(74), 6, 4, SHOE);
-      elO(lx(37), ly(74), 6, 4, SHOE);
+      el(lx(27), ly(74), 6, 4, SHOE);
+      el(lx(37), ly(74), 6, 4, SHOE);
       s.set(lx(25), ly(73), shoeLi);
       s.set(lx(26), ly(73), shoeMid);
       s.set(lx(35), ly(73), shoeLi);
@@ -887,20 +887,20 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       rrO(lx(frontX), ly(58), rlegW, 14, 3, pal.pants);
       rr(lx(frontX), ly(58), 2, 14, 2, pantsLi);
       rr(lx(frontX) + 3, ly(58), 2, 14, 2, pantsMid);
-      elO(lx(frontX + 4), ly(74), 6, 4, SHOE);
+      el(lx(frontX + 4), ly(74), 6, 4, SHOE);
       s.set(lx(frontX + 2), ly(73), shoeLi);
       s.set(lx(frontX + 3), ly(73), shoeMid);
       s.set(lx(frontX + 6), ly(76), shoeDk);
       // Back leg darker
       rrO(lx(backX), ly(60), rlegW, 10, 3, pantsDk);
-      elO(lx(backX + 4), ly(72), 6, 4, shoeDk);
+      el(lx(backX + 4), ly(72), 6, 4, shoeDk);
     } else {
       rrO(lx(25), ly(58), rlegW, 14, 3, pal.pants);
       rrO(lx(33), ly(58), rlegW, 14, 3, pantsDk);
       rr(lx(25), ly(58), 2, 14, 2, pantsLi);
       rr(lx(25) + 3, ly(58), 2, 14, 2, pantsMid);
-      elO(lx(29), ly(74), 6, 4, SHOE);
-      elO(lx(37), ly(74), 6, 4, shoeDk);
+      el(lx(29), ly(74), 6, 4, SHOE);
+      el(lx(37), ly(74), 6, 4, shoeDk);
       s.set(lx(27), ly(73), shoeLi);
       s.set(lx(28), ly(73), shoeMid);
       s.set(lx(31), ly(76), shoeDk);
