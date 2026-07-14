@@ -100,7 +100,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   const shoeLi = mix(SHOE, "#ffffff", 0.18);
   const shoeMid = mix(SHOE, "#ffffff", 0.06);
   const shoeDk = mix(SHOE, "#000000", 0.25);
-  const shoeSole = mix(SHOE, "#000000", 0.45);
 
   // Offset helpers
   const hx = (x: number) => ox + x + headSway;
@@ -698,11 +697,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(fx + 2), ly(73), shoeLi);
       s.set(lx(fx + 3), ly(73), shoeMid);
       s.set(lx(fx + 6), ly(76), shoeDk);
-      s.rect(lx(fx + 3), ly(77), 5, 1, shoeSole);
       rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
       elO(lx(rx2 + 4), ly(72), 6, 4, SHOE);
       s.set(lx(rx2 + 2), ly(71), shoeLi);
-      s.rect(lx(rx2 + 3), ly(75), 5, 1, shoeSole);
     } else {
       const legLX = isFat ? 21 : 23;
       const legRX = isFat ? 35 : 33;
@@ -721,8 +718,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(legRX + 3), ly(73), shoeMid);
       s.set(lx(legLX + 6), ly(76), shoeDk);
       s.set(lx(legRX + 6), ly(76), shoeDk);
-      s.rect(lx(legLX + 3), ly(77), 5, 1, shoeSole);
-      s.rect(lx(legRX + 3), ly(77), 5, 1, shoeSole);
     }
 
   } else if (d === "up") {
@@ -784,11 +779,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(fx + 2), ly(73), shoeLi);
       s.set(lx(fx + 3), ly(73), shoeMid);
       s.set(lx(fx + 6), ly(76), shoeDk);
-      s.rect(lx(fx + 3), ly(77), 5, 1, shoeSole);
       rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
       elO(lx(rx2 + 4), ly(72), 6, 4, SHOE);
       s.set(lx(rx2 + 2), ly(71), shoeLi);
-      s.rect(lx(rx2 + 3), ly(75), 5, 1, shoeSole);
     } else {
       rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
       rrO(lx(33), ly(58), 8, 14, 3, pal.pants);
@@ -804,8 +797,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(36), ly(73), shoeMid);
       s.set(lx(29), ly(76), shoeDk);
       s.set(lx(39), ly(76), shoeDk);
-      s.rect(lx(26), ly(77), 5, 1, shoeSole);
-      s.rect(lx(36), ly(77), 5, 1, shoeSole);
     }
 
   } else {
@@ -900,11 +891,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(frontX + 2), ly(73), shoeLi);
       s.set(lx(frontX + 3), ly(73), shoeMid);
       s.set(lx(frontX + 6), ly(76), shoeDk);
-      s.rect(lx(frontX + 3), ly(77), 5, 1, shoeSole);
       // Back leg darker
       rrO(lx(backX), ly(60), rlegW, 10, 3, pantsDk);
       elO(lx(backX + 4), ly(72), 6, 4, shoeDk);
-      s.rect(lx(backX + 3), ly(75), 5, 1, shoeSole);
     } else {
       rrO(lx(25), ly(58), rlegW, 14, 3, pal.pants);
       rrO(lx(33), ly(58), rlegW, 14, 3, pantsDk);
@@ -915,8 +904,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(27), ly(73), shoeLi);
       s.set(lx(28), ly(73), shoeMid);
       s.set(lx(31), ly(76), shoeDk);
-      s.rect(lx(28), ly(77), 5, 1, shoeSole);
-      s.rect(lx(36), ly(77), 5, 1, shoeSole);
     }
   }
 
