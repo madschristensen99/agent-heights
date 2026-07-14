@@ -963,13 +963,13 @@ input.invalid {
 /* --------------------------------------------------- wardrobe modal */
 
 .modal.wardrobe-modal {
-  width: 480px;
+  width: 640px;
   max-width: 92vw;
 }
 
 .wardrobe-layout {
   display: flex;
-  justify-content: center;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
@@ -987,6 +987,127 @@ input.invalid {
 .wardrobe-builder .builder-preview {
   width: 96px;
   height: 144px;
+}
+
+/* --- saved outfits panel --- */
+
+.wardrobe-outfits {
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.outfit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.outfit-title {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+.outfit-save-btn {
+  font-size: 9px !important;
+  padding: 3px 6px !important;
+}
+
+.outfit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.outfit-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--panel-soft);
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.outfit-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.outfit-thumb {
+  width: 32px;
+  height: 48px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.outfit-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outfit-delete {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.outfit-delete:hover {
+  color: #e05858;
+  background: rgba(224,88,88,0.1);
+}
+
+.outfit-empty {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 16px 8px;
+  line-height: 1.4;
+}
+
+/* --- hire modal outfit actions --- */
+
+.hire-outfit-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.outfit-select {
+  font-family: var(--font-body);
+  font-size: 10px;
+  background: var(--panel-soft);
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 3px 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 kbd {
@@ -2137,6 +2258,10 @@ kbd {
 
   .wardrobe-layout {
     flex-direction: column;
+  }
+
+  .wardrobe-outfits {
+    width: 100%;
   }
 
   /* ── Touch target sizing ── */

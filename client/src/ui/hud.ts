@@ -143,6 +143,63 @@ class CharBuilder {
   getAppearance(): CharAppearance {
     return { ...this.appearance };
   }
+
+  setAppearance(ap: CharAppearance): void {
+    this.appearance = { ...ap };
+    const root = document.getElementById(`${this.prefix}-builder`);
+    if (root) {
+      root.querySelectorAll<HTMLElement>(".builder-row").forEach((row) => {
+        const partKey = row.dataset.part as keyof CharAppearance;
+        const part = BUILDER_PARTS.find((b) => b.key === partKey)!;
+        this.updateRow(row, part);
+      });
+    }
+    this.refreshPreview();
+  }
+}
+
+// ----------------------------------------------------------- saved outfits
+
+const OUTFITS_KEY = "agent-hq-outfits";
+
+interface SavedOutfit {
+  id: string;
+  name: string;
+  appearance: CharAppearance;
+  createdAt: number;
+}
+
+function loadOutfits(): SavedOutfit[] {
+  try {
+    const raw = localStorage.getItem(OUTFITS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as SavedOutfit[];
+    return arr.filter((o) => isValidAppearance(o.appearance));
+  } catch {
+    return [];
+  }
+}
+
+function saveOutfits(outfits: SavedOutfit[]): void {
+  localStorage.setItem(OUTFITS_KEY, JSON.stringify(outfits));
+}
+
+function addOutfit(name: string, appearance: CharAppearance): SavedOutfit {
+  const outfits = loadOutfits();
+  const outfit: SavedOutfit = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: name.trim().slice(0, 24) || "Outfit",
+    appearance,
+    createdAt: Date.now(),
+  };
+  outfits.unshift(outfit);
+  saveOutfits(outfits);
+  return outfit;
+}
+
+function removeOutfit(id: string): void {
+  const outfits = loadOutfits().filter((o) => o.id !== id);
+  saveOutfits(outfits);
 }
 
 /* Crisp inline icons — font glyphs like ⛶ render as tofu in the pixel font. */
@@ -1448,6 +1505,13 @@ export class Hud {
         <div class="hire-layout">
           <div class="hire-appearance">
             ${builder.html()}
+            <div class="hire-outfit-actions">
+              <button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;">💾 SAVE OUTFIT</button>
+              <select class="outfit-select" id="h-load-outfit">
+                <option value="">Load outfit…</option>
+                ${loadOutfits().map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}
+              </select>
+            </div>
           </div>
           <div class="hire-form">
             <label>NAME <input id="h-name" maxlength="24" value="${suggested}" /></label>
@@ -1497,6 +1561,27 @@ export class Hud {
     }
 
     // Randomize personality button
+    // Save current appearance as a named outfit
+    document.getElementById("h-save-outfit")!.addEventListener("click", () => {
+      const name = prompt("Name this outfit:", "");
+      if (name === null) return;
+      addOutfit(name, builder.getAppearance());
+      // Refresh the load dropdown
+      const sel = document.getElementById("h-load-outfit") as HTMLSelectElement;
+      sel.innerHTML = `<option value="">Load outfit…</option>` +
+        loadOutfits().map((o) => `<option value="${o.id}">${o.name}</option>`).join("");
+      this.toast("Outfit saved!");
+    });
+
+    // Load a saved outfit into the builder
+    document.getElementById("h-load-outfit")!.addEventListener("change", (e) => {
+      const id = (e.target as HTMLSelectElement).value;
+      if (!id) return;
+      const outfit = loadOutfits().find((o) => o.id === id);
+      if (outfit) builder.setAppearance(outfit.appearance);
+      (e.target as HTMLSelectElement).value = "";
+    });
+
     document.getElementById("h-rand-personality")!.addEventListener("click", () => {
       const newP = randomPersonality();
       for (const key of traitKeys) {
@@ -2251,6 +2336,19 @@ export class Hud {
     const current = this.store.player?.appearance ?? DEFAULT_APPEARANCE;
     const builder = new CharBuilder("wd", current, () => {});
 
+    const renderOutfitList = (): string => {
+      const outfits = loadOutfits();
+      if (outfits.length === 0) {
+        return `<p class="outfit-empty">No saved outfits yet. Randomize and save one!</p>`;
+      }
+      return outfits.map((o) => `
+        <div class="outfit-item" data-id="${o.id}">
+          <div class="outfit-thumb" style="background-image:url('${generateCharPreviewDataURL(o.appearance, 2)}')"></div>
+          <span class="outfit-name">${o.name}</span>
+          <button class="outfit-delete" data-id="${o.id}" title="Delete">✕</button>
+        </div>`).join("");
+    };
+
     modal.innerHTML = `
       <div class="modal wardrobe-modal">
         <h2>WARDROBE</h2>
@@ -2258,6 +2356,15 @@ export class Hud {
         <div class="wardrobe-layout">
           <div class="wardrobe-builder">
             ${builder.html()}
+          </div>
+          <div class="wardrobe-outfits">
+            <div class="outfit-header">
+              <span class="outfit-title">SAVED OUTFITS</span>
+              <button class="btn outfit-save-btn" id="wd-save-outfit">💾 SAVE CURRENT</button>
+            </div>
+            <div class="outfit-list" id="wd-outfit-list">
+              ${renderOutfitList()}
+            </div>
           </div>
         </div>
         <div class="row">
@@ -2268,6 +2375,40 @@ export class Hud {
     `;
     modal.hidden = false;
     builder.mount();
+
+    const refreshOutfitList = (): void => {
+      const listEl = document.getElementById("wd-outfit-list");
+      if (listEl) listEl.innerHTML = renderOutfitList();
+      wireOutfitItems();
+    };
+
+    const wireOutfitItems = (): void => {
+      document.querySelectorAll<HTMLElement>(".outfit-item").forEach((item) => {
+        item.addEventListener("click", (e) => {
+          if ((e.target as HTMLElement).classList.contains("outfit-delete")) return;
+          const id = item.dataset.id;
+          const outfit = loadOutfits().find((o) => o.id === id);
+          if (outfit) builder.setAppearance(outfit.appearance);
+        });
+      });
+      document.querySelectorAll<HTMLElement>(".outfit-delete").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          removeOutfit(btn.dataset.id!);
+          refreshOutfitList();
+        });
+      });
+    };
+
+    wireOutfitItems();
+
+    document.getElementById("wd-save-outfit")!.addEventListener("click", () => {
+      const name = prompt("Name this outfit:", "");
+      if (name === null) return;
+      addOutfit(name, builder.getAppearance());
+      refreshOutfitList();
+      this.toast("Outfit saved!");
+    });
 
     document.getElementById("wd-cancel")!.addEventListener("click", () => {
       this.store.toggleWardrobe(false);
