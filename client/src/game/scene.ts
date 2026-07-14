@@ -798,14 +798,6 @@ export class OfficeScene extends Phaser.Scene {
           // no camera bounds — the world is infinite
           cam.startFollow(this.player, true);
           cam.setZoom(this.bestZoom());
-          const onResize = () => {
-            cam.setZoom(this.bestZoom());
-            this.drawVignette();
-            this.dayNightTint.setSize(this.scale.width, this.scale.height);
-            this.brightnessBoost.setSize(this.scale.width, this.scale.height);
-          };
-          this.scale.on("resize", onResize);
-          this.events.once("shutdown", () => this.scale.off("resize", onResize));
 
           // --- lighting system ---
           // vignette: darkened edges fixed to screen
@@ -826,6 +818,15 @@ export class OfficeScene extends Phaser.Scene {
             .setDepth(830)
             .setBlendMode(Phaser.BlendModes.ADD)
             .setScrollFactor(0);
+
+          const onResize = () => {
+            cam.setZoom(this.bestZoom());
+            this.drawVignette();
+            this.dayNightTint.setSize(this.scale.width, this.scale.height);
+            this.brightnessBoost.setSize(this.scale.width, this.scale.height);
+          };
+          this.scale.on("resize", onResize);
+          this.events.once("shutdown", () => this.scale.off("resize", onResize));
 
           // monitor glow pool — one per monitor slot
           this.monitors.forEach(() => {
