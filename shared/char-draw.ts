@@ -28,6 +28,7 @@ export interface CharPalette {
 export interface DrawSurface {
   width: number;
   height: number;
+  clip: { x: number; y: number; w: number; h: number } | null;
   set(x: number, y: number, hex: string): void;
   setAlpha(x: number, y: number, hex: string, a: number): void;
   rect(x: number, y: number, w: number, h: number, hex: string): void;
@@ -62,6 +63,8 @@ export const DIRS: Dir[] = ["down", "left", "right", "up"];
 // ------------------------------------------------------------- draw char
 
 export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalette, dir: Dir, pose: number): void {
+  const prevClip = s.clip;
+  s.clip = { x: ox, y: oy, w: CW, h: CH };
   const mirror = dir === "left";
   const d: Dir = mirror ? "right" : dir;
   const isFat = pal.bodyType === "fat";
@@ -905,4 +908,5 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   }
 
   if (mirror) s.flipH(ox, oy, CW, CH);
+  s.clip = prevClip;
 }
