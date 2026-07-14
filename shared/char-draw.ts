@@ -104,13 +104,14 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   const shoeMid = mix(SHOE, "#ffffff", 0.06);
   const shoeDk = mix(SHOE, "#000000", 0.25);
 
-  // Offset helpers
+  // Offset helpers — +3px vertical guard band so no frame has content on its
+  // top rows (prevents GPU sampling bleed from adjacent frames in the sheet)
   const hx = (x: number) => ox + x + headSway;
-  const hy = (y: number) => oy + y + headBob;
+  const hy = (y: number) => oy + y + headBob + 3;
   const bx = (x: number) => ox + x;
-  const by = (y: number) => oy + y + bodyBob;
+  const by = (y: number) => oy + y + bodyBob + 3;
   const lx = (x: number) => ox + x;
-  const ly = (y: number) => oy + y;
+  const ly = (y: number) => oy + y + 3;
 
   // Shape helpers — dynamic outline based on fill color
   const el = (cx: number, cy: number, rx: number, ry: number, c: string) => s.fillEllipse(cx, cy, rx, ry, c);
