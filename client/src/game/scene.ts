@@ -582,6 +582,7 @@ export class OfficeScene extends Phaser.Scene {
           // --- task board on the front wall ---
           this.drawBoard();
           this.drawProjector();
+          this.drawClock();
           this.drawTrophyCase();
           this.drawHallOfFameBoard();
           this.drawExteriorChimney();
@@ -1129,7 +1130,9 @@ export class OfficeScene extends Phaser.Scene {
   /** Set interactable tile positions based on the current theme. */
   private setupInteractables(): void {
     if (this.theme === "agenthq") {
-      this.clockTile = { x: 6, y: 1 };
+      this.clockTile = { x: 1, y: 3 };
+      this.projectorControlTile = { x: 6, y: 1 };
+      this.projectorSpeakerTile = { x: 7, y: 1 };
       this.vendingTile = null;
       this.sofaTile = { x: 23, y: 13 };
       this.hallOfFameTile = { x: 1, y: 5 };
@@ -1541,7 +1544,7 @@ export class OfficeScene extends Phaser.Scene {
     const clockDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, clockPx.x, clockPx.y);
     if (clockDist < 160) {
       this.clockHint
-        .setPosition(clockPx.x, clockPx.y + 64)
+        .setPosition(clockPx.x, clockPx.y + 48)
         .setText(hintLabel("E: CHECK TIME"))
         .setVisible(true);
     } else {
@@ -2704,6 +2707,56 @@ export class OfficeScene extends Phaser.Scene {
     this.projectorSpeakerGfx.fillCircle(px + 11, py - 11, 1.5);
     this.projectorSpeakerGfx.fillCircle(px - 11, py + 11, 1.5);
     this.projectorSpeakerGfx.fillCircle(px + 11, py + 11, 1.5);
+  }
+
+  /** Draw a wall-mounted clock at the new location near the chimney. */
+  private drawClock(): void {
+    const px = this.clockTile.x * TILE_PX + 32;
+    const py = this.clockTile.y * TILE_PX + 32;
+    const g = this.add.graphics().setDepth(3);
+
+    // mounting plate
+    g.fillStyle(0x1a2838, 1);
+    g.fillRoundedRect(px - 18, py - 18, 36, 36, 4);
+    g.fillStyle(0x2a3848, 1);
+    g.fillRoundedRect(px - 16, py - 16, 32, 32, 3);
+
+    // clock face
+    g.fillStyle(0xf5f0e0, 1);
+    g.fillCircle(px, py, 12);
+    g.fillStyle(0x0a0a12, 1);
+    g.lineStyle(1.5, 0x0a0a12, 1);
+    g.strokeCircle(px, py, 12);
+
+    // hour ticks
+    g.fillStyle(0x333333, 1);
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      const r1 = 10;
+      g.fillCircle(
+        px + Math.cos(angle) * r1,
+        py + Math.sin(angle) * r1,
+        i % 3 === 0 ? 1.5 : 1,
+      );
+    }
+
+    // hour hand
+    g.lineStyle(2, 0x333333, 1);
+    g.beginPath();
+    g.moveTo(px, py);
+    g.lineTo(px + 4, py - 6);
+    g.strokePath();
+
+    // minute hand
+    g.lineStyle(1.5, 0x555555, 1);
+    g.beginPath();
+    g.moveTo(px, py);
+    g.lineTo(px + 8, py - 2);
+    g.strokePath();
+
+    // center dot
+    g.fillStyle(0x333333, 1);
+    g.fillCircle(px, py, 1.5);
   }
 
   /** Update the YouTube IFrame overlay to match the projector screen position. */
