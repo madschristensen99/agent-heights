@@ -1520,12 +1520,36 @@ export class Hud {
     // Save current appearance as a named outfit
     const hSaveOutfit = document.getElementById("h-save-outfit");
     if (hSaveOutfit) {
-      hSaveOutfit.addEventListener("click", () => {
-        const name = prompt("Name this outfit:", "");
-        if (name === null) return;
-        this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
-        this.toast("Outfit saved!");
-      });
+      const actionsDiv = hSaveOutfit.parentElement!;
+      const restoreButton = () => {
+        actionsDiv.innerHTML = `<button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;">💾 SAVE OUTFIT</button><select class="outfit-select" id="h-load-outfit"><option value="">Load outfit…</option>${this.store.outfits.map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}</select>`;
+        document.getElementById("h-save-outfit")!.addEventListener("click", outfitSaveClick);
+        document.getElementById("h-load-outfit")!.addEventListener("change", (e) => {
+          const id = (e.target as HTMLSelectElement).value;
+          if (!id) return;
+          const outfit = this.store.outfits.find((o) => o.id === id);
+          if (outfit) builder.setAppearance(outfit.appearance);
+          (e.target as HTMLSelectElement).value = "";
+        });
+      };
+      const outfitSaveClick = () => {
+        actionsDiv.innerHTML = `<input type="text" id="h-outfit-name" placeholder="Outfit name…" maxlength="24" style="font-size:0.7rem;padding:0.3rem 0.5rem;width:100px;" /><button class="btn" id="h-outfit-confirm" style="font-size:0.7rem;padding:0.3rem 0.5rem;">✓</button><button class="btn" id="h-outfit-cancel" style="font-size:0.7rem;padding:0.3rem 0.5rem;">✕</button>`;
+        const input = document.getElementById("h-outfit-name") as HTMLInputElement;
+        input.focus();
+        const submit = () => {
+          const name = input.value.trim();
+          if (!name) return;
+          this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
+          this.toast("Outfit saved!");
+        };
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") restoreButton();
+        });
+        document.getElementById("h-outfit-confirm")!.addEventListener("click", submit);
+        document.getElementById("h-outfit-cancel")!.addEventListener("click", restoreButton);
+      };
+      hSaveOutfit.addEventListener("click", outfitSaveClick);
     }
 
     // Load a saved outfit into the builder
@@ -2358,12 +2382,34 @@ export class Hud {
 
     const saveOutfitBtn = document.getElementById("wd-save-outfit");
     if (saveOutfitBtn) {
-      saveOutfitBtn.addEventListener("click", () => {
-        const name = prompt("Name this outfit:", "");
-        if (name === null) return;
-        this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
-        this.toast("Outfit saved!");
-      });
+      const header = saveOutfitBtn.parentElement!;
+      const restoreButton = () => {
+        header.innerHTML = `<span class="outfit-title">SAVED OUTFITS</span><button class="btn outfit-save-btn" id="wd-save-outfit">💾 SAVE CURRENT</button>`;
+        document.getElementById("wd-save-outfit")!.addEventListener("click", outfitSaveClick);
+      };
+      const outfitSaveClick = () => {
+        header.querySelector("#wd-save-outfit")?.remove();
+        header.insertAdjacentHTML("beforeend", `
+          <input type="text" id="wd-outfit-name" placeholder="Outfit name…" maxlength="24" style="font-size:0.75rem;padding:0.3rem 0.5rem;width:120px;" />
+          <button class="btn" id="wd-outfit-confirm" style="font-size:0.7rem;padding:0.3rem 0.5rem;">✓</button>
+          <button class="btn" id="wd-outfit-cancel" style="font-size:0.7rem;padding:0.3rem 0.5rem;">✕</button>
+        `);
+        const input = document.getElementById("wd-outfit-name") as HTMLInputElement;
+        input.focus();
+        const submit = () => {
+          const name = input.value.trim();
+          if (!name) return;
+          this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
+          this.toast("Outfit saved!");
+        };
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") restoreButton();
+        });
+        document.getElementById("wd-outfit-confirm")!.addEventListener("click", submit);
+        document.getElementById("wd-outfit-cancel")!.addEventListener("click", restoreButton);
+      };
+      saveOutfitBtn.addEventListener("click", outfitSaveClick);
     }
 
     document.getElementById("wd-cancel")!.addEventListener("click", () => {

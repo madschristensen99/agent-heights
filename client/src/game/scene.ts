@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, dirFromVelocity, type Dir } from "./agent";
+import { hexToPixel, pixelToHex, HEX_SIZE, HEX_COL_SPACING, HEX_ROW_SPACING, HEX_COL_OFFSET, HEX_WIDTH, HEX_HEIGHT } from "../../../shared/hex";
 import { YUKI_ID, HERMES_ID, type CharAppearance } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
@@ -423,29 +424,53 @@ export class OfficeScene extends Phaser.Scene {
             `tiles-${this.theme}`,
           )!;
 
-          // draw a floor-colored backdrop so empty map tiles aren't white
-          const floorColor = this.theme === "agenthq" ? 0x4a6a8a : 0xd4d0c8;
-          const bg = this.add.graphics().setDepth(-1);
-          bg.fillStyle(floorColor, 1);
-          bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
-          // subtle grid lines for texture
-          bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0x3a5a7a, 0.3);
-          for (let x = 0; x <= map.width; x++) {
-            bg.moveTo(x * TILE_PX, 0);
-            bg.lineTo(x * TILE_PX, map.heightInPixels);
-          }
-          for (let y = 0; y <= map.height; y++) {
-            bg.moveTo(0, y * TILE_PX);
-            bg.lineTo(map.widthInPixels, y * TILE_PX);
-          }
-          bg.strokePath();
-
-          map.createLayer("Ground", tiles)!.setDepth(0);
-
-          const walls = map.createLayer("Walls", tiles)!.setDepth(1);
-          const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
+          // Create layers for data access but keep them invisible —
+          // we render tiles to a hex-positioned canvas instead.
+          const groundLayer = map.createLayer("Ground", tiles)!.setVisible(false);
+          const walls = map.createLayer("Walls", tiles)!.setVisible(false);
+          const furniture = map.createLayer("Furniture", tiles)!.setVisible(false);
           walls.setCollisionByProperty({ solid: true });
           furniture.setCollisionByProperty({ solid: true });
+
+          // --- Render office tiles to a hex-positioned canvas ---
+          const mapW = map.width;
+          const mapH = map.height;
+          const canvasW = Math.ceil(mapW * HEX_COL_SPACING + HEX_SIZE);
+          const canvasH = Math.ceil(mapH * HEX_ROW_SPACING + HEX_COL_OFFSET + HEX_SIZE);
+          const officeTexKey = `office-hex-${this.theme}`;
+          if (!this.textures.exists(officeTexKey)) {
+            const canvasTex = this.textures.createCanvas(officeTexKey, canvasW, canvasH);
+            if (canvasTex) {
+              const ctx = canvasTex.getContext();
+              // floor backdrop
+              ctx.fillStyle = this.theme === "agenthq" ? "#4a6a8a" : "#d4d0c8";
+              ctx.fillRect(0, 0, canvasW, canvasH);
+              // tileset image
+              const tilesetTex = this.textures.get(`tiles-${this.theme}`);
+              const tilesetImg = tilesetTex.getSourceImage() as CanvasImageSource;
+              const TS_COLS = 8;
+              const T = 64;
+              const renderLayer = (layer: Phaser.Tilemaps.TilemapLayer, depth: number) => {
+                for (let row = 0; row < mapH; row++) {
+                  for (let col = 0; col < mapW; col++) {
+                    const tile = layer.getTileAt(col, row);
+                    if (!tile) continue;
+                    const gid = tile.index - 1; // Tiled GID = tileId + 1
+                    const sx = (gid % TS_COLS) * T;
+                    const sy = Math.floor(gid / TS_COLS) * T;
+                    const { x, y } = hexToPixel(col, row);
+                    ctx.drawImage(tilesetImg, sx, sy, T, T, x - HEX_SIZE, y - HEX_SIZE, HEX_WIDTH, HEX_HEIGHT);
+                  }
+                }
+              };
+              renderLayer(groundLayer, 0);
+              renderLayer(walls, 1);
+              renderLayer(furniture, 2);
+              canvasTex.refresh();
+            }
+          }
+          const officeImg = this.add.image(0, 0, officeTexKey).setOrigin(0, 0).setDepth(0);
+          this.mapPx = { w: canvasW, h: canvasH };
 
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
           upgradeFurniture(this, furniture);
@@ -481,10 +506,12 @@ export class OfficeScene extends Phaser.Scene {
       {
         name: "map objects",
         fn: () => {
-          // points authored in the Tiled map
+          // points authored in the Tiled map — positions are in original square-grid
+          // pixels, so we convert to tile coords then re-position using hexToPixel.
           for (const obj of map.getObjectLayer("Points")?.objects ?? []) {
             const tx = Math.floor((obj.x ?? 0) / TILE_PX);
             const ty = Math.floor((obj.y ?? 0) / TILE_PX);
+            const hp = hexToPixel(tx, ty);
             if (obj.name === "spawn") {
               this.spawnTile = { x: tx, y: ty };
             } else if (obj.name === "coffee") {
@@ -492,42 +519,30 @@ export class OfficeScene extends Phaser.Scene {
             } else if (obj.name === "yuki-seat") {
               this.yukiSeat = { x: tx, y: ty };
             } else if (obj.name === "yuki-monitor") {
-              // Side-view monitor on Yuki's desk — thin profile, screen faces right toward her
-              const mx = (obj.x ?? 0) + TILE_PX * 0.35;
-              const my = (obj.y ?? 0) - TILE_PX * 0.15;
               const spr = this.add
-                .sprite(mx, my, MONITOR_SIDE_TEX, "0")
-                .setDepth(10 + (obj.y ?? 0) - 10);
+                .sprite(hp.x + 22, hp.y - 10, MONITOR_SIDE_TEX, "0")
+                .setDepth(10 + hp.y);
               this.yukiMonitor = spr;
             } else if (obj.name === "hermes-seat") {
               this.hermesSeat = { x: tx, y: ty };
             } else if (obj.name === "hermes-monitor") {
-              // Side-view monitor on Hermes's desk — thin profile, screen faces left toward him
-              const mx = (obj.x ?? 0) - TILE_PX * 0.35;
-              const my = (obj.y ?? 0) - TILE_PX * 0.15;
               const spr = this.add
-                .sprite(mx, my, MONITOR_SIDE_TEX, "0")
-                .setDepth(10 + (obj.y ?? 0) - 10)
+                .sprite(hp.x - 22, hp.y - 10, MONITOR_SIDE_TEX, "0")
+                .setDepth(10 + hp.y)
                 .setFlipX(true);
               this.hermesMonitor = spr;
             } else if (obj.name.startsWith("seat-")) {
               const idx = Number(obj.name.slice(5));
               this.seats[idx] = { x: tx, y: ty };
-              // Create chair sprite at seat position, facing down (unassigned default)
-              const cx = tx * TILE_PX + TILE_PX / 2;
-              const cy = ty * TILE_PX + TILE_PX / 2;
               const chair = this.add
-                .sprite(cx, cy, CHAIR_TEX_DOWN)
-                .setDepth(5 + ty * TILE_PX + 1);
+                .sprite(hp.x, hp.y, CHAIR_TEX_DOWN)
+                .setDepth(5 + hp.y + 1);
               this.chairs[idx] = chair;
             } else if (obj.name.startsWith("monitor-")) {
               const idx = Number(obj.name.slice(8));
-              // Procedural monitor standing on top of desk
-              const mx = (obj.x ?? 0) + TILE_PX / 2;
-              const my = (obj.y ?? 0) - TILE_PX * 0.35;
               const spr = this.add
-                .sprite(mx, my, MONITOR_TEX, "0")
-                .setDepth(10 + (obj.y ?? 0) - 10);
+                .sprite(hp.x, hp.y - 22, MONITOR_TEX, "0")
+                .setDepth(10 + hp.y);
               spr.setInteractive({ useHandCursor: true });
               spr.on("pointerdown", () => this.openAgentViewModal(idx));
               this.monitors[idx] = spr;
@@ -551,12 +566,10 @@ export class OfficeScene extends Phaser.Scene {
 
           // Yuki — the office manager NPC
           if (this.yukiSeat) {
-            // Create Yuki's left-facing chair sprite
-            const ycx = this.yukiSeat.x * TILE_PX + TILE_PX / 2;
-            const ycy = this.yukiSeat.y * TILE_PX + TILE_PX / 2;
+            const yhp = hexToPixel(this.yukiSeat.x, this.yukiSeat.y);
             this.add
-              .sprite(ycx, ycy, CHAIR_TEX_LEFT)
-              .setDepth(5 + this.yukiSeat.y * TILE_PX + 1);
+              .sprite(yhp.x, yhp.y, CHAIR_TEX_LEFT)
+              .setDepth(5 + yhp.y + 1);
 
             this.yuki = new YukiNPC(this, this.grid, this.yukiSeat, (clicked) =>
               this.store.select(clicked),
@@ -564,22 +577,20 @@ export class OfficeScene extends Phaser.Scene {
 
             // clickable zone over Yuki's office — clicking anywhere inside opens her chat
             const zo = { x0: 22, y0: 8, x1: 27, y1: 11 };
-            const zx = (zo.x0 + zo.x1 + 1) / 2 * TILE_PX;
-            const zy = (zo.y0 + zo.y1 + 1) / 2 * TILE_PX;
-            const zw = (zo.x1 - zo.x0 + 1) * TILE_PX;
-            const zh = (zo.y1 - zo.y0 + 1) * TILE_PX;
-            this.yukiOfficeZone = this.add.zone(zx, zy, zw, zh);
+            const zc = hexToPixel((zo.x0 + zo.x1) / 2, (zo.y0 + zo.y1) / 2);
+            const zw = (zo.x1 - zo.x0 + 1) * HEX_COL_SPACING;
+            const zh = (zo.y1 - zo.y0 + 1) * HEX_ROW_SPACING;
+            this.yukiOfficeZone = this.add.zone(zc.x, zc.y, zw, zh);
             this.yukiOfficeZone.setInteractive({ useHandCursor: true });
             this.yukiOfficeZone.on("pointerdown", () => this.store.select(YUKI_ID));
           }
 
           // Hermes — right-facing chair at the mail room desk
           if (this.hermesSeat) {
-            const hcx = this.hermesSeat.x * TILE_PX + TILE_PX / 2;
-            const hcy = this.hermesSeat.y * TILE_PX + TILE_PX / 2;
+            const hhp = hexToPixel(this.hermesSeat.x, this.hermesSeat.y);
             this.add
-              .sprite(hcx, hcy, CHAIR_TEX_RIGHT)
-              .setDepth(5 + this.hermesSeat.y * TILE_PX + 1);
+              .sprite(hhp.x, hhp.y, CHAIR_TEX_RIGHT)
+              .setDepth(5 + hhp.y + 1);
 
             this.hermes = new HermesNPC(this, this.grid, this.hermesSeat, (clicked) =>
               this.store.select(clicked),
@@ -769,13 +780,14 @@ export class OfficeScene extends Phaser.Scene {
         name: "lighting & input",
         fn: () => {
           // flower beds flanking the front door
-          const doorPxX = this.spawnTile.x * TILE_PX + TILE_PX / 2;
-          const doorPxY = map.heightInPixels;
+          const doorHp = hexToPixel(this.spawnTile.x, this.spawnTile.y + 2);
+          const doorPxX = doorHp.x;
+          const doorPxY = doorHp.y + HEX_SIZE;
           const flowerG = this.add.graphics().setDepth(3);
           const flowerColors = [0xe8c84a, 0xe84a8a, 0x8a4ae8, 0xff6a4a, 0x4ae8ca];
           for (const side of [-1, 1]) {
             for (let i = 0; i < 6; i++) {
-              const fx = doorPxX + side * (TILE_PX * 1.5 + i * 14);
+              const fx = doorPxX + side * (HEX_COL_SPACING * 1.5 + i * 14);
               const fy = doorPxY + 10 + Math.sin(i * 1.7) * 8;
               const color = flowerColors[(i + (side > 0 ? 2 : 0)) % flowerColors.length];
               flowerG.fillStyle(0x2a6a2a, 1);
@@ -788,7 +800,7 @@ export class OfficeScene extends Phaser.Scene {
           }
 
           // conspicuous mailbox to the left of the front door
-          this.mailboxPx = { x: doorPxX - TILE_PX * 3, y: doorPxY + 24 };
+          this.mailboxPx = { x: doorPxX - HEX_COL_SPACING * 3, y: doorPxY + 24 };
           this.mailboxGfx = this.add.graphics().setDepth(3);
           this.mailboxHasMail = true; // start with mail
           this.mailboxNextMail = this.time.now + 45000; // next mail arrives in 45s
@@ -1152,13 +1164,11 @@ export class OfficeScene extends Phaser.Scene {
       { x: px, y: py - 10 },
     ];
     for (const p of checks) {
-      const tx = Math.floor(p.x / TILE_PX);
-      const ty = Math.floor(p.y / TILE_PX);
+      const { col: tx, row: ty } = pixelToHex(p.x, p.y);
       if (this.grid.ok(tx, ty)) continue;
       // outside grid bounds — check world collision instead
       if (tx < 0 || ty < 0 || tx >= this.grid.width || ty >= this.grid.height) {
-        const wtx = Math.floor((p.x - this.world.offset.x) / TILE_PX);
-        const wty = Math.floor((p.y - this.world.offset.y) / TILE_PX);
+        const { tx: wtx, ty: wty } = this.world.pixelToTile(p.x, p.y);
         if (!this.world.isTileWalkable(wtx, wty)) return false;
         continue;
       }
@@ -1230,9 +1240,8 @@ export class OfficeScene extends Phaser.Scene {
     let best: Tile | null = null;
     let bestD = Infinity;
     for (const t of tiles) {
-      const px = t.x * TILE_PX + 32;
-      const py = t.y * TILE_PX + 32;
-      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py);
+      const tp = hexToPixel(t.x, t.y);
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, tp.x, tp.y);
       if (d < maxDist && d < bestD) {
         best = t;
         bestD = d;
@@ -1246,7 +1255,7 @@ export class OfficeScene extends Phaser.Scene {
     let nearest: PlatformMailbox | null = null;
     let nearestDist = Infinity;
     for (const mb of this.platformMailboxes) {
-      const mbPx = { x: mb.tile.x * TILE_PX + TILE_PX / 2, y: mb.tile.y * TILE_PX + TILE_PX / 2 };
+      const mbPx = hexToPixel(mb.tile.x, mb.tile.y);
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, mbPx.x, mbPx.y);
       if (d < 100 && d < nearestDist) {
         nearest = mb;
@@ -1254,7 +1263,7 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     if (!nearest) return false;
-    const mbPx = { x: nearest.tile.x * TILE_PX + TILE_PX / 2, y: nearest.tile.y * TILE_PX + TILE_PX / 2 };
+    const mbPx = hexToPixel(nearest.tile.x, nearest.tile.y);
     if (nearest.flagUp && nearest.lastMessage) {
       this.store.toast(`[${nearest.platform}] ${nearest.lastMessage}`);
       nearest.flagUp = false;
@@ -1271,7 +1280,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Try interacting with any new office object. Returns true if an interaction fired. */
   private tryOfficeInteract(time: number): boolean {
     // Projector control panel — cycle channels
-    const ctrlPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
+    const ctrlPx = hexToPixel(this.projectorControlTile.x, this.projectorControlTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, ctrlPx.x, ctrlPx.y) < 160) {
       const net = this.game.registry.get("net") as import("../net").Net;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
@@ -1284,7 +1293,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector speaker — toggle mute
-    const spkPx = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
+    const spkPx = hexToPixel(this.projectorSpeakerTile.x, this.projectorSpeakerTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, spkPx.x, spkPx.y) < 160) {
       this.projectorMuted = !this.projectorMuted;
       // Send mute/unmute command via YouTube IFrame postMessage API (no reload)
@@ -1301,7 +1310,8 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector screen — cycle channels (also possible directly at screen)
-    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
+    const projPx = hexToPixel(this.projectorTile.x, this.projectorTile.y);
+    projPx.y -= 100;
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, projPx.x, projPx.y) < 200) {
       const net = this.game.registry.get("net") as import("../net").Net;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
@@ -1314,7 +1324,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Fridge — full HP heal
-    const fridgePx = { x: this.fridgeTile.x * TILE_PX + 32, y: this.fridgeTile.y * TILE_PX + 32 };
+    const fridgePx = hexToPixel(this.fridgeTile.x, this.fridgeTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, fridgePx.x, fridgePx.y) < 144) {
       if (time < this.fridgeUntil) {
         this.store.toast("Fridge is restocking.");
@@ -1330,7 +1340,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Water Cooler — agent gossip
-    const coolerPx = { x: this.coolerTile.x * TILE_PX + 32, y: this.coolerTile.y * TILE_PX + 32 };
+    const coolerPx = hexToPixel(this.coolerTile.x, this.coolerTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, coolerPx.x, coolerPx.y) < 144) {
       if (time < this.coolerUntil) {
         this.store.toast("You just checked the cooler.");
@@ -1345,7 +1355,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Clock — session stats
-    const clockPx = { x: this.clockTile.x * TILE_PX + 32, y: this.clockTile.y * TILE_PX + 32 };
+    const clockPx = hexToPixel(this.clockTile.x, this.clockTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, clockPx.x, clockPx.y) < 160) {
       if (time >= this.clockUntil) {
         this.clockUntil = time + 2000;
@@ -1357,7 +1367,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Vending Machine — random consumable
     if (this.vendingTile) {
-      const vPx = { x: this.vendingTile.x * TILE_PX + 32, y: this.vendingTile.y * TILE_PX + 32 };
+      const vPx = hexToPixel(this.vendingTile.x, this.vendingTile.y);
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, vPx.x, vPx.y) < 144) {
         if (time < this.vendingUntil) {
           this.store.toast("Vending machine is restocking.");
@@ -1371,7 +1381,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Sofa — power nap speed boost
     if (this.sofaTile) {
-      const sPx = { x: this.sofaTile.x * TILE_PX + 32, y: this.sofaTile.y * TILE_PX + 32 };
+      const sPx = hexToPixel(this.sofaTile.x, this.sofaTile.y);
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, sPx.x, sPx.y) < 144) {
         if (time < this.sofaUntil) {
           this.store.toast("You're already rested.");
@@ -1394,13 +1404,14 @@ export class OfficeScene extends Phaser.Scene {
         this.store.toast("You just browsed the files.");
       } else {
         this.filingUntil = time + 3000;
-        this.filingCabinet(filingNear.x * TILE_PX + 32, filingNear.y * TILE_PX + 32);
+        const fp = hexToPixel(filingNear.x, filingNear.y);
+        this.filingCabinet(fp.x, fp.y);
       }
       return true;
     }
 
     // Wardrobe — change appearance
-    const wdPx = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
+    const wdPx = hexToPixel(this.wardrobeTile.x, this.wardrobeTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wdPx.x, wdPx.y) < 144) {
       this.store.toggleWardrobe(true);
       this.world.audio.uiClick();
@@ -1408,35 +1419,35 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // ── Expedition Workshop (before plants — plants at (26,16) overlap war table) ──
-    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+    const wtPx = hexToPixel(this.warTableTile.x, this.warTableTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y) < 144) {
       this.store.toast("The war table is empty. No expedition being planned.");
       this.world.audio.uiClick();
       return true;
     }
 
-    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+    const sbPx = hexToPixel(this.scrapBinTile.x, this.scrapBinTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y) < 144) {
       this.store.toast("Scrap pool: 0. Not enough for any robot tier.");
       this.world.audio.uiClick();
       return true;
     }
 
-    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+    const rdPx = hexToPixel(this.radioTile.x, this.radioTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y) < 144) {
       this.store.toast("The radio is silent. No robot deployed.");
       this.world.audio.uiClick();
       return true;
     }
 
-    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+    const wbPx = hexToPixel(this.workbenchTile.x, this.workbenchTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y) < 144) {
       this.store.toast("The workbench is clear. No robot in production.");
       this.world.audio.uiClick();
       return true;
     }
 
-    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+    const rsPx = hexToPixel(this.researchTile.x, this.researchTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y) < 144) {
       this.store.toast("Knowledge level: 0. No expedition data yet.");
       this.world.audio.uiClick();
@@ -1451,8 +1462,9 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         this.plantCooldownUntil = time + 60000;
         this.plantUntil = time + 30000;
-        const px = plantNear.x * TILE_PX + 32;
-        const py = plantNear.y * TILE_PX + 32;
+        const pp = hexToPixel(plantNear.x, plantNear.y);
+        const px = pp.x;
+        const py = pp.y;
         this.store.toast("Plants watered! Team morale boosted for 30s.");
         this.world.vfx.sparkBurst(px, py, 0x4acb4a, 16, 70);
         this.world.vfx.celebrate(px, py);
@@ -1493,7 +1505,7 @@ export class OfficeScene extends Phaser.Scene {
     // called earlier in the E-press chain, before server racks.
 
     // Red Button — EMERGENCY STOP: cease all agent work and assemble by entrance
-    const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
+    const rbPx = hexToPixel(this.redButtonTile.x, this.redButtonTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y) < 160) {
       if (time < this.redButtonUntil) {
         this.store.toast("The button is cooling down.");
@@ -1579,7 +1591,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Update proximity hints for all new interactables. */
   private updateInteractHints(time: number): void {
     // Fridge
-    const fridgePx = { x: this.fridgeTile.x * TILE_PX + 32, y: this.fridgeTile.y * TILE_PX + 32 };
+    const fridgePx = hexToPixel(this.fridgeTile.x, this.fridgeTile.y);
     const fridgeDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, fridgePx.x, fridgePx.y);
     if (fridgeDist < 144) {
       this.fridgeHint
@@ -1591,7 +1603,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Water Cooler
-    const coolerPx = { x: this.coolerTile.x * TILE_PX + 32, y: this.coolerTile.y * TILE_PX + 32 };
+    const coolerPx = hexToPixel(this.coolerTile.x, this.coolerTile.y);
     const coolerDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, coolerPx.x, coolerPx.y);
     if (coolerDist < 144) {
       this.coolerHint
@@ -1603,7 +1615,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Clock
-    const clockPx = { x: this.clockTile.x * TILE_PX + 32, y: this.clockTile.y * TILE_PX + 32 };
+    const clockPx = hexToPixel(this.clockTile.x, this.clockTile.y);
     const clockDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, clockPx.x, clockPx.y);
     if (clockDist < 160) {
       this.clockHint
@@ -1616,7 +1628,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Vending
     if (this.vendingTile) {
-      const vPx = { x: this.vendingTile.x * TILE_PX + 32, y: this.vendingTile.y * TILE_PX + 32 };
+      const vPx = hexToPixel(this.vendingTile.x, this.vendingTile.y);
       const vDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, vPx.x, vPx.y);
       if (vDist < 144) {
         this.vendingHint
@@ -1632,7 +1644,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Sofa
     if (this.sofaTile) {
-      const sPx = { x: this.sofaTile.x * TILE_PX + 32, y: this.sofaTile.y * TILE_PX + 32 };
+      const sPx = hexToPixel(this.sofaTile.x, this.sofaTile.y);
       const sDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sPx.x, sPx.y);
       if (sDist < 144) {
         this.sofaHint
@@ -1649,7 +1661,7 @@ export class OfficeScene extends Phaser.Scene {
     // Filing — check nearest
     const filingNear = this.nearestTile(this.filingTiles, 144);
     if (filingNear) {
-      const fPx = { x: filingNear.x * TILE_PX + 32, y: filingNear.y * TILE_PX + 32 };
+      const fPx = hexToPixel(filingNear.x, filingNear.y);
       this.filingHint
         .setPosition(fPx.x, fPx.y + 64)
         .setText(hintLabel(time < this.filingUntil ? "E: BROWSING..." : "E: BROWSE FILES"))
@@ -1659,7 +1671,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Wardrobe proximity hint
-    const wdHintPx = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
+    const wdHintPx = hexToPixel(this.wardrobeTile.x, this.wardrobeTile.y);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wdHintPx.x, wdHintPx.y) < 144) {
       this.wardrobeHint.setPosition(wdHintPx.x, wdHintPx.y + 64).setText(hintLabel("E: WARDROBE")).setVisible(true);
     } else {
@@ -1667,7 +1679,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // ── Expedition Workshop (before plants — war table overlaps plant at 26,16) ──
-    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+    const wtPx = hexToPixel(this.warTableTile.x, this.warTableTile.y);
     const wtDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y);
     if (wtDist < 144) {
       this.warTableHint.setPosition(wtPx.x, wtPx.y + 64).setText(hintLabel("E: WAR TABLE")).setVisible(true);
@@ -1675,7 +1687,7 @@ export class OfficeScene extends Phaser.Scene {
       this.warTableHint.setVisible(false);
     }
 
-    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+    const sbPx = hexToPixel(this.scrapBinTile.x, this.scrapBinTile.y);
     const sbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y);
     if (sbDist < 144) {
       this.scrapBinHint.setPosition(sbPx.x, sbPx.y + 64).setText(hintLabel("E: SCRAP BIN")).setVisible(true);
@@ -1683,7 +1695,7 @@ export class OfficeScene extends Phaser.Scene {
       this.scrapBinHint.setVisible(false);
     }
 
-    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+    const rdPx = hexToPixel(this.radioTile.x, this.radioTile.y);
     const rdDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y);
     if (rdDist < 144) {
       this.radioHint.setPosition(rdPx.x, rdPx.y + 64).setText(hintLabel("E: RADIO")).setVisible(true);
@@ -1691,7 +1703,7 @@ export class OfficeScene extends Phaser.Scene {
       this.radioHint.setVisible(false);
     }
 
-    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+    const wbPx = hexToPixel(this.workbenchTile.x, this.workbenchTile.y);
     const wbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y);
     if (wbDist < 144) {
       this.workbenchHint.setPosition(wbPx.x, wbPx.y + 64).setText(hintLabel("E: WORKBENCH")).setVisible(true);
@@ -1699,7 +1711,7 @@ export class OfficeScene extends Phaser.Scene {
       this.workbenchHint.setVisible(false);
     }
 
-    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+    const rsPx = hexToPixel(this.researchTile.x, this.researchTile.y);
     const rsDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y);
     if (rsDist < 144) {
       this.researchHint.setPosition(rsPx.x, rsPx.y + 64).setText(hintLabel("E: RESEARCH")).setVisible(true);
@@ -1710,7 +1722,7 @@ export class OfficeScene extends Phaser.Scene {
     // Plants — check nearest
     const plantNear = this.nearestTile(this.plantTiles, 144);
     if (plantNear) {
-      const pPx = { x: plantNear.x * TILE_PX + 32, y: plantNear.y * TILE_PX + 32 };
+      const pPx = hexToPixel(plantNear.x, plantNear.y);
       this.plantHint
         .setPosition(pPx.x, pPx.y + 64)
         .setText(hintLabel(time < this.plantUntil ? "E: BOOSTED!" : time < this.plantCooldownUntil ? "E: STILL MOIST" : "E: WATER PLANTS"))
@@ -1734,7 +1746,7 @@ export class OfficeScene extends Phaser.Scene {
     let nearestPm: PlatformMailbox | null = null;
     let nearestPmDist = Infinity;
     for (const pm of this.platformMailboxes) {
-      const pmPx = { x: pm.tile.x * TILE_PX + TILE_PX / 2, y: pm.tile.y * TILE_PX + TILE_PX / 2 };
+      const pmPx = hexToPixel(pm.tile.x, pm.tile.y);
       const pmDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, pmPx.x, pmPx.y);
       if (pmDist < 100 && pmDist < nearestPmDist) {
         nearestPm = pm;
@@ -1742,7 +1754,7 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     if (nearestPm) {
-      const pmPx = { x: nearestPm.tile.x * TILE_PX + TILE_PX / 2, y: nearestPm.tile.y * TILE_PX + TILE_PX / 2 };
+      const pmPx = hexToPixel(nearestPm.tile.x, nearestPm.tile.y);
       this.platformMailboxHint
         .setPosition(pmPx.x, pmPx.y + 64)
         .setText(hintLabel(nearestPm.flagUp ? `E: CHECK ${nearestPm.platform.toUpperCase()}` : "E: EMPTY"))
@@ -1752,7 +1764,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Red Button
-    const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
+    const rbPx = hexToPixel(this.redButtonTile.x, this.redButtonTile.y);
     const rbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y);
     if (rbDist < 160) {
       this.redButtonHint
@@ -1764,7 +1776,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector control panel
-    const ctrlHintPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
+    const ctrlHintPx = hexToPixel(this.projectorControlTile.x, this.projectorControlTile.y);
     const ctrlDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, ctrlHintPx.x, ctrlHintPx.y);
     if (ctrlDist < 160) {
       const ch = this.store.projectorChannel;
@@ -1781,7 +1793,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector speaker (mute/unmute)
-    const spkHintPx = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
+    const spkHintPx = hexToPixel(this.projectorSpeakerTile.x, this.projectorSpeakerTile.y);
     const spkDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, spkHintPx.x, spkHintPx.y);
     if (spkDist < 160) {
       this.projectorSpeakerHint
@@ -1793,7 +1805,8 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector screen
-    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
+    const projHintPx = hexToPixel(this.projectorTile.x, this.projectorTile.y);
+    projHintPx.y -= 100;
     const projDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, projHintPx.x, projHintPx.y);
     if (projDist < 200) {
       const ch = this.store.projectorChannel;
@@ -1880,8 +1893,9 @@ export class OfficeScene extends Phaser.Scene {
     const g = this.platformMailboxGfx;
     g.clear();
     for (const mb of this.platformMailboxes) {
-      const px = mb.tile.x * TILE_PX + TILE_PX / 2;
-      const py = mb.tile.y * TILE_PX + TILE_PX / 2;
+      const mbHp = hexToPixel(mb.tile.x, mb.tile.y);
+      const px = mbHp.x;
+      const py = mbHp.y;
       // ground shadow
       g.fillStyle(0x000000, 0.2);
       g.fillEllipse(px, py + 28, 28, 6);
@@ -1944,7 +1958,7 @@ export class OfficeScene extends Phaser.Scene {
   private drawHelipad(): void {
     const g = this.add.graphics().setDepth(-0.5);
 
-    const mapPxW = 30 * TILE_PX; // 1920
+    const mapPxW = 30 * HEX_COL_SPACING;
     const cx = mapPxW / 2;       // 960
     const roofY = 0;             // top edge of the office map
 
@@ -2302,8 +2316,9 @@ export class OfficeScene extends Phaser.Scene {
   /** Draw a big red emergency button on the wall in Yuki's office. */
   private drawRedButton(): void {
     const g = this.add.graphics().setDepth(3);
-    const bx = this.redButtonTile.x * TILE_PX + 32;
-    const by = this.redButtonTile.y * TILE_PX + 56;
+    const rbHp = hexToPixel(this.redButtonTile.x, this.redButtonTile.y);
+    const bx = rbHp.x;
+    const by = rbHp.y + 24;
 
     // mounting plate
     g.fillStyle(0x2a2a30, 1);
@@ -2339,8 +2354,9 @@ export class OfficeScene extends Phaser.Scene {
   private drawWardrobe(): void {
     this.wardrobeGfx = this.add.graphics().setDepth(3);
     const g = this.wardrobeGfx;
-    const bx = this.wardrobeTile.x * TILE_PX;
-    const by = this.wardrobeTile.y * TILE_PX;
+    const wdHp = hexToPixel(this.wardrobeTile.x, this.wardrobeTile.y);
+    const bx = wdHp.x - HEX_SIZE;
+    const by = wdHp.y - HEX_SIZE;
 
     // shadow
     g.fillStyle(0x000000, 0.2);
@@ -2560,8 +2576,9 @@ export class OfficeScene extends Phaser.Scene {
     const elevX = this.padFrontPx.x;
     const elevStartY = this.padFrontPx.y;
     // elevator exit inside the office — tile {x:14, y:3}
-    const exitX = 14 * TILE_PX + 32;
-    const exitY = 3 * TILE_PX + 52;
+    const exitHp = hexToPixel(14, 3);
+    const exitX = exitHp.x;
+    const exitY = exitHp.y + 20;
 
     // draw elevator platform
     const elev = this.add.graphics().setDepth(5);
@@ -2683,8 +2700,9 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Draw the projector screen frame on the top-left wall. */
   private drawProjector(): void {
-    const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX - 100;
+    const pjHp = hexToPixel(this.projectorTile.x, this.projectorTile.y);
+    const px = pjHp.x;
+    const py = pjHp.y - 100;
     const sw = 480;
     const sh = 288;
 
@@ -2706,8 +2724,9 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Draw a wall-mounted TV control panel for channel selection. */
   private drawProjectorControlPanel(): void {
-    const px = this.projectorControlTile.x * TILE_PX + 32;
-    const py = this.projectorControlTile.y * TILE_PX + 32;
+    const cpHp = hexToPixel(this.projectorControlTile.x, this.projectorControlTile.y);
+    const px = cpHp.x;
+    const py = cpHp.y;
     this.projectorControlGfx = this.add.graphics().setDepth(3);
 
     // mounting plate
@@ -2741,8 +2760,9 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Draw a wall-mounted speaker for mute/unmute control. */
   private drawProjectorSpeaker(): void {
-    const px = this.projectorSpeakerTile.x * TILE_PX + 32;
-    const py = this.projectorSpeakerTile.y * TILE_PX + 32;
+    const spHp = hexToPixel(this.projectorSpeakerTile.x, this.projectorSpeakerTile.y);
+    const px = spHp.x;
+    const py = spHp.y;
     this.projectorSpeakerGfx = this.add.graphics().setDepth(3);
 
     // mounting plate
@@ -2774,8 +2794,9 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Draw a wall-mounted clock at the new location near the chimney. */
   private drawClock(): void {
-    const px = this.clockTile.x * TILE_PX + 32;
-    const py = this.clockTile.y * TILE_PX + 32;
+    const clHp = hexToPixel(this.clockTile.x, this.clockTile.y);
+    const px = clHp.x;
+    const py = clHp.y;
     const g = this.add.graphics().setDepth(3);
 
     // mounting plate
@@ -2826,8 +2847,9 @@ export class OfficeScene extends Phaser.Scene {
   private updateProjectorVideo(): void {
     const channel = this.store.projectorChannel;
     const cam = this.cameras.main;
-    const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX - 100;
+    const pjHp = hexToPixel(this.projectorTile.x, this.projectorTile.y);
+    const px = pjHp.x;
+    const py = pjHp.y - 100;
     const sw = 480;
     const sh = 288;
 
@@ -2921,8 +2943,9 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Draw a kanban-style task board on the front wall of the office. */
   private drawBoard(): void {
-    const bx = this.boardTile.x * TILE_PX + 32;
-    const by = this.boardTile.y * TILE_PX + 8;
+    const bdHp = hexToPixel(this.boardTile.x, this.boardTile.y);
+    const bx = bdHp.x;
+    const by = bdHp.y - 24;
     const bw = 320;
     const bh = 88;
 
@@ -2983,8 +3006,9 @@ export class OfficeScene extends Phaser.Scene {
     if (!g) return;
     g.clear();
 
-    const tx = this.trophyTile.x * TILE_PX + 57; // offset for x=1.9 visual position
-    const ty = this.trophyTile.y * TILE_PX - 56;
+    const trHp = hexToPixel(this.trophyTile.x, this.trophyTile.y);
+    const tx = trHp.x + 25;
+    const ty = trHp.y - 88;
     const cw = 96;  // case width
     const ch = 120; // case height
     const cols = 6;
@@ -3068,8 +3092,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Board hangs on the west wall, portrait orientation,
     // centered vertically on the hallOfFameTile row, just right of the wall.
-    const bx = this.hallOfFameTile.x * TILE_PX + 10; // just off the west wall
-    const by = this.hallOfFameTile.y * TILE_PX + 32;
+    const hfHp = hexToPixel(this.hallOfFameTile.x, this.hallOfFameTile.y);
+    const bx = hfHp.x - HEX_SIZE + 10;
+    const by = hfHp.y;
     const bw = 48;
     const bh = 84;
 
@@ -3134,12 +3159,12 @@ export class OfficeScene extends Phaser.Scene {
     const g = this.chimneyGfx;
 
     // Chimney sits outside the left wall (x < 64), extending above the roof down to server room
-    const wallFace = TILE_PX;        // left wall outer edge at x=64
+    const wallFace = HEX_COL_SPACING;
     const chimW = 28;                 // chimney width at the shaft
     const chimX = wallFace - chimW - 6; // 6px gap from wall
     const roofY = 0;                  // top of building / roof line
     const chimTopY = -52;             // chimney extends 52px above the roof
-    const baseY = 14 * TILE_PX;       // server room level
+    const baseY = hexToPixel(0, 14).y;
 
     // Brick body — tapered from base to top
     const baseW = chimW + 8;
@@ -3541,7 +3566,7 @@ export class OfficeScene extends Phaser.Scene {
     // Sub-step movement to prevent tunneling through walls on large frames.
     // Collision checks only verify the endpoint, so a single big step can
     // skip past walls entirely. Break it into sub-steps of at most half a tile.
-    const maxStep = TILE_PX * 0.5;
+    const maxStep = HEX_SIZE * 0.5;
     const subSteps = Math.max(1, Math.ceil(Math.max(Math.abs(stepX), Math.abs(stepY)) / maxStep));
     const subX = stepX / subSteps;
     const subY = stepY / subSteps;
@@ -3591,10 +3616,12 @@ export class OfficeScene extends Phaser.Scene {
     }
     if (ePressed) {
       // trophy case check — before other interactables
-      const trophyPx = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
+      const trophyPx = hexToPixel(this.trophyTile.x, this.trophyTile.y);
+      trophyPx.y += 8;
       const trophyDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx.x, trophyPx.y);
       // hall of fame bulletin board — west wall, above trophy case
-      const hofPx = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      const hofPx = hexToPixel(this.hallOfFameTile.x, this.hallOfFameTile.y);
+      hofPx.x -= HEX_SIZE - 10;
       const hofDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx.x, hofPx.y);
       if (trophyDist < 120) {
         this.store.toggleAchievements();
@@ -3616,7 +3643,7 @@ export class OfficeScene extends Phaser.Scene {
         // handled by a new interactable
       } else {
       // check the coffee machine
-      const coffeePx = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
+      const coffeePx = hexToPixel(this.coffeeTile.x, this.coffeeTile.y);
       const coffeeDist = Phaser.Math.Distance.Between(
         this.player.x,
         this.player.y,
@@ -3633,7 +3660,8 @@ export class OfficeScene extends Phaser.Scene {
         if (time < this.sofaUntil) achievements.unlock("speed_demon");
       } else {
         // check the board — it's a big target on the wall
-        const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
+        const boardPx = hexToPixel(this.boardTile.x, this.boardTile.y);
+        boardPx.y += 20;
         const boardDist = Phaser.Math.Distance.Between(
           this.player.x,
           this.player.y,
@@ -3750,7 +3778,8 @@ export class OfficeScene extends Phaser.Scene {
     // office proximity hints — skip distance checks when outside
     if (!outside) {
       // board proximity hint
-      const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
+      const boardPx = hexToPixel(this.boardTile.x, this.boardTile.y);
+      boardPx.y += 20;
       const boardDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boardPx.x, boardPx.y);
       if (boardDist < 160 && !this.store.boardOpen) {
         this.boardHint
@@ -3762,7 +3791,7 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       // coffee machine proximity hint
-      const coffeePx = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
+      const coffeePx = hexToPixel(this.coffeeTile.x, this.coffeeTile.y);
       const coffeeDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, coffeePx.x, coffeePx.y);
       if (coffeeDist < 144) {
         this.coffeeHint
@@ -3834,7 +3863,8 @@ export class OfficeScene extends Phaser.Scene {
     }
     // trophy case & hall of fame proximity hints — skip when outside
     if (!outside) {
-      const trophyPx2 = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 68 };
+      const trophyPx2 = hexToPixel(this.trophyTile.x, this.trophyTile.y);
+      trophyPx2.y += 36;
       const trophyDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx2.x, trophyPx2.y);
       if (trophyDist2 < 120 && !this.store.achievementsOpen) {
         this.trophyHint
@@ -3846,7 +3876,8 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       // hall of fame bulletin board — proximity hint (player approaches from the right)
-      const hofPx2 = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      const hofPx2 = hexToPixel(this.hallOfFameTile.x, this.hallOfFameTile.y);
+      hofPx2.x -= HEX_SIZE - 10;
       const hofDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx2.x, hofPx2.y);
       if (hofDist2 < 120 && !this.store.hallOfFameOpen) {
         this.hallOfFameHint
@@ -3861,7 +3892,7 @@ export class OfficeScene extends Phaser.Scene {
       const rackNear = this.nearestTile(this.serverRackTiles, 150);
       if (rackNear && !this.store.railwayPanelOpen) {
         this.serverRackHint
-          .setPosition(rackNear.x * TILE_PX + 32, rackNear.y * TILE_PX - 8)
+          .setPosition(hexToPixel(rackNear.x, rackNear.y).x, hexToPixel(rackNear.x, rackNear.y).y - 8)
           .setText(hintLabel("E: CHECK SERVERS"))
           .setVisible(true);
       } else {
@@ -4198,8 +4229,9 @@ export class OfficeScene extends Phaser.Scene {
 
       // Draw or update the image on the projector
       if (!this.projectorAgentImage) {
-        const px = this.projectorTile.x * TILE_PX + 32;
-        const py = this.projectorTile.y * TILE_PX - 100;
+        const pjHp = hexToPixel(this.projectorTile.x, this.projectorTile.y);
+        const px = pjHp.x;
+        const py = pjHp.y - 100;
         this.projectorAgentImage = this.add.image(px, py, this.projectorAgentTextureKey).setDepth(3);
       }
       this.projectorAgentImage.setVisible(true);

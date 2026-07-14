@@ -4,7 +4,7 @@ import type { FiredAgent } from "../../../shared/types";
 import type { Store } from "../store";
 import type { Net } from "../net";
 import { isTouchDevice } from "../touch";
-import { TILE_PX, type Dir } from "./agent";
+import { type Dir } from "./agent";
 import { hexToPixel, pixelToHex, HEX_SIZE, HEX_COL_SPACING, HEX_ROW_SPACING, HEX_COL_OFFSET, HEX_WIDTH, HEX_HEIGHT } from "../../../shared/hex";
 import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
@@ -967,7 +967,7 @@ export class WorldLayer {
     const dx = playerX < 0 ? -playerX : playerX > this.officeW ? playerX - this.officeW : 0;
     const dy = playerY < 0 ? -playerY : playerY > this.officeH ? playerY - this.officeH : 0;
     const distOutside = Math.hypot(dx, dy);
-    const rampPx = 250 * TILE_PX;
+    const rampPx = 250 * HEX_ROW_SPACING;
     return Math.min(1, distOutside / rampPx);
   }
 
@@ -1161,8 +1161,7 @@ export class WorldLayer {
     for (const p of checks) {
       const { tx, ty } = this.pixelToTile(p.x, p.y);
       if (ty < 0) {
-        const otx = Math.floor(p.x / TILE_PX);
-        const oty = Math.floor(p.y / TILE_PX);
+        const { col: otx, row: oty } = pixelToHex(p.x, p.y);
         if (this.officeGrid?.ok(otx, oty)) continue;
         return false;
       }
@@ -1243,7 +1242,7 @@ export class WorldLayer {
   /** Returns the list of chunks needed around the door exit, sorted by distance. */
   getDoorChunkList(): { cx: number; cy: number }[] {
     const doorX = this.officeW / 2;
-    const doorY = this.officeH + TILE_PX;
+    const doorY = this.officeH + HEX_ROW_SPACING;
     const { tx, ty } = this.pixelToTile(doorX, doorY);
     const pcx = Math.floor(tx / CHUNK_SIZE);
     const pcy = Math.floor(ty / CHUNK_SIZE);
@@ -1701,7 +1700,7 @@ export class WorldLayer {
       const doorY = this.officeH;
       const dx = doorX - playerX;
       const dy = doorY - playerY;
-      const distTiles = Math.round(Math.hypot(dx, dy) / TILE_PX);
+      const distTiles = Math.round(Math.hypot(dx, dy) / HEX_ROW_SPACING);
       const { tx, ty } = this.pixelToTile(playerX, playerY);
       const cx = Math.floor(tx / CHUNK_SIZE);
       const cy = Math.floor(ty / CHUNK_SIZE);
@@ -1794,7 +1793,7 @@ export class WorldLayer {
           const { tx, ty } = this.pixelToTile(sx, sy);
           if (this.isCreatureWalkable(tx, ty)) {
             this.beasts.push(new LegendaryBeast(this, chosen, sx, sy));
-            this.hud.showBeastBanner(chosen.name, Math.round(dist / TILE_PX));
+            this.hud.showBeastBanner(chosen.name, Math.round(dist / HEX_ROW_SPACING));
             this.audio.beastRoar();
             this.vfx.shockwave(sx, sy, 0xff4444, 3);
             this.scene.time.delayedCall(4000, () => this.hud.hideBeastBanner());
@@ -1828,7 +1827,7 @@ export class WorldLayer {
     if (outside) {
       this.updateChunks(playerX, playerY, vx, vy);
     } else {
-      this.updateChunks(this.officeW / 2, this.officeH + TILE_PX);
+      this.updateChunks(this.officeW / 2, this.officeH + HEX_ROW_SPACING);
     }
 
     // update ghosts
@@ -1869,7 +1868,7 @@ export class WorldLayer {
 
     // show beast banner when one is near
     if (nearestBeast && nearestBeastDist < 600) {
-      this.hud.showBeastBanner(nearestBeast.name, Math.round(nearestBeastDist / TILE_PX));
+      this.hud.showBeastBanner(nearestBeast.name, Math.round(nearestBeastDist / HEX_ROW_SPACING));
     } else if (this.beasts.length === 0) {
       this.hud.hideBeastBanner();
     }

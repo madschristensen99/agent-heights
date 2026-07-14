@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { AgentInfo } from "../../../shared/types";
 import { YUKI_ID, HERMES_ID } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
+import { hexToPixel, pixelToHex } from "../../../shared/hex";
 
 /** Returns the Phaser texture key for an agent's character sprite. */
 export function agentTextureKey(info: AgentInfo): string {
@@ -22,11 +23,13 @@ export const STATUS_COLORS: Record<AgentInfo["status"], number> = {
 export type Dir = "down" | "left" | "right" | "up" | "ne" | "nw" | "se" | "sw";
 
 export function feetOf(tile: Tile): { x: number; y: number } {
-  return { x: tile.x * TILE_PX + 32, y: tile.y * TILE_PX + 52 };
+  const p = hexToPixel(tile.x, tile.y);
+  return { x: p.x, y: p.y + 20 };
 }
 
 export function tileOf(x: number, y: number): Tile {
-  return { x: Math.floor(x / TILE_PX), y: Math.floor(y / TILE_PX) };
+  const { col, row } = pixelToHex(x, y);
+  return { x: col, y: row };
 }
 
 export function dirFromVelocity(vx: number, vy: number): Dir {
