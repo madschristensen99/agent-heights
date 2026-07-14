@@ -15,6 +15,7 @@ import { rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { TenantManager, HQ2_ROOM_ID } from "./tenant.js";
+import { ScreenshotManager } from "./providers/screenshot.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
@@ -134,6 +135,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
 // ── tenant management ─────────────────────────────────────────────────────
 
 const tenants = new TenantManager(rootDir);
+const screenshots = new ScreenshotManager();
 
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
@@ -1041,20 +1043,25 @@ wss.on("connection", async (ws, req) => {
         }
         case "voice_start": {
           sess.voiceActive = true;
+          console.log(`[voice] voice_start from ${sess.user.id} in room ${sess.roomId}`);
           if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
           const myName = sess.player?.name ?? "Boss";
           // Notify all voice-active peers in the room about the new user
+          let peerCount = 0;
           for (const [pid] of room.players) {
             if (pid === sess.user.id) continue;
             const peerSess = tenants.get(pid);
             if (peerSess && peerSess.voiceActive) {
+              peerCount++;
+              console.log(`[voice] notifying peer ${pid} about ${sess.user.id}`);
               peerSess.broadcast({ type: "voice_peer", userId: sess.user.id, name: myName });
               // Also tell the joining user about the existing peer
               sess.broadcast({ type: "voice_peer", userId: pid, name: peerSess.player?.name ?? "Boss" });
             }
           }
+          console.log(`[voice] voice_start: found ${peerCount} voice-active peers`);
           break;
         }
         case "voice_stop": {
@@ -1079,9 +1086,16 @@ wss.on("connection", async (ws, req) => {
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
           // Verify target is in the same room
-          if (!room.players.has(msg.targetUserId)) break;
+          if (!room.players.has(msg.targetUserId)) {
+            console.warn(`[voice] ${msg.type}: target ${msg.targetUserId} not in room ${sess.roomId}`);
+            break;
+          }
           const targetSess = tenants.get(msg.targetUserId);
-          if (!targetSess || !targetSess.voiceActive) break;
+          if (!targetSess || !targetSess.voiceActive) {
+            console.warn(`[voice] ${msg.type}: target ${msg.targetUserId} not found or not voice-active`);
+            break;
+          }
+          console.log(`[voice] relaying ${msg.type} from ${sess.user.id} to ${msg.targetUserId}`);
           if (msg.type === "voice_offer") {
             targetSess.broadcast({ type: "voice_offer", fromUserId: sess.user.id, sdp: msg.sdp });
           } else if (msg.type === "voice_answer") {
@@ -1095,7 +1109,7 @@ wss.on("connection", async (ws, req) => {
           if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
-          const valid = ["off", "brainrot", "chill"];
+          const valid = ["off", "brainrot", "chill", "trading", "agent"];
           if (!valid.includes(msg.channel)) break;
           room.projectorChannel = msg.channel;
           // Broadcast to all players in the room
@@ -1103,6 +1117,140 @@ wss.on("connection", async (ws, req) => {
             const otherSess = tenants.get(pid);
             if (otherSess) {
               otherSess.broadcast({ type: "projector_state", channel: msg.channel });
+            }
+          }
+          break;
+        }
+        case "screen_share_start": {
+          sess.screenShareActive = true;
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const myName = sess.player?.name ?? "Boss";
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "screen_share_peer", userId: sess.user.id, name: myName });
+            }
+          }
+          break;
+        }
+        case "screen_share_stop": {
+          if (!sess.screenShareActive) break;
+          sess.screenShareActive = false;
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "screen_share_peer_left", userId: sess.user.id });
+            }
+          }
+          break;
+        }
+        case "screen_share_offer":
+        case "screen_share_answer":
+        case "screen_share_ice": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          if (!room.players.has(msg.targetUserId)) break;
+          const targetSess = tenants.get(msg.targetUserId);
+          if (!targetSess) break;
+          if (msg.type === "screen_share_offer") {
+            targetSess.broadcast({ type: "screen_share_offer", fromUserId: sess.user.id, sdp: msg.sdp });
+          } else if (msg.type === "screen_share_answer") {
+            targetSess.broadcast({ type: "screen_share_answer", fromUserId: sess.user.id, sdp: msg.sdp });
+          } else {
+            targetSess.broadcast({ type: "screen_share_ice", fromUserId: sess.user.id, candidate: msg.candidate });
+          }
+          break;
+        }
+        case "agent_view_start": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          // Find the agent's MCP config
+          const ownerSess = room.isPrivate
+            ? tenants.get(room.ownerId)
+            : sess;
+          if (!ownerSess) break;
+          const agent = [...ownerSess.manager["agents"].values()].find(a => a.info.id === msg.agentId);
+          if (!agent) break;
+          const ok = screenshots.startCapture(
+            msg.agentId,
+            agent.info.mcpServers,
+            { id: sess.user.id, broadcast: sess.broadcast },
+          );
+          if (!ok) {
+            sess.broadcast({ type: "toast", text: "This agent doesn't have a browser MCP (Playwright/Chrome DevTools) configured." });
+          }
+          break;
+        }
+        case "agent_view_stop": {
+          screenshots.stopViewer(msg.agentId, sess.user.id);
+          break;
+        }
+        case "agent_broadcast_start": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate
+            ? tenants.get(room.ownerId)
+            : sess;
+          if (!ownerSess) break;
+          const agent = [...ownerSess.manager["agents"].values()].find(a => a.info.id === msg.agentId);
+          if (!agent) break;
+          // Build a broadcast fn that sends to all players in the room
+          const roomBroadcast = (msg2: ServerMsg) => {
+            for (const [pid] of room.players) {
+              const peerSess = tenants.get(pid);
+              if (peerSess) peerSess.broadcast(msg2);
+            }
+          };
+          const ok = screenshots.startCapture(
+            msg.agentId,
+            agent.info.mcpServers,
+            undefined,
+            roomBroadcast,
+          );
+          if (ok) {
+            // Switch projector to agent channel and notify all players
+            room.projectorChannel = "agent";
+            for (const [pid] of room.players) {
+              const peerSess = tenants.get(pid);
+              if (peerSess) {
+                peerSess.broadcast({ type: "projector_state", channel: "agent" });
+                peerSess.broadcast({ type: "agent_broadcast_state", agentId: msg.agentId });
+              }
+            }
+          } else {
+            sess.broadcast({ type: "toast", text: "This agent doesn't have a browser MCP (Playwright/Chrome DevTools) configured." });
+          }
+          break;
+        }
+        case "agent_broadcast_stop": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          // Find and stop whichever agent is broadcasting
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (ownerSess) {
+            for (const agent of ownerSess.manager["agents"].values()) {
+              if (agent.info.status === "thinking" || agent.info.status === "working") {
+                screenshots.stopBroadcast(agent.info.id);
+              }
+            }
+          }
+          room.projectorChannel = "off";
+          for (const [pid] of room.players) {
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "projector_state", channel: "off" });
+              peerSess.broadcast({ type: "agent_broadcast_state", agentId: null });
             }
           }
           break;
@@ -1262,6 +1410,22 @@ wss.on("connection", async (ws, req) => {
             const peerSess = tenants.get(pid);
             if (peerSess && peerSess.voiceActive) {
               peerSess.broadcast({ type: "voice_peer_left", userId: sess.user.id });
+            }
+          }
+        }
+      }
+    }
+    // Clean up screen share state when the last client disconnects
+    if (sess.clients.size === 0 && sess.screenShareActive) {
+      sess.screenShareActive = false;
+      if (sess.roomId) {
+        const room = tenants.getRoom(sess.roomId);
+        if (room) {
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "screen_share_peer_left", userId: sess.user.id });
             }
           }
         }

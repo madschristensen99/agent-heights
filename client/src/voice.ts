@@ -44,6 +44,7 @@ export class VoiceManager {
   private sendFn: (msg: ClientMsg) => void;
   private _active = false;
   private _muted = false;
+  private _lastGainLog = 0;
   private speakingData: Uint8Array<ArrayBuffer> | null = null;
 
   constructor(myUserId: string, sendFn: (msg: ClientMsg) => void) {
@@ -72,6 +73,7 @@ export class VoiceManager {
     }
     this._active = true;
     this._muted = false;
+    console.log("[voice] started, sending voice_start, userId=", this.myUserId);
     this.sendFn({ type: "voice_start" });
   }
 
@@ -101,6 +103,7 @@ export class VoiceManager {
   }
 
   onPeer(userId: string, name: string): void {
+    console.log("[voice] onPeer:", userId, name, "active=", this._active, "self=", userId === this.myUserId);
     if (!this._active || userId === this.myUserId) return;
     if (this.peers.has(userId)) {
       const existing = this.peers.get(userId)!;
@@ -110,7 +113,10 @@ export class VoiceManager {
     this.createPeer(userId, name);
     // Deterministic initiator: lower userId creates the offer
     if (this.myUserId < userId) {
+      console.log("[voice] initiating offer to", userId, "(we are lower)");
       void this.initiateOffer(userId);
+    } else {
+      console.log("[voice] waiting for offer from", userId, "(they are lower)");
     }
   }
 
@@ -130,19 +136,31 @@ export class VoiceManager {
 
     // Handle incoming remote track
     pc.ontrack = (ev) => {
+      console.log("[voice] ontrack from", userId, "streams=", ev.streams.length);
       const remoteStream = ev.streams[0];
+      if (!remoteStream) {
+        console.warn("[voice] no remote stream in ontrack");
+        return;
+      }
       const source = this.audioContext!.createMediaStreamSource(remoteStream);
       source.connect(gainNode);
     };
 
-    // ICE candidates → relay to peer via server
+    // ICE candidates → relay to peer via server (send full candidate init)
     pc.onicecandidate = (ev) => {
       if (ev.candidate) {
-        this.sendFn({ type: "voice_ice", targetUserId: userId, candidate: ev.candidate.candidate });
+        const candidateInit = JSON.stringify({
+          candidate: ev.candidate.candidate,
+          sdpMid: ev.candidate.sdpMid,
+          sdpMLineIndex: ev.candidate.sdpMLineIndex,
+        });
+        console.log("[voice] ICE candidate for", userId, "sdpMid=", ev.candidate.sdpMid, "mLineIdx=", ev.candidate.sdpMLineIndex);
+        this.sendFn({ type: "voice_ice", targetUserId: userId, candidate: candidateInit });
       }
     };
 
     pc.onconnectionstatechange = () => {
+      console.log("[voice] peer", userId, "state:", pc.connectionState);
       if (pc.connectionState === "connected") {
         const peer = this.peers.get(userId);
         if (peer) peer.connected = true;
@@ -163,6 +181,7 @@ export class VoiceManager {
     try {
       const offer = await peer.pc.createOffer();
       await peer.pc.setLocalDescription(offer);
+      console.log("[voice] sending offer to", userId);
       this.sendFn({ type: "voice_offer", targetUserId: userId, sdp: offer.sdp! });
     } catch (err) {
       console.error(`[voice] failed to create offer for ${userId}:`, err);
@@ -170,6 +189,7 @@ export class VoiceManager {
   }
 
   async onOffer(fromUserId: string, sdp: string): Promise<void> {
+    console.log("[voice] onOffer from", fromUserId, "active=", this._active);
     if (!this._active) return;
     let peer = this.peers.get(fromUserId);
     if (!peer) {
@@ -179,6 +199,7 @@ export class VoiceManager {
       await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp }));
       const answer = await peer.pc.createAnswer();
       await peer.pc.setLocalDescription(answer);
+      console.log("[voice] sending answer to", fromUserId);
       this.sendFn({ type: "voice_answer", targetUserId: fromUserId, sdp: answer.sdp! });
     } catch (err) {
       console.error(`[voice] failed to handle offer from ${fromUserId}:`, err);
@@ -186,10 +207,12 @@ export class VoiceManager {
   }
 
   async onAnswer(fromUserId: string, sdp: string): Promise<void> {
+    console.log("[voice] onAnswer from", fromUserId);
     const peer = this.peers.get(fromUserId);
     if (!peer) return;
     try {
       await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp }));
+      console.log("[voice] remote description set for", fromUserId);
     } catch (err) {
       console.error(`[voice] failed to handle answer from ${fromUserId}:`, err);
     }
@@ -197,9 +220,13 @@ export class VoiceManager {
 
   async onIce(fromUserId: string, candidate: string): Promise<void> {
     const peer = this.peers.get(fromUserId);
-    if (!peer) return;
+    if (!peer) {
+      console.warn("[voice] ICE from unknown peer", fromUserId);
+      return;
+    }
     try {
-      await peer.pc.addIceCandidate(new RTCIceCandidate({ candidate }));
+      const init = JSON.parse(candidate) as RTCIceCandidateInit;
+      await peer.pc.addIceCandidate(new RTCIceCandidate(init));
     } catch (err) {
       console.error(`[voice] failed to add ICE candidate from ${fromUserId}:`, err);
     }
@@ -220,10 +247,14 @@ export class VoiceManager {
 
   updateVolumes(myX: number, myY: number, players: Map<string, { x: number; y: number }>, isOutdoor: boolean): void {
     const maxDist = isOutdoor ? MAX_VOICE_DISTANCE_OUTDOOR : MAX_VOICE_DISTANCE_INDOOR;
+    const now = Date.now();
+    const shouldLog = now - this._lastGainLog > 1000;
+    if (shouldLog) this._lastGainLog = now;
     for (const [userId, peer] of this.peers) {
       const p = players.get(userId);
       if (!p) {
         peer.gainNode.gain.value = 0;
+        if (shouldLog) console.log(`[voice] gain for ${userId}: 0 (not in roomPlayers)`);
         continue;
       }
       const dx = myX - p.x;
@@ -231,6 +262,7 @@ export class VoiceManager {
       const dist = Math.sqrt(dx * dx + dy * dy);
       const gain = distanceToGain(dist, maxDist);
       peer.gainNode.gain.value = this._muted ? 0 : gain;
+      if (shouldLog) console.log(`[voice] gain for ${userId}: ${gain.toFixed(3)} (dist=${dist.toFixed(0)}, max=${maxDist}, muted=${this._muted})`);
     }
   }
 

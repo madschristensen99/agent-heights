@@ -13,6 +13,7 @@ import { upgradeWorkshop } from "./workshop";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 import { touchInput, isTouchDevice } from "../touch";
 import { VoiceManager } from "../voice";
+import { ScreenShareManager } from "../screen-share";
 
 const PLAYER_SPEED = 380;
 
@@ -69,9 +70,11 @@ export class OfficeScene extends Phaser.Scene {
   private projectorGfx!: Phaser.GameObjects.Graphics;
   private projectorIframe: HTMLIFrameElement | null = null;
   private projectorVideoId: string | null = null;
-  private static readonly PROJECTOR_CHANNELS: { id: string; label: string; videoId: string }[] = [
+  private projectorEmbedUrl: string | null = null;
+  private static readonly PROJECTOR_CHANNELS: { id: string; label: string; videoId?: string; embedUrl?: string }[] = [
     { id: "brainrot", label: "BRAINROT", videoId: "vTfD20dbxho" },
     { id: "chill",    label: "CHILL",    videoId: "hnsmzzQABBo" },
+    { id: "trading",  label: "TRADING",  embedUrl: "https://s.tradingview.com/widgetembed/?frameElementId=tv-projector&symbol=BTCUSD&interval=60&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=[]&hideideas=1&theme=dark&style=1&timezone=Etc/UTC" },
   ];
 
   // --- new office interactables ---
@@ -194,6 +197,18 @@ export class OfficeScene extends Phaser.Scene {
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
   /** Voice chat manager — WebRTC proximity voice. */
   private voice: VoiceManager | null = null;
+  /** Screen share manager — WebRTC screen sharing on projector. */
+  private screenShare: ScreenShareManager | null = null;
+  /** Video element for displaying remote screen share on projector. */
+  private projectorVideoEl: HTMLVideoElement | null = null;
+  /** Agent currently broadcasting to the projector (null = none). */
+  private agentBroadcastAgentId: string | null = null;
+  /** Agent currently being viewed in the modal (null = modal closed). */
+  private agentViewAgentId: string | null = null;
+  /** Projector texture key for agent frames. */
+  private projectorAgentTextureKey = "projector-agent-frame";
+  /** Phaser image object for agent frames on projector. */
+  private projectorAgentImage: Phaser.GameObjects.Image | null = null;
   /** Speaking indicator icons above remote players. */
   private speakingIcons = new Map<string, Phaser.GameObjects.Text>();
   /** Tracks the last roomId the scene rendered — used to detect room changes. */
@@ -225,6 +240,42 @@ export class OfficeScene extends Phaser.Scene {
     }
     // Clean up projector iframe on scene shutdown/restart
     this.events.once("shutdown", () => this.destroyProjectorVideo());
+
+    // ── Agent screenshot viewing + projector broadcast ────────────────
+    this.store.onAgentFrame((agentId, frame) => {
+      // If this is the agent being viewed in the modal, update the modal
+      if (agentId === this.agentViewAgentId) {
+        const content = document.getElementById("agent-view-content");
+        if (content) {
+          content.innerHTML = `<img src="data:image/jpeg;base64,${frame}" style="width: 100%; height: 100%; object-fit: contain;" />`;
+        }
+      }
+      // If this agent is broadcasting, render on projector
+      if (agentId === this.agentBroadcastAgentId) {
+        this.updateProjectorAgentFrame(frame);
+      }
+    });
+    this.store.onAgentBroadcastState((agentId) => {
+      this.agentBroadcastAgentId = agentId;
+      if (!agentId) {
+        this.hideProjectorAgentFrame();
+      }
+      // Update modal broadcast button if open
+      const btn = document.getElementById("agent-view-broadcast");
+      if (btn) {
+        if (agentId && agentId === this.agentViewAgentId) {
+          btn.textContent = "Stop Broadcast";
+          (btn as HTMLButtonElement).style.background = "#6a2a2a";
+        } else {
+          btn.textContent = "Broadcast to Projector";
+          (btn as HTMLButtonElement).style.background = "#2a4a6a";
+        }
+      }
+    });
+    this.events.once("shutdown", () => {
+      this.closeAgentViewModal();
+      this.hideProjectorAgentFrame();
+    });
     // HQ2 and org rooms use the agenthq (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
     // players start. This prevents a brief flash of the wrong room layout.
@@ -477,6 +528,8 @@ export class OfficeScene extends Phaser.Scene {
               const spr = this.add
                 .sprite(mx, my, MONITOR_TEX, "0")
                 .setDepth(10 + (obj.y ?? 0) - 10);
+              spr.setInteractive({ useHandCursor: true });
+              spr.on("pointerdown", () => this.openAgentViewModal(idx));
               this.monitors[idx] = spr;
             }
           }
@@ -2777,21 +2830,35 @@ export class OfficeScene extends Phaser.Scene {
     const sw = 480;
     const sh = 288;
 
-    // Find the video ID for the current channel
+    // Find the config for the current channel
     const ch = OfficeScene.PROJECTOR_CHANNELS.find(c => c.id === channel);
     const videoId = ch?.videoId ?? null;
+    const embedUrl = ch?.embedUrl ?? null;
 
-    // Channel is off or unknown — stop video and hide iframe
-    if (!videoId) {
+    // Agent channel — hide YouTube iframe, agent frames drawn on canvas
+    if (channel === "agent") {
       if (this.projectorIframe) {
         this.projectorIframe.src = "about:blank";
         this.projectorIframe.style.display = "none";
       }
       this.projectorVideoId = null;
+      this.projectorEmbedUrl = null;
       return;
     }
 
-    // Create iframe if it doesn't exist or video changed
+    // Channel is off or unknown — stop video and hide iframe
+    if (!videoId && !embedUrl) {
+      if (this.projectorIframe) {
+        this.projectorIframe.src = "about:blank";
+        this.projectorIframe.style.display = "none";
+      }
+      this.projectorVideoId = null;
+      this.projectorEmbedUrl = null;
+      this.hideProjectorAgentFrame();
+      return;
+    }
+
+    // Create iframe if it doesn't exist
     if (!this.projectorIframe) {
       this.projectorIframe = document.createElement("iframe");
       this.projectorIframe.style.cssText = `
@@ -2807,13 +2874,25 @@ export class OfficeScene extends Phaser.Scene {
       document.body.appendChild(this.projectorIframe);
     }
 
-    // Video changed — update src with autoplay + loop + mute + JS API
-    if (this.projectorVideoId !== videoId) {
-      this.projectorVideoId = videoId;
-      const muteParam = this.projectorMuted ? 1 : 0;
-      this.projectorIframe.src =
-        `https://www.youtube.com/embed/${videoId}` +
-        `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=${muteParam}&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&enablejsapi=1`;
+    // YouTube video channel
+    if (videoId) {
+      if (this.projectorVideoId !== videoId) {
+        this.projectorVideoId = videoId;
+        this.projectorEmbedUrl = null;
+        this.hideProjectorAgentFrame();
+        const muteParam = this.projectorMuted ? 1 : 0;
+        this.projectorIframe.src =
+          `https://www.youtube.com/embed/${videoId}` +
+          `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=${muteParam}&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&enablejsapi=1`;
+      }
+    } else if (embedUrl) {
+      // TradingView or other embed URL
+      if (this.projectorEmbedUrl !== embedUrl) {
+        this.projectorEmbedUrl = embedUrl;
+        this.projectorVideoId = null;
+        this.hideProjectorAgentFrame();
+        this.projectorIframe.src = embedUrl;
+      }
     }
 
     // Convert world position to screen position using canvas bounding rect
@@ -4004,6 +4083,134 @@ export class OfficeScene extends Phaser.Scene {
 
   private _myUserId: string | null = null;
   private net: import("../net").Net | null = null;
+
+  // ── Agent screen viewing + projector broadcast ──────────────────────
+
+  /** Open a modal showing a live screenshot feed from an agent's browser. */
+  private openAgentViewModal(deskIndex: number): void {
+    const agent = [...this.store.agents.values()].find(a => a.deskIndex === deskIndex);
+    if (!agent) return;
+    this.agentViewAgentId = agent.id;
+
+    // Request screenshot stream from server
+    if (this.net) {
+      this.net.send({ type: "agent_view_start", agentId: agent.id });
+    }
+
+    // Build modal DOM
+    const existing = document.getElementById("agent-view-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "agent-view-modal";
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.8); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+    `;
+    modal.innerHTML = `
+      <div style="background: #1a1a2e; border-radius: 12px; padding: 16px; max-width: 90vw; max-height: 90vh; position: relative;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div>
+            <span style="color: ${agent.accent}; font-weight: bold; font-size: 1.1rem;">${agent.name}</span>
+            <span style="color: #888; font-size: 0.8rem; margin-left: 8px;">${agent.status.toUpperCase()}</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="agent-view-broadcast" style="padding: 4px 12px; border: none; border-radius: 6px; background: #2a4a6a; color: #e0e0e0; font-size: 0.8rem; cursor: pointer;">Broadcast to Projector</button>
+            <button id="agent-view-close" style="padding: 4px 12px; border: none; border-radius: 6px; background: #333; color: #e0e0e0; font-size: 0.8rem; cursor: pointer;">Close</button>
+          </div>
+        </div>
+        <div id="agent-view-content" style="width: 800px; height: 500px; background: #0a0a12; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+          <div style="color: #555; font-size: 0.9rem;">Waiting for agent screen...</div>
+        </div>
+        ${agent.task ? `<div style="color: #888; font-size: 0.75rem; margin-top: 8px;">Task: ${agent.task}</div>` : ""}
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Wire close button
+    document.getElementById("agent-view-close")!.addEventListener("click", () => {
+      this.closeAgentViewModal();
+    });
+
+    // Wire broadcast button
+    const broadcastBtn = document.getElementById("agent-view-broadcast")!;
+    broadcastBtn.addEventListener("click", () => {
+      if (this.agentBroadcastAgentId === agent.id) {
+        // Stop broadcasting
+        if (this.net) this.net.send({ type: "agent_broadcast_stop" });
+        broadcastBtn.textContent = "Broadcast to Projector";
+        broadcastBtn.style.background = "#2a4a6a";
+      } else {
+        // Start broadcasting
+        if (this.net) this.net.send({ type: "agent_broadcast_start", agentId: agent.id });
+        broadcastBtn.textContent = "Stop Broadcast";
+        broadcastBtn.style.background = "#6a2a2a";
+      }
+    });
+
+    // Update broadcast button state if already broadcasting
+    if (this.agentBroadcastAgentId === agent.id) {
+      broadcastBtn.textContent = "Stop Broadcast";
+      broadcastBtn.style.background = "#6a2a2a";
+    }
+
+    // Click outside to close
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) this.closeAgentViewModal();
+    });
+  }
+
+  /** Close the agent view modal and stop the screenshot stream. */
+  private closeAgentViewModal(): void {
+    if (this.agentViewAgentId && this.net) {
+      this.net.send({ type: "agent_view_stop", agentId: this.agentViewAgentId });
+    }
+    this.agentViewAgentId = null;
+    document.getElementById("agent-view-modal")?.remove();
+  }
+
+  /** Render an agent screenshot frame onto the projector canvas. */
+  private updateProjectorAgentFrame(frame: string): void {
+    // Hide YouTube iframe if visible
+    if (this.projectorIframe) this.projectorIframe.style.display = "none";
+
+    const img = new Image();
+    img.onload = () => {
+      // Create or update texture
+      if (!this.textures.exists(this.projectorAgentTextureKey)) {
+        const tex = this.textures.createCanvas(this.projectorAgentTextureKey, 480, 288);
+        if (!tex) return;
+      }
+      const tex = this.textures.get(this.projectorAgentTextureKey) as Phaser.Textures.CanvasTexture;
+      const canvas = tex.getSourceImage() as HTMLCanvasElement;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, 480, 288);
+      // Draw screenshot scaled to projector size
+      const scale = Math.min(480 / img.width, 288 / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      const dx = (480 - dw) / 2;
+      const dy = (288 - dh) / 2;
+      ctx.drawImage(img, dx, dy, dw, dh);
+      tex.refresh();
+
+      // Draw or update the image on the projector
+      if (!this.projectorAgentImage) {
+        const px = this.projectorTile.x * TILE_PX + 32;
+        const py = this.projectorTile.y * TILE_PX - 100;
+        this.projectorAgentImage = this.add.image(px, py, this.projectorAgentTextureKey).setDepth(3);
+      }
+      this.projectorAgentImage.setVisible(true);
+    };
+    img.src = `data:image/jpeg;base64,${frame}`;
+  }
+
+  /** Hide the agent frame on the projector. */
+  private hideProjectorAgentFrame(): void {
+    if (this.projectorAgentImage) this.projectorAgentImage.setVisible(false);
+  }
 }
 
 export { tileOf };

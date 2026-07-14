@@ -500,7 +500,16 @@ export type ClientMsg =
   | { type: "voice_answer"; targetUserId: string; sdp: string }
   | { type: "voice_ice"; targetUserId: string; candidate: string }
   | { type: "voice_stop" }
-  | { type: "projector_set_channel"; channel: string };
+  | { type: "projector_set_channel"; channel: string }
+  | { type: "screen_share_start" }
+  | { type: "screen_share_stop" }
+  | { type: "screen_share_offer"; targetUserId: string; sdp: string }
+  | { type: "screen_share_answer"; targetUserId: string; sdp: string }
+  | { type: "screen_share_ice"; targetUserId: string; candidate: string }
+  | { type: "agent_view_start"; agentId: string }
+  | { type: "agent_view_stop"; agentId: string }
+  | { type: "agent_broadcast_start"; agentId: string }
+  | { type: "agent_broadcast_stop" };
 
 export type ServerMsg =
   | {
@@ -558,7 +567,14 @@ export type ServerMsg =
   | { type: "voice_answer"; fromUserId: string; sdp: string }
   | { type: "voice_ice"; fromUserId: string; candidate: string }
   | { type: "voice_peer_left"; userId: string }
-  | { type: "projector_state"; channel: string };
+  | { type: "projector_state"; channel: string }
+  | { type: "screen_share_peer"; userId: string; name: string }
+  | { type: "screen_share_offer"; fromUserId: string; sdp: string }
+  | { type: "screen_share_answer"; fromUserId: string; sdp: string }
+  | { type: "screen_share_ice"; fromUserId: string; candidate: string }
+  | { type: "screen_share_peer_left"; userId: string }
+  | { type: "agent_frame"; agentId: string; frame: string }
+  | { type: "agent_broadcast_state"; agentId: string | null };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

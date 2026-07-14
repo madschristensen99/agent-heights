@@ -106,6 +106,13 @@ export class Store {
   private voiceAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
   private voiceIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
   private voicePeerLeftListeners = new Set<(userId: string) => void>();
+  private screenSharePeerListeners = new Set<(userId: string, name: string) => void>();
+  private screenShareOfferListeners = new Set<(fromUserId: string, sdp: string) => void>();
+  private screenShareAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
+  private screenShareIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
+  private screenSharePeerLeftListeners = new Set<(userId: string) => void>();
+  private agentFrameListeners = new Set<(agentId: string, frame: string) => void>();
+  private agentBroadcastStateListeners = new Set<(agentId: string | null) => void>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -195,6 +202,34 @@ export class Store {
 
   onVoicePeerLeft(fn: (userId: string) => void): void {
     this.voicePeerLeftListeners.add(fn);
+  }
+
+  onScreenSharePeer(fn: (userId: string, name: string) => void): void {
+    this.screenSharePeerListeners.add(fn);
+  }
+
+  onScreenShareOffer(fn: (fromUserId: string, sdp: string) => void): void {
+    this.screenShareOfferListeners.add(fn);
+  }
+
+  onScreenShareAnswer(fn: (fromUserId: string, sdp: string) => void): void {
+    this.screenShareAnswerListeners.add(fn);
+  }
+
+  onScreenShareIce(fn: (fromUserId: string, candidate: string) => void): void {
+    this.screenShareIceListeners.add(fn);
+  }
+
+  onScreenSharePeerLeft(fn: (userId: string) => void): void {
+    this.screenSharePeerLeftListeners.add(fn);
+  }
+
+  onAgentFrame(fn: (agentId: string, frame: string) => void): void {
+    this.agentFrameListeners.add(fn);
+  }
+
+  onAgentBroadcastState(fn: (agentId: string | null) => void): void {
+    this.agentBroadcastStateListeners.add(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -694,6 +729,34 @@ export class Store {
       }
       case "voice_peer_left": {
         for (const fn of this.voicePeerLeftListeners) fn(msg.userId);
+        return;
+      }
+      case "screen_share_peer": {
+        for (const fn of this.screenSharePeerListeners) fn(msg.userId, msg.name);
+        return;
+      }
+      case "screen_share_offer": {
+        for (const fn of this.screenShareOfferListeners) fn(msg.fromUserId, msg.sdp);
+        return;
+      }
+      case "screen_share_answer": {
+        for (const fn of this.screenShareAnswerListeners) fn(msg.fromUserId, msg.sdp);
+        return;
+      }
+      case "screen_share_ice": {
+        for (const fn of this.screenShareIceListeners) fn(msg.fromUserId, msg.candidate);
+        return;
+      }
+      case "screen_share_peer_left": {
+        for (const fn of this.screenSharePeerLeftListeners) fn(msg.userId);
+        return;
+      }
+      case "agent_frame": {
+        for (const fn of this.agentFrameListeners) fn(msg.agentId, msg.frame);
+        return;
+      }
+      case "agent_broadcast_state": {
+        for (const fn of this.agentBroadcastStateListeners) fn(msg.agentId);
         return;
       }
     }
