@@ -591,12 +591,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     }
   };
 
-  // ===== BAKED SHADOW (soft ellipse at feet) =====
-  const drawBakedShadow = () => {
-    s.fillCircleAlpha(ox + 32, oy + 82, 12, "#000000", 0.12);
-    s.fillCircleAlpha(ox + 32, oy + 82, 8, "#000000", 0.08);
-  };
-
   // ===== ROUNDED CHIBI (64x96) — polished, dynamic outlines =====
 
   if (d === "down") {
@@ -925,9 +919,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.rect(lx(36), ly(77), 5, 1, shoeSole);
     }
   }
-
-  // Baked shadow at feet (before mirror so it's symmetric)
-  drawBakedShadow();
 
   if (mirror) s.flipH(ox, oy, CW, CH);
 }
