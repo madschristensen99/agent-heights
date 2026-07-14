@@ -77,8 +77,17 @@ export class OfficeScene extends Phaser.Scene {
   // --- new office interactables ---
   private fridgeTile: Tile = { x: 26, y: 2 };
   private coolerTile: Tile = { x: 28, y: 4 };
-  private clockTile: Tile = { x: 6, y: 1 };
+  private clockTile: Tile = { x: 1, y: 3 };
   private vendingTile: Tile | null = null;
+
+  // --- projector control panel + speaker (where clock used to be) ---
+  private projectorControlTile: Tile = { x: 6, y: 1 };
+  private projectorSpeakerTile: Tile = { x: 7, y: 1 };
+  private projectorControlHint!: Phaser.GameObjects.Text;
+  private projectorSpeakerHint!: Phaser.GameObjects.Text;
+  private projectorControlGfx!: Phaser.GameObjects.Graphics;
+  private projectorSpeakerGfx!: Phaser.GameObjects.Graphics;
+  private projectorMuted = true;
   private sofaTile: Tile | null = null;
   private filingTiles: Tile[] = [];
   private plantTiles: Tile[] = [];
@@ -597,6 +606,8 @@ export class OfficeScene extends Phaser.Scene {
           this.fridgeHint = this.makeHint();
           this.coolerHint = this.makeHint();
           this.clockHint = this.makeHint();
+          this.projectorControlHint = this.makeHint();
+          this.projectorSpeakerHint = this.makeHint();
           this.vendingHint = this.makeHint();
           this.sofaHint = this.makeHint();
           this.filingHint = this.makeHint();
@@ -1134,7 +1145,9 @@ export class OfficeScene extends Phaser.Scene {
         { x: 16, y: 18 }, { x: 27, y: 11 }, { x: 6, y: 17 },
       ];
     } else {
-      this.clockTile = { x: 6, y: 1 };
+      this.clockTile = { x: 1, y: 3 };
+      this.projectorControlTile = { x: 6, y: 1 };
+      this.projectorSpeakerTile = { x: 7, y: 1 };
       this.vendingTile = null;
       this.sofaTile = { x: 23, y: 13 };
       this.hallOfFameTile = { x: 1, y: 5 };
@@ -1197,8 +1210,32 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Try interacting with any new office object. Returns true if an interaction fired. */
   private tryOfficeInteract(time: number): boolean {
-    // Projector screen — cycle channels
-    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 120 };
+    // Projector control panel — cycle channels
+    const ctrlPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, ctrlPx.x, ctrlPx.y) < 160) {
+      const net = this.game.registry.get("net") as import("../net").Net;
+      const channels = OfficeScene.PROJECTOR_CHANNELS;
+      const curIdx = channels.findIndex(c => c.id === this.store.projectorChannel);
+      const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1;
+      const next = nextIdx === -1 ? "off" : channels[nextIdx].id;
+      net.send({ type: "projector_set_channel", channel: next });
+      this.world?.audio.uiClick();
+      return true;
+    }
+
+    // Projector speaker — toggle mute
+    const spkPx = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, spkPx.x, spkPx.y) < 160) {
+      this.projectorMuted = !this.projectorMuted;
+      // Force iframe reload to apply mute change
+      this.projectorVideoId = null;
+      this.store.toast(this.projectorMuted ? "Projector muted" : "Projector unmuted");
+      this.world?.audio.uiClick();
+      return true;
+    }
+
+    // Projector screen — cycle channels (also possible directly at screen)
+    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, projPx.x, projPx.y) < 200) {
       const net = this.game.registry.get("net") as import("../net").Net;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
@@ -1660,8 +1697,37 @@ export class OfficeScene extends Phaser.Scene {
       this.redButtonHint.setVisible(false);
     }
 
+    // Projector control panel
+    const ctrlHintPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
+    const ctrlDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, ctrlHintPx.x, ctrlHintPx.y);
+    if (ctrlDist < 160) {
+      const ch = this.store.projectorChannel;
+      const channels = OfficeScene.PROJECTOR_CHANNELS;
+      const curIdx = channels.findIndex(c => c.id === ch);
+      const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1;
+      const nextLabel = nextIdx === -1 ? "OFF" : channels[nextIdx].label;
+      this.projectorControlHint
+        .setPosition(ctrlHintPx.x, ctrlHintPx.y + 48)
+        .setText(hintLabel(ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`))
+        .setVisible(true);
+    } else {
+      this.projectorControlHint.setVisible(false);
+    }
+
+    // Projector speaker (mute/unmute)
+    const spkHintPx = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
+    const spkDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, spkHintPx.x, spkHintPx.y);
+    if (spkDist < 160) {
+      this.projectorSpeakerHint
+        .setPosition(spkHintPx.x, spkHintPx.y + 48)
+        .setText(hintLabel(this.projectorMuted ? "E: UNMUTE" : "E: MUTE"))
+        .setVisible(true);
+    } else {
+      this.projectorSpeakerHint.setVisible(false);
+    }
+
     // Projector screen
-    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 120 };
+    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
     const projDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, projHintPx.x, projHintPx.y);
     if (projDist < 200) {
       const ch = this.store.projectorChannel;
@@ -2552,7 +2618,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Draw the projector screen frame on the top-left wall. */
   private drawProjector(): void {
     const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX - 120;
+    const py = this.projectorTile.y * TILE_PX - 100;
     const sw = 480;
     const sh = 288;
 
@@ -2566,6 +2632,78 @@ export class OfficeScene extends Phaser.Scene {
     // screen surface (dark when off)
     this.projectorGfx.fillStyle(0x0a0a12, 1);
     this.projectorGfx.fillRoundedRect(px - sw / 2, py - sh / 2, sw, sh, 3);
+
+    // Draw control panel and speaker next to projector
+    this.drawProjectorControlPanel();
+    this.drawProjectorSpeaker();
+  }
+
+  /** Draw a wall-mounted TV control panel for channel selection. */
+  private drawProjectorControlPanel(): void {
+    const px = this.projectorControlTile.x * TILE_PX + 32;
+    const py = this.projectorControlTile.y * TILE_PX + 32;
+    this.projectorControlGfx = this.add.graphics().setDepth(3);
+
+    // mounting plate
+    this.projectorControlGfx.fillStyle(0x1a2838, 1);
+    this.projectorControlGfx.fillRoundedRect(px - 20, py - 16, 40, 32, 4);
+    this.projectorControlGfx.fillStyle(0x2a3848, 1);
+    this.projectorControlGfx.fillRoundedRect(px - 18, py - 14, 36, 28, 3);
+
+    // small screen display
+    this.projectorControlGfx.fillStyle(0x0a0a12, 1);
+    this.projectorControlGfx.fillRoundedRect(px - 14, py - 10, 28, 12, 2);
+    // screen text indicator (channel label drawn as colored dot)
+    this.projectorControlGfx.fillStyle(0x4acb4a, 1);
+    this.projectorControlGfx.fillCircle(px - 8, py - 4, 2);
+
+    // channel buttons (3 small buttons)
+    const btnColors = [0x666666, 0xe74c3c, 0x3498db];
+    for (let i = 0; i < 3; i++) {
+      const bx = px - 12 + i * 12;
+      this.projectorControlGfx.fillStyle(btnColors[i], 1);
+      this.projectorControlGfx.fillRoundedRect(bx, py + 4, 8, 6, 1);
+    }
+
+    // screws
+    this.projectorControlGfx.fillStyle(0x555555, 1);
+    this.projectorControlGfx.fillCircle(px - 15, py - 12, 1.5);
+    this.projectorControlGfx.fillCircle(px + 15, py - 12, 1.5);
+    this.projectorControlGfx.fillCircle(px - 15, py + 12, 1.5);
+    this.projectorControlGfx.fillCircle(px + 15, py + 12, 1.5);
+  }
+
+  /** Draw a wall-mounted speaker for mute/unmute control. */
+  private drawProjectorSpeaker(): void {
+    const px = this.projectorSpeakerTile.x * TILE_PX + 32;
+    const py = this.projectorSpeakerTile.y * TILE_PX + 32;
+    this.projectorSpeakerGfx = this.add.graphics().setDepth(3);
+
+    // mounting plate
+    this.projectorSpeakerGfx.fillStyle(0x1a2838, 1);
+    this.projectorSpeakerGfx.fillRoundedRect(px - 16, py - 16, 32, 32, 4);
+    this.projectorSpeakerGfx.fillStyle(0x2a3848, 1);
+    this.projectorSpeakerGfx.fillRoundedRect(px - 14, py - 14, 28, 28, 3);
+
+    // speaker cone (outer ring)
+    this.projectorSpeakerGfx.fillStyle(0x0a0a12, 1);
+    this.projectorSpeakerGfx.fillCircle(px, py, 10);
+    // speaker cone (inner)
+    this.projectorSpeakerGfx.fillStyle(0x1a1a2a, 1);
+    this.projectorSpeakerGfx.fillCircle(px, py, 8);
+    // speaker dust cap
+    this.projectorSpeakerGfx.fillStyle(0x2a2a3a, 1);
+    this.projectorSpeakerGfx.fillCircle(px, py, 4);
+    // highlight
+    this.projectorSpeakerGfx.fillStyle(0x3a3a4a, 0.5);
+    this.projectorSpeakerGfx.fillCircle(px - 1, py - 1, 2);
+
+    // screws
+    this.projectorSpeakerGfx.fillStyle(0x555555, 1);
+    this.projectorSpeakerGfx.fillCircle(px - 11, py - 11, 1.5);
+    this.projectorSpeakerGfx.fillCircle(px + 11, py - 11, 1.5);
+    this.projectorSpeakerGfx.fillCircle(px - 11, py + 11, 1.5);
+    this.projectorSpeakerGfx.fillCircle(px + 11, py + 11, 1.5);
   }
 
   /** Update the YouTube IFrame overlay to match the projector screen position. */
@@ -2573,7 +2711,7 @@ export class OfficeScene extends Phaser.Scene {
     const channel = this.store.projectorChannel;
     const cam = this.cameras.main;
     const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX - 120;
+    const py = this.projectorTile.y * TILE_PX - 100;
     const sw = 480;
     const sh = 288;
 
@@ -2607,9 +2745,10 @@ export class OfficeScene extends Phaser.Scene {
     // Video changed — update src with autoplay + loop + mute
     if (this.projectorVideoId !== videoId) {
       this.projectorVideoId = videoId;
+      const muteParam = this.projectorMuted ? 1 : 0;
       this.projectorIframe.src =
         `https://www.youtube.com/embed/${videoId}` +
-        `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=1&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3`;
+        `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=${muteParam}&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3`;
     }
 
     // Convert world position to screen position using canvas bounding rect
@@ -3507,6 +3646,8 @@ export class OfficeScene extends Phaser.Scene {
       this.redButtonHint.setVisible(false);
       this.wardrobeHint.setVisible(false);
       this.projectorHint.setVisible(false);
+      this.projectorControlHint.setVisible(false);
+      this.projectorSpeakerHint.setVisible(false);
     }
 
     // mailbox: new mail arrives on timer
