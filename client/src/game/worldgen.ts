@@ -1,4 +1,5 @@
 import { CHUNK_SIZE, TILE } from "../../../shared/types";
+import { hexDistance, hexNeighbors } from "../../../shared/hex";
 
 /**
  * Seeded PRNG (mulberry32) — deterministic per (seed, chunkX, chunkY).
@@ -33,9 +34,9 @@ function chunkSeed(worldSeed: number, cx: number, cy: number): number {
  */
 export type Biome = "meadow" | "forest" | "ruins" | "wasteland" | "void" | "infernal";
 
-/** Hostility level 0–5+, scales with distance from origin. Never hits a wall — always playable. */
+/** Hostility level 0–5+, scales with hex distance from origin. Never hits a wall — always playable. */
 export function hostilityAt(cx: number, cy: number): number {
-  const dist = Math.hypot(cx, cy);
+  const dist = hexDistance({ col: cx, row: cy }, { col: 0, row: 0 });
   if (dist < 2) return 0; // meadow — safe zone near office
   if (dist < 4) return 1; // forest
   if (dist < 7) return 2; // ruins
@@ -124,7 +125,7 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   }
 
   // brick fortresses — enterable structures far from the office (~150+ tiles)
-  const chunkDist = Math.hypot(cx, cy);
+  const chunkDist = hexDistance({ col: cx, row: cy }, { col: 0, row: 0 });
   if (chunkDist >= 5 && rng() < 0.15) {
     placeBrickTower(tiles, biome, rng);
   }
@@ -140,7 +141,7 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   }
 
   // tennis courts — placed 50-75 tiles from the office (chunk dist ~1.5-2.5)
-  const tennisDist = Math.hypot(cx, cy);
+  const tennisDist = hexDistance({ col: cx, row: cy }, { col: 0, row: 0 });
   if ((biome === "meadow" || biome === "forest") && tennisDist >= 1.5 && tennisDist <= 2.5 && rng() < 0.55) {
     placeTennisCourt(tiles, rng);
   }
@@ -168,7 +169,7 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   // paths radiate outward from origin in near biomes
   if (hostility <= 1 && rng() < 0.3) {
     const len = 8 + Math.floor(rng() * 16);
-    const dir = Math.floor(rng() * 4);
+    const dir = Math.floor(rng() * 6);
     carvePath(tiles, CHUNK_SIZE / 2, CHUNK_SIZE / 2, dir, len);
   }
 
@@ -307,23 +308,24 @@ function placeLeprechaun(tiles: number[], rng: () => number): void {
 
   const tree = bigTrees[Math.floor(rng() * bigTrees.length)];
 
-  // Find a walkable tile adjacent to the big tree
-  const offsets = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
-  for (const [dx, dy] of offsets) {
-    const lx = tree.x + dx;
-    const ly = tree.y + dy;
+  // Find a walkable hex adjacent to the big tree
+  for (const n of hexNeighbors(tree.x, tree.y)) {
+    const lx = n.col;
+    const ly = n.row;
     if (lx >= 0 && lx < CHUNK_SIZE && ly >= 0 && ly < CHUNK_SIZE) {
       const t = tiles[idx(lx, ly)];
       if (t === TILE.GRASS || t === TILE.PATH || t === TILE.SAND || t === TILE.FLOWER) {
         tiles[idx(lx, ly)] = TILE.LEPRECHAUN;
         // Place an axe tile next to the leprechaun (the axe they offer)
-        const ax = lx + (dx === 0 ? 1 : 0);
-        const ay = ly + (dy === 0 ? 1 : 0);
-        if (ax >= 0 && ax < CHUNK_SIZE && ay >= 0 && ay < CHUNK_SIZE) {
-          const at = tiles[idx(ax, ay)];
-          if (at === TILE.GRASS || at === TILE.PATH || at === TILE.SAND || at === TILE.FLOWER) {
-            tiles[idx(ax, ay)] = TILE.AXE;
-          }
+        const axeNeighbors = hexNeighbors(lx, ly);
+        const axeN = axeNeighbors.find(an => {
+          const ax = an.col, ay = an.row;
+          return ax >= 0 && ax < CHUNK_SIZE && ay >= 0 && ay < CHUNK_SIZE &&
+            (tiles[idx(ax, ay)] === TILE.GRASS || tiles[idx(ax, ay)] === TILE.PATH ||
+             tiles[idx(ax, ay)] === TILE.SAND || tiles[idx(ax, ay)] === TILE.FLOWER);
+        });
+        if (axeN) {
+          tiles[idx(axeN.col, axeN.row)] = TILE.AXE;
         }
         return;
       }
@@ -759,6 +761,9 @@ function placeTennisCourt(tiles: number[], rng: () => number): void {
 }
 
 function carvePath(tiles: number[], startX: number, startY: number, dir: number, len: number): void {
+  // Hex directions: 0=n, 1=s, 2=ne, 3=nw, 4=se, 5=sw
+  const dirNames = ["n", "s", "ne", "nw", "se", "sw"] as const;
+  const targetDir = dirNames[dir % 6];
   let x = Math.floor(startX);
   let y = Math.floor(startY);
   for (let i = 0; i < len; i++) {
@@ -767,10 +772,10 @@ function carvePath(tiles: number[], startX: number, startY: number, dir: number,
         tiles[idx(x, y)] = TILE.PATH;
       }
     }
-    if (dir === 0) y--;
-    else if (dir === 1) x++;
-    else if (dir === 2) y++;
-    else x--;
+    const next = hexNeighbors(x, y).find(n => n.dir === targetDir);
+    if (!next) break;
+    x = next.col;
+    y = next.row;
   }
 }
 
