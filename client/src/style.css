@@ -2411,3 +2411,135 @@ kbd {
     height: 48px;
   }
 }
+
+/* ─── Agent Schedules ─── */
+.d-schedules {
+  margin: 0.5rem 0;
+}
+
+.sched-header {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--panel-edge-soft);
+}
+
+.sched-item {
+  padding: 0.5rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+}
+
+.sched-item.disabled {
+  opacity: 0.5;
+}
+
+.sched-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.sched-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.sched-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.sched-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sched-item-actions {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.sched-item-actions .btn {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.65rem;
+  min-width: auto;
+}
+
+.sched-task {
+  font-size: 0.72rem;
+  color: var(--dim);
+  margin: 0.25rem 0;
+  line-height: 1.3;
+}
+
+.sched-meta {
+  font-size: 0.65rem;
+  color: var(--dim);
+  opacity: 0.8;
+}
+
+.sched-cron {
+  font-family: var(--font-mono);
+  color: var(--accent-dark);
+}
+
+.sched-form {
+  padding: 0.5rem;
+  margin-bottom: 0.4rem;
+  border: 1px dashed var(--panel-edge);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+}
+
+.sched-input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--panel);
+  margin-bottom: 0.35rem;
+  box-sizing: border-box;
+}
+
+.sched-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sched-form-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.sched-form-row select,
+.sched-form-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sched-form-row .btn {
+  flex-shrink: 0;
+}
+
+.sched-add {
+  width: 100%;
+  font-size: 0.7rem;
+  padding: 0.35rem;
+  border-style: dashed;
+}

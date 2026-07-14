@@ -5,6 +5,7 @@ import type {
   AgentInfo,
   AgentRole,
   AgentStatus,
+  AgentSchedule,
   CardStatus,
   CharAppearance,
   FiredAgent,
@@ -48,6 +49,80 @@ function clearAllMemory(agentId: string): void {
 const MAX_LOG = 500;
 const DONE_LINGER_MS = 6000;
 const TASK_IDLE_TIMEOUT_MS = 90 * 1000; // Abort if no events arrive for 90s (model hung or rate-limited)
+const SCHEDULER_TICK_MS = 30 * 1000;
+const MIN_SCHEDULE_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Parse a 5-field cron expression and return the next run time after `from`.
+ *  Supports: * / N ranges , and specific numbers. Does NOT support L, W, #, or names. */
+function nextCronRun(cron: string, from: Date = new Date()): number {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return Date.now() + 60_000;
+  const [minF, hourF, domF, monthF, dowF] = parts;
+
+  const parseField = (field: string, min: number, max: number): number[] => {
+    if (field === "*") return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+    const result = new Set<number>();
+    for (const part of field.split(",")) {
+      if (part.includes("/")) {
+        const [range, stepStr] = part.split("/");
+        const step = parseInt(stepStr, 10);
+        if (isNaN(step) || step <= 0) continue;
+        let lo = min, hi = max;
+        if (range !== "*") {
+          const [a, b] = range.split("-").map((n) => parseInt(n, 10));
+          if (!isNaN(a)) lo = a;
+          if (!isNaN(b)) hi = b;
+        }
+        for (let v = lo; v <= hi; v += step) result.add(v);
+      } else if (part.includes("-")) {
+        const [a, b] = part.split("-").map((n) => parseInt(n, 10));
+        if (!isNaN(a) && !isNaN(b)) for (let v = a; v <= b; v++) result.add(v);
+      } else {
+        const v = parseInt(part, 10);
+        if (!isNaN(v)) result.add(v);
+      }
+    }
+    return [...result].filter((v) => v >= min && v <= max).sort((a, b) => a - b);
+  };
+
+  const minutes = parseField(minF, 0, 59);
+  const hours = parseField(hourF, 0, 23);
+  const doms = parseField(domF, 1, 31);
+  const months = parseField(monthF, 1, 12);
+  const dows = parseField(dowF, 0, 6);
+
+  if (minutes.length === 0 || hours.length === 0 || doms.length === 0 || months.length === 0 || dows.length === 0)
+    return Date.now() + 60_000;
+
+  // Start from the next minute
+  const d = new Date(from);
+  d.setSeconds(0, 0);
+  d.setMinutes(d.getMinutes() + 1);
+
+  // Search up to 366 days ahead
+  for (let i = 0; i < 527_040; i++) {
+    if (!months.includes(d.getMonth() + 1)) {
+      d.setMonth(d.getMonth() + 1, 1);
+      d.setHours(0, 0, 0, 0);
+      continue;
+    }
+    if (!doms.includes(d.getDate()) || !dows.includes(d.getDay())) {
+      d.setDate(d.getDate() + 1);
+      d.setHours(0, 0, 0, 0);
+      continue;
+    }
+    if (!hours.includes(d.getHours())) {
+      d.setHours(d.getHours() + 1, 0, 0, 0);
+      continue;
+    }
+    if (!minutes.includes(d.getMinutes())) {
+      d.setMinutes(d.getMinutes() + 1, 0, 0);
+      continue;
+    }
+    return d.getTime();
+  }
+  return Date.now() + 60_000;
+}
 
 const TITLES = [
   "Code Gremlin",
@@ -124,6 +199,8 @@ interface AgentRuntime {
 export class AgentManager {
   private agents = new Map<string, AgentRuntime>();
   private board = new Map<string, TaskCard>();
+  private schedules = new Map<string, AgentSchedule>();
+  private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private firedAgents = new Map<string, FiredAgent>();
   private worldSeed = 0;
   private chunkOverrides: Record<string, Record<number, number>> = {};
@@ -230,12 +307,26 @@ export class AgentManager {
     if (this.board.size > 0) {
       console.log(`[agent-hq] restored ${this.board.size} task card(s) from save`);
     }
+    // reload schedules from the save file
+    for (const sched of saved?.schedules ?? []) {
+      // recompute nextRunAt if it's in the past (server was down)
+      if (sched.enabled && sched.nextRunAt <= Date.now()) {
+        sched.nextRunAt = nextCronRun(sched.cronExpression);
+      }
+      this.schedules.set(sched.id, sched);
+    }
+    if (this.schedules.size > 0) {
+      console.log(`[agent-hq] restored ${this.schedules.size} schedule(s) from save`);
+    }
     if (saved?.settings) {
       this.setSettings(saved.settings, false);
     }
 
     this.ensureYuki();
     this.ensureHermes();
+
+    // Start the scheduler tick
+    this.schedulerTimer = setInterval(() => this.tickSchedules(), SCHEDULER_TICK_MS);
   }
 
   setSettings(s: GameSettings, announce = true): void {
@@ -330,9 +421,21 @@ export class AgentManager {
     return { agents, logs, board };
   }
 
+  snapshotSchedules(): AgentSchedule[] {
+    return [...this.schedules.values()];
+  }
+
   /** Get a single agent's info by ID, or null if not found. */
   getAgentInfo(agentId: string): AgentInfo | null {
     return this.agents.get(agentId)?.info ?? null;
+  }
+
+  /** Stop the scheduler tick and clean up timers. */
+  destroy(): void {
+    if (this.schedulerTimer) {
+      clearInterval(this.schedulerTimer);
+      this.schedulerTimer = null;
+    }
   }
 
   worldState(): WorldState {
@@ -647,6 +750,7 @@ export class AgentManager {
     this.firedAgents.set(fired.id, fired);
     this.persistWorld();
 
+    this.removeSchedulesForAgent(agentId);
     this.agents.delete(agentId);
     this.session.record("fire", { agentId, agentName: rt.info.name });
     this.persist();
@@ -1637,6 +1741,116 @@ export class AgentManager {
       rt.abort = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         this.setStatus(rt, "idle");
+      }
+    }
+  }
+
+  // ----------------------------------------------------------- schedules ---
+
+  private persistSchedules(): void {
+    this.save.setSchedules([...this.schedules.values()]);
+  }
+
+  createSchedule(agentId: string, name: string, task: string, cronExpression: string, handoffTo?: string): void {
+    const rt = this.agents.get(agentId);
+    if (!rt) {
+      this.broadcast({ type: "toast", text: "That agent doesn't work here." });
+      return;
+    }
+    const cleanName = name.trim().slice(0, 100) || "Untitled Schedule";
+    const cleanTask = task.trim().slice(0, 4000);
+    if (!cleanTask) {
+      this.broadcast({ type: "toast", text: "Schedule task can't be empty." });
+      return;
+    }
+    const cleanCron = cronExpression.trim();
+    if (!cleanCron || cleanCron.split(/\s+/).length !== 5) {
+      this.broadcast({ type: "toast", text: "Invalid cron expression. Use 5 fields: min hour day month weekday." });
+      return;
+    }
+    const now = Date.now();
+    const nextRun = nextCronRun(cleanCron);
+    // Enforce minimum interval
+    if (nextRun - now < MIN_SCHEDULE_INTERVAL_MS) {
+      this.broadcast({ type: "toast", text: `Schedule interval too short — minimum is ${MIN_SCHEDULE_INTERVAL_MS / 60000} minutes.` });
+      return;
+    }
+    const sched: AgentSchedule = {
+      id: randomUUID().slice(0, 8),
+      agentId,
+      name: cleanName,
+      task: cleanTask,
+      cronExpression: cleanCron,
+      enabled: true,
+      lastRunAt: null,
+      nextRunAt: nextRun,
+      runCount: 0,
+      handoffTo: handoffTo?.trim() || null,
+      createdAt: now,
+    };
+    this.schedules.set(sched.id, sched);
+    this.persistSchedules();
+    this.broadcast({ type: "schedule", schedule: sched });
+    this.broadcast({ type: "toast", text: `Schedule "${cleanName}" created for ${rt.info.name}.` });
+    this.log(rt, "status", `New schedule: ${cleanName} (${cleanCron})`);
+  }
+
+  updateSchedule(scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }): void {
+    const sched = this.schedules.get(scheduleId);
+    if (!sched) return;
+    if (updates.enabled !== undefined) sched.enabled = updates.enabled;
+    if (updates.name !== undefined) sched.name = updates.name.trim().slice(0, 100) || sched.name;
+    if (updates.task !== undefined) sched.task = updates.task.trim().slice(0, 4000) || sched.task;
+    if (updates.cronExpression !== undefined) {
+      const cleanCron = updates.cronExpression.trim();
+      if (cleanCron && cleanCron.split(/\s+/).length === 5) {
+        sched.cronExpression = cleanCron;
+        sched.nextRunAt = nextCronRun(cleanCron);
+      }
+    }
+    this.persistSchedules();
+    this.broadcast({ type: "schedule", schedule: sched });
+  }
+
+  deleteSchedule(scheduleId: string): void {
+    const sched = this.schedules.get(scheduleId);
+    if (!sched) return;
+    this.schedules.delete(scheduleId);
+    this.persistSchedules();
+    this.broadcast({ type: "schedule_removed", scheduleId });
+  }
+
+  /** Remove all schedules for an agent (used when firing). */
+  private removeSchedulesForAgent(agentId: string): void {
+    const toRemove = [...this.schedules.values()].filter((s) => s.agentId === agentId);
+    for (const s of toRemove) {
+      this.schedules.delete(s.id);
+      this.broadcast({ type: "schedule_removed", scheduleId: s.id });
+    }
+    if (toRemove.length > 0) this.persistSchedules();
+  }
+
+  /** Scheduler tick — check all enabled schedules and fire due ones. */
+  private tickSchedules(): void {
+    const now = Date.now();
+    for (const sched of this.schedules.values()) {
+      if (!sched.enabled || sched.nextRunAt > now) continue;
+      const rt = this.agents.get(sched.agentId);
+      if (!rt) continue;
+
+      // Update schedule metadata
+      sched.lastRunAt = now;
+      sched.runCount++;
+      sched.nextRunAt = nextCronRun(sched.cronExpression);
+      this.persistSchedules();
+      this.broadcast({ type: "schedule", schedule: sched });
+
+      // Fire the task
+      if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done") {
+        this.log(rt, "status", `Schedule "${sched.name}" fired but ${rt.info.name} is busy — skipping this run.`);
+      } else {
+        this.log(rt, "status", `Schedule fired: ${sched.name}`);
+        this.assign(sched.agentId, sched.task, sched.handoffTo ?? undefined);
       }
     }
   }

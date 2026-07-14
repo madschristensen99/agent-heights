@@ -549,7 +549,10 @@ export type ClientMsg =
   | { type: "agent_broadcast_start"; agentId: string }
   | { type: "agent_broadcast_stop" }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
-  | { type: "delete_outfit"; id: string };
+  | { type: "delete_outfit"; id: string }
+  | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
+  | { type: "update_schedule"; scheduleId: string; enabled?: boolean; name?: string; task?: string; cronExpression?: string }
+  | { type: "delete_schedule"; scheduleId: string };
 
 export type ServerMsg =
   | {

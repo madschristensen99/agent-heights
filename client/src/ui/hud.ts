@@ -1,7 +1,7 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig, PersonalityTraits } from "../../../shared/types";
-import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID,
+import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
   randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
@@ -180,6 +180,7 @@ export class Hud {
   private lastHandoffSig = "";
   private lastBoardSig = "";
   private detailMcpListener: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
+  private _scheduleCreateOpen = false;
   private feedCollapsed = false;
   private feedExpanded = false;
   private rosterCollapsed = false;
@@ -225,6 +226,7 @@ export class Hud {
         <div class="meta" id="d-meta"></div>
         <div class="task" id="d-task" hidden></div>
         <div id="d-mcp-section" hidden></div>
+        <div class="d-schedules" id="d-schedules" hidden></div>
         <div class="logs" id="logs"></div>
         <div class="row chat-row">
           <input id="d-chat" placeholder="Say something… (chat, not a task)" />
@@ -1959,6 +1961,174 @@ export class Hud {
       chatInput.placeholder = isBusy ? `${agent.name} is busy…` : "Say something… (chat, not a task)";
     }
     if (sayBtn) sayBtn.disabled = isBusy;
+
+    this.renderSchedules(agent.id);
+  }
+
+  private renderSchedules(agentId: string): void {
+    const container = document.getElementById("d-schedules")!;
+    const agentSchedules = [...this.store.schedules.values()].filter((s) => s.agentId === agentId);
+
+    if (agentSchedules.length === 0 && !this._scheduleCreateOpen) {
+      container.hidden = true;
+      container.innerHTML = "";
+      return;
+    }
+
+    container.hidden = false;
+
+    const fmtRel = (ts: number | null): string => {
+      if (!ts) return "never";
+      const diff = Date.now() - ts;
+      if (diff < 60_000) return "just now";
+      if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+      if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+      return `${Math.floor(diff / 86_400_000)}d ago`;
+    };
+
+    const fmtNext = (ts: number): string => {
+      const diff = ts - Date.now();
+      if (diff < 0) return "now";
+      if (diff < 60_000) return "in <1m";
+      if (diff < 3_600_000) return `in ${Math.floor(diff / 60_000)}m`;
+      if (diff < 86_400_000) return `in ${Math.floor(diff / 3_600_000)}h`;
+      return `in ${Math.floor(diff / 86_400_000)}d`;
+    };
+
+    const others = [...this.store.agents.values()].filter((a) => a.id !== agentId);
+    const handoffOpts = (sel?: string | null) =>
+      `<option value="">— nobody —</option>` +
+      others.map((a) => `<option value="${a.id}"${a.id === sel ? " selected" : ""}>${esc(a.name)}</option>`).join("");
+
+    const presetOpts = (sel?: string) =>
+      SCHEDULE_PRESETS.map((p) => `<option value="${p.cron}"${p.cron === sel ? " selected" : ""}>${esc(p.label)}</option>`).join("");
+
+    let html = `<div class="sched-header">⏰ SCHEDULED TASKS</div>`;
+
+    for (const s of agentSchedules) {
+      html += `
+        <div class="sched-item${s.enabled ? "" : " disabled"}" data-id="${s.id}">
+          <div class="sched-item-top">
+            <label class="sched-toggle">
+              <input type="checkbox" data-sched-toggle="${s.id}" ${s.enabled ? "checked" : ""} />
+              <span class="sched-name">${esc(s.name)}</span>
+            </label>
+            <div class="sched-item-actions">
+              <button class="btn sched-edit" data-sched-edit="${s.id}" title="Edit">✎</button>
+              <button class="btn danger sched-del" data-sched-del="${s.id}" title="Delete">✕</button>
+            </div>
+          </div>
+          <div class="sched-task">${esc(s.task.slice(0, 120))}${s.task.length > 120 ? "…" : ""}</div>
+          <div class="sched-meta">
+            <span class="sched-cron">${esc(s.cronExpression)}</span>
+            · run #${s.runCount} · last: ${fmtRel(s.lastRunAt)} · next: ${fmtNext(s.nextRunAt)}
+            ${s.handoffTo ? ` · → ${esc(this.store.agents.get(s.handoffTo)?.name ?? "?")}` : ""}
+          </div>
+        </div>`;
+    }
+
+    if (this._scheduleCreateOpen) {
+      html += `
+        <div class="sched-form">
+          <input class="sched-input" id="sched-name" placeholder="Schedule name (e.g. Daily Standup)" maxlength="100" />
+          <textarea class="sched-input" id="sched-task" rows="2" placeholder="Task prompt…" maxlength="4000"></textarea>
+          <div class="sched-form-row">
+            <select id="sched-preset">${presetOpts()}</select>
+            <input class="sched-input" id="sched-cron" placeholder="cron (min hour day month weekday)" value="0 9 * * *" />
+          </div>
+          <div class="sched-form-row">
+            <select id="sched-handoff">${handoffOpts()}</select>
+            <button class="btn primary" id="sched-create">CREATE</button>
+            <button class="btn" id="sched-cancel">CANCEL</button>
+          </div>
+        </div>`;
+    } else {
+      html += `<button class="btn sched-add" id="sched-add">+ NEW SCHEDULE</button>`;
+    }
+
+    container.innerHTML = html;
+
+    // Wire up controls
+    const addBtn = container.querySelector("#sched-add") as HTMLButtonElement | null;
+    if (addBtn) addBtn.addEventListener("click", () => {
+      this._scheduleCreateOpen = true;
+      this.renderSchedules(agentId);
+    });
+
+    const cancelBtn = container.querySelector("#sched-cancel") as HTMLButtonElement | null;
+    if (cancelBtn) cancelBtn.addEventListener("click", () => {
+      this._scheduleCreateOpen = false;
+      this.renderSchedules(agentId);
+    });
+
+    const createBtn = container.querySelector("#sched-create") as HTMLButtonElement | null;
+    if (createBtn) createBtn.addEventListener("click", () => {
+      const name = (container.querySelector("#sched-name") as HTMLInputElement).value;
+      const task = (container.querySelector("#sched-task") as HTMLTextAreaElement).value;
+      const cron = (container.querySelector("#sched-cron") as HTMLInputElement).value;
+      const handoff = (container.querySelector("#sched-handoff") as HTMLSelectElement).value;
+      if (!name.trim() || !task.trim()) return;
+      this.net.send({ type: "create_schedule", agentId, name, task, cronExpression: cron, handoffTo: handoff || undefined });
+      this._scheduleCreateOpen = false;
+      this.renderSchedules(agentId);
+    });
+
+    // Preset -> cron field sync
+    const presetSel = container.querySelector("#sched-preset") as HTMLSelectElement | null;
+    const cronInput = container.querySelector("#sched-cron") as HTMLInputElement | null;
+    if (presetSel && cronInput) {
+      presetSel.addEventListener("change", () => {
+        if (presetSel.value) cronInput.value = presetSel.value;
+      });
+    }
+
+    // Toggle handlers
+    container.querySelectorAll<HTMLInputElement>("[data-sched-toggle]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const id = cb.dataset.schedToggle!;
+        this.net.send({ type: "update_schedule", scheduleId: id, enabled: cb.checked });
+      });
+    });
+
+    // Delete handlers
+    container.querySelectorAll<HTMLButtonElement>("[data-sched-del]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.schedDel!;
+        this.net.send({ type: "delete_schedule", scheduleId: id });
+      });
+    });
+
+    // Edit handlers (inline toggle of name/task/cron)
+    container.querySelectorAll<HTMLButtonElement>("[data-sched-edit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.schedEdit!;
+        const sched = this.store.schedules.get(id);
+        if (!sched) return;
+        const item = container.querySelector(`.sched-item[data-id="${id}"]`) as HTMLElement | null;
+        if (!item) return;
+        item.innerHTML = `
+          <div class="sched-form">
+            <input class="sched-input" id="sched-edit-name" value="${esc(sched.name)}" maxlength="100" />
+            <textarea class="sched-input" id="sched-edit-task" rows="2" maxlength="4000">${esc(sched.task)}</textarea>
+            <div class="sched-form-row">
+              <input class="sched-input" id="sched-edit-cron" value="${esc(sched.cronExpression)}" />
+              <button class="btn primary" id="sched-edit-save" data-id="${id}">SAVE</button>
+              <button class="btn" id="sched-edit-cancel">CANCEL</button>
+            </div>
+          </div>`;
+        const saveBtn = item.querySelector("#sched-edit-save") as HTMLButtonElement;
+        saveBtn.addEventListener("click", () => {
+          const name = (item.querySelector("#sched-edit-name") as HTMLInputElement).value;
+          const task = (item.querySelector("#sched-edit-task") as HTMLTextAreaElement).value;
+          const cron = (item.querySelector("#sched-edit-cron") as HTMLInputElement).value;
+          this.net.send({ type: "update_schedule", scheduleId: id, name, task, cronExpression: cron });
+        });
+        const cancelBtn = item.querySelector("#sched-edit-cancel") as HTMLButtonElement;
+        cancelBtn.addEventListener("click", () => {
+          this.renderSchedules(agentId);
+        });
+      });
+    });
   }
 
   private renderFeed(): void {

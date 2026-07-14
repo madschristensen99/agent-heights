@@ -1,4 +1,4 @@
-import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -40,6 +40,7 @@ export class Store {
   agents = new Map<string, AgentInfo>();
   logs = new Map<string, LogEntry[]>();
   board = new Map<string, TaskCard>();
+  schedules = new Map<string, AgentSchedule>();
   firedAgents = new Map<string, FiredAgent>();
   worldSeed = 0;
   chunkOverrides: Record<string, Record<number, number>> = {};
@@ -121,6 +122,7 @@ export class Store {
     this.agents.clear();
     this.logs.clear();
     this.board.clear();
+    this.schedules.clear();
     this.firedAgents.clear();
     this.feed = [];
     this.feedVersion++;
@@ -299,6 +301,7 @@ export class Store {
         this.agents = new Map(msg.agents.map((a) => [a.id, a]));
         this.logs = new Map(Object.entries(msg.logs));
         this.board = new Map(msg.board.map((c) => [c.id, c]));
+        this.schedules = new Map((msg.schedules ?? []).map((s) => [s.id, s]));
         this.player = msg.player;
         this.settings = msg.settings;
         if (msg.world) {
@@ -406,6 +409,15 @@ export class Store {
       }
       case "card_removed":
         this.board.delete(msg.cardId);
+        break;
+      case "schedules":
+        this.schedules = new Map(msg.schedules.map((s) => [s.id, s]));
+        break;
+      case "schedule":
+        this.schedules.set(msg.schedule.id, msg.schedule);
+        break;
+      case "schedule_removed":
+        this.schedules.delete(msg.scheduleId);
         break;
       case "world":
         this.worldSeed = msg.world.seed;

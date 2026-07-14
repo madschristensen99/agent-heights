@@ -356,6 +356,7 @@ wss.on("connection", async (ws, req) => {
       player: sess.player,
       settings: sess.manager.settings,
       board: snap.board,
+      schedules: sess.manager.snapshotSchedules(),
       world: sess.manager.worldState(),
     } satisfies ServerMsg));
   } else if (currentRoom && currentRoom.isPrivate && currentRoom.ownerId !== sess.user.id) {
@@ -370,10 +371,11 @@ wss.on("connection", async (ws, req) => {
         player: ownerSess.player,
         settings: ownerSess.manager.settings,
         board: snap.board,
+        schedules: ownerSess.manager.snapshotSchedules(),
         world: ownerSess.manager.worldState(),
       } satisfies ServerMsg));
     } else {
-      ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], player: sess.player, settings: sess.manager.settings, world: null } satisfies ServerMsg));
+      ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], schedules: [], player: sess.player, settings: sess.manager.settings, world: null } satisfies ServerMsg));
     }
   } else {
     // HQ2 or no room — empty snapshot
@@ -382,6 +384,7 @@ wss.on("connection", async (ws, req) => {
       agents: [],
       logs: {},
       board: [],
+      schedules: [],
       player: sess.player,
       settings: sess.manager.settings,
       world: null,
@@ -505,7 +508,7 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all"]);
+      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all"]);
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
         return;
@@ -644,6 +647,15 @@ wss.on("connection", async (ws, req) => {
           break;
         case "delete_card":
           manager.deleteCard(msg.cardId);
+          break;
+        case "create_schedule":
+          manager.createSchedule(msg.agentId, msg.name, msg.task, msg.cronExpression, msg.handoffTo);
+          break;
+        case "update_schedule":
+          manager.updateSchedule(msg.scheduleId, { enabled: msg.enabled, name: msg.name, task: msg.task, cronExpression: msg.cronExpression });
+          break;
+        case "delete_schedule":
+          manager.deleteSchedule(msg.scheduleId);
           break;
         case "recruit":
           await manager.recruit(msg.firedAgentId);
@@ -932,6 +944,7 @@ wss.on("connection", async (ws, req) => {
                 player: ownerSess.player,
                 settings: ownerSess.manager.settings,
                 board: snap.board,
+                schedules: ownerSess.manager.snapshotSchedules(),
                 world: ownerSess.manager.worldState(),
               });
             }
@@ -945,6 +958,7 @@ wss.on("connection", async (ws, req) => {
               player: sess.player,
               settings: sess.manager.settings,
               board: snap.board,
+              schedules: sess.manager.snapshotSchedules(),
               world: sess.manager.worldState(),
             });
           } else {
@@ -956,6 +970,7 @@ wss.on("connection", async (ws, req) => {
               player: sess.player,
               settings: sess.manager.settings,
               board: [],
+              schedules: [],
               world: null,
             });
           }
@@ -1062,6 +1077,7 @@ wss.on("connection", async (ws, req) => {
                     player: ownerSess.player,
                     settings: ownerSess.manager.settings,
                     board: snap.board,
+                    schedules: ownerSess.manager.snapshotSchedules(),
                     world: ownerSess.manager.worldState(),
                   });
                 }
