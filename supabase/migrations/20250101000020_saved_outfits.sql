@@ -11,22 +11,27 @@ CREATE TABLE IF NOT EXISTS public.agent_hq_saved_outfits (
 
 ALTER TABLE public.agent_hq_saved_outfits ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users read own outfits" ON public.agent_hq_saved_outfits;
 CREATE POLICY "Users read own outfits"
   ON public.agent_hq_saved_outfits FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users insert own outfits" ON public.agent_hq_saved_outfits;
 CREATE POLICY "Users insert own outfits"
   ON public.agent_hq_saved_outfits FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users update own outfits" ON public.agent_hq_saved_outfits;
 CREATE POLICY "Users update own outfits"
   ON public.agent_hq_saved_outfits FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users delete own outfits" ON public.agent_hq_saved_outfits;
 CREATE POLICY "Users delete own outfits"
   ON public.agent_hq_saved_outfits FOR DELETE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Service role full access to outfits" ON public.agent_hq_saved_outfits;
 CREATE POLICY "Service role full access to outfits"
   ON public.agent_hq_saved_outfits FOR ALL
   TO service_role

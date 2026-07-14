@@ -16,18 +16,22 @@ CREATE TABLE IF NOT EXISTS public.user_mcp_keys (
 ALTER TABLE public.user_mcp_keys ENABLE ROW LEVEL SECURITY;
 
 -- Users can manage only their own MCP keys
+DROP POLICY IF EXISTS "Users read own MCP keys" ON public.user_mcp_keys;
 CREATE POLICY "Users read own MCP keys"
   ON public.user_mcp_keys FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users insert own MCP keys" ON public.user_mcp_keys;
 CREATE POLICY "Users insert own MCP keys"
   ON public.user_mcp_keys FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users update own MCP keys" ON public.user_mcp_keys;
 CREATE POLICY "Users update own MCP keys"
   ON public.user_mcp_keys FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users delete own MCP keys" ON public.user_mcp_keys;
 CREATE POLICY "Users delete own MCP keys"
   ON public.user_mcp_keys FOR DELETE
   USING (auth.uid() = user_id);

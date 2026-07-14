@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.agent_hq_organizations (
 
 ALTER TABLE public.agent_hq_organizations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access to organizations" ON public.agent_hq_organizations;
 CREATE POLICY "Service role full access to organizations"
   ON public.agent_hq_organizations FOR ALL
   TO service_role
@@ -36,10 +37,12 @@ CREATE TABLE IF NOT EXISTS public.agent_hq_org_members (
 
 ALTER TABLE public.agent_hq_org_members ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users read orgs they belong to" ON public.agent_hq_org_members;
 CREATE POLICY "Users read orgs they belong to"
   ON public.agent_hq_org_members FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Service role full access to org members" ON public.agent_hq_org_members;
 CREATE POLICY "Service role full access to org members"
   ON public.agent_hq_org_members FOR ALL
   TO service_role
