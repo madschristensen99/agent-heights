@@ -2719,9 +2719,12 @@ export class OfficeScene extends Phaser.Scene {
     const ch = OfficeScene.PROJECTOR_CHANNELS.find(c => c.id === channel);
     const videoId = ch?.videoId ?? null;
 
-    // Channel is off or unknown — hide iframe
+    // Channel is off or unknown — stop video and hide iframe
     if (!videoId) {
-      if (this.projectorIframe) this.projectorIframe.style.display = "none";
+      if (this.projectorIframe) {
+        this.projectorIframe.src = "about:blank";
+        this.projectorIframe.style.display = "none";
+      }
       this.projectorVideoId = null;
       return;
     }
