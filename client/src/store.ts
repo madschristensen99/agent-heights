@@ -1,4 +1,4 @@
-import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg } from "../../shared/types";
+import type { AgentInfo, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -71,11 +71,18 @@ export class Store {
   roomId: string | null = null;
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
+  projectorChannel: string = "off";
   pendingInvite: PendingInvite | null = null;
   privateOfficeId: string | null = null;
-  roomsList: { roomId: string; name: string; isPrivate: boolean }[] = [];
+  roomsList: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] = [];
+  /** Organizations the user can see. */
+  orgsList: (Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" })[] = [];
+  /** Members of the currently viewed org. */
+  orgMembers: { orgId: string; members: OrgMember[] } | null = null;
   /** True once the server has delivered all initial data (snapshot, room_state, rooms_list). */
   initialDataReady = false;
+  /** Reference to the OfficeScene — set during create() so the HUD can access VoiceManager. */
+  sceneRef: { voice: { active: boolean; muted: boolean; start: () => Promise<void>; stop: () => void; setMuted: (m: boolean) => void } } | null = null;
   private initialDataCallbacks = new Set<() => void>();
 
   private listeners = new Set<Listener>();
@@ -87,6 +94,11 @@ export class Store {
   private tileUpdatedListeners = new Set<(cx: number, cy: number, tileIndex: number, tile: number) => void>();
   private emoteListeners = new Set<(agentId: string, emote: string) => void>();
   private agentChatListeners = new Set<(fromId: string, toId: string, fromName: string, toName: string, text: string) => void>();
+  private voicePeerListeners = new Set<(userId: string, name: string) => void>();
+  private voiceOfferListeners = new Set<(fromUserId: string, sdp: string) => void>();
+  private voiceAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
+  private voiceIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
+  private voicePeerLeftListeners = new Set<(userId: string) => void>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -105,6 +117,8 @@ export class Store {
     this.pendingInvite = null;
     this.privateOfficeId = null;
     this.roomsList = [];
+    this.orgsList = [];
+    this.orgMembers = null;
     this.hasApiKey = false;
     this.entrancePaid = true;
     this.subscriptionActive = true;
@@ -154,6 +168,26 @@ export class Store {
 
   onAgentChat(fn: (fromId: string, toId: string, fromName: string, toName: string, text: string) => void): void {
     this.agentChatListeners.add(fn);
+  }
+
+  onVoicePeer(fn: (userId: string, name: string) => void): void {
+    this.voicePeerListeners.add(fn);
+  }
+
+  onVoiceOffer(fn: (fromUserId: string, sdp: string) => void): void {
+    this.voiceOfferListeners.add(fn);
+  }
+
+  onVoiceAnswer(fn: (fromUserId: string, sdp: string) => void): void {
+    this.voiceAnswerListeners.add(fn);
+  }
+
+  onVoiceIce(fn: (fromUserId: string, candidate: string) => void): void {
+    this.voiceIceListeners.add(fn);
+  }
+
+  onVoicePeerLeft(fn: (userId: string) => void): void {
+    this.voicePeerLeftListeners.add(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -538,6 +572,7 @@ export class Store {
         this.roomId = msg.roomId;
         this.roomName = msg.name;
         if (msg.privateOfficeId) this.privateOfficeId = msg.privateOfficeId;
+        this.projectorChannel = msg.projectorChannel ?? "off";
         this.roomPlayers.clear();
         for (const p of msg.players) {
           this.roomPlayers.set(p.userId, p);
@@ -606,12 +641,52 @@ export class Store {
         }
         break;
       }
+      case "orgs_list": {
+        this.orgsList = msg.orgs;
+        break;
+      }
+      case "org_members": {
+        this.orgMembers = { orgId: msg.orgId, members: msg.members };
+        break;
+      }
+      case "org_created": {
+        // Trigger a toast and mark for refresh
+        for (const fn of this.toastListeners) fn(`Organization "${msg.org.name}" created!`);
+        return;
+      }
+      case "org_error": {
+        for (const fn of this.toastListeners) fn(msg.message);
+        return;
+      }
       case "emote": {
         for (const fn of this.emoteListeners) fn(msg.agentId, msg.emote);
         return;
       }
       case "agent_chat": {
         for (const fn of this.agentChatListeners) fn(msg.fromId, msg.toId, msg.fromName, msg.toName, msg.text);
+        return;
+      }
+      case "projector_state":
+        this.projectorChannel = msg.channel;
+        break;
+      case "voice_peer": {
+        for (const fn of this.voicePeerListeners) fn(msg.userId, msg.name);
+        return;
+      }
+      case "voice_offer": {
+        for (const fn of this.voiceOfferListeners) fn(msg.fromUserId, msg.sdp);
+        return;
+      }
+      case "voice_answer": {
+        for (const fn of this.voiceAnswerListeners) fn(msg.fromUserId, msg.sdp);
+        return;
+      }
+      case "voice_ice": {
+        for (const fn of this.voiceIceListeners) fn(msg.fromUserId, msg.candidate);
+        return;
+      }
+      case "voice_peer_left": {
+        for (const fn of this.voicePeerLeftListeners) fn(msg.userId);
         return;
       }
     }

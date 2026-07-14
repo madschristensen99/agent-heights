@@ -12,6 +12,7 @@ import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_T
 import { upgradeWorkshop } from "./workshop";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 import { touchInput, isTouchDevice } from "../touch";
+import { VoiceManager } from "../voice";
 
 const PLAYER_SPEED = 380;
 
@@ -61,6 +62,15 @@ export class OfficeScene extends Phaser.Scene {
   private coffeeTile: Tile = { x: 23, y: 2 };
   private coffeeUntil = 0;
   private coffeeHint!: Phaser.GameObjects.Text;
+
+  // --- projector screen (top-left wall) ---
+  private projectorTile: Tile = { x: 2, y: 1 };
+  private projectorHint!: Phaser.GameObjects.Text;
+  private projectorGfx!: Phaser.GameObjects.Graphics;
+  private projectorCanvas: HTMLCanvasElement | null = null;
+  private projectorCtx: CanvasRenderingContext2D | null = null;
+  private projectorSprite: Phaser.GameObjects.Sprite | null = null;
+  private projectorAnimTime = 0;
 
   // --- new office interactables ---
   private fridgeTile: Tile = { x: 26, y: 2 };
@@ -171,6 +181,10 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Multiplayer: remote player sprites keyed by userId. */
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
+  /** Voice chat manager — WebRTC proximity voice. */
+  private voice: VoiceManager | null = null;
+  /** Speaking indicator icons above remote players. */
+  private speakingIcons = new Map<string, Phaser.GameObjects.Text>();
   /** Tracks the last roomId the scene rendered — used to detect room changes. */
   private lastRoomId: string | null = null;
   private lastPosSent = 0;
@@ -186,6 +200,18 @@ export class OfficeScene extends Phaser.Scene {
     this.store = this.game.registry.get("store") as Store;
     this.net = this.game.registry.get("net") as import("../net").Net;
     this._myUserId = (this.game.registry.get("userId") as string) ?? null;
+
+    // ── Voice chat: create VoiceManager and wire store listeners ──────────
+    if (this._myUserId && this.net) {
+      this.voice = new VoiceManager(this._myUserId, (msg) => this.net!.send(msg));
+      this.store.onVoicePeer((userId, name) => this.voice?.onPeer(userId, name));
+      this.store.onVoiceOffer((fromUserId, sdp) => { void this.voice?.onOffer(fromUserId, sdp); });
+      this.store.onVoiceAnswer((fromUserId, sdp) => { void this.voice?.onAnswer(fromUserId, sdp); });
+      this.store.onVoiceIce((fromUserId, candidate) => { void this.voice?.onIce(fromUserId, candidate); });
+      this.store.onVoicePeerLeft((userId) => this.voice?.onPeerLeft(userId));
+      this.events.once("shutdown", () => { this.voice?.stop(); this.voice = null; this.store.sceneRef = null; });
+      this.store.sceneRef = this as any;
+    }
     // HQ2 uses the agenthq (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
     // players start. This prevents a brief flash of the wrong room layout.
@@ -542,6 +568,7 @@ export class OfficeScene extends Phaser.Scene {
 
           // --- task board on the front wall ---
           this.drawBoard();
+          this.drawProjector();
           this.drawTrophyCase();
           this.drawHallOfFameBoard();
           this.drawExteriorChimney();
@@ -582,6 +609,7 @@ export class OfficeScene extends Phaser.Scene {
           this.platformMailboxHint = this.makeHint();
           this.redButtonHint = this.makeHint();
           this.wardrobeHint = this.makeHint();
+          this.projectorHint = this.makeHint();
         },
       },
       {
@@ -1165,6 +1193,16 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Try interacting with any new office object. Returns true if an interaction fired. */
   private tryOfficeInteract(time: number): boolean {
+    // Projector screen — cycle channels
+    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, projPx.x, projPx.y) < 160) {
+      const net = this.game.registry.get("net") as import("../net").Net;
+      const next = this.store.projectorChannel === "off" ? "brainrot" : "off";
+      net.send({ type: "projector_set_channel", channel: next });
+      this.world?.audio.uiClick();
+      return true;
+    }
+
     // Fridge — full HP heal
     const fridgePx = { x: this.fridgeTile.x * TILE_PX + 32, y: this.fridgeTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, fridgePx.x, fridgePx.y) < 144) {
@@ -1613,6 +1651,19 @@ export class OfficeScene extends Phaser.Scene {
         .setVisible(true);
     } else {
       this.redButtonHint.setVisible(false);
+    }
+
+    // Projector screen
+    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 32 };
+    const projDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, projHintPx.x, projHintPx.y);
+    if (projDist < 160) {
+      const ch = this.store.projectorChannel;
+      this.projectorHint
+        .setPosition(projHintPx.x, projHintPx.y + 64)
+        .setText(hintLabel(ch === "off" ? "E: TURN ON" : `E: ${ch.toUpperCase()} (OFF)`))
+        .setVisible(true);
+    } else {
+      this.projectorHint.setVisible(false);
     }
   }
 
@@ -2487,6 +2538,155 @@ export class OfficeScene extends Phaser.Scene {
     this.heliDelivery = null;
   }
 
+  /** Draw the projector screen on the top-left wall. */
+  private drawProjector(): void {
+    const px = this.projectorTile.x * TILE_PX + 32;
+    const py = this.projectorTile.y * TILE_PX + 32;
+    const sw = 160;
+    const sh = 96;
+
+    this.projectorGfx = this.add.graphics().setDepth(3);
+    // outer frame
+    this.projectorGfx.fillStyle(0x1a2838, 1);
+    this.projectorGfx.fillRoundedRect(px - sw / 2 - 6, py - sh / 2 - 6, sw + 12, sh + 12, 6);
+    // inner bezel
+    this.projectorGfx.fillStyle(0x2a3848, 1);
+    this.projectorGfx.fillRoundedRect(px - sw / 2 - 4, py - sh / 2 - 4, sw + 8, sh + 8, 5);
+    // screen surface (dark when off)
+    this.projectorGfx.fillStyle(0x0a0a12, 1);
+    this.projectorGfx.fillRoundedRect(px - sw / 2, py - sh / 2, sw, sh, 3);
+
+    // Create canvas for dynamic content
+    this.projectorCanvas = document.createElement("canvas");
+    this.projectorCanvas.width = sw;
+    this.projectorCanvas.height = sh;
+    this.projectorCtx = this.projectorCanvas.getContext("2d");
+
+    // Register canvas as a Phaser texture
+    if (this.textures.exists("projector-content")) {
+      this.textures.remove("projector-content");
+    }
+    this.textures.addCanvas("projector-content", this.projectorCanvas);
+
+    // Create sprite for the screen content
+    this.projectorSprite = this.add.sprite(px, py, "projector-content").setDepth(4);
+    this.projectorSprite.setVisible(false);
+  }
+
+  /** Render brainrot animation to the projector canvas. */
+  private updateProjectorAnim(dt: number): void {
+    if (!this.projectorCtx || !this.projectorCanvas) return;
+    const channel = this.store.projectorChannel;
+    if (channel === "off") {
+      if (this.projectorSprite?.visible) this.projectorSprite.setVisible(false);
+      return;
+    }
+
+    if (!this.projectorSprite?.visible) this.projectorSprite?.setVisible(true);
+    this.projectorAnimTime += dt;
+    const t = this.projectorAnimTime / 1000;
+    const w = this.projectorCanvas.width;
+    const h = this.projectorCanvas.height;
+    const ctx = this.projectorCtx;
+
+    if (channel === "brainrot") {
+      // Subway Surfers-style endless runner
+      // Sky gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, "#1a1a3e");
+      grad.addColorStop(0.5, "#3a2a5e");
+      grad.addColorStop(1, "#5a3a7e");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // 3-lane road
+      const roadTop = h * 0.35;
+      const roadBot = h;
+      const laneW = w / 3;
+      ctx.fillStyle = "#2a2a35";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.3, roadTop);
+      ctx.lineTo(w * 0.7, roadTop);
+      ctx.lineTo(w, roadBot);
+      ctx.lineTo(0, roadBot);
+      ctx.closePath();
+      ctx.fill();
+
+      // Lane dividers (scrolling)
+      const scrollY = (t * 200) % 20;
+      ctx.strokeStyle = "#ffdd44";
+      ctx.lineWidth = 1.5;
+      for (let lane = 1; lane < 3; lane++) {
+        const topX = w * 0.3 + (w * 0.4) * (lane / 3);
+        const botX = lane * laneW;
+        for (let i = 0; i < 8; i++) {
+          const f0 = (i * 20 + scrollY) / 160;
+          const f1 = (i * 20 + 10 + scrollY) / 160;
+          if (f0 > 1 || f1 > 1) continue;
+          const y0 = roadTop + (roadBot - roadTop) * f0;
+          const y1 = roadTop + (roadBot - roadTop) * f1;
+          const x0 = topX + (botX - topX) * f0;
+          const x1 = topX + (botX - topX) * f1;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+        }
+      }
+
+      // Obstacles (colorful blocks scrolling toward viewer)
+      const obstacles = [
+        { lane: 0, z: 0.2, color: "#e74c3c" },
+        { lane: 1, z: 0.5, color: "#2ecc71" },
+        { lane: 2, z: 0.8, color: "#3498db" },
+        { lane: 1, z: 1.1, color: "#e74c3c" },
+      ];
+      for (const obs of obstacles) {
+        const z = (obs.z + t * 0.6) % 1.4;
+        if (z < 0.05) continue;
+        const f = z;
+        const y = roadTop + (roadBot - roadTop) * f;
+        const topEdge = w * 0.3 + (w * 0.4) * (obs.lane / 3);
+        const botEdge = obs.lane * laneW;
+        const x = topEdge + (botEdge - topEdge) * f + laneW * 0.5 * f;
+        const size = 4 + f * 24;
+        ctx.fillStyle = obs.color;
+        ctx.fillRect(x - size / 2, y - size, size, size);
+        // highlight
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.fillRect(x - size / 2, y - size, size, 3);
+      }
+
+      // Runner character (center-bottom, bobbing)
+      const runnerY = roadTop + (roadBot - roadTop) * 0.92;
+      const runnerX = w * 0.5;
+      const bob = Math.sin(t * 12) * 3;
+      // body
+      ctx.fillStyle = "#f39c12";
+      ctx.fillRect(runnerX - 6, runnerY - 20 + bob, 12, 14);
+      // head
+      ctx.fillStyle = "#fdd9a0";
+      ctx.fillRect(runnerX - 4, runnerY - 28 + bob, 8, 8);
+      // legs (alternating)
+      ctx.fillStyle = "#2c3e50";
+      const legPhase = Math.sin(t * 12) > 0;
+      ctx.fillRect(runnerX - 5, runnerY - 6 + bob, 4, legPhase ? 8 : 5);
+      ctx.fillRect(runnerX + 1, runnerY - 6 + bob, 4, legPhase ? 5 : 8);
+
+      // "BRAINROT" label at top
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillRect(0, 0, w, 14);
+      ctx.fillStyle = "#ff6688";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("🧠 BRAINROT", w / 2, 10);
+
+      // Refresh Phaser texture
+      const tex = this.textures.get("projector-content");
+      if (tex) (tex as Phaser.Textures.CanvasTexture).refresh();
+    }
+  }
+
   /** Draw a kanban-style task board on the front wall of the office. */
   private drawBoard(): void {
     const bx = this.boardTile.x * TILE_PX + 32;
@@ -3258,6 +3458,9 @@ export class OfficeScene extends Phaser.Scene {
     // --- helicopter rotor ---
     this.updateHelicopter(time);
 
+    // --- projector screen animation ---
+    this.updateProjectorAnim(dt);
+
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
     // Run Yuki/Hermes state machine unless we're a visitor in someone else's private office
@@ -3355,6 +3558,7 @@ export class OfficeScene extends Phaser.Scene {
       this.platformMailboxHint.setVisible(false);
       this.redButtonHint.setVisible(false);
       this.wardrobeHint.setVisible(false);
+      this.projectorHint.setVisible(false);
     }
 
     // mailbox: new mail arrives on timer
@@ -3453,6 +3657,16 @@ export class OfficeScene extends Phaser.Scene {
     // ── Multiplayer: sync remote player sprites from store ──────────────
     this.syncRemotePlayers();
 
+    // ── Voice chat: update per-peer volumes and speaking indicators ──────
+    if (this.voice?.active && this.player) {
+      const isOutdoor = this.world.isOutside(this.player.x, this.player.y);
+      this.voice.updateVolumes(this.player.x, this.player.y, this.store.roomPlayers, isOutdoor);
+      const speaking = this.voice.getSpeakingPeers();
+      for (const [userId, icon] of this.speakingIcons) {
+        icon.setVisible(speaking.has(userId));
+      }
+    }
+
     // ── Multiplayer: broadcast NPC state (owner only, private rooms only, 5Hz) ──
     const myRoleForNpc = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
     const isOwnerForNpc = myRoleForNpc === "owner" && this.store.roomId !== "hq2";
@@ -3532,6 +3746,15 @@ export class OfficeScene extends Phaser.Scene {
         entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null };
         this.remotePlayers.set(userId, entry);
 
+        // Speaking indicator (hidden by default, shown when peer is talking)
+        const speakIcon = this.add
+          .text(0, 0, "🔊", { fontSize: "20px" })
+          .setOrigin(0.5, 1)
+          .setScale(0.7)
+          .setVisible(false)
+          .setDepth(10 + p.y + 0.2);
+        this.speakingIcons.set(userId, speakIcon);
+
         // Intro animation: descend from above while cycling through
         // directional profile views (front → side left → back → side right → front)
         // to simulate a 3D spin during the landing.
@@ -3587,6 +3810,12 @@ export class OfficeScene extends Phaser.Scene {
         .clear()
         .setPosition(target.x, target.y - 108)
         .setDepth(10 + target.y);
+
+      // Update speaking indicator position
+      const speakIcon = this.speakingIcons.get(userId);
+      if (speakIcon) {
+        speakIcon.setPosition(target.x, target.y - 128).setDepth(10 + target.y + 0.2);
+      }
     }
 
     // Remove sprites for players who left — play exit animation first
@@ -3594,6 +3823,9 @@ export class OfficeScene extends Phaser.Scene {
       if (!seen.has(userId)) {
         this.remotePlayers.delete(userId);
         const { sprite, label, nameBg } = entry;
+        // Clean up speaking icon
+        const speakIcon = this.speakingIcons.get(userId);
+        if (speakIcon) { speakIcon.destroy(); this.speakingIcons.delete(userId); }
         // Disable label/nameBg, fade them out quickly
         this.tweens.add({ targets: [label, nameBg], alpha: 0, duration: 300 });
         // Spin + levitate + fade out

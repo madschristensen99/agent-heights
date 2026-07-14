@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance } from "../shared/types.js";
+import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType } from "../shared/types.js";
+import { AGENT_HQ_HQ_SLUG, AGENT_HQ_HQ_ADMINS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
 import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
@@ -51,6 +52,31 @@ interface Room {
   players: Map<string, RoomPlayer>;
   /** Private offices are invite-only. HQ2 is open to all. */
   isPrivate: boolean;
+  /** Room type: private, organization, or public. */
+  roomType: RoomType;
+  /** For organization rooms, the org that owns this room. */
+  orgId?: string;
+  /** Current projector channel: "off", "brainrot", etc. */
+  projectorChannel: string;
+}
+
+/** In-memory organization member (augmented with email for display). */
+interface OrgMemberEntry {
+  orgId: string;
+  userId: string;
+  userEmail: string | null;
+  role: "admin" | "member";
+  joinedAt: number;
+}
+
+/** In-memory organization. */
+interface OrgEntry {
+  id: string;
+  name: string;
+  slug: string;
+  githubOrg: string | null;
+  createdAt: number;
+  members: Map<string, OrgMemberEntry>;
 }
 
 /** The global multiplayer lobby — everyone joins on connection. */
@@ -59,6 +85,9 @@ export const HQ2_ROOM_ID = "hq2";
 export class TenantManager {
   private sessions = new Map<string, UserSession>();
   private rooms = new Map<string, Room>();
+  private orgs = new Map<string, OrgEntry>();
+  /** Slug → orgId lookup. */
+  private orgsBySlug = new Map<string, string>();
   /** Last known position per user — persists across room leaves/rejoins. */
   private lastPositions = new Map<string, { x: number; y: number; dir: Dir }>();
   /** Last room the user was in — used to restore on reconnect. */
@@ -72,6 +101,34 @@ export class TenantManager {
       ownerId: "system",
       players: new Map(),
       isPrivate: false,
+      roomType: "public",
+      projectorChannel: "off",
+    });
+
+    // Pre-seed the Agent HQ HQ organization
+    const hqOrgId = "org-agent-hq-hq";
+    const hqOrg: OrgEntry = {
+      id: hqOrgId,
+      name: "Agent HQ HQ",
+      slug: AGENT_HQ_HQ_SLUG,
+      githubOrg: "agent-hq",
+      createdAt: Date.now(),
+      members: new Map(),
+    };
+    this.orgs.set(hqOrgId, hqOrg);
+    this.orgsBySlug.set(AGENT_HQ_HQ_SLUG, hqOrgId);
+
+    // Pre-seed an org room for Agent HQ HQ
+    const hqRoomId = "room-agent-hq-hq";
+    this.rooms.set(hqRoomId, {
+      id: hqRoomId,
+      name: "Agent HQ HQ",
+      ownerId: "system",
+      players: new Map(),
+      isPrivate: false,
+      roomType: "organization",
+      orgId: hqOrgId,
+      projectorChannel: "off",
     });
   }
 
@@ -87,26 +144,38 @@ export class TenantManager {
     return this.rooms.get(roomId);
   }
 
-  /** Get all rooms owned by a user. */
+  /** Get all rooms owned by or visible to a user. */
   getRoomsForUser(userId: string): Room[] {
     const result: Room[] = [];
     for (const room of this.rooms.values()) {
       if (room.ownerId === userId || room.players.has(userId)) {
         result.push(room);
+        continue;
+      }
+      // Include org rooms if the user is a member of the org
+      if (room.roomType === "organization" && room.orgId) {
+        const org = this.orgs.get(room.orgId);
+        if (org?.members.has(userId)) {
+          result.push(room);
+        }
       }
     }
     return result;
   }
 
   /** Create a new room. Returns the room ID. */
-  createRoom(ownerId: string, name: string, _theme?: OfficeTheme, isPrivate = true): string {
+  createRoom(ownerId: string, name: string, _theme?: OfficeTheme, isPrivate = true, orgId?: string): string {
     const roomId = `room-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const roomType: RoomType = orgId ? "organization" : isPrivate ? "private" : "public";
     const room: Room = {
       id: roomId,
       name,
       ownerId,
       players: new Map(),
       isPrivate,
+      roomType,
+      orgId,
+      projectorChannel: "off",
     };
     this.rooms.set(roomId, room);
     return roomId;
@@ -149,8 +218,8 @@ export class TenantManager {
     const sess = this.sessions.get(userId);
     if (sess) sess.roomId = null;
 
-    // Delete empty rooms (except HQ2 and private offices — keep for rejoin)
-    if (room.players.size === 0 && roomId !== HQ2_ROOM_ID && !room.isPrivate) {
+    // Delete empty rooms (except HQ2, org rooms, and private offices — keep for rejoin)
+    if (room.players.size === 0 && roomId !== HQ2_ROOM_ID && !room.isPrivate && room.roomType !== "organization") {
       this.rooms.delete(roomId);
     }
 
@@ -246,8 +315,8 @@ export class TenantManager {
     if (!sess?.roomId) return;
     const room = this.rooms.get(sess.roomId);
     if (!room) return;
-    // Only forward in private rooms where the sender is the owner
-    if (!room.isPrivate || room.ownerId !== senderId) return;
+    // Forward in private rooms where the sender is the owner, or in org rooms
+    if (room.roomType === "private" && room.ownerId !== senderId) return;
     for (const [pid] of room.players) {
       if (pid === senderId) continue;
       const peerSess = this.sessions.get(pid);
@@ -354,6 +423,43 @@ export class TenantManager {
     // Register session before joining rooms so joinRoom can update sess.roomId
     this.sessions.set(user.id, sess);
 
+    // Auto-add whitelisted admins to the Agent HQ HQ organization
+    if (user.email && AGENT_HQ_HQ_ADMINS.includes(user.email)) {
+      const hqOrg = this.orgsBySlug.get(AGENT_HQ_HQ_SLUG);
+      if (hqOrg) {
+        const org = this.orgs.get(hqOrg);
+        if (org && !org.members.has(user.id)) {
+          org.members.set(user.id, {
+            orgId: hqOrg,
+            userId: user.id,
+            userEmail: user.email,
+            role: "admin",
+            joinedAt: Date.now(),
+          });
+          console.log(`[agent-hq] auto-added ${user.email} as admin to Agent HQ HQ org`);
+        }
+      }
+    }
+
+    // Convert any pending email invitations to real memberships
+    if (user.email) {
+      const pendingKey = `pending:${user.email.toLowerCase()}`;
+      for (const org of this.orgs.values()) {
+        const pending = org.members.get(pendingKey);
+        if (pending) {
+          org.members.delete(pendingKey);
+          org.members.set(user.id, {
+            orgId: org.id,
+            userId: user.id,
+            userEmail: user.email,
+            role: pending.role,
+            joinedAt: Date.now(),
+          });
+          console.log(`[agent-hq] converted pending invite for ${user.email} in org ${org.name}`);
+        }
+      }
+    }
+
     // Create the user's private office (invite-only)
     const privateOfficeId = this.createRoom(user.id, `${player?.name ?? "Boss"}'s Office`, undefined, true);
     sess.privateOfficeId = privateOfficeId;
@@ -450,5 +556,178 @@ export class TenantManager {
 
   size(): number {
     return this.sessions.size;
+  }
+
+  // ── Organization management ──────────────────────────────────────────
+
+  /** Create a new organization. Returns the org or null if slug is taken. */
+  createOrg(name: string, slug: string, githubOrg?: string, founderUserId?: string, founderEmail?: string | null): OrgEntry | null {
+    if (this.orgsBySlug.has(slug)) return null;
+    const orgId = `org-${slug}`;
+    const org: OrgEntry = {
+      id: orgId,
+      name,
+      slug,
+      githubOrg: githubOrg ?? null,
+      createdAt: Date.now(),
+      members: new Map(),
+    };
+    if (founderUserId) {
+      org.members.set(founderUserId, {
+        orgId,
+        userId: founderUserId,
+        userEmail: founderEmail ?? null,
+        role: "admin",
+        joinedAt: Date.now(),
+      });
+    }
+    this.orgs.set(orgId, org);
+    this.orgsBySlug.set(slug, orgId);
+    return org;
+  }
+
+  /** Get an organization by ID. */
+  getOrg(orgId: string): OrgEntry | undefined {
+    return this.orgs.get(orgId);
+  }
+
+  /** Get all organizations a user is a member of. */
+  getOrgsForUser(userId: string): Array<OrgEntry & { role: "admin" | "member" }> {
+    const result: Array<OrgEntry & { role: "admin" | "member" }> = [];
+    for (const org of this.orgs.values()) {
+      const member = org.members.get(userId);
+      if (member) {
+        result.push({ ...org, role: member.role });
+      }
+    }
+    return result;
+  }
+
+  /** Get all organizations (for browsing). Includes membership info for the requesting user. */
+  getAllOrgs(userId: string): Array<Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" }> {
+    return Array.from(this.orgs.values()).map((org) => {
+      const member = org.members.get(userId);
+      return {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        githubOrg: org.githubOrg,
+        createdAt: org.createdAt,
+        memberCount: org.members.size,
+        isMember: !!member,
+        role: member?.role,
+      };
+    });
+  }
+
+  /** Get members of an organization. */
+  getOrgMembers(orgId: string): OrgMember[] {
+    const org = this.orgs.get(orgId);
+    if (!org) return [];
+    return Array.from(org.members.values()).map((m) => ({
+      orgId: m.orgId,
+      userId: m.userId,
+      userEmail: m.userEmail,
+      role: m.role,
+      joinedAt: m.joinedAt,
+    }));
+  }
+
+  /** Check if a user is a member of an org. */
+  isOrgMember(orgId: string, userId: string): boolean {
+    const org = this.orgs.get(orgId);
+    return !!org?.members.has(userId);
+  }
+
+  /** Check if a user is an admin of an org. */
+  isOrgAdmin(orgId: string, userId: string): boolean {
+    const org = this.orgs.get(orgId);
+    const member = org?.members.get(userId);
+    return member?.role === "admin";
+  }
+
+  /** Add a user to an org by email. Returns true if successful. */
+  addOrgMemberByEmail(orgId: string, userEmail: string, role: "admin" | "member" = "member", addedBy?: string): { ok: boolean; message: string } {
+    const org = this.orgs.get(orgId);
+    if (!org) return { ok: false, message: "Organization not found." };
+
+    // Find the user by email among active sessions
+    let targetUserId: string | null = null;
+    for (const [uid, sess] of this.sessions) {
+      if (sess.user.email?.toLowerCase() === userEmail.toLowerCase()) {
+        targetUserId = uid;
+        break;
+      }
+    }
+
+    if (!targetUserId) {
+      // Store a pending invitation — the user will be auto-added when they connect
+      // For now, we store it as a pending email in the org's members map with a synthetic key
+      const pendingKey = `pending:${userEmail.toLowerCase()}`;
+      if (org.members.has(pendingKey)) {
+        return { ok: false, message: `${userEmail} has already been invited.` };
+      }
+      org.members.set(pendingKey, {
+        orgId,
+        userId: pendingKey,
+        userEmail,
+        role,
+        joinedAt: Date.now(),
+      });
+      return { ok: true, message: `Invitation sent to ${userEmail}. They will be added when they log in.` };
+    }
+
+    if (org.members.has(targetUserId)) {
+      return { ok: false, message: `${userEmail} is already a member.` };
+    }
+
+    org.members.set(targetUserId, {
+      orgId,
+      userId: targetUserId,
+      userEmail,
+      role,
+      joinedAt: Date.now(),
+    });
+
+    return { ok: true, message: `Added ${userEmail} as ${role}.` };
+  }
+
+  /** Remove a user from an org. */
+  removeOrgMember(orgId: string, userId: string): boolean {
+    const org = this.orgs.get(orgId);
+    if (!org) return false;
+    return org.members.delete(userId);
+  }
+
+  /** Create a room within an organization. Returns the room ID or null. */
+  createOrgRoom(orgId: string, name: string, theme?: OfficeTheme): string | null {
+    const org = this.orgs.get(orgId);
+    if (!org) return null;
+    return this.createRoom("system", name, theme, false, orgId);
+  }
+
+  /** Check if a user can join a room (org members can join org rooms freely). */
+  canJoinRoom(roomId: string, userId: string): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    if (room.roomType === "public") return true;
+    if (room.roomType === "private") return room.ownerId === userId;
+    if (room.roomType === "organization" && room.orgId) {
+      return this.isOrgMember(room.orgId, userId);
+    }
+    return false;
+  }
+
+  /** Check if a user can perform admin actions in their current room. */
+  canManageRoom(userId: string): boolean {
+    const sess = this.sessions.get(userId);
+    if (!sess?.roomId) return false;
+    const room = this.rooms.get(sess.roomId);
+    if (!room) return false;
+    if (room.roomType === "private") return room.ownerId === userId;
+    if (room.roomType === "organization" && room.orgId) {
+      return this.isOrgAdmin(room.orgId, userId);
+    }
+    return false;
   }
 }

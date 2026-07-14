@@ -172,6 +172,7 @@ export class Hud {
   private rosterCollapsed = false;
   private renderQueued = false;
   private perfVisible = false;
+  private voiceBtn: HTMLButtonElement | null = null;
 
   constructor(
     private store: Store,
@@ -184,6 +185,7 @@ export class Hud {
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
+        <button class="btn mini" id="voice-btn" title="Toggle voice chat">🎤</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
           <span id="user-email" style="font-size:0.75rem; color:#888; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
@@ -248,7 +250,7 @@ export class Hud {
         </div>
       </div>
       <div class="toasts" id="toasts"></div>
-      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · click an agent · ESC close</div>
+      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · V voice · click an agent · ESC close</div>
       <div class="hint touch">Tap an agent · Use joystick to move · Tap action buttons</div>
       <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
       <div class="mobile-panel-toggles">
@@ -270,7 +272,15 @@ export class Hud {
 
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
     document.getElementById("settings-btn")!.addEventListener("click", () => this.openSettings());
-    document.getElementById("rooms-btn")!.addEventListener("click", () => this.openRoomsPanel());
+    document.getElementById("rooms-btn")!.addEventListener("click", () => {
+      this.net.send({ type: "list_orgs" });
+      this.openRoomsPanel();
+    });
+
+    // ── Voice chat toggle ──────────────────────────────────────────────
+    const voiceBtn = document.getElementById("voice-btn")! as HTMLButtonElement;
+    voiceBtn.addEventListener("click", () => this.toggleVoice());
+    this.voiceBtn = voiceBtn;
 
     // User menu: show email + sign-out button (reactive to auth state)
     if (isAuthEnabled) {
@@ -475,6 +485,35 @@ export class Hud {
     toggleBtn.title = this.feedCollapsed ? "Open feed" : "Collapse";
   }
 
+  private toggleVoice(): void {
+    const scene = this.store.sceneRef;
+    if (!scene) {
+      this.store.toast("Voice chat unavailable — scene not ready.");
+      return;
+    }
+    const voice = scene.voice;
+    if (!voice) {
+      this.store.toast("Voice chat unavailable.");
+      return;
+    }
+    if (voice.active) {
+      voice.stop();
+      if (this.voiceBtn) {
+        this.voiceBtn.textContent = "🎤";
+        this.voiceBtn.style.color = "";
+      }
+    } else {
+      voice.start().then(() => {
+        if (this.voiceBtn) {
+          this.voiceBtn.textContent = "🎙";
+          this.voiceBtn.style.color = "#4caf50";
+        }
+      }).catch(() => {
+        this.store.toast("Microphone access denied — check browser settings.");
+      });
+    }
+  }
+
   /** Global hotkeys: H hire · F feed · B board · , settings · ESC closes modals. */
   private bindShortcuts(): void {
     document.addEventListener("keydown", (e) => {
@@ -522,7 +561,19 @@ export class Hud {
           e.preventDefault();
           this.togglePerf();
           break;
+        case "v":
+          e.preventDefault();
+          {
+            const voice = this.store.sceneRef?.voice;
+            if (voice?.active && voice.muted) voice.setMuted(false);
+          }
+          break;
       }
+    });
+    document.addEventListener("keyup", (e) => {
+      if (e.key.toLowerCase() !== "v") return;
+      const voice = this.store.sceneRef?.voice;
+      if (voice?.active && !voice.muted) voice.setMuted(true);
     });
   }
 
@@ -756,8 +807,12 @@ export class Hud {
     const isHq2 = this.store.roomId === "hq2";
     const isInOffice = this.store.privateOfficeId != null && this.store.roomId === this.store.privateOfficeId;
 
+    // Separate org rooms from other rooms
+    const orgRooms = this.store.roomsList.filter(r => r.roomType === "organization" && r.roomId !== "hq2");
+    const otherRooms = this.store.roomsList.filter(r => r.roomId !== "hq2" && r.roomId !== this.store.privateOfficeId && r.roomType !== "organization");
+
     overlay.innerHTML = `
-      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;">
+      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:480px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;max-height:85vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
           <h2 style="margin:0;font-size:1.1rem;">🚪 Rooms</h2>
           <button class="x" id="rooms-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
@@ -779,16 +834,26 @@ export class Hud {
           </div>
         </div>
 
-        ${this.store.roomsList.filter(r => r.roomId !== "hq2" && r.roomId !== this.store.privateOfficeId).length > 0 ? `
+        ${orgRooms.length > 0 ? `
+        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">🏢 ORGANIZATION ROOMS</div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            ${orgRooms.map(r => {
+              const isCurrent = this.store.roomId === r.roomId;
+              return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">🏢 ${r.name}</button>`;
+            }).join("")}
+          </div>
+        </div>
+        ` : ""}
+
+        ${otherRooms.length > 0 ? `
         <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
           <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">YOUR ROOMS</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            ${this.store.roomsList
-              .filter(r => r.roomId !== "hq2" && r.roomId !== this.store.privateOfficeId)
-              .map(r => {
-                const isCurrent = this.store.roomId === r.roomId;
-                return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">${r.name}</button>`;
-              }).join("")}
+            ${otherRooms.map(r => {
+              const isCurrent = this.store.roomId === r.roomId;
+              return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">${r.name}</button>`;
+            }).join("")}
           </div>
         </div>
         ` : ""}
@@ -798,6 +863,36 @@ export class Hud {
           <div style="display:flex;gap:0.5rem;">
             <input id="room-name-input" placeholder="Room name…" style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
             <button class="btn primary" id="room-create-btn" style="font-size:0.8rem;">CREATE</button>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+            <div style="font-size:0.75rem;color:#888;">ORGANIZATIONS</div>
+            <button class="btn" id="org-refresh-btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;">↻</button>
+          </div>
+          <div id="orgs-container" style="display:flex;flex-direction:column;gap:0.4rem;">
+            ${this.store.orgsList.length === 0 ? '<p style="color:#888;font-size:0.8rem;">No organizations yet.</p>' : this.store.orgsList.map(o => `
+              <div style="background:#222;border-radius:6px;padding:0.5rem 0.7rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <div>
+                    <span style="font-size:0.85rem;font-weight:bold;">${o.name}</span>
+                    ${o.githubOrg ? `<span style="font-size:0.7rem;color:#666;margin-left:0.4rem;">github:${o.githubOrg}</span>` : ""}
+                  </div>
+                  <div style="display:flex;gap:0.3rem;align-items:center;">
+                    <span style="font-size:0.7rem;color:#888;">${o.memberCount} member${o.memberCount !== 1 ? 's' : ''}</span>
+                    ${o.isMember ? `<span style="font-size:0.65rem;color:#4f9dde;">${o.role}</span>` : ''}
+                  </div>
+                </div>
+                <div style="display:flex;gap:0.3rem;margin-top:0.4rem;">
+                  <button class="btn" data-org-join="${o.id}" data-org-name="${o.name}" style="font-size:0.7rem;padding:0.2rem 0.5rem;">${o.isMember ? 'Join Room' : 'Request Access'}</button>
+                  ${o.role === 'admin' ? `<button class="btn" data-org-members="${o.id}" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Members</button>` : ''}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+          <div style="margin-top:0.5rem;">
+            <button class="btn" id="org-create-btn" style="font-size:0.75rem;width:100%;">+ CREATE ORGANIZATION</button>
           </div>
         </div>
 
@@ -872,6 +967,140 @@ export class Hud {
       this.toast(`Invite sent to ${userId}`);
       close();
     });
+
+    // Refresh orgs
+    document.getElementById("org-refresh-btn")!.addEventListener("click", () => {
+      this.net.send({ type: "list_orgs" });
+    });
+
+    // Create org
+    document.getElementById("org-create-btn")!.addEventListener("click", () => {
+      this.openCreateOrgModal(close);
+    });
+
+    // Org join / members
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-org-join]")) {
+      btn.addEventListener("click", () => {
+        const orgId = btn.dataset.orgJoin!;
+        const orgName = btn.dataset.orgName!;
+        this.net.send({ type: "join_org_room", orgId, roomName: orgName });
+        close();
+      });
+    }
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-org-members]")) {
+      btn.addEventListener("click", () => {
+        const orgId = btn.dataset.orgMembers!;
+        this.net.send({ type: "list_org_members", orgId });
+        this.openOrgMembersModal(orgId);
+      });
+    }
+  }
+
+  private openCreateOrgModal(closeRooms: () => void): void {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10001;";
+    overlay.id = "create-org-overlay";
+
+    overlay.innerHTML = `
+      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:400px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin:0;font-size:1rem;">🏢 Create Organization</h2>
+          <button class="x" id="org-create-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.6rem;">
+          <div>
+            <label style="font-size:0.75rem;color:#888;">Name</label>
+            <input id="org-name-input" placeholder="My Organization" style="width:100%;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;margin-top:0.2rem;" />
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:#888;">Slug (URL-safe)</label>
+            <input id="org-slug-input" placeholder="my-org" style="width:100%;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;margin-top:0.2rem;" />
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:#888;">GitHub Org (optional)</label>
+            <input id="org-github-input" placeholder="my-github-org" style="width:100%;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;margin-top:0.2rem;" />
+          </div>
+          <button class="btn primary" id="org-create-submit" style="font-size:0.85rem;margin-top:0.3rem;">CREATE</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    document.getElementById("org-create-close")!.addEventListener("click", close);
+
+    document.getElementById("org-create-submit")!.addEventListener("click", () => {
+      const name = (document.getElementById("org-name-input") as HTMLInputElement).value.trim();
+      const slug = (document.getElementById("org-slug-input") as HTMLInputElement).value.trim();
+      const githubOrg = (document.getElementById("org-github-input") as HTMLInputElement).value.trim() || undefined;
+      if (!name || !slug) return;
+      this.net.send({ type: "create_org", name, slug, githubOrg });
+      this.net.send({ type: "list_orgs" });
+      close();
+      closeRooms();
+    });
+  }
+
+  private openOrgMembersModal(orgId: string): void {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10001;";
+    overlay.id = "org-members-overlay";
+
+    const members = this.store.orgMembers?.orgId === orgId ? this.store.orgMembers.members : [];
+
+    overlay.innerHTML = `
+      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin:0;font-size:1rem;">👥 Organization Members</h2>
+          <button class="x" id="org-members-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+        <div id="org-members-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1rem;">
+          ${members.length === 0 ? '<p style="color:#888;font-size:0.8rem;">No members yet.</p>' : members.map(m => `
+            <div style="display:flex;justify-content:space-between;align-items:center;background:#222;border-radius:6px;padding:0.5rem 0.7rem;">
+              <div>
+                <span style="font-size:0.85rem;">${m.userEmail ?? m.userId}</span>
+                <span style="font-size:0.65rem;color:${m.role === 'admin' ? '#4f9dde' : '#888'};margin-left:0.4rem;">${m.role}</span>
+              </div>
+              <button class="btn" data-remove-member="${m.userId}" style="font-size:0.7rem;padding:0.2rem 0.5rem;color:#c44a4a;">Remove</button>
+            </div>
+          `).join("")}
+        </div>
+        <div style="border-top:1px solid #333;padding-top:1rem;">
+          <div style="font-size:0.75rem;color:#888;margin-bottom:0.3rem;">ADD MEMBER BY EMAIL</div>
+          <div style="display:flex;gap:0.5rem;">
+            <input id="org-add-email" placeholder="user@example.com" style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
+            <select id="org-add-role" style="padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;">
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button class="btn primary" id="org-add-btn" style="font-size:0.8rem;">ADD</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    document.getElementById("org-members-close")!.addEventListener("click", close);
+
+    document.getElementById("org-add-btn")!.addEventListener("click", () => {
+      const email = (document.getElementById("org-add-email") as HTMLInputElement).value.trim();
+      const role = (document.getElementById("org-add-role") as HTMLSelectElement).value as "admin" | "member";
+      if (!email) return;
+      this.net.send({ type: "add_org_member", orgId, userEmail: email, role });
+      // Refresh members after a short delay
+      setTimeout(() => this.net.send({ type: "list_org_members", orgId }), 500);
+    });
+
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-remove-member]")) {
+      btn.addEventListener("click", () => {
+        const userId = btn.dataset.removeMember!;
+        this.net.send({ type: "remove_org_member", orgId, userId });
+        setTimeout(() => this.net.send({ type: "list_org_members", orgId }), 500);
+      });
+    }
   }
 
   private showInviteModal(invite: PendingInvite): void {

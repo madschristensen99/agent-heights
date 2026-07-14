@@ -371,6 +371,38 @@ export interface PlayerPresence {
 /** Visual theme for the office map + tileset. */
 export type OfficeTheme = "classic" | "agenthq";
 
+// --------------------------------------------------- organizations ---
+
+/** Room type: private (single owner), organization (shared by org members), or public (open to all). */
+export type RoomType = "private" | "organization" | "public";
+
+/** An organization that groups users, owns rooms, and can map to a GitHub org. */
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  githubOrg?: string | null;
+  createdAt: number;
+}
+
+/** A user's membership in an organization. */
+export interface OrgMember {
+  orgId: string;
+  userId: string;
+  userEmail: string | null;
+  role: "admin" | "member";
+  joinedAt: number;
+}
+
+/** Pre-seeded organization slug for Agent HQ's own HQ. */
+export const AGENT_HQ_HQ_SLUG = "agent-hq-hq";
+
+/** Admin emails whitelisted for the Agent HQ HQ organization. */
+export const AGENT_HQ_HQ_ADMINS = [
+  "remseechannel@gmail.com",
+  "madschristensen99@icloud.com",
+];
+
 export const OFFICE_THEMES: Array<{ id: OfficeTheme; label: string }> = [
   { id: "classic", label: "Classic — wood floors, cozy office" },
   { id: "agenthq", label: "Agent HQ — blue carpet, branded floor logo" },
@@ -448,12 +480,18 @@ export type ClientMsg =
   | { type: "start_mcp_oauth"; serverUrl: string }
   | { type: "submit_mcp_oauth_code"; serverUrl: string; callbackUrl: string }
   | { type: "renew_token"; token: string }
-  | { type: "create_room"; name: string; theme?: OfficeTheme }
+  | { type: "create_room"; name: string; theme?: OfficeTheme; orgId?: string }
   | { type: "join_room"; roomId: string }
   | { type: "leave_room"; roomId: string }
   | { type: "switch_room"; roomId: string }
   | { type: "invite_to_room"; roomId: string; userId: string; role: "member" | "guest" }
   | { type: "respond_invite"; roomId: string; accept: boolean }
+  | { type: "create_org"; name: string; slug: string; githubOrg?: string }
+  | { type: "list_orgs" }
+  | { type: "list_org_members"; orgId: string }
+  | { type: "add_org_member"; orgId: string; userEmail: string; role?: "admin" | "member" }
+  | { type: "remove_org_member"; orgId: string; userId: string }
+  | { type: "join_org_room"; orgId: string; roomName: string }
   | { type: "player_move"; x: number; y: number; dir: Dir }
   | { type: "npc_update"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_update"; cx: number; cy: number; tileIndex: number; tile: number }
@@ -461,7 +499,8 @@ export type ClientMsg =
   | { type: "voice_offer"; targetUserId: string; sdp: string }
   | { type: "voice_answer"; targetUserId: string; sdp: string }
   | { type: "voice_ice"; targetUserId: string; candidate: string }
-  | { type: "voice_stop" };
+  | { type: "voice_stop" }
+  | { type: "projector_set_channel"; channel: string };
 
 export type ServerMsg =
   | {
@@ -496,7 +535,7 @@ export type ServerMsg =
   | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "refresh_token" }
-  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string }
+  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }
   | { type: "player_left"; roomId: string; userId: string }
   | { type: "player_moved"; roomId: string; userId: string; x: number; y: number; dir: Dir }
@@ -505,7 +544,11 @@ export type ServerMsg =
   | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }
   | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
-  | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean }[] }
+  | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] }
+  | { type: "orgs_list"; orgs: (Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" })[] }
+  | { type: "org_members"; orgId: string; members: OrgMember[] }
+  | { type: "org_created"; org: Organization }
+  | { type: "org_error"; message: string }
   | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; currentPeriodEnd: number | null }
   | { type: "payment_required"; reason: "entrance" | "subscription"; message: string }
   | { type: "emote"; agentId: string; emote: string }
@@ -514,7 +557,8 @@ export type ServerMsg =
   | { type: "voice_offer"; fromUserId: string; sdp: string }
   | { type: "voice_answer"; fromUserId: string; sdp: string }
   | { type: "voice_ice"; fromUserId: string; candidate: string }
-  | { type: "voice_peer_left"; userId: string };
+  | { type: "voice_peer_left"; userId: string }
+  | { type: "projector_state"; channel: string };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

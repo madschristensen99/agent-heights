@@ -349,7 +349,7 @@ wss.on("connection", async (ws, req) => {
 
   // Helper: send the user's list of rooms they own or have joined
   const sendRoomsList = () => {
-    const rooms = tenants.getRoomsForUser(sess.user.id).map(r => ({ roomId: r.id, name: r.name, isPrivate: r.isPrivate }));
+    const rooms = tenants.getRoomsForUser(sess.user.id).map(r => ({ roomId: r.id, name: r.name, isPrivate: r.isPrivate, roomType: r.roomType, orgId: r.orgId }));
     ws.send(JSON.stringify({ type: "rooms_list", rooms } satisfies ServerMsg));
   };
 
@@ -733,9 +733,13 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "toast", text: "Room not found." });
             break;
           }
-          // Can't join private rooms directly — need an invite
-          if (room.isPrivate && room.ownerId !== sess.user.id) {
-            sess.broadcast({ type: "toast", text: "This is a private office. You need an invite." });
+          // Check join permission (private rooms need invite, org rooms need membership)
+          if (!tenants.canJoinRoom(msg.roomId, sess.user.id)) {
+            if (room.roomType === "organization") {
+              sess.broadcast({ type: "toast", text: "You need to be a member of this organization to join." });
+            } else {
+              sess.broadcast({ type: "toast", text: "This is a private office. You need an invite." });
+            }
             break;
           }
           // Notify old room that the player left
@@ -803,6 +807,7 @@ wss.on("connection", async (ws, req) => {
             name: room.name,
             players: tenants.getRoomPlayers(msg.roomId),
             privateOfficeId: sess.privateOfficeId ?? undefined,
+            projectorChannel: room.projectorChannel,
           });
           sendRoomsList();
           // If switching to a private room they don't own, send the owner's agent snapshot
@@ -932,6 +937,7 @@ wss.on("connection", async (ws, req) => {
                   name: room.name,
                   players: tenants.getRoomPlayers(msg.roomId),
                   privateOfficeId: sess.privateOfficeId ?? undefined,
+                  projectorChannel: room.projectorChannel,
                 });
                 sendRoomsList();
                 // Send the owner's agent snapshot to the visitor
@@ -1033,6 +1039,206 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         }
+        case "voice_start": {
+          sess.voiceActive = true;
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const myName = sess.player?.name ?? "Boss";
+          // Notify all voice-active peers in the room about the new user
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess && peerSess.voiceActive) {
+              peerSess.broadcast({ type: "voice_peer", userId: sess.user.id, name: myName });
+              // Also tell the joining user about the existing peer
+              sess.broadcast({ type: "voice_peer", userId: pid, name: peerSess.player?.name ?? "Boss" });
+            }
+          }
+          break;
+        }
+        case "voice_stop": {
+          if (!sess.voiceActive) break;
+          sess.voiceActive = false;
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess && peerSess.voiceActive) {
+              peerSess.broadcast({ type: "voice_peer_left", userId: sess.user.id });
+            }
+          }
+          break;
+        }
+        case "voice_offer":
+        case "voice_answer":
+        case "voice_ice": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          // Verify target is in the same room
+          if (!room.players.has(msg.targetUserId)) break;
+          const targetSess = tenants.get(msg.targetUserId);
+          if (!targetSess || !targetSess.voiceActive) break;
+          if (msg.type === "voice_offer") {
+            targetSess.broadcast({ type: "voice_offer", fromUserId: sess.user.id, sdp: msg.sdp });
+          } else if (msg.type === "voice_answer") {
+            targetSess.broadcast({ type: "voice_answer", fromUserId: sess.user.id, sdp: msg.sdp });
+          } else {
+            targetSess.broadcast({ type: "voice_ice", fromUserId: sess.user.id, candidate: msg.candidate });
+          }
+          break;
+        }
+        case "projector_set_channel": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const valid = ["off", "brainrot"];
+          if (!valid.includes(msg.channel)) break;
+          room.projectorChannel = msg.channel;
+          // Broadcast to all players in the room
+          for (const [pid] of room.players) {
+            const otherSess = tenants.get(pid);
+            if (otherSess) {
+              otherSess.broadcast({ type: "projector_state", channel: msg.channel });
+            }
+          }
+          break;
+        }
+        // ── Organization management ────────────────────────────────────
+        case "create_org": {
+          const slug = msg.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
+          if (!slug) {
+            sess.broadcast({ type: "org_error", message: "Invalid organization slug." });
+            break;
+          }
+          const org = tenants.createOrg(msg.name.trim(), slug, msg.githubOrg, sess.user.id, sess.user.email);
+          if (!org) {
+            sess.broadcast({ type: "org_error", message: "Organization slug already taken." });
+            break;
+          }
+          sess.broadcast({
+            type: "org_created",
+            org: { id: org.id, name: org.name, slug: org.slug, githubOrg: org.githubOrg, createdAt: org.createdAt },
+          });
+          break;
+        }
+        case "list_orgs": {
+          const orgs = tenants.getAllOrgs(sess.user.id);
+          sess.broadcast({ type: "orgs_list", orgs });
+          break;
+        }
+        case "list_org_members": {
+          const members = tenants.getOrgMembers(msg.orgId);
+          sess.broadcast({ type: "org_members", orgId: msg.orgId, members });
+          break;
+        }
+        case "add_org_member": {
+          if (!tenants.isOrgAdmin(msg.orgId, sess.user.id)) {
+            sess.broadcast({ type: "org_error", message: "You must be an org admin to add members." });
+            break;
+          }
+          const result = tenants.addOrgMemberByEmail(msg.orgId, msg.userEmail.trim(), msg.role ?? "member", sess.user.id);
+          if (result.ok) {
+            // Broadcast updated member list
+            const members = tenants.getOrgMembers(msg.orgId);
+            sess.broadcast({ type: "org_members", orgId: msg.orgId, members });
+            sess.broadcast({ type: "toast", text: result.message });
+          } else {
+            sess.broadcast({ type: "org_error", message: result.message });
+          }
+          break;
+        }
+        case "remove_org_member": {
+          if (!tenants.isOrgAdmin(msg.orgId, sess.user.id)) {
+            sess.broadcast({ type: "org_error", message: "You must be an org admin to remove members." });
+            break;
+          }
+          const ok = tenants.removeOrgMember(msg.orgId, msg.userId);
+          if (ok) {
+            const members = tenants.getOrgMembers(msg.orgId);
+            sess.broadcast({ type: "org_members", orgId: msg.orgId, members });
+            sess.broadcast({ type: "toast", text: "Member removed." });
+          } else {
+            sess.broadcast({ type: "org_error", message: "Failed to remove member." });
+          }
+          break;
+        }
+        case "join_org_room": {
+          if (!tenants.isOrgMember(msg.orgId, sess.user.id)) {
+            sess.broadcast({ type: "toast", text: "You are not a member of this organization." });
+            break;
+          }
+          // Find or create the org room
+          const org = tenants.getOrg(msg.orgId);
+          if (!org) {
+            sess.broadcast({ type: "toast", text: "Organization not found." });
+            break;
+          }
+          // Look for an existing org room with this name
+          let targetRoomId: string | null = null;
+          for (const room of tenants.getRoomsForUser(sess.user.id)) {
+            if (room.orgId === msg.orgId && room.name === msg.roomName) {
+              targetRoomId = room.id;
+              break;
+            }
+          }
+          // Also check all rooms (the org room may exist but not yet be in the user's list)
+          if (!targetRoomId) {
+            for (const room of tenants.getRoomsForUser(sess.user.id)) {
+              if (room.orgId === msg.orgId) {
+                targetRoomId = room.id;
+                break;
+              }
+            }
+          }
+          if (!targetRoomId) {
+            // Create a new room in the org
+            targetRoomId = tenants.createOrgRoom(msg.orgId, msg.roomName);
+            if (!targetRoomId) {
+              sess.broadcast({ type: "toast", text: "Failed to create org room." });
+              break;
+            }
+          }
+          // Switch to the room
+          const oldRoomId = sess.roomId;
+          if (oldRoomId && oldRoomId !== targetRoomId) {
+            for (const p of tenants.getRoomPlayers(oldRoomId)) {
+              if (p.userId === sess.user.id) continue;
+              const otherSess = tenants.get(p.userId);
+              if (otherSess) {
+                otherSess.broadcast({ type: "player_left", roomId: oldRoomId, userId: sess.user.id });
+              }
+            }
+          }
+          const room = tenants.switchRoom(sess.user.id, targetRoomId);
+          if (!room) {
+            sess.broadcast({ type: "toast", text: "Failed to join org room." });
+            break;
+          }
+          sess.broadcast({
+            type: "room_state",
+            roomId: targetRoomId,
+            name: room.name,
+            players: tenants.getRoomPlayers(targetRoomId),
+            privateOfficeId: sess.privateOfficeId ?? undefined,
+            projectorChannel: room.projectorChannel,
+          });
+          sendRoomsList();
+          // Notify other players in the room
+          const players = tenants.getRoomPlayers(targetRoomId);
+          const me = players.find((p) => p.userId === sess.user.id);
+          for (const p of players) {
+            if (p.userId === sess.user.id) continue;
+            const otherSess = tenants.get(p.userId);
+            if (otherSess && me) {
+              otherSess.broadcast({ type: "player_joined", roomId: targetRoomId, player: me });
+            }
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error("[server] error handling message:", err);
@@ -1045,6 +1251,22 @@ wss.on("connection", async (ws, req) => {
     sess.clients.delete(ws);
     if (refreshTimer) clearTimeout(refreshTimer);
     if (expiryTimer) clearTimeout(expiryTimer);
+    // Clean up voice state when the last client disconnects
+    if (sess.clients.size === 0 && sess.voiceActive) {
+      sess.voiceActive = false;
+      if (sess.roomId) {
+        const room = tenants.getRoom(sess.roomId);
+        if (room) {
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess && peerSess.voiceActive) {
+              peerSess.broadcast({ type: "voice_peer_left", userId: sess.user.id });
+            }
+          }
+        }
+      }
+    }
     tenants.handleClientDisconnect(sess.user.id);
   });
   ws.on("error", () => {
