@@ -230,7 +230,7 @@ export async function startOAuthFlow(
     console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
 
     if (!metadata.registration_endpoint) {
-      throw new Error("No registration_endpoint available — cannot register OAuth client");
+      throw new Error("This MCP server does not support automatic OAuth registration. It may require a pre-registered API key or a specific OAuth app — try using the API Key option instead.");
     }
 
     const registration = await fetch(`${metadata.registration_endpoint}`, {

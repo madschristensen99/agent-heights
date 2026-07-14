@@ -19,6 +19,9 @@ import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
 
+/** Throttle map for rate-limit toasts — one per 5s per user. */
+const rateLimitToastMap = new Map<string, number>();
+
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
 
@@ -427,8 +430,15 @@ wss.on("connection", async (ws, req) => {
       }
 
       if (!rateLimit(sess.user.id, msg.type)) {
-        const data = JSON.stringify({ type: "toast", text: "Too many requests — slow down." });
-        if (ws.readyState === WebSocket.OPEN) ws.send(data);
+        console.warn(`[rate-limit] BLOCKED user=${sess.user.id} type=${msg.type}`);
+        // Throttle the "too many requests" toast itself — only one per 5s
+        const rlKey = `rltoast:${sess.user.id}`;
+        const now = Date.now();
+        if (!rateLimitToastMap.has(rlKey) || now - rateLimitToastMap.get(rlKey)! > 5000) {
+          rateLimitToastMap.set(rlKey, now);
+          const data = JSON.stringify({ type: "toast", text: "Too many requests — slow down." });
+          if (ws.readyState === WebSocket.OPEN) ws.send(data);
+        }
         return;
       }
 
