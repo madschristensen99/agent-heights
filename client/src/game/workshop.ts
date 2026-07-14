@@ -10,7 +10,6 @@
  */
 
 import Phaser from "phaser";
-import { hexToPixel, HEX_SIZE } from "../../../shared/hex";
 
 const TILE_PX = 64;
 
@@ -887,9 +886,8 @@ export function upgradeWorkshop(scene: Phaser.Scene): Phaser.GameObjects.Sprite[
     const layout = WORKSHOP_LAYOUT[piece.key];
     if (!layout) continue;
 
-    const hp = hexToPixel(layout.tile.x, layout.tile.y);
-    const px = hp.x - HEX_SIZE;
-    const py = hp.y - HEX_SIZE;
+    const px = layout.tile.x * TILE_PX;
+    const py = layout.tile.y * TILE_PX;
     const sprite = scene.add.sprite(px, py, piece.key);
     sprite.setOrigin(0, 0);
     sprite.setDepth(5 + py + 0.2);

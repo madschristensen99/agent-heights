@@ -1,4 +1,4 @@
-import type { AgentInfo, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState, AgentStatus, AgentRole, OfficeTheme } from "../shared/types.js";
+import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState, AgentStatus, AgentRole, OfficeTheme } from "../shared/types.js";
 import type { SaveState } from "./persistence.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
@@ -29,6 +29,7 @@ export class RelationalPersistence {
   private flushInFlight: Promise<void> | null = null;
   private pendingAgents: boolean = false;
   private pendingBoard: boolean = false;
+  private pendingSchedules: boolean = false;
   private pendingSettings: boolean = false;
   private pendingPlayer: boolean = false;
   private pendingWorld: boolean = false;
@@ -40,6 +41,7 @@ export class RelationalPersistence {
       agents: [],
       logs: {},
       board: [],
+      schedules: [],
       world: { seed: 0, firedAgents: [] },
     };
   }
@@ -156,6 +158,26 @@ export class RelationalPersistence {
         createdAt: r.created_at,
       }));
 
+      // Load schedules
+      const { data: scheduleRows } = await supabaseAdmin
+        .from("agent_hq_schedules")
+        .select("*")
+        .eq("owner_id", this.userId);
+
+      const schedules: AgentSchedule[] = (scheduleRows ?? []).map((r: any) => ({
+        id: r.id,
+        agentId: r.agent_id,
+        name: r.name,
+        task: r.task,
+        cronExpression: r.cron_expression,
+        enabled: r.enabled,
+        lastRunAt: r.last_run_at ?? null,
+        nextRunAt: r.next_run_at,
+        runCount: r.run_count,
+        handoffTo: r.handoff_to ?? null,
+        createdAt: r.created_at,
+      }));
+
       // Load world state
       const { data: worldRow } = await supabaseAdmin
         .from("agent_hq_world_state")
@@ -167,7 +189,7 @@ export class RelationalPersistence {
         ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {} }
         : { seed: room.seed, firedAgents: [] };
 
-      this.state = { player, agents, logs, settings, board, world };
+      this.state = { player, agents, logs, settings, board, schedules, world };
       return this.state;
     } catch (err) {
       console.error("[db-rel] load failed:", err);
@@ -197,6 +219,12 @@ export class RelationalPersistence {
   setBoard(board: TaskCard[]): void {
     this.state.board = board;
     this.pendingBoard = true;
+    this.schedule();
+  }
+
+  setSchedules(schedules: AgentSchedule[]): void {
+    this.state.schedules = schedules;
+    this.pendingSchedules = true;
     this.schedule();
   }
 
@@ -304,6 +332,11 @@ export class RelationalPersistence {
     if (this.pendingBoard) {
       this.pendingBoard = false;
       await this.flushBoard();
+    }
+
+    if (this.pendingSchedules) {
+      this.pendingSchedules = false;
+      await this.flushSchedules();
     }
   }
 
@@ -456,6 +489,55 @@ export class RelationalPersistence {
         await supabaseAdmin.from("agent_hq_task_cards").delete().eq("owner_id", this.userId);
       } catch (err) {
         console.error("[db-rel] delete all cards failed:", err);
+      }
+    }
+  }
+
+  private async flushSchedules(): Promise<void> {
+    if (!this.roomId) return;
+    const schedules = this.state.schedules ?? [];
+
+    const rows = schedules.map((s) => ({
+      id: s.id,
+      agent_id: s.agentId,
+      owner_id: this.userId,
+      room_id: this.roomId,
+      name: s.name,
+      task: s.task,
+      cron_expression: s.cronExpression,
+      enabled: s.enabled,
+      last_run_at: s.lastRunAt,
+      next_run_at: s.nextRunAt,
+      run_count: s.runCount,
+      handoff_to: s.handoffTo,
+      created_at: s.createdAt,
+    }));
+
+    if (rows.length > 0) {
+      try {
+        await supabaseAdmin.from("agent_hq_schedules").upsert(rows);
+      } catch (err) {
+        console.error("[db-rel] upsert schedules failed:", err);
+      }
+    }
+
+    // Delete schedules that no longer exist
+    const currentIds = schedules.map((s) => s.id);
+    if (currentIds.length > 0) {
+      try {
+        await supabaseAdmin
+          .from("agent_hq_schedules")
+          .delete()
+          .eq("owner_id", this.userId)
+          .not("id", "in", `(${currentIds.join(",")})`);
+      } catch (err) {
+        console.error("[db-rel] delete stale schedules failed:", err);
+      }
+    } else {
+      try {
+        await supabaseAdmin.from("agent_hq_schedules").delete().eq("owner_id", this.userId);
+      } catch (err) {
+        console.error("[db-rel] delete all schedules failed:", err);
       }
     }
   }

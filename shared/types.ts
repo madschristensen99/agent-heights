@@ -340,6 +340,36 @@ export interface TaskCard {
   createdAt: number;
 }
 
+export interface AgentSchedule {
+  id: string;
+  agentId: string;
+  name: string;
+  task: string;
+  cronExpression: string;
+  enabled: boolean;
+  lastRunAt: number | null;
+  nextRunAt: number;
+  runCount: number;
+  handoffTo: string | null;
+  createdAt: number;
+}
+
+export interface SchedulePreset {
+  label: string;
+  cron: string;
+}
+
+export const SCHEDULE_PRESETS: SchedulePreset[] = [
+  { label: "Every 30 minutes", cron: "*/30 * * * *" },
+  { label: "Every hour", cron: "0 * * * *" },
+  { label: "Every 6 hours", cron: "0 */6 * * *" },
+  { label: "Daily at 9:00 AM", cron: "0 9 * * *" },
+  { label: "Daily at 5:00 PM", cron: "0 17 * * *" },
+  { label: "Weekly (Mon 9:00 AM)", cron: "0 9 * * 1" },
+  { label: "Weekly (Fri 5:00 PM)", cron: "0 17 * * 5" },
+  { label: "Custom cron…", cron: "" },
+];
+
 export type LogKind = "status" | "text" | "tool" | "result" | "error" | "boss";
 
 export interface LogEntry {
@@ -529,6 +559,7 @@ export type ServerMsg =
       player: PlayerInfo | null;
       settings: GameSettings;
       board: TaskCard[];
+      schedules: AgentSchedule[];
       world: WorldState | null;
     }
   | { type: "player"; player: PlayerInfo }
@@ -585,7 +616,10 @@ export type ServerMsg =
   | { type: "screen_share_peer_left"; userId: string }
   | { type: "agent_frame"; agentId: string; frame: string }
   | { type: "agent_broadcast_state"; agentId: string | null }
-  | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean };
+  | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }
+  | { type: "schedules"; schedules: AgentSchedule[] }
+  | { type: "schedule"; schedule: AgentSchedule }
+  | { type: "schedule_removed"; scheduleId: string };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

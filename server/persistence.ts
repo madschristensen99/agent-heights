@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentInfo, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState } from "../shared/types.js";
+import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState } from "../shared/types.js";
 
 export interface SaveState {
   player: PlayerInfo | null;
@@ -8,6 +8,7 @@ export interface SaveState {
   logs: Record<string, LogEntry[]>;
   settings?: GameSettings;
   board?: TaskCard[];
+  schedules?: AgentSchedule[];
   world?: WorldState;
   /** Conversation messages per agent (used by JSONB-based persistence backends). */
   messages?: Record<string, unknown[]>;
@@ -18,6 +19,7 @@ export interface Persistence {
   setAgents(agents: AgentInfo[], logs: Record<string, LogEntry[]>): void;
   setSettings(settings: GameSettings): void;
   setBoard(board: TaskCard[]): void;
+  setSchedules(schedules: AgentSchedule[]): void;
   setWorld(world: WorldState): void;
   getWorld(): WorldState;
   flushNow(): void | Promise<void>;
@@ -33,7 +35,7 @@ export interface Persistence {
  */
 export class SaveFile implements Persistence {
   readonly path: string;
-  private state: SaveState = { player: null, agents: [], logs: {}, board: [], world: { seed: 0, firedAgents: [] } };
+  private state: SaveState = { player: null, agents: [], logs: {}, board: [], schedules: [], world: { seed: 0, firedAgents: [] } };
   private timer: ReturnType<typeof setTimeout> | null = null;
   private messages: Map<string, unknown[]> = new Map();
 
@@ -53,6 +55,7 @@ export class SaveFile implements Persistence {
         logs: parsed.logs ?? {},
         settings: parsed.settings,
         board: parsed.board ?? [],
+        schedules: parsed.schedules ?? [],
         world: parsed.world ?? { seed: 0, firedAgents: [] },
       };
       const savedMessages = (parsed as any).messages;
@@ -85,6 +88,11 @@ export class SaveFile implements Persistence {
 
   setBoard(board: TaskCard[]): void {
     this.state.board = board;
+    this.schedule();
+  }
+
+  setSchedules(schedules: AgentSchedule[]): void {
+    this.state.schedules = schedules;
     this.schedule();
   }
 

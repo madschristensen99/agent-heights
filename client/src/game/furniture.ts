@@ -7,7 +7,6 @@
  */
 
 import Phaser from "phaser";
-import { hexToPixel, HEX_SIZE, HEX_HEIGHT } from "../../../shared/hex";
 
 const TILE_PX = 64;
 
@@ -2231,14 +2230,13 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
       // Hide the underlying tile to prevent double rendering
       tile.alpha = 0;
 
-      const hp = hexToPixel(x, y);
-      const px = hp.x - HEX_SIZE;
-      const py = hp.y - HEX_SIZE;
+      const px = x * TILE_PX;
+      const py = y * TILE_PX;
       const sprite = scene.add.sprite(px, py, key);
       sprite.setOrigin(0, 0);
       // Server racks and screens: shift up half a tile for visual fit
       if (tileId === 35 || tileId === 36) {
-        sprite.y -= HEX_HEIGHT / 2;
+        sprite.y -= TILE_PX / 2;
       }
       sprite.setDepth(furnitureLayer.depth + 0.1);
     }
