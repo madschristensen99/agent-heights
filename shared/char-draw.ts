@@ -646,7 +646,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO with gradient shading ----
     const tw = isFat ? (breathing ? 30 : 28) : (breathing ? 24 : 22);
     const tx = isFat ? (breathing ? 17 : 18) : (breathing ? 20 : 21);
-    rrO(bx(tx), by(38), tw, 18, 5, pal.shirt);
+    rr(bx(tx), by(38), tw, 18, 5, pal.shirt);
     // 3-tone shirt
     rr(bx(tx + 2), by(38), tw - 4, 3, 3, shirtLi);
     rr(bx(tx + 4), by(38), tw - 8, 2, 2, shirtMid);
@@ -739,7 +739,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO (back) ----
     const utw = isFat ? 28 : 22;
     const utx = isFat ? 18 : 21;
-    rrO(bx(utx), by(38), utw, 18, 5, pal.shirt);
+    rr(bx(utx), by(38), utw, 18, 5, pal.shirt);
     rr(bx(utx + 2), by(38), utw - 4, 3, 3, shirtLi);
     rr(bx(utx + 4), by(38), utw - 8, 2, 2, shirtMid);
     rr(bx(utx), by(38), 2, 18, 2, shirtLi);
@@ -854,7 +854,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO (profile) ----
     const rtw = isFat ? 22 : 18;
     const rtx = isFat ? 21 : 23;
-    rrO(bx(rtx), by(38), rtw, 18, 5, pal.shirt);
+    rr(bx(rtx), by(38), rtw, 18, 5, pal.shirt);
     rr(bx(rtx + 2), by(38), rtw - 4, 3, 3, shirtLi);
     rr(bx(rtx + 4), by(38), rtw - 8, 2, 2, shirtMid);
     rr(bx(rtx), by(38), 2, 18, 2, shirtLi);
