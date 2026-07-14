@@ -510,7 +510,21 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         },
       });
 
-      const stored = messageStore.get(agentId);
+      // Restore conversation history: try in-memory cache first (same process),
+      // then fall back to DB persistence (after server restart).
+      let stored = messageStore.get(agentId);
+      if ((!stored || stored.length === 0) && ctx.loadMessages) {
+        try {
+          const dbMessages = await ctx.loadMessages(agentId);
+          if (dbMessages.length > 0) {
+            stored = dbMessages as any[];
+            messageStore.set(agentId, stored);
+            console.log(`[cline:${agentId}] restored ${stored.length} messages from DB`);
+          }
+        } catch (err) {
+          console.error(`[cline:${agentId}] loadMessages failed:`, err);
+        }
+      }
       if (stored && stored.length > 0) {
         const compacted = compactMessages(stored);
         if (compacted.length !== stored.length) {
@@ -627,7 +641,16 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     }
 
     if (result.messages.length > 0) {
-      messageStore.set(agentId, [...result.messages] as any);
+      const msgs = [...result.messages] as any;
+      messageStore.set(agentId, msgs);
+      // Persist to DB for context restoration across server restarts
+      if (ctx.saveMessages) {
+        try {
+          await ctx.saveMessages(agentId, msgs);
+        } catch (err) {
+          console.error(`[cline:${agentId}] saveMessages failed:`, err);
+        }
+      }
     }
 
     if (result.status === "completed") {

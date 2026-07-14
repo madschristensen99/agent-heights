@@ -106,4 +106,21 @@ export class DbPersistence {
       console.error("[db] failed to flush save:", err);
     }
   }
+
+  async saveMessages(agentId: string, messages: unknown[]): Promise<void> {
+    if (!this.state.messages) this.state.messages = {};
+    this.state.messages[agentId] = [...messages];
+    this.schedule();
+  }
+
+  async loadMessages(agentId: string): Promise<unknown[]> {
+    return this.state.messages?.[agentId] ?? [];
+  }
+
+  async clearMessages(agentId: string): Promise<void> {
+    if (this.state.messages) {
+      delete this.state.messages[agentId];
+      this.schedule();
+    }
+  }
 }

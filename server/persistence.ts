@@ -9,6 +9,8 @@ export interface SaveState {
   settings?: GameSettings;
   board?: TaskCard[];
   world?: WorldState;
+  /** Conversation messages per agent (used by JSONB-based persistence backends). */
+  messages?: Record<string, unknown[]>;
 }
 
 export interface Persistence {
@@ -19,6 +21,9 @@ export interface Persistence {
   setWorld(world: WorldState): void;
   getWorld(): WorldState;
   flushNow(): void | Promise<void>;
+  saveMessages(agentId: string, messages: unknown[]): Promise<void>;
+  loadMessages(agentId: string): Promise<unknown[]>;
+  clearMessages(agentId: string): Promise<void>;
 }
 
 /**
@@ -30,6 +35,7 @@ export class SaveFile implements Persistence {
   readonly path: string;
   private state: SaveState = { player: null, agents: [], logs: {}, board: [], world: { seed: 0, firedAgents: [] } };
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private messages: Map<string, unknown[]> = new Map();
 
   constructor(rootDir: string) {
     const dir = join(rootDir, "ag");
@@ -49,6 +55,12 @@ export class SaveFile implements Persistence {
         board: parsed.board ?? [],
         world: parsed.world ?? { seed: 0, firedAgents: [] },
       };
+      const savedMessages = (parsed as any).messages;
+      if (savedMessages && typeof savedMessages === "object") {
+        for (const [id, msgs] of Object.entries(savedMessages)) {
+          if (Array.isArray(msgs)) this.messages.set(id, msgs);
+        }
+      }
       return this.state;
     } catch {
       return null; // first run, or an unreadable save — start fresh
@@ -103,9 +115,24 @@ export class SaveFile implements Persistence {
 
   private flush(): void {
     try {
-      writeFileSync(this.path, JSON.stringify(this.state, null, 2));
+      const data = { ...this.state, messages: Object.fromEntries(this.messages) };
+      writeFileSync(this.path, JSON.stringify(data, null, 2));
     } catch (err) {
       console.error("[save] failed to write save file:", err);
     }
+  }
+
+  async saveMessages(agentId: string, messages: unknown[]): Promise<void> {
+    this.messages.set(agentId, [...messages]);
+    this.schedule();
+  }
+
+  async loadMessages(agentId: string): Promise<unknown[]> {
+    return this.messages.get(agentId) ?? [];
+  }
+
+  async clearMessages(agentId: string): Promise<void> {
+    this.messages.delete(agentId);
+    this.schedule();
   }
 }

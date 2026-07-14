@@ -459,4 +459,65 @@ export class RelationalPersistence {
       }
     }
   }
+
+  async saveMessages(agentId: string, messages: unknown[]): Promise<void> {
+    if (!isSupabaseConfigured || !this.roomId) return;
+    try {
+      // Delete existing messages for this agent and re-insert
+      // This is simpler than diffing and handles compaction correctly
+      await supabaseAdmin
+        .from("agent_hq_conversation_messages")
+        .delete()
+        .eq("agent_id", agentId);
+
+      if (messages.length === 0) return;
+
+      const rows = messages.map((msg: any, i: number) => ({
+        agent_id: agentId,
+        owner_id: this.userId,
+        seq: i,
+        role: msg.role ?? "unknown",
+        content: msg.content ?? msg,
+      }));
+
+      await supabaseAdmin
+        .from("agent_hq_conversation_messages")
+        .insert(rows);
+    } catch (err) {
+      console.error(`[db-rel] saveMessages for ${agentId} failed:`, err);
+    }
+  }
+
+  async loadMessages(agentId: string): Promise<unknown[]> {
+    if (!isSupabaseConfigured || !this.roomId) return [];
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("agent_hq_conversation_messages")
+        .select("role, content")
+        .eq("agent_id", agentId)
+        .order("seq", { ascending: true });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        role: row.role,
+        content: row.content,
+      }));
+    } catch (err) {
+      console.error(`[db-rel] loadMessages for ${agentId} failed:`, err);
+      return [];
+    }
+  }
+
+  async clearMessages(agentId: string): Promise<void> {
+    if (!isSupabaseConfigured || !this.roomId) return;
+    try {
+      await supabaseAdmin
+        .from("agent_hq_conversation_messages")
+        .delete()
+        .eq("agent_id", agentId);
+    } catch (err) {
+      console.error(`[db-rel] clearMessages for ${agentId} failed:`, err);
+    }
+  }
 }

@@ -33,6 +33,12 @@ export interface RunContext {
   isChat?: boolean;
   /** MCP servers this agent can connect to (e.g. Robinhood Trading MCP). */
   mcpServers?: MCPServerConfig[];
+  /** Persist full conversation messages for an agent (for context restoration across restarts). */
+  saveMessages?: (agentId: string, messages: unknown[]) => Promise<void>;
+  /** Load persisted conversation messages for an agent (for context restoration across restarts). */
+  loadMessages?: (agentId: string) => Promise<unknown[]>;
+  /** Clear persisted conversation messages for an agent. */
+  clearMessages?: (agentId: string) => Promise<void>;
 }
 
 export type ProviderRunner = (

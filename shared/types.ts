@@ -455,6 +455,14 @@ export interface RailwayData {
   raw?: string;
 }
 
+/** A named CharAppearance snapshot saved by the user. */
+export interface SavedOutfit {
+  id: string;
+  name: string;
+  appearance: CharAppearance;
+  createdAt: number;
+}
+
 export type ClientMsg =
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
@@ -509,7 +517,9 @@ export type ClientMsg =
   | { type: "agent_view_start"; agentId: string }
   | { type: "agent_view_stop"; agentId: string }
   | { type: "agent_broadcast_start"; agentId: string }
-  | { type: "agent_broadcast_stop" };
+  | { type: "agent_broadcast_stop" }
+  | { type: "save_outfit"; name: string; appearance: CharAppearance }
+  | { type: "delete_outfit"; id: string };
 
 export type ServerMsg =
   | {
@@ -520,6 +530,7 @@ export type ServerMsg =
       settings: GameSettings;
       board: TaskCard[];
       world: WorldState | null;
+      outfits: SavedOutfit[];
     }
   | { type: "player"; player: PlayerInfo }
   | { type: "settings"; settings: GameSettings }
@@ -574,7 +585,8 @@ export type ServerMsg =
   | { type: "screen_share_ice"; fromUserId: string; candidate: string }
   | { type: "screen_share_peer_left"; userId: string }
   | { type: "agent_frame"; agentId: string; frame: string }
-  | { type: "agent_broadcast_state"; agentId: string | null };
+  | { type: "agent_broadcast_state"; agentId: string | null }
+  | { type: "outfits"; outfits: SavedOutfit[] };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

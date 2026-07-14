@@ -564,6 +564,8 @@ export class AgentManager {
     rt.logs = [];
     rt.info.sessionId = null;
     clearAllMemory(agentId);
+    void this.save.clearMessages(agentId);
+    void this.save.clearMessages(`${agentId}:chat`);
     this.session.record("clear", { agentId: rt.info.id, agentName: rt.info.name });
     this.persist();
     this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
@@ -586,6 +588,8 @@ export class AgentManager {
       rt.logs = [];
       rt.info.sessionId = null;
       clearAllMemory(rt.info.id);
+      void this.save.clearMessages(rt.info.id);
+      void this.save.clearMessages(`${rt.info.id}:chat`);
       this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
       this.log(rt, "status", `Fresh start — chat cleared and memory wiped.`);
     }
@@ -1181,6 +1185,9 @@ export class AgentManager {
           return true;
         },
         eventFeedPath: join(this.workspaceRoot, "events.jsonl"),
+        saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
+        loadMessages: (agentId: string) => this.save.loadMessages(agentId),
+        clearMessages: (agentId: string) => this.save.clearMessages(agentId),
       });
 
       for await (const ev of events) {
@@ -1504,6 +1511,9 @@ export class AgentManager {
         apiKey: this.apiKey,
         isChat: true,
         eventFeedPath: join(this.workspaceRoot, "events.jsonl"),
+        saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
+        loadMessages: (agentId: string) => this.save.loadMessages(agentId),
+        clearMessages: (agentId: string) => this.save.clearMessages(agentId),
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;
