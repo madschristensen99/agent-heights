@@ -400,6 +400,9 @@ export class OfficeScene extends Phaser.Scene {
           upgradeFurniture(this, furniture);
           upgradeWorkshop(this);
 
+          // Remove old clock tile from furniture layer (clock moved to west wall)
+          furniture.removeTileAt(6, 1, false);
+
           // Scan for server rack tiles (GID 35 = tile ID 34) for E-interaction
           this.serverRackTiles = [];
           for (let y = 0; y < map.height; y++) {
