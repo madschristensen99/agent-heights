@@ -1,4 +1,7 @@
-/** Minimal 4-directional A* over a boolean walkability grid. */
+/** Hex-grid A* over a boolean walkability grid.
+ *  Tile {x, y} maps to hex offset {col, row}. */
+
+import { hexNeighbors, hexDistance, type HexCoord } from "../../../shared/hex";
 
 export interface Tile {
   x: number;
@@ -9,7 +12,7 @@ export class Grid {
   constructor(
     public width: number,
     public height: number,
-    /** walkable[y][x] */
+    /** walkable[row][col] — indexed [y][x] */
     public walkable: boolean[][],
   ) {}
 
@@ -25,13 +28,14 @@ export function findPath(grid: Grid, start: Tile, goal: Tile): Tile[] {
   const open: Tile[] = [start];
   const cameFrom = new Map<number, number>();
   const gScore = new Map<number, number>([[key(start.x, start.y), 0]]);
-  const fScore = new Map<number, number>([
-    [key(start.x, start.y), Math.abs(goal.x - start.x) + Math.abs(goal.y - start.y)],
-  ]);
+  const startH = hexDistance(
+    { col: start.x, row: start.y },
+    { col: goal.x, row: goal.y },
+  );
+  const fScore = new Map<number, number>([[key(start.x, start.y), startH]]);
   const inOpen = new Set<number>([key(start.x, start.y)]);
 
   while (open.length > 0) {
-    // lowest fScore in open (linear scan; maps are tiny)
     let bestI = 0;
     for (let i = 1; i < open.length; i++) {
       const fa = fScore.get(key(open[i].x, open[i].y)) ?? Infinity;
@@ -49,20 +53,24 @@ export function findPath(grid: Grid, start: Tile, goal: Tile): Tile[] {
         k = cameFrom.get(k)!;
         path.unshift({ x: k % grid.width, y: Math.floor(k / grid.width) });
       }
-      path.shift(); // drop the start tile
+      path.shift();
       return path;
     }
 
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const nx = current.x + dx;
-      const ny = current.y + dy;
+    for (const n of hexNeighbors(current.x, current.y)) {
+      const nx = n.col;
+      const ny = n.row;
       if (!grid.ok(nx, ny)) continue;
       const nk = key(nx, ny);
       const tentative = (gScore.get(ck) ?? Infinity) + 1;
       if (tentative < (gScore.get(nk) ?? Infinity)) {
         cameFrom.set(nk, ck);
         gScore.set(nk, tentative);
-        fScore.set(nk, tentative + Math.abs(goal.x - nx) + Math.abs(goal.y - ny));
+        const h = hexDistance(
+          { col: nx, row: ny } as HexCoord,
+          { col: goal.x, row: goal.y } as HexCoord,
+        );
+        fScore.set(nk, tentative + h);
         if (!inOpen.has(nk)) {
           open.push({ x: nx, y: ny });
           inOpen.add(nk);
