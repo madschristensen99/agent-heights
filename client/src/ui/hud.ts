@@ -1462,7 +1462,7 @@ export class Hud {
           <div class="hire-appearance">
             ${builder.html()}
             <div class="hire-outfit-actions">
-              <button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;">💾 SAVE OUTFIT</button>
+              ${this.store.wardrobeEditable ? `<button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;">💾 SAVE OUTFIT</button>` : ""}
               <select class="outfit-select" id="h-load-outfit">
                 <option value="">Load outfit…</option>
                 ${this.store.outfits.map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}
@@ -1518,12 +1518,15 @@ export class Hud {
 
     // Randomize personality button
     // Save current appearance as a named outfit
-    document.getElementById("h-save-outfit")!.addEventListener("click", () => {
-      const name = prompt("Name this outfit:", "");
-      if (name === null) return;
-      this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
-      this.toast("Outfit saved!");
-    });
+    const hSaveOutfit = document.getElementById("h-save-outfit");
+    if (hSaveOutfit) {
+      hSaveOutfit.addEventListener("click", () => {
+        const name = prompt("Name this outfit:", "");
+        if (name === null) return;
+        this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
+        this.toast("Outfit saved!");
+      });
+    }
 
     // Load a saved outfit into the builder
     document.getElementById("h-load-outfit")!.addEventListener("change", (e) => {
@@ -2288,17 +2291,19 @@ export class Hud {
     const current = this.store.player?.appearance ?? DEFAULT_APPEARANCE;
     const builder = new CharBuilder("wd", current, () => {});
 
+    const editable = this.store.wardrobeEditable;
+
     const renderOutfitList = (): string => {
       const outfits = this.store.outfits;
       if (outfits.length === 0) {
-        return `<p class="outfit-empty">No saved outfits yet. Randomize and save one!</p>`;
+        return `<p class="outfit-empty">No saved outfits yet.${editable ? " Randomize and save one!" : ""}</p>`;
       }
       return outfits.map((o) => `
         <div class="outfit-item" data-id="${o.id}">
           <div class="outfit-thumb" style="background-image:url('${generateCharPreviewDataURL(o.appearance, 2)}')"></div>
           <span class="outfit-name">${o.name}</span>
           <button class="outfit-load" data-id="${o.id}" title="Load into builder">▶ LOAD</button>
-          <button class="outfit-delete" data-id="${o.id}" title="Delete">✕</button>
+          ${editable ? `<button class="outfit-delete" data-id="${o.id}" title="Delete">✕</button>` : ""}
         </div>`).join("");
     };
 
@@ -2313,7 +2318,7 @@ export class Hud {
           <div class="wardrobe-outfits">
             <div class="outfit-header">
               <span class="outfit-title">SAVED OUTFITS</span>
-              <button class="btn outfit-save-btn" id="wd-save-outfit">💾 SAVE CURRENT</button>
+              ${editable ? `<button class="btn outfit-save-btn" id="wd-save-outfit">💾 SAVE CURRENT</button>` : ""}
             </div>
             <div class="outfit-list" id="wd-outfit-list">
               ${renderOutfitList()}
@@ -2351,12 +2356,15 @@ export class Hud {
 
     wireOutfitItems();
 
-    document.getElementById("wd-save-outfit")!.addEventListener("click", () => {
-      const name = prompt("Name this outfit:", "");
-      if (name === null) return;
-      this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
-      this.toast("Outfit saved!");
-    });
+    const saveOutfitBtn = document.getElementById("wd-save-outfit");
+    if (saveOutfitBtn) {
+      saveOutfitBtn.addEventListener("click", () => {
+        const name = prompt("Name this outfit:", "");
+        if (name === null) return;
+        this.net.send({ type: "save_outfit", name, appearance: builder.getAppearance() });
+        this.toast("Outfit saved!");
+      });
+    }
 
     document.getElementById("wd-cancel")!.addEventListener("click", () => {
       this.store.toggleWardrobe(false);

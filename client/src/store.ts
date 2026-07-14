@@ -58,6 +58,7 @@ export class Store {
   railwayPanelOpen = false;
   wardrobeOpen = false;
   outfits: SavedOutfit[] = [];
+  wardrobeEditable = true;
   railwayData: RailwayData | null = null;
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
@@ -448,6 +449,7 @@ export class Store {
         break;
       case "outfits":
         this.outfits = msg.outfits;
+        this.wardrobeEditable = msg.editable;
         break;
       case "mcp_key_status":
         // MCP key status is handled via toast — no persistent UI state needed

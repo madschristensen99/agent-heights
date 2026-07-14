@@ -585,7 +585,7 @@ export type ServerMsg =
   | { type: "screen_share_peer_left"; userId: string }
   | { type: "agent_frame"; agentId: string; frame: string }
   | { type: "agent_broadcast_state"; agentId: string | null }
-  | { type: "outfits"; outfits: SavedOutfit[] };
+  | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

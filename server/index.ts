@@ -14,7 +14,7 @@ import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/ra
 import { rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
-import { TenantManager, HQ2_ROOM_ID } from "./tenant.js";
+import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
@@ -24,14 +24,23 @@ import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from ".
 const rateLimitToastMap = new Map<string, number>();
 
 // ── Saved outfits helpers ────────────────────────────────────────────────
-async function loadOutfits(userId: string): Promise<SavedOutfit[]> {
+
+type OutfitScope =
+  | { type: "user"; userId: string }
+  | { type: "org"; orgId: string };
+
+async function loadOutfits(scope: OutfitScope): Promise<SavedOutfit[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("agent_hq_saved_outfits")
-      .select("id, name, appearance, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .select("id, name, appearance, created_at");
+    if (scope.type === "user") {
+      query = query.eq("user_id", scope.userId).is("org_id", null);
+    } else {
+      query = query.eq("org_id", scope.orgId);
+    }
+    const { data, error } = await query.order("created_at", { ascending: false });
     if (error || !data) return [];
     return data
       .filter((r: any) => isValidAppearance(r.appearance))
@@ -46,9 +55,30 @@ async function loadOutfits(userId: string): Promise<SavedOutfit[]> {
   }
 }
 
-async function sendOutfits(ws: WebSocket, userId: string): Promise<void> {
-  const outfits = await loadOutfits(userId);
-  ws.send(JSON.stringify({ type: "outfits", outfits } satisfies ServerMsg));
+/** Resolve which wardrobe scope applies to the user's current room. */
+function resolveOutfitScope(sess: UserSession): { scope: OutfitScope; editable: boolean } | null {
+  if (!sess.roomId) return null;
+  const room = tenants.getRoom(sess.roomId);
+  if (!room) return null;
+
+  if (room.roomType === "organization" && room.orgId) {
+    const editable = tenants.isOrgAdmin(room.orgId, sess.user.id);
+    return { scope: { type: "org", orgId: room.orgId }, editable };
+  }
+
+  // Personal room — show the owner's outfits
+  const isOwner = room.ownerId === sess.user.id;
+  return { scope: { type: "user", userId: room.ownerId }, editable: isOwner };
+}
+
+async function sendOutfits(ws: WebSocket, sess: UserSession): Promise<void> {
+  const resolved = resolveOutfitScope(sess);
+  if (!resolved) {
+    ws.send(JSON.stringify({ type: "outfits", outfits: [], editable: false } satisfies ServerMsg));
+    return;
+  }
+  const outfits = await loadOutfits(resolved.scope);
+  ws.send(JSON.stringify({ type: "outfits", outfits, editable: resolved.editable } satisfies ServerMsg));
 }
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -362,7 +392,7 @@ wss.on("connection", async (ws, req) => {
   ws.send(JSON.stringify({ type: "api_key_status", hasKey: sess.apiKey != null } satisfies ServerMsg));
 
   // Send saved outfits
-  void sendOutfits(ws, sess.user.id);
+  void sendOutfits(ws, sess);
 
   // Send payment status so the client can gate UI (entrance fee + subscription)
   if (isSupabaseConfigured && isStripeConfigured) {
@@ -726,34 +756,46 @@ wss.on("connection", async (ws, req) => {
         }
         case "save_outfit": {
           if (!isValidAppearance(msg.appearance)) break;
+          const resolved = resolveOutfitScope(sess);
+          if (!resolved || !resolved.editable) {
+            sess.broadcast({ type: "toast", text: "You can't save outfits to this wardrobe." });
+            break;
+          }
           const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
           const name = msg.name.trim().slice(0, 24) || "Outfit";
           const createdAt = Date.now();
           if (isSupabaseConfigured) {
             try {
-              await supabaseAdmin
-                .from("agent_hq_saved_outfits")
-                .insert({ id, user_id: sess.user.id, name, appearance: msg.appearance, created_at: createdAt });
+              const row: Record<string, unknown> = { id, user_id: sess.user.id, name, appearance: msg.appearance, created_at: createdAt };
+              if (resolved.scope.type === "org") row.org_id = resolved.scope.orgId;
+              await supabaseAdmin.from("agent_hq_saved_outfits").insert(row);
             } catch (err) {
               console.error("[outfits] save failed:", err);
             }
           }
-          await sendOutfits(ws, sess.user.id);
+          await sendOutfits(ws, sess);
           break;
         }
         case "delete_outfit": {
+          const resolved = resolveOutfitScope(sess);
+          if (!resolved || !resolved.editable) {
+            sess.broadcast({ type: "toast", text: "You can't delete outfits from this wardrobe." });
+            break;
+          }
           if (isSupabaseConfigured) {
             try {
-              await supabaseAdmin
-                .from("agent_hq_saved_outfits")
-                .delete()
-                .eq("id", msg.id)
-                .eq("user_id", sess.user.id);
+              const del = supabaseAdmin.from("agent_hq_saved_outfits").delete().eq("id", msg.id);
+              if (resolved.scope.type === "org") {
+                del.eq("org_id", resolved.scope.orgId);
+              } else {
+                del.eq("user_id", resolved.scope.userId).is("org_id", null);
+              }
+              await del;
             } catch (err) {
               console.error("[outfits] delete failed:", err);
             }
           }
-          await sendOutfits(ws, sess.user.id);
+          await sendOutfits(ws, sess);
           break;
         }
         case "renew_token": {
@@ -789,6 +831,7 @@ wss.on("connection", async (ws, req) => {
               privateOfficeId: sess.privateOfficeId ?? undefined,
             });
             sendRoomsList();
+            void sendOutfits(ws, sess);
           }
           break;
         }
@@ -833,6 +876,8 @@ wss.on("connection", async (ws, req) => {
             privateOfficeId: sess.privateOfficeId ?? undefined,
           });
           sendRoomsList();
+          // Send outfits for the joined room's wardrobe
+          void sendOutfits(ws, sess);
           // Notify all other players in the room
           const me = players.find((p) => p.userId === sess.user.id);
           for (const p of players) {
@@ -914,6 +959,8 @@ wss.on("connection", async (ws, req) => {
               world: null,
             });
           }
+          // Send outfits for the new room's wardrobe
+          void sendOutfits(ws, sess);
           // Notify players in the new room
           const switchedPlayers = tenants.getRoomPlayers(msg.roomId);
           const switchedMe = switchedPlayers.find((p) => p.userId === sess.user.id);
@@ -1438,6 +1485,8 @@ wss.on("connection", async (ws, req) => {
             projectorChannel: room.projectorChannel,
           });
           sendRoomsList();
+          // Send outfits for the org room's wardrobe
+          void sendOutfits(ws, sess);
           // Notify other players in the room
           const players = tenants.getRoomPlayers(targetRoomId);
           const me = players.find((p) => p.userId === sess.user.id);
