@@ -74,7 +74,7 @@ export class OfficeScene extends Phaser.Scene {
   private static readonly PROJECTOR_CHANNELS: { id: string; label: string; videoId?: string; embedUrl?: string }[] = [
     { id: "brainrot", label: "BRAINROT", videoId: "vTfD20dbxho" },
     { id: "chill",    label: "CHILL",    videoId: "hnsmzzQABBo" },
-    { id: "trading",  label: "TRADING",  embedUrl: "https://s.tradingview.com/widgetembed/?frameElementId=tv-projector&symbol=BTCUSD&interval=60&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=[]&hideideas=1&theme=dark&style=1&timezone=Etc/UTC" },
+    { id: "trading",  label: "TRADING",  embedUrl: "https://s.tradingview.com/widgetembed/?frameElementId=tv-projector&symbol=XMRUSD&interval=60&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=[]&hideideas=1&theme=dark&style=1&timezone=Etc/UTC" },
   ];
 
   // --- new office interactables ---
