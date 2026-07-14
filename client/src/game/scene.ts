@@ -469,7 +469,7 @@ export class OfficeScene extends Phaser.Scene {
               canvasTex.refresh();
             }
           }
-          const officeImg = this.add.image(0, 0, officeTexKey).setOrigin(0, 0).setDepth(0);
+          this.add.image(0, 0, officeTexKey).setOrigin(0, 0).setDepth(0);
           this.mapPx = { w: canvasW, h: canvasH };
 
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
@@ -722,9 +722,11 @@ export class OfficeScene extends Phaser.Scene {
         fn: () => {
           this.sceneStart = this.time.now;
 
-          this.mapPx = { w: map.widthInPixels, h: map.heightInPixels };
+          // Use hex canvas dimensions for office boundaries
+          const hexOfficeW = this.mapPx.w;
+          const hexOfficeH = this.mapPx.h;
           // world layer — infinite procedural world outside the office
-          this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
+          this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), hexOfficeW, hexOfficeH);
           this.world.setOfficeGrid(this.grid);
 
           // Immediately request all door chunks from the background worker so
