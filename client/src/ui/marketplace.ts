@@ -598,7 +598,7 @@ export class MarketplaceBrowser {
   private renderIcon(icon: string, size: number, name?: string): string {
     if (icon.startsWith("http")) {
       const fallbackText = (name ?? "?").charAt(0).toUpperCase();
-      return `<img src="${icon}" width="${size}" height="${size}" alt="" style="display:block;" onerror="this.style.display='none';this.parentElement.style.fontSize='1rem';this.parentElement.style.fontWeight='700';this.parentElement.style.color='#e0e0e0';this.parentElement.textContent='${fallbackText}'" />`;
+      return `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;position:relative;"><img src="${icon}" width="${size}" height="${size}" alt="" style="display:block;position:absolute;inset:0;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><span style="display:none;font-size:${Math.floor(size*0.6)}px;font-weight:700;color:#e0e0e0;">${fallbackText}</span></div>`;
     }
     if (icon.startsWith("<svg")) {
       const withNs = icon.includes("xmlns") ? icon : icon.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');

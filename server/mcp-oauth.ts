@@ -211,7 +211,16 @@ export async function startOAuthFlow(
     }
 
     const metadataUrl = deriveAuthServerMetadataUrl(authServerUrl);
-    const metadata = await fetchJson<AuthServerMetadata>(metadataUrl);
+    let metadata: AuthServerMetadata;
+    try {
+      metadata = await fetchJson<AuthServerMetadata>(metadataUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("fetch failed") || msg.includes("ENOTFOUND") || msg.includes("ECONNREFUSED")) {
+        throw new Error(`Could not reach the MCP server at ${serverUrl} — it may be offline or not yet available.`);
+      }
+      throw new Error(`Failed to fetch OAuth metadata: ${msg}`);
+    }
 
     if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
       throw new Error("Missing authorization_endpoint or token_endpoint in metadata");
@@ -374,6 +383,9 @@ export async function handleOAuthCallback(
   return { success: true, serverUrl: flow.serverUrl, userId: flow.userId };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, error: msg, serverUrl: flow.serverUrl, userId: flow.userId };
+    const friendly = msg.includes("fetch failed") || msg.includes("ENOTFOUND") || msg.includes("ECONNREFUSED")
+      ? `Could not reach the MCP server — it may be offline or not yet available. (${msg})`
+      : msg;
+    return { success: false, error: friendly, serverUrl: flow.serverUrl, userId: flow.userId };
   }
 }
