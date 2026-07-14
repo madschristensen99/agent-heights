@@ -698,6 +698,8 @@ export class TenantManager {
   canJoinRoom(roomId: string, userId: string): boolean {
     const room = this.rooms.get(roomId);
     if (!room) return false;
+    // HQ2 is always open to everyone, even though it's the Agent HQ HQ org room
+    if (roomId === HQ2_ROOM_ID) return true;
     if (room.roomType === "public") return true;
     if (room.roomType === "private") return room.ownerId === userId;
     if (room.roomType === "organization" && room.orgId) {

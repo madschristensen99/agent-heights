@@ -861,7 +861,7 @@ export class Hud {
         <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
           <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">SWITCH ROOM</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 HQ² LOBBY</button>
+            <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 AGENT HQ HQ</button>
             <button class="btn ${isInOffice ? 'primary' : ''}" id="room-office-btn" style="font-size:0.8rem;${isInOffice ? 'opacity:0.6;pointer-events:none;' : ''}">🏠 MY OFFICE</button>
           </div>
         </div>
