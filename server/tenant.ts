@@ -94,17 +94,6 @@ export class TenantManager {
   private lastRoomIds = new Map<string, string>();
 
   constructor(private rootDir: string) {
-    // Create the global HQ2 room on startup
-    this.rooms.set(HQ2_ROOM_ID, {
-      id: HQ2_ROOM_ID,
-      name: "HQ² — Multiplayer Lobby",
-      ownerId: "system",
-      players: new Map(),
-      isPrivate: false,
-      roomType: "public",
-      projectorChannel: "off",
-    });
-
     // Pre-seed the Agent HQ HQ organization
     const hqOrgId = "org-agent-hq-hq";
     const hqOrg: OrgEntry = {
@@ -118,10 +107,9 @@ export class TenantManager {
     this.orgs.set(hqOrgId, hqOrg);
     this.orgsBySlug.set(AGENT_HQ_HQ_SLUG, hqOrgId);
 
-    // Pre-seed an org room for Agent HQ HQ
-    const hqRoomId = "room-agent-hq-hq";
-    this.rooms.set(hqRoomId, {
-      id: hqRoomId,
+    // Create the global HQ2 room — it IS the Agent HQ HQ org room
+    this.rooms.set(HQ2_ROOM_ID, {
+      id: HQ2_ROOM_ID,
       name: "Agent HQ HQ",
       ownerId: "system",
       players: new Map(),

@@ -64,7 +64,7 @@ export class OfficeScene extends Phaser.Scene {
   private coffeeHint!: Phaser.GameObjects.Text;
 
   // --- projector screen (top-left wall) ---
-  private projectorTile: Tile = { x: 4, y: 0 };
+  private projectorTile: Tile = { x: 6, y: 0 };
   private projectorHint!: Phaser.GameObjects.Text;
   private projectorGfx!: Phaser.GameObjects.Graphics;
   private projectorIframe: HTMLIFrameElement | null = null;
@@ -1198,7 +1198,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Try interacting with any new office object. Returns true if an interaction fired. */
   private tryOfficeInteract(time: number): boolean {
     // Projector screen — cycle channels
-    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 24 };
+    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 144 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, projPx.x, projPx.y) < 200) {
       const net = this.game.registry.get("net") as import("../net").Net;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
@@ -1661,7 +1661,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector screen
-    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 24 };
+    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 144 };
     const projDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, projHintPx.x, projHintPx.y);
     if (projDist < 200) {
       const ch = this.store.projectorChannel;
@@ -2552,7 +2552,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Draw the projector screen frame on the top-left wall. */
   private drawProjector(): void {
     const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX + 24;
+    const py = this.projectorTile.y * TILE_PX + 144;
     const sw = 480;
     const sh = 288;
 
@@ -2573,7 +2573,7 @@ export class OfficeScene extends Phaser.Scene {
     const channel = this.store.projectorChannel;
     const cam = this.cameras.main;
     const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX + 24;
+    const py = this.projectorTile.y * TILE_PX + 144;
     const sw = 480;
     const sh = 288;
 
@@ -2612,9 +2612,10 @@ export class OfficeScene extends Phaser.Scene {
         `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=1&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3`;
     }
 
-    // Convert world position to screen position
-    const screenX = cam.worldView.x + (px - cam.scrollX) * cam.zoom - (sw * cam.zoom) / 2;
-    const screenY = cam.worldView.y + (py - cam.scrollY) * cam.zoom - (sh * cam.zoom) / 2;
+    // Convert world position to screen position using canvas bounding rect
+    const canvas = this.game.canvas.getBoundingClientRect();
+    const screenX = canvas.left + (px - cam.scrollX) * cam.zoom - (sw * cam.zoom) / 2;
+    const screenY = canvas.top + (py - cam.scrollY) * cam.zoom - (sh * cam.zoom) / 2;
     const screenW = sw * cam.zoom;
     const screenH = sh * cam.zoom;
 
