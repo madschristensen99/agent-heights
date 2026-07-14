@@ -456,7 +456,12 @@ export type ClientMsg =
   | { type: "respond_invite"; roomId: string; accept: boolean }
   | { type: "player_move"; x: number; y: number; dir: Dir }
   | { type: "npc_update"; npcId: string; x: number; y: number; dir: Dir; state: string }
-  | { type: "tile_update"; cx: number; cy: number; tileIndex: number; tile: number };
+  | { type: "tile_update"; cx: number; cy: number; tileIndex: number; tile: number }
+  | { type: "voice_start" }
+  | { type: "voice_offer"; targetUserId: string; sdp: string }
+  | { type: "voice_answer"; targetUserId: string; sdp: string }
+  | { type: "voice_ice"; targetUserId: string; candidate: string }
+  | { type: "voice_stop" };
 
 export type ServerMsg =
   | {
@@ -504,7 +509,12 @@ export type ServerMsg =
   | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; currentPeriodEnd: number | null }
   | { type: "payment_required"; reason: "entrance" | "subscription"; message: string }
   | { type: "emote"; agentId: string; emote: string }
-  | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string };
+  | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string }
+  | { type: "voice_peer"; userId: string; name: string }
+  | { type: "voice_offer"; fromUserId: string; sdp: string }
+  | { type: "voice_answer"; fromUserId: string; sdp: string }
+  | { type: "voice_ice"; fromUserId: string; candidate: string }
+  | { type: "voice_peer_left"; userId: string };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

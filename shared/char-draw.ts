@@ -653,7 +653,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     rr(bx(tx), by(38), 2, 18, 2, shirtLi);
     rr(bx(tx + 3), by(38), 2, 18, 2, shirtMid);
     rr(bx(tx + tw - 2), by(38), 2, 18, 2, shirtDk);
-    rr(bx(tx), by(52), tw, 4, 3, shirtDk);
     // Soft top glow
     for (let xx = tx + 2; xx < tx + tw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
     // Collar V-neck
@@ -745,7 +744,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     rr(bx(utx), by(38), 2, 18, 2, shirtLi);
     rr(bx(utx + 2), by(38), 2, 18, 2, shirtMid);
     rr(bx(utx + utw - 2), by(38), 2, 18, 2, shirtDk);
-    rr(bx(utx), by(52), utw, 4, 3, shirtDk);
     // Soft top glow
     for (let xx = utx + 2; xx < utx + utw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
     // Back seam
@@ -860,7 +858,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     rr(bx(rtx), by(38), 2, 18, 2, shirtLi);
     rr(bx(rtx + 2), by(38), 2, 18, 2, shirtMid);
     rr(bx(rtx + rtw - 2), by(38), 2, 18, 2, shirtDk);
-    rr(bx(rtx), by(52), rtw, 4, 3, shirtDk);
     // Soft top glow
     for (let xx = rtx + 2; xx < rtx + rtw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
     // Collar

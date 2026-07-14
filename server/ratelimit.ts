@@ -18,6 +18,11 @@ const LIMITS: Record<string, { max: number; refillPerSec: number }> = {
   chat: { max: 60, refillPerSec: 60 / 60 },
   player_move: { max: 600, refillPerSec: 10 },
   npc_update: { max: 600, refillPerSec: 10 },
+  voice_ice: { max: 200, refillPerSec: 50 },
+  voice_offer: { max: 20, refillPerSec: 2 },
+  voice_answer: { max: 20, refillPerSec: 2 },
+  voice_start: { max: 10, refillPerSec: 10 / 60 },
+  voice_stop: { max: 10, refillPerSec: 10 / 60 },
 };
 
 /** Default limit for any message type not explicitly listed. */

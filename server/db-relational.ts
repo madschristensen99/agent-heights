@@ -119,6 +119,7 @@ export class RelationalPersistence {
         role: r.role as AgentRole,
         sessionId: r.session_id,
         tasksDone: r.tasks_done,
+        mcpServers: r.mcp_servers ?? undefined,
       }));
 
       // Load logs (capped at LOG_CAP per agent)
@@ -330,6 +331,7 @@ export class RelationalPersistence {
       role: a.role,
       session_id: a.sessionId,
       tasks_done: a.tasksDone,
+      mcp_servers: a.mcpServers ?? null,
     }));
 
     if (rows.length > 0) {
