@@ -64,13 +64,15 @@ export class OfficeScene extends Phaser.Scene {
   private coffeeHint!: Phaser.GameObjects.Text;
 
   // --- projector screen (top-left wall) ---
-  private projectorTile: Tile = { x: 2, y: 1 };
+  private projectorTile: Tile = { x: 4, y: 0 };
   private projectorHint!: Phaser.GameObjects.Text;
   private projectorGfx!: Phaser.GameObjects.Graphics;
-  private projectorCanvas: HTMLCanvasElement | null = null;
-  private projectorCtx: CanvasRenderingContext2D | null = null;
-  private projectorSprite: Phaser.GameObjects.Sprite | null = null;
-  private projectorAnimTime = 0;
+  private projectorIframe: HTMLIFrameElement | null = null;
+  private projectorVideoId: string | null = null;
+  private static readonly PROJECTOR_CHANNELS: { id: string; label: string; videoId: string }[] = [
+    { id: "brainrot", label: "BRAINROT", videoId: "vTfD20dbxho" },
+    { id: "chill",    label: "CHILL",    videoId: "hnsmzzQABBo" },
+  ];
 
   // --- new office interactables ---
   private fridgeTile: Tile = { x: 26, y: 2 };
@@ -212,10 +214,12 @@ export class OfficeScene extends Phaser.Scene {
       this.events.once("shutdown", () => { this.voice?.stop(); this.voice = null; this.store.sceneRef = null; });
       this.store.sceneRef = this as any;
     }
-    // HQ2 uses the agenthq (big open office) theme; private offices use user's chosen theme.
+    // Clean up projector iframe on scene shutdown/restart
+    this.events.once("shutdown", () => this.destroyProjectorVideo());
+    // HQ2 and org rooms use the agenthq (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
     // players start. This prevents a brief flash of the wrong room layout.
-    const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null;
+    const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null || this.store.isOrgRoom;
     this.theme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
     this.ready = false;
 
@@ -789,7 +793,7 @@ export class OfficeScene extends Phaser.Scene {
               }
               console.log("[scene] store emit fired — calling syncAgents. agents in store:", [...this.store.agents.keys()]);
               if (this.store.roomId === null) return; // room_state not yet received — skip theme check
-              const isHq2 = this.store.roomId === "hq2";
+              const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
               const desiredTheme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
               if (desiredTheme !== this.theme) {
                 console.log("[scene] theme changed — restarting scene");
@@ -855,7 +859,7 @@ export class OfficeScene extends Phaser.Scene {
           // already matches but the theme was set from a null roomId default
           // to "agenthq".  Restart if the current room requires a different theme.
           if (this.store.roomId !== null) {
-            const isHq2 = this.store.roomId === "hq2";
+            const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
             const desiredTheme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
             if (desiredTheme !== this.theme) {
               console.log(`[scene] ready but theme mismatch: theme=${this.theme} desired=${desiredTheme} (roomId=${this.store.roomId}) — restarting`);
@@ -1194,10 +1198,13 @@ export class OfficeScene extends Phaser.Scene {
   /** Try interacting with any new office object. Returns true if an interaction fired. */
   private tryOfficeInteract(time: number): boolean {
     // Projector screen — cycle channels
-    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, projPx.x, projPx.y) < 160) {
+    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 24 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, projPx.x, projPx.y) < 200) {
       const net = this.game.registry.get("net") as import("../net").Net;
-      const next = this.store.projectorChannel === "off" ? "brainrot" : "off";
+      const channels = OfficeScene.PROJECTOR_CHANNELS;
+      const curIdx = channels.findIndex(c => c.id === this.store.projectorChannel);
+      const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1; // -1 means "off"
+      const next = nextIdx === -1 ? "off" : channels[nextIdx].id;
       net.send({ type: "projector_set_channel", channel: next });
       this.world?.audio.uiClick();
       return true;
@@ -1654,13 +1661,17 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector screen
-    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 32 };
+    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 24 };
     const projDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, projHintPx.x, projHintPx.y);
-    if (projDist < 160) {
+    if (projDist < 200) {
       const ch = this.store.projectorChannel;
+      const channels = OfficeScene.PROJECTOR_CHANNELS;
+      const curIdx = channels.findIndex(c => c.id === ch);
+      const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1;
+      const nextLabel = nextIdx === -1 ? "OFF" : channels[nextIdx].label;
       this.projectorHint
         .setPosition(projHintPx.x, projHintPx.y + 64)
-        .setText(hintLabel(ch === "off" ? "E: TURN ON" : `E: ${ch.toUpperCase()} (OFF)`))
+        .setText(hintLabel(ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`))
         .setVisible(true);
     } else {
       this.projectorHint.setVisible(false);
@@ -2538,11 +2549,11 @@ export class OfficeScene extends Phaser.Scene {
     this.heliDelivery = null;
   }
 
-  /** Draw the projector screen on the top-left wall. */
+  /** Draw the projector screen frame on the top-left wall. */
   private drawProjector(): void {
     const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX + 32;
-    const sw = 160;
+    const py = this.projectorTile.y * TILE_PX + 24;
+    const sw = 480;
     const sh = 96;
 
     this.projectorGfx = this.add.graphics().setDepth(3);
@@ -2555,135 +2566,71 @@ export class OfficeScene extends Phaser.Scene {
     // screen surface (dark when off)
     this.projectorGfx.fillStyle(0x0a0a12, 1);
     this.projectorGfx.fillRoundedRect(px - sw / 2, py - sh / 2, sw, sh, 3);
-
-    // Create canvas for dynamic content
-    this.projectorCanvas = document.createElement("canvas");
-    this.projectorCanvas.width = sw;
-    this.projectorCanvas.height = sh;
-    this.projectorCtx = this.projectorCanvas.getContext("2d");
-
-    // Register canvas as a Phaser texture
-    if (this.textures.exists("projector-content")) {
-      this.textures.remove("projector-content");
-    }
-    this.textures.addCanvas("projector-content", this.projectorCanvas);
-
-    // Create sprite for the screen content
-    this.projectorSprite = this.add.sprite(px, py, "projector-content").setDepth(4);
-    this.projectorSprite.setVisible(false);
   }
 
-  /** Render brainrot animation to the projector canvas. */
-  private updateProjectorAnim(dt: number): void {
-    if (!this.projectorCtx || !this.projectorCanvas) return;
+  /** Update the YouTube IFrame overlay to match the projector screen position. */
+  private updateProjectorVideo(): void {
     const channel = this.store.projectorChannel;
-    if (channel === "off") {
-      if (this.projectorSprite?.visible) this.projectorSprite.setVisible(false);
+    const cam = this.cameras.main;
+    const px = this.projectorTile.x * TILE_PX + 32;
+    const py = this.projectorTile.y * TILE_PX + 24;
+    const sw = 480;
+    const sh = 96;
+
+    // Find the video ID for the current channel
+    const ch = OfficeScene.PROJECTOR_CHANNELS.find(c => c.id === channel);
+    const videoId = ch?.videoId ?? null;
+
+    // Channel is off or unknown — hide iframe
+    if (!videoId) {
+      if (this.projectorIframe) this.projectorIframe.style.display = "none";
+      this.projectorVideoId = null;
       return;
     }
 
-    if (!this.projectorSprite?.visible) this.projectorSprite?.setVisible(true);
-    this.projectorAnimTime += dt;
-    const t = this.projectorAnimTime / 1000;
-    const w = this.projectorCanvas.width;
-    const h = this.projectorCanvas.height;
-    const ctx = this.projectorCtx;
+    // Create iframe if it doesn't exist or video changed
+    if (!this.projectorIframe) {
+      this.projectorIframe = document.createElement("iframe");
+      this.projectorIframe.style.cssText = `
+        position: fixed;
+        border: none;
+        pointer-events: none;
+        z-index: 50;
+        border-radius: 3px;
+        display: none;
+      `;
+      this.projectorIframe.allow = "autoplay; encrypted-media";
+      this.projectorIframe.setAttribute("frameborder", "0");
+      document.body.appendChild(this.projectorIframe);
+    }
 
-    if (channel === "brainrot") {
-      // Subway Surfers-style endless runner
-      // Sky gradient
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, "#1a1a3e");
-      grad.addColorStop(0.5, "#3a2a5e");
-      grad.addColorStop(1, "#5a3a7e");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
+    // Video changed — update src with autoplay + loop + mute
+    if (this.projectorVideoId !== videoId) {
+      this.projectorVideoId = videoId;
+      this.projectorIframe.src =
+        `https://www.youtube.com/embed/${videoId}` +
+        `?autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=1&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3`;
+    }
 
-      // 3-lane road
-      const roadTop = h * 0.35;
-      const roadBot = h;
-      const laneW = w / 3;
-      ctx.fillStyle = "#2a2a35";
-      ctx.beginPath();
-      ctx.moveTo(w * 0.3, roadTop);
-      ctx.lineTo(w * 0.7, roadTop);
-      ctx.lineTo(w, roadBot);
-      ctx.lineTo(0, roadBot);
-      ctx.closePath();
-      ctx.fill();
+    // Convert world position to screen position
+    const screenX = cam.worldView.x + (px - cam.scrollX) * cam.zoom - (sw * cam.zoom) / 2;
+    const screenY = cam.worldView.y + (py - cam.scrollY) * cam.zoom - (sh * cam.zoom) / 2;
+    const screenW = sw * cam.zoom;
+    const screenH = sh * cam.zoom;
 
-      // Lane dividers (scrolling)
-      const scrollY = (t * 200) % 20;
-      ctx.strokeStyle = "#ffdd44";
-      ctx.lineWidth = 1.5;
-      for (let lane = 1; lane < 3; lane++) {
-        const topX = w * 0.3 + (w * 0.4) * (lane / 3);
-        const botX = lane * laneW;
-        for (let i = 0; i < 8; i++) {
-          const f0 = (i * 20 + scrollY) / 160;
-          const f1 = (i * 20 + 10 + scrollY) / 160;
-          if (f0 > 1 || f1 > 1) continue;
-          const y0 = roadTop + (roadBot - roadTop) * f0;
-          const y1 = roadTop + (roadBot - roadTop) * f1;
-          const x0 = topX + (botX - topX) * f0;
-          const x1 = topX + (botX - topX) * f1;
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(x1, y1);
-          ctx.stroke();
-        }
-      }
+    this.projectorIframe.style.left = `${screenX}px`;
+    this.projectorIframe.style.top = `${screenY}px`;
+    this.projectorIframe.style.width = `${screenW}px`;
+    this.projectorIframe.style.height = `${screenH}px`;
+    this.projectorIframe.style.display = "block";
+  }
 
-      // Obstacles (colorful blocks scrolling toward viewer)
-      const obstacles = [
-        { lane: 0, z: 0.2, color: "#e74c3c" },
-        { lane: 1, z: 0.5, color: "#2ecc71" },
-        { lane: 2, z: 0.8, color: "#3498db" },
-        { lane: 1, z: 1.1, color: "#e74c3c" },
-      ];
-      for (const obs of obstacles) {
-        const z = (obs.z + t * 0.6) % 1.4;
-        if (z < 0.05) continue;
-        const f = z;
-        const y = roadTop + (roadBot - roadTop) * f;
-        const topEdge = w * 0.3 + (w * 0.4) * (obs.lane / 3);
-        const botEdge = obs.lane * laneW;
-        const x = topEdge + (botEdge - topEdge) * f + laneW * 0.5 * f;
-        const size = 4 + f * 24;
-        ctx.fillStyle = obs.color;
-        ctx.fillRect(x - size / 2, y - size, size, size);
-        // highlight
-        ctx.fillStyle = "rgba(255,255,255,0.3)";
-        ctx.fillRect(x - size / 2, y - size, size, 3);
-      }
-
-      // Runner character (center-bottom, bobbing)
-      const runnerY = roadTop + (roadBot - roadTop) * 0.92;
-      const runnerX = w * 0.5;
-      const bob = Math.sin(t * 12) * 3;
-      // body
-      ctx.fillStyle = "#f39c12";
-      ctx.fillRect(runnerX - 6, runnerY - 20 + bob, 12, 14);
-      // head
-      ctx.fillStyle = "#fdd9a0";
-      ctx.fillRect(runnerX - 4, runnerY - 28 + bob, 8, 8);
-      // legs (alternating)
-      ctx.fillStyle = "#2c3e50";
-      const legPhase = Math.sin(t * 12) > 0;
-      ctx.fillRect(runnerX - 5, runnerY - 6 + bob, 4, legPhase ? 8 : 5);
-      ctx.fillRect(runnerX + 1, runnerY - 6 + bob, 4, legPhase ? 5 : 8);
-
-      // "BRAINROT" label at top
-      ctx.fillStyle = "rgba(0,0,0,0.4)";
-      ctx.fillRect(0, 0, w, 14);
-      ctx.fillStyle = "#ff6688";
-      ctx.font = "bold 10px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("🧠 BRAINROT", w / 2, 10);
-
-      // Refresh Phaser texture
-      const tex = this.textures.get("projector-content");
-      if (tex) (tex as Phaser.Textures.CanvasTexture).refresh();
+  /** Clean up the projector iframe on scene shutdown. */
+  private destroyProjectorVideo(): void {
+    if (this.projectorIframe) {
+      this.projectorIframe.remove();
+      this.projectorIframe = null;
+      this.projectorVideoId = null;
     }
   }
 
@@ -3458,8 +3405,8 @@ export class OfficeScene extends Phaser.Scene {
     // --- helicopter rotor ---
     this.updateHelicopter(time);
 
-    // --- projector screen animation ---
-    this.updateProjectorAnim(dt);
+    // --- projector screen video overlay ---
+    this.updateProjectorVideo();
 
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);

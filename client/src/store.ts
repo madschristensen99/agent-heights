@@ -79,6 +79,13 @@ export class Store {
   orgsList: (Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" })[] = [];
   /** Members of the currently viewed org. */
   orgMembers: { orgId: string; members: OrgMember[] } | null = null;
+
+  /** True if the current room is an organization room (uses the agenthq theme). */
+  get isOrgRoom(): boolean {
+    if (!this.roomId) return false;
+    return this.roomsList.some(r => r.roomId === this.roomId && r.roomType === "organization");
+  }
+
   /** True once the server has delivered all initial data (snapshot, room_state, rooms_list). */
   initialDataReady = false;
   /** Reference to the OfficeScene — set during create() so the HUD can access VoiceManager. */

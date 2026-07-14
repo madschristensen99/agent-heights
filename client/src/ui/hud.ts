@@ -265,6 +265,7 @@ export class Hud {
         </div>
         <div class="mobile-actions">
           <button class="mobile-action-btn primary" id="ma-interact" title="Interact / Talk">E</button>
+          <button class="mobile-action-btn" id="ma-voice" title="Voice chat">🎤</button>
           <button class="mobile-action-btn" id="ma-teleport" title="Teleport">Q</button>
         </div>
       </div>
@@ -502,12 +503,16 @@ export class Hud {
         this.voiceBtn.textContent = "🎤";
         this.voiceBtn.style.color = "";
       }
+      const maVoice = document.getElementById("ma-voice");
+      if (maVoice) { maVoice.textContent = "🎤"; maVoice.classList.remove("primary"); }
     } else {
       voice.start().then(() => {
         if (this.voiceBtn) {
           this.voiceBtn.textContent = "🎙";
           this.voiceBtn.style.color = "#4caf50";
         }
+        const maVoice = document.getElementById("ma-voice");
+        if (maVoice) { maVoice.textContent = "🎙"; maVoice.classList.add("primary"); }
       }).catch(() => {
         this.store.toast("Microphone access denied — check browser settings.");
       });
@@ -687,6 +692,33 @@ export class Hud {
     teleportBtn.addEventListener("touchstart", (e) => {
       e.preventDefault();
       touchInput.action = "teleport";
+    }, { passive: false });
+
+    // ── Mobile voice button ──
+    // Tap toggles voice on/off. When voice is active, press-and-hold unmutes (push-to-talk).
+    const voiceBtn = document.getElementById("ma-voice")!;
+    let voiceHoldActive = false;
+    voiceBtn.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      const voice = this.store.sceneRef?.voice;
+      if (!voice) return;
+      if (!voice.active) {
+        this.toggleVoice();
+        return;
+      }
+      // Voice is active — press-and-hold to unmute
+      if (voice.muted) {
+        voice.setMuted(false);
+        voiceHoldActive = true;
+      }
+    }, { passive: false });
+    voiceBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      if (voiceHoldActive) {
+        const voice = this.store.sceneRef?.voice;
+        if (voice?.active && !voice.muted) voice.setMuted(true);
+        voiceHoldActive = false;
+      }
     }, { passive: false });
   }
 

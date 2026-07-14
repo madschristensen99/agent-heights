@@ -1095,7 +1095,7 @@ wss.on("connection", async (ws, req) => {
           if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
-          const valid = ["off", "brainrot"];
+          const valid = ["off", "brainrot", "chill"];
           if (!valid.includes(msg.channel)) break;
           room.projectorChannel = msg.channel;
           // Broadcast to all players in the room

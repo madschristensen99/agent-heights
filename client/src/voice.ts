@@ -67,6 +67,9 @@ export class VoiceManager {
     }
     this.micTrack = this.micStream.getAudioTracks()[0] ?? null;
     this.audioContext = new AudioContext();
+    if (this.audioContext.state === "suspended") {
+      await this.audioContext.resume();
+    }
     this._active = true;
     this._muted = false;
     this.sendFn({ type: "voice_start" });
