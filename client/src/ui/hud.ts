@@ -1969,12 +1969,6 @@ export class Hud {
     const container = document.getElementById("d-schedules")!;
     const agentSchedules = [...this.store.schedules.values()].filter((s) => s.agentId === agentId);
 
-    if (agentSchedules.length === 0 && !this._scheduleCreateOpen) {
-      container.hidden = true;
-      container.innerHTML = "";
-      return;
-    }
-
     container.hidden = false;
 
     const fmtRel = (ts: number | null): string => {
