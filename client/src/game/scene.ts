@@ -1198,7 +1198,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Try interacting with any new office object. Returns true if an interaction fired. */
   private tryOfficeInteract(time: number): boolean {
     // Projector screen — cycle channels
-    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 96 };
+    const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 24 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, projPx.x, projPx.y) < 200) {
       const net = this.game.registry.get("net") as import("../net").Net;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
@@ -1661,7 +1661,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Projector screen
-    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 96 };
+    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX + 24 };
     const projDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, projHintPx.x, projHintPx.y);
     if (projDist < 200) {
       const ch = this.store.projectorChannel;
@@ -2552,7 +2552,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Draw the projector screen frame on the top-left wall. */
   private drawProjector(): void {
     const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX + 96;
+    const py = this.projectorTile.y * TILE_PX + 24;
     const sw = 480;
     const sh = 288;
 
@@ -2573,7 +2573,7 @@ export class OfficeScene extends Phaser.Scene {
     const channel = this.store.projectorChannel;
     const cam = this.cameras.main;
     const px = this.projectorTile.x * TILE_PX + 32;
-    const py = this.projectorTile.y * TILE_PX + 96;
+    const py = this.projectorTile.y * TILE_PX + 24;
     const sw = 480;
     const sh = 288;
 
