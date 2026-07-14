@@ -2554,7 +2554,7 @@ export class OfficeScene extends Phaser.Scene {
     const px = this.projectorTile.x * TILE_PX + 32;
     const py = this.projectorTile.y * TILE_PX + 24;
     const sw = 480;
-    const sh = 96;
+    const sh = 288;
 
     this.projectorGfx = this.add.graphics().setDepth(3);
     // outer frame
@@ -2575,7 +2575,7 @@ export class OfficeScene extends Phaser.Scene {
     const px = this.projectorTile.x * TILE_PX + 32;
     const py = this.projectorTile.y * TILE_PX + 24;
     const sw = 480;
-    const sh = 96;
+    const sh = 288;
 
     // Find the video ID for the current channel
     const ch = OfficeScene.PROJECTOR_CHANNELS.find(c => c.id === channel);
