@@ -109,7 +109,7 @@ export class RailwayMCPClient {
       this.rpc("initialize", {
         protocolVersion: "2024-11-05",
         capabilities: {},
-        clientInfo: { name: "agent-hq", version: "0.1.0" },
+        clientInfo: { name: "sprite-heights", version: "0.1.0" },
       }).then((result) => {
         this.notify("notifications/initialized", {});
         console.log("[railway-mcp] connected:", JSON.stringify((result as { capabilities?: unknown })?.capabilities ?? {}));

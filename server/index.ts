@@ -34,7 +34,7 @@ async function loadOutfits(scope: OutfitScope): Promise<SavedOutfit[]> {
   if (!isSupabaseConfigured) return [];
   try {
     let query = supabaseAdmin
-      .from("agent_hq_saved_outfits")
+      .from("sprite_heights_saved_outfits")
       .select("id, name, appearance, created_at");
     if (scope.type === "user") {
       query = query.eq("user_id", scope.userId).is("org_id", null);
@@ -291,7 +291,7 @@ const server = createServer((req, res) => {
       }
       res.writeHead(200, { "Content-Type": "text/html" });
       if (result.success) {
-        res.end(`<html><body><h2>✓ Connected!</h2><p>Redirecting back to AgentHQ...</p><script>setTimeout(function(){window.location.href='/';},1500);</script></body></html>`);
+        res.end(`<html><body><h2>✓ Connected!</h2><p>Redirecting back to Sprite Heights...</p><script>setTimeout(function(){window.location.href='/';},1500);</script></body></html>`);
       } else {
         res.end(`<html><body><h2>Authentication failed</h2><p>${result.error ?? "Unknown error"}</p><script>setTimeout(function(){window.location.href='/';},3000);</script></body></html>`);
       }
@@ -800,7 +800,7 @@ wss.on("connection", async (ws, req) => {
             try {
               const row: Record<string, unknown> = { id, user_id: sess.user.id, name, appearance: msg.appearance, created_at: createdAt };
               if (resolved.scope.type === "org") row.org_id = resolved.scope.orgId;
-              await supabaseAdmin.from("agent_hq_saved_outfits").insert(row);
+              await supabaseAdmin.from("sprite_heights_saved_outfits").insert(row);
             } catch (err) {
               console.error("[outfits] save failed:", err);
             }
@@ -816,7 +816,7 @@ wss.on("connection", async (ws, req) => {
           }
           if (isSupabaseConfigured) {
             try {
-              const del = supabaseAdmin.from("agent_hq_saved_outfits").delete().eq("id", msg.id);
+              const del = supabaseAdmin.from("sprite_heights_saved_outfits").delete().eq("id", msg.id);
               if (resolved.scope.type === "org") {
                 del.eq("org_id", resolved.scope.orgId);
               } else {
@@ -1695,25 +1695,25 @@ wss.on("connection", async (ws, req) => {
 const logMaintenanceInterval = startLogMaintenance();
 
 server.listen(SERVER_PORT, () => {
-  console.log(`[agent-hq] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
+  console.log(`[sprite-heights] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
   if (isSupabaseConfigured) {
-    console.log(`[agent-hq] Supabase auth enabled`);
+    console.log(`[sprite-heights] Supabase auth enabled`);
   } else {
-    console.log(`[agent-hq] Supabase not configured — running in dev mode (no auth)`);
-    console.log(`[agent-hq]   Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable auth`);
+    console.log(`[sprite-heights] Supabase not configured — running in dev mode (no auth)`);
+    console.log(`[sprite-heights]   Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable auth`);
   }
-  console.log(`[agent-hq] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
+  console.log(`[sprite-heights] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
   if (isRedisConfigured) {
-    console.log(`[agent-hq] Redis enabled — pub/sub + presence (server ${serverId})`);
+    console.log(`[sprite-heights] Redis enabled — pub/sub + presence (server ${serverId})`);
   } else {
-    console.log(`[agent-hq] Redis not configured — single-server mode`);
-    console.log(`[agent-hq]   Set REDIS_URL to enable pub/sub + presence`);
+    console.log(`[sprite-heights] Redis not configured — single-server mode`);
+    console.log(`[sprite-heights]   Set REDIS_URL to enable pub/sub + presence`);
   }
-  console.log(`[agent-hq] global multiplayer room: ${HQ2_ROOM_ID}`);
+  console.log(`[sprite-heights] global multiplayer room: ${HQ2_ROOM_ID}`);
 });
 
 async function shutdown(): Promise<void> {
-  console.log("[agent-hq] graceful shutdown initiated — notifying clients & saving agent tasks");
+  console.log("[sprite-heights] graceful shutdown initiated — notifying clients & saving agent tasks");
 
   // 1. Broadcast "server_restarting" to all connected clients so they show
   //    a friendly overlay instead of a scary disconnect.
@@ -1740,7 +1740,7 @@ async function shutdown(): Promise<void> {
   }
   await Promise.all(flushes);
 
-  console.log("[agent-hq] graceful shutdown complete — exiting");
+  console.log("[sprite-heights] graceful shutdown complete — exiting");
   process.exit(0);
 }
 

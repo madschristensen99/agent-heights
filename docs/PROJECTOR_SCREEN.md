@@ -1,4 +1,4 @@
-# Agent HQ — Projector Screen & Screen Sharing
+# Sprite Heights — Projector Screen & Screen Sharing
 
 A projector screen on the office wall where players can present their screen
 to everyone in the room. Walk up, press E, pick what to share, and your
@@ -47,7 +47,7 @@ of audio from `getUserMedia`).
 | Infra needed | None (STUN free, TURN optional) | LiveKit Cloud (paid) or self-hosted |
 | Complexity | Medium | Low (but new infra) |
 | Scale | ≤ 10 viewers (mesh) | 50+ viewers |
-| Fit for Agent HQ | ✅ Perfect — offices are small | Overkill for 2-10 players |
+| Fit for Sprite Heights | ✅ Perfect — offices are small | Overkill for 2-10 players |
 
 **Decision: WebRTC P2P mesh, capped at 10 viewers.** Rooms typically have
 2-10 players. One presenter → N viewers = N peer connections, which is

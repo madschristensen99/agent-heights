@@ -1,4 +1,4 @@
-# Agent HQ — Office Customization
+# Sprite Heights — Office Customization
 
 The player can personalize their office space — swap floors, buy new desks and
 chairs, place plants and decor, and choose between preset room layouts. The

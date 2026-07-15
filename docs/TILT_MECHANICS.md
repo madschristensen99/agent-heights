@@ -2,7 +2,7 @@
 
 ## Overview
 
-Agent HQ is a 2D top-down office game built with Phaser. On desktop, movement is WASD/arrows with E for interact. On mobile, a virtual joystick + action buttons exist but feel like a ported desktop experience rather than something native to the platform.
+Sprite Heights is a 2D top-down office game built with Phaser. On desktop, movement is WASD/arrows with E for interact. On mobile, a virtual joystick + action buttons exist but feel like a ported desktop experience rather than something native to the platform.
 
 **Goal:** Make the game feel truly mobile-oriented by adding tilt-to-move and shake-to-interact mechanics using the DeviceOrientation and DeviceMotion APIs.
 
@@ -97,7 +97,7 @@ interface TiltSettings {
 }
 ```
 
-Stored in `localStorage` under key `agenthq_tilt_settings`. These are **device-specific** preferences — they don't sync to the server. A player might have tilt enabled on their phone but not on their tablet.
+Stored in `localStorage` under key `spriteHeights_tilt_settings`. These are **device-specific** preferences — they don't sync to the server. A player might have tilt enabled on their phone but not on their tablet.
 
 ### 3. HUD Integration (`client/src/ui/hud.ts`)
 

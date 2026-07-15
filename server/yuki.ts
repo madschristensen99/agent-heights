@@ -21,9 +21,9 @@ function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string
     ? board.map((c) => `- [${c.status}] ${c.title}${c.assignedAgentId ? ` (assigned)` : ""}`).join("\n")
     : "(no task cards)";
 
-  return `## Agent HQ Context
+  return `## Sprite Heights Context
 
-The user is currently in Agent HQ — a pixel-art office where they manage real AI agents.
+The user is currently in Sprite Heights — a pixel-art office where they manage real AI agents.
 Their name is "${bossName}".
 
 ### Current Office Roster
@@ -32,10 +32,10 @@ ${roster}
 ### Task Board
 ${cards}
 
-### About Agent HQ
-Agent HQ is a visual workspace where users hire AI agents (powered by Claude, GPT, etc.) to work on real coding tasks.
+### About Sprite Heights
+Sprite Heights is a visual workspace where users hire AI agents (powered by Claude, GPT, etc.) to work on real coding tasks.
 Agents have individual workspaces, can be assigned tasks, collaborate via handoffs, and be organized with a task board.
-Users can browse the Swarms Marketplace from inside Agent HQ and hire marketplace agents directly into their office.
+Users can browse the Swarms Marketplace from inside Sprite Heights and hire marketplace agents directly into their office.
 
 ### YOUR ROLE — Office Manager (IMPORTANT)
 You are Yuki, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.

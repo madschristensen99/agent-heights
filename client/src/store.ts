@@ -84,7 +84,7 @@ export class Store {
   /** Members of the currently viewed org. */
   orgMembers: { orgId: string; members: OrgMember[] } | null = null;
 
-  /** True if the current room is an organization room (uses the agenthq theme). */
+  /** True if the current room is an organization room (uses the spriteHeights theme). */
   get isOrgRoom(): boolean {
     if (!this.roomId) return false;
     return this.roomsList.some(r => r.roomId === this.roomId && r.roomType === "organization");

@@ -1,8 +1,8 @@
-# Agent HQ — GitHub Integration & Deployment Pipeline
+# Sprite Heights — GitHub Integration & Deployment Pipeline
 
 ## The Problem
 
-Agent HQ agents produce real code, but that code goes nowhere. Work lives in
+Sprite Heights agents produce real code, but that code goes nowhere. Work lives in
 ephemeral workspace directories on the server's filesystem. There is no version
 control, no history, no diff review, no pull request, no merge, and no path from
 "agent finished a task" to "code is deployed."
@@ -20,7 +20,7 @@ but nothing shipped.
 
 Railway is already integrated (`server/providers/railway-mcp.ts`) but it's
 disconnected from agent output. Railway manages existing projects that were
-created outside Agent HQ. Agents can query deployments and check logs, but they
+created outside Sprite Heights. Agents can query deployments and check logs, but they
 can't push code that triggers a deploy. The loop is open.
 
 This document proposes closing that loop: **agent work → git commit → GitHub
@@ -81,7 +81,7 @@ is implemented. It's a design direction, not code.
 
 ### Design Principle: Server Owns the Identity
 
-Agent HQ operates as a managed platform. The server holds a GitHub App (or bot
+Sprite Heights operates as a managed platform. The server holds a GitHub App (or bot
 account) token. Agents never touch git or GitHub credentials directly. The
 server performs all git operations on behalf of agents after they submit work.
 
@@ -142,7 +142,7 @@ Two options depending on scale:
 **Option A: Single org repo (simpler, good for MVP)**
 
 ```
-github.com/agent-hq-org/user-{userId}
+github.com/sprite-heights-org/user-{userId}
   └── main
       ├── task/abc12345-fix-auth-loop
       ├── task/def67890-add-dark-mode
@@ -155,7 +155,7 @@ the repo's main branch for deploys.
 **Option B: Per-project repos (more flexible, for multi-project users)**
 
 ```
-github.com/agent-hq-org/{userId}-{projectName}
+github.com/sprite-heights-org/{userId}-{projectName}
 ```
 
 Users can create multiple projects, each with its own repo and Railway service.
@@ -204,7 +204,7 @@ as before. Git is invisible.
   ```typescript
   github: {
     enabled: boolean;
-    org: string;       // GitHub org name (e.g. "agent-hq-users")
+    org: string;       // GitHub org name (e.g. "sprite-heights-users")
     autoPR: boolean;   // auto-create PR on task completion
   };
   ```
@@ -289,7 +289,7 @@ topbar button. Three tabs:
   owner, description, language, star count, and last-updated. Clicking a repo
   opens a detail view with README preview, file tree, and a "Clone into
   workspace" button.
-- **My Repos** — Shows repos in the user's Agent HQ org. Lists branches, open
+- **My Repos** — Shows repos in the user's Sprite Heights org. Lists branches, open
   PRs, and deploy status (if Railway connected). This is the management view
   for repos the server created on the user's behalf.
 
@@ -388,7 +388,7 @@ project" workflows.
 **Fork → PR flow (future, not MVP):**
 
 1. User clicks "Fork & Contribute" on a repo in the GitHub Browser
-2. Server forks the repo to the user's Agent HQ org
+2. Server forks the repo to the user's Sprite Heights org
 3. Agent works on a branch in the fork
 4. On task completion, server opens a PR against the original repo
 5. This enables "agent contributes to open source" workflows

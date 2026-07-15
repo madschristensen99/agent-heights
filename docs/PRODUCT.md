@@ -1,4 +1,4 @@
-# AGENT HQ — Product & Monetization Strategy
+# SPRITE HEIGHTS — Product & Monetization Strategy
 
 *The multi-agent manager that people actually enjoy opening.*
 
@@ -6,7 +6,7 @@
 
 ## 1. What this product is
 
-Agent HQ turns multi-agent orchestration into a place. Instead of a wall of
+Sprite Heights turns multi-agent orchestration into a place. Instead of a wall of
 terminal panes or a YAML pipeline, your AI agents are pixel-art coworkers in an
 office you walk around in. You hire them, brief them in a huddle, watch them
 walk to their desks and type, chat with them, chain them into handoffs, and read
@@ -19,7 +19,7 @@ and an exportable audit trail.
 
 ### Why it can win
 
-| Conventional agent tooling | Agent HQ |
+| Conventional agent tooling | Sprite Heights |
 | --- | --- |
 | Dashboards, logs, DAGs | A game world your brain parses instantly |
 | "Which run is stuck?" → grep | The stuck agent is literally standing there with a red dot |
@@ -165,7 +165,7 @@ products; predictable bills with caps users set themselves build trust.
 ### Phase 3 — Multiplayer teams (months 8–18)
 - Shared offices land team subscriptions; integrations (GitHub/Slack/Linear)
   make agents visible where work already lives — each integration is a
-  retention hook and an acquisition surface ("what's this Agent HQ link?").
+  retention hook and an acquisition surface ("what's this Sprite Heights link?").
 - Agency program: white-label offices for client deliverables.
 - KPI: team seats, seat expansion rate, logo retention.
 

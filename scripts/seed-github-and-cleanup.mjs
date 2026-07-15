@@ -16,7 +16,7 @@ const githubPayload = {
     model: "claude-sonnet-4-20250514",
     systemPrompt: "You are a GitHub agent connected via the GitHub MCP at https://api.githubcopilot.com/mcp/. You can manage repositories, create and review issues, handle pull requests, search across code, and manage branches. When asked to perform actions, always confirm destructive operations (deleting branches, closing PRs) with the user first. Format code references with repo name and line numbers. You wear a dark hoodie with the GitHub logo and are precise and methodical.",
     provider: "cline",
-    source: "agent-hq",
+    source: "sprite-heights",
     appearance: { skin: 1, hairStyle: 1, hair: 1, shirt: 0, pants: 0, accessory: 1, accent: 0, beard: 1, eyeColor: 0, headFeature: 0 },
     mcpServers: [{ url: "https://api.githubcopilot.com/mcp/", name: "github", authType: "apikey", keyLabel: "Personal Access Token", keyPlaceholder: "ghp_...", keyHelpUrl: "https://github.com/settings/tokens" }]
   }),

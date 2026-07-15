@@ -1,4 +1,4 @@
-# Agent HQ — Proximity Voice Chat
+# Sprite Heights — Proximity Voice Chat
 
 Real-time voice chat between players based on in-world distance. Players who
 walk near each other in offices or the outside world can hear each other; walk

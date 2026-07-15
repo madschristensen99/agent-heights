@@ -1,9 +1,9 @@
 /**
- * Authors all pixel art for Agent HQ:
+ * Authors all pixel art for Sprite Heights:
  *   client/public/assets/tilesets/office.png   - 64x64 office tileset (32 tiles)
- *   client/public/assets/tilesets/agenthq.png  - Agent HQ-theme recolor of the tileset
+ *   client/public/assets/tilesets/spriteHeights.png  - Sprite Heights-theme recolor of the tileset
  *   client/public/assets/maps/office.json      - Tiled-format map (open it in Tiled!)
- *   client/public/assets/maps/agenthq.json     - Agent HQ-theme map (carpeted office layout)
+ *   client/public/assets/maps/spriteHeights.json     - Sprite Heights-theme map (carpeted office layout)
  *   client/public/assets/characters/char-N.png - 64x96 4-dir walk sheets, 8 variants
  *   client/public/assets/characters/boss.png   - the player character
  *   client/public/assets/sprites/monitor.png   - 2-frame monitor (off/on)
@@ -1347,7 +1347,7 @@ function vendingTile(body: string, bodyLight: string): TileDrawer {
   };
 }
 
-// Agent HQ theme: blue carpet everywhere, classic office styling with branded floor logo.
+// Sprite Heights theme: blue carpet everywhere, classic office styling with branded floor logo.
 
 // 5×7 pixel bitmap font (same as generate-og-image.ts)
 const PIXEL_FONT: Record<string, string[]> = {
@@ -1399,20 +1399,20 @@ function drawPixelText(s: Sheet, text: string, startX: number, startY: number, s
   }
 }
 
-// Agent HQ logo — drawn as a 10×5 tile grid (640×320px), sublimated into the carpet.
+// Sprite Heights logo — drawn as a 10×5 tile grid (640×320px), sublimated into the carpet.
 // No plate background; green pixel text + accent line blend directly onto the floor.
 const LOGO_W = 640; // 10 * 64
 const LOGO_H = 320; // 5 * 64
 
-function drawAgentHQLogo(s: Sheet, ox: number, oy: number): void {
+function drawSpriteHeightsLogo(s: Sheet, ox: number, oy: number): void {
   const cx = ox + LOGO_W / 2;
   const cy = oy + LOGO_H / 2 + 16; // shifted down slightly
 
   const accent = "#58c866";
   const accentDk = "#3a8848";
 
-  // --- "AGENT HQ HQ" in pixel font ---
-  const title = "AGENT HQ HQ";
+  // --- "SPRITE HEIGHTS" in pixel font ---
+  const title = "SPRITE HEIGHTS";
   const titleScale = 9; // 12 chars × (5+1)*9 - 9 = 639px, fits in 640px canvas
   const titleW = pixelFontWidth(title, titleScale);
   const titleX = Math.round(cx - titleW / 2);
@@ -1472,12 +1472,12 @@ function logoFragment(row: number, col: number): TileDrawer {
     const baseX = ox - col * T;
     const baseY = oy - row * T;
     s.clip = { x: ox, y: oy, w: T, h: T };
-    drawAgentHQLogo(s, baseX, baseY);
+    drawSpriteHeightsLogo(s, baseX, baseY);
     s.clip = null;
   };
 }
 
-const agenthqDrawers: Record<number, TileDrawer> = {
+const spriteHeightsDrawers: Record<number, TileDrawer> = {
   ...drawers,
   [TILE.CARPET_A]: carpetTile("#4a6a8a", "#3a5a7a"),
   [TILE.CARPET_B]: carpetTile("#446484", "#365474"),
@@ -1794,9 +1794,9 @@ const CLASSIC: MapTheme = {
   },
 };
 
-// Agent HQ theme: same layout as classic but the entire floor is blue carpet.
-const AGENTHQ: MapTheme = {
-  tileset: "agenthq",
+// Sprite Heights theme: same layout as classic but the entire floor is blue carpet.
+const SPRITE_HEIGHTS: MapTheme = {
+  tileset: "spriteHeights",
   desks: [
     [3, 4], [8, 4], [13, 4], [18, 4],
     [3, 10], [8, 10], [13, 10], [18, 10],
@@ -1810,7 +1810,7 @@ const AGENTHQ: MapTheme = {
         G(x, y, (x + y) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
       }
     }
-    // Agent HQ logo — 10×5 tile grid sublimated into the carpet, centered in work area
+    // Sprite Heights logo — 10×5 tile grid sublimated into the carpet, centered in work area
     G(5, 5, TILE.LOGO_00);
     G(6, 5, TILE.LOGO_01);
     G(7, 5, TILE.LOGO_02);
@@ -2646,9 +2646,9 @@ const tileset = buildTileset(drawers);
 tileset.save(join(ASSETS, "tilesets", "office.png"));
 tileset.preview(join(PREVIEWS, "tileset.png"), 2);
 
-const agenthqTileset = buildTileset(agenthqDrawers);
-agenthqTileset.save(join(ASSETS, "tilesets", "agenthq.png"));
-agenthqTileset.preview(join(PREVIEWS, "tileset-agenthq.png"), 2);
+const spriteHeightsTileset = buildTileset(spriteHeightsDrawers);
+spriteHeightsTileset.save(join(ASSETS, "tilesets", "spriteHeights.png"));
+spriteHeightsTileset.preview(join(PREVIEWS, "tileset-spriteHeights.png"), 2);
 
 CHAR_PALETTES.forEach((pal, i) => {
   const sheet = buildCharSheet(pal);
@@ -2668,6 +2668,6 @@ buildBubble().save(join(ASSETS, "sprites", "bubble.png"));
 
 mkdirSync(join(ASSETS, "maps"), { recursive: true });
 writeFileSync(join(ASSETS, "maps", "office.json"), JSON.stringify(buildMap(CLASSIC)));
-writeFileSync(join(ASSETS, "maps", "agenthq.json"), JSON.stringify(buildMap(AGENTHQ)));
+writeFileSync(join(ASSETS, "maps", "spriteHeights.json"), JSON.stringify(buildMap(SPRITE_HEIGHTS)));
 
 console.log("assets written to", ASSETS);

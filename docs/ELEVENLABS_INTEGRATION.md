@@ -1,4 +1,4 @@
-# ElevenLabs Integration — Agent HQ
+# ElevenLabs Integration — Sprite Heights
 
 ## Overview
 
@@ -367,9 +367,9 @@ From the HERMES.md competitive analysis:
 > **BossRoom** — Multiplayer 3D office. Voice chat (Deepgram + Inworld TTS with
 > HRTF spatial audio). Agents do real work. Shows the voice embodiment angle.
 > Spatial audio is interesting — agents have *voices* that get louder as you
-> approach. Agent HQ could add this.
+> approach. Sprite Heights could add this.
 
-This integration brings that capability to Agent HQ with ElevenLabs as the TTS
+This integration brings that capability to Sprite Heights with ElevenLabs as the TTS
 provider, plus the unique `SPOKEN:` prefix pattern that separates the spoken
 line from the full text response — something BossRoom doesn't do.
 

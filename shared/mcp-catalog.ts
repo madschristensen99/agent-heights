@@ -467,7 +467,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     name: "Filesystem",
     summary: "Read, write, and manipulate local files (controlled API).",
     description:
-      "Read, write, and manipulate local files through a controlled API. Requires specifying allowed directories. Note: AgentHQ already has built-in file tools — this is for agents that need direct filesystem access outside the workspace sandbox.",
+      "Read, write, and manipulate local files through a controlled API. Requires specifying allowed directories. Note: Sprite Heights already has built-in file tools — this is for agents that need direct filesystem access outside the workspace sandbox.",
     transport: "stdio",
     authType: "open",
     isOfficial: true,
@@ -485,7 +485,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     name: "Fetch",
     summary: "Retrieve and convert web content to markdown.",
     description:
-      "Retrieve and convert web content to markdown for analysis. Note: AgentHQ agents already have a built-in web_fetch tool — this MCP provides a more robust fetching pipeline with better content extraction.",
+      "Retrieve and convert web content to markdown for analysis. Note: Sprite Heights agents already have a built-in web_fetch tool — this MCP provides a more robust fetching pipeline with better content extraction.",
     transport: "stdio",
     authType: "open",
     isOfficial: true,

@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType } from "../shared/types.js";
-import { AGENT_HQ_HQ_SLUG, AGENT_HQ_HQ_ADMINS } from "../shared/types.js";
+import { SPRITE_HEIGHTS_HQ_SLUG, SPRITE_HEIGHTS_HQ_ADMINS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
 import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
@@ -96,23 +96,23 @@ export class TenantManager {
   private lastRoomIds = new Map<string, string>();
 
   constructor(private rootDir: string) {
-    // Pre-seed the Agent HQ HQ organization
-    const hqOrgId = "org-agent-hq-hq";
+    // Pre-seed the Sprite Heights HQ organization
+    const hqOrgId = "org-sprite-heights-hq";
     const hqOrg: OrgEntry = {
       id: hqOrgId,
-      name: "Agent HQ HQ",
-      slug: AGENT_HQ_HQ_SLUG,
-      githubOrg: "agent-hq",
+      name: "Sprite Heights HQ",
+      slug: SPRITE_HEIGHTS_HQ_SLUG,
+      githubOrg: "sprite-heights",
       createdAt: Date.now(),
       members: new Map(),
     };
     this.orgs.set(hqOrgId, hqOrg);
-    this.orgsBySlug.set(AGENT_HQ_HQ_SLUG, hqOrgId);
+    this.orgsBySlug.set(SPRITE_HEIGHTS_HQ_SLUG, hqOrgId);
 
-    // Create the global HQ2 room — it IS the Agent HQ HQ org room
+    // Create the global HQ2 room — it IS the Sprite Heights HQ org room
     this.rooms.set(HQ2_ROOM_ID, {
       id: HQ2_ROOM_ID,
-      name: "Agent HQ HQ",
+      name: "Sprite Heights HQ",
       ownerId: "system",
       players: new Map(),
       isPrivate: false,
@@ -415,9 +415,9 @@ export class TenantManager {
     // Register session before joining rooms so joinRoom can update sess.roomId
     this.sessions.set(user.id, sess);
 
-    // Auto-add whitelisted admins to the Agent HQ HQ organization
-    if (user.email && AGENT_HQ_HQ_ADMINS.includes(user.email)) {
-      const hqOrg = this.orgsBySlug.get(AGENT_HQ_HQ_SLUG);
+    // Auto-add whitelisted admins to the Sprite Heights HQ organization
+    if (user.email && SPRITE_HEIGHTS_HQ_ADMINS.includes(user.email)) {
+      const hqOrg = this.orgsBySlug.get(SPRITE_HEIGHTS_HQ_SLUG);
       if (hqOrg) {
         const org = this.orgs.get(hqOrg);
         if (org && !org.members.has(user.id)) {
@@ -428,7 +428,7 @@ export class TenantManager {
             role: "admin",
             joinedAt: Date.now(),
           });
-          console.log(`[agent-hq] auto-added ${user.email} as admin to Agent HQ HQ org`);
+          console.log(`[sprite-heights] auto-added ${user.email} as admin to Sprite Heights HQ org`);
         }
       }
     }
@@ -447,7 +447,7 @@ export class TenantManager {
             role: pending.role,
             joinedAt: Date.now(),
           });
-          console.log(`[agent-hq] converted pending invite for ${user.email} in org ${org.name}`);
+          console.log(`[sprite-heights] converted pending invite for ${user.email} in org ${org.name}`);
         }
       }
     }
@@ -463,7 +463,7 @@ export class TenantManager {
     this.joinRoom(HQ2_ROOM_ID, user, player);
     this.switchRoom(user.id, privateOfficeId);
     console.log(
-      `[agent-hq] created session for user ${user.id} (${user.email ?? "no email"})` +
+      `[sprite-heights] created session for user ${user.id} (${user.email ?? "no email"})` +
       (isRedisConfigured ? " [redis]" : ""),
     );
     return sess;
@@ -702,7 +702,7 @@ export class TenantManager {
   canJoinRoom(roomId: string, userId: string): boolean {
     const room = this.rooms.get(roomId);
     if (!room) return false;
-    // HQ2 is always open to everyone, even though it's the Agent HQ HQ org room
+    // HQ2 is always open to everyone, even though it's the Sprite Heights HQ org room
     if (roomId === HQ2_ROOM_ID) return true;
     if (room.roomType === "public") return true;
     if (room.roomType === "private") return room.ownerId === userId;

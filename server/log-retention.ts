@@ -12,7 +12,7 @@ export async function pruneOldLogs(): Promise<number> {
   const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
   try {
     const { count } = await supabaseAdmin
-      .from("agent_hq_agent_logs")
+      .from("sprite_heights_agent_logs")
       .delete()
       .lt("ts", cutoff);
     const deleted = count ?? 0;
@@ -34,27 +34,27 @@ export async function trimAllLogs(): Promise<void> {
   try {
     // Get all agents
     const { data: agents } = await supabaseAdmin
-      .from("agent_hq_agents")
+      .from("sprite_heights_agents")
       .select("id");
     if (!agents) return;
 
     for (const agent of agents) {
       const { count } = await supabaseAdmin
-        .from("agent_hq_agent_logs")
+        .from("sprite_heights_agent_logs")
         .select("id", { count: "exact", head: true })
         .eq("agent_id", agent.id);
 
       if ((count ?? 0) > LOG_CAP) {
         const excess = (count ?? 0) - LOG_CAP;
         const { data: oldLogs } = await supabaseAdmin
-          .from("agent_hq_agent_logs")
+          .from("sprite_heights_agent_logs")
           .select("id")
           .eq("agent_id", agent.id)
           .order("ts", { ascending: true })
           .limit(excess);
         if (oldLogs && oldLogs.length > 0) {
           const ids = oldLogs.map((r: any) => r.id);
-          await supabaseAdmin.from("agent_hq_agent_logs").delete().in("id", ids);
+          await supabaseAdmin.from("sprite_heights_agent_logs").delete().in("id", ids);
         }
       }
     }

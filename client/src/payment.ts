@@ -99,12 +99,12 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
 
   overlay.innerHTML = `
     <div style="position:relative;z-index:1;text-align:center;max-width:440px;width:90vw;">
-      <h1 style="font-size:2.2rem;font-weight:800;margin:0 0 0.5rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HQ</h1>
+      <h1 style="font-size:2.2rem;font-weight:800;margin:0 0 0.5rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">SPRITE HEIGHTS</h1>
       <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 1.5rem;letter-spacing:0.15em;text-transform:uppercase;">World Access & Agent Subscription</p>
 
       <div id="payment-entrance-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
         <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">World Entrance Fee — $1</h2>
-        <p style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.5rem;line-height:1.4;">A one-time fee to enter the Agent HQ world and join the multiplayer lobby.</p>
+        <p style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.5rem;line-height:1.4;">A one-time fee to enter the Sprite Heights world and join the multiplayer lobby.</p>
         <button id="pay-entrance-btn"
           style="padding:0.8rem 1rem;border-radius:8px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.03em;transition:filter 0.15s,transform 0.1s;">
           Pay $1 Entrance Fee

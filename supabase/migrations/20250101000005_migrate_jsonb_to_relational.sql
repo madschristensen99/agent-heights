@@ -1,6 +1,6 @@
 -- Phase 2: Migrate existing JSONB blobs into relational tables.
 -- Run AFTER relational_tables.sql.
--- For each row in agent_hq_saves, decompose the JSONB data into:
+-- For each row in sprite_heights_saves, decompose the JSONB data into:
 --   - one room
 --   - one room_player (owner)
 --   - one player_info row
@@ -20,14 +20,14 @@ DECLARE
   log_key TEXT;
 BEGIN
   FOR save_row IN
-    SELECT user_id, data, tenant_id FROM public.agent_hq_saves
+    SELECT user_id, data, tenant_id FROM public.sprite_heights_saves
   LOOP
     -- Skip if already migrated (room exists for this user)
-    SELECT id INTO room_id FROM public.agent_hq_rooms WHERE owner_id = save_row.user_id LIMIT 1;
+    SELECT id INTO room_id FROM public.sprite_heights_rooms WHERE owner_id = save_row.user_id LIMIT 1;
     IF room_id IS NOT NULL THEN CONTINUE; END IF;
 
     -- Create room
-    INSERT INTO public.agent_hq_rooms (owner_id, name, seed, theme)
+    INSERT INTO public.sprite_heights_rooms (owner_id, name, seed, theme)
     VALUES (
       save_row.user_id,
       COALESCE(save_row.data->>'name', 'My Office'),
@@ -37,7 +37,7 @@ BEGIN
     RETURNING id INTO room_id;
 
     -- Create room_player (owner)
-    INSERT INTO public.agent_hq_room_players (room_id, user_id, role, appearance)
+    INSERT INTO public.sprite_heights_room_players (room_id, user_id, role, appearance)
     VALUES (
       room_id,
       save_row.user_id,
@@ -47,7 +47,7 @@ BEGIN
     ON CONFLICT DO NOTHING;
 
     -- Create player_info
-    INSERT INTO public.agent_hq_player_info (user_id, name, workspace, appearance)
+    INSERT INTO public.sprite_heights_player_info (user_id, name, workspace, appearance)
     VALUES (
       save_row.user_id,
       COALESCE(save_row.data->'player'->>'name', 'Boss'),
@@ -60,7 +60,7 @@ BEGIN
       appearance = EXCLUDED.appearance;
 
     -- Create game_settings
-    INSERT INTO public.agent_hq_game_settings (
+    INSERT INTO public.sprite_heights_game_settings (
       user_id, cline_max_iterations, cline_auto_approve,
       game_idle_wander, game_theme, railway_enabled
     )
@@ -80,7 +80,7 @@ BEGIN
       railway_enabled = EXCLUDED.railway_enabled;
 
     -- Create world_state
-    INSERT INTO public.agent_hq_world_state (room_id, owner_id, seed, fired_agents)
+    INSERT INTO public.sprite_heights_world_state (room_id, owner_id, seed, fired_agents)
     VALUES (
       room_id,
       save_row.user_id,
@@ -95,7 +95,7 @@ BEGIN
     IF save_row.data->'agents' IS NOT NULL THEN
       FOR agent_data IN SELECT * FROM jsonb_array_elements(save_row.data->'agents')
       LOOP
-        INSERT INTO public.agent_hq_agents (
+        INSERT INTO public.sprite_heights_agents (
           id, room_id, owner_id, name, title, provider, model, status, task,
           desk_index, sprite, appearance, accent, system_prompt, role,
           session_id, tasks_done
@@ -136,7 +136,7 @@ BEGIN
       LOOP
         FOR log_entry IN SELECT * FROM jsonb_array_elements(save_row.data->'logs'->log_key)
         LOOP
-          INSERT INTO public.agent_hq_agent_logs (agent_id, owner_id, ts, kind, text)
+          INSERT INTO public.sprite_heights_agent_logs (agent_id, owner_id, ts, kind, text)
           VALUES (
             log_key,
             save_row.user_id,
@@ -153,7 +153,7 @@ BEGIN
     IF save_row.data->'board' IS NOT NULL THEN
       FOR card_data IN SELECT * FROM jsonb_array_elements(save_row.data->'board')
       LOOP
-        INSERT INTO public.agent_hq_task_cards (
+        INSERT INTO public.sprite_heights_task_cards (
           id, room_id, owner_id, title, description, status,
           assigned_agent_id, created_at
         )

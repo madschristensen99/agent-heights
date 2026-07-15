@@ -1,4 +1,4 @@
-# Running the Swarms Marketplace + Agent HQ Locally
+# Running the Swarms Marketplace + Sprite Heights Locally
 
 This guide covers how to run both apps simultaneously, sharing the same local Supabase database.
 
@@ -10,9 +10,9 @@ This guide covers how to run both apps simultaneously, sharing the same local Su
 │                  (Docker, :54321)                     │
 │                                                      │
 │  ┌─────────────────┐    ┌────────────────────────┐  │
-│  │  Marketplace     │    │  Agent HQ              │  │
+│  │  Marketplace     │    │  Sprite Heights              │  │
 │  │  Tables          │    │  Tables                │  │
-│  │  - swarms_cloud_ │    │  - agent_hq_saves      │  │
+│  │  - swarms_cloud_ │    │  - sprite_heights_saves      │  │
 │  │    agents        │    │                        │  │
 │  │  - swarms_cloud_ │    │                        │  │
 │  │    prompts       │    │                        │  │
@@ -25,7 +25,7 @@ This guide covers how to run both apps simultaneously, sharing the same local Su
 └───────────┼────────────────────────┼─────────────────┘
             │                        │
      ┌──────┴──────┐          ┌──────┴──────┐
-     │ Marketplace │          │  Agent HQ   │
+     │ Marketplace │          │  Sprite Heights   │
      │  Next.js    │          │  Node + WS  │
      │  :3000      │          │  :3001      │
      │             │          │  Vite :5173 │
@@ -33,8 +33,8 @@ This guide covers how to run both apps simultaneously, sharing the same local Su
 ```
 
 - **Marketplace** (Next.js, port 3000): Browse/hire agents, chat with Yuki, publish agents
-- **Agent HQ** (Node WS server port 3001 + Vite client port 5173/5174): Pixel-art office for managing AI agents
-- **Supabase** (Docker, port 54321): Shared database — marketplace tables + agent_hq_saves + auth.users
+- **Sprite Heights** (Node WS server port 3001 + Vite client port 5173/5174): Pixel-art office for managing AI agents
+- **Supabase** (Docker, port 54321): Shared database — marketplace tables + sprite_heights_saves + auth.users
 - Both apps read/write the same Supabase instance. Auth tokens are interchangeable.
 
 ## Prerequisites
@@ -43,7 +43,7 @@ This guide covers how to run both apps simultaneously, sharing the same local Su
 2. **Node.js 22+** and **pnpm** installed
 3. Both repos cloned:
    - Marketplace: `/home/remsee/swrmsmarkeplaceplaholder`
-   - Agent HQ: `/home/remsee/AgentHQ-main`
+   - Sprite Heights: `/home/remsee/SpriteHeights-main`
 
 ## Step 1: Start Local Supabase
 
@@ -67,19 +67,19 @@ You should see containers like `supabase_kong_swarms-marketplace`, `supabase_db_
 - Studio dashboard: `http://localhost:54323`
 - Mail inbox (for magic links): `http://localhost:54324`
 
-## Step 2: Apply Agent HQ Migration
+## Step 2: Apply Sprite Heights Migration
 
-The marketplace tables already exist via Supabase migrations. Agent HQ needs one additional table:
+The marketplace tables already exist via Supabase migrations. Sprite Heights needs one additional table:
 
 ```bash
-docker exec supabase_db_swarms-marketplace psql -U postgres -d postgres -c "$(cat /home/remsee/AgentHQ-main/supabase/migrations/agent_hq.sql)"
+docker exec supabase_db_swarms-marketplace psql -U postgres -d postgres -c "$(cat /home/remsee/SpriteHeights-main/supabase/migrations/sprite_heights.sql)"
 ```
 
-This creates the `agent_hq_saves` table with RLS policies. You only need to do this once.
+This creates the `sprite_heights_saves` table with RLS policies. You only need to do this once.
 
 ## Step 3: Configure Environment Variables
 
-### Agent HQ — `/home/remsee/AgentHQ-main/.env`
+### Sprite Heights — `/home/remsee/SpriteHeights-main/.env`
 
 ```env
 # Supabase (shared with marketplace)
@@ -122,12 +122,12 @@ pnpm dev
 - Provides the Yuki API at `/api/yuki`
 - Provides the marketplace UI for browsing/publishing agents
 
-## Step 5: Start Agent HQ
+## Step 5: Start Sprite Heights
 
 ### Option A: Dev mode (hot reload for both server + client)
 
 ```bash
-cd /home/remsee/AgentHQ-main
+cd /home/remsee/SpriteHeights-main
 pnpm dev
 ```
 
@@ -139,17 +139,17 @@ This runs both the server (`tsx watch`) and client (`vite`) concurrently.
 
 Terminal 1 — server:
 ```bash
-cd /home/remsee/AgentHQ-main
+cd /home/remsee/SpriteHeights-main
 pnpm start
 ```
 
 Terminal 2 — client:
 ```bash
-cd /home/remsee/AgentHQ-main
+cd /home/remsee/SpriteHeights-main
 pnpm client
 ```
 
-## Step 6: Open Agent HQ
+## Step 6: Open Sprite Heights
 
 Visit **http://localhost:5173** (or 5174).
 
@@ -161,7 +161,7 @@ In dev mode without authentication, the server falls back to a dev session. You'
 ## Features That Work When Both Are Running
 
 ### Browse Marketplace Agents from HQ
-Click **🛒 MARKET** in the Agent HQ topbar. This queries Supabase directly via the HQ server's `/api/marketplace` endpoint.
+Click **🛒 MARKET** in the Sprite Heights topbar. This queries Supabase directly via the HQ server's `/api/marketplace` endpoint.
 
 ### Helicopter Delivery
 1. Open the MARKET panel
@@ -198,13 +198,13 @@ The client needs `VITE_WS_HOST` in `.env` pointing to the HQ server port. Withou
 The server isn't loading `.env`. Make sure `--env-file=.env` is in the start script (it is by default now). Verify with:
 ```bash
 pnpm start
-# Should say: "[agent-hq] Supabase auth enabled"
+# Should say: "[sprite-heights] Supabase auth enabled"
 ```
 
 ### Port conflicts
 - 3000: Marketplace (Next.js)
-- 3001: Agent HQ server (Node WS)
-- 5173/5174: Agent HQ client (Vite)
+- 3001: Sprite Heights server (Node WS)
+- 5173/5174: Sprite Heights client (Vite)
 - 54321: Supabase API gateway
 - 54323: Supabase Studio dashboard
 - 54324: Inbucket mail inbox
@@ -225,8 +225,8 @@ curl -s "http://127.0.0.1:54321/rest/v1/swarms_cloud_agents?select=id,name&limit
   -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
 ```
 
-### agent_hq_saves table missing
+### sprite_heights_saves table missing
 Re-run the migration:
 ```bash
-docker exec supabase_db_swarms-marketplace psql -U postgres -d postgres -c "$(cat /home/remsee/AgentHQ-main/supabase/migrations/agent_hq.sql)"
+docker exec supabase_db_swarms-marketplace psql -U postgres -d postgres -c "$(cat /home/remsee/SpriteHeights-main/supabase/migrations/sprite_heights.sql)"
 ```

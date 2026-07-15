@@ -1,4 +1,4 @@
-# Agent HQ — Weapon Progression & Labyrinth Adventure Chain
+# Sprite Heights — Weapon Progression & Labyrinth Adventure Chain
 
 The Labyrinth is currently a place you explore, get hurt, and run away from.
 This document describes a progression chain that turns it into a place you

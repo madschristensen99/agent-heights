@@ -7,12 +7,12 @@ import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
  *
  * Instead of upserting a megabyte JSONB blob on every change, this class
  * reads/writes individual rows across the relational tables:
- *   - agent_hq_player_info
- *   - agent_hq_game_settings
- *   - agent_hq_rooms + agent_hq_world_state
- *   - agent_hq_agents
- *   - agent_hq_agent_logs
- *   - agent_hq_task_cards
+ *   - sprite_heights_player_info
+ *   - sprite_heights_game_settings
+ *   - sprite_heights_rooms + sprite_heights_world_state
+ *   - sprite_heights_agents
+ *   - sprite_heights_agent_logs
+ *   - sprite_heights_task_cards
  *
  * Implements the same Persistence interface so AgentManager doesn't change.
  * Writes are still debounced (400ms) for batch operations like setAgents,
@@ -52,14 +52,14 @@ export class RelationalPersistence {
     try {
       // Get or create room for this user
       let { data: room } = await supabaseAdmin
-        .from("agent_hq_rooms")
+        .from("sprite_heights_rooms")
         .select("id, seed, theme")
         .eq("owner_id", this.userId)
         .maybeSingle();
 
       if (!room) {
         const { data: newRoom, error: roomErr } = await supabaseAdmin
-          .from("agent_hq_rooms")
+          .from("sprite_heights_rooms")
           .insert({ owner_id: this.userId, name: "My Office", seed: 0, theme: "classic" })
           .select("id, seed, theme")
           .single();
@@ -70,7 +70,7 @@ export class RelationalPersistence {
 
       // Load player info
       const { data: playerRow } = await supabaseAdmin
-        .from("agent_hq_player_info")
+        .from("sprite_heights_player_info")
         .select("name, workspace, appearance")
         .eq("user_id", this.userId)
         .maybeSingle();
@@ -81,7 +81,7 @@ export class RelationalPersistence {
 
       // Load settings
       const { data: settingsRow } = await supabaseAdmin
-        .from("agent_hq_game_settings")
+        .from("sprite_heights_game_settings")
         .select("cline_max_iterations, cline_auto_approve, game_idle_wander, game_theme, railway_enabled")
         .eq("user_id", this.userId)
         .maybeSingle();
@@ -102,7 +102,7 @@ export class RelationalPersistence {
 
       // Load agents
       const { data: agentRows } = await supabaseAdmin
-        .from("agent_hq_agents")
+        .from("sprite_heights_agents")
         .select("*")
         .eq("owner_id", this.userId);
 
@@ -130,7 +130,7 @@ export class RelationalPersistence {
       if (agents.length > 0) {
         const agentIds = agents.map((a) => a.id);
         const { data: logRows } = await supabaseAdmin
-          .from("agent_hq_agent_logs")
+          .from("sprite_heights_agent_logs")
           .select("agent_id, ts, kind, text")
           .in("agent_id", agentIds)
           .order("ts", { ascending: true })
@@ -146,7 +146,7 @@ export class RelationalPersistence {
 
       // Load task cards
       const { data: cardRows } = await supabaseAdmin
-        .from("agent_hq_task_cards")
+        .from("sprite_heights_task_cards")
         .select("*")
         .eq("owner_id", this.userId);
 
@@ -161,7 +161,7 @@ export class RelationalPersistence {
 
       // Load schedules
       const { data: scheduleRows } = await supabaseAdmin
-        .from("agent_hq_schedules")
+        .from("sprite_heights_schedules")
         .select("*")
         .eq("owner_id", this.userId);
 
@@ -181,7 +181,7 @@ export class RelationalPersistence {
 
       // Load world state
       const { data: worldRow } = await supabaseAdmin
-        .from("agent_hq_world_state")
+        .from("sprite_heights_world_state")
         .select("seed, fired_agents, chunk_overrides, pending_tasks")
         .eq("room_id", this.roomId)
         .maybeSingle();
@@ -304,7 +304,7 @@ export class RelationalPersistence {
       this.pendingPlayer = false;
       try {
         await supabaseAdmin
-          .from("agent_hq_player_info")
+          .from("sprite_heights_player_info")
           .upsert({
             user_id: this.userId,
             name: this.state.player.name,
@@ -320,7 +320,7 @@ export class RelationalPersistence {
       this.pendingSettings = false;
       try {
         await supabaseAdmin
-          .from("agent_hq_game_settings")
+          .from("sprite_heights_game_settings")
           .upsert({
             user_id: this.userId,
             cline_max_iterations: this.state.settings.cline.maxIterations,
@@ -338,7 +338,7 @@ export class RelationalPersistence {
       this.pendingWorld = false;
       try {
         await supabaseAdmin
-          .from("agent_hq_world_state")
+          .from("sprite_heights_world_state")
           .upsert({
             room_id: this.roomId,
             owner_id: this.userId,
@@ -355,7 +355,7 @@ export class RelationalPersistence {
       this.pendingPendingTasks = false;
       try {
         await supabaseAdmin
-          .from("agent_hq_world_state")
+          .from("sprite_heights_world_state")
           .update({ pending_tasks: this.state.pendingTasks ?? {} })
           .eq("room_id", this.roomId);
       } catch (err) {
@@ -408,7 +408,7 @@ export class RelationalPersistence {
 
     if (rows.length > 0) {
       try {
-        await supabaseAdmin.from("agent_hq_agents").upsert(rows);
+        await supabaseAdmin.from("sprite_heights_agents").upsert(rows);
       } catch (err) {
         console.error("[db-rel] upsert agents failed:", err);
       }
@@ -419,7 +419,7 @@ export class RelationalPersistence {
     if (currentIds.length > 0) {
       try {
         await supabaseAdmin
-          .from("agent_hq_agents")
+          .from("sprite_heights_agents")
           .delete()
           .eq("owner_id", this.userId)
           .not("id", "in", `(${currentIds.join(",")})`);
@@ -428,7 +428,7 @@ export class RelationalPersistence {
       }
     } else {
       try {
-        await supabaseAdmin.from("agent_hq_agents").delete().eq("owner_id", this.userId);
+        await supabaseAdmin.from("sprite_heights_agents").delete().eq("owner_id", this.userId);
       } catch (err) {
         console.error("[db-rel] delete all agents failed:", err);
       }
@@ -442,7 +442,7 @@ export class RelationalPersistence {
 
       // Get current count for this agent
       const { count } = await supabaseAdmin
-        .from("agent_hq_agent_logs")
+        .from("sprite_heights_agent_logs")
         .select("id", { count: "exact", head: true })
         .eq("agent_id", agent.id);
 
@@ -459,7 +459,7 @@ export class RelationalPersistence {
           text: l.text,
         }));
         try {
-          await supabaseAdmin.from("agent_hq_agent_logs").insert(logRows);
+          await supabaseAdmin.from("sprite_heights_agent_logs").insert(logRows);
         } catch (err) {
           console.error(`[db-rel] insert logs for ${agent.id} failed:`, err);
         }
@@ -469,7 +469,7 @@ export class RelationalPersistence {
       if (existingCount + newLogs.length > LOG_CAP) {
         try {
           const { data: oldLogs } = await supabaseAdmin
-            .from("agent_hq_agent_logs")
+            .from("sprite_heights_agent_logs")
             .select("id")
             .eq("agent_id", agent.id)
             .order("ts", { ascending: true })
@@ -477,7 +477,7 @@ export class RelationalPersistence {
           if (oldLogs && oldLogs.length > 0) {
             const idsToDelete = oldLogs.map((r: any) => r.id);
             await supabaseAdmin
-              .from("agent_hq_agent_logs")
+              .from("sprite_heights_agent_logs")
               .delete()
               .in("id", idsToDelete);
           }
@@ -505,7 +505,7 @@ export class RelationalPersistence {
 
     if (rows.length > 0) {
       try {
-        await supabaseAdmin.from("agent_hq_task_cards").upsert(rows);
+        await supabaseAdmin.from("sprite_heights_task_cards").upsert(rows);
       } catch (err) {
         console.error("[db-rel] upsert board failed:", err);
       }
@@ -516,7 +516,7 @@ export class RelationalPersistence {
     if (currentIds.length > 0) {
       try {
         await supabaseAdmin
-          .from("agent_hq_task_cards")
+          .from("sprite_heights_task_cards")
           .delete()
           .eq("owner_id", this.userId)
           .not("id", "in", `(${currentIds.join(",")})`);
@@ -525,7 +525,7 @@ export class RelationalPersistence {
       }
     } else {
       try {
-        await supabaseAdmin.from("agent_hq_task_cards").delete().eq("owner_id", this.userId);
+        await supabaseAdmin.from("sprite_heights_task_cards").delete().eq("owner_id", this.userId);
       } catch (err) {
         console.error("[db-rel] delete all cards failed:", err);
       }
@@ -554,7 +554,7 @@ export class RelationalPersistence {
 
     if (rows.length > 0) {
       try {
-        await supabaseAdmin.from("agent_hq_schedules").upsert(rows);
+        await supabaseAdmin.from("sprite_heights_schedules").upsert(rows);
       } catch (err) {
         console.error("[db-rel] upsert schedules failed:", err);
       }
@@ -565,7 +565,7 @@ export class RelationalPersistence {
     if (currentIds.length > 0) {
       try {
         await supabaseAdmin
-          .from("agent_hq_schedules")
+          .from("sprite_heights_schedules")
           .delete()
           .eq("owner_id", this.userId)
           .not("id", "in", `(${currentIds.join(",")})`);
@@ -574,7 +574,7 @@ export class RelationalPersistence {
       }
     } else {
       try {
-        await supabaseAdmin.from("agent_hq_schedules").delete().eq("owner_id", this.userId);
+        await supabaseAdmin.from("sprite_heights_schedules").delete().eq("owner_id", this.userId);
       } catch (err) {
         console.error("[db-rel] delete all schedules failed:", err);
       }
@@ -587,7 +587,7 @@ export class RelationalPersistence {
       // Delete existing messages for this agent and re-insert
       // This is simpler than diffing and handles compaction correctly
       await supabaseAdmin
-        .from("agent_hq_conversation_messages")
+        .from("sprite_heights_conversation_messages")
         .delete()
         .eq("agent_id", agentId);
 
@@ -602,7 +602,7 @@ export class RelationalPersistence {
       }));
 
       await supabaseAdmin
-        .from("agent_hq_conversation_messages")
+        .from("sprite_heights_conversation_messages")
         .insert(rows);
     } catch (err) {
       console.error(`[db-rel] saveMessages for ${agentId} failed:`, err);
@@ -613,7 +613,7 @@ export class RelationalPersistence {
     if (!isSupabaseConfigured || !this.roomId) return [];
     try {
       const { data, error } = await supabaseAdmin
-        .from("agent_hq_conversation_messages")
+        .from("sprite_heights_conversation_messages")
         .select("role, content")
         .eq("agent_id", agentId)
         .order("seq", { ascending: true });
@@ -634,7 +634,7 @@ export class RelationalPersistence {
     if (!isSupabaseConfigured || !this.roomId) return;
     try {
       await supabaseAdmin
-        .from("agent_hq_conversation_messages")
+        .from("sprite_heights_conversation_messages")
         .delete()
         .eq("agent_id", agentId);
     } catch (err) {
@@ -647,7 +647,7 @@ export class RelationalPersistence {
     if (this.state.logs) this.state.logs[agentId] = [];
     try {
       await supabaseAdmin
-        .from("agent_hq_agent_logs")
+        .from("sprite_heights_agent_logs")
         .delete()
         .eq("agent_id", agentId);
     } catch (err) {

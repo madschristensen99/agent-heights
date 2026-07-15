@@ -1,4 +1,4 @@
-# Agent HQ
+# Sprite Heights
 
 A retro pixel-art office where you hire and manage **real AI agents**. Each employee at a desk is a live coding agent — powered by the [Cline SDK](https://github.com/cline/cline) routed through the [Swarms API](https://swarms.world) — that actually reads, writes, and runs code in its own workspace folder while you watch it work from a top-down Phaser office.
 

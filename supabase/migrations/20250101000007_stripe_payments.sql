@@ -1,4 +1,4 @@
--- Stripe payment tracking for Agent HQ.
+-- Stripe payment tracking for Sprite Heights.
 -- Tracks the $1 entrance fee (one-time) and $20/month subscription for hiring agents.
 
 CREATE TABLE IF NOT EXISTS public.user_payments (

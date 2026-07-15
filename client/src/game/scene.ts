@@ -172,7 +172,7 @@ export class OfficeScene extends Phaser.Scene {
   private heliDelivery: HelicopterDelivery | null = null;
 
   private world!: WorldLayer;
-  private theme: "classic" | "agenthq" = "classic";
+  private theme: "classic" | "spriteHeights" = "classic";
   /** Pixel positions of chimney tiles — for smoke when devops agents work. */
   private chimneyPositions: { x: number; y: number }[] = [];
   /** Server rack tile positions for E-interaction. */
@@ -360,11 +360,11 @@ export class OfficeScene extends Phaser.Scene {
       this.monitorMatrixOverlays.clear();
       this.matrixColumns = [];
     });
-    // HQ2 and org rooms use the agenthq (big open office) theme; private offices use user's chosen theme.
+    // HQ2 and org rooms use the spriteHeights (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
     // players start. This prevents a brief flash of the wrong room layout.
     const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null || this.store.isOrgRoom;
-    this.theme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
+    this.theme = isHq2 ? "spriteHeights" : (this.store.settings.game.theme === "spriteHeights" ? "spriteHeights" : "classic");
     this.ready = false;
 
     // Remove any stale overlay from a previous scene restart
@@ -503,12 +503,12 @@ export class OfficeScene extends Phaser.Scene {
         fn: () => {
           map = this.make.tilemap({ key: `map-${this.theme}` });
           const tiles = map.addTilesetImage(
-            this.theme === "agenthq" ? "agenthq" : "office",
+            this.theme === "spriteHeights" ? "spriteHeights" : "office",
             `tiles-${this.theme}`,
           )!;
 
           // draw a floor-colored backdrop so empty map tiles aren't white
-          const floorColor = this.theme === "agenthq" ? 0x4a6a8a : 0xd4d0c8;
+          const floorColor = this.theme === "spriteHeights" ? 0x4a6a8a : 0xd4d0c8;
           const bg = this.add.graphics().setDepth(-1);
           bg.fillStyle(floorColor, 1);
           bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
@@ -962,10 +962,10 @@ export class OfficeScene extends Phaser.Scene {
               console.log("[scene] store emit fired — calling syncAgents. agents in store:", [...this.store.agents.keys()]);
               if (this.store.roomId === null) return; // room_state not yet received — skip theme check
               const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
-              const desiredTheme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
+              const desiredTheme = isHq2 ? "spriteHeights" : (this.store.settings.game.theme === "spriteHeights" ? "spriteHeights" : "classic");
               if (desiredTheme !== this.theme) {
                 console.log("[scene] theme changed — restarting scene");
-                if (desiredTheme === "agenthq") achievements.unlock("agenthq_mode");
+                if (desiredTheme === "spriteHeights") achievements.unlock("spriteHeights_mode");
                 this.ready = false;
                 this.remotePlayers.clear();
                 this.scene.restart();
@@ -1025,10 +1025,10 @@ export class OfficeScene extends Phaser.Scene {
           // Theme consistency check: room_state may have arrived during the
           // phased init (before the store listener was wired), so lastRoomId
           // already matches but the theme was set from a null roomId default
-          // to "agenthq".  Restart if the current room requires a different theme.
+          // to "spriteHeights".  Restart if the current room requires a different theme.
           if (this.store.roomId !== null) {
             const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
-            const desiredTheme = isHq2 ? "agenthq" : (this.store.settings.game.theme === "agenthq" ? "agenthq" : "classic");
+            const desiredTheme = isHq2 ? "spriteHeights" : (this.store.settings.game.theme === "spriteHeights" ? "spriteHeights" : "classic");
             if (desiredTheme !== this.theme) {
               console.log(`[scene] ready but theme mismatch: theme=${this.theme} desired=${desiredTheme} (roomId=${this.store.roomId}) — restarting`);
               this.ready = false;
@@ -1288,7 +1288,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Set interactable tile positions based on the current theme. */
   private setupInteractables(): void {
-    if (this.theme === "agenthq") {
+    if (this.theme === "spriteHeights") {
       this.clockTile = { x: 1, y: 3 };
       this.projectorControlTile = { x: 6, y: 1 };
       this.projectorSpeakerTile = { x: 7, y: 1 };

@@ -415,7 +415,7 @@ export interface PlayerPresence {
 }
 
 /** Visual theme for the office map + tileset. */
-export type OfficeTheme = "classic" | "agenthq";
+export type OfficeTheme = "classic" | "spriteHeights";
 
 // --------------------------------------------------- organizations ---
 
@@ -440,18 +440,18 @@ export interface OrgMember {
   joinedAt: number;
 }
 
-/** Pre-seeded organization slug for Agent HQ's own HQ. */
-export const AGENT_HQ_HQ_SLUG = "agent-hq-hq";
+/** Pre-seeded organization slug for Sprite Heights' own HQ. */
+export const SPRITE_HEIGHTS_HQ_SLUG = "sprite-heights-hq";
 
-/** Admin emails whitelisted for the Agent HQ HQ organization. */
-export const AGENT_HQ_HQ_ADMINS = [
+/** Admin emails whitelisted for the Sprite Heights HQ organization. */
+export const SPRITE_HEIGHTS_HQ_ADMINS = [
   "remseechannel@gmail.com",
   "madschristensen99@icloud.com",
 ];
 
 export const OFFICE_THEMES: Array<{ id: OfficeTheme; label: string }> = [
   { id: "classic", label: "Classic — wood floors, cozy office" },
-  { id: "agenthq", label: "Agent HQ — blue carpet, branded floor logo" },
+  { id: "spriteHeights", label: "Sprite Heights — blue carpet, branded floor logo" },
 ];
 
 export interface GameSettings {

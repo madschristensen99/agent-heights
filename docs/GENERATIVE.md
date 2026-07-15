@@ -1,4 +1,4 @@
-# Agent HQ — Generative Content System
+# Sprite Heights — Generative Content System
 
 The Labyrinth isn't just terrain — it's a living world whose inhabitants,
 structures, missions, and stories are written on demand by an LLM. Every

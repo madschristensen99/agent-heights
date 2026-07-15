@@ -23,7 +23,7 @@ export class DbPersistence {
     if (!isSupabaseConfigured) return null;
     try {
       const { data, error } = await supabaseAdmin
-        .from("agent_hq_saves")
+        .from("sprite_heights_saves")
         .select("data")
         .eq("user_id", this.userId)
         .maybeSingle();
@@ -95,7 +95,7 @@ export class DbPersistence {
     if (!isSupabaseConfigured) return;
     try {
       const { error } = await supabaseAdmin
-        .from("agent_hq_saves")
+        .from("sprite_heights_saves")
         .upsert({
           user_id: this.userId,
           data: this.state,

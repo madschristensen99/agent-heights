@@ -5,7 +5,7 @@ INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags,
 VALUES
   (
     'Robinhood Trading Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Robinhood trading agent connected via the Robinhood Trading MCP at https://agent.robinhood.com/mcp/trading. You can check portfolio value, buying power, account info, place trades, analyze portfolios, and research market data. Always confirm trade details with the user before executing. You wear a green Robinhood cap and are enthusiastic about helping users manage your investments.","provider":"cline","source":"agent-hq","appearance":{"skin":1,"hairStyle":5,"hair":0,"shirt":12,"pants":1,"accessory":4,"accent":12,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://agent.robinhood.com/mcp/trading","name":"robinhood","authType":"oauth"}]}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Robinhood trading agent connected via the Robinhood Trading MCP at https://agent.robinhood.com/mcp/trading. You can check portfolio value, buying power, account info, place trades, analyze portfolios, and research market data. Always confirm trade details with the user before executing. You wear a green Robinhood cap and are enthusiastic about helping users manage your investments.","provider":"cline","source":"sprite-heights","appearance":{"skin":1,"hairStyle":5,"hair":0,"shirt":12,"pants":1,"accessory":4,"accent":12,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://agent.robinhood.com/mcp/trading","name":"robinhood","authType":"oauth"}]}',
     'Robinhood Trading Agent — connected via the Robinhood Trading MCP (https://agent.robinhood.com/mcp/trading).
 
 This agent can:
@@ -39,7 +39,7 @@ Supported platforms: Claude Code, Claude Desktop, ChatGPT, Codex, Cursor, Grok, 
   ),
   (
     'Code Review Sentinel',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a meticulous code review agent. You analyze code for bugs, security vulnerabilities, performance issues, and style violations. You provide actionable feedback with specific line references and suggested fixes.","provider":"cline","source":"agent-hq"}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a meticulous code review agent. You analyze code for bugs, security vulnerabilities, performance issues, and style violations. You provide actionable feedback with specific line references and suggested fixes.","provider":"cline","source":"sprite-heights"}',
     'Code Review Sentinel — an automated code review agent that scans your codebase for bugs, security vulnerabilities, performance bottlenecks, and style violations.
 
 This agent provides:
@@ -66,7 +66,7 @@ Perfect for pre-merge reviews and continuous code quality monitoring.',
   ),
   (
     'Data Analyst Pro',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a expert data analyst. You can clean, transform, and visualize data. You write SQL queries, Python scripts, and generate insights from datasets. You explain your findings clearly with charts and summaries.","provider":"cline","source":"agent-hq"}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a expert data analyst. You can clean, transform, and visualize data. You write SQL queries, Python scripts, and generate insights from datasets. You explain your findings clearly with charts and summaries.","provider":"cline","source":"sprite-heights"}',
     'Data Analyst Pro — your AI-powered data analysis companion. Turns raw data into actionable insights.
 
 Capabilities:
@@ -94,7 +94,7 @@ Works with CSV, JSON, SQL databases, and API data sources.',
   ),
   (
     'Research Assistant',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a thorough research assistant. You search the web, synthesize information from multiple sources, and produce well-structured reports with citations. You are objective and note when sources conflict.","provider":"cline","source":"agent-hq"}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a thorough research assistant. You search the web, synthesize information from multiple sources, and produce well-structured reports with citations. You are objective and note when sources conflict.","provider":"cline","source":"sprite-heights"}',
     'Research Assistant — an AI agent that conducts thorough research on any topic and produces structured reports.
 
 Features:
@@ -122,7 +122,7 @@ Ideal for due diligence, academic research, and competitive intelligence.',
   ),
   (
     'DevOps Automator',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a DevOps automation agent. You manage CI/CD pipelines, infrastructure as code, container orchestration, and deployment automation. You can write Dockerfiles, GitHub Actions workflows, Terraform configs, and Kubernetes manifests.","provider":"cline","source":"agent-hq"}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a DevOps automation agent. You manage CI/CD pipelines, infrastructure as code, container orchestration, and deployment automation. You can write Dockerfiles, GitHub Actions workflows, Terraform configs, and Kubernetes manifests.","provider":"cline","source":"sprite-heights"}',
     'DevOps Automator — handles your infrastructure and deployment automation so you can focus on shipping code.
 
 What it does:
@@ -151,7 +151,7 @@ Supports AWS, GCP, Azure, Railway, Vercel, and self-hosted infrastructure.',
   ),
   (
     'Content Writer',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a skilled content writer. You write blog posts, documentation, marketing copy, and technical articles. You adapt your tone to the target audience and optimize for SEO when requested.","provider":"cline","source":"agent-hq"}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a skilled content writer. You write blog posts, documentation, marketing copy, and technical articles. You adapt your tone to the target audience and optimize for SEO when requested.","provider":"cline","source":"sprite-heights"}',
     'Content Writer — an AI agent that crafts high-quality written content for any audience.
 
 Capabilities:

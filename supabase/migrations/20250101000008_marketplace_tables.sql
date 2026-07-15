@@ -1,9 +1,9 @@
 -- Marketplace tables from the Swarms Marketplace project.
 -- These tables (swarms_cloud_agents, swarms_cloud_prompts, swarms_cloud_tools)
--- are normally created by the marketplace's own Supabase project. When Agent HQ
+-- are normally created by the marketplace's own Supabase project. When Sprite Heights
 -- shares the same Supabase project, these tables must exist here too so that
 -- marketplace browsing and agent publishing work.
--- Only the columns used by Agent HQ are included; the marketplace may add more
+-- Only the columns used by Sprite Heights are included; the marketplace may add more
 -- columns via its own migrations.
 
 -- ── Enums ──────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS public.swarms_cloud_agents (
 
 ALTER TABLE public.swarms_cloud_agents ENABLE ROW LEVEL SECURITY;
 
--- Service role full access (Agent HQ uses the service role key)
+-- Service role full access (Sprite Heights uses the service role key)
 CREATE POLICY "Service role full access to marketplace agents"
   ON public.swarms_cloud_agents FOR ALL
   TO service_role

@@ -96,8 +96,8 @@ export async function createEntranceCheckoutSession(
             currency: "usd",
             unit_amount: ENTRANCE_FEE,
             product_data: {
-              name: "Agent HQ — World Entrance Fee",
-              description: "One-time fee to enter the Agent HQ world",
+              name: "Sprite Heights — World Entrance Fee",
+              description: "One-time fee to enter the Sprite Heights world",
             },
           },
         },
@@ -135,7 +135,7 @@ export async function createSubscriptionCheckoutSession(
             unit_amount: SUBSCRIPTION_PRICE,
             recurring: { interval: "month" },
             product_data: {
-              name: "Agent HQ — Agent Hire Subscription",
+              name: "Sprite Heights — Agent Hire Subscription",
               description: "$20/month to hire and manage agents in your own room",
             },
           },
