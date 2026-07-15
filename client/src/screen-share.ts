@@ -111,10 +111,8 @@ export class ScreenShareManager {
       return;
     }
     this.createViewerPeer(userId, name);
-    // Viewer creates the offer (we want to receive)
-    if (this.myUserId > userId) {
-      void this.initiateOffer(userId);
-    }
+    // Viewer always initiates the offer — the sharer only responds to offers
+    void this.initiateOffer(userId);
   }
 
   private createViewerPeer(userId: string, name: string): SharePeer {

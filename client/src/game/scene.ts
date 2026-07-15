@@ -190,6 +190,7 @@ export class OfficeScene extends Phaser.Scene {
   private radioHint!: Phaser.GameObjects.Text;
   private workbenchHint!: Phaser.GameObjects.Text;
   private researchHint!: Phaser.GameObjects.Text;
+  private allHints: Phaser.GameObjects.Text[] = [];
 
   /** Store listeners are registered once; they survive scene restarts. */
   private wired = false;
@@ -768,6 +769,17 @@ export class OfficeScene extends Phaser.Scene {
           this.projectorHint = this.makeHint();
           this.phoneBoothHint = this.makeHint();
           this.screenShareHint = this.makeHint();
+          this.allHints = [
+            this.boardHint, this.coffeeHint, this.fridgeHint, this.coolerHint,
+            this.clockHint, this.vendingHint, this.sofaHint, this.filingHint,
+            this.plantHint, this.mailboxHint, this.platformMailboxHint,
+            this.redButtonHint, this.wardrobeHint, this.projectorHint,
+            this.projectorControlHint, this.projectorSpeakerHint,
+            this.phoneBoothHint, this.screenShareHint, this.trophyHint,
+            this.hallOfFameHint, this.serverRackHint, this.warTableHint,
+            this.scrapBinHint, this.radioHint, this.workbenchHint,
+            this.researchHint,
+          ];
         },
       },
       {

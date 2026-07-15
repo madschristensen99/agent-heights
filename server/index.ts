@@ -890,6 +890,19 @@ wss.on("connection", async (ws, req) => {
           sendRoomsList();
           // Send outfits for the joined room's wardrobe
           void sendOutfits(ws, sess);
+          // Re-broadcast active screen share / webcam state to the joining player
+          for (const p of players) {
+            if (p.userId === sess.user.id) continue;
+            const peerSess = tenants.get(p.userId);
+            if (!peerSess) continue;
+            if (peerSess.screenShareActive) {
+              sess.broadcast({ type: "screen_share_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
+            }
+            if (peerSess.webcamActive) {
+              sess.broadcast({ type: "webcam_state", presenterId: p.userId, presenterName: peerSess.player?.name ?? "Boss" });
+              sess.broadcast({ type: "webcam_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
+            }
+          }
           // Notify all other players in the room
           const me = players.find((p) => p.userId === sess.user.id);
           for (const p of players) {
@@ -976,8 +989,21 @@ wss.on("connection", async (ws, req) => {
           }
           // Send outfits for the new room's wardrobe
           void sendOutfits(ws, sess);
-          // Notify players in the new room
+          // Re-broadcast active screen share / webcam state to the switching player
           const switchedPlayers = tenants.getRoomPlayers(msg.roomId);
+          for (const p of switchedPlayers) {
+            if (p.userId === sess.user.id) continue;
+            const peerSess = tenants.get(p.userId);
+            if (!peerSess) continue;
+            if (peerSess.screenShareActive) {
+              sess.broadcast({ type: "screen_share_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
+            }
+            if (peerSess.webcamActive) {
+              sess.broadcast({ type: "webcam_state", presenterId: p.userId, presenterName: peerSess.player?.name ?? "Boss" });
+              sess.broadcast({ type: "webcam_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
+            }
+          }
+          // Notify players in the new room
           const switchedMe = switchedPlayers.find((p) => p.userId === sess.user.id);
           for (const p of switchedPlayers) {
             if (p.userId === sess.user.id) continue;

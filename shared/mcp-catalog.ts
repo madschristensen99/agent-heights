@@ -1577,17 +1577,24 @@ export function getServerById(id: string): MCPCatalogServer | undefined {
  * MCP servers to users without browsing the marketplace.
  */
 export function catalogSummary(): string {
-  const byCategory: Record<string, string[]> = {};
+  const byCategory: Record<string, { name: string; summary: string; auth: string }[]> = {};
   for (const s of MCP_CATALOG) {
+    const entry = { name: s.name, summary: s.summary, auth: s.authType };
     for (const cat of s.category) {
       if (!byCategory[cat]) byCategory[cat] = [];
-      byCategory[cat].push(s.name);
+      if (!byCategory[cat].some((e) => e.name === s.name)) {
+        byCategory[cat].push(entry);
+      }
     }
   }
   const lines: string[] = [];
   for (const cat of Object.keys(byCategory).sort()) {
-    const names = byCategory[cat];
-    lines.push(`  ${cat}: ${names.join(", ")}`);
+    const items = byCategory[cat];
+    lines.push(`  ${cat}:`);
+    for (const item of items) {
+      const authTag = item.auth === "open" ? " (no auth)" : item.auth === "oauth" ? " (OAuth)" : " (API key)";
+      lines.push(`    - ${item.name}${authTag}: ${item.summary}`);
+    }
   }
   return lines.join("\n");
 }

@@ -122,9 +122,8 @@ export class WebcamManager {
       return;
     }
     this.createViewerPeer(userId, name);
-    if (this.myUserId > userId) {
-      void this.initiateOffer(userId);
-    }
+    // Viewer always initiates the offer — broadcaster only responds to offers
+    void this.initiateOffer(userId);
   }
 
   private createViewerPeer(userId: string, name: string): WebcamPeer {
