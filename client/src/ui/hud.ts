@@ -1345,9 +1345,12 @@ export class Hud {
       modal.hidden = true;
     });
     document.getElementById("s-clear-key")!.addEventListener("click", () => {
-      if (!confirm("Remove your stored API key? Your agents will fall back to the server's shared key.")) return;
-      this.net.send({ type: "set_api_key", apiKey: "" });
-      modal.hidden = true;
+      inlineConfirm(
+        "Remove API key?",
+        "Your agents will fall back to the server's shared key.",
+        "Remove",
+        () => { this.net.send({ type: "set_api_key", apiKey: "" }); modal.hidden = true; },
+      );
     });
     const subscribeBtn = document.getElementById("s-subscribe");
     if (subscribeBtn) {
@@ -1380,20 +1383,20 @@ export class Hud {
     });
     document.getElementById("s-export")!.addEventListener("click", () => this.exportAll());
     document.getElementById("s-clear-all")!.addEventListener("click", () => {
-      if (
-        confirm(
-          "Clear every agent's chat and wipe their memories? They'll all forget previous orders (busy agents are skipped). Workspace files stay.",
-        )
-      ) {
-        this.net.send({ type: "clear_all" });
-        modal.hidden = true;
-      }
+      inlineConfirm(
+        "Clear all agents' chats?",
+        "They'll all forget previous orders (busy agents are skipped). Workspace files stay.",
+        "Clear all",
+        () => { this.net.send({ type: "clear_all" }); modal.hidden = true; },
+      );
     });
     document.getElementById("s-reset")!.addEventListener("click", () => {
-      if (confirm("Reset your boss profile? You'll go through onboarding again. Agents and logs are kept.")) {
-        localStorage.removeItem(PLAYER_KEY);
-        location.reload();
-      }
+      inlineConfirm(
+        "Reset boss profile?",
+        "You'll go through onboarding again. Agents and logs are kept.",
+        "Reset",
+        () => { localStorage.removeItem(PLAYER_KEY); location.reload(); },
+      );
     });
   }
 
