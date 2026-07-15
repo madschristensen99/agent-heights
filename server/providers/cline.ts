@@ -139,14 +139,14 @@ export async function makeTools(cwd: string, opts?: {
   executors.submit = async (summary: string) => summary;
 
   // Override bash executor with bubblewrap sandboxing
-  const allowNetwork = opts?.railway ?? false;
+  const allowNetwork = !!(opts?.railway) || !!(opts?.mcpServers && opts.mcpServers.length > 0);
   const useBwrap = await checkBwrap();
   const originalBash = executors.bash;
   (executors as any).bash = async (input: any, ctxCwd: string, context: any) => {
     const cmd = typeof input === "string" ? input : input.command;
     const abortSignal: AbortSignal | undefined = context?.signal ?? context?.abortSignal;
     if (useBwrap) {
-      const roBinds = opts?.railway && workspaceRoot !== cwd ? [workspaceRoot] : [];
+      const roBinds = allowNetwork && workspaceRoot !== cwd ? [workspaceRoot] : [];
       const { executable, args } = bwrapCommand(cmd, cwd, allowNetwork, roBinds);
       try {
         const { stdout, stderr } = await execFileAsync(executable, args, {

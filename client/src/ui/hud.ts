@@ -1831,7 +1831,7 @@ export class Hud {
     panel.hidden = false;
 
     document.getElementById("d-title")!.innerHTML =
-      `<span style="color:${agent.accent}">${esc(agent.name)}</span> · ${esc(agent.title)}`;
+      `<span style="color:${agent.accent}">${esc(agent.name)}</span>`;
     document.getElementById("d-titlebar")!.style.borderColor = agent.accent;
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
@@ -2334,7 +2334,6 @@ export class Hud {
       ...agents.map((a) => ({
         id: a.id,
         name: a.name,
-        title: a.title,
         accent: a.accent,
         sprite: a.sprite,
         tasksDone: a.tasksDone,
@@ -2346,7 +2345,6 @@ export class Hud {
       ...fired.map((a) => ({
         id: a.id,
         name: a.name,
-        title: a.title,
         accent: a.accent,
         sprite: a.sprite,
         tasksDone: a.tasksDone,
@@ -2374,7 +2372,6 @@ export class Hud {
       html += `<div class="hof-spotlight-avatar" style="background-image:url('assets/characters/char-${topAgent.sprite}.png')"></div>`;
       html += `<div class="hof-spotlight-info">`;
       html += `<span class="hof-spotlight-name" style="color:${topAgent.accent}">${esc(topAgent.name)}</span>`;
-      html += `<span class="hof-spotlight-title">${esc(topAgent.title)}</span>`;
       html += `<span class="hof-spotlight-tasks">${topAgent.tasksDone} task${topAgent.tasksDone !== 1 ? "s" : ""} completed${topAgent.fired ? " · (fired)" : ""}</span>`;
       html += `</div>`;
       html += `<span class="hof-spotlight-medal">🏆</span>`;
@@ -2392,7 +2389,6 @@ export class Hud {
         html += `<span class="hof-medal">${medal}</span>`;
         html += `<div class="hof-avatar" style="background-image:url('assets/characters/char-${a.sprite}.png')"></div>`;
         html += `<span class="hof-name" style="color:${a.accent}">${esc(a.name)}</span>`;
-        html += `<span class="hof-title">${esc(a.title)}</span>`;
         html += `<span class="hof-tasks">${a.tasksDone} done${a.fired ? " · 🔥" : ""}</span>`;
         html += `</div>`;
       }

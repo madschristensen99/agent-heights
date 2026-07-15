@@ -14,7 +14,7 @@ function json(res: ServerResponse, status: number, data: unknown): void {
 function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string): string {
   const roster = agents
     .filter((a) => a.id !== "yuki")
-    .map((a) => `- ${a.name} (${a.title}, ${a.model}, ${a.status}${a.task ? `, working on: ${a.task.slice(0, 60)}` : ""})`)
+    .map((a) => `- ${a.name} (${a.model}, ${a.status}${a.task ? `, working on: ${a.task.slice(0, 60)}` : ""})`)
     .join("\n") || "(no agents hired yet)";
 
   const cards = board.length > 0

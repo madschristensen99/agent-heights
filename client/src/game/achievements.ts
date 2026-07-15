@@ -33,7 +33,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "clear_memory", name: "Clean Slate", desc: "Clear an agent's chat/memory.", tier: "Agent Mastery", icon: "🧠" },
   { id: "both_providers", name: "Model Variety", desc: "Hire agents using 3+ different models.", tier: "Agent Mastery", icon: "🤝" },
   { id: "all_models", name: "Model Collector", desc: "Hire agents using all 9 available models.", tier: "Agent Mastery", icon: "🧩" },
-  { id: "all_titles", name: "Full Roster", desc: "Hire agents with all 10 job titles.", tier: "Agent Mastery", icon: "🎖️" },
+  { id: "personality_variety", name: "Diverse Personalities", desc: "Hire agents with 5+ distinct personality profiles.", tier: "Agent Mastery", icon: "�" },
 
   // ── Explorer ──
   { id: "step_outside", name: "Into the Wild", desc: "Walk through the office door.", tier: "Explorer", icon: "🚪" },
