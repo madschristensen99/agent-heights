@@ -56,6 +56,9 @@ export class WebcamManager {
 
   get broadcasting(): boolean { return this._broadcasting; }
 
+  /** Returns the local camera+mic stream (null if not broadcasting). */
+  get localStream(): MediaStream | null { return this.camStream; }
+
   /** Start broadcasting webcam + mic to all peers in the room. */
   async startBroadcasting(): Promise<void> {
     if (this._broadcasting) return;

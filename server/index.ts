@@ -1660,15 +1660,34 @@ server.listen(SERVER_PORT, () => {
 });
 
 async function shutdown(): Promise<void> {
+  console.log("[agent-hq] graceful shutdown initiated — notifying clients & saving agent tasks");
+
+  // 1. Broadcast "server_restarting" to all connected clients so they show
+  //    a friendly overlay instead of a scary disconnect.
+  for (const sess of tenants.values()) {
+    sess.broadcast({ type: "server_restarting", estimatedSeconds: 5 });
+  }
+
+  // 2. Prepare each agent manager for shutdown — saves active + queued tasks
+  //    so agents can resume exactly where they left off after restart.
+  for (const sess of tenants.values()) {
+    sess.manager.prepareForShutdown();
+  }
+
+  // 3. Stop background services
   stopRailwayMCP();
   stopRedis();
   clearInterval(logMaintenanceInterval);
+
+  // 4. Flush all saves to disk/DB (pending tasks are included)
   const flushes: Promise<void>[] = [];
   for (const sess of tenants.values()) {
     const f = sess.save.flushNow();
     if (f && typeof (f as any).then === "function") flushes.push((f as Promise<void>).catch(() => {}));
   }
   await Promise.all(flushes);
+
+  console.log("[agent-hq] graceful shutdown complete — exiting");
   process.exit(0);
 }
 

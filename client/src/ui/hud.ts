@@ -302,6 +302,13 @@ export class Hud {
           <button class="mobile-action-btn" id="ma-teleport" title="Teleport">Q</button>
         </div>
       </div>
+      <div id="server-restart-overlay" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; flex-direction:column; gap:1rem;">
+        <div style="font-size:1.5rem; font-weight:bold; color:#e0e0e0; font-family:monospace;">🔄 Office Update In Progress</div>
+        <div style="font-size:0.9rem; color:#9aa0b0; font-family:monospace;">Your agents will resume their tasks shortly…</div>
+        <div style="width:120px; height:4px; background:#222; border-radius:2px; overflow:hidden;">
+          <div style="width:40%; height:100%; background:#4f9dde; border-radius:2px; animation: restart-pulse 1.2s ease-in-out infinite;"></div>
+        </div>
+      </div>
     `;
 
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
@@ -1765,7 +1772,15 @@ export class Hud {
     document.getElementById("workspace-name")!.textContent = this.store.player
       ? `${this.store.player.workspace} · boss: ${this.store.player.name}`
       : "";
-    document.getElementById("conn")!.classList.toggle("ok", this.store.connected);
+    const connEl = document.getElementById("conn")!;
+    connEl.classList.toggle("ok", this.store.connected);
+    connEl.classList.toggle("updating", this.store.serverRestarting);
+
+    // Show/hide the server restarting overlay
+    const overlay = document.getElementById("server-restart-overlay");
+    if (overlay) {
+      overlay.style.display = this.store.serverRestarting ? "flex" : "none";
+    }
 
     this.renderRoster();
     this.renderDetail();

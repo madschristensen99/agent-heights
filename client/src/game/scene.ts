@@ -1404,6 +1404,11 @@ export class OfficeScene extends Phaser.Scene {
         this.webcam.stopBroadcasting();
         this.inPhoneBooth = false;
         if (this.player) this.player.setVisible(true);
+        if (this.webcamPresenterId === this._myUserId) {
+          this.webcamPresenterId = null;
+          this.webcamPresenterName = null;
+        }
+        this.detachWebcamVideo();
         this.store.toast("Webcam broadcast stopped.");
       } else {
         if (this.webcamPresenterId && this.webcamPresenterId !== this._myUserId) {
@@ -1413,6 +1418,13 @@ export class OfficeScene extends Phaser.Scene {
         this.webcam?.startBroadcasting().then(() => {
           this.inPhoneBooth = true;
           if (this.player) this.player.setVisible(false);
+          // Show broadcaster's own camera on the projector
+          const localStream = this.webcam?.localStream;
+          if (localStream) {
+            this.webcamPresenterId = this._myUserId;
+            this.webcamPresenterName = this.store.player?.name ?? "You";
+            this.attachWebcamVideo(localStream);
+          }
           this.store.toast("ON AIR — webcam broadcasting to projector!");
         }).catch(() => {
           this.store.toast("Camera access denied. Check browser permissions.");

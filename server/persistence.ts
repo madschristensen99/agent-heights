@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState } from "../shared/types.js";
+import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, PendingTask, TaskCard, WorldState } from "../shared/types.js";
 
 export interface SaveState {
   player: PlayerInfo | null;
@@ -12,6 +12,8 @@ export interface SaveState {
   world?: WorldState;
   /** Conversation messages per agent (used by JSONB-based persistence backends). */
   messages?: Record<string, unknown[]>;
+  /** Tasks saved across server restarts so agents can resume work. */
+  pendingTasks?: Record<string, PendingTask[]>;
 }
 
 export interface Persistence {
@@ -22,6 +24,9 @@ export interface Persistence {
   setSchedules(schedules: AgentSchedule[]): void;
   setWorld(world: WorldState): void;
   getWorld(): WorldState;
+  setPendingTasks(tasks: Record<string, PendingTask[]>): void;
+  getPendingTasks(): Record<string, PendingTask[]>;
+  clearPendingTasks(): void;
   flushNow(): void | Promise<void>;
   saveMessages(agentId: string, messages: unknown[]): Promise<void>;
   loadMessages(agentId: string): Promise<unknown[]>;
@@ -35,7 +40,7 @@ export interface Persistence {
  */
 export class SaveFile implements Persistence {
   readonly path: string;
-  private state: SaveState = { player: null, agents: [], logs: {}, board: [], schedules: [], world: { seed: 0, firedAgents: [] } };
+  private state: SaveState = { player: null, agents: [], logs: {}, board: [], schedules: [], world: { seed: 0, firedAgents: [] }, pendingTasks: {} };
   private timer: ReturnType<typeof setTimeout> | null = null;
   private messages: Map<string, unknown[]> = new Map();
 
@@ -57,6 +62,7 @@ export class SaveFile implements Persistence {
         board: parsed.board ?? [],
         schedules: parsed.schedules ?? [],
         world: parsed.world ?? { seed: 0, firedAgents: [] },
+        pendingTasks: parsed.pendingTasks ?? {},
       };
       const savedMessages = (parsed as any).messages;
       if (savedMessages && typeof savedMessages === "object") {
@@ -141,6 +147,20 @@ export class SaveFile implements Persistence {
 
   async clearMessages(agentId: string): Promise<void> {
     this.messages.delete(agentId);
+    this.schedule();
+  }
+
+  setPendingTasks(tasks: Record<string, PendingTask[]>): void {
+    this.state.pendingTasks = tasks;
+    this.schedule();
+  }
+
+  getPendingTasks(): Record<string, PendingTask[]> {
+    return this.state.pendingTasks ?? {};
+  }
+
+  clearPendingTasks(): void {
+    this.state.pendingTasks = {};
     this.schedule();
   }
 }

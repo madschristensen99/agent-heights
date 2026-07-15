@@ -338,6 +338,13 @@ export const TILE = {
 
 export type CardStatus = "backlog" | "in_progress" | "done";
 
+/** A task saved across server restarts so agents can resume exactly where they left off. */
+export interface PendingTask {
+  task: string;
+  handoffTo: string | null;
+  cardId: string | null;
+}
+
 export interface TaskCard {
   id: string;
   title: string;
@@ -640,7 +647,8 @@ export type ServerMsg =
   | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }
   | { type: "schedules"; schedules: AgentSchedule[] }
   | { type: "schedule"; schedule: AgentSchedule }
-  | { type: "schedule_removed"; scheduleId: string };
+  | { type: "schedule_removed"; scheduleId: string }
+  | { type: "server_restarting"; estimatedSeconds: number };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },

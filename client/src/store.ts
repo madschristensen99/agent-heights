@@ -53,6 +53,7 @@ export class Store {
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   selectedId: string | null = null;
   connected = false;
+  serverRestarting = false;
   boardOpen = false;
   achievementsOpen = false;
   hallOfFameOpen = false;
@@ -318,6 +319,7 @@ export class Store {
 
   setConnected(connected: boolean): void {
     this.connected = connected;
+    if (connected) this.serverRestarting = false;
     if (!connected) this.initialDataReady = false;
     this.emit();
   }
@@ -372,6 +374,9 @@ export class Store {
       }
       case "player":
         this.player = msg.player;
+        break;
+      case "server_restarting":
+        this.serverRestarting = true;
         break;
       case "settings":
         this.settings = msg.settings;

@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState, AgentStatus, AgentRole, OfficeTheme } from "../shared/types.js";
+import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, PendingTask, TaskCard, WorldState, AgentStatus, AgentRole, OfficeTheme } from "../shared/types.js";
 import type { SaveState } from "./persistence.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
@@ -33,6 +33,7 @@ export class RelationalPersistence {
   private pendingSettings: boolean = false;
   private pendingPlayer: boolean = false;
   private pendingWorld: boolean = false;
+  private pendingPendingTasks: boolean = false;
 
   constructor(userId: string) {
     this.userId = userId;
@@ -181,7 +182,7 @@ export class RelationalPersistence {
       // Load world state
       const { data: worldRow } = await supabaseAdmin
         .from("agent_hq_world_state")
-        .select("seed, fired_agents, chunk_overrides")
+        .select("seed, fired_agents, chunk_overrides, pending_tasks")
         .eq("room_id", this.roomId)
         .maybeSingle();
 
@@ -189,7 +190,17 @@ export class RelationalPersistence {
         ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {} }
         : { seed: room.seed, firedAgents: [] };
 
-      this.state = { player, agents, logs, settings, board, schedules, world };
+      // Load pending tasks (stored as JSONB on world_state)
+      const pendingTasksMap: Record<string, PendingTask[]> = {};
+      if ((worldRow as any)?.pending_tasks && typeof (worldRow as any).pending_tasks === "object") {
+        for (const [agentId, tasks] of Object.entries((worldRow as any).pending_tasks as Record<string, unknown>)) {
+          if (Array.isArray(tasks)) {
+            pendingTasksMap[agentId] = tasks as PendingTask[];
+          }
+        }
+      }
+
+      this.state = { player, agents, logs, settings, board, schedules, world, pendingTasks: pendingTasksMap };
       return this.state;
     } catch (err) {
       console.error("[db-rel] load failed:", err);
@@ -236,6 +247,22 @@ export class RelationalPersistence {
 
   getWorld(): WorldState {
     return this.state.world ?? { seed: 0, firedAgents: [] };
+  }
+
+  setPendingTasks(tasks: Record<string, PendingTask[]>): void {
+    this.state.pendingTasks = tasks;
+    this.pendingPendingTasks = true;
+    this.schedule();
+  }
+
+  getPendingTasks(): Record<string, PendingTask[]> {
+    return this.state.pendingTasks ?? {};
+  }
+
+  clearPendingTasks(): void {
+    this.state.pendingTasks = {};
+    this.pendingPendingTasks = true;
+    this.schedule();
   }
 
   flushNow(): Promise<void> {
@@ -321,6 +348,18 @@ export class RelationalPersistence {
           });
       } catch (err) {
         console.error("[db-rel] setWorld failed:", err);
+      }
+    }
+
+    if (this.pendingPendingTasks) {
+      this.pendingPendingTasks = false;
+      try {
+        await supabaseAdmin
+          .from("agent_hq_world_state")
+          .update({ pending_tasks: this.state.pendingTasks ?? {} })
+          .eq("room_id", this.roomId);
+      } catch (err) {
+        console.error("[db-rel] setPendingTasks failed:", err);
       }
     }
 

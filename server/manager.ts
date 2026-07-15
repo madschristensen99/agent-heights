@@ -15,6 +15,7 @@ import type {
   Provider,
   ServerMsg,
   TaskCard,
+  PendingTask,
   WorldState,
   MCPServerConfig,
   PersonalityTraits,
@@ -251,6 +252,8 @@ export class AgentManager {
     this.apiKey = apiKey;
 
     // reload the office from the save file
+    const savedPendingTasks = saved?.pendingTasks ?? {};
+    let resumedCount = 0;
     for (const info of saved?.agents ?? []) {
       const wasBusy = info.status === "thinking" || info.status === "working";
       info.status = "idle";
@@ -287,8 +290,14 @@ export class AgentManager {
       this.board.set(card.id, card);
     }
     // any card that was in-progress when the server stopped goes back to backlog
+    // UNLESS the agent has pending tasks to resume (the card will be re-assigned)
+    const agentsWithPendingTasks = new Set(Object.keys(savedPendingTasks));
     for (const card of this.board.values()) {
       if (card.status === "in_progress") {
+        if (card.assignedAgentId && agentsWithPendingTasks.has(card.assignedAgentId)) {
+          // Keep the card in_progress — the agent will resume it
+          continue;
+        }
         card.status = "backlog";
         card.assignedAgentId = null;
       }
@@ -316,6 +325,26 @@ export class AgentManager {
 
     // Start the scheduler tick
     this.schedulerTimer = setInterval(() => this.tickSchedules(), SCHEDULER_TICK_MS);
+
+    // Resume pending tasks for agents that were interrupted by a server restart
+    for (const [agentId, tasks] of Object.entries(savedPendingTasks)) {
+      if (tasks.length === 0) continue;
+      const rt = this.agents.get(agentId);
+      if (!rt) continue; // agent was fired or removed
+      for (const t of tasks) {
+        rt.taskQueue.push({ task: t.task, handoffTo: t.handoffTo, cardId: t.cardId });
+      }
+      const first = tasks[0];
+      this.log(rt, "status", `Resuming task from before update: ${first.task}`);
+      resumedCount++;
+      // Drain the first task immediately — the rest stay queued
+      this.drainQueue(rt);
+    }
+    if (resumedCount > 0) {
+      console.log(`[agent-hq] resumed ${resumedCount} agent task(s) from pending state`);
+    }
+    // Clear pending tasks from save — they're now in-memory
+    this.save.clearPendingTasks();
   }
 
   setSettings(s: GameSettings, announce = true): void {
@@ -967,6 +996,66 @@ export class AgentManager {
     }
   }
 
+  /**
+   * Prepare for a graceful shutdown: save all active + queued tasks so agents
+   * can resume exactly where they left off after the server restarts.
+   * Aborts in-flight tasks, stops loops, and persists everything to disk/DB.
+   */
+  prepareForShutdown(): void {
+    // Stop autonomous loops so no new tasks start during drain
+    this.stopThinkLoop();
+    if (this.schedulerTimer) {
+      clearInterval(this.schedulerTimer);
+      this.schedulerTimer = null;
+    }
+
+    const pendingTasks: Record<string, PendingTask[]> = {};
+
+    for (const rt of this.agents.values()) {
+      // Skip permanent NPCs — they don't run user tasks
+      if (rt.info.id === YUKI_ID || rt.info.id === HERMES_ID) continue;
+
+      const tasks: PendingTask[] = [];
+
+      // If the agent is actively working on a task, save it as the first item
+      if (rt.info.task && (rt.info.status === "thinking" || rt.info.status === "working")) {
+        tasks.push({
+          task: rt.info.task,
+          handoffTo: rt.handoffTo,
+          cardId: rt.cardId,
+        });
+      }
+
+      // Append all queued tasks
+      for (const qt of rt.taskQueue) {
+        tasks.push({ task: qt.task, handoffTo: qt.handoffTo, cardId: qt.cardId });
+      }
+
+      if (tasks.length > 0) {
+        pendingTasks[rt.info.id] = tasks;
+        // Log the interruption
+        this.log(rt, "status", "Server updating — task will resume automatically after restart.");
+      }
+
+      // Abort any in-flight task
+      if (rt.abort) {
+        rt.abort.abort();
+      }
+      if (rt.doneTimer) {
+        clearTimeout(rt.doneTimer);
+        rt.doneTimer = null;
+      }
+
+      // Clear the in-memory queue — tasks are now persisted
+      rt.taskQueue = [];
+    }
+
+    // Persist pending tasks
+    this.save.setPendingTasks(pendingTasks);
+    this.persist();
+    this.persistBoard();
+  }
+
   /** One tick of the think loop — check each idle agent for autonomous action. */
   private tickThinkLoop(): void {
     const now = Date.now();
@@ -1200,6 +1289,12 @@ export class AgentManager {
   }
 
   private async runTask(rt: AgentRuntime, task: string): Promise<void> {
+    // If Yuki receives a question as a task, answer it directly instead of delegating
+    if (rt.info.id === YUKI_ID && isYukiQuestion(task)) {
+      await this.runYukiKnowledgeChat(rt, task);
+      return;
+    }
+
     const abort = new AbortController();
     rt.abort = abort;
 

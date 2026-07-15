@@ -102,6 +102,21 @@ body {
   color: var(--green);
 }
 
+.conn.updating {
+  color: #e8a838;
+  animation: conn-pulse 1s ease-in-out infinite;
+}
+
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes restart-pulse {
+  0% { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
 .hint {
   position: absolute;
   bottom: 10px;
