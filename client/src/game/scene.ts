@@ -216,8 +216,8 @@ export class OfficeScene extends Phaser.Scene {
   /** Matrix rain columns state — array of {y, speed, chars[]} per column. */
   private matrixColumns: { y: number; speed: number; chars: string[] }[] = [];
   /** Matrix rain canvas width/height. */
-  private static MATRIX_W = 64;
-  private static MATRIX_H = 40;
+  private static MATRIX_W = 128;
+  private static MATRIX_H = 80;
   /** Speaking indicator icons above remote players. */
   private speakingIcons = new Map<string, Phaser.GameObjects.Text>();
   /** Tracks the last roomId the scene rendered — used to detect room changes. */
@@ -4237,18 +4237,18 @@ export class OfficeScene extends Phaser.Scene {
   // ── Matrix rain monitor animation ────────────────────────────────────
 
   private initMatrixRain(): void {
-    const cols = Math.floor(OfficeScene.MATRIX_W / 4);
+    const cols = Math.floor(OfficeScene.MATRIX_W / 6);
     this.matrixColumns = [];
     for (let i = 0; i < cols; i++) {
       this.matrixColumns.push({
         y: Math.random() * OfficeScene.MATRIX_H,
-        speed: 0.3 + Math.random() * 0.7,
+        speed: 0.5 + Math.random() * 1.0,
         chars: [],
       });
     }
   }
 
-  private updateMatrixRain(time: number): void {
+  private updateMatrixRain(_time: number): void {
     const workingDesks = new Set<number>();
     for (const agent of this.store.agents.values()) {
       if (agent.deskIndex >= 0 && agent.status !== "idle" && agent.status !== "done" && agent.status !== "error") {
@@ -4269,7 +4269,8 @@ export class OfficeScene extends Phaser.Scene {
 
     // Create texture if needed
     if (!this.textures.exists(this.monitorMatrixTexKey)) {
-      this.textures.createCanvas(this.monitorMatrixTexKey, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
+      const ct = this.textures.createCanvas(this.monitorMatrixTexKey, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
+      if (!ct) return;
     }
 
     // Update matrix rain canvas
@@ -4284,20 +4285,20 @@ export class OfficeScene extends Phaser.Scene {
 
     // Draw falling characters
     const charSet = "01ABCDEF<>/{}[]#$%&*+-=";
+    ctx.font = "6px monospace";
     for (let col = 0; col < this.matrixColumns.length; col++) {
       const mc = this.matrixColumns[col];
-      const x = col * 4;
-      const y = Math.floor(mc.y) * 4;
+      const x = col * 6;
+      const y = Math.floor(mc.y) * 6;
 
       // Bright leading character
       ctx.fillStyle = "#ccffcc";
-      ctx.font = "4px monospace";
       ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, y);
 
       // Trailing dimmer characters
       ctx.fillStyle = "rgba(0,255,0,0.5)";
-      for (let trail = 1; trail < 4; trail++) {
-        const ty = y - trail * 4;
+      for (let trail = 1; trail < 5; trail++) {
+        const ty = y - trail * 6;
         if (ty < 0) break;
         ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, ty);
       }
@@ -4305,8 +4306,8 @@ export class OfficeScene extends Phaser.Scene {
       // Advance column
       mc.y += mc.speed;
       if (mc.y > OfficeScene.MATRIX_H) {
-        mc.y = -Math.random() * 10;
-        mc.speed = 0.3 + Math.random() * 0.7;
+        mc.y = -Math.random() * 15;
+        mc.speed = 0.5 + Math.random() * 1.0;
       }
     }
     tex.refresh();

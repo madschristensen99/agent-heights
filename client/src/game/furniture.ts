@@ -2176,6 +2176,10 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
   }
 
   // Generate procedural monitor texture (3 frames: off / on / black)
+  // Force regenerate if old 2-frame version exists without frame "2"
+  if (tex.exists(MONITOR_TEX) && !tex.get(MONITOR_TEX).has("2")) {
+    tex.remove(MONITOR_TEX);
+  }
   if (!tex.exists(MONITOR_TEX)) {
     const canvasTex = tex.createCanvas(MONITOR_TEX, TILE_PX * 3, TILE_PX);
     if (canvasTex) {
