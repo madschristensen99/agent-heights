@@ -1373,7 +1373,7 @@ export class OfficeScene extends Phaser.Scene {
   private tryOfficeInteract(time: number): boolean {
     // Projector control panel — cycle channels
     const ctrlPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, ctrlPx.x, ctrlPx.y) < 160) {
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, ctrlPx.x, ctrlPx.y) < 80) {
       const net = this.game.registry.get("net") as import("../net").Net;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
       const curIdx = channels.findIndex(c => c.id === this.store.projectorChannel);
@@ -1386,7 +1386,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Projector speaker — toggle mute
     const spkPx = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, spkPx.x, spkPx.y) < 160) {
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, spkPx.x, spkPx.y) < 80) {
       this.projectorMuted = !this.projectorMuted;
       // Send mute/unmute command via YouTube IFrame postMessage API (no reload)
       if (this.projectorIframe?.contentWindow) {
@@ -1890,7 +1890,7 @@ export class OfficeScene extends Phaser.Scene {
       const chLabel = ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`;
 
       const ctrlPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
-      add(this.projectorControlHint, ctrlPx.x, ctrlPx.y, 160, chLabel, ctrlPx.x, ctrlPx.y + 48);
+      add(this.projectorControlHint, ctrlPx.x, ctrlPx.y, 80, chLabel, ctrlPx.x, ctrlPx.y + 48);
 
       const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
       add(this.projectorHint, projPx.x, projPx.y, 200, chLabel, projPx.x, projPx.y + 64);
@@ -1899,7 +1899,7 @@ export class OfficeScene extends Phaser.Scene {
     // Projector speaker (mute/unmute)
     {
       const px = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
-      add(this.projectorSpeakerHint, px.x, px.y, 160, this.projectorMuted ? "E: UNMUTE" : "E: MUTE", px.x, px.y + 48);
+      add(this.projectorSpeakerHint, px.x, px.y, 80, this.projectorMuted ? "E: UNMUTE" : "E: MUTE", px.x, px.y + 48);
     }
 
     // Phone booth
