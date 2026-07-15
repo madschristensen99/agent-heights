@@ -427,7 +427,12 @@ export class MarketplaceBrowser {
 
     modal.querySelector("#mq-hire")!.addEventListener("click", () => {
       this.onHireAgent(agent);
-      modal.remove();
+      const btn = modal.querySelector("#mq-hire") as HTMLButtonElement;
+      btn.textContent = "Hired! 🚁";
+      btn.style.background = "#53b86b";
+      btn.style.color = "#fff";
+      btn.disabled = true;
+      setTimeout(() => modal.remove(), 1500);
     });
   }
 
@@ -497,6 +502,10 @@ export class MarketplaceBrowser {
           const hireBtn = card.querySelector("button")!;
           hireBtn.addEventListener("click", () => {
             this.onHireCommunityMCP(mcp.name, mcp.mcpConfig);
+            hireBtn.textContent = "Hired! 🚁";
+            hireBtn.style.background = "#53b86b";
+            hireBtn.style.color = "#fff";
+            hireBtn.disabled = true;
           });
         }
 
