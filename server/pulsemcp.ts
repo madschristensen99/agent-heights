@@ -18,6 +18,10 @@ interface PulseMCPServer {
   package_name?: string;
   package_download_count?: number;
   integrations?: { name: string; slug: string; url?: string }[];
+  /** v0beta may include remotes directly */
+  remotes?: { type: string; url: string }[];
+  /** v0beta may include packages with transport info */
+  packages?: { registryType?: string; identifier?: string; transport?: { type: string }; runtimeHint?: string }[];
 }
 
 interface PulseMCPListResponse {
@@ -66,6 +70,7 @@ async function fetchPulseMCPServers(query: string, limit: number): Promise<Pulse
 
     if (res.ok) {
       const parsed: PulseMCPListResponse = await res.json();
+      // Also check for remotes/packages fields that v0beta might include
       return parsed.servers ?? [];
     }
 
@@ -113,13 +118,66 @@ async function fetchPulseMCPServers(query: string, limit: number): Promise<Pulse
 }
 
 /**
+ * Try to fetch server.json from a GitHub repo to get remotes/packages.
+ * Returns the MCP remote URL if found, or null.
+ */
+async function fetchServerJsonRemote(githubUrl: string): Promise<string | null> {
+  try {
+    // Convert https://github.com/owner/repo to raw URL
+    const match = githubUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+    if (!match) return null;
+    const [, owner, repo] = match;
+    const cleanRepo = repo.replace(/\.git$/, "");
+    // Try common branch names
+    for (const branch of ["main", "master"]) {
+      try {
+        const rawUrl = `https://raw.githubusercontent.com/${owner}/${cleanRepo}/${branch}/server.json`;
+        const res = await fetch(rawUrl, {
+          signal: AbortSignal.timeout(5_000),
+          headers: { "Accept": "application/json" },
+        });
+        if (!res.ok) continue;
+        const json = await res.json() as {
+          remotes?: { type: string; url: string }[];
+          packages?: { identifier?: string; transport?: { type: string }; runtimeHint?: string }[];
+        };
+        // Return first remote URL that looks like an MCP endpoint
+        const remote = json.remotes?.find((r) => r.url && !r.url.includes("github.com"));
+        if (remote?.url) {
+          console.log(`[pulsemcp] found remote URL in server.json: ${remote.url}`);
+          return remote.url;
+        }
+      } catch { /* try next branch */ }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Convert a PulseMCPServer into an MCPServerConfig for hiring.
  * Prefers remote URL, falls back to npx package install.
+ * This is the synchronous version — uses only data already in the server object.
  */
-function toMCPConfig(s: PulseMCPServer): MCPServerConfig {
+function toMCPConfigSync(s: PulseMCPServer): MCPServerConfig {
+  // Check remotes array first (v0beta or v0.1 may include it)
+  const remoteUrl = s.remotes?.find((r) => r.url && !r.url.includes("github.com") && !r.url.includes("pulsemcp.com"))?.url;
+  if (remoteUrl) {
+    return { name: s.name, url: remoteUrl };
+  }
   // Only use url if it looks like an actual MCP endpoint (not a GitHub page)
   if (s.url && !s.url.includes("github.com") && !s.url.includes("pulsemcp.com")) {
     return { name: s.name, url: s.url };
+  }
+  // Check packages array (v0.1 format)
+  const pkg = s.packages?.find((p) => p.identifier);
+  if (pkg?.identifier) {
+    return {
+      name: s.name,
+      command: pkg.runtimeHint ?? "npx",
+      args: ["-y", pkg.identifier],
+    };
   }
   if (s.package_name) {
     return {
@@ -128,12 +186,8 @@ function toMCPConfig(s: PulseMCPServer): MCPServerConfig {
       args: ["-y", s.package_name],
     };
   }
-  // No installable config — return a placeholder with source URL for reference
-  // The agent will be hired but won't have a working MCP connection
-  return {
-    name: s.name,
-    url: s.external_url && !s.external_url.includes("github.com") ? s.external_url : undefined,
-  };
+  // No installable config from available data
+  return { name: s.name };
 }
 
 /**
@@ -167,6 +221,8 @@ export async function searchPulseMCP(query: string, limit = 10): Promise<string 
 /**
  * Search PulseMCP and return structured results for the marketplace UI.
  * Each result includes a ready-to-use MCPServerConfig.
+ * For servers without a direct URL/package, tries to fetch server.json
+ * from the GitHub repo to discover the remote endpoint.
  */
 export async function searchPulseMCPStructured(query: string, limit = 20): Promise<CommunityMCPResult[]> {
   const trimmed = query.trim();
@@ -175,13 +231,27 @@ export async function searchPulseMCPStructured(query: string, limit = 20): Promi
   const servers = await fetchPulseMCPServers(trimmed, limit);
   if (!servers) return [];
 
-  return servers.map((s) => ({
-    name: s.name,
-    description: s.short_description ?? "No description available",
-    source_code_url: s.source_code_url,
-    github_stars: s.github_stars,
-    mcpConfig: toMCPConfig(s),
-  }));
+  const results: CommunityMCPResult[] = [];
+  for (const s of servers) {
+    let config = toMCPConfigSync(s);
+
+    // If no installable config yet, try fetching server.json from GitHub
+    if (!config.url && !config.command && s.source_code_url) {
+      const remoteUrl = await fetchServerJsonRemote(s.source_code_url);
+      if (remoteUrl) {
+        config = { name: s.name, url: remoteUrl };
+      }
+    }
+
+    results.push({
+      name: s.name,
+      description: s.short_description ?? "No description available",
+      source_code_url: s.source_code_url,
+      github_stars: s.github_stars,
+      mcpConfig: config,
+    });
+  }
+  return results;
 }
 
 /**
