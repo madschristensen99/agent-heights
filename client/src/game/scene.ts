@@ -92,6 +92,9 @@ export class OfficeScene extends Phaser.Scene {
   private projectorControlGfx!: Phaser.GameObjects.Graphics;
   private projectorSpeakerGfx!: Phaser.GameObjects.Graphics;
   private projectorMuted = true;
+  private screenShareTile: Tile = { x: 5, y: 1 };
+  private screenShareHint!: Phaser.GameObjects.Text;
+  private screenShareGfx!: Phaser.GameObjects.Graphics;
 
   // --- phone booth (webcam broadcast) ---
   private phoneBoothTile: Tile = { x: 3, y: 2 };
@@ -718,6 +721,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawBoard();
           this.drawProjector();
           this.drawPhoneBooth();
+          this.drawScreenShareStation();
           this.drawClock();
           this.drawTrophyCase();
           this.drawHallOfFameBoard();
@@ -763,6 +767,7 @@ export class OfficeScene extends Phaser.Scene {
           this.wardrobeHint = this.makeHint();
           this.projectorHint = this.makeHint();
           this.phoneBoothHint = this.makeHint();
+          this.screenShareHint = this.makeHint();
         },
       },
       {
@@ -1397,6 +1402,28 @@ export class OfficeScene extends Phaser.Scene {
       return true;
     }
 
+    // Screen share station — start/stop screen sharing
+    const ssPx = { x: this.screenShareTile.x * TILE_PX + 32, y: this.screenShareTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, ssPx.x, ssPx.y) < 120) {
+      if (this.screenShare?.sharing) {
+        this.screenShare.stopSharing();
+        this.detachScreenShareVideo();
+        this.store.toast("Screen share stopped.");
+      } else {
+        this.screenShare?.startSharing().then(() => {
+          const localStream = this.screenShare?.localStream;
+          if (localStream) {
+            this.attachScreenShareVideo(localStream);
+          }
+          this.store.toast("Sharing your screen to the projector!");
+        }).catch(() => {
+          this.store.toast("Screen share permission denied.");
+        });
+      }
+      this.world?.audio.uiClick();
+      return true;
+    }
+
     // Phone booth — start/stop webcam broadcast
     const boothPx = { x: this.phoneBoothTile.x * TILE_PX + 32, y: this.phoneBoothTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, boothPx.x, boothPx.y) < 120) {
@@ -1948,6 +1975,19 @@ export class OfficeScene extends Phaser.Scene {
         .setVisible(true);
     } else {
       this.phoneBoothHint.setVisible(false);
+    }
+
+    // Screen share station
+    const ssHintPx = { x: this.screenShareTile.x * TILE_PX + 32, y: this.screenShareTile.y * TILE_PX + 32 };
+    const ssDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, ssHintPx.x, ssHintPx.y);
+    if (ssDist < 120) {
+      const label = this.screenShare?.sharing ? "E: STOP SHARE" : "E: SHARE SCREEN";
+      this.screenShareHint
+        .setPosition(ssHintPx.x, ssHintPx.y + 48)
+        .setText(hintLabel(label))
+        .setVisible(true);
+    } else {
+      this.screenShareHint.setVisible(false);
     }
   }
 
@@ -4388,6 +4428,39 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ── Phone booth + webcam/screen share video overlay ──────────────────
+
+  /** Draw a wall-mounted screen share station next to the projector. */
+  private drawScreenShareStation(): void {
+    const px = this.screenShareTile.x * TILE_PX + 32;
+    const py = this.screenShareTile.y * TILE_PX + 32;
+    this.screenShareGfx = this.add.graphics().setDepth(3);
+
+    // mounting plate
+    this.screenShareGfx.fillStyle(0x1a2838, 1);
+    this.screenShareGfx.fillRoundedRect(px - 20, py - 16, 40, 32, 4);
+    this.screenShareGfx.fillStyle(0x2a3848, 1);
+    this.screenShareGfx.fillRoundedRect(px - 18, py - 14, 36, 28, 3);
+
+    // small screen display
+    this.screenShareGfx.fillStyle(0x0a0a12, 1);
+    this.screenShareGfx.fillRoundedRect(px - 14, py - 10, 28, 12, 2);
+    // monitor icon (screen with arrow)
+    this.screenShareGfx.fillStyle(0x4a8cd4, 1);
+    this.screenShareGfx.fillRect(px - 8, py - 7, 10, 6);
+    this.screenShareGfx.fillStyle(0x2a4868, 1);
+    this.screenShareGfx.fillRect(px - 6, py - 5, 6, 2);
+
+    // share button (green when sharing, gray when not)
+    this.screenShareGfx.fillStyle(0x666666, 1);
+    this.screenShareGfx.fillRoundedRect(px - 12, py + 4, 24, 8, 2);
+
+    // screws
+    this.screenShareGfx.fillStyle(0x555555, 1);
+    this.screenShareGfx.fillCircle(px - 15, py - 12, 1.5);
+    this.screenShareGfx.fillCircle(px + 15, py - 12, 1.5);
+    this.screenShareGfx.fillCircle(px - 15, py + 12, 1.5);
+    this.screenShareGfx.fillCircle(px + 15, py + 12, 1.5);
+  }
 
   /** Draw the phone booth near the projector in the top-left corner. */
   private drawPhoneBooth(): void {

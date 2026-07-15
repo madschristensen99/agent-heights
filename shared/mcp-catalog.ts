@@ -1598,14 +1598,9 @@ export function catalogSummary(): string {
  * proven services. Yuki uses this to recommend specific agents.
  */
 export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via MARKET button)
-- Robinhood Trading Agent: AI trading agent — manage portfolios, place trades, analyze markets. Connects via Robinhood Trading MCP (OAuth).
-- Yahoo Finance Agent: Financial data agent — pulls stock quotes, price history, financials, and market news via Yahoo Finance MCP. No API key needed. Pairs with Robinhood agent for analysis-to-execution pipeline.
-- GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.
-- Code Review Sentinel: Automated code review — catches bugs, security issues, and performance problems before they ship.
-- Data Analyst Pro: AI data analyst — writes SQL, cleans data, generates insights, and creates visualizations from any dataset.
-- Research Assistant: AI research agent — searches the web, synthesizes sources, produces cited reports on any topic.
-- DevOps Automator: DevOps automation — manages CI/CD, Docker, Kubernetes, Terraform, and deployment pipelines.
-- Content Writer: AI content writer — blogs, docs, marketing copy, and more, optimized for your audience.`;
+- Yahoo Finance Agent: Strategy evaluator — fetches market data, computes technical indicators inline (RSI, MACD, SMA, Bollinger Bands), evaluates strategy conditions, and emits structured trade signals. No auth needed. Pairs with Robinhood agent via schedule + handoff.
+- Robinhood Trading Agent: Trade executor — receives trade signal handoffs from analysis agents, confirms with boss, places trades via Robinhood MCP (OAuth). Always requires human confirmation before executing.
+- GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.`;
 
 
 /** Convert a catalog entry to an MCPServerConfig for agent assignment. */

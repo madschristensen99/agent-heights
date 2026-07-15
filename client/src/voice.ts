@@ -278,7 +278,15 @@ export class VoiceManager {
       const dist = Math.sqrt(dx * dx + dy * dy);
       const gain = distanceToGain(dist, maxDist);
       peer.gainNode.gain.value = this._muted ? 0 : gain;
-      if (shouldLog) console.log(`[voice] gain for ${userId}: ${gain.toFixed(3)} (dist=${dist.toFixed(0)}, max=${maxDist}, muted=${this._muted})`);
+      if (shouldLog) {
+        // Check if remote audio data is actually flowing
+        if (!this.speakingData) this.speakingData = new Uint8Array(new ArrayBuffer(256));
+        peer.analyser.getByteFrequencyData(this.speakingData);
+        let sum = 0;
+        for (let i = 0; i < this.speakingData.length; i++) sum += this.speakingData[i];
+        const avgLevel = sum / this.speakingData.length / 255;
+        console.log(`[voice] gain for ${userId}: ${gain.toFixed(3)} (dist=${dist.toFixed(0)}, max=${maxDist}, muted=${this._muted}, audioLevel=${avgLevel.toFixed(3)})`);
+      }
     }
   }
 

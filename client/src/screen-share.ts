@@ -53,6 +53,9 @@ export class ScreenShareManager {
 
   get sharing(): boolean { return this._sharing; }
 
+  /** Returns the local screen stream (null if not sharing). */
+  get localStream(): MediaStream | null { return this.screenStream; }
+
   /** Start sharing your screen to all peers in the room. */
   async startSharing(): Promise<void> {
     if (this._sharing) return;
