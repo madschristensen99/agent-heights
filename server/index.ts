@@ -8,6 +8,7 @@ import { SERVER_PORT, isValidAppearance } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleMcpCatalogRequest } from "./mcp-store.js";
+import { searchPulseMCPStructured } from "./pulsemcp.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
@@ -301,6 +302,25 @@ const server = createServer((req, res) => {
   // MCP catalog — curated server directory
   if (req.url?.split("?")[0]?.startsWith("/api/mcp-catalog")) {
     handleMcpCatalogRequest(req, res);
+    return;
+  }
+
+  // PulseMCP community search — search 22k+ community MCP servers
+  if (req.url?.split("?")[0] === "/api/pulsemcp-search") {
+    const params = new URLSearchParams(req.url?.split("?")[1] ?? "");
+    const search = params.get("search") ?? "";
+    if (!search) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing search parameter" }));
+      return;
+    }
+    searchPulseMCPStructured(search, 20).then((results) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ results, count: results.length }));
+    }).catch(() => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Search failed" }));
+    });
     return;
   }
 

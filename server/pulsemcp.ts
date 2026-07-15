@@ -2,8 +2,11 @@
  * PulseMCP search helper — calls the PulseMCP REST API directly
  * to search 22,000+ MCP servers from pulsemcp.com.
  *
- * API: https://api.pulsemcp.com/v0beta/servers
+ * API: https://api.pulsemcp.com/v0beta/servers (legacy)
+ *      https://api.pulsemcp.com/v0.1/servers (new, requires auth)
  */
+import type { MCPServerConfig } from "../shared/types.js";
+
 interface PulseMCPServer {
   name: string;
   url?: string;
@@ -23,8 +26,110 @@ interface PulseMCPListResponse {
   next: string | null;
 }
 
+/** Structured result for client-side rendering (marketplace Community tab). */
+export interface CommunityMCPResult {
+  name: string;
+  description: string;
+  source_code_url?: string;
+  github_stars?: number;
+  /** Constructed MCPServerConfig for hiring. */
+  mcpConfig: MCPServerConfig;
+}
+
 const PULSEMCP_API_BASE = "https://api.pulsemcp.com/v0beta";
 const PULSEMCP_SEARCH_TIMEOUT_MS = 8_000;
+
+/**
+ * Search PulseMCP for MCP servers matching the query.
+ * Returns a formatted string suitable for injecting into Yuki's context.
+ * Returns null if the search fails, times out, or finds no results.
+ */
+/**
+ * Fetch raw server data from PulseMCP API.
+ * Tries v0beta first, falls back to v0.1 (which may require auth).
+ */
+async function fetchPulseMCPServers(query: string, limit: number): Promise<PulseMCPServer[] | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PULSEMCP_SEARCH_TIMEOUT_MS);
+
+  try {
+    // Try v0beta first (no auth needed)
+    const url = new URL(`${PULSEMCP_API_BASE}/servers`);
+    url.searchParams.set("query", query);
+    url.searchParams.set("count_per_page", String(limit));
+    url.searchParams.set("offset", "0");
+
+    const res = await fetch(url.toString(), {
+      signal: controller.signal,
+      headers: { "Accept": "application/json" },
+    });
+
+    if (res.ok) {
+      const parsed: PulseMCPListResponse = await res.json();
+      return parsed.servers ?? [];
+    }
+
+    console.warn(`[pulsemcp] v0beta returned ${res.status}, trying v0.1...`);
+
+    // Fallback: try v0.1 with search param (may work without auth for basic queries)
+    const v01Url = new URL("https://api.pulsemcp.com/v0.1/servers");
+    v01Url.searchParams.set("search", query);
+    v01Url.searchParams.set("limit", String(limit));
+    v01Url.searchParams.set("version", "latest");
+
+    const v01Res = await fetch(v01Url.toString(), {
+      signal: controller.signal,
+      headers: { "Accept": "application/json" },
+    });
+
+    if (v01Res.ok) {
+      const v01Parsed = await v01Res.json();
+      // v0.1 has a different shape: { servers: [{ server: { name, description, repository, packages, remotes } }] }
+      const servers: PulseMCPServer[] = (v01Parsed.servers ?? []).map((entry: any) => {
+        const s = entry.server ?? entry;
+        const pkg = s.packages?.[0];
+        const remote = s.remotes?.[0];
+        return {
+          name: s.title ?? s.name ?? "Unknown",
+          url: remote?.url,
+          short_description: s.description,
+          source_code_url: s.repository?.url,
+          package_registry: pkg?.registryType,
+          package_name: pkg?.identifier,
+        };
+      });
+      return servers;
+    }
+
+    console.warn(`[pulsemcp] v0.1 also returned ${v01Res.status}`);
+    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[pulsemcp] fetch failed for "${query}": ${msg}`);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Convert a PulseMCPServer into an MCPServerConfig for hiring.
+ * Prefers remote URL, falls back to npx package install.
+ */
+function toMCPConfig(s: PulseMCPServer): MCPServerConfig {
+  if (s.url) {
+    return { name: s.name, url: s.url };
+  }
+  if (s.package_name) {
+    return {
+      name: s.name,
+      command: "npx",
+      args: ["-y", s.package_name],
+    };
+  }
+  // Fallback: use source code URL as a reference (won't be installable directly)
+  return { name: s.name, url: s.external_url ?? s.source_code_url };
+}
 
 /**
  * Search PulseMCP for MCP servers matching the query.
@@ -35,50 +140,43 @@ export async function searchPulseMCP(query: string, limit = 10): Promise<string 
   const trimmed = query.trim();
   if (!trimmed) return null;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PULSEMCP_SEARCH_TIMEOUT_MS);
-
-  try {
-    const url = new URL(`${PULSEMCP_API_BASE}/servers`);
-    url.searchParams.set("query", trimmed);
-    url.searchParams.set("count_per_page", String(limit));
-    url.searchParams.set("offset", "0");
-
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
-      headers: { "Accept": "application/json" },
-    });
-
-    if (!res.ok) {
-      console.warn(`[pulsemcp] API returned ${res.status} for "${trimmed}"`);
-      return null;
-    }
-
-    const parsed: PulseMCPListResponse = await res.json();
-
-    if (!parsed.servers || parsed.servers.length === 0) {
-      console.log(`[pulsemcp] no results for "${trimmed}"`);
-      return null;
-    }
-
-    const lines = parsed.servers.map((s) => {
-      const stars = s.github_stars ? ` (${s.github_stars}★)` : "";
-      const integrations = s.integrations?.length
-        ? ` — integrations: ${s.integrations.map((i) => i.name).join(", ")}`
-        : "";
-      const source = s.source_code_url ? ` (source: ${s.source_code_url})` : "";
-      return `- ${s.name}${stars}: ${s.short_description ?? "No description"}${integrations}${source}`;
-    });
-
-    console.log(`[pulsemcp] search "${trimmed}" → ${parsed.servers.length} results (of ${parsed.total_count})`);
-    return `### PulseMCP Community Search Results (${parsed.total_count} total matches for "${trimmed}")\n${lines.join("\n")}`;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[pulsemcp] search failed for "${trimmed}": ${msg}`);
+  const servers = await fetchPulseMCPServers(trimmed, limit);
+  if (!servers || servers.length === 0) {
+    console.log(`[pulsemcp] no results for "${trimmed}"`);
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
+
+  const lines = servers.map((s) => {
+    const stars = s.github_stars ? ` (${s.github_stars}★)` : "";
+    const integrations = s.integrations?.length
+      ? ` — integrations: ${s.integrations.map((i) => i.name).join(", ")}`
+      : "";
+    const source = s.source_code_url ? ` (source: ${s.source_code_url})` : "";
+    return `- ${s.name}${stars}: ${s.short_description ?? "No description"}${integrations}${source}`;
+  });
+
+  console.log(`[pulsemcp] search "${trimmed}" → ${servers.length} results`);
+  return `### PulseMCP Community Search Results for "${trimmed}"\n${lines.join("\n")}`;
+}
+
+/**
+ * Search PulseMCP and return structured results for the marketplace UI.
+ * Each result includes a ready-to-use MCPServerConfig.
+ */
+export async function searchPulseMCPStructured(query: string, limit = 20): Promise<CommunityMCPResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const servers = await fetchPulseMCPServers(trimmed, limit);
+  if (!servers) return [];
+
+  return servers.map((s) => ({
+    name: s.name,
+    description: s.short_description ?? "No description available",
+    source_code_url: s.source_code_url,
+    github_stars: s.github_stars,
+    mcpConfig: toMCPConfig(s),
+  }));
 }
 
 /**

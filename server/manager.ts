@@ -1818,7 +1818,8 @@ export class AgentManager {
       `When asked about MCP servers or integrations, recommend from the curated catalog below.`,
       `If PulseMCP community search results are included, LEAD WITH THOSE — they are live results from a 22,000+ server database.`,
       `Include server names, descriptions, GitHub stars, and source URLs from the PulseMCP results.`,
-      `Tell the user they can browse the MARKET button to hire agents or install MCP servers.`,
+      `Tell the user they can hire any community MCP directly: click the MARKET button, then the "Community MCPs" tab, search, and hit "Hire into HQ" — the agent will fly in via helicopter.`,
+      `Tell the user they can also browse the MARKET button to hire curated agents or install curated MCP servers.`,
       ``,
       knowledgeContext,
     ].join("\n");

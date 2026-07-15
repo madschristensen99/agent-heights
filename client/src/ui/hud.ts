@@ -362,6 +362,7 @@ export class Hud {
 
     const mqBrowser = new MarketplaceBrowser();
     mqBrowser.onHireAgent = (agent: MarketplaceAgent) => this.hireFromMarketplace(agent);
+    mqBrowser.onHireCommunityMCP = (name: string, mcpConfig: MCPServerConfig) => this.hireCommunityMCP(name, mcpConfig);
     mqBrowser.onSetMcpKey = (serverUrl: string, apiKey: string) => {
       this.net.send({ type: "set_mcp_key", serverUrl, apiKey });
     };
@@ -1666,6 +1667,18 @@ export class Hud {
     // sent from the scene when the agent emerges from the elevator, so the
     // server creates the agent at the right moment and syncAgents() replaces
     // the cosmetic sprite with the real NPC.
+    this.store.triggerHelicopter(delivery);
+  }
+
+  private hireCommunityMCP(name: string, mcpConfig: MCPServerConfig): void {
+    const delivery = {
+      name: name.slice(0, 24) || "Agent",
+      systemPrompt: `You are an AI agent powered by a community MCP server from PulseMCP.\nYour MCP server: ${mcpConfig.name ?? name}\n${mcpConfig.url ? `Remote URL: ${mcpConfig.url}` : mcpConfig.command ? `Command: ${mcpConfig.command} ${(mcpConfig.args ?? []).join(" ")}` : ""}\nUse your MCP tools to help the boss with tasks related to your capabilities.`,
+      model: SWARMS_MODELS[0].id,
+      provider: "cline",
+      appearance: randomAppearance(),
+      mcpServers: [mcpConfig],
+    };
     this.store.triggerHelicopter(delivery);
   }
 

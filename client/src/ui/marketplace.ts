@@ -1,8 +1,17 @@
 import type { MarketplaceAgent } from "../../../shared/marketplace";
+import type { MCPServerConfig } from "../../../shared/types";
 
 export interface MarketplaceResult {
   agents?: MarketplaceAgent[];
   count: number;
+}
+
+export interface CommunityMCPResult {
+  name: string;
+  description: string;
+  source_code_url?: string;
+  github_stars?: number;
+  mcpConfig: MCPServerConfig;
 }
 
 const KNOWN_CATEGORIES = [
@@ -32,7 +41,9 @@ export class MarketplaceBrowser {
   private categoryChips: HTMLDivElement;
   private currentCategory = "All";
   private allAgents: MarketplaceAgent[] = [];
+  private currentTab: "agents" | "community" = "agents";
   onHireAgent: (agent: MarketplaceAgent) => void = () => {};
+  onHireCommunityMCP: (name: string, mcpConfig: MCPServerConfig) => void = () => {};
   onSetMcpKey: (serverUrl: string, apiKey: string) => void = () => {};
   onCheckMcpKeys: (serverUrls: string[]) => void = () => {};
   onStartMcpOAuth: (serverUrl: string) => void = () => {};
@@ -55,6 +66,10 @@ export class MarketplaceBrowser {
         <h2 style="font-size: 1rem; font-weight: 700; margin: 0; flex: 1;">Marketplace</h2>
         <button id="mq-close" style="background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer;">×</button>
       </div>
+      <div style="padding: 0.25rem 1rem; border-bottom: 1px solid #222; display:flex; gap:0.25rem;">
+        <button id="mq-tab-agents" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#2a2a2a; color:#e0e0e0; cursor:pointer;">Agents</button>
+        <button id="mq-tab-community" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Community MCPs</button>
+      </div>
       <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #222;">
         <div id="mq-categories" style="display:flex; gap:0.25rem; margin-bottom:0.5rem; flex-wrap:wrap;"></div>
         <input id="mq-search" type="text" placeholder="Search agents…" style="width:100%;padding:0.5rem 0.75rem;border-radius:0.375rem;border:1px solid #222;background:#1a1a1a;color:#e0e0e0;font-size:0.85rem;outline:none;" />
@@ -70,16 +85,51 @@ export class MarketplaceBrowser {
 
     this.panel.querySelector("#mq-close")!.addEventListener("click", () => this.hide());
 
+    // Tab switching
+    const tabAgents = this.panel.querySelector("#mq-tab-agents") as HTMLButtonElement;
+    const tabCommunity = this.panel.querySelector("#mq-tab-community") as HTMLButtonElement;
+    tabAgents.addEventListener("click", () => this.switchTab("agents"));
+    tabCommunity.addEventListener("click", () => this.switchTab("community"));
+
     let searchTimer: ReturnType<typeof setTimeout> | null = null;
     this.searchInput.addEventListener("input", () => {
       if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => void this.renderAgents(), 300);
+      searchTimer = setTimeout(() => {
+        if (this.currentTab === "agents") void this.renderAgents();
+        else void this.renderCommunity();
+      }, 300);
     });
+  }
+
+  private switchTab(tab: "agents" | "community"): void {
+    this.currentTab = tab;
+    const tabAgents = this.panel.querySelector("#mq-tab-agents") as HTMLButtonElement;
+    const tabCommunity = this.panel.querySelector("#mq-tab-community") as HTMLButtonElement;
+    const categoryChips = this.panel.querySelector("#mq-categories") as HTMLDivElement;
+
+    if (tab === "agents") {
+      tabAgents.style.background = "#2a2a2a";
+      tabAgents.style.color = "#e0e0e0";
+      tabCommunity.style.background = "#1a1a1a";
+      tabCommunity.style.color = "#888";
+      this.searchInput.placeholder = "Search agents…";
+      categoryChips.style.display = "flex";
+      void this.load();
+    } else {
+      tabCommunity.style.background = "#2a2a2a";
+      tabCommunity.style.color = "#e0e0e0";
+      tabAgents.style.background = "#1a1a1a";
+      tabAgents.style.color = "#888";
+      this.searchInput.placeholder = "Search 22k+ community MCPs…";
+      categoryChips.style.display = "none";
+      void this.renderCommunity();
+    }
   }
 
   show(): void {
     this.panel.style.display = "flex";
-    void this.load();
+    if (this.currentTab === "agents") void this.load();
+    else void this.renderCommunity();
   }
 
   hide(): void {
@@ -379,6 +429,78 @@ export class MarketplaceBrowser {
       this.onHireAgent(agent);
       modal.remove();
     });
+  }
+
+  private async renderCommunity(): Promise<void> {
+    const search = this.searchInput.value.trim();
+
+    if (!search) {
+      this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">
+        <div style="font-size:0.9rem; margin-bottom:0.5rem;">🔍 Search 22,000+ community MCP servers</div>
+        <div style="font-size:0.75rem; color:#888;">Type a keyword like "hyperliquid", "trading", "database"…</div>
+      </div>`;
+      return;
+    }
+
+    this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Searching PulseMCP for "${this.escape(search)}"…</div>`;
+
+    try {
+      const res = await fetch(`/api/pulsemcp-search?search=${encodeURIComponent(search)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: { results: CommunityMCPResult[]; count: number } = await res.json();
+
+      if (!data.results || data.results.length === 0) {
+        this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">No community MCPs found for "${this.escape(search)}".</div>`;
+        return;
+      }
+
+      this.content.innerHTML = "";
+      for (const mcp of data.results) {
+        const card = document.createElement("div");
+        card.style.cssText = `
+          padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid #1a1a1a;
+          border-radius: 0.5rem; background: #0d0d0d;
+          transition: border-color 0.15s;
+        `;
+        card.addEventListener("mouseenter", () => { card.style.borderColor = "#333"; });
+        card.addEventListener("mouseleave", () => { card.style.borderColor = "#1a1a1a"; });
+
+        const stars = mcp.github_stars ? ` (${mcp.github_stars}★)` : "";
+        const sourceLink = mcp.source_code_url
+          ? `<a href="${mcp.source_code_url}" target="_blank" style="font-size:0.65rem; color:#4f9dde; text-decoration:none;">source →</a>`
+          : "";
+        const transport = mcp.mcpConfig.url
+          ? `<span style="font-size:0.6rem; padding:0.1rem 0.3rem; background:#1a2a1a; border-radius:0.25rem; color:#53b86b;">remote</span>`
+          : mcp.mcpConfig.command
+            ? `<span style="font-size:0.6rem; padding:0.1rem 0.3rem; background:#1a1a2a; border-radius:0.25rem; color:#6b8acf;">stdio</span>`
+            : "";
+
+        card.innerHTML = `
+          <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.15rem;">${this.escape(mcp.name)}${stars}</div>
+              <div style="font-size:0.75rem; color:#888; margin-bottom:0.35rem;">${this.escape(mcp.description.slice(0, 100))}</div>
+              <div style="display:flex; gap:0.25rem; align-items:center; flex-wrap:wrap;">
+                ${transport}
+                ${sourceLink}
+              </div>
+            </div>
+          </div>
+          <button style="margin-top:0.5rem; width:100%; padding:0.4rem; border:none; border-radius:0.375rem; background:#e0e0e0; color:#0d0d0d; font-size:0.8rem; font-weight:600; cursor:pointer;">
+            🚁 Hire into HQ
+          </button>
+        `;
+
+        const hireBtn = card.querySelector("button")!;
+        hireBtn.addEventListener("click", () => {
+          this.onHireCommunityMCP(mcp.name, mcp.mcpConfig);
+        });
+
+        this.content.appendChild(card);
+      }
+    } catch {
+      this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Unable to search PulseMCP. Please try again later.</div>`;
+    }
   }
 
   private escape(s: string): string {
