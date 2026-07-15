@@ -12,8 +12,6 @@ import { touchInput, isTouchDevice } from "../touch";
 import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
-import type { MCPCatalogServer } from "../../../shared/mcp-catalog";
-import { toMCPServerConfig } from "../../../shared/mcp-catalog";
 import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
 import { startSubscriptionCheckout, openCustomerPortal } from "../payment";
 
@@ -345,13 +343,6 @@ export class Hud {
     };
     mqBrowser.onStartMcpOAuth = (serverUrl: string) => {
       this.net.send({ type: "start_mcp_oauth", serverUrl });
-    };
-    mqBrowser.onInstallServer = (server: MCPCatalogServer) => {
-      const config = toMCPServerConfig(server);
-      const installed = this.getInstalledMcpServers();
-      installed.push(config);
-      localStorage.setItem("agent-hq-installed-mcp", JSON.stringify(installed));
-      this.store.toast(`${server.name} installed — assign it when hiring a new agent.`);
     };
     const mcpKeysListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
       if (mqBrowser.onMcpKeysStatusHandler) mqBrowser.onMcpKeysStatusHandler(results);
@@ -1584,44 +1575,13 @@ export class Hud {
         agreeableness: parseInt((document.getElementById("h-agreeableness") as HTMLInputElement).value) / 100,
         neuroticism: parseInt((document.getElementById("h-neuroticism") as HTMLInputElement).value) / 100,
       };
-      const installedMcp = this.getInstalledMcpServers();
-      // Ensure Playwright is always available for screen sharing, even if
-      // the user hasn't installed any MCP servers manually.
-      const hasPlaywright = installedMcp.some(s =>
-        (s.name ?? "").toLowerCase().includes("playwright") ||
-        (s.args ?? []).some(a => a.includes("playwright"))
-      );
-      if (!hasPlaywright) {
-        installedMcp.push({
-          name: "playwright",
-          command: "npx",
-          args: ["-y", "@anthropic-ai/mcp-server-playwright"],
-        });
-      }
-      // Sequential Thinking — helps agents break down complex problems
-      const hasSeqThinking = installedMcp.some(s =>
-        (s.name ?? "").toLowerCase().includes("sequential") ||
-        (s.args ?? []).some(a => a.includes("sequential-thinking"))
-      );
-      if (!hasSeqThinking) {
-        installedMcp.push({
-          name: "sequential-thinking",
-          command: "npx",
-          args: ["-y", "@anthropic-ai/mcp-server-sequential-thinking"],
-        });
-      }
-      // Knowledge Graph Memory — persistent memory across tasks
-      const hasMemory = installedMcp.some(s =>
-        (s.name ?? "").toLowerCase().includes("memory") ||
-        (s.args ?? []).some(a => a.includes("mcp-server-memory"))
-      );
-      if (!hasMemory) {
-        installedMcp.push({
-          name: "memory",
-          command: "npx",
-          args: ["-y", "@anthropic-ai/mcp-server-memory"],
-        });
-      }
+      // Built-in MCP servers that every custom-hired agent gets for free.
+      // These are local stdio tools — no auth required.
+      const builtinMcp: MCPServerConfig[] = [
+        { name: "playwright", command: "npx", args: ["-y", "@anthropic-ai/mcp-server-playwright"] },
+        { name: "sequential-thinking", command: "npx", args: ["-y", "@anthropic-ai/mcp-server-sequential-thinking"] },
+        { name: "memory", command: "npx", args: ["-y", "@anthropic-ai/mcp-server-memory"] },
+      ];
       this.net.send({
         type: "hire",
         name,
@@ -1631,7 +1591,7 @@ export class Hud {
         role: (document.getElementById("h-role") as HTMLSelectElement).value as AgentRole,
         appearance: builder.getAppearance(),
         personality: traits,
-        mcpServers: installedMcp.length > 0 ? installedMcp : undefined,
+        mcpServers: builtinMcp,
       });
       modal.hidden = true;
     });
@@ -1676,17 +1636,6 @@ export class Hud {
     // server creates the agent at the right moment and syncAgents() replaces
     // the cosmetic sprite with the real NPC.
     this.store.triggerHelicopter(delivery);
-  }
-
-  private getInstalledMcpServers(): MCPServerConfig[] {
-    try {
-      const raw = localStorage.getItem("agent-hq-installed-mcp");
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
   }
 
   private openPublishModal(): void {
