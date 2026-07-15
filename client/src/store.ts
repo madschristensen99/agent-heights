@@ -494,6 +494,16 @@ export class Store {
       case "assembly":
         for (const fn of this.assemblyListeners) fn(msg.agentIds);
         return;
+      case "helicopter_delivery":
+        this.triggerHelicopter({
+          name: msg.name,
+          model: msg.model,
+          provider: msg.provider,
+          systemPrompt: msg.systemPrompt,
+          appearance: msg.appearance,
+          mcpServers: msg.mcpServers,
+        });
+        return;
       case "railway_status":
         this.railwayStatus = { ok: msg.ok, message: msg.message };
         this.toast(msg.message);

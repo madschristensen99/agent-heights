@@ -39,6 +39,8 @@ export interface RunContext {
   loadMessages?: (agentId: string) => Promise<unknown[]>;
   /** Clear persisted conversation messages for an agent. */
   clearMessages?: (agentId: string) => Promise<void>;
+  /** Hire an agent (Yuki only). Triggers helicopter delivery + creates agent. */
+  hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]) => Promise<string>;
 }
 
 export type ProviderRunner = (

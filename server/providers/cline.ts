@@ -489,7 +489,79 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     const isExisting = !!agent;
     if (!agent) {
       const submitState = { called: false, verified: false, callCount: 0 };
-      const tools = isChat ? [] : await makeTools(ctx.cwd, {
+      // Yuki chat with hireAgent capability gets special tools
+      const yukiHireTools: AgentTool<any, any>[] = [];
+      if (isChat && ctx.hireAgent) {
+        yukiHireTools.push({
+          name: "hire_agent",
+          description: "Hire a new AI agent into the office. The agent will arrive via helicopter. Use this when the boss asks you to hire someone, bring someone in, or add an agent to the office. You can specify MCP servers for community MCP agents.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Display name for the agent (max 24 chars)" },
+              model: { type: "string", description: "Model ID (e.g. 'claude-sonnet-4-20250514', 'gpt-4o'). Default: 'claude-sonnet-4-20250514'" },
+              systemPrompt: { type: "string", description: "System prompt describing the agent's role and capabilities" },
+              mcpServers: {
+                type: "array",
+                description: "MCP server configs for community MCP agents",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    url: { type: "string", description: "Remote MCP server URL" },
+                    command: { type: "string", description: "Command to run (e.g. npx)" },
+                    args: { type: "array", items: { type: "string" } },
+                  },
+                },
+              },
+            },
+            required: ["name"],
+          },
+          async execute(input: any) {
+            try {
+              const name = String(input.name ?? "").slice(0, 24);
+              const model = String(input.model ?? "claude-sonnet-4-20250514");
+              const systemPrompt = String(input.systemPrompt ?? "");
+              const mcpServers = Array.isArray(input.mcpServers) ? input.mcpServers : undefined;
+              const id = await ctx.hireAgent!(name, model, systemPrompt, mcpServers);
+              return `Successfully hired ${name} (id: ${id}). They are arriving via helicopter now!`;
+            } catch (err) {
+              return `Failed to hire agent: ${err instanceof Error ? err.message : String(err)}`;
+            }
+          },
+        });
+        yukiHireTools.push({
+          name: "search_community_mcps",
+          description: "Search the PulseMCP community database of 22,000+ MCP servers. Returns names, descriptions, and install configs. Use this when the boss asks about tools, integrations, or capabilities not in the curated catalog.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              query: { type: "string", description: "Search query (e.g. 'hyperliquid', 'trading', 'database')" },
+            },
+            required: ["query"],
+          },
+          async execute(input: any) {
+            try {
+              const query = String(input.query ?? "").trim();
+              if (!query) return "Query is required";
+              const res = await fetch(`http://localhost:${process.env.PORT ?? 3001}/api/pulsemcp-search?search=${encodeURIComponent(query)}`, {
+                signal: AbortSignal.timeout(10_000),
+              });
+              if (!res.ok) return `Search failed: HTTP ${res.status}`;
+              const results = await res.json() as Array<{ name: string; description: string; source_code_url?: string; github_stars?: number; mcpConfig: { url?: string; command?: string; args?: string[]; name?: string } }>;
+              if (!results.length) return `No community MCP servers found for "${query}".`;
+              return results.slice(0, 10).map((r) => {
+                const stars = r.github_stars ? ` (${r.github_stars}★)` : "";
+                const transport = r.mcpConfig.url ? `remote: ${r.mcpConfig.url}` : r.mcpConfig.command ? `stdio: ${r.mcpConfig.command} ${(r.mcpConfig.args ?? []).join(" ")}` : "no auto-install";
+                return `- ${r.name}${stars}: ${r.description.slice(0, 100)} [${transport}]${r.source_code_url ? ` (source: ${r.source_code_url})` : ""}`;
+              }).join("\n");
+            } catch (err) {
+              return `Search failed: ${err instanceof Error ? err.message : String(err)}`;
+            }
+          },
+        });
+      }
+      const tools = isChat ? yukiHireTools : await makeTools(ctx.cwd, {
         railway: ctx.railway,
         sharedCwd: ctx.sharedCwd,
         workspaceRoot: resolve(ctx.cwd, ".."),
@@ -500,7 +572,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         submitState: isChat ? undefined : submitState,
         mcpServers: ctx.mcpServers,
       });
-      const maxIter = isChat ? 1 : ctx.settings.cline.maxIterations;
+      const maxIter = isChat ? (yukiHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
         providerId: "openai-compatible",

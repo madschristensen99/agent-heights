@@ -560,6 +560,27 @@ export class AgentManager {
     this.logEvent("hire", `${cleanName} joined the office.`);
   }
 
+  /** Hire an agent from Yuki's chat — broadcasts helicopter_delivery to client
+   *  so the helicopter animation plays, then hires the agent server-side.
+   *  Returns the new agent's id. */
+  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]): Promise<string> {
+    const cleanName = name.trim().slice(0, 24) || "Agent";
+    // Broadcast helicopter delivery to all clients so the animation plays
+    this.broadcast({
+      type: "helicopter_delivery",
+      name: cleanName,
+      model,
+      provider: "cline",
+      systemPrompt,
+      mcpServers,
+    });
+    // Hire the agent server-side (this creates the agent + broadcasts "agent" msg)
+    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers);
+    // Find the agent we just hired by name
+    const rt = [...this.agents.values()].find((a) => a.info.name === cleanName);
+    return rt?.info.id ?? "";
+  }
+
   assign(agentId: string, task: string, handoffTo?: string, cardId?: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
@@ -1805,7 +1826,16 @@ export class AgentManager {
       `The user is talking to YOU because they want YOUR answer.`,
       `You have ALREADY SEARCHED PulseMCP and the results are included in your knowledge below.`,
       `Do NOT say "I can't browse" or "I can't search" — if PulseMCP results are present, REPORT THEM.`,
-      `If no PulseMCP results are present for a specific query, say you didn't find any community results but list what you know from the curated catalog.`,
+      `If no PulseMCP results are present for a specific query, use the search_community_mcps tool to search, or say you didn't find any community results but list what you know from the curated catalog.`,
+      ``,
+      `### YOUR TOOLS — HIRING`,
+      `You have TWO tools available:`,
+      `1. "search_community_mcps" — Search the PulseMCP database of 22,000+ community MCP servers by keyword.`,
+      `2. "hire_agent" — Hire a new agent directly into the office. The agent will arrive via helicopter!`,
+      `When the boss asks you to hire an agent, USE THE hire_agent TOOL. Do NOT tell them to go click buttons — just hire it yourself!`,
+      `When the boss asks about a tool or capability, USE search_community_mcps to find community MCP servers, then offer to hire one.`,
+      `For community MCP agents, pass the mcpServers array from the search results to hire_agent.`,
+      `Always use model "claude-sonnet-4-20250514" for hired agents (it supports tool calling).`,
       ``,
       `### Current Office Roster`,
       roster,
@@ -1814,20 +1844,19 @@ export class AgentManager {
       cards,
       ``,
       `### Knowledge`,
-      `When asked about agents to hire, recommend from the curated marketplace agents listed below.`,
-      `When asked about MCP servers or integrations, recommend from the curated catalog below.`,
+      `When asked about agents to hire, recommend from the curated marketplace agents listed below OR search community MCPs.`,
+      `When asked about MCP servers or integrations, recommend from the curated catalog below OR search community MCPs.`,
       `If PulseMCP community search results are included, LEAD WITH THOSE — they are live results from a 22,000+ server database.`,
       `Include server names, descriptions, GitHub stars, and source URLs from the PulseMCP results.`,
-      `Tell the user they can hire any community MCP directly: click the MARKET button, then the "Community MCPs" tab, search, and hit "Hire into HQ" — the agent will fly in via helicopter.`,
-      `Tell the user they can also browse the MARKET button to hire curated agents or install curated MCP servers.`,
+      `You can also browse the MARKET button to hire curated agents or install curated MCP servers.`,
       ``,
       knowledgeContext,
     ].join("\n");
 
     const prompt = [
       `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
-      `This is NOT a work task — do not use tools or touch files.`,
-      `Just reply in character: warm, helpful, and conversational.)`,
+      `Reply in character: warm, helpful, and conversational.`,
+      `If the boss asks you to hire an agent or search for MCPs, USE YOUR TOOLS to do it directly.)`,
       `\n${this.bossName} says: "${text}"`,
     ].join(" ");
 
@@ -1858,6 +1887,7 @@ export class AgentManager {
         saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
         loadMessages: (agentId: string) => this.save.loadMessages(agentId),
         clearMessages: (agentId: string) => this.save.clearMessages(agentId),
+        hireAgent: (name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]) => this.hireAgent(name, model, systemPrompt, mcpServers),
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;
