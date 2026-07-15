@@ -1655,13 +1655,13 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
-    // Yuki chat should also be quick — abort after 30s
+    // Yuki chat includes PulseMCP pre-search + marketplace API call — allow 45s
     const chatTimeout = setTimeout(() => {
       if (!abort.signal.aborted) {
         abort.abort();
-        this.log(rt, "error", "Chat timed out after 30s — try again.");
+        this.log(rt, "error", "Chat timed out after 45s — try again.");
       }
-    }, 30_000);
+    }, 45_000);
 
     const marketplaceUrl = process.env.MARKETPLACE_URL || "http://localhost:3000";
 

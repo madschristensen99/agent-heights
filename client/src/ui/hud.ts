@@ -1585,6 +1585,43 @@ export class Hud {
         neuroticism: parseInt((document.getElementById("h-neuroticism") as HTMLInputElement).value) / 100,
       };
       const installedMcp = this.getInstalledMcpServers();
+      // Ensure Playwright is always available for screen sharing, even if
+      // the user hasn't installed any MCP servers manually.
+      const hasPlaywright = installedMcp.some(s =>
+        (s.name ?? "").toLowerCase().includes("playwright") ||
+        (s.args ?? []).some(a => a.includes("playwright"))
+      );
+      if (!hasPlaywright) {
+        installedMcp.push({
+          name: "playwright",
+          command: "npx",
+          args: ["-y", "@anthropic-ai/mcp-server-playwright"],
+        });
+      }
+      // Sequential Thinking — helps agents break down complex problems
+      const hasSeqThinking = installedMcp.some(s =>
+        (s.name ?? "").toLowerCase().includes("sequential") ||
+        (s.args ?? []).some(a => a.includes("sequential-thinking"))
+      );
+      if (!hasSeqThinking) {
+        installedMcp.push({
+          name: "sequential-thinking",
+          command: "npx",
+          args: ["-y", "@anthropic-ai/mcp-server-sequential-thinking"],
+        });
+      }
+      // Knowledge Graph Memory — persistent memory across tasks
+      const hasMemory = installedMcp.some(s =>
+        (s.name ?? "").toLowerCase().includes("memory") ||
+        (s.args ?? []).some(a => a.includes("mcp-server-memory"))
+      );
+      if (!hasMemory) {
+        installedMcp.push({
+          name: "memory",
+          command: "npx",
+          args: ["-y", "@anthropic-ai/mcp-server-memory"],
+        });
+      }
       this.net.send({
         type: "hire",
         name,

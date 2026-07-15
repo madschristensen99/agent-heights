@@ -32,21 +32,34 @@ interface PulseMCPListResponse {
   next: string | null;
 }
 
+/** Hard timeout for PulseMCP search — must be well under Yuki's 30s chat timeout. */
+const PULSEMCP_SEARCH_TIMEOUT_MS = 8_000;
+
 /**
  * Search PulseMCP for MCP servers matching the query.
  * Returns a formatted string suitable for injecting into Yuki's context.
- * Returns null if the search fails or finds no results.
+ * Returns null if the search fails, times out, or finds no results.
  */
 export async function searchPulseMCP(query: string, limit = 10): Promise<string | null> {
   const trimmed = query.trim();
   if (!trimmed) return null;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PULSEMCP_SEARCH_TIMEOUT_MS);
+
   try {
-    const raw = await callMCPTool(PULSEMCP_CONFIG, "list_servers", {
-      query: trimmed,
-      count_per_page: limit,
-      offset: 0,
-    });
+    const raw = await Promise.race([
+      callMCPTool(PULSEMCP_CONFIG, "list_servers", {
+        query: trimmed,
+        count_per_page: limit,
+        offset: 0,
+      }),
+      new Promise<never>((_, reject) => {
+        controller.signal.addEventListener("abort", () =>
+          reject(new Error(`PulseMCP search timed out after ${PULSEMCP_SEARCH_TIMEOUT_MS}ms`)),
+        );
+      }),
+    ]);
 
     if (!raw) return null;
 
@@ -75,23 +88,41 @@ export async function searchPulseMCP(query: string, limit = 10): Promise<string 
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[pulsemcp] search failed for "${trimmed}": ${msg}`);
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 /**
  * Determine if a user's message to Yuki seems like it's asking about
- * finding tools, agents, or capabilities — in which case we should
- * pre-search PulseMCP for relevant results.
+ * finding tools, agents, or capabilities that would warrant a PulseMCP search.
+ * Only triggers on messages that look like they're seeking a specific tool/service,
+ * not generic questions about the office or current agents.
  */
 export function shouldSearchPulseMCP(message: string): boolean {
   const lower = message.toLowerCase();
-  const triggerWords = [
-    "find", "search", "tool", "agent", "hire", "mcp", "server",
-    "integration", "connect", "api", "service", "plugin", "extension",
-    "automate", "workflow", "can i", "is there", "do you have",
-    "looking for", "need help with", "recommend",
+  // Strong signals: user is looking for a specific capability or tool
+  const strongTriggers = [
+    "mcp server", "mcp tool", "is there a tool", "is there an mcp",
+    "is there a server", "find a tool", "find a server", "find an mcp",
+    "looking for a tool", "looking for a server", "looking for an mcp",
+    "need a tool", "need a server", "need an mcp", "need a plugin",
+    "recommend a tool", "recommend a server", "recommend an mcp",
+    "any mcp", "any tool", "any server", "any plugin",
+    "what tools", "what servers", "what mcp",
+    "search for", "integrate with", "connect to",
   ];
-  return triggerWords.some((w) => lower.includes(w));
+  if (strongTriggers.some((w) => lower.includes(w))) return true;
+
+  // Weaker signals: only trigger if the message also mentions a specific domain
+  const domainWords = [
+    "trading", "finance", "stocks", "crypto", "payment", "stripe",
+    "github", "notion", "slack", "database", "email", "calendar",
+    "deploy", "monitoring", "analytics", "crm", "sales", "marketing",
+    "design", "social", "cloud", "kubernetes", "docker",
+  ];
+  const queryWords = ["tool", "server", "mcp", "integration", "plugin", "connect", "automate"];
+  return domainWords.some((d) => lower.includes(d)) && queryWords.some((q) => lower.includes(q));
 }
 
 /**

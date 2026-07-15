@@ -2175,21 +2175,40 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
     canvasTex.refresh();
   }
 
-  // Generate procedural monitor texture (2 frames: off / on)
+  // Generate procedural monitor texture (3 frames: off / on / black)
   if (!tex.exists(MONITOR_TEX)) {
-    const canvasTex = tex.createCanvas(MONITOR_TEX, TILE_PX * 2, TILE_PX);
+    const canvasTex = tex.createCanvas(MONITOR_TEX, TILE_PX * 3, TILE_PX);
     if (canvasTex) {
       const ctx = canvasTex.getContext();
+      // Frame 0: off — code editor look (idle agent)
       ctx.clearRect(0, 0, TILE_PX, TILE_PX);
       drawDeskMonitor(ctx, TILE_PX, false);
+      // Frame 1: on — lit blue (legacy, kept for compatibility)
       ctx.save();
       ctx.translate(TILE_PX, 0);
       drawDeskMonitor(ctx, TILE_PX, true);
+      ctx.restore();
+      // Frame 2: black — unassigned desk (no agent)
+      ctx.save();
+      ctx.translate(TILE_PX * 2, 0);
+      drawDeskMonitor(ctx, TILE_PX, false);
+      ctx.restore();
+      // Overwrite frame 2 screen area with pure black
+      ctx.save();
+      ctx.translate(TILE_PX * 2, 0);
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.fillRect(TILE_PX * 0.15, TILE_PX * 0.11, TILE_PX * 0.7, TILE_PX * 0.4);
+      // No power LED on unassigned
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.beginPath();
+      ctx.arc(TILE_PX * 0.82, TILE_PX * 0.52, 2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
       canvasTex.refresh();
       const texture = tex.get(MONITOR_TEX);
       texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
       texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+      texture.add("2", 0, TILE_PX * 2, 0, TILE_PX, TILE_PX);
     }
   }
 

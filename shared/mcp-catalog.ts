@@ -1600,6 +1600,7 @@ export function catalogSummary(): string {
 export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via MARKET button)
 - Robinhood Trading Agent: AI trading agent — manage portfolios, place trades, analyze markets. Connects via Robinhood Trading MCP (OAuth).
 - Market Data Analyst: Financial data agent — fetches stock quotes, price history, financials, and market news via Yahoo Finance MCP. Pairs with Robinhood agent for analysis-to-execution pipeline.
+- GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.
 - Code Review Sentinel: Automated code review — catches bugs, security issues, and performance problems before they ship.
 - Data Analyst Pro: AI data analyst — writes SQL, cleans data, generates insights, and creates visualizations from any dataset.
 - Research Assistant: AI research agent — searches the web, synthesizes sources, produces cited reports on any topic.

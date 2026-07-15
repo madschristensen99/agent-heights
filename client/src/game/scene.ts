@@ -209,6 +209,15 @@ export class OfficeScene extends Phaser.Scene {
   private projectorAgentTextureKey = "projector-agent-frame";
   /** Phaser image object for agent frames on projector. */
   private projectorAgentImage: Phaser.GameObjects.Image | null = null;
+  /** Matrix rain overlays for working monitors — keyed by desk index. */
+  private monitorMatrixOverlays: Map<number, Phaser.GameObjects.Image> = new Map();
+  /** Matrix rain canvas texture. */
+  private monitorMatrixTexKey = "monitor-matrix-rain";
+  /** Matrix rain columns state — array of {y, speed, chars[]} per column. */
+  private matrixColumns: { y: number; speed: number; chars: string[] }[] = [];
+  /** Matrix rain canvas width/height. */
+  private static MATRIX_W = 64;
+  private static MATRIX_H = 40;
   /** Speaking indicator icons above remote players. */
   private speakingIcons = new Map<string, Phaser.GameObjects.Text>();
   /** Tracks the last roomId the scene rendered — used to detect room changes. */
@@ -276,6 +285,9 @@ export class OfficeScene extends Phaser.Scene {
     this.events.once("shutdown", () => {
       this.closeAgentViewModal();
       this.hideProjectorAgentFrame();
+      for (const overlay of this.monitorMatrixOverlays.values()) overlay.destroy();
+      this.monitorMatrixOverlays.clear();
+      this.matrixColumns = [];
     });
     // HQ2 and org rooms use the agenthq (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
@@ -1091,6 +1103,9 @@ export class OfficeScene extends Phaser.Scene {
         glow.setVisible(false);
       }
     });
+
+    // matrix rain overlay for working monitors
+    this.updateMatrixRain(time);
   }
 
   /** Everyone called to ASSIGN-TO-ALL gathers in a ring around the boss. */
@@ -3435,9 +3450,14 @@ export class OfficeScene extends Phaser.Scene {
     // they only go dark during the post-task break (done/error linger)
     this.monitors.forEach((m, i) => {
       const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
-      if (!agent || agent.status === "idle") {
+      if (!agent) {
+        // Unassigned desk — black screen
+        m?.setFrame("2").clearTint();
+      } else if (agent.status === "idle") {
+        // Assigned but idle — code editor look
         m?.setFrame("0").clearTint();
       } else {
+        // Working — lit with status color (matrix overlay drawn in update)
         m?.setFrame("1");
         m?.setTint(STATUS_COLORS[agent.status]);
       }
@@ -4212,6 +4232,109 @@ export class OfficeScene extends Phaser.Scene {
   /** Hide the agent frame on the projector. */
   private hideProjectorAgentFrame(): void {
     if (this.projectorAgentImage) this.projectorAgentImage.setVisible(false);
+  }
+
+  // ── Matrix rain monitor animation ────────────────────────────────────
+
+  private initMatrixRain(): void {
+    const cols = Math.floor(OfficeScene.MATRIX_W / 4);
+    this.matrixColumns = [];
+    for (let i = 0; i < cols; i++) {
+      this.matrixColumns.push({
+        y: Math.random() * OfficeScene.MATRIX_H,
+        speed: 0.3 + Math.random() * 0.7,
+        chars: [],
+      });
+    }
+  }
+
+  private updateMatrixRain(time: number): void {
+    const workingDesks = new Set<number>();
+    for (const agent of this.store.agents.values()) {
+      if (agent.deskIndex >= 0 && agent.status !== "idle" && agent.status !== "done" && agent.status !== "error") {
+        workingDesks.add(agent.deskIndex);
+      }
+    }
+
+    // No working agents — hide all overlays
+    if (workingDesks.size === 0) {
+      for (const overlay of this.monitorMatrixOverlays.values()) {
+        overlay.setVisible(false);
+      }
+      return;
+    }
+
+    // Init columns if needed
+    if (this.matrixColumns.length === 0) this.initMatrixRain();
+
+    // Create texture if needed
+    if (!this.textures.exists(this.monitorMatrixTexKey)) {
+      this.textures.createCanvas(this.monitorMatrixTexKey, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
+    }
+
+    // Update matrix rain canvas
+    const tex = this.textures.get(this.monitorMatrixTexKey) as Phaser.Textures.CanvasTexture;
+    const canvas = tex.getSourceImage() as HTMLCanvasElement;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Fade previous frame
+    ctx.fillStyle = "rgba(0,0,0,0.15)";
+    ctx.fillRect(0, 0, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
+
+    // Draw falling characters
+    const charSet = "01ABCDEF<>/{}[]#$%&*+-=";
+    for (let col = 0; col < this.matrixColumns.length; col++) {
+      const mc = this.matrixColumns[col];
+      const x = col * 4;
+      const y = Math.floor(mc.y) * 4;
+
+      // Bright leading character
+      ctx.fillStyle = "#ccffcc";
+      ctx.font = "4px monospace";
+      ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, y);
+
+      // Trailing dimmer characters
+      ctx.fillStyle = "rgba(0,255,0,0.5)";
+      for (let trail = 1; trail < 4; trail++) {
+        const ty = y - trail * 4;
+        if (ty < 0) break;
+        ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, ty);
+      }
+
+      // Advance column
+      mc.y += mc.speed;
+      if (mc.y > OfficeScene.MATRIX_H) {
+        mc.y = -Math.random() * 10;
+        mc.speed = 0.3 + Math.random() * 0.7;
+      }
+    }
+    tex.refresh();
+
+    // Create/update overlays for working monitors
+    for (const deskIdx of workingDesks) {
+      const monitor = this.monitors[deskIdx];
+      if (!monitor) continue;
+
+      let overlay = this.monitorMatrixOverlays.get(deskIdx);
+      if (!overlay) {
+        overlay = this.add.image(monitor.x, monitor.y, this.monitorMatrixTexKey)
+          .setDepth(monitor.depth + 1)
+          .setBlendMode(Phaser.BlendModes.ADD);
+        this.monitorMatrixOverlays.set(deskIdx, overlay);
+      }
+      // Position the overlay on the monitor screen area
+      overlay.setPosition(monitor.x, monitor.y - 2);
+      overlay.setDisplaySize(TILE_PX * 0.7, TILE_PX * 0.4);
+      overlay.setVisible(true);
+    }
+
+    // Hide overlays for non-working monitors
+    for (const [deskIdx, overlay] of this.monitorMatrixOverlays) {
+      if (!workingDesks.has(deskIdx)) {
+        overlay.setVisible(false);
+      }
+    }
   }
 }
 
