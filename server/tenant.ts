@@ -32,6 +32,7 @@ export interface UserSession {
   disconnectTimer: ReturnType<typeof setTimeout> | null;
   voiceActive: boolean;
   screenShareActive: boolean;
+  webcamActive: boolean;
 }
 
 /** A player's live state within a room. */
@@ -358,6 +359,7 @@ export class TenantManager {
       disconnectTimer: null,
       voiceActive: false,
       screenShareActive: false,
+      webcamActive: false,
     };
 
     // ── Broadcast: Redis pub/sub (with in-memory fallback) ──────────────

@@ -114,6 +114,12 @@ export class Store {
   private screenShareAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
   private screenShareIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
   private screenSharePeerLeftListeners = new Set<(userId: string) => void>();
+  private webcamStateListeners = new Set<(presenterId: string | null, presenterName: string | null) => void>();
+  private webcamPeerListeners = new Set<(userId: string, name: string) => void>();
+  private webcamOfferListeners = new Set<(fromUserId: string, sdp: string) => void>();
+  private webcamAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
+  private webcamIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
+  private webcamPeerLeftListeners = new Set<(userId: string) => void>();
   private agentFrameListeners = new Set<(agentId: string, frame: string) => void>();
   private agentBroadcastStateListeners = new Set<(agentId: string | null) => void>();
 
@@ -234,6 +240,30 @@ export class Store {
 
   onScreenSharePeerLeft(fn: (userId: string) => void): void {
     this.screenSharePeerLeftListeners.add(fn);
+  }
+
+  onWebcamState(fn: (presenterId: string | null, presenterName: string | null) => void): void {
+    this.webcamStateListeners.add(fn);
+  }
+
+  onWebcamPeer(fn: (userId: string, name: string) => void): void {
+    this.webcamPeerListeners.add(fn);
+  }
+
+  onWebcamOffer(fn: (fromUserId: string, sdp: string) => void): void {
+    this.webcamOfferListeners.add(fn);
+  }
+
+  onWebcamAnswer(fn: (fromUserId: string, sdp: string) => void): void {
+    this.webcamAnswerListeners.add(fn);
+  }
+
+  onWebcamIce(fn: (fromUserId: string, candidate: string) => void): void {
+    this.webcamIceListeners.add(fn);
+  }
+
+  onWebcamPeerLeft(fn: (userId: string) => void): void {
+    this.webcamPeerLeftListeners.add(fn);
   }
 
   onAgentFrame(fn: (agentId: string, frame: string) => void): void {
@@ -362,8 +392,12 @@ export class Store {
           if (achievements.getSetSize("models") >= 3) achievements.unlock("both_providers");
           achievements.addToSet("models", msg.agent.model);
           if (achievements.getSetSize("models") >= 9) achievements.unlock("all_models");
-          achievements.addToSet("titles", msg.agent.title);
-          if (achievements.getSetSize("titles") >= 10) achievements.unlock("all_titles");
+          if (msg.agent.personality) {
+            const p = msg.agent.personality;
+            const sig = `${Math.round(p.openness * 5)}${Math.round(p.conscientiousness * 5)}${Math.round(p.extraversion * 5)}${Math.round(p.agreeableness * 5)}${Math.round(p.neuroticism * 5)}`;
+            achievements.addToSet("personalities", sig);
+            if (achievements.getSetSize("personalities") >= 5) achievements.unlock("personality_variety");
+          }
         }
         if (prev && msg.agent.tasksDone > prev.tasksDone) {
           const diff = msg.agent.tasksDone - prev.tasksDone;
@@ -775,6 +809,30 @@ export class Store {
       }
       case "screen_share_peer_left": {
         for (const fn of this.screenSharePeerLeftListeners) fn(msg.userId);
+        return;
+      }
+      case "webcam_state": {
+        for (const fn of this.webcamStateListeners) fn(msg.presenterId, msg.presenterName);
+        return;
+      }
+      case "webcam_peer": {
+        for (const fn of this.webcamPeerListeners) fn(msg.userId, msg.name);
+        return;
+      }
+      case "webcam_offer": {
+        for (const fn of this.webcamOfferListeners) fn(msg.fromUserId, msg.sdp);
+        return;
+      }
+      case "webcam_answer": {
+        for (const fn of this.webcamAnswerListeners) fn(msg.fromUserId, msg.sdp);
+        return;
+      }
+      case "webcam_ice": {
+        for (const fn of this.webcamIceListeners) fn(msg.fromUserId, msg.candidate);
+        return;
+      }
+      case "webcam_peer_left": {
+        for (const fn of this.webcamPeerLeftListeners) fn(msg.userId);
         return;
       }
       case "agent_frame": {

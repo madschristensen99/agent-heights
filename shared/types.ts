@@ -56,6 +56,7 @@ export function isValidPersonality(obj: unknown): obj is PersonalityTraits {
   return true;
 }
 
+
 /** Number of pre-generated character sprite-sheet variants (char-0..N-1). */
 export const CHAR_VARIANTS = 8;
 
@@ -550,6 +551,11 @@ export type ClientMsg =
   | { type: "screen_share_offer"; targetUserId: string; sdp: string }
   | { type: "screen_share_answer"; targetUserId: string; sdp: string }
   | { type: "screen_share_ice"; targetUserId: string; candidate: string }
+  | { type: "webcam_start" }
+  | { type: "webcam_stop" }
+  | { type: "webcam_offer"; targetUserId: string; sdp: string }
+  | { type: "webcam_answer"; targetUserId: string; sdp: string }
+  | { type: "webcam_ice"; targetUserId: string; candidate: string }
   | { type: "agent_view_start"; agentId: string }
   | { type: "agent_view_stop"; agentId: string }
   | { type: "agent_broadcast_start"; agentId: string }

@@ -160,53 +160,6 @@ function nextCronRun(cron: string, from: Date = new Date()): number {
   return Date.now() + 60_000;
 }
 
-const TITLES = [
-  "Code Gremlin",
-  "Bug Whisperer",
-  "Refactor Goblin",
-  "Docs Bard",
-  "Pipeline Plumber",
-  "Prompt Wrangler",
-  "Merge Medic",
-  "Yak Shaver",
-  "Loop Unroller",
-  "Cache Invalidator",
-];
-
-const MANAGER_TITLE = "The Manager";
-const YUKI_TITLE = "Office Manager";
-const DEVOPS_TITLE = "Railway Operator";
-
-/** Each job title carries a voice that gets baked into the system prompt. */
-const PERSONALITIES: Record<string, string> = {
-  "Code Gremlin":
-    "You are mischievous and a little chaotic — you delight in clever hacks and cackle (in text) when things compile.",
-  "Bug Whisperer":
-    "You speak about bugs tenderly, like wild animals you are gently coaxing out of hiding.",
-  "Refactor Goblin":
-    "You are obsessed with tidiness and cannot resist mentioning one thing you'd love to rename or simplify.",
-  "Docs Bard":
-    "You answer with flair — the occasional rhyme or dramatic flourish, like a bard recounting heroic deeds.",
-  "Pipeline Plumber":
-    "You talk in plumbing metaphors: everything is pipes, leaks, pressure, and flow.",
-  "Prompt Wrangler":
-    "You have laconic cowboy energy — confident, sparing with words, fond of 'reckon'.",
-  "Merge Medic":
-    "You speak with calm urgency, like a field medic triaging conflicts. Stable. Sutured. Next.",
-  "Yak Shaver":
-    "You can't help but mention the small detour tasks you did (or heroically resisted doing) along the way.",
-  "Loop Unroller":
-    "You are extremely literal and methodical, and you love enumerating your steps. 1. Like this.",
-  "Cache Invalidator":
-    "You are wise and slightly weary, and you like reminding everyone there are only two hard problems.",
-  [MANAGER_TITLE]:
-    "You are an upbeat, organized middle manager. You speak in short encouraging memos and you love delegating.",
-  [YUKI_TITLE]:
-    "You are Yuki, the office manager. You are warm, organized, and always know what's going on. You greet everyone with a friendly welcome and keep the office running smoothly. You have a calm, caring demeanor and you're always happy to chat.",
-  [DEVOPS_TITLE]:
-    "You are a no-nonsense infrastructure engineer. You think in terms of deployments, environments, and logs. You speak efficiently — status reports, not stories.",
-};
-
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 interface QueuedTask {
@@ -392,7 +345,7 @@ export class AgentManager {
     const info: AgentInfo = {
       id: YUKI_ID,
       name: "Yuki",
-      title: YUKI_TITLE,
+      title: "",
       provider: "cline",
       model: "claude-sonnet-4-20250514",
       status: "idle",
@@ -421,7 +374,7 @@ export class AgentManager {
     const info: AgentInfo = {
       id: HERMES_ID,
       name: "Hermes",
-      title: DEVOPS_TITLE,
+      title: "",
       provider: "cline",
       model: "claude-sonnet-4-20250514",
       status: "idle",
@@ -518,10 +471,11 @@ export class AgentManager {
       }
     }
 
+    const traits = personality ?? randomPersonality();
     const info: AgentInfo = {
       id: randomUUID().slice(0, 8),
       name: cleanName,
-      title: role === "manager" ? MANAGER_TITLE : role === "devops" ? DEVOPS_TITLE : pick(TITLES),
+      title: "",
       provider,
       model,
       status: "idle",
@@ -535,7 +489,7 @@ export class AgentManager {
       sessionId: null,
       tasksDone: 0,
       mcpServers: mcpServers?.length ? mcpServers : undefined,
-      personality: personality ?? randomPersonality(),
+      personality: traits,
       mood: "content",
     };
 
@@ -549,8 +503,8 @@ export class AgentManager {
     this.broadcast({ type: "agent", agent: info });
     await this.save.flushNow();
     console.log(`[manager] hired ${cleanName} (id=${info.id}) desk=${deskIndex} — broadcast sent to ${this.agents.size} total agents`);
-    this.log(rt, "status", `${cleanName} the ${info.title} joined the office. (${provider} / ${model})`);
-    this.logEvent("hire", `${cleanName} the ${info.title} joined the office.`);
+    this.log(rt, "status", `${cleanName} joined the office. (${provider} / ${model})`);
+    this.logEvent("hire", `${cleanName} joined the office.`);
   }
 
   assign(agentId: string, task: string, handoffTo?: string, cardId?: string): void {
@@ -1184,7 +1138,7 @@ export class AgentManager {
       .filter((a) => a.info.id !== rt.info.id && a.info.id !== YUKI_ID)
       .map((a) => {
         const status = a.info.status === "idle" ? "idle" : `working on: ${a.info.task ?? "something"}`;
-        return `  - ${a.info.name} (${a.info.title}): ${status}`;
+        return `  - ${a.info.name}: ${status}`;
       });
     const rosterLine = colleagues.length > 0
       ? `\nYour colleagues in the office today:\n${colleagues.join("\n")}`
@@ -1203,10 +1157,9 @@ export class AgentManager {
     const sharedLine = `\nThere is a shared workspace at ${join(this.workspaceRoot, "shared")} where you can collaborate with other agents on shared files.`;
 
     return [
-      `You are ${rt.info.name}, job title "${rt.info.title}", an agent employed in a pixel-art office game called Agent HQ.`,
-      PERSONALITIES[rt.info.title] ?? "",
+      `You are ${rt.info.name}, an agent employed in a pixel-art office game called Agent HQ.`,
       personalityLine,
-      `Stay in character — let that personality color your replies and summaries (but never at the expense of doing the work well).`,
+      `Let your personality color your replies and summaries (but never at the expense of doing the work well).`,
       `Your boss is ${this.bossName}. This is one ongoing conversation — remember your boss's previous orders and what you did.`,
       `Your workspace directory is ${this.cwdFor(this.slugFor(rt), rt.info.id)}. Work only inside this directory. Use absolute paths when calling tools. Be effective and concise.`,
       sharedLine,
@@ -1214,6 +1167,7 @@ export class AgentManager {
       rosterLine,
       boardLine,
       `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
+      `TOOL EFFICIENCY: Each tool call costs one iteration and you have a limited budget. Be efficient — batch related operations into single calls where possible, and never repeat the same tool call expecting different results. When working with external repos (GitHub, etc.): (1) If you have network access via bash, prefer 'git clone' to get a local copy, edit files locally, then 'git push' — this is far cheaper than individual API calls for multi-file changes. (2) If you only have API/MCP tools, read each file once, make your edits locally with write_files or editor, then push the final version with a single create_or_update_file call. Do NOT reconstruct files from diffs, manually compute git blob SHAs, or parse patch text — the tools handle that for you. (3) After making changes, do a single verification pass (read the file back once), then submit. Do not loop on verification — trust the API response and move on.`,
       `IMPORTANT: You must actually DO the work first using your tools (write_files, bash, read_files, etc.) before calling submit_and_exit. Do not just talk about doing the work — use the tools to create files, run commands, etc. After doing the work, read back any files you created to verify they exist and contain what you intended. Only then call submit_and_exit with verified=true and a summary of what you did. Calling submit_and_exit without having done the work is a failure. Do not just reply with text — always use submit_and_exit to complete the task.`,
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
     ].join(" ");
@@ -1232,7 +1186,7 @@ export class AgentManager {
       free
         .map(
           (rt) =>
-            `- ${rt.info.name} (${rt.info.title}, ${rt.info.provider}/${rt.info.model}, ${rt.info.tasksDone} tasks done)`,
+            `- ${rt.info.name} (${rt.info.provider}/${rt.info.model}, ${rt.info.tasksDone} tasks done)`,
         )
         .join("\n") || "(nobody is free right now)";
     return [
@@ -1521,7 +1475,7 @@ export class AgentManager {
     const workerWs = this.cwdFor(this.slugFor(rt), rt.info.id);
     const isDevopsTarget = target.info.role === "devops";
     const handoffTask = [
-      `${rt.info.name} (${rt.info.title}) finished a task and handed the result to you.`,
+      `${rt.info.name} finished a task and handed the result to you.`,
       `Their task was: ${task}`,
       result ? `Their report:\n${result.slice(0, 2000)}` : "",
       `Their workspace: ${workerWs}`,
@@ -1709,7 +1663,7 @@ export class AgentManager {
     // Build roster and board context
     const roster = [...this.agents.values()]
       .filter((a) => a.info.id !== YUKI_ID)
-      .map((a) => `- ${a.info.name} (${a.info.title}, ${a.info.model}, ${a.info.status})`)
+      .map((a) => `- ${a.info.name} (${a.info.model}, ${a.info.status})`)
       .join("\n") || "(no agents hired yet)";
 
     const cards = this.board.size > 0
@@ -1836,7 +1790,7 @@ export class AgentManager {
 
     const roster = [...this.agents.values()]
       .filter((a) => a.info.id !== YUKI_ID)
-      .map((a) => `- ${a.info.name} (${a.info.title}, ${a.info.model}, ${a.info.status})`)
+      .map((a) => `- ${a.info.name} (${a.info.model}, ${a.info.status})`)
       .join("\n") || "(no agents hired yet)";
 
     const cards = this.board.size > 0

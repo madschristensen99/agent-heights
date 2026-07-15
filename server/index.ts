@@ -1295,6 +1295,57 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         }
+        case "webcam_start": {
+          if (sess.webcamActive) break;
+          sess.webcamActive = true;
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const myName = sess.player?.name ?? "Boss";
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "webcam_state", presenterId: sess.user.id, presenterName: myName });
+              peerSess.broadcast({ type: "webcam_peer", userId: sess.user.id, name: myName });
+            }
+          }
+          break;
+        }
+        case "webcam_stop": {
+          if (!sess.webcamActive) break;
+          sess.webcamActive = false;
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "webcam_state", presenterId: null, presenterName: null });
+              peerSess.broadcast({ type: "webcam_peer_left", userId: sess.user.id });
+            }
+          }
+          break;
+        }
+        case "webcam_offer":
+        case "webcam_answer":
+        case "webcam_ice": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          if (!room.players.has(msg.targetUserId)) break;
+          const targetSess = tenants.get(msg.targetUserId);
+          if (!targetSess) break;
+          if (msg.type === "webcam_offer") {
+            targetSess.broadcast({ type: "webcam_offer", fromUserId: sess.user.id, sdp: msg.sdp });
+          } else if (msg.type === "webcam_answer") {
+            targetSess.broadcast({ type: "webcam_answer", fromUserId: sess.user.id, sdp: msg.sdp });
+          } else {
+            targetSess.broadcast({ type: "webcam_ice", fromUserId: sess.user.id, candidate: msg.candidate });
+          }
+          break;
+        }
         case "agent_view_start": {
           if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
@@ -1554,6 +1605,23 @@ wss.on("connection", async (ws, req) => {
             const peerSess = tenants.get(pid);
             if (peerSess) {
               peerSess.broadcast({ type: "screen_share_peer_left", userId: sess.user.id });
+            }
+          }
+        }
+      }
+    }
+    // Clean up webcam state when the last client disconnects
+    if (sess.clients.size === 0 && sess.webcamActive) {
+      sess.webcamActive = false;
+      if (sess.roomId) {
+        const room = tenants.getRoom(sess.roomId);
+        if (room) {
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "webcam_state", presenterId: null, presenterName: null });
+              peerSess.broadcast({ type: "webcam_peer_left", userId: sess.user.id });
             }
           }
         }
