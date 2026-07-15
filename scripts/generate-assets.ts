@@ -1413,7 +1413,7 @@ function drawSpriteHeightsLogo(s: Sheet, ox: number, oy: number): void {
 
   // --- "SPRITE HEIGHTS HQ" in pixel font ---
   const title = "SPRITE HEIGHTS HQ";
-  const titleScale = 5; // 18 chars × (5+1)*5 - 5 = 535px, fits in 640px canvas
+  const titleScale = 6; // 18 chars × (5+1)*6 - 6 = 642px, fits in 640px canvas (2px clipped)
   const titleW = pixelFontWidth(title, titleScale);
   const titleX = Math.round(cx - titleW / 2);
   const titleY = Math.round(cy - 63 / 2) - 12; // shift up for accent line below
