@@ -225,11 +225,15 @@ export class MarketplaceBrowser {
       }
     } catch { /* not JSON */ }
 
-    const mcpKeyHtml = mcpServers.length > 0
+    // Only show auth UI for servers that actually require it (oauth or apikey).
+    // Servers without authType (open/no-auth) are ready to use immediately.
+    const authRequiredServers = mcpServers.filter((s) => s.authType === "oauth" || s.authType === "apikey");
+
+    const mcpKeyHtml = authRequiredServers.length > 0
       ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
           <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.5rem;">⚠ AUTHENTICATION REQUIRED</div>
           <div id="mq-mcp-warning" style="font-size:0.75rem; color:#e05d5d; margin-bottom:0.5rem;">Connect each service before hiring.</div>
-          ${mcpServers.map((s, i) => {
+          ${authRequiredServers.map((s, i) => {
             const isOAuth = s.authType === "oauth";
             const kLabel = s.keyLabel ?? "API Key";
             const kPlaceholder = s.keyPlaceholder ?? "Paste API key...";
@@ -277,7 +281,7 @@ export class MarketplaceBrowser {
         </div>
         ${mcpKeyHtml}
         <div style="display:flex; gap:0.5rem;">
-          <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;"${mcpServers.length > 0 ? " disabled" : ""}>Hire into HQ</button>
+          <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;"${authRequiredServers.length > 0 ? " disabled" : ""}>Hire into HQ</button>
           <button id="mq-cancel" style="padding:0.6rem 1rem; border:1px solid #222; border-radius:0.5rem; background:#1a1a1a; color:#888; font-size:0.9rem; cursor:pointer;">Close</button>
         </div>
       </div>
@@ -290,7 +294,7 @@ export class MarketplaceBrowser {
 
     // Track which MCP servers have keys saved
     const mcpKeyState: Record<string, boolean> = {};
-    const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
+    const serverUrls = authRequiredServers.map((s) => s.url).filter((u): u is string => !!u);
 
     const updateHireButton = () => {
       const hireBtn = modal.querySelector("#mq-hire") as HTMLButtonElement | null;
@@ -315,7 +319,7 @@ export class MarketplaceBrowser {
     }
 
     // Wire up MCP key save buttons (API key auth)
-    mcpServers.forEach((s, i) => {
+    authRequiredServers.forEach((s, i) => {
       const saveBtn = modal.querySelector(`#mq-mcp-save-${i}`) as HTMLButtonElement | null;
       if (saveBtn && s.url) {
         saveBtn.addEventListener("click", () => {
@@ -336,7 +340,7 @@ export class MarketplaceBrowser {
     });
 
     // Wire up OAuth connect buttons
-    mcpServers.forEach((s, i) => {
+    authRequiredServers.forEach((s, i) => {
       const connectBtn = modal.querySelector(`#mq-mcp-connect-${i}`) as HTMLButtonElement | null;
       if (connectBtn && s.url) {
         connectBtn.addEventListener("click", () => {

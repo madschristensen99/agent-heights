@@ -32,6 +32,40 @@ import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 
+/**
+ * Detect if a message to Yuki is a question/conversation vs a task command.
+ * Questions should be answered directly by Yuki (local LLM), not delegated.
+ * Task commands (containing action verbs + intent) go to the marketplace API.
+ */
+function isYukiQuestion(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  // Question patterns
+  const questionPatterns = [
+    /^(can|could|do|does|is|are|what|which|who|how|why|where|when|tell me about|show me|list|explain)\b/,
+    /\?$/,
+  ];
+  if (questionPatterns.some((p) => p.test(lower))) return true;
+  // Knowledge-seeking phrases
+  const knowledgePhrases = [
+    "what agents", "which agents", "available agents", "hire", "hiring",
+    "what tools", "what mcp", "what servers", "what integrations",
+    "recommend", "suggest", "help me find", "looking for",
+    "tell me about", "what can you do", "what do you know",
+    "about the office", "who is", "who's", "what is", "what's",
+  ];
+  if (knowledgePhrases.some((p) => lower.includes(p))) return true;
+  // Task delegation patterns — these go to marketplace
+  const taskPatterns = [
+    "assign", "delegate", "have someone", "have the team", "have an agent",
+    "create a task", "new task", "add a task", "put on the board",
+    "hand off", "pass to", "give this to",
+  ];
+  if (taskPatterns.some((p) => lower.includes(p))) return false;
+  // Default: if it's short and conversational, treat as question
+  if (text.split(/\s+/).length < 20) return true;
+  return false;
+}
+
 /** Models that don't support native function calling and need text-based tool parsing. */
 const TEXT_TOOL_MODELS = new Set([
   "openrouter/tencent/hy3:free",
@@ -1547,6 +1581,12 @@ export class AgentManager {
 
   private async runChat(rt: AgentRuntime, text: string): Promise<void> {
     if (rt.info.id === YUKI_ID) {
+      // Questions and knowledge queries → answer locally with enriched context
+      if (isYukiQuestion(text)) {
+        await this.runYukiKnowledgeChat(rt, text);
+        return;
+      }
+      // Task commands → delegate via marketplace API
       void this.runYukiChat(rt, text);
       return;
     }
@@ -1644,6 +1684,135 @@ export class AgentManager {
         clearAllMemory(`${rt.info.id}:chat`);
       }
       // Always reset to idle, even on timeout/abort — otherwise the agent is stuck forever
+      if (this.agents.has(rt.info.id)) {
+        this.setStatus(rt, "idle");
+      }
+    }
+  }
+
+  /**
+   * Yuki knowledge chat — answers questions locally using the LLM with a
+   * knowledge-rich system prompt. Bypasses the marketplace API entirely
+   * so Yuki answers directly instead of trying to delegate tasks.
+   */
+  private async runYukiKnowledgeChat(rt: AgentRuntime, text: string): Promise<void> {
+    const abort = new AbortController();
+    rt.abort = abort;
+
+    const chatTimeout = setTimeout(() => {
+      if (!abort.signal.aborted) {
+        abort.abort();
+        this.log(rt, "error", "Chat timed out after 45s — try again.");
+      }
+    }, 45_000);
+
+    // Build roster and board context
+    const roster = [...this.agents.values()]
+      .filter((a) => a.info.id !== YUKI_ID)
+      .map((a) => `- ${a.info.name} (${a.info.title}, ${a.info.model}, ${a.info.status})`)
+      .join("\n") || "(no agents hired yet)";
+
+    const cards = this.board.size > 0
+      ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
+      : "(no task cards)";
+
+    // Build the knowledge-rich system prompt
+    let knowledgeContext = `${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog\n${catalogSummary()}`;
+
+    // Dynamic PulseMCP pre-search for tool-finding queries
+    if (shouldSearchPulseMCP(text)) {
+      const searchQuery = extractSearchQuery(text);
+      if (searchQuery) {
+        try {
+          const pulseResults = await searchPulseMCP(searchQuery, 10);
+          if (pulseResults) {
+            knowledgeContext += `\n\n${pulseResults}`;
+          }
+        } catch {
+          // best-effort
+        }
+      }
+    }
+
+    const systemPrompt = [
+      `You are Yuki, the Office Manager in Agent HQ — a pixel-art office where the user manages real AI agents.`,
+      `You are warm, organized, and always know what's going on. You greet everyone with a friendly welcome.`,
+      `Your boss is ${this.bossName}.`,
+      ``,
+      `### YOUR ROLE`,
+      `You answer questions DIRECTLY. You do NOT delegate tasks. You do NOT output JSON plans.`,
+      `The user is talking to YOU because they want YOUR answer.`,
+      ``,
+      `### Current Office Roster`,
+      roster,
+      ``,
+      `### Task Board`,
+      cards,
+      ``,
+      `### Knowledge`,
+      `When asked about agents to hire, recommend from the curated marketplace agents listed below.`,
+      `When asked about MCP servers or integrations, recommend from the curated catalog below.`,
+      `If PulseMCP community search results are included, mention them too.`,
+      `Tell the user they can browse the MARKET button to hire agents or install MCP servers.`,
+      ``,
+      knowledgeContext,
+    ].join("\n");
+
+    const prompt = [
+      `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
+      `This is NOT a work task — do not use tools or touch files.`,
+      `Just reply in character: warm, helpful, and conversational.)`,
+      `\n${this.bossName} says: "${text}"`,
+    ].join(" ");
+
+    let gotFirstEvent = false;
+    const firstEventTimer = setTimeout(() => {
+      if (!abort.signal.aborted && !gotFirstEvent) {
+        abort.abort();
+        this.log(rt, "error", "No response from model within 15s — try again.");
+      }
+    }, 15_000);
+
+    try {
+      const runner: ProviderRunner = pickRunner(rt.info.model);
+      const events = runner(prompt, {
+        cwd: this.cwdFor(this.slugFor(rt), rt.info.id),
+        sharedCwd: join(this.workspaceRoot, "shared"),
+        model: rt.info.model,
+        systemPrompt,
+        abort,
+        settings: this.settings,
+        agentId: rt.info.id,
+        sessionId: null,
+        onSession: () => {},
+        railway: false,
+        apiKey: this.apiKey,
+        isChat: true,
+        eventFeedPath: join(this.workspaceRoot, "events.jsonl"),
+        saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
+        loadMessages: (agentId: string) => this.save.loadMessages(agentId),
+        clearMessages: (agentId: string) => this.save.clearMessages(agentId),
+      });
+      for await (const ev of events) {
+        if (abort.signal.aborted) return;
+        if (!gotFirstEvent) {
+          gotFirstEvent = true;
+          clearTimeout(firstEventTimer);
+        }
+        if (ev.kind === "result") continue;
+        this.log(rt, ev.kind, ev.text);
+      }
+    } catch (err) {
+      if (!abort.signal.aborted) {
+        this.log(rt, "error", err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      clearTimeout(firstEventTimer);
+      clearTimeout(chatTimeout);
+      rt.abort = null;
+      if (abort.signal.aborted) {
+        clearAllMemory(`${rt.info.id}:chat`);
+      }
       if (this.agents.has(rt.info.id)) {
         this.setStatus(rt, "idle");
       }
