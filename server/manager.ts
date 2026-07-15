@@ -1771,16 +1771,22 @@ export class AgentManager {
     // Dynamic PulseMCP pre-search for tool-finding queries
     if (shouldSearchPulseMCP(text)) {
       const searchQuery = extractSearchQuery(text);
+      console.log(`[yuki] PulseMCP search triggered for "${text}" → query="${searchQuery}"`);
       if (searchQuery) {
         try {
           const pulseResults = await searchPulseMCP(searchQuery, 10);
           if (pulseResults) {
+            console.log(`[yuki] PulseMCP returned ${pulseResults.split("\n").length} lines`);
             knowledgeContext += `\n\n${pulseResults}`;
+          } else {
+            console.log(`[yuki] PulseMCP returned null (no results or error)`);
           }
         } catch {
           // best-effort
         }
       }
+    } else {
+      console.log(`[yuki] PulseMCP search NOT triggered for "${text}"`);
     }
 
     const systemPrompt = [

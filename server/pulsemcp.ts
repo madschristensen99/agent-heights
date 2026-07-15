@@ -105,12 +105,19 @@ export function shouldSearchPulseMCP(message: string): boolean {
   const strongTriggers = [
     "mcp server", "mcp tool", "is there a tool", "is there an mcp",
     "is there a server", "find a tool", "find a server", "find an mcp",
+    "find me a", "find me an", "find me some",
     "looking for a tool", "looking for a server", "looking for an mcp",
     "need a tool", "need a server", "need an mcp", "need a plugin",
     "recommend a tool", "recommend a server", "recommend an mcp",
     "any mcp", "any tool", "any server", "any plugin",
     "what tools", "what servers", "what mcp",
     "search for", "integrate with", "connect to",
+    "pulsemcp", "pulse mcp", "pulse-mcp",
+    "mcp catalog", "mcp catalogue", "mcp directory",
+    "browse mcp", "browse the market", "browse the catalog",
+    "what's in there", "whats in there", "what's available", "whats available",
+    "show me mcp", "show me servers", "show me tools",
+    "examples of", "give me examples",
   ];
   if (strongTriggers.some((w) => lower.includes(w))) return true;
 
@@ -120,6 +127,15 @@ export function shouldSearchPulseMCP(message: string): boolean {
     "github", "notion", "slack", "database", "email", "calendar",
     "deploy", "monitoring", "analytics", "crm", "sales", "marketing",
     "design", "social", "cloud", "kubernetes", "docker",
+    "defi", "hyperliquid", "perps", "nft", "web3", "blockchain",
+    "solana", "ethereum", "bitcoin", "uniswap", "aave",
+    "ai", "ml", "llm", "rag", "embedding", "vector",
+    "seo", "sem", "ads", "content", "writing",
+    "sentry", "vercel", "cloudflare", "gitlab",
+    "linear", "asana", "clickup", "airtable",
+    "mongo", "postgres", "redis", "supabase",
+    "brave", "tavily", "exa", "firecrawl",
+    "hubspot", "apollo", "ahrefs", "semrush",
   ];
   const queryWords = ["tool", "server", "mcp", "integration", "plugin", "connect", "automate"];
   return domainWords.some((d) => lower.includes(d)) && queryWords.some((q) => lower.includes(q));
@@ -137,6 +153,8 @@ export function extractSearchQuery(message: string): string {
     "about", "how", "what", "which", "any", "some", "please", "recommend",
     "connect", "integrate", "integration", "service", "plugin", "extension",
     "to", "and", "or", "if", "there", "available", "use", "using",
+    "pulse", "catalog", "catalogue", "directory", "browse", "examples",
+    "related", "niche", "give", "show", "see", "look", "yoou",
   ]);
   const words = message
     .toLowerCase()
