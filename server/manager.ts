@@ -429,6 +429,30 @@ export class AgentManager {
   private persist(): void {
     const snap = this.snapshot();
     this.save.setAgents(snap.agents, snap.logs);
+    this.persistPendingTasks();
+  }
+
+  /**
+   * Continuously persist the current active task + queued tasks for every agent.
+   * This ensures tasks survive even an abrupt SIGKILL — not just graceful shutdown.
+   * Called as part of every persist() cycle.
+   */
+  private persistPendingTasks(): void {
+    const pendingTasks: Record<string, PendingTask[]> = {};
+    for (const rt of this.agents.values()) {
+      if (rt.info.id === YUKI_ID || rt.info.id === HERMES_ID) continue;
+      const tasks: PendingTask[] = [];
+      if (rt.info.task && (rt.info.status === "thinking" || rt.info.status === "working")) {
+        tasks.push({ task: rt.info.task, handoffTo: rt.handoffTo, cardId: rt.cardId });
+      }
+      for (const qt of rt.taskQueue) {
+        tasks.push({ task: qt.task, handoffTo: qt.handoffTo, cardId: qt.cardId });
+      }
+      if (tasks.length > 0) {
+        pendingTasks[rt.info.id] = tasks;
+      }
+    }
+    this.save.setPendingTasks(pendingTasks);
   }
 
   snapshot(): { agents: AgentInfo[]; logs: Record<string, LogEntry[]>; board: TaskCard[] } {
@@ -636,6 +660,7 @@ export class AgentManager {
     this.log(rt, "status", "Task stopped by the boss.");
     this.setStatus(rt, "idle");
     rt.info.task = null;
+    this.persist();
     this.broadcast({ type: "agent", agent: rt.info });
     if (hadQueue) {
       this.broadcast({ type: "toast", text: `Cleared ${hadQueue} queued task${hadQueue > 1 ? "s" : ""}.` });
@@ -1011,31 +1036,11 @@ export class AgentManager {
       this.schedulerTimer = null;
     }
 
-    const pendingTasks: Record<string, PendingTask[]> = {};
-
     for (const rt of this.agents.values()) {
-      // Skip permanent NPCs — they don't run user tasks
       if (rt.info.id === YUKI_ID || rt.info.id === HERMES_ID) continue;
 
-      const tasks: PendingTask[] = [];
-
-      // If the agent is actively working on a task, save it as the first item
-      if (rt.info.task && (rt.info.status === "thinking" || rt.info.status === "working")) {
-        tasks.push({
-          task: rt.info.task,
-          handoffTo: rt.handoffTo,
-          cardId: rt.cardId,
-        });
-      }
-
-      // Append all queued tasks
-      for (const qt of rt.taskQueue) {
-        tasks.push({ task: qt.task, handoffTo: qt.handoffTo, cardId: qt.cardId });
-      }
-
-      if (tasks.length > 0) {
-        pendingTasks[rt.info.id] = tasks;
-        // Log the interruption
+      // Log the interruption for any agent with active work
+      if (rt.info.task || rt.taskQueue.length > 0) {
         this.log(rt, "status", "Server updating — task will resume automatically after restart.");
       }
 
@@ -1047,13 +1052,9 @@ export class AgentManager {
         clearTimeout(rt.doneTimer);
         rt.doneTimer = null;
       }
-
-      // Clear the in-memory queue — tasks are now persisted
-      rt.taskQueue = [];
     }
 
-    // Persist pending tasks
-    this.save.setPendingTasks(pendingTasks);
+    // Final persist — saves agent state + pending tasks (active + queued)
     this.persist();
     this.persistBoard();
   }
@@ -1438,6 +1439,7 @@ export class AgentManager {
           rt.doneTimer = setTimeout(() => {
             rt.info.task = null;
             this.setStatus(rt, "idle");
+            this.persist();
           }, DONE_LINGER_MS);
         } else {
           rt.info.tasksDone += 1;
@@ -1450,6 +1452,7 @@ export class AgentManager {
             rt.doneTimer = setTimeout(() => {
               rt.info.task = null;
               this.setStatus(rt, "idle");
+              this.persist();
             }, DONE_LINGER_MS);
           }
         }
