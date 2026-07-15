@@ -117,7 +117,8 @@ async function fetchPulseMCPServers(query: string, limit: number): Promise<Pulse
  * Prefers remote URL, falls back to npx package install.
  */
 function toMCPConfig(s: PulseMCPServer): MCPServerConfig {
-  if (s.url) {
+  // Only use url if it looks like an actual MCP endpoint (not a GitHub page)
+  if (s.url && !s.url.includes("github.com") && !s.url.includes("pulsemcp.com")) {
     return { name: s.name, url: s.url };
   }
   if (s.package_name) {
@@ -127,8 +128,12 @@ function toMCPConfig(s: PulseMCPServer): MCPServerConfig {
       args: ["-y", s.package_name],
     };
   }
-  // Fallback: use source code URL as a reference (won't be installable directly)
-  return { name: s.name, url: s.external_url ?? s.source_code_url };
+  // No installable config — return a placeholder with source URL for reference
+  // The agent will be hired but won't have a working MCP connection
+  return {
+    name: s.name,
+    url: s.external_url && !s.external_url.includes("github.com") ? s.external_url : undefined,
+  };
 }
 
 /**

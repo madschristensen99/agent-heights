@@ -1571,6 +1571,12 @@ export function getServerById(id: string): MCPCatalogServer | undefined {
   return MCP_CATALOG.find((s) => s.id === id);
 }
 
+/** Get a server by its remote URL. Used to look up icon/branding for agents
+ *  whose MCPServerConfig was persisted before the `icon` field was added. */
+export function getServerByUrl(url: string): MCPCatalogServer | undefined {
+  return MCP_CATALOG.find((s) => s.url === url);
+}
+
 /**
  * Build a compact categorized summary of the curated MCP catalog.
  * Used to inject knowledge into Yuki's context so she can recommend
@@ -1629,5 +1635,6 @@ export function toMCPServerConfig(server: MCPCatalogServer): import("./types.js"
   if (server.keyLabel) config.keyLabel = server.keyLabel;
   if (server.keyPlaceholder) config.keyPlaceholder = server.keyPlaceholder;
   if (server.keyHelpUrl) config.keyHelpUrl = server.keyHelpUrl;
+  if (server.icon) config.icon = server.icon;
   return config;
 }

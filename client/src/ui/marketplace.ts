@@ -475,6 +475,8 @@ export class MarketplaceBrowser {
             ? `<span style="font-size:0.6rem; padding:0.1rem 0.3rem; background:#1a1a2a; border-radius:0.25rem; color:#6b8acf;">stdio</span>`
             : "";
 
+        const canHire = !!(mcp.mcpConfig.url || mcp.mcpConfig.command);
+
         card.innerHTML = `
           <div style="display:flex; align-items:flex-start; gap:0.5rem;">
             <div style="flex:1; min-width:0;">
@@ -486,15 +488,17 @@ export class MarketplaceBrowser {
               </div>
             </div>
           </div>
-          <button style="margin-top:0.5rem; width:100%; padding:0.4rem; border:none; border-radius:0.375rem; background:#e0e0e0; color:#0d0d0d; font-size:0.8rem; font-weight:600; cursor:pointer;">
-            🚁 Hire into HQ
+          <button style="margin-top:0.5rem; width:100%; padding:0.4rem; border:none; border-radius:0.375rem; background:${canHire ? "#e0e0e0" : "#333"}; color:${canHire ? "#0d0d0d" : "#666"}; font-size:0.8rem; font-weight:600; cursor:${canHire ? "pointer" : "not-allowed"};" ${canHire ? "" : "disabled"}>
+            ${canHire ? "🚁 Hire into HQ" : "No auto-install (see source)"}
           </button>
         `;
 
-        const hireBtn = card.querySelector("button")!;
-        hireBtn.addEventListener("click", () => {
-          this.onHireCommunityMCP(mcp.name, mcp.mcpConfig);
-        });
+        if (canHire) {
+          const hireBtn = card.querySelector("button")!;
+          hireBtn.addEventListener("click", () => {
+            this.onHireCommunityMCP(mcp.name, mcp.mcpConfig);
+          });
+        }
 
         this.content.appendChild(card);
       }

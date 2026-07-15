@@ -255,6 +255,8 @@ export interface MCPServerConfig {
   keyPlaceholder?: string;
   /** URL where users can create/obtain their key. Renders as a "Get your key →" link. */
   keyHelpUrl?: string;
+  /** Brand logo URL (e.g. from simpleicons.org CDN) or inline SVG string. */
+  icon?: string;
 }
 
 // ----------------------------------------------------------- Labyrinth ---

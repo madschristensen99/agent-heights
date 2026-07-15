@@ -7,7 +7,8 @@ import { Grid, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
-import { generateCharTexture, CHAR_FRAMES_PER_ROW } from "./chargen";
+import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
+import { getServerByUrl } from "../../../shared/mcp-catalog";
 import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
 import { upgradeWorkshop } from "./workshop";
 import { achievements, ACHIEVEMENTS } from "./achievements";
@@ -4272,7 +4273,6 @@ export class OfficeScene extends Phaser.Scene {
     };
     const sc = statusColor[agent.status] ?? "#888";
     const mcpCount = agent.mcpServers?.length ?? 0;
-    const mcpNames = (agent.mcpServers ?? []).map(s => s.name ?? s.command ?? "unknown").join(", ");
     const moodEmoji: Record<string, string> = {
       content: "😊",
       focused: "🤓",
@@ -4284,11 +4284,41 @@ export class OfficeScene extends Phaser.Scene {
     };
     const mood = agent.mood ? (moodEmoji[agent.mood] ?? "🤖") : "🤖";
 
+    // Resolve sprite image for the dashboard header
+    let spriteImg: string;
+    if (agent.id === YUKI_ID) {
+      spriteImg = "assets/characters/char-yuki.png";
+    } else if (agent.id === HERMES_ID) {
+      spriteImg = "assets/characters/char-hermes.png";
+    } else if (agent.appearance) {
+      spriteImg = generateCharPreviewDataURL(agent.appearance, 3);
+    } else {
+      spriteImg = `assets/characters/char-${agent.sprite}.png`;
+    }
+
+    // Resolve MCP server icons (from config or catalog fallback)
+    const mcpBadges = (agent.mcpServers ?? []).map(s => {
+      const icon = s.icon ?? (s.url ? getServerByUrl(s.url)?.icon : undefined);
+      const name = s.name ?? s.command ?? "unknown";
+      let iconHtml: string;
+      if (icon && icon.startsWith("<svg")) {
+        iconHtml = `<span style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;">${icon.replace(/<svg/, '<svg width="14" height="14"')}</span>`;
+      } else if (icon && icon.startsWith("http")) {
+        iconHtml = `<img src="${icon}" style="width:14px;height:14px;object-fit:contain;" />`;
+      } else {
+        iconHtml = `<span style="font-size:0.6rem;">🔌</span>`;
+      }
+      return `<span style="display:inline-flex;align-items:center;gap:4px;background:#1a2a3a;padding:3px 8px;border-radius:4px;color:#6aaadf;font-size:0.7rem;">${iconHtml}${name}</span>`;
+    }).join("");
+
     return `
       <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:monospace;color:#c0c0d0;font-size:0.8rem;">
         <!-- Header bar -->
         <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#111122;border-bottom:1px solid #222244;">
-          <div style="font-size:2rem;">${mood}</div>
+          <div style="position:relative;width:48px;height:48px;flex-shrink:0;">
+            <img src="${spriteImg}" style="width:48px;height:48px;object-fit:contain;image-rendering:pixelated;" />
+            <div style="position:absolute;bottom:-2px;right:-2px;font-size:1rem;">${mood}</div>
+          </div>
           <div>
             <div style="color:${agent.accent};font-size:1.1rem;font-weight:bold;">${agent.name}</div>
             <div style="color:#666;font-size:0.7rem;">${agent.model}</div>
@@ -4326,7 +4356,7 @@ export class OfficeScene extends Phaser.Scene {
             <div style="color:#555;font-size:0.65rem;text-transform:uppercase;margin:16px 0 8px;">MCP Servers (${mcpCount})</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;">
               ${mcpCount > 0
-                ? mcpNames.split(", ").map(n => `<span style="background:#1a2a3a;padding:3px 8px;border-radius:4px;color:#6aaadf;font-size:0.7rem;">${n}</span>`).join("")
+                ? mcpBadges
                 : `<span style="color:#555;font-size:0.7rem;">No MCP servers configured</span>`}
             </div>
 

@@ -1674,7 +1674,7 @@ export class Hud {
     const delivery = {
       name: name.slice(0, 24) || "Agent",
       systemPrompt: `You are an AI agent powered by a community MCP server from PulseMCP.\nYour MCP server: ${mcpConfig.name ?? name}\n${mcpConfig.url ? `Remote URL: ${mcpConfig.url}` : mcpConfig.command ? `Command: ${mcpConfig.command} ${(mcpConfig.args ?? []).join(" ")}` : ""}\nUse your MCP tools to help the boss with tasks related to your capabilities.`,
-      model: SWARMS_MODELS[0].id,
+      model: "claude-sonnet-4-20250514",
       provider: "cline",
       appearance: randomAppearance(),
       mcpServers: [mcpConfig],
