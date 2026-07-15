@@ -22,6 +22,26 @@ const NAME_POOL = [
 
 const PLAYER_KEY = "agent-hq-player";
 
+/** In-game styled confirmation modal — replaces browser confirm() to preserve immersion. */
+function inlineConfirm(title: string, message: string, confirmLabel: string, onConfirm: () => void): void {
+  const modal = document.createElement("div");
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+  modal.innerHTML = `
+    <div style="background:#1a1a1a;border:1px solid #333;border-radius:0.75rem;padding:1.5rem;max-width:360px;width:90vw;text-align:center;font-family:'M Plus Rounded 1c',sans-serif;">
+      <h3 style="margin:0 0 0.5rem;font-size:1.05rem;color:#e0e0e0;">${title}</h3>
+      <p style="color:#888;font-size:0.82rem;margin:0 0 1.25rem;line-height:1.4;">${message}</p>
+      <div style="display:flex;gap:0.75rem;justify-content:center;">
+        <button id="ic-cancel" style="padding:0.5rem 1.25rem;border:1px solid #333;border-radius:0.5rem;background:#1a1a1a;color:#999;font-size:0.85rem;cursor:pointer;">Cancel</button>
+        <button id="ic-confirm" style="padding:0.5rem 1.25rem;border:none;border-radius:0.5rem;background:#c44a4a;color:#fff;font-size:0.85rem;font-weight:600;cursor:pointer;">${confirmLabel}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.querySelector("#ic-cancel")!.addEventListener("click", () => modal.remove());
+  modal.querySelector("#ic-confirm")!.addEventListener("click", () => { modal.remove(); onConfirm(); });
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+}
+
 // ----------------------------------------------------------- character builder
 
 interface BuilderPart {
@@ -416,12 +436,13 @@ export class Hud {
     });
     document.getElementById("d-clear")!.addEventListener("click", () => {
       const agent = this.store.selected();
-      if (
-        agent &&
-        confirm(`Clear ${agent.name}'s chat and wipe their memory? They'll forget every previous order. Files in their workspace stay.`)
-      ) {
-        this.net.send({ type: "clear", agentId: agent.id });
-      }
+      if (!agent) return;
+      inlineConfirm(
+        `New chat with ${agent.name}?`,
+        "They'll forget every previous order. Files in their workspace stay.",
+        "New chat",
+        () => this.net.send({ type: "clear", agentId: agent.id }),
+      );
     });
     document.getElementById("d-fire")!.addEventListener("click", () => {
       if (this.store.selectedId) this.net.send({ type: "fire", agentId: this.store.selectedId });

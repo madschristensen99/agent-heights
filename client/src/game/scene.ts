@@ -4321,12 +4321,13 @@ export class OfficeScene extends Phaser.Scene {
       if (!overlay) {
         overlay = this.add.image(monitor.x, monitor.y, this.monitorMatrixTexKey)
           .setDepth(monitor.depth + 1)
+          .setOrigin(0.5, 0.5)
           .setBlendMode(Phaser.BlendModes.ADD);
         this.monitorMatrixOverlays.set(deskIdx, overlay);
       }
-      // Position the overlay on the monitor screen area
-      overlay.setPosition(monitor.x, monitor.y - 2);
-      overlay.setDisplaySize(TILE_PX * 0.7, TILE_PX * 0.4);
+      // Position the overlay on the monitor screen area (slightly above center)
+      overlay.setPosition(monitor.x, monitor.y - 4);
+      overlay.setDisplaySize(TILE_PX * 0.65, TILE_PX * 0.38);
       overlay.setVisible(true);
     }
 
