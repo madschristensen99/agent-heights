@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AgentInfo, TaskCard } from "../shared/types.js";
+import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
+import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 
 const MARKETPLACE_URL = process.env.MARKETPLACE_URL || "http://localhost:3000";
 
@@ -35,7 +37,20 @@ Agent HQ is a visual workspace where users hire AI agents (powered by Claude, GP
 Agents have individual workspaces, can be assigned tasks, collaborate via handoffs, and be organized with a task board.
 Users can browse the Swarms Marketplace from inside Agent HQ and hire marketplace agents directly into their office.
 When a user asks about hiring agents or finding the right agent for a task, mention that they can browse the marketplace
-using the MARKET button in the top bar, or ask you for recommendations.`;
+using the MARKET button in the top bar, or ask you for recommendations.
+
+${CURATED_AGENTS_SUMMARY}
+
+### Curated MCP Server Catalog (installable on any agent)
+These are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.
+${catalogSummary()}
+
+### Dynamic Discovery via PulseMCP
+Beyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).
+When a user asks about a capability not covered by the curated catalog, you can mention that there may be
+community-built MCP servers available, and the results below (if any) show what was found.
+If PulseMCP search results are included in this context, summarize them and suggest the user install
+the relevant MCP server on a new or existing agent.`;
 }
 
 export async function handleYukiRequest(
@@ -77,9 +92,26 @@ export async function handleYukiRequest(
     return true;
   }
 
-  // Build HQ context
+  // Build HQ context (curated knowledge is baked in)
   const hqCtx = getHqContext();
-  const hqContextStr = hqCtx ? buildHqContext(hqCtx.agents, hqCtx.board, hqCtx.bossName) : undefined;
+  let hqContextStr = hqCtx ? buildHqContext(hqCtx.agents, hqCtx.board, hqCtx.bossName) : undefined;
+
+  // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
+  // query, search PulseMCP and inject results into the context so Yuki can
+  // recommend community MCP servers beyond the curated catalog.
+  if (hqContextStr && shouldSearchPulseMCP(parsed.message)) {
+    const searchQuery = extractSearchQuery(parsed.message);
+    if (searchQuery) {
+      try {
+        const pulseResults = await searchPulseMCP(searchQuery, 10);
+        if (pulseResults) {
+          hqContextStr += `\n\n${pulseResults}`;
+        }
+      } catch {
+        // PulseMCP search is best-effort — don't block Yuki's response
+      }
+    }
+  }
 
   // Forward to marketplace Yuki API
   const forwardBody = {

@@ -28,6 +28,8 @@ import { runTextTools, clearTextToolMemory } from "./providers/text-tools.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
+import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
+import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 
 /** Models that don't support native function calling and need text-based tool parsing. */
@@ -1672,7 +1674,23 @@ export class AgentManager {
       ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
       : "(no task cards)";
 
-    const hqContext = `## Agent HQ Context\n\nThe user is in Agent HQ — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.`;
+    let hqContext = `## Agent HQ Context\n\nThe user is in Agent HQ — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
+
+    // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
+    // query, search PulseMCP and inject results into the context.
+    if (shouldSearchPulseMCP(text)) {
+      const searchQuery = extractSearchQuery(text);
+      if (searchQuery) {
+        try {
+          const pulseResults = await searchPulseMCP(searchQuery, 10);
+          if (pulseResults) {
+            hqContext += `\n\n${pulseResults}`;
+          }
+        } catch {
+          // PulseMCP search is best-effort — don't block Yuki's response
+        }
+      }
+    }
 
     const chatHistory = rt.logs
       .filter((l) => l.kind === "boss" || l.kind === "text")

@@ -212,6 +212,7 @@ class HttpMCPClient {
   private toolsCache: MCPToolDef[] | null = null;
   private initialized = false;
   private label: string;
+  private sessionId: string | null = null;
 
   constructor(private config: MCPServerConfig) {
     this.label = config.name ?? config.url ?? "http-mcp";
@@ -280,6 +281,10 @@ class HttpMCPClient {
       if (this.config.headers) {
         Object.assign(headers, this.config.headers);
       }
+      // Include session ID for Streamable HTTP transport
+      if (this.sessionId) {
+        headers["Mcp-Session-Id"] = this.sessionId;
+      }
 
       const res = await fetch(this.baseUrl, {
         method: "POST",
@@ -291,6 +296,10 @@ class HttpMCPClient {
       if (!res.ok) {
         throw new Error(`MCP HTTP ${res.status}: ${await res.text().catch(() => res.statusText)}`);
       }
+
+      // Capture session ID from initialize response (Streamable HTTP transport)
+      const sid = res.headers.get("mcp-session-id");
+      if (sid) this.sessionId = sid;
 
       const contentType = res.headers.get("content-type") ?? "";
 
@@ -345,6 +354,7 @@ class HttpMCPClient {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (this.config.authToken) headers["Authorization"] = `Bearer ${this.config.authToken}`;
       if (this.config.headers) Object.assign(headers, this.config.headers);
+      if (this.sessionId) headers["Mcp-Session-Id"] = this.sessionId;
       await fetch(this.baseUrl, {
         method: "POST",
         headers,
@@ -356,6 +366,7 @@ class HttpMCPClient {
   stop(): void {
     this.initialized = false;
     this.toolsCache = null;
+    this.sessionId = null;
   }
 }
 
@@ -424,6 +435,24 @@ export async function loadMCPTools(servers: MCPServerConfig[]): Promise<AgentToo
   }
 
   return allTools;
+}
+
+/**
+ * Call a specific tool on an MCP server by name.
+ * Uses the client cache so repeated calls reuse the same connection.
+ */
+export async function callMCPTool(
+  config: MCPServerConfig,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const key = clientKey(config);
+  let client = clientCache.get(key);
+  if (!client) {
+    client = createClient(config);
+    clientCache.set(key, client);
+  }
+  return client.callTool(toolName, args);
 }
 
 /** Stop and clear all cached MCP clients (called on server shutdown). */

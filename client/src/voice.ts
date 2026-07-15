@@ -136,14 +136,19 @@ export class VoiceManager {
 
     // Handle incoming remote track
     pc.ontrack = (ev) => {
-      console.log("[voice] ontrack from", userId, "streams=", ev.streams.length);
+      console.log("[voice] ontrack from", userId, "streams=", ev.streams.length, "audioCtx state=", this.audioContext?.state);
       const remoteStream = ev.streams[0];
       if (!remoteStream) {
         console.warn("[voice] no remote stream in ontrack");
         return;
       }
+      // Ensure audioContext is running (may have been suspended by browser)
+      if (this.audioContext && this.audioContext.state === "suspended") {
+        void this.audioContext.resume();
+      }
       const source = this.audioContext!.createMediaStreamSource(remoteStream);
       source.connect(gainNode);
+      console.log("[voice] remote stream connected to gain node for", userId);
     };
 
     // ICE candidates → relay to peer via server (send full candidate init)
@@ -178,6 +183,7 @@ export class VoiceManager {
   private async initiateOffer(userId: string): Promise<void> {
     const peer = this.peers.get(userId);
     if (!peer) return;
+    if (peer.pc.signalingState !== "stable") return;
     try {
       const offer = await peer.pc.createOffer();
       await peer.pc.setLocalDescription(offer);
@@ -195,6 +201,11 @@ export class VoiceManager {
     if (!peer) {
       peer = this.createPeer(fromUserId, "Unknown");
     }
+    // Guard: ignore if already processing or connected (duplicate message)
+    if (peer.pc.signalingState !== "stable" || peer.connected) {
+      console.log("[voice] onOffer ignored — signalingState=", peer.pc.signalingState, "connected=", peer.connected);
+      return;
+    }
     try {
       await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp }));
       const answer = await peer.pc.createAnswer();
@@ -210,6 +221,11 @@ export class VoiceManager {
     console.log("[voice] onAnswer from", fromUserId);
     const peer = this.peers.get(fromUserId);
     if (!peer) return;
+    // Guard: ignore if not in have-local-offer state (duplicate or stale answer)
+    if (peer.pc.signalingState !== "have-local-offer") {
+      console.log("[voice] onAnswer ignored — signalingState=", peer.pc.signalingState);
+      return;
+    }
     try {
       await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp }));
       console.log("[voice] remote description set for", fromUserId);

@@ -248,6 +248,12 @@ export interface MCPServerConfig {
   authType?: "oauth" | "apikey";
   /** Human-readable label for logging. */
   name?: string;
+  /** What to call the credential in the UI (e.g. "Personal Access Token", "Secret Key"). Falls back to "API Key". */
+  keyLabel?: string;
+  /** Placeholder text for the key input (e.g. "ghp_...", "sk_live_..."). Falls back to "Paste API key...". */
+  keyPlaceholder?: string;
+  /** URL where users can create/obtain their key. Renders as a "Get your key →" link. */
+  keyHelpUrl?: string;
 }
 
 // ----------------------------------------------------------- Labyrinth ---
@@ -617,6 +623,12 @@ export type ServerMsg =
   | { type: "screen_share_answer"; fromUserId: string; sdp: string }
   | { type: "screen_share_ice"; fromUserId: string; candidate: string }
   | { type: "screen_share_peer_left"; userId: string }
+  | { type: "webcam_state"; presenterId: string | null; presenterName: string | null }
+  | { type: "webcam_peer"; userId: string; name: string }
+  | { type: "webcam_offer"; fromUserId: string; sdp: string }
+  | { type: "webcam_answer"; fromUserId: string; sdp: string }
+  | { type: "webcam_ice"; fromUserId: string; candidate: string }
+  | { type: "webcam_peer_left"; userId: string }
   | { type: "agent_frame"; agentId: string; frame: string }
   | { type: "agent_broadcast_state"; agentId: string | null }
   | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }

@@ -208,6 +208,14 @@ export class Store {
     this.voicePeerLeftListeners.add(fn);
   }
 
+  clearVoiceListeners(): void {
+    this.voicePeerListeners.clear();
+    this.voiceOfferListeners.clear();
+    this.voiceAnswerListeners.clear();
+    this.voiceIceListeners.clear();
+    this.voicePeerLeftListeners.clear();
+  }
+
   onScreenSharePeer(fn: (userId: string, name: string) => void): void {
     this.screenSharePeerListeners.add(fn);
   }

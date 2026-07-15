@@ -1864,13 +1864,18 @@ export class Hud {
           <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.4rem;">MCP SERVER AUTH</div>
           ${mcpServers.map((s, i) => {
             const isOAuth = s.authType === "oauth";
+            const kLabel = s.keyLabel ?? "API Key";
+            const kPlaceholder = s.keyPlaceholder ?? "Paste new API key...";
+            const kHelpHtml = s.keyHelpUrl
+              ? `<a href="${s.keyHelpUrl}" target="_blank" style="font-size:0.6rem; color:#4f9dde; text-decoration:none; margin-left:0.4rem;">Get key →</a>`
+              : "";
             return `
             <div style="margin-bottom:0.4rem;">
-              <div style="font-size:0.7rem; color:#888; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.6rem;">OAuth</span>' : '<span style="color:#666;font-size:0.6rem;">API Key</span>'}</div>
+              <div style="font-size:0.7rem; color:#888; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.6rem;">OAuth</span>' : `<span style="color:#666;font-size:0.6rem;">${esc(kLabel)}</span>${kHelpHtml}`}</div>
               <div style="display:flex; gap:0.25rem; align-items:center;">
                 ${isOAuth
                   ? `<button id="d-mcp-connect-${i}" style="flex:1; padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#2a4a6a; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">🔗 Reconnect via OAuth</button>`
-                  : `<input id="d-mcp-key-${i}" type="password" placeholder="Paste new API key..." autocomplete="off"
+                  : `<input id="d-mcp-key-${i}" type="password" placeholder="${esc(kPlaceholder)}" autocomplete="off"
                       style="flex:1; padding:0.35rem 0.5rem; border-radius:0.3rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.75rem;" />
                     <button id="d-mcp-save-${i}" style="padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#333; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">Save</button>`
                 }

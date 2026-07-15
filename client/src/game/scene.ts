@@ -229,6 +229,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // ── Voice chat: create VoiceManager and wire store listeners ──────────
     if (this._myUserId && this.net) {
+      this.store.clearVoiceListeners();
       this.voice = new VoiceManager(this._myUserId, (msg) => this.net!.send(msg));
       this.store.onVoicePeer((userId, name) => this.voice?.onPeer(userId, name));
       this.store.onVoiceOffer((fromUserId, sdp) => { void this.voice?.onOffer(fromUserId, sdp); });

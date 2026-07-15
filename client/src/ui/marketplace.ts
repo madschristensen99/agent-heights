@@ -293,19 +293,28 @@ export class MarketplaceBrowser {
       : "";
 
     // Auth section for remote servers that need authentication
+    const keyLabel = server.keyLabel ?? "API Key";
+    const keyPlaceholder = server.keyPlaceholder ?? "Paste API key...";
+    const keyHelpHtml = server.keyHelpUrl
+      ? `<a href="${server.keyHelpUrl}" target="_blank" style="font-size:0.7rem; color:#4f9dde; text-decoration:none; margin-left:0.5rem;">Get your ${keyLabel.toLowerCase()} →</a>`
+      : "";
     const authHtml = server.transport === "remote" && server.authType !== "open" && server.url
       ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
           <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.5rem;">⚠ AUTHENTICATION REQUIRED</div>
           <div id="mq-srv-auth-warning" style="font-size:0.75rem; color:#e05d5d; margin-bottom:0.5rem;">Authenticate before installing.</div>
-          <div style="display:flex; gap:0.25rem; align-items:center;">
-            ${server.authType === "oauth"
-              ? `<button id="mq-srv-oauth" style="flex:1; padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#2a4a6a; color:#e0e0e0; font-size:0.8rem; cursor:pointer;">🔗 Connect via OAuth</button>`
-              : `<input id="mq-srv-apikey" type="password" placeholder="Paste API key..." autocomplete="off"
+          ${server.authType === "oauth"
+            ? `<div style="display:flex; gap:0.25rem; align-items:center;">
+                <button id="mq-srv-oauth" style="flex:1; padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#2a4a6a; color:#e0e0e0; font-size:0.8rem; cursor:pointer;">🔗 Connect via OAuth</button>
+                <span id="mq-srv-auth-status" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
+              </div>`
+            : `<div style="font-size:0.7rem; color:#888; margin-bottom:0.25rem;">${this.escape(keyLabel)}${keyHelpHtml}</div>
+              <div style="display:flex; gap:0.25rem; align-items:center;">
+                <input id="mq-srv-apikey" type="password" placeholder="${this.escape(keyPlaceholder)}" autocomplete="off"
                   style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />
-                <button id="mq-srv-save-key" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>`
-            }
-            <span id="mq-srv-auth-status" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
-          </div>
+                <button id="mq-srv-save-key" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>
+                <span id="mq-srv-auth-status" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
+              </div>`
+          }
         </div>`
       : "";
 
@@ -438,7 +447,7 @@ export class MarketplaceBrowser {
       : "None";
 
     // Parse agent config to detect MCP servers that need auth
-    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey" }[] = [];
+    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey"; keyLabel?: string; keyPlaceholder?: string; keyHelpUrl?: string }[] = [];
     try {
       const config = agent.agent ? JSON.parse(agent.agent) : {};
       if (config.mcpServers && Array.isArray(config.mcpServers)) {
@@ -452,13 +461,18 @@ export class MarketplaceBrowser {
           <div id="mq-mcp-warning" style="font-size:0.75rem; color:#e05d5d; margin-bottom:0.5rem;">Connect each server before hiring.</div>
           ${mcpServers.map((s, i) => {
             const isOAuth = s.authType === "oauth";
+            const kLabel = s.keyLabel ?? "API Key";
+            const kPlaceholder = s.keyPlaceholder ?? "Paste API key...";
+            const kHelpHtml = s.keyHelpUrl
+              ? `<a href="${s.keyHelpUrl}" target="_blank" style="font-size:0.65rem; color:#4f9dde; text-decoration:none; margin-left:0.4rem;">Get key →</a>`
+              : "";
             return `
             <div style="margin-bottom:0.5rem;">
-              <div style="font-size:0.75rem; color:#888; margin-bottom:0.25rem;">${this.escape(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.65rem;">OAuth</span>' : '<span style="color:#666;font-size:0.65rem;">API Key</span>'}</div>
+              <div style="font-size:0.75rem; color:#888; margin-bottom:0.25rem;">${this.escape(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.65rem;">OAuth</span>' : `<span style="color:#666;font-size:0.65rem;">${this.escape(kLabel)}</span>${kHelpHtml}`}</div>
               <div style="display:flex; gap:0.25rem; align-items:center;">
                 ${isOAuth
                   ? `<button id="mq-mcp-connect-${i}" style="flex:1; padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#2a4a6a; color:#e0e0e0; font-size:0.8rem; cursor:pointer;">🔗 Connect via OAuth</button>`
-                  : `<input id="mq-mcp-key-${i}" type="password" placeholder="Paste API key..." autocomplete="off"
+                  : `<input id="mq-mcp-key-${i}" type="password" placeholder="${this.escape(kPlaceholder)}" autocomplete="off"
                       style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />
                     <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>`
                 }

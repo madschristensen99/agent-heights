@@ -44,6 +44,12 @@ export interface MCPCatalogServer {
   nativeIntegration?: boolean;
   /** Description of the native game integration, if applicable. */
   nativeIntegrationNote?: string;
+  /** What to call the credential in the UI (e.g. "Personal Access Token", "Secret Key"). Falls back to "API Key". */
+  keyLabel?: string;
+  /** Placeholder text for the key input (e.g. "ghp_...", "sk_live_..."). Falls back to "Paste API key...". */
+  keyPlaceholder?: string;
+  /** URL where users can create/obtain their key. Renders as a "Get your key →" link. */
+  keyHelpUrl?: string;
 }
 
 export const MCP_CATALOG: MCPCatalogServer[] = [
@@ -70,12 +76,15 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     description:
       "Manage repositories, issues, pull requests, and search code via GitHub API. Agents can create issues, review PRs, search across repos, and manage branches.",
     transport: "remote",
-    authType: "oauth",
+    authType: "apikey",
     isOfficial: true,
     category: ["development", "git"],
     icon: "https://cdn.simpleicons.org/github/white",
     visitorsPerWeek: "106k",
     url: "https://api.githubcopilot.com/mcp/",
+    keyLabel: "Personal Access Token",
+    keyPlaceholder: "ghp_...",
+    keyHelpUrl: "https://github.com/settings/tokens",
   },
   {
     id: "linear",
@@ -90,6 +99,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/linear",
     visitorsPerWeek: "66k",
     url: "https://mcp.linear.app/mcp",
+    keyLabel: "API Key",
+    keyPlaceholder: "lin_api_...",
+    keyHelpUrl: "https://linear.app/settings/api",
   },
   {
     id: "slack",
@@ -118,6 +130,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/stripe",
     visitorsPerWeek: "70k",
     url: "https://mcp.stripe.com",
+    keyLabel: "Secret Key",
+    keyPlaceholder: "sk_live_...",
+    keyHelpUrl: "https://dashboard.stripe.com/apikeys",
   },
   {
     id: "figma",
@@ -146,6 +161,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/hubspot",
     visitorsPerWeek: "63k",
     url: "https://mcp.hubspot.com/mcp",
+    keyLabel: "Private App Token",
+    keyPlaceholder: "pat-...",
+    keyHelpUrl: "https://app.hubspot.com/settings/api/private-apps",
   },
   {
     id: "grafana",
@@ -160,6 +178,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/grafana",
     visitorsPerWeek: "140k",
     url: "https://mcp.grafana.com/sse",
+    keyLabel: "Access Token",
+    keyPlaceholder: "glsa_...",
+    keyHelpUrl: "https://grafana.com/docs/grafana/latest/administration/service-accounts/",
   },
   {
     id: "mongodb",
@@ -174,6 +195,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/mongodb",
     visitorsPerWeek: "54k",
     url: "https://mcp.mongodb.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://www.mongodb.com/docs/atlas/app-services/authentication/api-key/",
   },
   {
     id: "firecrawl",
@@ -188,6 +212,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/firecrawl",
     visitorsPerWeek: "92k",
     url: "https://mcp.firecrawl.dev/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "fc-...",
+    keyHelpUrl: "https://www.firecrawl.dev/app/api-keys",
   },
   {
     id: "n8n",
@@ -202,6 +229,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/n8n",
     visitorsPerWeek: "122k",
     url: "https://mcp.n8n.io/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "n8n_api_...",
+    keyHelpUrl: "https://docs.n8n.io/advanced-features/api/",
   },
   {
     id: "vercel",
@@ -216,6 +246,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/vercel/white",
     visitorsPerWeek: "—",
     url: "https://mcp.vercel.com/sse",
+    keyLabel: "Access Token",
+    keyPlaceholder: "vercel_...",
+    keyHelpUrl: "https://vercel.com/account/tokens",
   },
   {
     id: "supabase",
@@ -230,6 +263,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/supabase",
     visitorsPerWeek: "93k",
     url: "https://mcp.supabase.com/mcp",
+    keyLabel: "Access Token",
+    keyPlaceholder: "sbp_...",
+    keyHelpUrl: "https://supabase.com/dashboard/account/tokens",
   },
   {
     id: "gitlab",
@@ -258,6 +294,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/brave",
     visitorsPerWeek: "—",
     url: "https://mcp.brave.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "BSA...",
+    keyHelpUrl: "https://brave.com/search/api/",
   },
   {
     id: "tavily",
@@ -272,6 +311,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "<svg viewBox='0 0 24 24' fill='none' stroke='#e0e0e0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/><line x1='11' y1='8' x2='11' y2='14'/><line x1='8' y1='11' x2='14' y2='11'/></svg>",
     visitorsPerWeek: "—",
     url: "https://mcp.tavily.com/mcp",
+    keyLabel: "API Key",
+    keyPlaceholder: "tvly-...",
+    keyHelpUrl: "https://app.tavily.com/api-key",
   },
 
   // ── Tier 2: Local MCPs (Native Game Integration Candidates) ──────────
@@ -529,6 +571,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/homeassistant",
     visitorsPerWeek: "123k",
     url: "https://mcp.home-assistant.io/sse",
+    keyLabel: "Long-Lived Access Token",
+    keyPlaceholder: "Paste access token...",
+    keyHelpUrl: "https://www.home-assistant.io/docs/authentication/",
   },
 
   // ── Tier 3: Additional Remote MCPs from mcpservers.org ───────────────
@@ -604,6 +649,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["search", "web", "ai"],
     icon: "https://cdn.simpleicons.org/exa/white",
     url: "https://mcp.exa.ai/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://dashboard.exa.ai/api-keys",
   },
   {
     id: "sentry",
@@ -616,6 +664,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["monitoring", "devops", "development"],
     icon: "https://cdn.simpleicons.org/sentry",
     url: "https://mcp.sentry.dev/sse",
+    keyLabel: "Auth Token",
+    keyPlaceholder: "sntrys_...",
+    keyHelpUrl: "https://sentry.io/settings/auth-tokens/",
   },
   {
     id: "posthog",
@@ -628,6 +679,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["analytics", "monitoring"],
     icon: "https://cdn.simpleicons.org/posthog",
     url: "https://mcp.posthog.com/sse",
+    keyLabel: "Personal API Key",
+    keyPlaceholder: "phx_...",
+    keyHelpUrl: "https://us.posthog.com/settings/user-api-keys",
   },
   {
     id: "shopify",
@@ -652,6 +706,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["automation", "productivity"],
     icon: "https://cdn.simpleicons.org/zapier",
     url: "https://mcp.zapier.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://developer.zapier.com/api/v1/docs/",
   },
   {
     id: "zoom",
@@ -676,6 +733,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["communication", "development"],
     icon: "https://cdn.simpleicons.org/twilio/red",
     url: "https://mcp.twilio.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "SK...",
+    keyHelpUrl: "https://console.twilio.com/us1/account/keys",
   },
   {
     id: "paypal",
@@ -700,6 +760,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["design", "hosting", "cms"],
     icon: "https://cdn.simpleicons.org/webflow/white",
     url: "https://mcp.webflow.com/sse",
+    keyLabel: "Access Token",
+    keyPlaceholder: "Paste access token...",
+    keyHelpUrl: "https://developers.webflow.com/data/docs/access-tokens",
   },
   {
     id: "netlify",
@@ -712,6 +775,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["devops", "hosting"],
     icon: "https://cdn.simpleicons.org/netlify/white",
     url: "https://mcp.netlify.com/sse",
+    keyLabel: "Access Token",
+    keyPlaceholder: "nfp_...",
+    keyHelpUrl: "https://app.netlify.com/user/applications",
   },
   {
     id: "airtable",
@@ -736,6 +802,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["productivity", "project-management"],
     icon: "https://cdn.simpleicons.org/clickup",
     url: "https://mcp.clickup.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "pk_...",
+    keyHelpUrl: "https://app.clickup.com/settings/apps",
   },
   {
     id: "calendly",
@@ -748,6 +817,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["productivity", "scheduling"],
     icon: "https://cdn.simpleicons.org/calendly",
     url: "https://mcp.calendly.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://calendly.com/integrations/api_webhooks",
   },
   {
     id: "cal-com",
@@ -772,6 +844,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["ai", "ml", "development"],
     icon: "https://cdn.simpleicons.org/huggingface",
     url: "https://huggingface.co/mcp/sse",
+    keyLabel: "Access Token",
+    keyPlaceholder: "hf_...",
+    keyHelpUrl: "https://huggingface.co/settings/tokens",
   },
   {
     id: "openrouter",
@@ -784,6 +859,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["ai", "development"],
     icon: "https://cdn.simpleicons.org/openrouter/white",
     url: "https://mcp.openrouter.ai/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "sk-or-...",
+    keyHelpUrl: "https://openrouter.ai/keys",
   },
   {
     id: "postman",
@@ -796,6 +874,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["development", "api"],
     icon: "https://cdn.simpleicons.org/postman/white",
     url: "https://mcp.postman.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "PMAK-...",
+    keyHelpUrl: "https://postman.postman.co/settings/me/api-keys",
   },
   {
     id: "miro",
@@ -844,6 +925,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["design", "development"],
     icon: "https://cdn.simpleicons.org/mermaid/white",
     url: "https://mcp.mermaidchart.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://www.mermaidchart.com/app/settings/api-keys",
   },
   {
     id: "strava",
@@ -904,6 +988,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["support", "business"],
     icon: "https://cdn.simpleicons.org/intercom/white",
     url: "https://mcp.intercom.com/sse",
+    keyLabel: "Access Token",
+    keyPlaceholder: "dGsk_...",
+    keyHelpUrl: "https://developers.intercom.com/docs/references/authentication/",
   },
   {
     id: "pagerduty",
@@ -916,6 +1003,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["devops", "monitoring"],
     icon: "https://cdn.simpleicons.org/pagerduty/white",
     url: "https://mcp.pagerduty.com/sse",
+    keyLabel: "API Token",
+    keyPlaceholder: "y_Nb...",
+    keyHelpUrl: "https://support.pagerduty.com/docs/generating-api-keys",
   },
   {
     id: "incident-io",
@@ -928,6 +1018,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["devops", "monitoring"],
     icon: "https://cdn.simpleicons.org/incidentdotio/white",
     url: "https://mcp.incident.io/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "inc_...",
+    keyHelpUrl: "https://api-docs.incident.io/",
   },
   {
     id: "honeycomb",
@@ -940,6 +1033,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["monitoring", "devops"],
     icon: "https://cdn.simpleicons.org/honeycomb/white",
     url: "https://mcp.honeycomb.io/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://docs.honeycomb.io/manage-api-keys/",
   },
   {
     id: "mixpanel",
@@ -952,6 +1048,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["analytics", "business"],
     icon: "https://cdn.simpleicons.org/mixpanel/white",
     url: "https://mcp.mixpanel.com/sse",
+    keyLabel: "Service Account",
+    keyPlaceholder: "Paste service account...",
+    keyHelpUrl: "https://mixpanel.com/settings/project#service-accounts",
   },
   {
     id: "amplitude",
@@ -964,6 +1063,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["analytics", "business"],
     icon: "https://cdn.simpleicons.org/amplitude/white",
     url: "https://mcp.amplitude.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://amplitude.com/docs/find-amplitude-api-id-and-key",
   },
   {
     id: "ramp",
@@ -976,6 +1078,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["finance", "business"],
     icon: "https://cdn.simpleicons.org/ramp/white",
     url: "https://mcp.ramp.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "sk_ramp_...",
+    keyHelpUrl: "https://docs.ramp.com/developer-api/v1/overview",
   },
   {
     id: "xero",
@@ -1000,6 +1105,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["sales", "business"],
     icon: "https://cdn.simpleicons.org/apolloio/white",
     url: "https://mcp.apollo.io/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://app.apollo.io/settings/integrations/api-key",
   },
   {
     id: "attio",
@@ -1012,6 +1120,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["crm", "business"],
     icon: "https://cdn.simpleicons.org/attio/white",
     url: "https://mcp.attio.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://developers.attio.com/docs/api-key",
   },
   {
     id: "close",
@@ -1024,6 +1135,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["crm", "sales"],
     icon: "https://cdn.simpleicons.org/close/white",
     url: "https://mcp.close.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://app.close.com/settings/api/",
   },
   {
     id: "docusing",
@@ -1048,6 +1162,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["cms", "content"],
     icon: "https://cdn.simpleicons.org/sanity/white",
     url: "https://mcp.sanity.io/sse",
+    keyLabel: "API Token",
+    keyPlaceholder: "sk...",
+    keyHelpUrl: "https://www.sanity.io/manage/personal/api-tokens",
   },
   {
     id: "wordpress",
@@ -1072,6 +1189,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["cms", "hosting", "commerce"],
     icon: "https://cdn.simpleicons.org/wix/white",
     url: "https://mcp.wix.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://dev.wix.com/docs/go/api/wix-business-management/app-keys",
   },
   {
     id: "make",
@@ -1084,6 +1204,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["automation", "productivity"],
     icon: "https://cdn.simpleicons.org/make/white",
     url: "https://mcp.make.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://www.make.com/en/help/api-documentation",
   },
   {
     id: "neon",
@@ -1096,6 +1219,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["database", "backend"],
     icon: "https://cdn.simpleicons.org/neon/white",
     url: "https://mcp.neon.tech/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "neon_...",
+    keyHelpUrl: "https://neon.tech/docs/manage/api-keys",
   },
   {
     id: "microsoft-learn",
@@ -1120,6 +1246,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["documentation", "development"],
     icon: "https://cdn.simpleicons.org/mintlify/white",
     url: "https://mcp.mintlify.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "ml_...",
+    keyHelpUrl: "https://mintlify.com/docs/api",
   },
   {
     id: "browserbase",
@@ -1132,6 +1261,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["browser", "automation", "web"],
     icon: "https://cdn.simpleicons.org/browserbase/white",
     url: "https://mcp.browserbase.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "bb_...",
+    keyHelpUrl: "https://www.browserbase.com/settings",
   },
   {
     id: "parallel-search",
@@ -1144,6 +1276,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["search", "web"],
     icon: "<svg viewBox='0 0 24 24' fill='none' stroke='#e0e0e0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12h4l3-9 4 18 3-9h4'/></svg>",
     url: "https://mcp.parallel.ai/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://parallel.ai/settings",
   },
   {
     id: "mercury",
@@ -1156,6 +1291,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["finance", "banking"],
     icon: "https://cdn.simpleicons.org/mercury/white",
     url: "https://mcp.mercury.com/sse",
+    keyLabel: "API Token",
+    keyPlaceholder: "Paste API token...",
+    keyHelpUrl: "https://docs.mercury.com/reference",
   },
   {
     id: "ahrefs",
@@ -1168,6 +1306,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["seo", "marketing"],
     icon: "https://cdn.simpleicons.org/ahrefs/white",
     url: "https://mcp.ahrefs.com/sse",
+    keyLabel: "API Token",
+    keyPlaceholder: "Paste API token...",
+    keyHelpUrl: "https://ahrefs.com/api/profile",
   },
   {
     id: "semrush",
@@ -1180,6 +1321,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["seo", "marketing"],
     icon: "https://cdn.simpleicons.org/semrush/white",
     url: "https://mcp.semrush.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://www.semrush.com/kb/41-api-keys",
   },
   {
     id: "similarweb",
@@ -1192,6 +1336,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["analytics", "marketing"],
     icon: "https://cdn.simpleicons.org/similarweb/white",
     url: "https://mcp.similarweb.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://www.similarweb.com/corp/api/",
   },
   {
     id: "granola",
@@ -1216,6 +1363,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["communication", "productivity"],
     icon: "https://cdn.simpleicons.org/fireflies/white",
     url: "https://mcp.fireflies.ai/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://app.fireflies.ai/api/webhooks",
   },
   {
     id: "otter-ai",
@@ -1228,6 +1378,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["communication", "productivity"],
     icon: "https://cdn.simpleicons.org/otterai/white",
     url: "https://mcp.otter.ai/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://otter.ai/api",
   },
   {
     id: "gamma",
@@ -1240,6 +1393,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["design", "productivity"],
     icon: "https://cdn.simpleicons.org/gamma/white",
     url: "https://mcp.gamma.app/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://gamma.app/docs/api",
   },
   {
     id: "gusto-payroll",
@@ -1252,6 +1408,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["hr", "business"],
     icon: "https://cdn.simpleicons.org/workable/white",
     url: "https://mcp.workable.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://dev.workable.com/",
   },
   {
     id: "indeed",
@@ -1264,6 +1423,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["hr", "jobs"],
     icon: "https://cdn.simpleicons.org/indeed/white",
     url: "https://mcp.indeed.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://developers.indeed.com/",
   },
   {
     id: "survey-monkey",
@@ -1276,6 +1438,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["research", "business"],
     icon: "https://cdn.simpleicons.org/surveymonkey/white",
     url: "https://mcp.surveymonkey.com/sse",
+    keyLabel: "Access Token",
+    keyPlaceholder: "Paste access token...",
+    keyHelpUrl: "https://developer.surveymonkey.com/api/v3/",
   },
   {
     id: "cloudinary",
@@ -1288,6 +1453,9 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["media", "development"],
     icon: "https://cdn.simpleicons.org/cloudinary/white",
     url: "https://mcp.cloudinary.com/sse",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste API key...",
+    keyHelpUrl: "https://cloudinary.com/documentation/api_keys",
   },
   {
     id: "godot",
@@ -1344,6 +1512,36 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     command: "npx",
     args: ["-y", "@proxyman/proxyman-mcp"],
   },
+  {
+    id: "yahoo-finance",
+    name: "Yahoo Finance",
+    summary: "Stock data, market news, financials, and price history.",
+    description:
+      "Remote MCP server providing access to Yahoo Finance market data. Agents can fetch stock quotes, historical price data, company financials, market news, and key statistics. No authentication required — works out of the box. Perfect as a read-only data source for analysis agents that feed trading decisions to execution agents.",
+    transport: "remote",
+    authType: "open",
+    isOfficial: false,
+    category: ["finance", "trading", "data"],
+    icon: "https://cdn.simpleicons.org/yahoofinance/white",
+    url: "https://gateway.mcpservers.org/yahoo-finance/mcp",
+  },
+  {
+    id: "pulsemcp",
+    name: "PulseMCP",
+    summary: "Search and discover 22k+ MCP servers across the ecosystem.",
+    description:
+      "An MCP server that provides tools for discovering and exploring MCP servers and integrations through the PulseMCP API. Agents can search the entire PulseMCP ecosystem (22,000+ servers) using list_servers with optional query filtering, and list all available integrations with list_integrations. Perfect for finding the right MCP server for a task when the curated catalog doesn't have what you need.",
+    transport: "stdio",
+    authType: "open",
+    isOfficial: false,
+    category: ["search", "discovery", "mcp"],
+    icon: "<svg viewBox='0 0 24 24' fill='none' stroke='#e0e0e0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M22 12h-4l-3 9L9 3l-3 9H2'/></svg>",
+    command: "npx",
+    args: ["-y", "pulsemcp-server"],
+    nativeIntegration: true,
+    nativeIntegrationNote:
+      "Discovery terminal: when an agent searches PulseMCP, show results scrolling on their monitor like a search engine. Results appear as installable cards.",
+  },
 ];
 
 // ── Helper functions ───────────────────────────────────────────────────
@@ -1373,6 +1571,42 @@ export function getServerById(id: string): MCPCatalogServer | undefined {
   return MCP_CATALOG.find((s) => s.id === id);
 }
 
+/**
+ * Build a compact categorized summary of the curated MCP catalog.
+ * Used to inject knowledge into Yuki's context so she can recommend
+ * MCP servers to users without browsing the marketplace.
+ */
+export function catalogSummary(): string {
+  const byCategory: Record<string, string[]> = {};
+  for (const s of MCP_CATALOG) {
+    for (const cat of s.category) {
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(s.name);
+    }
+  }
+  const lines: string[] = [];
+  for (const cat of Object.keys(byCategory).sort()) {
+    const names = byCategory[cat];
+    lines.push(`  ${cat}: ${names.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Build a summary of notable curated marketplace agents.
+ * These are the seed agents from the Supabase migrations — big tech,
+ * proven services. Yuki uses this to recommend specific agents.
+ */
+export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via MARKET button)
+- Robinhood Trading Agent: AI trading agent — manage portfolios, place trades, analyze markets. Connects via Robinhood Trading MCP (OAuth).
+- Market Data Analyst: Financial data agent — fetches stock quotes, price history, financials, and market news via Yahoo Finance MCP. Pairs with Robinhood agent for analysis-to-execution pipeline.
+- Code Review Sentinel: Automated code review — catches bugs, security issues, and performance problems before they ship.
+- Data Analyst Pro: AI data analyst — writes SQL, cleans data, generates insights, and creates visualizations from any dataset.
+- Research Assistant: AI research agent — searches the web, synthesizes sources, produces cited reports on any topic.
+- DevOps Automator: DevOps automation — manages CI/CD, Docker, Kubernetes, Terraform, and deployment pipelines.
+- Content Writer: AI content writer — blogs, docs, marketing copy, and more, optimized for your audience.`;
+
+
 /** Convert a catalog entry to an MCPServerConfig for agent assignment. */
 export function toMCPServerConfig(server: MCPCatalogServer): import("./types.js").MCPServerConfig {
   const config: import("./types.js").MCPServerConfig = {
@@ -1389,5 +1623,8 @@ export function toMCPServerConfig(server: MCPCatalogServer): import("./types.js"
   } else if (server.authType === "apikey") {
     config.authType = "apikey";
   }
+  if (server.keyLabel) config.keyLabel = server.keyLabel;
+  if (server.keyPlaceholder) config.keyPlaceholder = server.keyPlaceholder;
+  if (server.keyHelpUrl) config.keyHelpUrl = server.keyHelpUrl;
   return config;
 }
