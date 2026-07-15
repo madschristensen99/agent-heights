@@ -105,6 +105,7 @@ export class ScreenShareManager {
 
   onSharerPeer(userId: string, name: string): void {
     if (userId === this.myUserId) return;
+    console.log(`[screen-share] sharer peer appeared: ${userId} (${name})`);
     if (this.peers.has(userId)) {
       const existing = this.peers.get(userId)!;
       existing.name = name;
@@ -153,6 +154,7 @@ export class ScreenShareManager {
       peer.pc.addTransceiver("audio", { direction: "recvonly" });
       const offer = await peer.pc.createOffer();
       await peer.pc.setLocalDescription(offer);
+      console.log(`[screen-share] sending offer to ${userId}`);
       this.sendFn({ type: "screen_share_offer", targetUserId: userId, sdp: offer.sdp! });
     } catch (err) {
       console.error(`[screen-share] failed to create offer for ${userId}:`, err);
@@ -163,6 +165,7 @@ export class ScreenShareManager {
 
   async onOffer(fromUserId: string, sdp: string): Promise<void> {
     if (!this._sharing || !this.screenStream) return;
+    console.log(`[screen-share] received offer from ${fromUserId}`);
     let peer = this.peers.get(fromUserId);
     if (!peer) {
       peer = this.createSharerPeer(fromUserId, "Unknown");

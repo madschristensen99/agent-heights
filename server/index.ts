@@ -1279,6 +1279,7 @@ wss.on("connection", async (ws, req) => {
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
           const myName = sess.player?.name ?? "Boss";
+          console.log(`[screen-share] ${sess.user.id} (${myName}) started sharing in room ${sess.roomId} (players: ${[...room.players.keys()].join(",")})`);
           for (const [pid] of room.players) {
             if (pid === sess.user.id) continue;
             const peerSess = tenants.get(pid);
@@ -1309,9 +1310,16 @@ wss.on("connection", async (ws, req) => {
           if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
-          if (!room.players.has(msg.targetUserId)) break;
+          if (!room.players.has(msg.targetUserId)) {
+            console.warn(`[screen-share] ${msg.type}: target ${msg.targetUserId} not in room ${sess.roomId} (players: ${[...room.players.keys()].join(",")})`);
+            break;
+          }
           const targetSess = tenants.get(msg.targetUserId);
-          if (!targetSess) break;
+          if (!targetSess) {
+            console.warn(`[screen-share] ${msg.type}: target session ${msg.targetUserId} not found`);
+            break;
+          }
+          console.log(`[screen-share] relaying ${msg.type} from ${sess.user.id} to ${msg.targetUserId}`);
           if (msg.type === "screen_share_offer") {
             targetSess.broadcast({ type: "screen_share_offer", fromUserId: sess.user.id, sdp: msg.sdp });
           } else if (msg.type === "screen_share_answer") {

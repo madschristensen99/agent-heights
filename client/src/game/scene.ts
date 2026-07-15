@@ -1736,243 +1736,175 @@ export class OfficeScene extends Phaser.Scene {
     this.world.audio.uiClick();
   }
 
-  /** Update proximity hints for all new interactables. */
-  private updateInteractHints(time: number): void {
+  /** Update proximity hints — show only the closest interactable. */
+  private updateAllHints(time: number): void {
+    interface Candidate {
+      hint: Phaser.GameObjects.Text;
+      dist: number;
+      label: string;
+      hx: number;
+      hy: number;
+    }
+    const candidates: Candidate[] = [];
+    const add = (
+      hint: Phaser.GameObjects.Text,
+      cx: number, cy: number, radius: number,
+      label: string, hx: number, hy: number,
+    ): void => {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, cx, cy);
+      if (dist < radius) candidates.push({ hint, dist, label, hx, hy });
+    };
+
+    // Board
+    if (!this.store.boardOpen) {
+      const px = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
+      add(this.boardHint, px.x, px.y, 160, "E: TASK BOARD", px.x, px.y + 64);
+    }
+
+    // Coffee
+    {
+      const px = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
+      add(this.coffeeHint, px.x, px.y, 144, time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE", px.x, px.y + 64);
+    }
+
     // Fridge
-    const fridgePx = { x: this.fridgeTile.x * TILE_PX + 32, y: this.fridgeTile.y * TILE_PX + 32 };
-    const fridgeDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, fridgePx.x, fridgePx.y);
-    if (fridgeDist < 144) {
-      this.fridgeHint
-        .setPosition(fridgePx.x, fridgePx.y + 64)
-        .setText(hintLabel(time < this.fridgeUntil ? "E: RESTOCKING..." : "E: SNACK"))
-        .setVisible(true);
-    } else {
-      this.fridgeHint.setVisible(false);
+    {
+      const px = { x: this.fridgeTile.x * TILE_PX + 32, y: this.fridgeTile.y * TILE_PX + 32 };
+      add(this.fridgeHint, px.x, px.y, 144, time < this.fridgeUntil ? "E: RESTOCKING..." : "E: SNACK", px.x, px.y + 64);
     }
 
     // Water Cooler
-    const coolerPx = { x: this.coolerTile.x * TILE_PX + 32, y: this.coolerTile.y * TILE_PX + 32 };
-    const coolerDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, coolerPx.x, coolerPx.y);
-    if (coolerDist < 144) {
-      this.coolerHint
-        .setPosition(coolerPx.x, coolerPx.y + 64)
-        .setText(hintLabel(time < this.coolerUntil ? "E: ..." : "E: GOSSIP"))
-        .setVisible(true);
-    } else {
-      this.coolerHint.setVisible(false);
+    {
+      const px = { x: this.coolerTile.x * TILE_PX + 32, y: this.coolerTile.y * TILE_PX + 32 };
+      add(this.coolerHint, px.x, px.y, 144, time < this.coolerUntil ? "E: ..." : "E: GOSSIP", px.x, px.y + 64);
     }
 
     // Clock
-    const clockPx = { x: this.clockTile.x * TILE_PX + 32, y: this.clockTile.y * TILE_PX + 32 };
-    const clockDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, clockPx.x, clockPx.y);
-    if (clockDist < 160) {
-      this.clockHint
-        .setPosition(clockPx.x, clockPx.y + 48)
-        .setText(hintLabel("E: CHECK TIME"))
-        .setVisible(true);
-    } else {
-      this.clockHint.setVisible(false);
+    {
+      const px = { x: this.clockTile.x * TILE_PX + 32, y: this.clockTile.y * TILE_PX + 32 };
+      add(this.clockHint, px.x, px.y, 160, "E: CHECK TIME", px.x, px.y + 48);
     }
 
     // Vending
     if (this.vendingTile) {
-      const vPx = { x: this.vendingTile.x * TILE_PX + 32, y: this.vendingTile.y * TILE_PX + 32 };
-      const vDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, vPx.x, vPx.y);
-      if (vDist < 144) {
-        this.vendingHint
-          .setPosition(vPx.x, vPx.y + 64)
-          .setText(hintLabel(time < this.vendingUntil ? "E: RESTOCKING..." : "E: BUY SNACK"))
-          .setVisible(true);
-      } else {
-        this.vendingHint.setVisible(false);
-      }
-    } else {
-      this.vendingHint.setVisible(false);
+      const px = { x: this.vendingTile.x * TILE_PX + 32, y: this.vendingTile.y * TILE_PX + 32 };
+      add(this.vendingHint, px.x, px.y, 144, time < this.vendingUntil ? "E: RESTOCKING..." : "E: BUY SNACK", px.x, px.y + 64);
     }
 
     // Sofa
     if (this.sofaTile) {
-      const sPx = { x: this.sofaTile.x * TILE_PX + 32, y: this.sofaTile.y * TILE_PX + 32 };
-      const sDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sPx.x, sPx.y);
-      if (sDist < 144) {
-        this.sofaHint
-          .setPosition(sPx.x, sPx.y + 64)
-          .setText(hintLabel(time < this.sofaUntil ? "E: ALREADY RESTED" : "E: POWER NAP"))
-          .setVisible(true);
-      } else {
-        this.sofaHint.setVisible(false);
-      }
-    } else {
-      this.sofaHint.setVisible(false);
+      const px = { x: this.sofaTile.x * TILE_PX + 32, y: this.sofaTile.y * TILE_PX + 32 };
+      add(this.sofaHint, px.x, px.y, 144, time < this.sofaUntil ? "E: ALREADY RESTED" : "E: POWER NAP", px.x, px.y + 64);
     }
 
     // Filing — check nearest
-    const filingNear = this.nearestTile(this.filingTiles, 144);
-    if (filingNear) {
-      const fPx = { x: filingNear.x * TILE_PX + 32, y: filingNear.y * TILE_PX + 32 };
-      this.filingHint
-        .setPosition(fPx.x, fPx.y + 64)
-        .setText(hintLabel(time < this.filingUntil ? "E: BROWSING..." : "E: BROWSE FILES"))
-        .setVisible(true);
-    } else {
-      this.filingHint.setVisible(false);
+    {
+      const near = this.nearestTile(this.filingTiles, 144);
+      if (near) {
+        const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
+        add(this.filingHint, px.x, px.y, 144, time < this.filingUntil ? "E: BROWSING..." : "E: BROWSE FILES", px.x, px.y + 64);
+      }
     }
 
-    // Wardrobe proximity hint
-    const wdHintPx = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wdHintPx.x, wdHintPx.y) < 144) {
-      this.wardrobeHint.setPosition(wdHintPx.x, wdHintPx.y + 64).setText(hintLabel("E: WARDROBE")).setVisible(true);
-    } else {
-      this.wardrobeHint.setVisible(false);
+    // Wardrobe
+    {
+      const px = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
+      add(this.wardrobeHint, px.x, px.y, 144, "E: WARDROBE", px.x, px.y + 64);
     }
 
-    // ── Expedition Workshop (before plants — war table overlaps plant at 26,16) ──
-    const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
-    const wtDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y);
-    if (wtDist < 144) {
-      this.warTableHint.setPosition(wtPx.x, wtPx.y + 64).setText(hintLabel("E: WAR TABLE")).setVisible(true);
-    } else {
-      this.warTableHint.setVisible(false);
+    // War Table
+    {
+      const px = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+      add(this.warTableHint, px.x, px.y, 144, "E: WAR TABLE", px.x, px.y + 64);
     }
 
-    const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
-    const sbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y);
-    if (sbDist < 144) {
-      this.scrapBinHint.setPosition(sbPx.x, sbPx.y + 64).setText(hintLabel("E: SCRAP BIN")).setVisible(true);
-    } else {
-      this.scrapBinHint.setVisible(false);
+    // Scrap Bin
+    {
+      const px = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+      add(this.scrapBinHint, px.x, px.y, 144, "E: SCRAP BIN", px.x, px.y + 64);
     }
 
-    const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
-    const rdDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y);
-    if (rdDist < 144) {
-      this.radioHint.setPosition(rdPx.x, rdPx.y + 64).setText(hintLabel("E: RADIO")).setVisible(true);
-    } else {
-      this.radioHint.setVisible(false);
+    // Radio
+    {
+      const px = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+      add(this.radioHint, px.x, px.y, 144, "E: RADIO", px.x, px.y + 64);
     }
 
-    const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
-    const wbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y);
-    if (wbDist < 144) {
-      this.workbenchHint.setPosition(wbPx.x, wbPx.y + 64).setText(hintLabel("E: WORKBENCH")).setVisible(true);
-    } else {
-      this.workbenchHint.setVisible(false);
+    // Workbench
+    {
+      const px = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+      add(this.workbenchHint, px.x, px.y, 144, "E: WORKBENCH", px.x, px.y + 64);
     }
 
-    const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
-    const rsDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y);
-    if (rsDist < 144) {
-      this.researchHint.setPosition(rsPx.x, rsPx.y + 64).setText(hintLabel("E: RESEARCH")).setVisible(true);
-    } else {
-      this.researchHint.setVisible(false);
+    // Research
+    {
+      const px = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+      add(this.researchHint, px.x, px.y, 144, "E: RESEARCH", px.x, px.y + 64);
     }
 
     // Plants — check nearest
-    const plantNear = this.nearestTile(this.plantTiles, 144);
-    if (plantNear) {
-      const pPx = { x: plantNear.x * TILE_PX + 32, y: plantNear.y * TILE_PX + 32 };
-      this.plantHint
-        .setPosition(pPx.x, pPx.y + 64)
-        .setText(hintLabel(time < this.plantUntil ? "E: BOOSTED!" : time < this.plantCooldownUntil ? "E: STILL MOIST" : "E: WATER PLANTS"))
-        .setVisible(true);
-    } else {
-      this.plantHint.setVisible(false);
+    {
+      const near = this.nearestTile(this.plantTiles, 144);
+      if (near) {
+        const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
+        const label = time < this.plantUntil ? "E: BOOSTED!" : time < this.plantCooldownUntil ? "E: STILL MOIST" : "E: WATER PLANTS";
+        add(this.plantHint, px.x, px.y, 144, label, px.x, px.y + 64);
+      }
     }
 
     // Mailbox
-    const mbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.mailboxPx.x, this.mailboxPx.y);
-    if (mbDist < 120) {
-      this.mailboxHint
-        .setPosition(this.mailboxPx.x, this.mailboxPx.y + 64)
-        .setText(hintLabel(this.mailboxHasMail ? "E: CHECK MAIL" : "E: EMPTY"))
-        .setVisible(true);
-    } else {
-      this.mailboxHint.setVisible(false);
-    }
+    add(this.mailboxHint, this.mailboxPx.x, this.mailboxPx.y, 120, this.mailboxHasMail ? "E: CHECK MAIL" : "E: EMPTY", this.mailboxPx.x, this.mailboxPx.y + 64);
 
     // Platform mailboxes (mail room)
-    let nearestPm: PlatformMailbox | null = null;
-    let nearestPmDist = Infinity;
-    for (const pm of this.platformMailboxes) {
-      const pmPx = { x: pm.tile.x * TILE_PX + TILE_PX / 2, y: pm.tile.y * TILE_PX + TILE_PX / 2 };
-      const pmDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, pmPx.x, pmPx.y);
-      if (pmDist < 100 && pmDist < nearestPmDist) {
-        nearestPm = pm;
-        nearestPmDist = pmDist;
+    {
+      let nearestPm: PlatformMailbox | null = null;
+      let nearestPmDist = Infinity;
+      for (const pm of this.platformMailboxes) {
+        const pmPx = { x: pm.tile.x * TILE_PX + TILE_PX / 2, y: pm.tile.y * TILE_PX + TILE_PX / 2 };
+        const pmDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, pmPx.x, pmPx.y);
+        if (pmDist < 100 && pmDist < nearestPmDist) {
+          nearestPm = pm;
+          nearestPmDist = pmDist;
+        }
       }
-    }
-    if (nearestPm) {
-      const pmPx = { x: nearestPm.tile.x * TILE_PX + TILE_PX / 2, y: nearestPm.tile.y * TILE_PX + TILE_PX / 2 };
-      this.platformMailboxHint
-        .setPosition(pmPx.x, pmPx.y + 64)
-        .setText(hintLabel(nearestPm.flagUp ? `E: CHECK ${nearestPm.platform.toUpperCase()}` : "E: EMPTY"))
-        .setVisible(true);
-    } else {
-      this.platformMailboxHint.setVisible(false);
+      if (nearestPm) {
+        const pmPx = { x: nearestPm.tile.x * TILE_PX + TILE_PX / 2, y: nearestPm.tile.y * TILE_PX + TILE_PX / 2 };
+        const label = nearestPm.flagUp ? `E: CHECK ${nearestPm.platform.toUpperCase()}` : "E: EMPTY";
+        add(this.platformMailboxHint, pmPx.x, pmPx.y, 100, label, pmPx.x, pmPx.y + 64);
+      }
     }
 
     // Red Button
-    const rbPx = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
-    const rbDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, rbPx.x, rbPx.y);
-    if (rbDist < 160) {
-      this.redButtonHint
-        .setPosition(rbPx.x, rbPx.y + 64)
-        .setText(hintLabel(time < this.redButtonUntil ? "E: COOLING" : "E: STOP!"))
-        .setVisible(true);
-    } else {
-      this.redButtonHint.setVisible(false);
+    {
+      const px = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
+      add(this.redButtonHint, px.x, px.y, 160, time < this.redButtonUntil ? "E: COOLING" : "E: STOP!", px.x, px.y + 64);
     }
 
-    // Projector control panel
-    const ctrlHintPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
-    const ctrlDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, ctrlHintPx.x, ctrlHintPx.y);
-    if (ctrlDist < 160) {
+    // Projector control panel + screen (share channel label computation)
+    {
       const ch = this.store.projectorChannel;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
       const curIdx = channels.findIndex(c => c.id === ch);
       const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1;
       const nextLabel = nextIdx === -1 ? "OFF" : channels[nextIdx].label;
-      this.projectorControlHint
-        .setPosition(ctrlHintPx.x, ctrlHintPx.y + 48)
-        .setText(hintLabel(ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`))
-        .setVisible(true);
-    } else {
-      this.projectorControlHint.setVisible(false);
+      const chLabel = ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`;
+
+      const ctrlPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
+      add(this.projectorControlHint, ctrlPx.x, ctrlPx.y, 160, chLabel, ctrlPx.x, ctrlPx.y + 48);
+
+      const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
+      add(this.projectorHint, projPx.x, projPx.y, 200, chLabel, projPx.x, projPx.y + 64);
     }
 
     // Projector speaker (mute/unmute)
-    const spkHintPx = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
-    const spkDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, spkHintPx.x, spkHintPx.y);
-    if (spkDist < 160) {
-      this.projectorSpeakerHint
-        .setPosition(spkHintPx.x, spkHintPx.y + 48)
-        .setText(hintLabel(this.projectorMuted ? "E: UNMUTE" : "E: MUTE"))
-        .setVisible(true);
-    } else {
-      this.projectorSpeakerHint.setVisible(false);
-    }
-
-    // Projector screen
-    const projHintPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
-    const projDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, projHintPx.x, projHintPx.y);
-    if (projDist < 200) {
-      const ch = this.store.projectorChannel;
-      const channels = OfficeScene.PROJECTOR_CHANNELS;
-      const curIdx = channels.findIndex(c => c.id === ch);
-      const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1;
-      const nextLabel = nextIdx === -1 ? "OFF" : channels[nextIdx].label;
-      this.projectorHint
-        .setPosition(projHintPx.x, projHintPx.y + 64)
-        .setText(hintLabel(ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`))
-        .setVisible(true);
-    } else {
-      this.projectorHint.setVisible(false);
+    {
+      const px = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
+      add(this.projectorSpeakerHint, px.x, px.y, 160, this.projectorMuted ? "E: UNMUTE" : "E: MUTE", px.x, px.y + 48);
     }
 
     // Phone booth
-    const boothHintPx = { x: this.phoneBoothTile.x * TILE_PX + 32, y: this.phoneBoothTile.y * TILE_PX + 32 };
-    const boothDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boothHintPx.x, boothHintPx.y);
-    if (boothDist < 120) {
+    {
+      const px = { x: this.phoneBoothTile.x * TILE_PX + 32, y: this.phoneBoothTile.y * TILE_PX + 32 };
       let label: string;
       if (this.webcam?.broadcasting) {
         label = "E: STOP BROADCAST";
@@ -1981,25 +1913,45 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         label = "E: START WEBCAM";
       }
-      this.phoneBoothHint
-        .setPosition(boothHintPx.x, boothHintPx.y + 56)
-        .setText(hintLabel(label))
-        .setVisible(true);
-    } else {
-      this.phoneBoothHint.setVisible(false);
+      add(this.phoneBoothHint, px.x, px.y, 120, label, px.x, px.y + 56);
     }
 
     // Screen share station
-    const ssHintPx = { x: this.screenShareTile.x * TILE_PX + 32, y: this.screenShareTile.y * TILE_PX + 32 };
-    const ssDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, ssHintPx.x, ssHintPx.y);
-    if (ssDist < 120) {
+    {
+      const px = { x: this.screenShareTile.x * TILE_PX + 32, y: this.screenShareTile.y * TILE_PX + 32 };
       const label = this.screenShare?.sharing ? "E: STOP SHARE" : "E: SHARE SCREEN";
-      this.screenShareHint
-        .setPosition(ssHintPx.x, ssHintPx.y + 48)
-        .setText(hintLabel(label))
-        .setVisible(true);
-    } else {
-      this.screenShareHint.setVisible(false);
+      add(this.screenShareHint, px.x, px.y, 120, label, px.x, px.y + 48);
+    }
+
+    // Trophy case
+    if (!this.store.achievementsOpen) {
+      const px = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 68 };
+      add(this.trophyHint, px.x, px.y, 120, "E: TROPHY CASE", px.x, px.y + 64);
+    }
+
+    // Hall of fame bulletin board
+    if (!this.store.hallOfFameOpen) {
+      const px = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      add(this.hallOfFameHint, px.x, px.y, 120, "E: HALL OF FAME", px.x + 48, px.y);
+    }
+
+    // Server rack
+    if (!this.store.railwayPanelOpen) {
+      const near = this.nearestTile(this.serverRackTiles, 150);
+      if (near) {
+        const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
+        add(this.serverRackHint, px.x, px.y, 150, "E: CHECK SERVERS", px.x, near.y * TILE_PX - 8);
+      }
+    }
+
+    // Hide all, then show only the closest
+    for (const h of this.allHints) h.setVisible(false);
+    let best: Candidate | null = null;
+    for (const c of candidates) {
+      if (!best || c.dist < best.dist) best = c;
+    }
+    if (best) {
+      best.hint.setPosition(best.hx, best.hy).setText(hintLabel(best.label)).setVisible(true);
     }
   }
 
@@ -3974,51 +3926,11 @@ export class OfficeScene extends Phaser.Scene {
       this.store.toast("You were knocked out and dragged back to the office!");
     }
 
-    // office proximity hints — skip distance checks when outside
+    // office proximity hints — unified: show only the closest interactable
     if (!outside) {
-      // board proximity hint
-      const boardPx = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
-      const boardDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boardPx.x, boardPx.y);
-      if (boardDist < 160 && !this.store.boardOpen) {
-        this.boardHint
-          .setPosition(boardPx.x, boardPx.y + 64)
-          .setText(hintLabel("E: TASK BOARD"))
-          .setVisible(true);
-      } else {
-        this.boardHint.setVisible(false);
-      }
-
-      // coffee machine proximity hint
-      const coffeePx = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
-      const coffeeDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, coffeePx.x, coffeePx.y);
-      if (coffeeDist < 144) {
-        this.coffeeHint
-          .setPosition(coffeePx.x, coffeePx.y + 64)
-          .setText(hintLabel(time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE"))
-          .setVisible(true);
-      } else {
-        this.coffeeHint.setVisible(false);
-      }
-
-      // new interactable proximity hints
-      this.updateInteractHints(time);
+      this.updateAllHints(time);
     } else {
-      this.boardHint.setVisible(false);
-      this.coffeeHint.setVisible(false);
-      this.fridgeHint.setVisible(false);
-      this.coolerHint.setVisible(false);
-      this.clockHint.setVisible(false);
-      this.vendingHint.setVisible(false);
-      this.sofaHint.setVisible(false);
-      this.filingHint.setVisible(false);
-      this.plantHint.setVisible(false);
-      this.mailboxHint.setVisible(false);
-      this.platformMailboxHint.setVisible(false);
-      this.redButtonHint.setVisible(false);
-      this.wardrobeHint.setVisible(false);
-      this.projectorHint.setVisible(false);
-      this.projectorControlHint.setVisible(false);
-      this.projectorSpeakerHint.setVisible(false);
+      for (const h of this.allHints) h.setVisible(false);
     }
 
     // mailbox: new mail arrives on timer
@@ -4059,46 +3971,7 @@ export class OfficeScene extends Phaser.Scene {
       this.trophyAchCount = achCount;
       this.updateTrophyCase();
     }
-    // trophy case & hall of fame proximity hints — skip when outside
-    if (!outside) {
-      const trophyPx2 = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 68 };
-      const trophyDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, trophyPx2.x, trophyPx2.y);
-      if (trophyDist2 < 120 && !this.store.achievementsOpen) {
-        this.trophyHint
-          .setPosition(trophyPx2.x, trophyPx2.y + 64)
-          .setText(hintLabel("E: TROPHY CASE"))
-          .setVisible(true);
-      } else {
-        this.trophyHint.setVisible(false);
-      }
-
-      // hall of fame bulletin board — proximity hint (player approaches from the right)
-      const hofPx2 = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
-      const hofDist2 = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx2.x, hofPx2.y);
-      if (hofDist2 < 120 && !this.store.hallOfFameOpen) {
-        this.hallOfFameHint
-          .setPosition(hofPx2.x + 48, hofPx2.y)
-          .setText(hintLabel("E: HALL OF FAME"))
-          .setVisible(true);
-      } else {
-        this.hallOfFameHint.setVisible(false);
-      }
-
-      // server rack proximity hint
-      const rackNear = this.nearestTile(this.serverRackTiles, 150);
-      if (rackNear && !this.store.railwayPanelOpen) {
-        this.serverRackHint
-          .setPosition(rackNear.x * TILE_PX + 32, rackNear.y * TILE_PX - 8)
-          .setText(hintLabel("E: CHECK SERVERS"))
-          .setVisible(true);
-      } else {
-        this.serverRackHint.setVisible(false);
-      }
-    } else {
-      this.trophyHint.setVisible(false);
-      this.hallOfFameHint.setVisible(false);
-      this.serverRackHint.setVisible(false);
-    }
+    // trophy case & hall of fame proximity hints — handled by updateAllHints above
 
     // ── Multiplayer: send boss position to server (10Hz) ────────────────
     const now = time;
