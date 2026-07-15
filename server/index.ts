@@ -1357,14 +1357,13 @@ wss.on("connection", async (ws, req) => {
           if (!ownerSess) break;
           const agent = [...ownerSess.manager["agents"].values()].find(a => a.info.id === msg.agentId);
           if (!agent) break;
-          const ok = screenshots.startCapture(
+          screenshots.startCapture(
             msg.agentId,
             agent.info.mcpServers,
             { id: sess.user.id, broadcast: sess.broadcast },
           );
-          if (!ok) {
-            sess.broadcast({ type: "toast", text: "This agent doesn't have a browser MCP (Playwright/Chrome DevTools) configured." });
-          }
+          // If no browser MCP is available, the client dashboard stays visible.
+          // No toast needed — the dashboard is always useful.
           break;
         }
         case "agent_view_stop": {

@@ -132,6 +132,9 @@ export class VoiceManager {
     // Add local mic track
     if (this.micTrack && this.micStream) {
       pc.addTrack(this.micTrack, this.micStream);
+      console.log("[voice] added local mic track to peer", userId, "enabled=", this.micTrack.enabled, "readyState=", this.micTrack.readyState);
+    } else {
+      console.warn("[voice] no mic track to add for peer", userId, "micTrack=", !!this.micTrack, "micStream=", !!this.micStream);
     }
 
     // Handle incoming remote track
@@ -142,6 +145,9 @@ export class VoiceManager {
         console.warn("[voice] no remote stream in ontrack");
         return;
       }
+      // Log track details for debugging
+      const tracks = remoteStream.getAudioTracks();
+      console.log("[voice] remote audio tracks:", tracks.length, tracks.map(t => `kind=${t.kind} enabled=${t.enabled} readyState=${t.readyState} muted=${t.muted}`));
       // Ensure audioContext is running (may have been suspended by browser)
       if (this.audioContext && this.audioContext.state === "suspended") {
         void this.audioContext.resume();
@@ -149,6 +155,14 @@ export class VoiceManager {
       const source = this.audioContext!.createMediaStreamSource(remoteStream);
       source.connect(gainNode);
       console.log("[voice] remote stream connected to gain node for", userId);
+      // Also create a hidden audio element as fallback — some browsers need this
+      // to actually decode/play the remote WebRTC audio stream.
+      const audioEl = document.createElement("audio");
+      audioEl.autoplay = true;
+      audioEl.srcObject = remoteStream;
+      audioEl.style.display = "none";
+      document.body.appendChild(audioEl);
+      console.log("[voice] created fallback audio element for", userId);
     };
 
     // ICE candidates → relay to peer via server (send full candidate init)

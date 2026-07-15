@@ -140,6 +140,22 @@ export async function makeTools(cwd: string, opts?: {
 
   // Override bash executor with bubblewrap sandboxing
   const allowNetwork = !!(opts?.railway) || !!(opts?.mcpServers && opts.mcpServers.length > 0);
+
+  // Build env with MCP auth tokens so agents can use them in bash (e.g. git clone)
+  const sandboxEnv = { ...process.env };
+  if (opts?.mcpServers) {
+    for (const s of opts.mcpServers) {
+      if (s.authToken) {
+        const label = (s.name ?? "").toLowerCase();
+        const url = (s.url ?? "").toLowerCase();
+        if (label.includes("github") || url.includes("github")) {
+          sandboxEnv.GITHUB_TOKEN = s.authToken;
+          sandboxEnv.GH_TOKEN = s.authToken;
+        }
+      }
+    }
+  }
+
   const useBwrap = await checkBwrap();
   const originalBash = executors.bash;
   (executors as any).bash = async (input: any, ctxCwd: string, context: any) => {
@@ -153,6 +169,7 @@ export async function makeTools(cwd: string, opts?: {
           cwd,
           maxBuffer: 10 * 1024 * 1024,
           signal: abortSignal,
+          env: sandboxEnv,
         });
         return stderr ? `${stdout}\n[stderr]\n${stderr}` : stdout;
       } catch (err: any) {
@@ -161,7 +178,7 @@ export async function makeTools(cwd: string, opts?: {
       }
     }
     // Fallback: use the original executor when bwrap is not available
-    return originalBash?.(input, ctxCwd, context) ?? "[No bash executor available]";
+    return originalBash?.(input, ctxCwd, { ...context, env: sandboxEnv }) ?? "[No bash executor available]";
   };
 
   const builtinTools = createDefaultTools({
