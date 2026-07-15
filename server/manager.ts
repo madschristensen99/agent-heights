@@ -688,6 +688,7 @@ export class AgentManager {
     clearAllMemory(agentId);
     void this.save.clearMessages(agentId);
     void this.save.clearMessages(`${agentId}:chat`);
+    void this.save.clearLogs(agentId);
     this.session.record("clear", { agentId: rt.info.id, agentName: rt.info.name });
     this.persist();
     this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
@@ -712,6 +713,7 @@ export class AgentManager {
       clearAllMemory(rt.info.id);
       void this.save.clearMessages(rt.info.id);
       void this.save.clearMessages(`${rt.info.id}:chat`);
+      void this.save.clearLogs(rt.info.id);
       this.broadcast({ type: "chat_cleared", agentId: rt.info.id });
       this.log(rt, "status", `Fresh start — chat cleared and memory wiped.`);
     }
@@ -1401,9 +1403,10 @@ export class AgentManager {
         }
       }
 
-      // a stale conversation id shouldn't brick the agent forever
-      if (sawError && !gotEvents && hadSession && /session|resume|conversation|thread/i.test(firstErrorText)) {
+      // a stale or corrupted conversation shouldn't brick the agent forever
+      if (sawError && !gotEvents && hadSession && /session|resume|conversation|thread|tool_call_id|invalid.*request/i.test(firstErrorText)) {
         rt.info.sessionId = null;
+        clearAllMemory(rt.info.id);
         this.persist();
         this.log(rt, "status", "Couldn't resume memory — starting a fresh conversation next task.");
       }

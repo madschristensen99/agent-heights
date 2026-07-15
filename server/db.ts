@@ -123,4 +123,9 @@ export class DbPersistence {
       this.schedule();
     }
   }
+
+  async clearLogs(agentId: string): Promise<void> {
+    if (this.state.logs) this.state.logs[agentId] = [];
+    this.schedule();
+  }
 }

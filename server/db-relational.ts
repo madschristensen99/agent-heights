@@ -641,4 +641,17 @@ export class RelationalPersistence {
       console.error(`[db-rel] clearMessages for ${agentId} failed:`, err);
     }
   }
+
+  async clearLogs(agentId: string): Promise<void> {
+    if (!isSupabaseConfigured || !this.roomId) return;
+    if (this.state.logs) this.state.logs[agentId] = [];
+    try {
+      await supabaseAdmin
+        .from("agent_hq_agent_logs")
+        .delete()
+        .eq("agent_id", agentId);
+    } catch (err) {
+      console.error(`[db-rel] clearLogs for ${agentId} failed:`, err);
+    }
+  }
 }
