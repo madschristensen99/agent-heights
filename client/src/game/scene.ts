@@ -4325,9 +4325,11 @@ export class OfficeScene extends Phaser.Scene {
           .setBlendMode(Phaser.BlendModes.ADD);
         this.monitorMatrixOverlays.set(deskIdx, overlay);
       }
-      // Position the overlay on the monitor screen area (slightly above center)
-      overlay.setPosition(monitor.x, monitor.y - 4);
-      overlay.setDisplaySize(TILE_PX * 0.65, TILE_PX * 0.38);
+      // Position the overlay on the monitor screen area.
+      // Screen in the texture is at y: 0.11–0.51 (center 0.31), x: 0.15–0.85 (center 0.5)
+      // Monitor sprite origin is 0.5,0.5 so screen center is at offset (0, -0.19 * TILE_PX)
+      overlay.setPosition(monitor.x, monitor.y - TILE_PX * 0.19);
+      overlay.setDisplaySize(TILE_PX * 0.66, TILE_PX * 0.36);
       overlay.setVisible(true);
     }
 
