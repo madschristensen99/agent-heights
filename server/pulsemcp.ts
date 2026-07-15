@@ -1,18 +1,9 @@
 /**
- * PulseMCP search helper — connects to the PulseMCP MCP server (stdio)
- * and exposes search functionality for Yuki's context injection.
+ * PulseMCP search helper — calls the PulseMCP REST API directly
+ * to search 22,000+ MCP servers from pulsemcp.com.
  *
- * The PulseMCP server indexes 22,000+ MCP servers from pulsemcp.com.
- * Tools: list_servers (with query filtering), list_integrations.
+ * API: https://api.pulsemcp.com/v0beta/servers
  */
-import { callMCPTool, type MCPServerConfig } from "./providers/mcp-client.js";
-
-const PULSEMCP_CONFIG: MCPServerConfig = {
-  name: "pulsemcp",
-  command: "npx",
-  args: ["-y", "pulsemcp-server"],
-};
-
 interface PulseMCPServer {
   name: string;
   url?: string;
@@ -32,7 +23,7 @@ interface PulseMCPListResponse {
   next: string | null;
 }
 
-/** Hard timeout for PulseMCP search — must be well under Yuki's 30s chat timeout. */
+const PULSEMCP_API_BASE = "https://api.pulsemcp.com/v0beta";
 const PULSEMCP_SEARCH_TIMEOUT_MS = 8_000;
 
 /**
@@ -48,41 +39,38 @@ export async function searchPulseMCP(query: string, limit = 10): Promise<string 
   const timeout = setTimeout(() => controller.abort(), PULSEMCP_SEARCH_TIMEOUT_MS);
 
   try {
-    const raw = await Promise.race([
-      callMCPTool(PULSEMCP_CONFIG, "list_servers", {
-        query: trimmed,
-        count_per_page: limit,
-        offset: 0,
-      }),
-      new Promise<never>((_, reject) => {
-        controller.signal.addEventListener("abort", () =>
-          reject(new Error(`PulseMCP search timed out after ${PULSEMCP_SEARCH_TIMEOUT_MS}ms`)),
-        );
-      }),
-    ]);
+    const url = new URL(`${PULSEMCP_API_BASE}/servers`);
+    url.searchParams.set("query", trimmed);
+    url.searchParams.set("count_per_page", String(limit));
+    url.searchParams.set("offset", "0");
 
-    if (!raw) return null;
+    const res = await fetch(url.toString(), {
+      signal: controller.signal,
+      headers: { "Accept": "application/json" },
+    });
 
-    let parsed: PulseMCPListResponse;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      // The MCP tool might return text that's not pure JSON — try to extract
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return null;
-      parsed = JSON.parse(jsonMatch[0]);
+    if (!res.ok) {
+      console.warn(`[pulsemcp] API returned ${res.status} for "${trimmed}"`);
+      return null;
     }
 
-    if (!parsed.servers || parsed.servers.length === 0) return null;
+    const parsed: PulseMCPListResponse = await res.json();
+
+    if (!parsed.servers || parsed.servers.length === 0) {
+      console.log(`[pulsemcp] no results for "${trimmed}"`);
+      return null;
+    }
 
     const lines = parsed.servers.map((s) => {
       const stars = s.github_stars ? ` (${s.github_stars}★)` : "";
       const integrations = s.integrations?.length
         ? ` — integrations: ${s.integrations.map((i) => i.name).join(", ")}`
         : "";
-      return `- ${s.name}${stars}: ${s.short_description ?? "No description"}${integrations}`;
+      const source = s.source_code_url ? ` (source: ${s.source_code_url})` : "";
+      return `- ${s.name}${stars}: ${s.short_description ?? "No description"}${integrations}${source}`;
     });
 
+    console.log(`[pulsemcp] search "${trimmed}" → ${parsed.servers.length} results (of ${parsed.total_count})`);
     return `### PulseMCP Community Search Results (${parsed.total_count} total matches for "${trimmed}")\n${lines.join("\n")}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -137,7 +125,7 @@ export function shouldSearchPulseMCP(message: string): boolean {
     "brave", "tavily", "exa", "firecrawl",
     "hubspot", "apollo", "ahrefs", "semrush",
   ];
-  const queryWords = ["tool", "server", "mcp", "integration", "plugin", "connect", "automate"];
+  const queryWords = ["tool", "server", "mcp", "mcps", "integration", "plugin", "connect", "automate"];
   return domainWords.some((d) => lower.includes(d)) && queryWords.some((q) => lower.includes(q));
 }
 
@@ -149,7 +137,7 @@ export function extractSearchQuery(message: string): string {
   const stopWords = new Set([
     "the", "a", "an", "is", "are", "can", "i", "you", "me", "my",
     "do", "have", "has", "find", "search", "tool", "agent", "hire",
-    "mcp", "server", "help", "need", "want", "looking", "for", "with",
+    "mcp", "mcps", "server", "help", "need", "want", "looking", "for", "with",
     "about", "how", "what", "which", "any", "some", "please", "recommend",
     "connect", "integrate", "integration", "service", "plugin", "extension",
     "to", "and", "or", "if", "there", "available", "use", "using",

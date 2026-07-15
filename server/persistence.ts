@@ -31,6 +31,7 @@ export interface Persistence {
   saveMessages(agentId: string, messages: unknown[]): Promise<void>;
   loadMessages(agentId: string): Promise<unknown[]>;
   clearMessages(agentId: string): Promise<void>;
+  clearLogs(agentId: string): Promise<void>;
 }
 
 /**
@@ -147,6 +148,11 @@ export class SaveFile implements Persistence {
 
   async clearMessages(agentId: string): Promise<void> {
     this.messages.delete(agentId);
+    this.schedule();
+  }
+
+  async clearLogs(agentId: string): Promise<void> {
+    if (this.state.logs) this.state.logs[agentId] = [];
     this.schedule();
   }
 
