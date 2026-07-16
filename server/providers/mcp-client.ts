@@ -396,6 +396,7 @@ function clientKey(config: MCPServerConfig): string {
  */
 export async function loadMCPTools(servers: MCPServerConfig[]): Promise<AgentTool<any, any>[]> {
   const allTools: AgentTool<any, any>[] = [];
+  const MIN_CALL_INTERVAL_MS = 500; // throttle to avoid API rate limits
 
   for (const config of servers) {
     const key = clientKey(config);
@@ -404,6 +405,9 @@ export async function loadMCPTools(servers: MCPServerConfig[]): Promise<AgentToo
       client = createClient(config);
       clientCache.set(key, client);
     }
+
+    // Per-server rate limiter: ensures at least MIN_CALL_INTERVAL_MS between calls
+    let lastCallTime = 0;
 
     try {
       const toolDefs = await client.listTools();
@@ -419,6 +423,13 @@ export async function loadMCPTools(servers: MCPServerConfig[]): Promise<AgentToo
           inputSchema: def.inputSchema ?? { type: "object", properties: {} },
           async execute(input: any) {
             try {
+              // Throttle: wait if we're calling too fast
+              const now = Date.now();
+              const elapsed = now - lastCallTime;
+              if (elapsed < MIN_CALL_INTERVAL_MS) {
+                await new Promise((r) => setTimeout(r, MIN_CALL_INTERVAL_MS - elapsed));
+              }
+              lastCallTime = Date.now();
               const result = await client!.callTool(def.name, input ?? {});
               return result || `(tool ${def.name} returned no output)`;
             } catch (err) {

@@ -1288,7 +1288,22 @@ export class AgentManager {
       rosterLine,
       boardLine,
       `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
-      `TOOL EFFICIENCY: Each tool call costs one iteration and you have a limited budget. Be efficient — batch related operations into single calls where possible, and never repeat the same tool call expecting different results. When working with external repos (GitHub, etc.): (1) If you have network access via bash, prefer 'git clone' to get a local copy, edit files locally, then 'git push' — this is far cheaper than individual API calls for multi-file changes. For private repos, your GitHub token is available as the GITHUB_TOKEN env var — use it like: git clone https://$GITHUB_TOKEN@github.com/owner/repo.git (2) If you only have API/MCP tools, read each file once, make your edits locally with write_files or editor, then push the final version with a single create_or_update_file call. Do NOT reconstruct files from diffs, manually compute git blob SHAs, or parse patch text — the tools handle that for you. (3) After making changes, do a single verification pass (read the file back once), then submit. Do not loop on verification — trust the API response and move on.`,
+      `=== API & TOOL BUDGET RULES (READ CAREFULLY) ===`,
+      `You have a LIMITED number of tool calls per task. Wasting them on redundant API calls will cause your task to FAIL.`,
+      ``,
+      `When working with GitHub or any external repository:`,
+      `  1. FIRST: Use bash to run: git clone https://$GITHUB_TOKEN@github.com/owner/repo.git — This gets the ENTIRE repo locally in ONE call.`,
+      `  2. THEN: Use read_files, write_files, bash (grep, sed, cat) to explore and edit files LOCALLY. These do NOT count against any API rate limit.`,
+      `  3. FINALLY: Push your changes with a single git push, or at most one create_or_update_file API call.`,
+      ``,
+      `NEVER do these — they waste your budget and hit rate limits:`,
+      `  - NEVER call search_code or get_file_contents repeatedly. Clone the repo and use bash (grep, find) instead.`,
+      `  - NEVER use fetch_web_content to read files from a repo you already cloned. Read them from disk.`,
+      `  - NEVER call list_issues more than once. Get the issues list once, pick one, and move on.`,
+      `  - NEVER re-read the same file via API after you already have it locally.`,
+      ``,
+      `General efficiency: batch related operations into single calls, never repeat the same tool call expecting different results. After making changes, do a single verification pass (read the file back once), then submit. Do not loop on verification.`,
+      `=== END API & TOOL BUDGET RULES ===`,
       `IMPORTANT: You must actually DO the work first using your tools (write_files, bash, read_files, etc.) before calling submit_and_exit. Do not just talk about doing the work — use the tools to create files, run commands, etc. After doing the work, read back any files you created to verify they exist and contain what you intended. Only then call submit_and_exit with verified=true and a summary of what you did. Calling submit_and_exit without having done the work is a failure. Do not just reply with text — always use submit_and_exit to complete the task.`,
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
     ].join(" ");
@@ -1369,7 +1384,11 @@ export class AgentManager {
       }
     } catch { /* ignore inbox errors */ }
 
-    const prompt = promptPrefix + (isManager ? this.managerBrief(task, rt) : task);
+    // Managers get the planning brief instead of the raw task — UNLESS this is
+    // a review/assessment task (from notifyManagersOfCompletion or onPostMessage),
+    // which the manager should process directly rather than delegate.
+    const isReviewTask = isManager && /\b(failed|completed) their task\b.*\bReview\b/i.test(task);
+    const prompt = promptPrefix + (isManager && !isReviewTask ? this.managerBrief(task, rt) : task);
 
     let sawError = false;
     let gotEvents = false;
@@ -1451,7 +1470,7 @@ export class AgentManager {
       }
 
       if (!sawError && !abort.signal.aborted) {
-        if (isManager) this.delegate(rt, task, finalText);
+        if (isManager && !isReviewTask) this.delegate(rt, task, finalText);
         this.completeHandoff(rt, task, finalText);
         this.notifyManagersOfCompletion(rt, task, finalText, false);
         this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
