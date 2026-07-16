@@ -149,7 +149,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 function deriveAuthServerMetadataUrl(mcpServerUrl: string): string {
   // Per MCP spec: /.well-known/oauth-authorization-server relative to the server URL
   const url = new URL(mcpServerUrl);
-  const path = url.pathname;
+  const path = url.pathname === '/' ? '' : url.pathname;
   return `${url.origin}/.well-known/oauth-authorization-server${path}`;
 }
 
@@ -197,11 +197,18 @@ export async function startOAuthFlow(
     console.log(`[mcp-oauth] Using cached registration for ${serverUrl}`);
   } else {
     // Unknown server — fetch metadata + register dynamically
-    const protectedMetadataUrl = `${new URL(serverUrl).origin}/.well-known/oauth-protected-resource${new URL(serverUrl).pathname}`;
+    const origin = new URL(serverUrl).origin;
+    const path = new URL(serverUrl).pathname === '/' ? '' : new URL(serverUrl).pathname;
     let authServerUrl: string;
 
     try {
-      const protectedMetadata = await fetchJson<ProtectedResourceMetadata>(protectedMetadataUrl);
+      // Try with path suffix first (per RFC 9728), then without as fallback
+      let protectedMetadata: ProtectedResourceMetadata;
+      try {
+        protectedMetadata = await fetchJson<ProtectedResourceMetadata>(`${origin}/.well-known/oauth-protected-resource${path}`);
+      } catch {
+        protectedMetadata = await fetchJson<ProtectedResourceMetadata>(`${origin}/.well-known/oauth-protected-resource`);
+      }
       if (!protectedMetadata.authorization_servers || protectedMetadata.authorization_servers.length === 0) {
         throw new Error("No authorization_servers in protected resource metadata");
       }
@@ -210,10 +217,16 @@ export async function startOAuthFlow(
       authServerUrl = serverUrl;
     }
 
-    const metadataUrl = deriveAuthServerMetadataUrl(authServerUrl);
     let metadata: AuthServerMetadata;
     try {
-      metadata = await fetchJson<AuthServerMetadata>(metadataUrl);
+      // Try with path suffix first, then without (some servers don't include the path)
+      const metadataUrlWith = deriveAuthServerMetadataUrl(authServerUrl);
+      try {
+        metadata = await fetchJson<AuthServerMetadata>(metadataUrlWith);
+      } catch {
+        const metadataUrlWithout = `${new URL(authServerUrl).origin}/.well-known/oauth-authorization-server`;
+        metadata = await fetchJson<AuthServerMetadata>(metadataUrlWithout);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("fetch failed") || msg.includes("ENOTFOUND") || msg.includes("ECONNREFUSED")) {
@@ -317,7 +330,7 @@ export async function exchangeOAuthCode(
   const errorParam = parsedUrl.searchParams.get("error");
 
   if (errorParam) {
-    return { success: false, error: `Robinhood error: ${errorParam}` };
+    return { success: false, error: `OAuth error: ${errorParam}` };
   }
   if (!code || !state) {
     return { success: false, error: "No code or state found in URL. Make sure you copied the full URL." };

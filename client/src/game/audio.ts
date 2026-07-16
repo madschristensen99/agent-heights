@@ -268,49 +268,33 @@ export class AudioSystem {
     thumpOsc.frequency.value = 14;
     const thumpGain = ctx.createGain();
     thumpGain.gain.value = 0;
-    thumpGain.gain.linearRampToValueAtTime(0.12, now + 0.5);
+    thumpGain.gain.linearRampToValueAtTime(0.12, now + 4);
     thumpOsc.connect(thumpGain);
     thumpGain.connect(this.sfxGain);
-
-    // --- Turbine whine — mid sawtooth, low volume ---
-    const turbineOsc = ctx.createOscillator();
-    turbineOsc.type = "sawtooth";
-    turbineOsc.frequency.value = 320;
-    const turbineGain = ctx.createGain();
-    turbineGain.gain.value = 0;
-    turbineGain.gain.linearRampToValueAtTime(0.04, now + 1);
-    turbineOsc.connect(turbineGain);
-    turbineGain.connect(this.sfxGain);
 
     // Start everything
     noiseSrc.start(now);
     bladeLfo.start(now);
     thumpOsc.start(now);
-    turbineOsc.start(now);
 
     // Fade in the blade gain
     bladeGain.gain.setValueAtTime(0, now);
-    bladeGain.gain.linearRampToValueAtTime(0.25, now + 0.5);
+    bladeGain.gain.linearRampToValueAtTime(0.25, now + 4);
 
     return {
       stop: () => {
         const stopTime = ctx.currentTime;
-        const fadeDuration = 1.5;
+        const fadeDuration = 4;
         bladeGain.gain.cancelScheduledValues(stopTime);
         bladeGain.gain.setValueAtTime(bladeGain.gain.value, stopTime);
         bladeGain.gain.linearRampToValueAtTime(0, stopTime + fadeDuration);
         thumpGain.gain.cancelScheduledValues(stopTime);
         thumpGain.gain.setValueAtTime(thumpGain.gain.value, stopTime);
         thumpGain.gain.linearRampToValueAtTime(0, stopTime + fadeDuration);
-        turbineGain.gain.cancelScheduledValues(stopTime);
-        turbineGain.gain.setValueAtTime(turbineGain.gain.value, stopTime);
-        turbineGain.gain.linearRampToValueAtTime(0, stopTime + fadeDuration);
-
         const end = stopTime + fadeDuration + 0.1;
         try { noiseSrc.stop(end); } catch {}
         try { bladeLfo.stop(end); } catch {}
         try { thumpOsc.stop(end); } catch {}
-        try { turbineOsc.stop(end); } catch {}
       },
     };
   }

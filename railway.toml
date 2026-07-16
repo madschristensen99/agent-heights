@@ -1,0 +1,12 @@
+[deploy]
+# Railway volume mounts — these directories persist across redeployments.
+# Create two volumes in the Railway dashboard and mount them at these paths:
+#   1. /app/ag        — user save files, session logs (file mode only; Supabase mode uses DB)
+#   2. /app/workspace  — agent working directories (files agents create, edit, and upload)
+#
+# Without these volume mounts, all workspace files are lost on every redeploy.
+# Agent metadata and conversation memory persist via Supabase regardless.
+
+[deploy.healthcheck]
+path = "/"
+timeout = 30

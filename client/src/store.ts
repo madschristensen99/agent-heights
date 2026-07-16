@@ -609,21 +609,22 @@ export class Store {
       case "mcp_oauth_required": {
         // Fallback: treat same as mcp_oauth_code_needed
         console.log("[mcp-oauth] received mcp_oauth_required (fallback), showing modal", msg);
+        const svcName2 = msg.serverUrl ? new URL(msg.serverUrl).hostname.replace(/^mcp\./, '').replace(/^www\./, '').replace(/\.[^.]+$/, '').replace(/^./, c => c.toUpperCase()) : 'MCP Server';
         const modal2 = document.createElement("div");
         modal2.id = "mcp-oauth-modal";
         modal2.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;";
         modal2.innerHTML = `
           <div style="background:#111;border:1px solid #333;border-radius:0.75rem;max-width:480px;width:90vw;padding:1.5rem;color:#e0e0e0;font-family:system-ui,sans-serif;">
-            <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to Robinhood</h3>
+            <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to ${svcName2}</h3>
             <div style="font-size:0.8rem;color:#888;margin:0 0 1rem;">
-              1. Click "Open Robinhood Login" below<br>
-              2. Log in and complete 2FA<br>
+              1. Click "Open ${svcName2} Login" below<br>
+              2. Log in and authorize access<br>
               3. You'll be redirected to a localhost URL that won't load — that's OK<br>
               4. Copy the full URL from that page's address bar<br>
               5. Paste it below and click "Submit Code"
             </div>
             <button id="mcp-oauth-open" style="display:block;width:100%;text-align:center;padding:0.6rem;border:none;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;font-size:0.85rem;font-weight:600;margin-bottom:1rem;cursor:pointer;">
-              🔗 Open Robinhood Login
+              🔗 Open ${svcName2} Login
             </button>
             <input id="mcp-oauth-input" type="text" placeholder="Paste the localhost URL here..."
               style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.5rem;box-sizing:border-box;" />
@@ -646,7 +647,7 @@ export class Store {
         cancelBtn2.addEventListener("click", close2);
         modal2.addEventListener("click", (e) => { if (e.target === modal2) close2(); });
         openBtn2.addEventListener("click", () => {
-          window.open(msg.authUrl, "robinhood-oauth", "width=600,height=700,scrollbars=yes");
+          window.open(msg.authUrl, "mcp-oauth-popup", "width=600,height=700,scrollbars=yes");
         });
         pasteBtn2.addEventListener("click", async () => {
           try {
@@ -673,22 +674,23 @@ export class Store {
       }
       case "mcp_oauth_code_needed": {
         console.log("[mcp-oauth] received mcp_oauth_code_needed, showing modal", msg);
-        // Robinhood requires localhost redirect URIs. Show modal with link + paste input.
+        // OAuth requires localhost redirect URIs. Show modal with link + paste input.
+        const svcName = msg.serverUrl ? new URL(msg.serverUrl).hostname.replace(/^mcp\./, '').replace(/^www\./, '').replace(/\.[^.]+$/, '').replace(/^./, c => c.toUpperCase()) : 'MCP Server';
         const modal = document.createElement("div");
         modal.id = "mcp-oauth-modal";
         modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;";
         modal.innerHTML = `
           <div style="background:#111;border:1px solid #333;border-radius:0.75rem;max-width:480px;width:90vw;padding:1.5rem;color:#e0e0e0;font-family:system-ui,sans-serif;">
-            <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to Robinhood</h3>
+            <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to ${svcName}</h3>
             <div id="mcp-oauth-hint" style="font-size:0.8rem;color:#888;margin:0 0 1rem;">
-              1. Click "Open Robinhood Login" below<br>
-              2. Log in and complete 2FA<br>
+              1. Click "Open ${svcName} Login" below<br>
+              2. Log in and authorize access<br>
               3. You'll be redirected to a localhost URL that won't load — that's OK<br>
               4. Copy the full URL from that page's address bar<br>
               5. Paste it below and click "Submit Code"
             </div>
             <button id="mcp-oauth-open" style="display:block;width:100%;text-align:center;padding:0.6rem;border:none;border-radius:0.5rem;background:#2a4a6a;color:#e0e0e0;font-size:0.85rem;font-weight:600;margin-bottom:1rem;cursor:pointer;">
-              🔗 Open Robinhood Login
+              🔗 Open ${svcName} Login
             </button>
             <input id="mcp-oauth-input" type="text" placeholder="Paste the localhost URL here..."
               style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.5rem;box-sizing:border-box;" />
@@ -714,7 +716,7 @@ export class Store {
 
         // Open popup (window.open forces a popup, target=_blank can navigate current page)
         openBtn.addEventListener("click", () => {
-          window.open(msg.authUrl, "robinhood-oauth", "width=600,height=700,scrollbars=yes");
+          window.open(msg.authUrl, "mcp-oauth-popup", "width=600,height=700,scrollbars=yes");
         });
 
         // Paste from clipboard

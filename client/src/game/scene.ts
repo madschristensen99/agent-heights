@@ -439,6 +439,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // a theme change restarts the scene — drop everything the last run built
     this.npcs.clear();
+    this.initialSyncDone = false;
     this.yuki = null;
     this.hermes = null;
     this.yukiSeat = null;
@@ -2691,6 +2692,24 @@ export class OfficeScene extends Phaser.Scene {
     this.store.toast(`Helicopter summoned! ${agentName} incoming...`);
     this.heliSound = this.world?.audio.helicopter() ?? null;
 
+    // Send the hire WS message immediately so the agent appears in the
+    // sidebar and is interactable right away. The helicopter animation
+    // is purely cosmetic — syncAgents() will replace the cosmetic sprite
+    // with the real NPC when the server confirms.
+    if (delivery) {
+      const net = this.game.registry.get("net") as import("../net").Net;
+      net.send({
+        type: "hire",
+        name: delivery.name,
+        provider: "cline",
+        model: delivery.model,
+        systemPrompt: delivery.systemPrompt,
+        role: "worker",
+        appearance: delivery.appearance,
+        mcpServers: delivery.mcpServers,
+      });
+    }
+
     const padCx = this.padCenter.x;
     const padCy = this.padCenter.y;
 
@@ -2817,22 +2836,6 @@ export class OfficeScene extends Phaser.Scene {
       duration: 2000,
       ease: "Cubic.inOut",
       onComplete: () => {
-        // agent emerges from elevator — send hire message now so the server
-        // creates the agent and broadcasts it back. syncAgents() will replace
-        // this cosmetic sprite with the real NPC seamlessly.
-        if (this.heliDelivery) {
-          const net = this.game.registry.get("net") as import("../net").Net;
-          net.send({
-            type: "hire",
-            name: this.heliDelivery.name,
-            provider: "cline",
-            model: this.heliDelivery.model,
-            systemPrompt: this.heliDelivery.systemPrompt,
-            role: "worker",
-            appearance: this.heliDelivery.appearance,
-            mcpServers: this.heliDelivery.mcpServers,
-          });
-        }
         if (this.heliAgent && sprite.active) {
           this.heliAgent.setPosition(exitX, exitY);
           this.heliAgent.setVisible(true);
