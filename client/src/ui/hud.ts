@@ -215,7 +215,7 @@ export class Hud {
     const root = document.getElementById("hud")!;
     root.innerHTML = `
       <div class="topbar">
-        <span class="logo">SPRITE&nbsp;HEIGHTS</span>
+        <span class="logo">AGENT&nbsp;HEIGHTS</span>
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
