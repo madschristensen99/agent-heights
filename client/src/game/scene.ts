@@ -222,8 +222,8 @@ export class OfficeScene extends Phaser.Scene {
   private agentBroadcastAgentId: string | null = null;
   /** Agent currently being viewed in the modal (null = modal closed). */
   private agentViewAgentId: string | null = null;
-  /** Current tab in the agent monitor: "screen" | "files" | "terminal" | "stats". */
-  private agentViewTab: "screen" | "files" | "terminal" | "stats" = "screen";
+  /** Current tab in the agent monitor. */
+  private agentViewTab: "screen" | "files" | "terminal" | "tasks" | "stats" = "screen";
   /** Current file browser path within the agent workspace. */
   private agentFsPath = ".";
   /** Unsubscribe functions for agent log/FS listeners. */
@@ -4240,6 +4240,7 @@ export class OfficeScene extends Phaser.Scene {
           <button class="av-tab" data-tab="screen" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#0a0a12;color:#6aaadf;font-size:0.8rem;cursor:pointer;">Screen</button>
           <button class="av-tab" data-tab="files" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Files</button>
           <button class="av-tab" data-tab="terminal" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Terminal</button>
+          <button class="av-tab" data-tab="tasks" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Tasks</button>
           <button class="av-tab" data-tab="stats" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Stats</button>
         </div>
         <div id="agent-view-content" style="width: 900px; height: 560px; background: #0a0a12; border-radius: 0 8px 8px 8px; overflow: hidden;">
@@ -4276,7 +4277,7 @@ export class OfficeScene extends Phaser.Scene {
     // Wire tab buttons
     modal.querySelectorAll(".av-tab").forEach(btn => {
       btn.addEventListener("click", () => {
-        const tab = (btn as HTMLElement).dataset.tab as "screen" | "files" | "terminal" | "stats";
+        const tab = (btn as HTMLElement).dataset.tab as "screen" | "files" | "terminal" | "tasks" | "stats";
         this.switchAgentViewTab(tab, agent.id);
       });
     });
@@ -4291,7 +4292,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** Switch to a different tab in the agent monitor. */
-  private switchAgentViewTab(tab: "screen" | "files" | "terminal" | "stats", agentId: string): void {
+  private switchAgentViewTab(tab: "screen" | "files" | "terminal" | "tasks" | "stats", agentId: string): void {
     this.agentViewTab = tab;
     // Update tab button styles
     const modal = document.getElementById("agent-view-modal");
@@ -4329,6 +4330,8 @@ export class OfficeScene extends Phaser.Scene {
       this.renderFilesTab(agentId, content);
     } else if (this.agentViewTab === "terminal") {
       this.renderTerminalTab(agentId, content);
+    } else if (this.agentViewTab === "tasks") {
+      this.renderTasksTab(agentId, content);
     } else if (this.agentViewTab === "stats") {
       content.innerHTML = this.renderStatsTab(agent);
     }
@@ -4507,9 +4510,17 @@ export class OfficeScene extends Phaser.Scene {
   private renderTerminalTab(agentId: string, content: HTMLElement): void {
     content.innerHTML = `
       <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Courier New',monospace;color:#c0c0d0;font-size:0.78rem;">
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#111122;border-bottom:1px solid #222244;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#111122;border-bottom:1px solid #222244;flex-wrap:wrap;">
           <span style="color:#555;font-size:0.7rem;">Live Log Stream</span>
           <span id="av-term-status" style="color:#44cc66;font-size:0.65rem;">● connected</span>
+          <div style="display:flex;gap:4px;margin-left:8px;">
+            <label style="display:flex;align-items:center;gap:2px;color:#888;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="status" checked /> status</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#888;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="text" checked /> text</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#888;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="tool" checked /> tool</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#888;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="result" checked /> result</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#888;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="error" checked /> error</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#888;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="boss" checked /> boss</label>
+          </div>
           <button id="av-term-clear" style="margin-left:auto;padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#888;font-size:0.7rem;cursor:pointer;">Clear</button>
           <label style="display:flex;align-items:center;gap:4px;color:#888;font-size:0.7rem;cursor:pointer;">
             <input id="av-term-autoscroll" type="checkbox" checked /> Auto-scroll
@@ -4521,10 +4532,20 @@ export class OfficeScene extends Phaser.Scene {
 
     const logEl = document.getElementById("av-terminal-log")!;
 
+    const getActiveFilters = (): Set<string> => {
+      const filters = new Set<string>();
+      document.querySelectorAll(".av-term-filter").forEach((cb: Element) => {
+        const input = cb as HTMLInputElement;
+        if (input.checked) filters.add(input.value);
+      });
+      return filters;
+    };
+
     // Listen for log history
     const onHistory = (respAgentId: string, entries: LogEntry[]) => {
       if (respAgentId !== agentId) return;
-      logEl.innerHTML = entries.map(e => this.formatLogEntry(e)).join("");
+      const filters = getActiveFilters();
+      logEl.innerHTML = entries.filter(e => filters.has(e.kind)).map(e => this.formatLogEntry(e)).join("");
       this.scrollToTerminalBottom();
     };
     this.store.onAgentLogHistory(onHistory);
@@ -4533,11 +4554,23 @@ export class OfficeScene extends Phaser.Scene {
     // Listen for live log entries
     const onLog = (respAgentId: string, entry: LogEntry) => {
       if (respAgentId !== agentId) return;
+      const filters = getActiveFilters();
+      if (!filters.has(entry.kind)) return;
       logEl.insertAdjacentHTML("beforeend", this.formatLogEntry(entry));
       this.scrollToTerminalBottom();
     };
     this.store.onAgentLog(onLog);
     this.agentViewCleanup.push(() => this.store.offAgentLog(onLog));
+
+    // Wire filter changes — re-render from stored logs
+    document.querySelectorAll(".av-term-filter").forEach(cb => {
+      cb.addEventListener("change", () => {
+        const filters = getActiveFilters();
+        const allLogs = this.store.logs.get(agentId) ?? [];
+        logEl.innerHTML = allLogs.filter(e => filters.has(e.kind)).map(e => this.formatLogEntry(e)).join("");
+        this.scrollToTerminalBottom();
+      });
+    });
 
     // Wire clear button
     document.getElementById("av-term-clear")?.addEventListener("click", () => {
@@ -4587,6 +4620,92 @@ export class OfficeScene extends Phaser.Scene {
     if (bytes < 1024) return `${bytes}B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  /** Render the Tasks tab — current task, queue, history, and inject controls. */
+  private renderTasksTab(agentId: string, content: HTMLElement): void {
+    content.innerHTML = `
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:monospace;color:#c0c0d0;font-size:0.8rem;">
+        <!-- Task injection bar -->
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#111122;border-bottom:1px solid #222244;">
+          <input id="av-task-input" type="text" placeholder="Inject a task..." style="flex:1;padding:6px 10px;border:1px solid #333;border-radius:4px;background:#0d0d18;color:#e0e0e0;font-size:0.8rem;font-family:monospace;" />
+          <button id="av-task-send" style="padding:6px 14px;border:none;border-radius:4px;background:#2a4a6a;color:#e0e0e0;font-size:0.8rem;cursor:pointer;">Assign</button>
+          <button id="av-task-stop" style="padding:6px 14px;border:none;border-radius:4px;background:#3a1a1a;color:#cc6666;font-size:0.8rem;cursor:pointer;">Stop</button>
+        </div>
+        <!-- Task info display -->
+        <div id="av-task-info" style="flex:1;overflow-y:auto;padding:12px;"></div>
+      </div>
+    `;
+
+    const infoEl = document.getElementById("av-task-info")!;
+
+    // Request task info from server
+    // We'll use the agent_inject_task handler's response, but also need a way to just get info.
+    // For now, render from the local store's AgentInfo (which has current task) and listen for agent_task_info.
+    const agent = this.store.agents.get(agentId);
+    if (agent) {
+      this.renderTaskInfoContent(infoEl, agent.task, [], []);
+    }
+
+    // Listen for task info responses
+    const onTaskInfo = (respAgentId: string, currentTask: string | null, queue: { task: string; handoffTo: string | null }[], history: { task: string; success: boolean; ts: number; durationMs: number }[]) => {
+      if (respAgentId !== agentId) return;
+      this.renderTaskInfoContent(infoEl, currentTask, queue, history);
+    };
+    this.store.onAgentTaskInfo(onTaskInfo);
+    this.agentViewCleanup.push(() => this.store.offAgentTaskInfo(onTaskInfo));
+
+    // Wire task input
+    const taskInput = document.getElementById("av-task-input") as HTMLInputElement;
+    const sendTask = () => {
+      const task = taskInput.value.trim();
+      if (!task) return;
+      if (this.net) this.net.send({ type: "agent_inject_task", agentId, task });
+      taskInput.value = "";
+    };
+    document.getElementById("av-task-send")?.addEventListener("click", sendTask);
+    taskInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendTask();
+    });
+
+    // Wire stop button
+    document.getElementById("av-task-stop")?.addEventListener("click", () => {
+      if (this.net) this.net.send({ type: "stop", agentId });
+    });
+  }
+
+  /** Render the task info content (current task, queue, history). */
+  private renderTaskInfoContent(el: HTMLElement, currentTask: string | null, queue: { task: string; handoffTo: string | null }[], history: { task: string; success: boolean; ts: number; durationMs: number }[]): void {
+    const queueHtml = queue.length > 0
+      ? queue.map((q, i) => `<div style="padding:6px 12px;background:#0d0d18;border-left:3px solid #4a8cd4;margin-bottom:4px;"><span style="color:#555;font-size:0.65rem;">#${i + 1}</span> <span style="color:#c0c0d0;">${this.escapeHtml(q.task)}</span>${q.handoffTo ? ` <span style="color:#666;font-size:0.65rem;">→ ${q.handoffTo}</span>` : ""}</div>`).join("")
+      : `<div style="color:#555;font-size:0.7rem;padding:8px 0;">No queued tasks</div>`;
+
+    const historyHtml = history.length > 0
+      ? history.slice(0, 10).map(h => {
+          const status = h.success ? "✓" : "✗";
+          const color = h.success ? "#44cc66" : "#cc4444";
+          const duration = h.durationMs < 1000 ? `${h.durationMs}ms` : `${(h.durationMs / 1000).toFixed(1)}s`;
+          const time = new Date(h.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          return `<div style="padding:4px 12px;border-bottom:1px solid #111122;"><span style="color:${color};">${status}</span> <span style="color:#888;font-size:0.65rem;">[${time}]</span> <span style="color:#c0c0d0;">${this.escapeHtml(h.task.slice(0, 80))}${h.task.length > 80 ? "…" : ""}</span> <span style="color:#555;font-size:0.65rem;">${duration}</span></div>`;
+        }).join("")
+      : `<div style="color:#555;font-size:0.7rem;padding:8px 0;">No task history yet</div>`;
+
+    el.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <div style="color:#555;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;">Current Task</div>
+        <div style="background:#111122;padding:12px;border-radius:6px;color:#e0e0e0;font-size:0.8rem;line-height:1.4;">
+          ${currentTask ? this.escapeHtml(currentTask) : '<span style="color:#555;">No active task — agent is idle</span>'}
+        </div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="color:#555;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;">Task Queue (${queue.length})</div>
+        ${queueHtml}
+      </div>
+      <div>
+        <div style="color:#555;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;">Recent History</div>
+        ${historyHtml}
+      </div>
+    `;
   }
 
   /** Render the Stats tab — agent info dashboard (reuses old dashboard layout). */

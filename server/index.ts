@@ -1596,6 +1596,19 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         }
+        // ── Agent task injection + task info ──────────────────────────────
+        case "agent_inject_task": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          ownerSess.manager.assign(msg.agentId, msg.task, msg.handoffTo);
+          // Send back updated task info
+          const info = ownerSess.manager.getTaskInfo(msg.agentId);
+          if (info) sess.broadcast({ type: "agent_task_info", agentId: msg.agentId, ...info });
+          break;
+        }
         case "create_org": {
           const slug = msg.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
           if (!slug) {

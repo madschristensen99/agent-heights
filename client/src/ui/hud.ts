@@ -303,7 +303,13 @@ export class Hud {
         </div>
       </div>
       <div id="server-restart-overlay" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; flex-direction:column; gap:1rem;">
-        <div style="font-size:1.5rem; font-weight:bold; color:#e0e0e0; font-family:monospace;">🔄 Office Update In Progress</div>
+        <div style="font-size:1.5rem; font-weight:bold; color:#e0e0e0; font-family:monospace; display:flex; align-items:center; gap:0.6rem;">
+          <svg width="28" height="28" viewBox="0 0 48 48" style="animation: restart-spin 1.2s linear infinite;" fill="none" stroke="#4f9dde" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M38.8 18.6a16 16 0 1 0 1.2 6.4"/>
+            <path d="M40 6v12h-12"/>
+          </svg>
+          Office Update In Progress
+        </div>
         <div style="font-size:0.9rem; color:#9aa0b0; font-family:monospace;">Your agents will resume their tasks shortly…</div>
         <div style="width:120px; height:4px; background:#222; border-radius:2px; overflow:hidden;">
           <div style="width:40%; height:100%; background:#4f9dde; border-radius:2px; animation: restart-pulse 1.2s ease-in-out infinite;"></div>

@@ -169,6 +169,13 @@ interface QueuedTask {
   cardId: string | null;
 }
 
+interface TaskHistoryEntry {
+  task: string;
+  success: boolean;
+  ts: number;
+  durationMs: number;
+}
+
 interface AgentRuntime {
   info: AgentInfo;
   logs: LogEntry[];
@@ -184,6 +191,10 @@ interface AgentRuntime {
   nextThinkAt: number;
   /** Cooldown after last autonomous action to avoid spamming. */
   thinkCooldownUntil: number;
+  /** Recent completed tasks (newest first, capped at 20). */
+  taskHistory: TaskHistoryEntry[];
+  /** Timestamp when the current task started (for duration tracking). */
+  taskStartedAt: number;
 }
 
 export class AgentManager {
@@ -267,7 +278,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 });
     }
     if (this.agents.size > 0) {
       console.log(`[sprite-heights] restored ${this.agents.size} agent(s) from save`);
@@ -391,7 +402,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("yuki", YUKI_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
     this.agents.set(YUKI_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -420,7 +431,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -549,7 +560,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -860,7 +871,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -982,6 +993,17 @@ export class AgentManager {
   getAgentLogs(agentId: string): LogEntry[] {
     const rt = this.agents.get(agentId);
     return rt ? [...rt.logs] : [];
+  }
+
+  /** Get an agent's task info: current task, queue, and history. */
+  getTaskInfo(agentId: string): { currentTask: string | null; queue: { task: string; handoffTo: string | null }[]; history: { task: string; success: boolean; ts: number; durationMs: number }[] } | null {
+    const rt = this.agents.get(agentId);
+    if (!rt) return null;
+    return {
+      currentTask: rt.info.task,
+      queue: rt.taskQueue.map(q => ({ task: q.task, handoffTo: q.handoffTo })),
+      history: [...rt.taskHistory],
+    };
   }
 
   /** Register a callback to receive live log entries for an agent. Returns an unsubscribe fn. */
@@ -1367,6 +1389,7 @@ export class AgentManager {
   }
 
   private async runTask(rt: AgentRuntime, task: string): Promise<void> {
+    rt.taskStartedAt = Date.now();
     // If Yuki receives a question as a task, answer it directly instead of delegating
     if (rt.info.id === YUKI_ID && isYukiQuestion(task)) {
       await this.runYukiKnowledgeChat(rt, task);
@@ -1520,7 +1543,10 @@ export class AgentManager {
       rt.abort = null;
       rt.handoffTo = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
+        const duration = Date.now() - rt.taskStartedAt;
         if (sawError) {
+          rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
+          if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           this.setStatus(rt, "error");
           if (rt.cardId) this.revertCard(rt.cardId);
           rt.cardId = null;
@@ -1531,6 +1557,8 @@ export class AgentManager {
           }, DONE_LINGER_MS);
         } else {
           rt.info.tasksDone += 1;
+          rt.taskHistory.unshift({ task, success: true, ts: Date.now(), durationMs: duration });
+          if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           this.setStatus(rt, "done");
           if (rt.cardId) this.completeCard(rt.cardId);
           rt.cardId = null;
