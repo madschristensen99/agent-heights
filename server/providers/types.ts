@@ -41,6 +41,8 @@ export interface RunContext {
   clearMessages?: (agentId: string) => Promise<void>;
   /** Hire an agent (Yuki only). Triggers helicopter delivery + creates agent. */
   hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]) => Promise<string>;
+  /** Called when an agent posts a message to a colleague's inbox. Lets the manager assign a review task to an idle recipient. */
+  onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
 }
 
 export type ProviderRunner = (

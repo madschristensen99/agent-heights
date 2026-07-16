@@ -115,6 +115,7 @@ export async function makeTools(cwd: string, opts?: {
   eventFeedPath?: string;
   submitState?: { called: boolean; verified: boolean; callCount: number };
   mcpServers?: import("../../shared/types.js").MCPServerConfig[];
+  onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -356,9 +357,11 @@ export async function makeTools(cwd: string, opts?: {
     },
     async execute(input: any) {
       const recipientInbox = resolve(workspaceRoot, input.to, "inbox.jsonl");
-      const entry = JSON.stringify({ ts: Date.now(), from: cwd.split("/").pop(), message: input.message }) + "\n";
+      const fromFolder = cwd.split("/").pop() ?? "";
+      const entry = JSON.stringify({ ts: Date.now(), from: fromFolder, message: input.message }) + "\n";
       await mkdir(dirname(recipientInbox), { recursive: true });
       await appendFile(recipientInbox, entry, "utf-8");
+      opts?.onPostMessage?.(input.to, fromFolder, input.message);
       return `Message sent to ${input.to}`;
     },
   };
@@ -571,6 +574,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         eventFeedPath: ctx.eventFeedPath,
         submitState: isChat ? undefined : submitState,
         mcpServers: ctx.mcpServers,
+        onPostMessage: ctx.onPostMessage,
       });
       const maxIter = isChat ? (yukiHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);

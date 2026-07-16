@@ -976,6 +976,14 @@ export class AgentManager {
     );
   }
 
+  /** Resolve a workspace folder name (e.g. "beep-6ccfc256") back to its agent. */
+  private agentByFolder(folder: string): AgentRuntime | undefined {
+    for (const rt of this.agents.values()) {
+      if (`${this.slugFor(rt)}-${rt.info.id}` === folder) return rt;
+    }
+    return undefined;
+  }
+
   /** Append an event to the shared office event feed. */
   private logEvent(type: string, text: string): void {
     const feedPath = join(this.workspaceRoot, "events.jsonl");
@@ -1401,6 +1409,15 @@ export class AgentManager {
         saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
         loadMessages: (agentId: string) => this.save.loadMessages(agentId),
         clearMessages: (agentId: string) => this.save.clearMessages(agentId),
+        onPostMessage: (recipientFolder: string, fromFolder: string, message: string) => {
+          const target = this.agentByFolder(recipientFolder);
+          if (!target) return;
+          if (target.info.status === "thinking" || target.info.status === "working") return;
+          const sender = this.agentByFolder(fromFolder);
+          const senderName = sender?.info.name ?? fromFolder;
+          const reviewTask = `${senderName} sent you a message. Review it and respond if needed:\n\n"${message}"`;
+          this.assign(target.info.id, reviewTask);
+        },
       });
 
       for await (const ev of events) {
@@ -1633,6 +1650,14 @@ export class AgentManager {
           appendFile(mgrInbox, entry, "utf-8").catch(() => {}),
         );
       }).catch(() => {});
+
+      // If the manager is idle, assign them a task to review the completion report
+      if (mgr.info.status !== "thinking" && mgr.info.status !== "working") {
+        const reviewTask = failed
+          ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}. Review the situation and decide if any action is needed.`
+          : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed.`;
+        this.assign(mgr.info.id, reviewTask);
+      }
     }
   }
 
