@@ -233,7 +233,7 @@ export class MarketplaceBrowser {
 
       card.innerHTML = `
         <div style="display:flex; align-items:flex-start; gap:0.5rem;">
-          ${agent.image_url ? `<img src="${agent.image_url}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\"><rect width=\"40\" height=\"40\" rx=\"6\" fill=\"#2a2a2a\"/><text x=\"20\" y=\"27\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"18\" font-weight=\"bold\" fill=\"#e0e0e0\">${this.escape(name.charAt(0).toUpperCase())}</text></svg>')" />` : ""}
+          ${agent.image_url ? `<img src="${agent.image_url}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${this.letterAvatar(name, 40)}'" />` : ""}
           <div style="flex:1; min-width:0;">
             <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.15rem;">${this.escape(name)}</div>
             <div style="font-size:0.75rem; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.escape(summary.slice(0, 80))}</div>
@@ -310,7 +310,7 @@ export class MarketplaceBrowser {
     modal.innerHTML = `
       <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; overflow-y:auto; padding:1.5rem; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
         <div style="display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:1rem;">
-          ${agent.image_url ? `<img src="${agent.image_url}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" onerror="this.onerror=null;this.src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"56\" height=\"56\"><rect width=\"56\" height=\"56\" rx=\"8\" fill=\"#2a2a2a\"/><text x=\"28\" y=\"38\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"26\" font-weight=\"bold\" fill=\"#e0e0e0\">${this.escape(agent.name.charAt(0).toUpperCase())}</text></svg>')" />` : ""}
+          ${agent.image_url ? `<img src="${agent.image_url}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" onerror="this.onerror=null;this.src='${this.letterAvatar(agent.name, 56)}'" />` : ""}
           <div style="flex:1;">
             <h3 style="font-size:1.1rem; font-weight:700; margin:0 0 0.25rem;">${this.escape(agent.name)}</h3>
             <div style="font-size:0.8rem; color:#888;">${this.escape(agent.summary)}</div>
@@ -520,5 +520,11 @@ export class MarketplaceBrowser {
     const div = document.createElement("div");
     div.textContent = s;
     return div.innerHTML;
+  }
+
+  private letterAvatar(name: string, size: number): string {
+    const letter = (name || "?").charAt(0).toUpperCase();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="6" fill="#2a2a2a"/><text x="${size / 2}" y="${Math.round(size * 0.67)}" text-anchor="middle" font-family="sans-serif" font-size="${Math.round(size * 0.45)}" font-weight="bold" fill="#e0e0e0">${letter}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   }
 }

@@ -4304,7 +4304,10 @@ export class OfficeScene extends Phaser.Scene {
       if (icon && icon.startsWith("<svg")) {
         iconHtml = `<span style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;">${icon.replace(/<svg/, '<svg width="14" height="14"')}</span>`;
       } else if (icon && icon.startsWith("http")) {
-        iconHtml = `<img src="${icon}" style="width:14px;height:14px;object-fit:contain;" onerror="this.onerror=null;this.replace(Object.assign(document.createElement('span'),{textContent:'${name.charAt(0).toUpperCase()}',style:'font-size:0.6rem;font-weight:bold;color:#6aaadf;'}))" />`;
+        const letter = name.charAt(0).toUpperCase();
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect width="14" height="14" rx="2" fill="#1a2a3a"/><text x="7" y="10" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#6aaadf">${letter}</text></svg>`;
+        const fallback = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+        iconHtml = `<img src="${icon}" style="width:14px;height:14px;object-fit:contain;" onerror="this.onerror=null;this.src='${fallback}'" />`;
       } else {
         iconHtml = `<span style="font-size:0.6rem;">🔌</span>`;
       }
