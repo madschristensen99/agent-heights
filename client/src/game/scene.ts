@@ -170,6 +170,7 @@ export class OfficeScene extends Phaser.Scene {
   private heliAgent: Phaser.GameObjects.Container | null = null;
   private heliElevatorGfx: Phaser.GameObjects.Graphics | null = null;
   private heliDelivery: HelicopterDelivery | null = null;
+  private initialSyncDone = false;
 
   private world!: WorldLayer;
   private theme: "classic" | "spriteHeights" = "classic";
@@ -3577,7 +3578,11 @@ export class OfficeScene extends Phaser.Scene {
           this.spawnTile;
         // When delivered via helicopter, spawn at the elevator exit (top of
         // office) instead of the front door.
-        const spawnTile = this.heliActive ? { x: 14, y: 3 } : this.doorTile;
+        // On initial page load, spawn agents at their desk so they don't all
+        // walk in from the door.
+        const spawnTile = this.heliActive ? { x: 14, y: 3 }
+          : !this.initialSyncDone ? seat
+          : this.doorTile;
         const npc = new AgentNPC(this, this.grid, info, spawnTile, seat, (clicked) =>
           this.store.select(clicked),
         );
@@ -3592,6 +3597,7 @@ export class OfficeScene extends Phaser.Scene {
         this.npcs.delete(id);
       }
     }
+    this.initialSyncDone = true;
     // monitors glow whenever someone's at the desk — working or just typing;
     // they only go dark during the post-task break (done/error linger)
     this.monitors.forEach((m, i) => {
