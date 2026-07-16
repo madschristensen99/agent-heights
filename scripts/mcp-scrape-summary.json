@@ -1,0 +1,2055 @@
+{
+  "totalScraped": 256,
+  "newServers": 188,
+  "urlUpdates": 58,
+  "servers": [
+    {
+      "slug": "ahrefs",
+      "name": "Ahrefs",
+      "url": "https://api.ahrefs.com/mcp/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "asana",
+      "name": "Asana",
+      "url": "https://mcp.asana.com/v2/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "atlassian",
+      "name": "Atlassian",
+      "url": "https://mcp.atlassian.com/v1/mcp/authv2",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "canva",
+      "name": "Canva",
+      "url": "https://mcp.canva.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "cloudflare",
+      "name": "Cloudflare",
+      "url": "https://mcp.cloudflare.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "figma",
+      "name": "Figma",
+      "url": "https://mcp.figma.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "github",
+      "name": "GitHub",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "hubspot",
+      "name": "HubSpot",
+      "url": "https://mcp.hubspot.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "linear",
+      "name": "Linear",
+      "url": "https://mcp.linear.app/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "mercury",
+      "name": "Mercury",
+      "url": "https://mcp.mercury.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "neon",
+      "name": "Neon",
+      "url": "https://mcp.neon.tech/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "notion",
+      "name": "Notion",
+      "url": "https://mcp.notion.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "parallel",
+      "name": "Parallel Search",
+      "url": "https://search.parallel.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "railway",
+      "name": "Railway",
+      "url": "https://mcp.railway.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "slack",
+      "name": "Slack",
+      "url": "https://mcp.slack.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "stripe",
+      "name": "Stripe",
+      "url": "https://mcp.stripe.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "supabase",
+      "name": "Supabase",
+      "url": "https://mcp.supabase.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "yahoo-finance",
+      "name": "Yahoo Finance",
+      "url": "https://gateway.mcpservers.org/yahoo-finance/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "aiera",
+      "name": "Aiera",
+      "url": "https://mcp-pub.aiera.com/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "apollo-io",
+      "name": "Apollo.io",
+      "url": "https://mcp.apollo.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "attio",
+      "name": "Attio",
+      "url": "https://mcp.attio.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "box",
+      "name": "Box",
+      "url": "https://mcp.box.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "adisinsight",
+      "name": "AdisInsight",
+      "url": "https://adisinsight-mcp.springer.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "adobe-experience-manager",
+      "name": "Adobe Experience Manager",
+      "url": "https://mcp.adobeaemcloud.com/adobe/mcp/aem",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "adobe-creativity",
+      "name": "Adobe for creativity",
+      "url": "https://adobe-creativity.adobe.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "adobe-journey-optimizer",
+      "name": "Adobe Journey Optimizer",
+      "url": "https://ajo-mcp.adobe.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "adobe-marketing-agent",
+      "name": "Adobe Marketing Agent",
+      "url": "https://aep-ai-ama.adobe.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "airtable",
+      "name": "Airtable",
+      "url": "https://mcp.airtable.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "airwallex",
+      "name": "Airwallex",
+      "url": "https://mcp-demo.airwallex.com/developer",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "aiwyn-tax",
+      "name": "Aiwyn Tax",
+      "url": "https://mcp.columnapi.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "alltrails",
+      "name": "AllTrails",
+      "url": "https://www.alltrails.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "amplitude",
+      "name": "Amplitude",
+      "url": "https://mcp.amplitude.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "audible",
+      "name": "Audible",
+      "url": "https://mcp.audible.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "aura",
+      "name": "Aura",
+      "url": "https://mcp.auraintelligence.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "aurora",
+      "name": "Aurora",
+      "url": "https://mcp.ai.consilio.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "autodesk-product-help",
+      "name": "Autodesk Product Help",
+      "url": "https://developer.api.autodesk.com/knowledge/public/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "aws-marketplace",
+      "name": "AWS Marketplace",
+      "url": "https://marketplace-mcp.us-east-1.api.aws/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "b12",
+      "name": "B12",
+      "url": "https://b12.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "base44",
+      "name": "Base44",
+      "url": "https://app.base44.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "bigdata",
+      "name": "Bigdata.com",
+      "url": "https://mcp.bigdata.com/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "biorender",
+      "name": "BioRender",
+      "url": "https://mcp.services.biorender.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "blockscout",
+      "name": "Blockscout",
+      "url": "https://mcp.blockscout.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "boardwise",
+      "name": "BoardWise",
+      "url": "https://uakozrqrztgrgwoywxkx.supabase.co/functions/v1/mcp-server",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "booking",
+      "name": "Booking.com",
+      "url": "https://demandapi-mcp.booking.com/v1/mcp/8132308",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "brex",
+      "name": "Brex",
+      "url": "https://api.brex.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "calendly",
+      "name": "Calendly",
+      "url": "https://mcp.calendly.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "carta",
+      "name": "Carta",
+      "url": "https://mcp.app.carta.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "cash-app",
+      "name": "Cash App",
+      "url": "https://connect.squareup.com/v2/mcp/cash-app",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "cb-insights",
+      "name": "CB Insights",
+      "url": "https://mcp.cbinsights.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "chronograph",
+      "name": "Chronograph",
+      "url": "https://ai.chronograph.pe/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "circleback",
+      "name": "Circleback",
+      "url": "https://app.circleback.ai/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "clarify",
+      "name": "Clarify",
+      "url": "https://api.clarify.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "clarity-ai",
+      "name": "Clarity AI",
+      "url": "https://clarity-sfdr20-mcp.pro.clarity.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "clay",
+      "name": "Clay",
+      "url": "https://api.clay.com/v3/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "clerk",
+      "name": "Clerk",
+      "url": "https://mcp.clerk.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "clickup",
+      "name": "ClickUp",
+      "url": "https://mcp.clickup.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "clockwise",
+      "name": "Clockwise",
+      "url": "https://mcp.getclockwise.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "close",
+      "name": "Close",
+      "url": "https://mcp.close.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "cloudinary",
+      "name": "Cloudinary",
+      "url": "https://asset-management.mcp.cloudinary.com/sse",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "coindesk",
+      "name": "CoinDesk",
+      "url": "https://mcp.coindesk.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "common-room",
+      "name": "Common Room",
+      "url": "https://mcp.commonroom.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "consensus",
+      "name": "Consensus",
+      "url": "https://mcp.consensus.app/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "contentsquare",
+      "name": "Contentsquare",
+      "url": "https://api.contentsquare.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "context7",
+      "name": "Context7",
+      "url": "https://mcp.context7.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "control-plane",
+      "name": "Control Plane",
+      "url": "https://mcp.cpln.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "coros",
+      "name": "COROS",
+      "url": "https://mcp.coros.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "cortellis-regulatory-intelligence",
+      "name": "Cortellis Regulatory Intelligence",
+      "url": "https://api.clarivate.com/lifesciences/mcp-regulatory/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "coupler-io",
+      "name": "Coupler.io",
+      "url": "https://mcp.coupler.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "courtlistener",
+      "name": "CourtListener",
+      "url": "https://mcp.courtlistener.com/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "courtroom5",
+      "name": "Courtroom5",
+      "url": "https://mcp.courtroom5.com/v1",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "craft",
+      "name": "Craft",
+      "url": "https://mcp.craft.do/my/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "credit-karma",
+      "name": "Credit Karma",
+      "url": "https://mcp.creditkarma.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "crossbeam",
+      "name": "Crossbeam",
+      "url": "https://mcp.crossbeam.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "crypto-com",
+      "name": "Crypto.com",
+      "url": "https://mcp.crypto.com/market-data/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "dnb-risk-analytics",
+      "name": "D&amp;B Risk Analytics",
+      "url": "https://agents.riskanalytics.dnb.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "daloopa",
+      "name": "Daloopa",
+      "url": "https://mcp.daloopa.com/server/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "datasite",
+      "name": "Datasite",
+      "url": "https://mcp.global.datasite.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "day-ai",
+      "name": "Day AI",
+      "url": "https://day.ai/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "definely",
+      "name": "Definely",
+      "url": "https://mcp.eu.definely.com/api/proxy/core-mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "descrybe-legal-engine",
+      "name": "Descrybe Legal Engine",
+      "url": "https://mcp.descrybe.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "digits",
+      "name": "Digits",
+      "url": "https://api.digits.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "directbooker",
+      "name": "DirectBooker",
+      "url": "https://www.directbooker.ai/claude",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "doordash",
+      "name": "DoorDash",
+      "url": "https://openapi.doordash.com/mcp/consumer",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "dovetail",
+      "name": "Dovetail",
+      "url": "https://dovetail.com/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "egnyte",
+      "name": "Egnyte",
+      "url": "https://mcp-server.egnyte.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "enterpret",
+      "name": "Enterpret",
+      "url": "https://wisdom-api.enterpret.com/server/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "era-context",
+      "name": "Era Context",
+      "url": "https://context.era.app",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "eraser",
+      "name": "Eraser",
+      "url": "https://app.eraser.io/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "everlaw",
+      "name": "Everlaw",
+      "url": "https://api.everlaw.com/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "exa",
+      "name": "Exa",
+      "url": "https://mcp.exa.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "excalidraw-app-demo",
+      "name": "Excalidraw",
+      "url": "https://excalidraw-mcp-app.vercel.app/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "expedia",
+      "name": "Expedia",
+      "url": "https://www.expedia.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "factset",
+      "name": "FactSet",
+      "url": "https://mcp.factset.com/content/v1",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "fathom",
+      "name": "Fathom",
+      "url": "https://api.fathom.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "fever-event-discovery",
+      "name": "Fever Event Discovery",
+      "url": "https://data-search.apigw.feverup.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "fireflies",
+      "name": "Fireflies",
+      "url": "https://api.fireflies.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "fiscal-ai",
+      "name": "Fiscal.ai",
+      "url": "https://api.fiscal.ai/mcp/sse",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "fmp",
+      "name": "FMP",
+      "url": "https://financialmodelingprep.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "gainsight-staircase-ai",
+      "name": "Gainsight (Staircase AI)",
+      "url": "https://mcp.staircase.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "gamma",
+      "name": "Gamma",
+      "url": "https://mcp.gamma.app/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "gitlab",
+      "name": "GitLab",
+      "url": "https://gitlab.com/api/v4/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "gocardless",
+      "name": "GoCardless",
+      "url": "https://mcp.gocardless.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "godaddy",
+      "name": "GoDaddy",
+      "url": "https://api.godaddy.com/v1/domains/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "goodnotes",
+      "name": "Goodnotes",
+      "url": "https://claude-mcp-api.ml.goodnotes.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "bigquery",
+      "name": "Google Cloud BigQuery",
+      "url": "https://bigquery.googleapis.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "docusign",
+      "name": "Docusign",
+      "url": "https://mcp.docusign.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "explorium",
+      "name": "Explorium",
+      "url": "https://mcp.explorium.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "govtribe",
+      "name": "GovTribe",
+      "url": "https://govtribe.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "grain",
+      "name": "Grain",
+      "url": "https://api.grain.com/_/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "granola",
+      "name": "Granola",
+      "url": "https://mcp.granola.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "granted",
+      "name": "Granted",
+      "url": "https://grantedai.com/api/mcp/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "graphos-tools",
+      "name": "GraphOS MCP Tools",
+      "url": "https://mcp.apollographql.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "guidepoint",
+      "name": "Guidepoint",
+      "url": "https://clapi.guidepoint.io/mcp-server/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "guru",
+      "name": "Guru",
+      "url": "https://mcp.api.getguru.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "gusto",
+      "name": "Gusto",
+      "url": "https://mcp.api.gusto.com/anthropic",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "harmonic",
+      "name": "Harmonic",
+      "url": "https://mcp.api.harmonic.ai",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "harvey",
+      "name": "Harvey",
+      "url": "https://api.harvey.ai/hosted_mcp/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "hex",
+      "name": "Hex",
+      "url": "https://app.hex.tech/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "honeycomb",
+      "name": "Honeycomb",
+      "url": "https://mcp.honeycomb.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "hugging-face",
+      "name": "Hugging Face",
+      "url": "https://huggingface.co/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "ibisworld",
+      "name": "IBISWorld",
+      "url": "https://mcp.ibisworld.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "ice-data-services",
+      "name": "ICE Data Services",
+      "url": "https://fids-mcp.ice.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "ifttt",
+      "name": "IFTTT",
+      "url": "https://ifttt.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "imanage",
+      "name": "iManage Work",
+      "url": "https://cloudimanage.com/mcp/work",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "incident-io",
+      "name": "incident.io",
+      "url": "https://mcp.incident.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "indeed",
+      "name": "Indeed",
+      "url": "https://mcp.indeed.com/claude/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "instacart",
+      "name": "Instacart",
+      "url": "https://fig-mcp.instacart.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "intercom",
+      "name": "Intercom",
+      "url": "https://mcp.intercom.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "ironclad-contracts",
+      "name": "Ironclad Contracts",
+      "url": "https://mcp.na1.ironcladapp.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "jam",
+      "name": "Jam",
+      "url": "https://mcp.jam.dev/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "jotform",
+      "name": "Jotform",
+      "url": "https://mcp.jotform.com/mcp-app",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "ketryx",
+      "name": "Ketryx",
+      "url": "https://app.ketryx.com/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "kindora-funder-discovery",
+      "name": "Kindora Funder Discovery",
+      "url": "https://kindora-mcp.azurewebsites.net/mcp/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "kiwi",
+      "name": "Kiwi.com",
+      "url": "https://mcp.kiwi.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "klaviyo",
+      "name": "Klaviyo",
+      "url": "https://mcp.klaviyo.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "krisp",
+      "name": "Krisp",
+      "url": "https://mcp.krisp.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "lastminute",
+      "name": "lastminute.com",
+      "url": "https://mcp.lastminute.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "lawve-ai",
+      "name": "Lawve AI",
+      "url": "https://mcp.lawve.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "legal-data-hunter",
+      "name": "Legal Data Hunter",
+      "url": "https://legaldatahunter.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "legalzoom",
+      "name": "LegalZoom",
+      "url": "https://www.legalzoom.com/mcp/claude/v1",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "lilt",
+      "name": "LILT",
+      "url": "https://mcp.lilt.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "local-falcon",
+      "name": "Local Falcon",
+      "url": "https://mcp.localfalcon.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "longbridge",
+      "name": "Longbridge",
+      "url": "https://mcp.longbridge.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "lorikeet",
+      "name": "Lorikeet",
+      "url": "https://api.lorikeetcx.ai/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "lseg",
+      "name": "LSEG",
+      "url": "https://api.analytics.lseg.com/lfa/mcp/server-cl",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "lucid",
+      "name": "Lucid",
+      "url": "https://mcp.lucid.app/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "lumin",
+      "name": "Lumin",
+      "url": "https://mcp.luminpdf.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "lusha",
+      "name": "Lusha",
+      "url": "https://mcp.lusha.com/mcp/claude",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "magic-patterns",
+      "name": "Magic Patterns",
+      "url": "https://mcp.magicpatterns.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "mailchimp",
+      "name": "Mailchimp",
+      "url": "https://ai-inc.mailchimp.com/claude/mcp/v2",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "mailerlite",
+      "name": "MailerLite",
+      "url": "https://mcp.mailerlite.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "make",
+      "name": "Make",
+      "url": "https://mcp.make.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "malwarebytes",
+      "name": "Malwarebytes",
+      "url": "https://scamguard.malwarebytes.com/claude/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "mdn",
+      "name": "MDN",
+      "url": "https://mcp.mdn.mozilla.net/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "melon",
+      "name": "Melon",
+      "url": "https://mcp.melon.com/mcp/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "mem",
+      "name": "Mem",
+      "url": "https://mcp.mem.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "mermaid-chart",
+      "name": "Mermaid Chart",
+      "url": "https://mcp.mermaid.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "metaview",
+      "name": "Metaview",
+      "url": "https://mcp.metaview.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "microsoft-learn",
+      "name": "Microsoft Learn",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "midpage",
+      "name": "Midpage Legal Research",
+      "url": "https://app.midpage.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "mintlify",
+      "name": "Mintlify",
+      "url": "https://mcp.mintlify.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "miro",
+      "name": "Miro",
+      "url": "https://mcp.miro.com/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "mixpanel",
+      "name": "Mixpanel",
+      "url": "https://mcp.mixpanel.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "monday",
+      "name": "Monday",
+      "url": "https://mcp.monday.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "monte-carlo",
+      "name": "Monte Carlo",
+      "url": "https://integrations.getmontecarlo.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "moodys",
+      "name": "Moody&#x27;s",
+      "url": "https://api.moodys.com/genai-ready-data/m1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "morningstar",
+      "name": "Morningstar",
+      "url": "https://mcp.morningstar.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "motherduck",
+      "name": "MotherDuck",
+      "url": "https://api.motherduck.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "motion",
+      "name": "Motion Creative Analytics",
+      "url": "https://projects.motionapp.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "msci",
+      "name": "MSCI",
+      "url": "https://mcp.msci.com/mcp/v1.0/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "mt-newswires",
+      "name": "MT Newswires",
+      "url": "https://mcp.mtnewswires.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "netdocuments",
+      "name": "NetDocuments",
+      "url": "https://web-api.us.netdocuments.app/connect/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "netlify",
+      "name": "Netlify",
+      "url": "https://netlify-mcp.netlify.app/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "omni-analytics",
+      "name": "Omni Analytics",
+      "url": "https://callbacks.omniapp.co/callback/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "open-targets",
+      "name": "Open Targets",
+      "url": "https://mcp.platform.opentargets.org/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "openrouter",
+      "name": "OpenRouter",
+      "url": "https://mcp.openrouter.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "orion",
+      "name": "Orion by Gravity",
+      "url": "https://g.runorion.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "otter-ai",
+      "name": "Otter.ai",
+      "url": "https://mcp.otter.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "outreach",
+      "name": "Outreach",
+      "url": "https://api.outreach.io/mcp/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "pagerduty",
+      "name": "PagerDuty",
+      "url": "https://mcp.pagerduty.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "paypal",
+      "name": "PayPal",
+      "url": "https://mcp.paypal.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "peec-ai",
+      "name": "Peec AI",
+      "url": "https://api.peec.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "pendo",
+      "name": "Pendo",
+      "url": "https://app.pendo.io/mcp/v0/shttp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "pg-aiguide",
+      "name": "pg-aiguide",
+      "url": "https://mcp.tigerdata.com/docs",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "pitchbook",
+      "name": "PitchBook",
+      "url": "https://premium.mcp.pitchbook.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "planetscale",
+      "name": "PlanetScale",
+      "url": "https://mcp.pscale.dev/mcp/planetscale\\n",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "polar-analytics",
+      "name": "Polar Analytics",
+      "url": "https://api.polaranalytics.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "posthog",
+      "name": "PostHog",
+      "url": "https://mcp.posthog.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "postman",
+      "name": "Postman",
+      "url": "https://mcp.postman.com/minimal",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "privacy",
+      "name": "Privacy.com",
+      "url": "https://mcp.privacy.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "pylon",
+      "name": "Pylon",
+      "url": "https://mcp.usepylon.com/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "quartr",
+      "name": "Quartr",
+      "url": "https://mcp.quartr.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "quickbooks",
+      "name": "QuickBooks",
+      "url": "https://ai-inc.quickbooks.intuit.com/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "quo",
+      "name": "Quo",
+      "url": "https://mcp.quo.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "ramp",
+      "name": "Ramp",
+      "url": "https://ramp-mcp-remote.ramp.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "ramp-data",
+      "name": "Ramp Data",
+      "url": "https://mcp.ramp.com/ramp-data/anthropic/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "razorpay",
+      "name": "Razorpay",
+      "url": "https://mcp.razorpay.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "resy",
+      "name": "Resy",
+      "url": "https://apigw.americanexpress.com/dining/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "rillet",
+      "name": "Rillet",
+      "url": "https://api.rillet.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "sanity",
+      "name": "Sanity",
+      "url": "https://mcp.sanity.io",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "scholar-gateway",
+      "name": "Scholar Gateway",
+      "url": "https://connector.scholargateway.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "scite",
+      "name": "Scite",
+      "url": "https://api.scite.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "semrush",
+      "name": "Semrush",
+      "url": "https://mcp.semrush.com/claude/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "send",
+      "name": "Send",
+      "url": "https://www.send.co/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "sentry",
+      "name": "Sentry",
+      "url": "https://mcp.sentry.dev/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "shapes",
+      "name": "Shapes",
+      "url": "https://mcp.shapes.co/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "shopify",
+      "name": "Shopify",
+      "url": "https://setup.shopify.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "signnow",
+      "name": "SignNow",
+      "url": "https://mcp-server.signnow.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "similarweb",
+      "name": "Similarweb",
+      "url": "https://mcp.similarweb.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "solve-intelligence",
+      "name": "Solve Intelligence",
+      "url": "https://api.solveintelligence.com/mcp/",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "sp-global",
+      "name": "S&amp;P Global",
+      "url": "https://kfinance.kensho.com/integrations/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "splice",
+      "name": "Splice",
+      "url": "https://mcp.splice.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "spotify",
+      "name": "Spotify",
+      "url": "https://mcp-gateway-external-pilot.spotify.net/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "sprouts",
+      "name": "Sprouts Data Intelligence",
+      "url": "https://sprouts-mcp-server.kartikay-dhar.workers.dev",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "square",
+      "name": "Square",
+      "url": "https://mcp.squareup.com/sse",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "strava",
+      "name": "Strava",
+      "url": "https://mcp.strava.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "stubhub",
+      "name": "StubHub",
+      "url": "https://open-ai-app.stubhub.net/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "superhuman-mail",
+      "name": "Superhuman Mail",
+      "url": "https://mcp.mail.superhuman.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "supermetrics",
+      "name": "Supermetrics",
+      "url": "https://mcp.supermetrics.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "surveymonkey",
+      "name": "SurveyMonkey",
+      "url": "https://mcp.surveymonkey.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "synthesize-bio",
+      "name": "Synthesize Bio",
+      "url": "https://app.synthesize.bio/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "taskrabbit",
+      "name": "Taskrabbit Booking Assistance",
+      "url": "https://mcp.taskrabbit.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "tavily",
+      "name": "Tavily",
+      "url": "https://mcp.tavily.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "third-bridge",
+      "name": "Third Bridge",
+      "url": "https://ai.thirdbridge.com/mcp/sse",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "thumbtack",
+      "name": "Thumbtack",
+      "url": "https://mcp.thumbtack.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "ticket-tailor",
+      "name": "Ticket Tailor",
+      "url": "https://mcp.tickettailor.ai/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "todoist",
+      "name": "Todoist",
+      "url": "https://ai.todoist.net/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "topcounsel",
+      "name": "TopCounsel by The L Suite",
+      "url": "https://api.techgc.co/api/mcp/topcounsel",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "trellis",
+      "name": "Trellis",
+      "url": "https://mcp.trellis.law/anthropic",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "sketchup",
+      "name": "Trimble SketchUp",
+      "url": "https://api.sketchup.com/mcp/v1/sketchup/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "tldraw",
+      "name": "tldraw",
+      "url": "https://tldraw-mcp-app.tldraw.workers.dev/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "tripadvisor",
+      "name": "Tripadvisor",
+      "url": "https://production.ai-mcp-extensibility-prd.tamg.cloud/ogMvjY4De1G7CiHanMOAgddl/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "trivago",
+      "name": "Trivago",
+      "url": "https://mcp.trivago.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "tropic",
+      "name": "Tropic",
+      "url": "https://app.tropicapp.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "turbotax",
+      "name": "TurboTax",
+      "url": "https://ai-inc.turbotax.intuit.com/358A1C1B-F73B-46A7-B130-4B14916E6843/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "twilio",
+      "name": "Twilio",
+      "url": "https://mcp.twilio.com/docs",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "uber",
+      "name": "Uber",
+      "url": "https://mcp.uber.com/claude/rides-3p/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "uber-eats",
+      "name": "Uber Eats",
+      "url": "https://mcp.ubereats.com/eats-claude/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "udemy-business",
+      "name": "Udemy Business",
+      "url": "https://api.udemy.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "unthread",
+      "name": "Unthread",
+      "url": "https://app.unthread.io/api/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "vercel",
+      "name": "Vercel",
+      "url": "https://mcp.vercel.com",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "verisk-underwriting-intelligence",
+      "name": "Verisk Underwriting Intelligence",
+      "url": "https://gatewaymcp.verisk.com/underwriting/intelligencemcp/v1",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "verisk-xactrestore",
+      "name": "Verisk XactRestore",
+      "url": "https://xactrestore-xactremodelserver-usw2-prod.propsol.io/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "viator",
+      "name": "Viator",
+      "url": "https://exp-app-mcp.prod.ep.viator.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "webflow",
+      "name": "Webflow",
+      "url": "https://mcp.webflow.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "windsor-ai",
+      "name": "Windsor.ai",
+      "url": "https://mcp.windsor.ai",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "wix",
+      "name": "Wix",
+      "url": "https://mcp.wix.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "wordpress-com",
+      "name": "WordPress.com",
+      "url": "https://public-api.wordpress.com/wpcom/v2/mcp/v1",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "workable",
+      "name": "Workable",
+      "url": "https://mcp.workable.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "wyndham-hotels",
+      "name": "Wyndham Hotels and Resorts",
+      "url": "https://mcp.wyndhamhotels.com/claude/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "xero",
+      "name": "Xero",
+      "url": "https://mcp.xero.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "zapier",
+      "name": "Zapier",
+      "url": "https://mcp.zapier.com/api/v1/connect",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "ziprecruiter",
+      "name": "ZipRecruiter",
+      "url": "https://api.ziprecruiter.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "zocks",
+      "name": "Zocks",
+      "url": "https://mcp.zocks.io/v1/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    },
+    {
+      "slug": "zoom",
+      "name": "Zoom",
+      "url": "https://mcp.zoom.us/mcp/zoom/streamable",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": true
+    },
+    {
+      "slug": "zoominfo",
+      "name": "ZoomInfo",
+      "url": "https://mcp.zoominfo.com/mcp",
+      "authType": "oauth",
+      "isOfficial": false,
+      "alreadyInCatalog": false
+    }
+  ]
+}

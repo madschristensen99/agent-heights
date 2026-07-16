@@ -1,0 +1,292 @@
+[
+  {
+    "id": "cloudflare",
+    "oldUrl": "https://docs.mcp.cloudflare.com/sse",
+    "newUrl": "https://mcp.cloudflare.com/mcp"
+  },
+  {
+    "id": "ahrefs",
+    "oldUrl": "https://mcp.ahrefs.com/sse",
+    "newUrl": "https://api.ahrefs.com/mcp/mcp"
+  },
+  {
+    "id": "asana",
+    "oldUrl": "https://mcp.asana.com/sse",
+    "newUrl": "https://mcp.asana.com/v2/mcp"
+  },
+  {
+    "id": "canva",
+    "oldUrl": "https://mcp.canva.com/sse",
+    "newUrl": "https://mcp.canva.com/mcp"
+  },
+  {
+    "id": "atlassian",
+    "oldUrl": "https://mcp.atlassian.com/v1/sse",
+    "newUrl": "https://mcp.atlassian.com/v1/mcp/authv2"
+  },
+  {
+    "id": "mercury",
+    "oldUrl": "https://mcp.mercury.com/sse",
+    "newUrl": "https://mcp.mercury.com/mcp"
+  },
+  {
+    "id": "hubspot",
+    "oldUrl": "https://mcp.hubspot.com/mcp",
+    "newUrl": "https://mcp.hubspot.com"
+  },
+  {
+    "id": "neon",
+    "oldUrl": "https://mcp.neon.tech/sse",
+    "newUrl": "https://mcp.neon.tech/mcp"
+  },
+  {
+    "id": "slack",
+    "oldUrl": "https://mcp.slack.com/sse",
+    "newUrl": "https://mcp.slack.com/mcp"
+  },
+  {
+    "id": "apollo-io",
+    "oldUrl": "https://mcp.apollo.io/sse",
+    "newUrl": "https://mcp.apollo.io/mcp"
+  },
+  {
+    "id": "attio",
+    "oldUrl": "https://mcp.attio.com/sse",
+    "newUrl": "https://mcp.attio.com/mcp"
+  },
+  {
+    "id": "airtable",
+    "oldUrl": "https://mcp.airtable.com/sse",
+    "newUrl": "https://mcp.airtable.com/mcp"
+  },
+  {
+    "id": "amplitude",
+    "oldUrl": "https://mcp.amplitude.com/sse",
+    "newUrl": "https://mcp.amplitude.com/mcp"
+  },
+  {
+    "id": "calendly",
+    "oldUrl": "https://mcp.calendly.com/sse",
+    "newUrl": "https://mcp.calendly.com"
+  },
+  {
+    "id": "clickup",
+    "oldUrl": "https://mcp.clickup.com/sse",
+    "newUrl": "https://mcp.clickup.com/mcp"
+  },
+  {
+    "id": "cloudinary",
+    "oldUrl": "https://mcp.cloudinary.com/sse",
+    "newUrl": "https://asset-management.mcp.cloudinary.com/sse"
+  },
+  {
+    "id": "close",
+    "oldUrl": "https://mcp.close.com/sse",
+    "newUrl": "https://mcp.close.com/mcp"
+  },
+  {
+    "id": "exa",
+    "oldUrl": "https://mcp.exa.ai/sse",
+    "newUrl": "https://mcp.exa.ai/mcp"
+  },
+  {
+    "id": "doordash",
+    "oldUrl": "https://mcp.doordash.com/sse",
+    "newUrl": "https://openapi.doordash.com/mcp/consumer"
+  },
+  {
+    "id": "gamma",
+    "oldUrl": "https://mcp.gamma.app/sse",
+    "newUrl": "https://mcp.gamma.app/mcp"
+  },
+  {
+    "id": "fireflies",
+    "oldUrl": "https://mcp.fireflies.ai/sse",
+    "newUrl": "https://api.fireflies.ai/mcp"
+  },
+  {
+    "id": "granola",
+    "oldUrl": "https://mcp.granola.ai/sse",
+    "newUrl": "https://mcp.granola.ai/mcp"
+  },
+  {
+    "id": "honeycomb",
+    "oldUrl": "https://mcp.honeycomb.io/sse",
+    "newUrl": "https://mcp.honeycomb.io/mcp"
+  },
+  {
+    "id": "hugging-face",
+    "oldUrl": "https://mcp.huggingface.ai/sse",
+    "newUrl": "https://huggingface.co/mcp"
+  },
+  {
+    "id": "indeed",
+    "oldUrl": "https://mcp.indeed.com/sse",
+    "newUrl": "https://mcp.indeed.com/claude/mcp"
+  },
+  {
+    "id": "instacart",
+    "oldUrl": "https://mcp.instacart.com/sse",
+    "newUrl": "https://fig-mcp.instacart.com/mcp"
+  },
+  {
+    "id": "incident-io",
+    "oldUrl": "https://mcp.incident.io/sse",
+    "newUrl": "https://mcp.incident.io/mcp"
+  },
+  {
+    "id": "intercom",
+    "oldUrl": "https://mcp.intercom.com/sse",
+    "newUrl": "https://mcp.intercom.com/mcp"
+  },
+  {
+    "id": "lucid",
+    "oldUrl": "https://mcp.lucid.co/sse",
+    "newUrl": "https://mcp.lucid.app/mcp"
+  },
+  {
+    "id": "microsoft-learn",
+    "oldUrl": "https://mcp.microsoft.com/learn/sse",
+    "newUrl": "https://learn.microsoft.com/api/mcp"
+  },
+  {
+    "id": "make",
+    "oldUrl": "https://mcp.make.com/sse",
+    "newUrl": "https://mcp.make.com"
+  },
+  {
+    "id": "mermaid-chart",
+    "oldUrl": "https://mcp.mermaidchart.com/sse",
+    "newUrl": "https://mcp.mermaid.ai/mcp"
+  },
+  {
+    "id": "mintlify",
+    "oldUrl": "https://mcp.mintlify.com/sse",
+    "newUrl": "https://mcp.mintlify.com"
+  },
+  {
+    "id": "miro",
+    "oldUrl": "https://mcp.miro.com/sse",
+    "newUrl": "https://mcp.miro.com/"
+  },
+  {
+    "id": "mixpanel",
+    "oldUrl": "https://mcp.mixpanel.com/sse",
+    "newUrl": "https://mcp.mixpanel.com/mcp"
+  },
+  {
+    "id": "otter-ai",
+    "oldUrl": "https://mcp.otter.ai/sse",
+    "newUrl": "https://mcp.otter.ai/mcp"
+  },
+  {
+    "id": "openrouter",
+    "oldUrl": "https://mcp.openrouter.com/sse",
+    "newUrl": "https://mcp.openrouter.ai/mcp"
+  },
+  {
+    "id": "pagerduty",
+    "oldUrl": "https://mcp.pagerduty.com/sse",
+    "newUrl": "https://mcp.pagerduty.com/mcp"
+  },
+  {
+    "id": "netlify",
+    "oldUrl": "https://mcp.netlify.com/sse",
+    "newUrl": "https://netlify-mcp.netlify.app/mcp"
+  },
+  {
+    "id": "postman",
+    "oldUrl": "https://mcp.postman.com/sse",
+    "newUrl": "https://mcp.postman.com/minimal"
+  },
+  {
+    "id": "paypal",
+    "oldUrl": "https://mcp.paypal.com/sse",
+    "newUrl": "https://mcp.paypal.com/mcp"
+  },
+  {
+    "id": "posthog",
+    "oldUrl": "https://mcp.posthog.com/sse",
+    "newUrl": "https://mcp.posthog.com/mcp"
+  },
+  {
+    "id": "ramp",
+    "oldUrl": "https://mcp.ramp.com/sse",
+    "newUrl": "https://ramp-mcp-remote.ramp.com/mcp"
+  },
+  {
+    "id": "sanity",
+    "oldUrl": "https://mcp.sanity.io/sse",
+    "newUrl": "https://mcp.sanity.io"
+  },
+  {
+    "id": "sentry",
+    "oldUrl": "https://mcp.sentry.dev/sse",
+    "newUrl": "https://mcp.sentry.dev/mcp"
+  },
+  {
+    "id": "shopify",
+    "oldUrl": "https://mcp.shopify.com/sse",
+    "newUrl": "https://setup.shopify.com/mcp"
+  },
+  {
+    "id": "semrush",
+    "oldUrl": "https://mcp.semrush.com/sse",
+    "newUrl": "https://mcp.semrush.com/claude/v1/mcp"
+  },
+  {
+    "id": "similarweb",
+    "oldUrl": "https://mcp.similarweb.com/sse",
+    "newUrl": "https://mcp.similarweb.com"
+  },
+  {
+    "id": "strava",
+    "oldUrl": "https://mcp.strava.com/sse",
+    "newUrl": "https://mcp.strava.com/mcp"
+  },
+  {
+    "id": "tldraw",
+    "oldUrl": "https://mcp.tldraw.com/sse",
+    "newUrl": "https://tldraw-mcp-app.tldraw.workers.dev/mcp"
+  },
+  {
+    "id": "uber",
+    "oldUrl": "https://mcp.uber.com/sse",
+    "newUrl": "https://mcp.uber.com/claude/rides-3p/mcp"
+  },
+  {
+    "id": "twilio",
+    "oldUrl": "https://mcp.twilio.com/sse",
+    "newUrl": "https://mcp.twilio.com/docs"
+  },
+  {
+    "id": "vercel",
+    "oldUrl": "https://mcp.vercel.com/sse",
+    "newUrl": "https://mcp.vercel.com"
+  },
+  {
+    "id": "wix",
+    "oldUrl": "https://mcp.wix.com/sse",
+    "newUrl": "https://mcp.wix.com/mcp"
+  },
+  {
+    "id": "webflow",
+    "oldUrl": "https://mcp.webflow.com/sse",
+    "newUrl": "https://mcp.webflow.com/mcp"
+  },
+  {
+    "id": "zapier",
+    "oldUrl": "https://mcp.zapier.com/sse",
+    "newUrl": "https://mcp.zapier.com/api/v1/connect"
+  },
+  {
+    "id": "xero",
+    "oldUrl": "https://mcp.xero.com/sse",
+    "newUrl": "https://mcp.xero.com/mcp"
+  },
+  {
+    "id": "zoom",
+    "oldUrl": "https://mcp.zoom.us/sse",
+    "newUrl": "https://mcp.zoom.us/mcp/zoom/streamable"
+  }
+]

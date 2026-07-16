@@ -4304,7 +4304,7 @@ export class OfficeScene extends Phaser.Scene {
       if (icon && icon.startsWith("<svg")) {
         iconHtml = `<span style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;">${icon.replace(/<svg/, '<svg width="14" height="14"')}</span>`;
       } else if (icon && icon.startsWith("http")) {
-        iconHtml = `<img src="${icon}" style="width:14px;height:14px;object-fit:contain;" />`;
+        iconHtml = `<img src="${icon}" style="width:14px;height:14px;object-fit:contain;" onerror="this.onerror=null;this.replace(Object.assign(document.createElement('span'),{textContent:'${name.charAt(0).toUpperCase()}',style:'font-size:0.6rem;font-weight:bold;color:#6aaadf;'}))" />`;
       } else {
         iconHtml = `<span style="font-size:0.6rem;">🔌</span>`;
       }

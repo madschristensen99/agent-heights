@@ -116,7 +116,7 @@ export async function handleMarketplaceRequest(
   const params = new URLSearchParams(queryStr);
   const type = (params.get("type") ?? "agent") as MarketplaceItemType;
   const search = sanitizeSearch(params.get("search") ?? "");
-  const limit = Math.min(parseInt(params.get("limit") ?? "50", 10) || 50, 100);
+  const limit = Math.min(parseInt(params.get("limit") ?? "500", 10) || 500, 1000);
   const offset = parseInt(params.get("offset") ?? "0", 10) || 0;
 
   try {
