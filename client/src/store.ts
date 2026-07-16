@@ -129,6 +129,7 @@ export class Store {
   private agentLogListeners = new Set<(agentId: string, entry: LogEntry) => void>();
   private agentLogHistoryListeners = new Set<(agentId: string, entries: LogEntry[]) => void>();
   private agentTaskInfoListeners = new Set<(agentId: string, currentTask: string | null, queue: { task: string; handoffTo: string | null }[], history: { task: string; success: boolean; ts: number; durationMs: number }[]) => void>();
+  private agentMemoryListeners = new Set<(agentId: string, messages: { role: string; content: string }[]) => void>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -327,6 +328,14 @@ export class Store {
 
   offAgentTaskInfo(fn: (agentId: string, currentTask: string | null, queue: { task: string; handoffTo: string | null }[], history: { task: string; success: boolean; ts: number; durationMs: number }[]) => void): void {
     this.agentTaskInfoListeners.delete(fn);
+  }
+
+  onAgentMemory(fn: (agentId: string, messages: { role: string; content: string }[]) => void): void {
+    this.agentMemoryListeners.add(fn);
+  }
+
+  offAgentMemory(fn: (agentId: string, messages: { role: string; content: string }[]) => void): void {
+    this.agentMemoryListeners.delete(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -934,6 +943,10 @@ export class Store {
       }
       case "agent_task_info": {
         for (const fn of this.agentTaskInfoListeners) fn(msg.agentId, msg.currentTask, msg.queue, msg.history);
+        return;
+      }
+      case "agent_memory": {
+        for (const fn of this.agentMemoryListeners) fn(msg.agentId, msg.messages);
         return;
       }
     }

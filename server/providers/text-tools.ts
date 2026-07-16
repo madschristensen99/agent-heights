@@ -21,6 +21,11 @@ export function clearTextToolMemory(agentId: string): void {
   conversations.delete(agentId);
 }
 
+/** Get an agent's in-memory conversation messages (for the memory viewer). */
+export function getAgentConversations(agentId: string): unknown[] {
+  return conversations.get(agentId) ?? [];
+}
+
 // ── Tool description injection ────────────────────────────────────────────
 
 const TOOL_OPEN = "<<tool_call";

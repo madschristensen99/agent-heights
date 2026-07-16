@@ -223,7 +223,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Agent currently being viewed in the modal (null = modal closed). */
   private agentViewAgentId: string | null = null;
   /** Current tab in the agent monitor. */
-  private agentViewTab: "screen" | "files" | "terminal" | "tasks" | "chat" | "stats" = "screen";
+  private agentViewTab: "screen" | "files" | "terminal" | "tasks" | "chat" | "memory" | "stats" = "screen";
   /** Current file browser path within the agent workspace. */
   private agentFsPath = ".";
   /** Unsubscribe functions for agent log/FS listeners. */
@@ -4242,6 +4242,7 @@ export class OfficeScene extends Phaser.Scene {
           <button class="av-tab" data-tab="terminal" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Terminal</button>
           <button class="av-tab" data-tab="tasks" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Tasks</button>
           <button class="av-tab" data-tab="chat" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Chat</button>
+          <button class="av-tab" data-tab="memory" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Memory</button>
           <button class="av-tab" data-tab="stats" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Stats</button>
         </div>
         <div id="agent-view-content" style="width: 900px; height: 560px; background: #0a0a12; border-radius: 0 8px 8px 8px; overflow: hidden;">
@@ -4278,7 +4279,7 @@ export class OfficeScene extends Phaser.Scene {
     // Wire tab buttons
     modal.querySelectorAll(".av-tab").forEach(btn => {
       btn.addEventListener("click", () => {
-        const tab = (btn as HTMLElement).dataset.tab as "screen" | "files" | "terminal" | "tasks" | "chat" | "stats";
+        const tab = (btn as HTMLElement).dataset.tab as "screen" | "files" | "terminal" | "tasks" | "chat" | "memory" | "stats";
         this.switchAgentViewTab(tab, agent.id);
       });
     });
@@ -4293,7 +4294,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** Switch to a different tab in the agent monitor. */
-  private switchAgentViewTab(tab: "screen" | "files" | "terminal" | "tasks" | "chat" | "stats", agentId: string): void {
+  private switchAgentViewTab(tab: "screen" | "files" | "terminal" | "tasks" | "chat" | "memory" | "stats", agentId: string): void {
     this.agentViewTab = tab;
     // Update tab button styles
     const modal = document.getElementById("agent-view-modal");
@@ -4335,6 +4336,8 @@ export class OfficeScene extends Phaser.Scene {
       this.renderTasksTab(agentId, content);
     } else if (this.agentViewTab === "chat") {
       this.renderChatTab(agentId, content);
+    } else if (this.agentViewTab === "memory") {
+      this.renderMemoryTab(agentId, content);
     } else if (this.agentViewTab === "stats") {
       content.innerHTML = this.renderStatsTab(agent);
     }
@@ -4828,6 +4831,72 @@ export class OfficeScene extends Phaser.Scene {
     document.getElementById("av-chat-send")?.addEventListener("click", sendChat);
     chatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendChat();
+    });
+  }
+
+  /** Render the Memory tab — view agent's conversation history with the LLM. */
+  private renderMemoryTab(agentId: string, content: HTMLElement): void {
+    content.innerHTML = `
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:monospace;color:#c0c0d0;font-size:0.78rem;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#111122;border-bottom:1px solid #222244;">
+          <span style="color:#555;font-size:0.7rem;">Conversation Memory</span>
+          <span id="av-mem-count" style="color:#888;font-size:0.65rem;"></span>
+          <button id="av-mem-refresh" style="margin-left:auto;padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#888;font-size:0.7rem;cursor:pointer;">Refresh</button>
+        </div>
+        <div id="av-mem-list" style="flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="color:#555;font-size:0.7rem;padding:20px;text-align:center;">Loading conversation history...</div>
+        </div>
+      </div>
+    `;
+
+    const listEl = document.getElementById("av-mem-list")!;
+    const countEl = document.getElementById("av-mem-count")!;
+
+    // Request memory from server
+    if (this.net) this.net.send({ type: "agent_memory_request", agentId });
+
+    // Listen for memory response
+    const onMemory = (respAgentId: string, messages: { role: string; content: string }[]) => {
+      if (respAgentId !== agentId) return;
+      countEl.textContent = `${messages.length} messages`;
+
+      if (messages.length === 0) {
+        listEl.innerHTML = `<div style="color:#555;font-size:0.7rem;padding:20px;text-align:center;">No conversation history. The agent hasn't been given any tasks yet.</div>`;
+        return;
+      }
+
+      const roleColors: Record<string, string> = {
+        system: "#666",
+        user: "#6aaadf",
+        assistant: "#44cc66",
+        tool: "#cc8844",
+        unknown: "#888",
+      };
+      const roleLabels: Record<string, string> = {
+        system: "SYSTEM",
+        user: "USER",
+        assistant: "ASSISTANT",
+        tool: "TOOL",
+        unknown: "???",
+      };
+
+      listEl.innerHTML = messages.map(m => {
+        const color = roleColors[m.role] ?? "#888";
+        const label = roleLabels[m.role] ?? m.role.toUpperCase();
+        const isLong = m.content.length > 500;
+        const displayContent = isLong ? m.content.slice(0, 500) + "..." : m.content;
+        return `<div style="background:#0d0d18;border-left:3px solid ${color};padding:8px 12px;border-radius:0 4px 4px 0;">
+          <div style="color:${color};font-size:0.6rem;font-weight:bold;margin-bottom:4px;">${label}</div>
+          <div style="color:#c0c0d0;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-word;">${this.escapeHtml(displayContent)}</div>
+        </div>`;
+      }).join("");
+    };
+    this.store.onAgentMemory(onMemory);
+    this.agentViewCleanup.push(() => this.store.offAgentMemory(onMemory));
+
+    // Wire refresh button
+    document.getElementById("av-mem-refresh")?.addEventListener("click", () => {
+      if (this.net) this.net.send({ type: "agent_memory_request", agentId });
     });
   }
 

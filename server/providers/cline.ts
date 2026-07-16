@@ -770,3 +770,8 @@ export function clearAgentMemory(agentId: string): void {
   agents.delete(agentId);
   messageStore.delete(agentId);
 }
+
+/** Get an agent's in-memory conversation messages (for the memory viewer). */
+export function getAgentMessages(agentId: string): unknown[] {
+  return messageStore.get(agentId) ?? [];
+}

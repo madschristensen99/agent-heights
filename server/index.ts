@@ -1609,6 +1609,38 @@ wss.on("connection", async (ws, req) => {
           if (info) sess.broadcast({ type: "agent_task_info", agentId: msg.agentId, ...info });
           break;
         }
+        // ── Agent memory viewer ───────────────────────────────────────────
+        case "agent_memory_request": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          const rawMessages = await ownerSess.manager.getAgentMemory(msg.agentId);
+          // Normalize messages to { role, content } format
+          const messages = rawMessages.map((m: any) => {
+            const role = m.role ?? "unknown";
+            let content = "";
+            if (typeof m.content === "string") {
+              content = m.content;
+            } else if (Array.isArray(m.content)) {
+              content = m.content.map((part: any) => {
+                if (part.type === "text" && part.text) return part.text;
+                if (part.type === "tool_use") return `[tool_use: ${part.name}(${JSON.stringify(part.input ?? {}).slice(0, 200)})]`;
+                if (part.type === "tool_result") {
+                  const resultText = typeof part.content === "string" ? part.content : JSON.stringify(part.content ?? "");
+                  return `[tool_result: ${resultText.slice(0, 200)}]`;
+                }
+                return JSON.stringify(part).slice(0, 200);
+              }).join("\n");
+            } else {
+              content = JSON.stringify(m.content ?? "").slice(0, 500);
+            }
+            return { role, content: content.slice(0, 2000) };
+          });
+          sess.broadcast({ type: "agent_memory", agentId: msg.agentId, messages });
+          break;
+        }
         case "create_org": {
           const slug = msg.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
           if (!slug) {

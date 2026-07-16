@@ -24,8 +24,8 @@ import type {
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
-import { clearAgentMemory } from "./providers/cline.js";
-import { runTextTools, clearTextToolMemory } from "./providers/text-tools.js";
+import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
+import { runTextTools, clearTextToolMemory, getAgentConversations } from "./providers/text-tools.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
@@ -1004,6 +1004,25 @@ export class AgentManager {
       queue: rt.taskQueue.map(q => ({ task: q.task, handoffTo: q.handoffTo })),
       history: [...rt.taskHistory],
     };
+  }
+
+  /** Get an agent's conversation memory (from in-memory stores or persistence). */
+  async getAgentMemory(agentId: string): Promise<unknown[]> {
+    // Try in-memory stores first (current process)
+    const clineMsgs = getAgentMessages(agentId);
+    if (clineMsgs.length > 0) return clineMsgs;
+    const textMsgs = getAgentConversations(agentId);
+    if (textMsgs.length > 0) return textMsgs;
+    // Also check chat-scoped conversations
+    const chatMsgs = getAgentMessages(`${agentId}:chat`);
+    if (chatMsgs.length > 0) return chatMsgs;
+    // Fall back to persistence (survives server restart)
+    try {
+      const persisted = await this.save.loadMessages(agentId);
+      return persisted;
+    } catch {
+      return [];
+    }
   }
 
   /** Register a callback to receive live log entries for an agent. Returns an unsubscribe fn. */

@@ -577,6 +577,7 @@ export type ClientMsg =
   | { type: "agent_log_subscribe"; agentId: string }
   | { type: "agent_log_unsubscribe"; agentId: string }
   | { type: "agent_inject_task"; agentId: string; task: string; handoffTo?: string }
+  | { type: "agent_memory_request"; agentId: string }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
@@ -660,6 +661,7 @@ export type ServerMsg =
   | { type: "agent_log"; agentId: string; entry: LogEntry }
   | { type: "agent_log_history"; agentId: string; entries: LogEntry[] }
   | { type: "agent_task_info"; agentId: string; currentTask: string | null; queue: { task: string; handoffTo: string | null }[]; history: { task: string; success: boolean; ts: number; durationMs: number }[] }
+  | { type: "agent_memory"; agentId: string; messages: { role: string; content: string }[] }
   | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }
   | { type: "schedules"; schedules: AgentSchedule[] }
   | { type: "schedule"; schedule: AgentSchedule }
