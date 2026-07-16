@@ -1411,20 +1411,27 @@ function drawSpriteHeightsLogo(s: Sheet, ox: number, oy: number): void {
   const accent = "#58c866";
   const accentDk = "#3a8848";
 
-  // --- "SPRITE HEIGHTS HQ" in pixel font ---
-  const title = "SPRITE HEIGHTS HQ";
-  const titleScale = 6; // 18 chars × (5+1)*6 - 6 = 642px, fits in 640px canvas (2px clipped)
-  const titleW = pixelFontWidth(title, titleScale);
-  const titleX = Math.round(cx - titleW / 2);
-  const titleY = Math.round(cy - 63 / 2) - 12; // shift up for accent line below
+  // --- "SPRITE HEIGHTS HQ" in pixel font, two lines at scale 8 ---
+  const titleScale = 8;
+  const line1 = "SPRITE";       // 6 chars × (5+1)*8 - 8 = 280px
+  const line2 = "HEIGHTS HQ";   // 10 chars × (5+1)*8 - 8 = 472px
+  const line1W = pixelFontWidth(line1, titleScale);
+  const line2W = pixelFontWidth(line2, titleScale);
+  const line1X = Math.round(cx - line1W / 2);
+  const line2X = Math.round(cx - line2W / 2);
+  const line1Y = Math.round(cy - 7 * titleScale - 4); // top line
+  const line2Y = line1Y + 7 * titleScale + 8;          // bottom line
 
   // Shadow (offset by 4px, very dark, barely visible)
-  drawPixelTextAlpha(s, title, titleX + 4, titleY + 4, titleScale, "#0a0e14", 0.15);
+  drawPixelTextAlpha(s, line1, line1X + 4, line1Y + 4, titleScale, "#0a0e14", 0.15);
+  drawPixelTextAlpha(s, line2, line2X + 4, line2Y + 4, titleScale, "#0a0e14", 0.15);
   // Main text — bright green, very transparent so carpet dominates
-  drawPixelTextAlpha(s, title, titleX, titleY, titleScale, accent, 0.3);
+  drawPixelTextAlpha(s, line1, line1X, line1Y, titleScale, accent, 0.3);
+  drawPixelTextAlpha(s, line2, line2X, line2Y, titleScale, accent, 0.3);
 
   // Accent line below text
-  const lineY = titleY + 7 * titleScale + 16;
+  const titleW = Math.max(line1W, line2W);
+  const lineY = line2Y + 7 * titleScale + 16;
   const lineW = Math.min(titleW + 60, LOGO_W - 80);
   const lineX = Math.round(cx - lineW / 2);
   for (let x = lineX; x < lineX + lineW; x++) {
