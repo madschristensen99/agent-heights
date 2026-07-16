@@ -16,11 +16,6 @@ RUN pnpm build
 # Create data directories for agent workspaces / logs / saves
 RUN mkdir -p /app/ag /app/workspace
 
-# Persistent volumes — mount these in Railway (or docker run -v) to survive redeployments
-# /app/ag       → user save files, session logs, agent metadata (file mode)
-# /app/workspace → agent working directories (files agents create/edit/upload)
-VOLUME ["/app/ag", "/app/workspace"]
-
 EXPOSE 3001
 
 ENV PORT=3001
