@@ -2383,7 +2383,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Aiera account (OAuth connection required)"]',
     '[{"label":"Aiera MCP Server","url":"https://mcp-pub.aiera.com/"}]',
-    'https://icons.duckduckgo.com/ip3/aiera.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%232ECC71%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EA%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Box Agent',
@@ -2435,7 +2435,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["AdisInsight account (OAuth connection required)"]',
     '[{"label":"AdisInsight MCP Server","url":"https://adisinsight-mcp.springer.com/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/springer.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23D35400%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EA%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Adobe Experience Manager Agent',
@@ -2461,7 +2461,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Adobe Experience Manager account (OAuth connection required)"]',
     '[{"label":"Adobe Experience Manager MCP Server","url":"https://mcp.adobeaemcloud.com/adobe/mcp/aem"}]',
-    'https://icons.duckduckgo.com/ip3/adobeaemcloud.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%233498DB%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EA%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Adobe for creativity Agent',
@@ -2591,7 +2591,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Aiwyn Tax account (OAuth connection required)"]',
     '[{"label":"Aiwyn Tax MCP Server","url":"https://mcp.columnapi.com/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/columnapi.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%233498DB%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EA%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'AllTrails Agent',
@@ -2747,7 +2747,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["AWS Marketplace account (OAuth connection required)"]',
     '[{"label":"AWS Marketplace MCP Server","url":"https://marketplace-mcp.us-east-1.api.aws/"}]',
-    'https://icons.duckduckgo.com/ip3/api.aws.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%239B59B6%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EA%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'B12 Agent',
@@ -2877,7 +2877,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Blockscout account (OAuth connection required)"]',
     '[{"label":"Blockscout MCP Server","url":"https://mcp.blockscout.com/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/blockscout.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23D94A4A%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EB%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'BoardWise Agent',
@@ -3137,7 +3137,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Clarity AI account (OAuth connection required)"]',
     '[{"label":"Clarity AI MCP Server","url":"https://clarity-sfdr20-mcp.pro.clarity.ai/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/clarity.ai.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%2350B83C%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EC%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Clay Agent',
@@ -3215,7 +3215,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Clockwise account (OAuth connection required)"]',
     '[{"label":"Clockwise MCP Server","url":"https://mcp.getclockwise.com/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/getclockwise.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23D9A441%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EC%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'CoinDesk Agent',
@@ -3345,7 +3345,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Control Plane account (OAuth connection required)"]',
     '[{"label":"Control Plane MCP Server","url":"https://mcp.cpln.io/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/cpln.io.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23E67E22%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EC%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'COROS Agent',
@@ -3397,7 +3397,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Cortellis Regulatory Intelligence account (OAuth connection required)"]',
     '[{"label":"Cortellis Regulatory Intelligence MCP Server","url":"https://api.clarivate.com/lifesciences/mcp-regulatory/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/clarivate.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%239B59B6%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EC%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Coupler.io Agent',
@@ -3787,7 +3787,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["DirectBooker account (OAuth connection required)"]',
     '[{"label":"DirectBooker MCP Server","url":"https://www.directbooker.ai/claude"}]',
-    'https://icons.duckduckgo.com/ip3/directbooker.ai.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%231ABC9C%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ED%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Dovetail Agent',
@@ -4047,7 +4047,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Fathom account (OAuth connection required)"]',
     '[{"label":"Fathom MCP Server","url":"https://api.fathom.ai/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/fathom.ai.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23E67E22%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EF%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Fever Event Discovery Agent',
@@ -4125,7 +4125,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["FMP account (OAuth connection required)"]',
     '[{"label":"FMP MCP Server","url":"https://financialmodelingprep.com/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/financialmodelingprep.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%233498DB%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EF%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Gainsight (Staircase AI) Agent',
@@ -4255,7 +4255,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Google Cloud BigQuery account (OAuth connection required)"]',
     '[{"label":"Google Cloud BigQuery MCP Server","url":"https://bigquery.googleapis.com/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/googleapis.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%232980B9%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EG%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Docusign Agent',
@@ -4437,7 +4437,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Guidepoint account (OAuth connection required)"]',
     '[{"label":"Guidepoint MCP Server","url":"https://clapi.guidepoint.io/mcp-server/v1/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/guidepoint.io.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23E67E22%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EG%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Guru Agent',
@@ -4567,7 +4567,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Hex account (OAuth connection required)"]',
     '[{"label":"Hex MCP Server","url":"https://app.hex.tech/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/hex.tech.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%231ABC9C%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EH%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'IBISWorld Agent',
@@ -4801,7 +4801,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Kindora Funder Discovery account (OAuth connection required)"]',
     '[{"label":"Kindora Funder Discovery MCP Server","url":"https://kindora-mcp.azurewebsites.net/mcp/"}]',
-    'https://icons.duckduckgo.com/ip3/azurewebsites.net.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%238E44AD%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EK%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Kiwi.com Agent',
@@ -4931,7 +4931,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Lawve AI account (OAuth connection required)"]',
     '[{"label":"Lawve AI MCP Server","url":"https://mcp.lawve.ai/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/lawve.ai.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%2350B83C%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EL%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Legal Data Hunter Agent',
@@ -5295,7 +5295,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["MDN account (OAuth connection required)"]',
     '[{"label":"MDN MCP Server","url":"https://mcp.mdn.mozilla.net/"}]',
-    'https://icons.duckduckgo.com/ip3/mozilla.net.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23E74C3C%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EM%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Melon Agent',
@@ -5634,7 +5634,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["NetDocuments account (OAuth connection required)"]',
     '[{"label":"NetDocuments MCP Server","url":"https://web-api.us.netdocuments.app/connect/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/netdocuments.app.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%2316A085%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EN%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Omni Analytics Agent',
@@ -5660,7 +5660,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Omni Analytics account (OAuth connection required)"]',
     '[{"label":"Omni Analytics MCP Server","url":"https://callbacks.omniapp.co/callback/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/omniapp.co.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23D9A441%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EO%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Open Targets Agent',
@@ -6182,7 +6182,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Scite account (OAuth connection required)"]',
     '[{"label":"Scite MCP Server","url":"https://api.scite.ai/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/scite.ai.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%232980B9%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ES%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Send Agent',
@@ -6364,7 +6364,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Spotify account (OAuth connection required)"]',
     '[{"label":"Spotify MCP Server","url":"https://mcp-gateway-external-pilot.spotify.net/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/spotify.net.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23E74C3C%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ES%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Sprouts Data Intelligence Agent',
@@ -6443,7 +6443,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["StubHub account (OAuth connection required)"]',
     '[{"label":"StubHub MCP Server","url":"https://open-ai-app.stubhub.net/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/stubhub.net.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%233498DB%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ES%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Superhuman Mail Agent',
@@ -6651,7 +6651,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Ticket Tailor account (OAuth connection required)"]',
     '[{"label":"Ticket Tailor MCP Server","url":"https://mcp.tickettailor.ai/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/tickettailor.ai.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23D9A441%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ET%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Todoist Agent',
@@ -6678,7 +6678,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Todoist account (OAuth connection required)"]',
     '[{"label":"Todoist MCP Server","url":"https://ai.todoist.net/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/todoist.net.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%2316A085%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ET%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'TopCounsel by The L Suite Agent',
@@ -6704,7 +6704,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["TopCounsel by The L Suite account (OAuth connection required)"]',
     '[{"label":"TopCounsel by The L Suite MCP Server","url":"https://api.techgc.co/api/mcp/topcounsel"}]',
-    'https://icons.duckduckgo.com/ip3/techgc.co.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23D9A441%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ET%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Trellis Agent',
@@ -6730,7 +6730,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Trellis account (OAuth connection required)"]',
     '[{"label":"Trellis MCP Server","url":"https://mcp.trellis.law/anthropic"}]',
-    'https://icons.duckduckgo.com/ip3/trellis.law.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23F39C12%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ET%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Trimble SketchUp Agent',
@@ -6782,7 +6782,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Tripadvisor account (OAuth connection required)"]',
     '[{"label":"Tripadvisor MCP Server","url":"https://production.ai-mcp-extensibility-prd.tamg.cloud/ogMvjY4De1G7CiHanMOAgddl/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/tamg.cloud.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%238E44AD%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ET%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Trivago Agent',
@@ -6886,7 +6886,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Uber Eats account (OAuth connection required)"]',
     '[{"label":"Uber Eats MCP Server","url":"https://mcp.ubereats.com/eats-claude/mcp"}]',
-    'https://icons.duckduckgo.com/ip3/ubereats.com.ico'
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%2316A085%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EU%3C%2Ftext%3E%3C%2Fsvg%3E'
   ),
   (
     'Udemy Business Agent',

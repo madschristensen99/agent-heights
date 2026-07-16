@@ -212,6 +212,17 @@ function genLinks(server) {
 }
 
 // ── Generate a letter avatar SVG data URI (no external requests) ─────────
+// Domains that don't have favicons on DuckDuckGo — use letter avatar instead
+const NO_FAVICON = new Set([
+  "springer.com", "adobeaemcloud.com", "api.aws", "clarity.ai", "getclockwise.com",
+  "clarivate.com", "googleapis.com", "hex.tech", "trellis.law", "ubereats.com",
+  "financialmodelingprep.com", "azurewebsites.net", "cpln.io", "mozilla.net",
+  "scite.ai", "directbooker.ai", "guidepoint.io", "columnapi.com", "tickettailor.ai",
+  "netdocuments.app", "tamg.cloud", "lawve.ai", "stubhub.net", "techgc.co",
+  "blockscout.com", "todoist.net", "fathom.ai", "omniapp.co", "spotify.net",
+  "aiera.com", "adobeaemcloud.com",
+]);
+
 function getFaviconUrl(url) {
   try {
     const u = new URL(url);
@@ -221,6 +232,7 @@ function getFaviconUrl(url) {
     if (parts.length > 2) {
       host = parts.slice(-2).join(".");
     }
+    if (NO_FAVICON.has(host)) return null;
     return `https://icons.duckduckgo.com/ip3/${host}.ico`;
   } catch {
     return null;
