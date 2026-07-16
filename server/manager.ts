@@ -966,6 +966,37 @@ export class AgentManager {
     this.broadcast({ type: "card", card });
   }
 
+  /** Get the workspace directory path for an agent (used by file browser endpoints). */
+  getAgentWorkspace(agentId: string): string | null {
+    const rt = this.agents.get(agentId);
+    if (!rt) return null;
+    return this.cwdFor(this.slugFor(rt), rt.info.id);
+  }
+
+  /** Get the shared workspace path. */
+  getSharedWorkspace(): string {
+    return join(this.workspaceRoot, "shared");
+  }
+
+  /** Get an agent's current log entries (for log history on subscribe). */
+  getAgentLogs(agentId: string): LogEntry[] {
+    const rt = this.agents.get(agentId);
+    return rt ? [...rt.logs] : [];
+  }
+
+  /** Register a callback to receive live log entries for an agent. Returns an unsubscribe fn. */
+  subscribeAgentLogs(agentId: string, cb: (entry: LogEntry) => void): () => void {
+    const set = this.logSubscribers.get(agentId) ?? new Set();
+    set.add(cb);
+    this.logSubscribers.set(agentId, set);
+    return () => {
+      set.delete(cb);
+      if (set.size === 0) this.logSubscribers.delete(agentId);
+    };
+  }
+
+  private logSubscribers = new Map<string, Set<(entry: LogEntry) => void>>();
+
   private cwdFor(slug: string, id: string): string {
     return join(this.workspaceRoot, `${slug}-${id}`);
   }
@@ -2197,5 +2228,8 @@ export class AgentManager {
     this.session.record("log", { agentId: rt.info.id, agentName: rt.info.name, kind, text });
     this.persist();
     this.broadcast({ type: "log", agentId: rt.info.id, entry });
+    // Notify direct subscribers (agent monitor live log)
+    const subs = this.logSubscribers.get(rt.info.id);
+    if (subs) for (const cb of subs) cb(entry);
   }
 }

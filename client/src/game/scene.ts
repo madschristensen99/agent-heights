@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
-import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo } from "../../../shared/types";
+import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry } from "../../../shared/types";
 import { Grid, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -222,6 +222,12 @@ export class OfficeScene extends Phaser.Scene {
   private agentBroadcastAgentId: string | null = null;
   /** Agent currently being viewed in the modal (null = modal closed). */
   private agentViewAgentId: string | null = null;
+  /** Current tab in the agent monitor: "screen" | "files" | "terminal" | "stats". */
+  private agentViewTab: "screen" | "files" | "terminal" | "stats" = "screen";
+  /** Current file browser path within the agent workspace. */
+  private agentFsPath = ".";
+  /** Unsubscribe functions for agent log/FS listeners. */
+  private agentViewCleanup: (() => void)[] = [];
   /** Projector texture key for agent frames. */
   private projectorAgentTextureKey = "projector-agent-frame";
   /** Phaser image object for agent frames on projector. */
@@ -325,8 +331,8 @@ export class OfficeScene extends Phaser.Scene {
 
     // ── Agent screenshot viewing + projector broadcast ────────────────
     this.store.onAgentFrame((agentId, frame) => {
-      // If this is the agent being viewed in the modal, update the modal
-      if (agentId === this.agentViewAgentId) {
+      // If this is the agent being viewed in the modal and on the screen tab, update the modal
+      if (agentId === this.agentViewAgentId && this.agentViewTab === "screen") {
         const content = document.getElementById("agent-view-content");
         if (content) {
           content.innerHTML = `<img src="data:image/jpeg;base64,${frame}" style="width: 100%; height: 100%; object-fit: contain;" />`;
@@ -4198,6 +4204,9 @@ export class OfficeScene extends Phaser.Scene {
     const agent = [...this.store.agents.values()].find(a => a.deskIndex === deskIndex);
     if (!agent) return;
     this.agentViewAgentId = agent.id;
+    this.agentViewTab = "screen";
+    this.agentFsPath = ".";
+    this.agentViewCleanup = [];
 
     // Request screenshot stream from server
     if (this.net) {
@@ -4216,8 +4225,8 @@ export class OfficeScene extends Phaser.Scene {
       display: flex; align-items: center; justify-content: center;
     `;
     modal.innerHTML = `
-      <div style="background: #1a1a2e; border-radius: 12px; padding: 16px; max-width: 90vw; max-height: 90vh; position: relative;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+      <div style="background: #1a1a2e; border-radius: 12px; padding: 16px; max-width: 90vw; max-height: 90vh; position: relative; display:flex; flex-direction:column;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
           <div>
             <span style="color: ${agent.accent}; font-weight: bold; font-size: 1.1rem;">${agent.name}</span>
             <span style="color: #888; font-size: 0.8rem; margin-left: 8px;">${agent.status.toUpperCase()}</span>
@@ -4227,8 +4236,13 @@ export class OfficeScene extends Phaser.Scene {
             <button id="agent-view-close" style="padding: 4px 12px; border: none; border-radius: 6px; background: #333; color: #e0e0e0; font-size: 0.8rem; cursor: pointer;">Close</button>
           </div>
         </div>
-        <div id="agent-view-content" style="width: 800px; height: 500px; background: #0a0a12; border-radius: 8px; overflow: hidden;">
-          ${this.renderAgentDashboard(agent)}
+        <div id="agent-view-tabs" style="display:flex;gap:2px;margin-bottom:8px;">
+          <button class="av-tab" data-tab="screen" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#0a0a12;color:#6aaadf;font-size:0.8rem;cursor:pointer;">Screen</button>
+          <button class="av-tab" data-tab="files" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Files</button>
+          <button class="av-tab" data-tab="terminal" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Terminal</button>
+          <button class="av-tab" data-tab="stats" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Stats</button>
+        </div>
+        <div id="agent-view-content" style="width: 900px; height: 560px; background: #0a0a12; border-radius: 0 8px 8px 8px; overflow: hidden;">
         </div>
         ${agent.task ? `<div style="color: #888; font-size: 0.75rem; margin-top: 8px;">Task: ${agent.task}</div>` : ""}
       </div>
@@ -4244,28 +4258,340 @@ export class OfficeScene extends Phaser.Scene {
     const broadcastBtn = document.getElementById("agent-view-broadcast")!;
     broadcastBtn.addEventListener("click", () => {
       if (this.agentBroadcastAgentId === agent.id) {
-        // Stop broadcasting
         if (this.net) this.net.send({ type: "agent_broadcast_stop" });
         broadcastBtn.textContent = "Broadcast to Projector";
-        broadcastBtn.style.background = "#2a4a6a";
+        (broadcastBtn as HTMLButtonElement).style.background = "#2a4a6a";
       } else {
-        // Start broadcasting
         if (this.net) this.net.send({ type: "agent_broadcast_start", agentId: agent.id });
         broadcastBtn.textContent = "Stop Broadcast";
-        broadcastBtn.style.background = "#6a2a2a";
+        (broadcastBtn as HTMLButtonElement).style.background = "#6a2a2a";
       }
     });
 
-    // Update broadcast button state if already broadcasting
     if (this.agentBroadcastAgentId === agent.id) {
       broadcastBtn.textContent = "Stop Broadcast";
-      broadcastBtn.style.background = "#6a2a2a";
+      (broadcastBtn as HTMLButtonElement).style.background = "#6a2a2a";
     }
+
+    // Wire tab buttons
+    modal.querySelectorAll(".av-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tab = (btn as HTMLElement).dataset.tab as "screen" | "files" | "terminal" | "stats";
+        this.switchAgentViewTab(tab, agent.id);
+      });
+    });
 
     // Click outside to close
     modal.addEventListener("click", (e) => {
       if (e.target === modal) this.closeAgentViewModal();
     });
+
+    // Render initial tab (screen)
+    this.renderAgentViewTab(agent.id);
+  }
+
+  /** Switch to a different tab in the agent monitor. */
+  private switchAgentViewTab(tab: "screen" | "files" | "terminal" | "stats", agentId: string): void {
+    this.agentViewTab = tab;
+    // Update tab button styles
+    const modal = document.getElementById("agent-view-modal");
+    if (modal) {
+      modal.querySelectorAll(".av-tab").forEach(btn => {
+        const isActive = (btn as HTMLElement).dataset.tab === tab;
+        (btn as HTMLElement).style.background = isActive ? "#0a0a12" : "#111122";
+        (btn as HTMLElement).style.color = isActive ? "#6aaadf" : "#888";
+      });
+    }
+    // Clean up previous tab listeners
+    for (const cleanup of this.agentViewCleanup) cleanup();
+    this.agentViewCleanup = [];
+
+    // Handle log subscription lifecycle
+    if (tab === "terminal") {
+      if (this.net) this.net.send({ type: "agent_log_subscribe", agentId });
+    } else {
+      if (this.net) this.net.send({ type: "agent_log_unsubscribe", agentId });
+    }
+
+    this.renderAgentViewTab(agentId);
+  }
+
+  /** Render the current tab content. */
+  private renderAgentViewTab(agentId: string): void {
+    const content = document.getElementById("agent-view-content");
+    if (!content) return;
+    const agent = this.store.agents.get(agentId);
+    if (!agent) return;
+
+    if (this.agentViewTab === "screen") {
+      content.innerHTML = this.renderAgentDashboard(agent);
+    } else if (this.agentViewTab === "files") {
+      this.renderFilesTab(agentId, content);
+    } else if (this.agentViewTab === "terminal") {
+      this.renderTerminalTab(agentId, content);
+    } else if (this.agentViewTab === "stats") {
+      content.innerHTML = this.renderStatsTab(agent);
+    }
+  }
+
+  /** Render the Files tab — file browser with upload/download/delete. */
+  private renderFilesTab(agentId: string, content: HTMLElement): void {
+    content.innerHTML = `
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:monospace;color:#c0c0d0;font-size:0.8rem;">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#111122;border-bottom:1px solid #222244;">
+          <span style="color:#555;font-size:0.7rem;">Path:</span>
+          <span id="av-fs-path" style="color:#6aaadf;flex:1;">${this.agentFsPath}</span>
+          <button id="av-fs-up" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#aaa;font-size:0.7rem;cursor:pointer;">Up</button>
+          <label style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a2a3a;color:#6aaadf;font-size:0.7rem;cursor:pointer;">
+            Upload
+            <input id="av-fs-upload-input" type="file" style="display:none;" />
+          </label>
+        </div>
+        <div id="av-fs-listing" style="flex:1;overflow-y:auto;padding:4px 0;"></div>
+        <div id="av-fs-viewer" style="display:none;flex:1;overflow:hidden;border-top:1px solid #222244;flex-direction:column;">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#111122;">
+            <span id="av-fs-filename" style="color:#e0e0e0;font-size:0.75rem;flex:1;"></span>
+            <button id="av-fs-download" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a2a3a;color:#6aaadf;font-size:0.7rem;cursor:pointer;">Download</button>
+            <button id="av-fs-delete" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#3a1a1a;color:#cc6666;font-size:0.7rem;cursor:pointer;">Delete</button>
+            <button id="av-fs-close-viewer" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#888;font-size:0.7rem;cursor:pointer;">Back</button>
+          </div>
+          <pre id="av-fs-content" style="flex:1;overflow:auto;margin:0;padding:12px;background:#0d0d18;color:#c0c0d0;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-all;"></pre>
+        </div>
+      </div>
+    `;
+
+    // Request listing
+    if (this.net) this.net.send({ type: "agent_fs_list", agentId, path: this.agentFsPath });
+
+    // Listen for listing responses
+    const onListing = (respAgentId: string, path: string, entries: { name: string; isDir: boolean; size: number; mtime: number }[]) => {
+      if (respAgentId !== agentId || path !== this.agentFsPath) return;
+      const listingEl = document.getElementById("av-fs-listing");
+      if (!listingEl) return;
+      if (entries.length === 0) {
+        listingEl.innerHTML = `<div style="padding:16px;color:#555;text-align:center;">Empty directory</div>`;
+        return;
+      }
+      listingEl.innerHTML = entries.map(e => {
+        const icon = e.isDir ? "📁" : "📄";
+        const sizeStr = e.isDir ? "" : this.formatFileSize(e.size);
+        const timeStr = new Date(e.mtime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        return `<div class="av-fs-item" data-name="${e.name}" data-dir="${e.isDir}" style="display:flex;align-items:center;gap:8px;padding:4px 12px;cursor:pointer;border-bottom:1px solid #111122;">
+          <span style="font-size:0.9rem;">${icon}</span>
+          <span style="flex:1;color:${e.isDir ? "#6aaadf" : "#c0c0d0"};">${e.name}</span>
+          <span style="color:#555;font-size:0.65rem;">${sizeStr}</span>
+          <span style="color:#444;font-size:0.65rem;">${timeStr}</span>
+        </div>`;
+      }).join("");
+
+      // Wire item clicks
+      listingEl.querySelectorAll(".av-fs-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const name = (item as HTMLElement).dataset.name!;
+          const isDir = (item as HTMLElement).dataset.dir === "true";
+          const newPath = this.agentFsPath === "." ? name : `${this.agentFsPath}/${name}`;
+          if (isDir) {
+            this.agentFsPath = newPath;
+            if (this.net) this.net.send({ type: "agent_fs_list", agentId, path: newPath });
+            const pathEl = document.getElementById("av-fs-path");
+            if (pathEl) pathEl.textContent = newPath;
+          } else {
+            // Read file
+            if (this.net) this.net.send({ type: "agent_fs_read", agentId, path: newPath });
+            this.agentFsCurrentFile = newPath;
+          }
+        });
+      });
+    };
+    this.store.onAgentFsListing(onListing);
+    this.agentViewCleanup.push(() => this.store.offAgentFsListing(onListing));
+
+    // Listen for file content
+    const onContent = (respAgentId: string, path: string, fileContent: string, error?: string) => {
+      if (respAgentId !== agentId) return;
+      const viewer = document.getElementById("av-fs-viewer");
+      const filenameEl = document.getElementById("av-fs-filename");
+      const contentEl = document.getElementById("av-fs-content");
+      const listingEl = document.getElementById("av-fs-listing");
+      if (!viewer || !filenameEl || !contentEl) return;
+      viewer.style.display = "flex";
+      if (listingEl) listingEl.style.display = "none";
+      filenameEl.textContent = path;
+      if (error) {
+        contentEl.textContent = `Error: ${error}`;
+        contentEl.style.color = "#cc4444";
+      } else {
+        contentEl.textContent = fileContent;
+        contentEl.style.color = "#c0c0d0";
+      }
+    };
+    this.store.onAgentFsContent(onContent);
+    this.agentViewCleanup.push(() => this.store.offAgentFsContent(onContent));
+
+    // Listen for FS results (write/delete/upload)
+    const onResult = (respAgentId: string, _path: string, action: string, success: boolean, error?: string) => {
+      if (respAgentId !== agentId) return;
+      if (success) {
+        // Refresh listing
+        if (this.net) this.net.send({ type: "agent_fs_list", agentId, path: this.agentFsPath });
+        this.store.toast(`File ${action} successful`);
+      } else {
+        this.store.toast(`File ${action} failed: ${error ?? "unknown error"}`);
+      }
+    };
+    this.store.onAgentFsResult(onResult);
+    this.agentViewCleanup.push(() => this.store.offAgentFsResult(onResult));
+
+    // Wire Up button
+    document.getElementById("av-fs-up")?.addEventListener("click", () => {
+      if (this.agentFsPath === ".") return;
+      const parts = this.agentFsPath.split("/");
+      parts.pop();
+      this.agentFsPath = parts.join("/") || ".";
+      if (this.net) this.net.send({ type: "agent_fs_list", agentId, path: this.agentFsPath });
+      const pathEl = document.getElementById("av-fs-path");
+      if (pathEl) pathEl.textContent = this.agentFsPath;
+    });
+
+    // Wire upload
+    const uploadInput = document.getElementById("av-fs-upload-input") as HTMLInputElement | null;
+    uploadInput?.addEventListener("change", () => {
+      const file = uploadInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(",")[1] ?? "";
+        const uploadPath = this.agentFsPath === "." ? file.name : `${this.agentFsPath}/${file.name}`;
+        if (this.net) this.net.send({ type: "agent_fs_upload", agentId, path: uploadPath, content: base64, encoding: "base64" });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Wire viewer buttons
+    document.getElementById("av-fs-close-viewer")?.addEventListener("click", () => {
+      const viewer = document.getElementById("av-fs-viewer");
+      const listingEl = document.getElementById("av-fs-listing");
+      if (viewer) viewer.style.display = "none";
+      if (listingEl) listingEl.style.display = "block";
+    });
+
+    document.getElementById("av-fs-download")?.addEventListener("click", () => {
+      const filename = this.agentFsCurrentFile?.split("/").pop() ?? "download";
+      const contentEl = document.getElementById("av-fs-content");
+      if (!contentEl) return;
+      const blob = new Blob([contentEl.textContent ?? ""], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById("av-fs-delete")?.addEventListener("click", () => {
+      if (!this.agentFsCurrentFile) return;
+      if (!confirm(`Delete ${this.agentFsCurrentFile}?`)) return;
+      if (this.net) this.net.send({ type: "agent_fs_delete", agentId, path: this.agentFsCurrentFile });
+      const viewer = document.getElementById("av-fs-viewer");
+      const listingEl = document.getElementById("av-fs-listing");
+      if (viewer) viewer.style.display = "none";
+      if (listingEl) listingEl.style.display = "block";
+    });
+  }
+
+  /** Current file being viewed in the file browser. */
+  private agentFsCurrentFile: string | null = null;
+
+  /** Render the Terminal tab — live log stream. */
+  private renderTerminalTab(agentId: string, content: HTMLElement): void {
+    content.innerHTML = `
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Courier New',monospace;color:#c0c0d0;font-size:0.78rem;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#111122;border-bottom:1px solid #222244;">
+          <span style="color:#555;font-size:0.7rem;">Live Log Stream</span>
+          <span id="av-term-status" style="color:#44cc66;font-size:0.65rem;">● connected</span>
+          <button id="av-term-clear" style="margin-left:auto;padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#888;font-size:0.7rem;cursor:pointer;">Clear</button>
+          <label style="display:flex;align-items:center;gap:4px;color:#888;font-size:0.7rem;cursor:pointer;">
+            <input id="av-term-autoscroll" type="checkbox" checked /> Auto-scroll
+          </label>
+        </div>
+        <div id="av-terminal-log" style="flex:1;overflow-y:auto;padding:8px 12px;background:#0d0d18;"></div>
+      </div>
+    `;
+
+    const logEl = document.getElementById("av-terminal-log")!;
+
+    // Listen for log history
+    const onHistory = (respAgentId: string, entries: LogEntry[]) => {
+      if (respAgentId !== agentId) return;
+      logEl.innerHTML = entries.map(e => this.formatLogEntry(e)).join("");
+      this.scrollToTerminalBottom();
+    };
+    this.store.onAgentLogHistory(onHistory);
+    this.agentViewCleanup.push(() => this.store.offAgentLogHistory(onHistory));
+
+    // Listen for live log entries
+    const onLog = (respAgentId: string, entry: LogEntry) => {
+      if (respAgentId !== agentId) return;
+      logEl.insertAdjacentHTML("beforeend", this.formatLogEntry(entry));
+      this.scrollToTerminalBottom();
+    };
+    this.store.onAgentLog(onLog);
+    this.agentViewCleanup.push(() => this.store.offAgentLog(onLog));
+
+    // Wire clear button
+    document.getElementById("av-term-clear")?.addEventListener("click", () => {
+      logEl.innerHTML = "";
+    });
+  }
+
+  /** Format a log entry as HTML for the terminal. */
+  private formatLogEntry(entry: LogEntry): string {
+    const colors: Record<string, string> = {
+      status: "#888",
+      text: "#e0e0e0",
+      tool: "#4a8cd4",
+      result: "#44cc66",
+      error: "#cc4444",
+      boss: "#cc8844",
+    };
+    const color = colors[entry.kind] ?? "#c0c0d0";
+    const time = new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const prefix: Record<string, string> = {
+      status: "STATUS",
+      text: "TEXT",
+      tool: "TOOL",
+      result: "RESULT",
+      error: "ERROR",
+      boss: "BOSS",
+    };
+    const tag = prefix[entry.kind] ?? entry.kind.toUpperCase();
+    return `<div style="padding:1px 0;"><span style="color:#444;">[${time}]</span> <span style="color:${color};font-weight:bold;">${tag}</span> <span style="color:${color};">${this.escapeHtml(entry.text)}</span></div>`;
+  }
+
+  /** Scroll terminal to bottom if auto-scroll is enabled. */
+  private scrollToTerminalBottom(): void {
+    const autoScroll = document.getElementById("av-term-autoscroll") as HTMLInputElement | null;
+    if (autoScroll && !autoScroll.checked) return;
+    const logEl = document.getElementById("av-terminal-log");
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  /** Escape HTML special characters. */
+  private escapeHtml(text: string): string {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  /** Format file size for display. */
+  private formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  /** Render the Stats tab — agent info dashboard (reuses old dashboard layout). */
+  private renderStatsTab(agent: AgentInfo): string {
+    return this.renderAgentDashboard(agent);
   }
 
   /** Render an HTML dashboard for an agent — shown when no live screenshot is available. */
@@ -4416,8 +4742,13 @@ export class OfficeScene extends Phaser.Scene {
   private closeAgentViewModal(): void {
     if (this.agentViewAgentId && this.net) {
       this.net.send({ type: "agent_view_stop", agentId: this.agentViewAgentId });
+      this.net.send({ type: "agent_log_unsubscribe", agentId: this.agentViewAgentId });
     }
+    // Clean up tab listeners
+    for (const cleanup of this.agentViewCleanup) cleanup();
+    this.agentViewCleanup = [];
     this.agentViewAgentId = null;
+    this.agentFsCurrentFile = null;
     document.getElementById("agent-view-modal")?.remove();
   }
 

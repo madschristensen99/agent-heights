@@ -123,6 +123,11 @@ export class Store {
   private webcamPeerLeftListeners = new Set<(userId: string) => void>();
   private agentFrameListeners = new Set<(agentId: string, frame: string) => void>();
   private agentBroadcastStateListeners = new Set<(agentId: string | null) => void>();
+  private agentFsListingListeners = new Set<(agentId: string, path: string, entries: { name: string; isDir: boolean; size: number; mtime: number }[]) => void>();
+  private agentFsContentListeners = new Set<(agentId: string, path: string, content: string, error?: string) => void>();
+  private agentFsResultListeners = new Set<(agentId: string, path: string, action: "write" | "delete" | "upload", success: boolean, error?: string) => void>();
+  private agentLogListeners = new Set<(agentId: string, entry: LogEntry) => void>();
+  private agentLogHistoryListeners = new Set<(agentId: string, entries: LogEntry[]) => void>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -273,6 +278,46 @@ export class Store {
 
   onAgentBroadcastState(fn: (agentId: string | null) => void): void {
     this.agentBroadcastStateListeners.add(fn);
+  }
+
+  onAgentFsListing(fn: (agentId: string, path: string, entries: { name: string; isDir: boolean; size: number; mtime: number }[]) => void): void {
+    this.agentFsListingListeners.add(fn);
+  }
+
+  onAgentFsContent(fn: (agentId: string, path: string, content: string, error?: string) => void): void {
+    this.agentFsContentListeners.add(fn);
+  }
+
+  onAgentFsResult(fn: (agentId: string, path: string, action: "write" | "delete" | "upload", success: boolean, error?: string) => void): void {
+    this.agentFsResultListeners.add(fn);
+  }
+
+  onAgentLog(fn: (agentId: string, entry: LogEntry) => void): void {
+    this.agentLogListeners.add(fn);
+  }
+
+  onAgentLogHistory(fn: (agentId: string, entries: LogEntry[]) => void): void {
+    this.agentLogHistoryListeners.add(fn);
+  }
+
+  offAgentFsListing(fn: (agentId: string, path: string, entries: { name: string; isDir: boolean; size: number; mtime: number }[]) => void): void {
+    this.agentFsListingListeners.delete(fn);
+  }
+
+  offAgentFsContent(fn: (agentId: string, path: string, content: string, error?: string) => void): void {
+    this.agentFsContentListeners.delete(fn);
+  }
+
+  offAgentFsResult(fn: (agentId: string, path: string, action: "write" | "delete" | "upload", success: boolean, error?: string) => void): void {
+    this.agentFsResultListeners.delete(fn);
+  }
+
+  offAgentLog(fn: (agentId: string, entry: LogEntry) => void): void {
+    this.agentLogListeners.delete(fn);
+  }
+
+  offAgentLogHistory(fn: (agentId: string, entries: LogEntry[]) => void): void {
+    this.agentLogHistoryListeners.delete(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -856,6 +901,26 @@ export class Store {
       }
       case "agent_broadcast_state": {
         for (const fn of this.agentBroadcastStateListeners) fn(msg.agentId);
+        return;
+      }
+      case "agent_fs_listing": {
+        for (const fn of this.agentFsListingListeners) fn(msg.agentId, msg.path, msg.entries);
+        return;
+      }
+      case "agent_fs_content": {
+        for (const fn of this.agentFsContentListeners) fn(msg.agentId, msg.path, msg.content, msg.error);
+        return;
+      }
+      case "agent_fs_result": {
+        for (const fn of this.agentFsResultListeners) fn(msg.agentId, msg.path, msg.action, msg.success, msg.error);
+        return;
+      }
+      case "agent_log": {
+        for (const fn of this.agentLogListeners) fn(msg.agentId, msg.entry);
+        return;
+      }
+      case "agent_log_history": {
+        for (const fn of this.agentLogHistoryListeners) fn(msg.agentId, msg.entries);
         return;
       }
     }

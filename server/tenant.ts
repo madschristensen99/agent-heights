@@ -33,6 +33,8 @@ export interface UserSession {
   voiceActive: boolean;
   screenShareActive: boolean;
   webcamActive: boolean;
+  /** Live log subscriptions keyed by agentId — cleaned up on disconnect. */
+  agentLogSubscriptions?: Map<string, () => void>;
 }
 
 /** A player's live state within a room. */

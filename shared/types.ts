@@ -569,6 +569,13 @@ export type ClientMsg =
   | { type: "agent_view_stop"; agentId: string }
   | { type: "agent_broadcast_start"; agentId: string }
   | { type: "agent_broadcast_stop" }
+  | { type: "agent_fs_list"; agentId: string; path: string }
+  | { type: "agent_fs_read"; agentId: string; path: string }
+  | { type: "agent_fs_write"; agentId: string; path: string; content: string }
+  | { type: "agent_fs_delete"; agentId: string; path: string }
+  | { type: "agent_fs_upload"; agentId: string; path: string; content: string; encoding: "base64" | "utf-8" }
+  | { type: "agent_log_subscribe"; agentId: string }
+  | { type: "agent_log_unsubscribe"; agentId: string }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
@@ -646,6 +653,11 @@ export type ServerMsg =
   | { type: "webcam_peer_left"; userId: string }
   | { type: "agent_frame"; agentId: string; frame: string }
   | { type: "agent_broadcast_state"; agentId: string | null }
+  | { type: "agent_fs_listing"; agentId: string; path: string; entries: { name: string; isDir: boolean; size: number; mtime: number }[] }
+  | { type: "agent_fs_content"; agentId: string; path: string; content: string; error?: string }
+  | { type: "agent_fs_result"; agentId: string; path: string; action: "write" | "delete" | "upload"; success: boolean; error?: string }
+  | { type: "agent_log"; agentId: string; entry: LogEntry }
+  | { type: "agent_log_history"; agentId: string; entries: LogEntry[] }
   | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }
   | { type: "schedules"; schedules: AgentSchedule[] }
   | { type: "schedule"; schedule: AgentSchedule }

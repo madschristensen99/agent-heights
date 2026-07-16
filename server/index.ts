@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
-import { dirname, join, extname, normalize } from "node:path";
-import { readFile, stat } from "node:fs/promises";
+import { dirname, join, extname, normalize, resolve, relative } from "node:path";
+import { readFile, stat, readdir, writeFile, unlink, mkdir } from "node:fs/promises";
 import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance } from "../shared/types.js";
 import { SERVER_PORT, isValidAppearance } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
@@ -1485,7 +1485,117 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         }
-        // ── Organization management ────────────────────────────────────
+        // ── Agent file system operations ────────────────────────────────
+        case "agent_fs_list":
+        case "agent_fs_read":
+        case "agent_fs_write":
+        case "agent_fs_delete":
+        case "agent_fs_upload": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          const ws_path = (msg as any).path ?? ".";
+          const isShared = ws_path.startsWith("shared/");
+          const agentWs = isShared
+            ? ownerSess.manager.getSharedWorkspace()
+            : ownerSess.manager.getAgentWorkspace(msg.agentId);
+          if (!agentWs) {
+            sess.broadcast({ type: "agent_fs_listing", agentId: msg.agentId, path: ws_path, entries: [] });
+            break;
+          }
+          const relPath = isShared ? ws_path.slice("shared/".length) : ws_path;
+          const safePath = resolve(agentWs, relPath);
+          const rel = relative(agentWs, safePath);
+          if (rel.startsWith("..")) {
+            sess.broadcast({ type: "toast", text: "Path outside workspace." });
+            break;
+          }
+
+          if (msg.type === "agent_fs_list") {
+            try {
+              const entries = await readdir(safePath, { withFileTypes: true });
+              const listing = await Promise.all(entries.map(async (e) => {
+                const fullPath = join(safePath, e.name);
+                const s = await stat(fullPath).catch(() => null);
+                return {
+                  name: e.name,
+                  isDir: e.isDirectory(),
+                  size: s?.size ?? 0,
+                  mtime: s?.mtimeMs ?? 0,
+                };
+              }));
+              listing.sort((a, b) => (a.isDir === b.isDir) ? a.name.localeCompare(b.name) : (a.isDir ? -1 : 1));
+              sess.broadcast({ type: "agent_fs_listing", agentId: msg.agentId, path: ws_path, entries: listing });
+            } catch {
+              sess.broadcast({ type: "agent_fs_listing", agentId: msg.agentId, path: ws_path, entries: [] });
+            }
+          } else if (msg.type === "agent_fs_read") {
+            try {
+              const content = await readFile(safePath, "utf-8");
+              sess.broadcast({ type: "agent_fs_content", agentId: msg.agentId, path: ws_path, content });
+            } catch (err) {
+              sess.broadcast({ type: "agent_fs_content", agentId: msg.agentId, path: ws_path, content: "", error: err instanceof Error ? err.message : "Read failed" });
+            }
+          } else if (msg.type === "agent_fs_write") {
+            try {
+              await mkdir(dirname(safePath), { recursive: true });
+              await writeFile(safePath, (msg as any).content, "utf-8");
+              sess.broadcast({ type: "agent_fs_result", agentId: msg.agentId, path: ws_path, action: "write", success: true });
+            } catch (err) {
+              sess.broadcast({ type: "agent_fs_result", agentId: msg.agentId, path: ws_path, action: "write", success: false, error: err instanceof Error ? err.message : "Write failed" });
+            }
+          } else if (msg.type === "agent_fs_delete") {
+            try {
+              await unlink(safePath);
+              sess.broadcast({ type: "agent_fs_result", agentId: msg.agentId, path: ws_path, action: "delete", success: true });
+            } catch (err) {
+              sess.broadcast({ type: "agent_fs_result", agentId: msg.agentId, path: ws_path, action: "delete", success: false, error: err instanceof Error ? err.message : "Delete failed" });
+            }
+          } else if (msg.type === "agent_fs_upload") {
+            try {
+              await mkdir(dirname(safePath), { recursive: true });
+              const content = (msg as any).encoding === "base64"
+                ? Buffer.from((msg as any).content, "base64")
+                : (msg as any).content;
+              await writeFile(safePath, content);
+              sess.broadcast({ type: "agent_fs_result", agentId: msg.agentId, path: ws_path, action: "upload", success: true });
+            } catch (err) {
+              sess.broadcast({ type: "agent_fs_result", agentId: msg.agentId, path: ws_path, action: "upload", success: false, error: err instanceof Error ? err.message : "Upload failed" });
+            }
+          }
+          break;
+        }
+        // ── Agent live log streaming ────────────────────────────────────
+        case "agent_log_subscribe": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          // Send log history first
+          const history = ownerSess.manager.getAgentLogs(msg.agentId);
+          sess.broadcast({ type: "agent_log_history", agentId: msg.agentId, entries: history });
+          // Subscribe to live logs
+          const unsub = ownerSess.manager.subscribeAgentLogs(msg.agentId, (entry) => {
+            sess.broadcast({ type: "agent_log", agentId: msg.agentId, entry });
+          });
+          // Store unsubscribe fn for cleanup
+          if (!sess.agentLogSubscriptions) sess.agentLogSubscriptions = new Map();
+          sess.agentLogSubscriptions.set(msg.agentId, unsub);
+          break;
+        }
+        case "agent_log_unsubscribe": {
+          if (sess.agentLogSubscriptions) {
+            const unsub = sess.agentLogSubscriptions.get(msg.agentId);
+            if (unsub) {
+              unsub();
+              sess.agentLogSubscriptions.delete(msg.agentId);
+            }
+          }
+          break;
+        }
         case "create_org": {
           const slug = msg.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
           if (!slug) {
@@ -1631,6 +1741,11 @@ wss.on("connection", async (ws, req) => {
     sess.clients.delete(ws);
     if (refreshTimer) clearTimeout(refreshTimer);
     if (expiryTimer) clearTimeout(expiryTimer);
+    // Clean up agent log subscriptions
+    if (sess.agentLogSubscriptions) {
+      for (const unsub of sess.agentLogSubscriptions.values()) unsub();
+      sess.agentLogSubscriptions.clear();
+    }
     // Clean up voice state when the last client disconnects
     if (sess.clients.size === 0 && sess.voiceActive) {
       sess.voiceActive = false;
