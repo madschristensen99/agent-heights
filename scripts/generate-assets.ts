@@ -1413,7 +1413,7 @@ function drawSpriteHeightsLogo(s: Sheet, ox: number, oy: number): void {
 
   // --- "SPRITE HEIGHTS" in pixel font, single line at scale 10 ---
   const title = "SPRITE HEIGHTS";
-  const titleScale = 10;
+  const titleScale = 7; // 14 chars × (5+1)*7 - 7 = 497px, fits in 640px
   const titleW = pixelFontWidth(title, titleScale);
   const titleX = Math.round(cx - titleW / 2);
   const titleY = Math.round(cy - 7 * titleScale / 2) - 8;
