@@ -243,11 +243,7 @@ for (let i = 0; i < newEntries.length; i++) {
   const useCases = genUseCases(e);
   const requirements = genRequirements(e);
   const links = genLinks(e);
-  const imageUrl = (e.icon && e.icon.startsWith("http") && e.icon.includes("simpleicons.org"))
-    ? e.icon
-    : (e.icon && e.icon.startsWith("http"))
-      ? e.icon
-      : getFaviconUrl(e.url);
+  const imageUrl = getFaviconUrl(e.url);
 
   sqlParts.push(`  (`);
   sqlParts.push(`    '${sqlEscape(agentName)}',`);
