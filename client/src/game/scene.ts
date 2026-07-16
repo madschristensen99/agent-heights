@@ -223,7 +223,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Agent currently being viewed in the modal (null = modal closed). */
   private agentViewAgentId: string | null = null;
   /** Current tab in the agent monitor. */
-  private agentViewTab: "screen" | "files" | "terminal" | "tasks" | "stats" = "screen";
+  private agentViewTab: "screen" | "files" | "terminal" | "tasks" | "chat" | "stats" = "screen";
   /** Current file browser path within the agent workspace. */
   private agentFsPath = ".";
   /** Unsubscribe functions for agent log/FS listeners. */
@@ -4241,6 +4241,7 @@ export class OfficeScene extends Phaser.Scene {
           <button class="av-tab" data-tab="files" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Files</button>
           <button class="av-tab" data-tab="terminal" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Terminal</button>
           <button class="av-tab" data-tab="tasks" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Tasks</button>
+          <button class="av-tab" data-tab="chat" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Chat</button>
           <button class="av-tab" data-tab="stats" style="padding:6px 16px;border:none;border-radius:6px 6px 0 0;background:#111122;color:#888;font-size:0.8rem;cursor:pointer;">Stats</button>
         </div>
         <div id="agent-view-content" style="width: 900px; height: 560px; background: #0a0a12; border-radius: 0 8px 8px 8px; overflow: hidden;">
@@ -4277,7 +4278,7 @@ export class OfficeScene extends Phaser.Scene {
     // Wire tab buttons
     modal.querySelectorAll(".av-tab").forEach(btn => {
       btn.addEventListener("click", () => {
-        const tab = (btn as HTMLElement).dataset.tab as "screen" | "files" | "terminal" | "tasks" | "stats";
+        const tab = (btn as HTMLElement).dataset.tab as "screen" | "files" | "terminal" | "tasks" | "chat" | "stats";
         this.switchAgentViewTab(tab, agent.id);
       });
     });
@@ -4292,7 +4293,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** Switch to a different tab in the agent monitor. */
-  private switchAgentViewTab(tab: "screen" | "files" | "terminal" | "tasks" | "stats", agentId: string): void {
+  private switchAgentViewTab(tab: "screen" | "files" | "terminal" | "tasks" | "chat" | "stats", agentId: string): void {
     this.agentViewTab = tab;
     // Update tab button styles
     const modal = document.getElementById("agent-view-modal");
@@ -4332,6 +4333,8 @@ export class OfficeScene extends Phaser.Scene {
       this.renderTerminalTab(agentId, content);
     } else if (this.agentViewTab === "tasks") {
       this.renderTasksTab(agentId, content);
+    } else if (this.agentViewTab === "chat") {
+      this.renderChatTab(agentId, content);
     } else if (this.agentViewTab === "stats") {
       content.innerHTML = this.renderStatsTab(agent);
     }
@@ -4354,11 +4357,15 @@ export class OfficeScene extends Phaser.Scene {
         <div id="av-fs-viewer" style="display:none;flex:1;overflow:hidden;border-top:1px solid #222244;flex-direction:column;">
           <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#111122;">
             <span id="av-fs-filename" style="color:#e0e0e0;font-size:0.75rem;flex:1;"></span>
+            <button id="av-fs-edit" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#2a3a1a;color:#88cc44;font-size:0.7rem;cursor:pointer;">Edit</button>
+            <button id="av-fs-save" style="display:none;padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a4a2a;color:#44cc66;font-size:0.7rem;cursor:pointer;">Save</button>
+            <button id="av-fs-cancel-edit" style="display:none;padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#888;font-size:0.7rem;cursor:pointer;">Cancel</button>
             <button id="av-fs-download" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a2a3a;color:#6aaadf;font-size:0.7rem;cursor:pointer;">Download</button>
             <button id="av-fs-delete" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#3a1a1a;color:#cc6666;font-size:0.7rem;cursor:pointer;">Delete</button>
             <button id="av-fs-close-viewer" style="padding:2px 8px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#888;font-size:0.7rem;cursor:pointer;">Back</button>
           </div>
           <pre id="av-fs-content" style="flex:1;overflow:auto;margin:0;padding:12px;background:#0d0d18;color:#c0c0d0;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-all;"></pre>
+          <textarea id="av-fs-editor" style="display:none;flex:1;margin:0;padding:12px;background:#0d0d18;color:#c0c0d0;font-size:0.75rem;line-height:1.4;border:none;border-top:1px solid #222244;font-family:monospace;resize:none;outline:none;" spellcheck="false"></textarea>
         </div>
       </div>
     `;
@@ -4500,6 +4507,54 @@ export class OfficeScene extends Phaser.Scene {
       const listingEl = document.getElementById("av-fs-listing");
       if (viewer) viewer.style.display = "none";
       if (listingEl) listingEl.style.display = "block";
+    });
+
+    // Wire edit/save/cancel
+    document.getElementById("av-fs-edit")?.addEventListener("click", () => {
+      const contentEl = document.getElementById("av-fs-content") as HTMLPreElement | null;
+      const editorEl = document.getElementById("av-fs-editor") as HTMLTextAreaElement | null;
+      const editBtn = document.getElementById("av-fs-edit");
+      const saveBtn = document.getElementById("av-fs-save");
+      const cancelBtn = document.getElementById("av-fs-cancel-edit");
+      if (!contentEl || !editorEl) return;
+      editorEl.value = contentEl.textContent ?? "";
+      contentEl.style.display = "none";
+      editorEl.style.display = "block";
+      if (editBtn) editBtn.style.display = "none";
+      if (saveBtn) saveBtn.style.display = "inline-block";
+      if (cancelBtn) cancelBtn.style.display = "inline-block";
+      editorEl.focus();
+    });
+
+    document.getElementById("av-fs-save")?.addEventListener("click", () => {
+      if (!this.agentFsCurrentFile) return;
+      const editorEl = document.getElementById("av-fs-editor") as HTMLTextAreaElement | null;
+      const contentEl = document.getElementById("av-fs-content") as HTMLPreElement | null;
+      const editBtn = document.getElementById("av-fs-edit");
+      const saveBtn = document.getElementById("av-fs-save");
+      const cancelBtn = document.getElementById("av-fs-cancel-edit");
+      if (!editorEl || !contentEl) return;
+      const newContent = editorEl.value;
+      if (this.net) this.net.send({ type: "agent_fs_write", agentId, path: this.agentFsCurrentFile, content: newContent });
+      contentEl.textContent = newContent;
+      contentEl.style.display = "block";
+      editorEl.style.display = "none";
+      if (editBtn) editBtn.style.display = "inline-block";
+      if (saveBtn) saveBtn.style.display = "none";
+      if (cancelBtn) cancelBtn.style.display = "none";
+    });
+
+    document.getElementById("av-fs-cancel-edit")?.addEventListener("click", () => {
+      const contentEl = document.getElementById("av-fs-content") as HTMLPreElement | null;
+      const editorEl = document.getElementById("av-fs-editor") as HTMLTextAreaElement | null;
+      const editBtn = document.getElementById("av-fs-edit");
+      const saveBtn = document.getElementById("av-fs-save");
+      const cancelBtn = document.getElementById("av-fs-cancel-edit");
+      if (contentEl) contentEl.style.display = "block";
+      if (editorEl) editorEl.style.display = "none";
+      if (editBtn) editBtn.style.display = "inline-block";
+      if (saveBtn) saveBtn.style.display = "none";
+      if (cancelBtn) cancelBtn.style.display = "none";
     });
   }
 
@@ -4706,6 +4761,74 @@ export class OfficeScene extends Phaser.Scene {
         ${historyHtml}
       </div>
     `;
+  }
+
+  /** Render the Chat tab — boss-to-agent chat using existing chat message + log entries. */
+  private renderChatTab(agentId: string, content: HTMLElement): void {
+    content.innerHTML = `
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:monospace;color:#c0c0d0;font-size:0.8rem;">
+        <div id="av-chat-log" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#111122;border-top:1px solid #222244;">
+          <input id="av-chat-input" type="text" placeholder="Say something to the agent..." style="flex:1;padding:8px 12px;border:1px solid #333;border-radius:4px;background:#0d0d18;color:#e0e0e0;font-size:0.8rem;font-family:monospace;" />
+          <button id="av-chat-send" style="padding:8px 16px;border:none;border-radius:4px;background:#2a4a6a;color:#e0e0e0;font-size:0.8rem;cursor:pointer;">Send</button>
+        </div>
+      </div>
+    `;
+
+    const chatLogEl = document.getElementById("av-chat-log")!;
+    const agent = this.store.agents.get(agentId);
+
+    // Render existing chat history from store logs (boss + text entries)
+    const renderChatHistory = () => {
+      const logs = this.store.logs.get(agentId) ?? [];
+      const chatEntries = logs.filter(e => e.kind === "boss" || e.kind === "text");
+      chatLogEl.innerHTML = chatEntries.map(e => {
+        const isBoss = e.kind === "boss";
+        const time = new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const name = isBoss ? (this.store.player?.name ?? "Boss") : (agent?.name ?? "Agent");
+        const align = isBoss ? "flex-end" : "flex-start";
+        const bg = isBoss ? "#1a2a3a" : "#0d0d18";
+        const color = isBoss ? "#6aaadf" : "#c0c0d0";
+        return `<div style="align-self:${align};max-width:75%;display:flex;flex-direction:column;gap:2px;">
+          <span style="color:#555;font-size:0.6rem;padding:0 8px;">${name} · ${time}</span>
+          <div style="background:${bg};padding:8px 12px;border-radius:8px;color:${color};font-size:0.8rem;line-height:1.4;">${this.escapeHtml(e.text)}</div>
+        </div>`;
+      }).join("");
+      chatLogEl.scrollTop = chatLogEl.scrollHeight;
+    };
+    renderChatHistory();
+
+    // Listen for new log entries to update chat
+    const onLog = (respAgentId: string, entry: LogEntry) => {
+      if (respAgentId !== agentId) return;
+      if (entry.kind !== "boss" && entry.kind !== "text") return;
+      const isBoss = entry.kind === "boss";
+      const time = new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const name = isBoss ? (this.store.player?.name ?? "Boss") : (agent?.name ?? "Agent");
+      const align = isBoss ? "flex-end" : "flex-start";
+      const bg = isBoss ? "#1a2a3a" : "#0d0d18";
+      const color = isBoss ? "#6aaadf" : "#c0c0d0";
+      chatLogEl.insertAdjacentHTML("beforeend", `<div style="align-self:${align};max-width:75%;display:flex;flex-direction:column;gap:2px;">
+        <span style="color:#555;font-size:0.6rem;padding:0 8px;">${name} · ${time}</span>
+        <div style="background:${bg};padding:8px 12px;border-radius:8px;color:${color};font-size:0.8rem;line-height:1.4;">${this.escapeHtml(entry.text)}</div>
+      </div>`);
+      chatLogEl.scrollTop = chatLogEl.scrollHeight;
+    };
+    this.store.onAgentLog(onLog);
+    this.agentViewCleanup.push(() => this.store.offAgentLog(onLog));
+
+    // Wire send
+    const chatInput = document.getElementById("av-chat-input") as HTMLInputElement;
+    const sendChat = () => {
+      const text = chatInput.value.trim();
+      if (!text) return;
+      if (this.net) this.net.send({ type: "chat", agentId, text });
+      chatInput.value = "";
+    };
+    document.getElementById("av-chat-send")?.addEventListener("click", sendChat);
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendChat();
+    });
   }
 
   /** Render the Stats tab — agent info dashboard (reuses old dashboard layout). */
