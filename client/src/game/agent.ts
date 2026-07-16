@@ -39,21 +39,8 @@ const BREAK_SPOTS: Array<{ tile: Tile; face: Dir }> = [
   { tile: { x: 24, y: 14 }, face: "up" }, // sofa, right cushion
 ];
 
-/** Where idle agents hang out — scattered around the water cooler area. */
-const WATER_COOLER_SPOTS: Array<{ tile: Tile; face: Dir }> = [
-  { tile: { x: 28, y: 5 }, face: "up" },
-  { tile: { x: 27, y: 5 }, face: "up" },
-  { tile: { x: 26, y: 5 }, face: "up" },
-  { tile: { x: 25, y: 5 }, face: "up" },
-  { tile: { x: 28, y: 6 }, face: "up" },
-  { tile: { x: 26, y: 6 }, face: "up" },
-  { tile: { x: 25, y: 6 }, face: "up" },
-  { tile: { x: 25, y: 4 }, face: "up" },
-  { tile: { x: 26, y: 3 }, face: "up" },
-  { tile: { x: 27, y: 3 }, face: "up" },
-  { tile: { x: 28, y: 3 }, face: "up" },
-  { tile: { x: 25, y: 3 }, face: "up" },
-];
+/** Max tiles an idle agent shuffles from their desk. */
+const DESK_SHUFFLE_RADIUS = 2;
 
 /** A hired agent walking around the office, driven by server state. */
 export class AgentNPC {
@@ -78,7 +65,7 @@ export class AgentNPC {
   private breakUntil = 0;
   private breakFace: Dir | null = null;
   private strollUntil = 0;
-  private coolerSpot: Tile | null = null;
+  private idleSpot: Tile | null = null;
   private assembleUntil = 0;
   private scene: Phaser.Scene;
 
@@ -134,11 +121,11 @@ export class AgentNPC {
     this.sprite.on("pointerdown", () => onClick(this.info.id));
 
     this.sync(info);
-    // walk in from the door and head to the water cooler
-    this.coolerSpot = WATER_COOLER_SPOTS[info.deskIndex % WATER_COOLER_SPOTS.length].tile;
-    const coolerPath = findPath(grid, spawn, this.coolerSpot);
-    this.path = coolerPath.length > 0 ? coolerPath : findPath(grid, spawn, seat);
-    console.log(`[AgentNPC] created: name=${info.name} id=${info.id} spawn=${JSON.stringify(spawn)} seat=${JSON.stringify(seat)} coolerSpot=${JSON.stringify(this.coolerSpot)} pathLen=${this.path.length} pos=(${this.container.x},${this.container.y})`);
+    // walk in from the door and head to a spot near the desk
+    this.idleSpot = this.findDeskAdjacentTile(seat);
+    const idlePath = this.idleSpot ? findPath(grid, spawn, this.idleSpot) : [];
+    this.path = idlePath.length > 0 ? idlePath : findPath(grid, spawn, seat);
+    console.log(`[AgentNPC] created: name=${info.name} id=${info.id} spawn=${JSON.stringify(spawn)} seat=${JSON.stringify(seat)} idleSpot=${JSON.stringify(this.idleSpot)} pathLen=${this.path.length} pos=(${this.container.x},${this.container.y})`);
   }
 
   private positionDot(): void {
@@ -366,39 +353,40 @@ export class AgentNPC {
       }
       this.breakFace = null;
 
-      // no task? go hang out at the water cooler
-      if (!this.coolerSpot) {
-        this.coolerSpot = WATER_COOLER_SPOTS[this.info.deskIndex % WATER_COOLER_SPOTS.length].tile;
+      // no task? stand near the desk and shuffle around
+      if (!this.idleSpot) {
+        this.idleSpot = this.findDeskAdjacentTile(this.seat);
       }
       const at = this.tile();
-      const atCooler = at.x === this.coolerSpot.x && at.y === this.coolerSpot.y;
+      const atIdle = this.idleSpot && at.x === this.idleSpot.x && at.y === this.idleSpot.y;
 
-      if (atCooler) {
-        // chilling at the cooler — face the boss if nearby, else face the cooler
+      if (atIdle) {
+        // standing near the desk — face the boss if nearby, else face the desk
         const pdx = playerX - this.container.x;
         const pdy = playerY - this.container.y;
         if (Math.hypot(pdx, pdy) < 192) {
           this.dir =
             Math.abs(pdx) > Math.abs(pdy) ? (pdx > 0 ? "right" : "left") : pdy > 0 ? "down" : "up";
         } else {
-          this.dir = "up";
+          this.dir = "down";
         }
         this.play(`${c}-idle-${this.dir}`);
-        if (this.wanderAt === 0) this.wanderAt = time + 8000 + Math.random() * 12000;
+        if (this.wanderAt === 0) this.wanderAt = time + 12000 + Math.random() * 16000;
         if (wanderEnabled && time > this.wanderAt) {
-          this.wanderAt = time + 15000 + Math.random() * 15000;
-          this.strollUntil = time + 3000 + Math.random() * 4000;
-          const target = this.randomTile();
+          this.wanderAt = time + 20000 + Math.random() * 20000;
+          this.strollUntil = time + 4000 + Math.random() * 6000;
+          const target = this.shuffleNearDesk(this.seat);
           if (target) this.path = findPath(this.grid, at, target);
         }
       } else if (time < this.strollUntil) {
-        // stretching legs
+        // shuffling near the desk
         this.play(`${c}-idle-${this.dir}`);
       } else {
-        // head to the cooler (or back to it after a stroll)
-        this.path = findPath(this.grid, at, this.coolerSpot);
+        // head back to the idle spot near the desk
+        if (this.idleSpot) {
+          this.path = findPath(this.grid, at, this.idleSpot);
+        }
         if (this.path.length === 0) {
-          // can't reach the cooler — fall back to the seat
           this.path = findPath(this.grid, at, this.seat);
           if (this.path.length === 0) {
             const feet = feetOf(this.seat);
@@ -411,11 +399,28 @@ export class AgentNPC {
     this.container.setDepth(10 + this.container.y);
   }
 
-  private randomTile(): Tile | null {
+  /** Find a walkable tile adjacent to the desk (not the seat itself). */
+  private findDeskAdjacentTile(seat: Tile): Tile | null {
+    const candidates: Tile[] = [];
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+      const x = seat.x + dx;
+      const y = seat.y + dy;
+      if (this.grid.ok(x, y) && !(x === seat.x && y === seat.y)) {
+        candidates.push({ x, y });
+      }
+    }
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  /** Pick a random walkable tile within DESK_SHUFFLE_RADIUS of the desk. */
+  private shuffleNearDesk(seat: Tile): Tile | null {
     for (let tries = 0; tries < 20; tries++) {
-      const x = 1 + Math.floor(Math.random() * (this.grid.width - 2));
-      const y = 2 + Math.floor(Math.random() * (this.grid.height - 4));
-      if (this.grid.ok(x, y)) return { x, y };
+      const dx = Math.floor(Math.random() * (DESK_SHUFFLE_RADIUS * 2 + 1)) - DESK_SHUFFLE_RADIUS;
+      const dy = Math.floor(Math.random() * (DESK_SHUFFLE_RADIUS * 2 + 1)) - DESK_SHUFFLE_RADIUS;
+      const x = seat.x + dx;
+      const y = seat.y + dy;
+      if (this.grid.ok(x, y) && !(x === seat.x && y === seat.y)) return { x, y };
     }
     return null;
   }
