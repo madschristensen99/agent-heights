@@ -212,6 +212,21 @@ function genLinks(server) {
 }
 
 // ── Generate a letter avatar SVG data URI (no external requests) ─────────
+function getFaviconUrl(url) {
+  try {
+    const u = new URL(url);
+    let host = u.hostname;
+    host = host.replace(/^(mcp|docs|api|setup|agent|gateway|fig-mcp)\./, "");
+    const parts = host.split(".");
+    if (parts.length > 2) {
+      host = parts.slice(-2).join(".");
+    }
+    return `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
+  } catch {
+    return null;
+  }
+}
+
 function genLetterAvatar(name) {
   const letter = (name || "?").charAt(0).toUpperCase();
   // Pick a color from a palette based on the name hash
@@ -297,7 +312,7 @@ for (let i = 0; i < newEntries.length; i++) {
   const useCases = genUseCases(e);
   const requirements = genRequirements(e);
   const links = genLinks(e);
-  const imageUrl = (e.icon && e.icon.startsWith("http")) ? e.icon : genLetterAvatar(agentName);
+  const imageUrl = getFaviconUrl(e.url) || genLetterAvatar(agentName);
 
   sqlParts.push(`  (`);
   sqlParts.push(`    '${sqlEscape(agentName)}',`);

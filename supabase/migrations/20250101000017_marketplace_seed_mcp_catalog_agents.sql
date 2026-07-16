@@ -301,7 +301,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Productivity"]',
     '["Notion account (OAuth connection required)"]',
     '[{"label":"Notion MCP Server","url":"https://mcp.notion.com/mcp"}]',
-    'https://cdn.simpleicons.org/notion/white'
+    'https://www.google.com/s2/favicons?domain=notion.com&sz=128'
   ),
   (
     'Linear Agent',
@@ -327,7 +327,7 @@ To connect: Get your API Key at https://linear.app/settings/api',
     '["Productivity"]',
     '["API Key (https://linear.app/settings/api)"]',
     '[{"label":"Linear MCP Server","url":"https://mcp.linear.app/mcp"},{"label":"Get your API Key","url":"https://linear.app/settings/api"}]',
-    'https://cdn.simpleicons.org/linear'
+    'https://www.google.com/s2/favicons?domain=linear.app&sz=128'
   ),
   (
     'Slack Agent',
@@ -353,7 +353,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Slack account (OAuth connection required)"]',
     '[{"label":"Slack MCP Server","url":"https://mcp.slack.com/mcp"}]',
-    'https://cdn.simpleicons.org/slack'
+    'https://www.google.com/s2/favicons?domain=slack.com&sz=128'
   ),
   (
     'Stripe Agent',
@@ -379,7 +379,7 @@ To connect: Get your Secret Key at https://dashboard.stripe.com/apikeys',
     '["Finance"]',
     '["Secret Key (https://dashboard.stripe.com/apikeys)"]',
     '[{"label":"Stripe MCP Server","url":"https://mcp.stripe.com"},{"label":"Get your Secret Key","url":"https://dashboard.stripe.com/apikeys"}]',
-    'https://cdn.simpleicons.org/stripe'
+    'https://www.google.com/s2/favicons?domain=stripe.com&sz=128'
   ),
   (
     'Figma Agent',
@@ -405,7 +405,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Figma account (OAuth connection required)"]',
     '[{"label":"Figma MCP Server","url":"https://mcp.figma.com/mcp"}]',
-    'https://cdn.simpleicons.org/figma'
+    'https://www.google.com/s2/favicons?domain=figma.com&sz=128'
   ),
   (
     'HubSpot Agent',
@@ -431,7 +431,7 @@ To connect: Get your Private App Token at https://app.hubspot.com/settings/api/p
     '["Business"]',
     '["Private App Token (https://app.hubspot.com/settings/api/private-apps)"]',
     '[{"label":"HubSpot MCP Server","url":"https://mcp.hubspot.com"},{"label":"Get your Private App Token","url":"https://app.hubspot.com/settings/api/private-apps"}]',
-    'https://cdn.simpleicons.org/hubspot'
+    'https://www.google.com/s2/favicons?domain=hubspot.com&sz=128'
   ),
   (
     'Grafana Agent',
@@ -457,7 +457,7 @@ To connect: Get your Access Token at https://grafana.com/docs/grafana/latest/adm
     '["Data & Analytics"]',
     '["Access Token (https://grafana.com/docs/grafana/latest/administration/service-accounts/)"]',
     '[{"label":"Grafana MCP Server","url":"https://mcp.grafana.com/sse"},{"label":"Get your Access Token","url":"https://grafana.com/docs/grafana/latest/administration/service-accounts/"}]',
-    'https://cdn.simpleicons.org/grafana'
+    'https://www.google.com/s2/favicons?domain=grafana.com&sz=128'
   ),
   (
     'MongoDB Agent',
@@ -483,7 +483,7 @@ To connect: Get your API Key at https://www.mongodb.com/docs/atlas/app-services/
     '["Data & Analytics"]',
     '["API Key (https://www.mongodb.com/docs/atlas/app-services/authentication/api-key/)"]',
     '[{"label":"MongoDB MCP Server","url":"https://mcp.mongodb.com/sse"},{"label":"Get your API Key","url":"https://www.mongodb.com/docs/atlas/app-services/authentication/api-key/"}]',
-    'https://cdn.simpleicons.org/mongodb'
+    'https://www.google.com/s2/favicons?domain=mongodb.com&sz=128'
   ),
   (
     'FireCrawl Agent',
@@ -509,7 +509,7 @@ To connect: Get your API Key at https://www.firecrawl.dev/app/api-keys',
     '["Infrastructure"]',
     '["API Key (https://www.firecrawl.dev/app/api-keys)"]',
     '[{"label":"FireCrawl MCP Server","url":"https://mcp.firecrawl.dev/sse"},{"label":"Get your API Key","url":"https://www.firecrawl.dev/app/api-keys"}]',
-    'https://cdn.simpleicons.org/firecrawl'
+    'https://www.google.com/s2/favicons?domain=firecrawl.dev&sz=128'
   ),
   (
     'n8n Agent',
@@ -535,7 +535,7 @@ To connect: Get your API Key at https://docs.n8n.io/advanced-features/api/',
     '["AI & ML"]',
     '["API Key (https://docs.n8n.io/advanced-features/api/)"]',
     '[{"label":"n8n MCP Server","url":"https://mcp.n8n.io/sse"},{"label":"Get your API Key","url":"https://docs.n8n.io/advanced-features/api/"}]',
-    'https://cdn.simpleicons.org/n8n'
+    'https://www.google.com/s2/favicons?domain=n8n.io&sz=128'
   ),
   (
     'Vercel Agent',
@@ -561,7 +561,7 @@ To connect: Get your Access Token at https://vercel.com/account/tokens',
     '["Infrastructure"]',
     '["Access Token (https://vercel.com/account/tokens)"]',
     '[{"label":"Vercel MCP Server","url":"https://mcp.vercel.com"},{"label":"Get your Access Token","url":"https://vercel.com/account/tokens"}]',
-    'https://cdn.simpleicons.org/vercel/white'
+    'https://www.google.com/s2/favicons?domain=vercel.com&sz=128'
   ),
   (
     'Supabase Agent',
@@ -587,7 +587,7 @@ To connect: Get your Access Token at https://supabase.com/dashboard/account/toke
     '["Data & Analytics"]',
     '["Access Token (https://supabase.com/dashboard/account/tokens)"]',
     '[{"label":"Supabase MCP Server","url":"https://mcp.supabase.com/mcp"},{"label":"Get your Access Token","url":"https://supabase.com/dashboard/account/tokens"}]',
-    'https://cdn.simpleicons.org/supabase'
+    'https://www.google.com/s2/favicons?domain=supabase.com&sz=128'
   ),
   (
     'GitLab Agent',
@@ -613,7 +613,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["GitLab account (OAuth connection required)"]',
     '[{"label":"GitLab MCP Server","url":"https://gitlab.com/api/v4/mcp"}]',
-    'https://cdn.simpleicons.org/gitlab'
+    'https://www.google.com/s2/favicons?domain=gitlab.com&sz=128'
   ),
   (
     'Brave Search Agent',
@@ -639,7 +639,7 @@ To connect: Get your API Key at https://brave.com/search/api/',
     '["Data & Analytics"]',
     '["API Key (https://brave.com/search/api/)"]',
     '[{"label":"Brave Search MCP Server","url":"https://mcp.brave.com/sse"},{"label":"Get your API Key","url":"https://brave.com/search/api/"}]',
-    'https://cdn.simpleicons.org/brave'
+    'https://www.google.com/s2/favicons?domain=brave.com&sz=128'
   ),
   (
     'Tavily Agent',
@@ -665,7 +665,7 @@ To connect: Get your API Key at https://app.tavily.com/api-key',
     '["Data & Analytics"]',
     '["API Key (https://app.tavily.com/api-key)"]',
     '[{"label":"Tavily MCP Server","url":"https://mcp.tavily.com/mcp"},{"label":"Get your API Key","url":"https://app.tavily.com/api-key"}]',
-    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%23F39C12%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3ET%3C%2Ftext%3E%3C%2Fsvg%3E'
+    'https://www.google.com/s2/favicons?domain=tavily.com&sz=128'
   ),
   (
     'Home Assistant Agent',
@@ -691,7 +691,7 @@ To connect: Get your Long-Lived Access Token at https://www.home-assistant.io/do
     '["Infrastructure"]',
     '["Long-Lived Access Token (https://www.home-assistant.io/docs/authentication/)"]',
     '[{"label":"Home Assistant MCP Server","url":"https://mcp.home-assistant.io/sse"},{"label":"Get your Long-Lived Access Token","url":"https://www.home-assistant.io/docs/authentication/"}]',
-    'https://cdn.simpleicons.org/homeassistant'
+    'https://www.google.com/s2/favicons?domain=home-assistant.io&sz=128'
   ),
   (
     'Asana Agent',
@@ -717,7 +717,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Productivity"]',
     '["Asana account (OAuth connection required)"]',
     '[{"label":"Asana MCP Server","url":"https://mcp.asana.com/v2/mcp"}]',
-    'https://cdn.simpleicons.org/asana'
+    'https://www.google.com/s2/favicons?domain=asana.com&sz=128'
   ),
   (
     'Atlassian (Jira & Confluence) Agent',
@@ -743,7 +743,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Productivity"]',
     '["Atlassian (Jira & Confluence) account (OAuth connection required)"]',
     '[{"label":"Atlassian (Jira & Confluence) MCP Server","url":"https://mcp.atlassian.com/v1/mcp/authv2"}]',
-    'https://cdn.simpleicons.org/atlassian/white'
+    'https://www.google.com/s2/favicons?domain=atlassian.com&sz=128'
   ),
   (
     'Canva Agent',
@@ -769,7 +769,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Canva account (OAuth connection required)"]',
     '[{"label":"Canva MCP Server","url":"https://mcp.canva.com/mcp"}]',
-    'https://cdn.simpleicons.org/canva'
+    'https://www.google.com/s2/favicons?domain=canva.com&sz=128'
   ),
   (
     'Cloudflare Agent',
@@ -794,7 +794,7 @@ This agent can:
     '["Infrastructure"]',
     '["API Key"]',
     '[{"label":"Cloudflare MCP Server","url":"https://mcp.cloudflare.com/mcp"}]',
-    'https://cdn.simpleicons.org/cloudflare/white'
+    'https://www.google.com/s2/favicons?domain=cloudflare.com&sz=128'
   ),
   (
     'DeepWiki by Devin Agent',
@@ -820,7 +820,7 @@ No authentication required — works immediately.',
     '["Development"]',
     '["No authentication required — works immediately"]',
     '[{"label":"DeepWiki by Devin MCP Server","url":"https://mcp.deepwiki.com/sse"}]',
-    'https://cdn.simpleicons.org/devin/white'
+    'https://www.google.com/s2/favicons?domain=deepwiki.com&sz=128'
   ),
   (
     'Exa Agent',
@@ -846,7 +846,7 @@ To connect: Get your API Key at https://dashboard.exa.ai/api-keys',
     '["Data & Analytics"]',
     '["API Key (https://dashboard.exa.ai/api-keys)"]',
     '[{"label":"Exa MCP Server","url":"https://mcp.exa.ai/mcp"},{"label":"Get your API Key","url":"https://dashboard.exa.ai/api-keys"}]',
-    'https://cdn.simpleicons.org/exa/white'
+    'https://www.google.com/s2/favicons?domain=exa.ai&sz=128'
   ),
   (
     'Sentry Agent',
@@ -872,7 +872,7 @@ To connect: Get your Auth Token at https://sentry.io/settings/auth-tokens/',
     '["Data & Analytics"]',
     '["Auth Token (https://sentry.io/settings/auth-tokens/)"]',
     '[{"label":"Sentry MCP Server","url":"https://mcp.sentry.dev/mcp"},{"label":"Get your Auth Token","url":"https://sentry.io/settings/auth-tokens/"}]',
-    'https://cdn.simpleicons.org/sentry'
+    'https://www.google.com/s2/favicons?domain=sentry.dev&sz=128'
   ),
   (
     'PostHog Agent',
@@ -898,7 +898,7 @@ To connect: Get your Personal API Key at https://us.posthog.com/settings/user-ap
     '["Data & Analytics"]',
     '["Personal API Key (https://us.posthog.com/settings/user-api-keys)"]',
     '[{"label":"PostHog MCP Server","url":"https://mcp.posthog.com/mcp"},{"label":"Get your Personal API Key","url":"https://us.posthog.com/settings/user-api-keys"}]',
-    'https://cdn.simpleicons.org/posthog'
+    'https://www.google.com/s2/favicons?domain=posthog.com&sz=128'
   ),
   (
     'Shopify Agent',
@@ -925,7 +925,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Shopify account (OAuth connection required)"]',
     '[{"label":"Shopify MCP Server","url":"https://setup.shopify.com/mcp"}]',
-    'https://cdn.simpleicons.org/shopify/white'
+    'https://www.google.com/s2/favicons?domain=shopify.com&sz=128'
   ),
   (
     'Zapier Agent',
@@ -951,7 +951,7 @@ To connect: Get your API Key at https://developer.zapier.com/api/v1/docs/',
     '["AI & ML"]',
     '["API Key (https://developer.zapier.com/api/v1/docs/)"]',
     '[{"label":"Zapier MCP Server","url":"https://mcp.zapier.com/api/v1/connect"},{"label":"Get your API Key","url":"https://developer.zapier.com/api/v1/docs/"}]',
-    'https://cdn.simpleicons.org/zapier'
+    'https://www.google.com/s2/favicons?domain=zapier.com&sz=128'
   ),
   (
     'Zoom Agent',
@@ -977,7 +977,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Zoom account (OAuth connection required)"]',
     '[{"label":"Zoom MCP Server","url":"https://mcp.zoom.us/mcp/zoom/streamable"}]',
-    'https://cdn.simpleicons.org/zoom/white'
+    'https://www.google.com/s2/favicons?domain=zoom.us&sz=128'
   ),
   (
     'Twilio Agent',
@@ -1003,7 +1003,7 @@ To connect: Get your API Key at https://console.twilio.com/us1/account/keys',
     '["Communication"]',
     '["API Key (https://console.twilio.com/us1/account/keys)"]',
     '[{"label":"Twilio MCP Server","url":"https://mcp.twilio.com/docs"},{"label":"Get your API Key","url":"https://console.twilio.com/us1/account/keys"}]',
-    'https://cdn.simpleicons.org/twilio/red'
+    'https://www.google.com/s2/favicons?domain=twilio.com&sz=128'
   ),
   (
     'PayPal Agent',
@@ -1029,7 +1029,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["PayPal account (OAuth connection required)"]',
     '[{"label":"PayPal MCP Server","url":"https://mcp.paypal.com/mcp"}]',
-    'https://cdn.simpleicons.org/paypal/white'
+    'https://www.google.com/s2/favicons?domain=paypal.com&sz=128'
   ),
   (
     'Webflow Agent',
@@ -1055,7 +1055,7 @@ To connect: Get your Access Token at https://developers.webflow.com/data/docs/ac
     '["Design"]',
     '["Access Token (https://developers.webflow.com/data/docs/access-tokens)"]',
     '[{"label":"Webflow MCP Server","url":"https://mcp.webflow.com/mcp"},{"label":"Get your Access Token","url":"https://developers.webflow.com/data/docs/access-tokens"}]',
-    'https://cdn.simpleicons.org/webflow/white'
+    'https://www.google.com/s2/favicons?domain=webflow.com&sz=128'
   ),
   (
     'Netlify Agent',
@@ -1081,7 +1081,7 @@ To connect: Get your Access Token at https://app.netlify.com/user/applications',
     '["Infrastructure"]',
     '["Access Token (https://app.netlify.com/user/applications)"]',
     '[{"label":"Netlify MCP Server","url":"https://netlify-mcp.netlify.app/mcp"},{"label":"Get your Access Token","url":"https://app.netlify.com/user/applications"}]',
-    'https://cdn.simpleicons.org/netlify/white'
+    'https://www.google.com/s2/favicons?domain=netlify.app&sz=128'
   ),
   (
     'Airtable Agent',
@@ -1107,7 +1107,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Productivity"]',
     '["Airtable account (OAuth connection required)"]',
     '[{"label":"Airtable MCP Server","url":"https://mcp.airtable.com/mcp"}]',
-    'https://cdn.simpleicons.org/airtable'
+    'https://www.google.com/s2/favicons?domain=airtable.com&sz=128'
   ),
   (
     'ClickUp Agent',
@@ -1133,7 +1133,7 @@ To connect: Get your API Key at https://app.clickup.com/settings/apps',
     '["Productivity"]',
     '["API Key (https://app.clickup.com/settings/apps)"]',
     '[{"label":"ClickUp MCP Server","url":"https://mcp.clickup.com/mcp"},{"label":"Get your API Key","url":"https://app.clickup.com/settings/apps"}]',
-    'https://cdn.simpleicons.org/clickup'
+    'https://www.google.com/s2/favicons?domain=clickup.com&sz=128'
   ),
   (
     'Calendly Agent',
@@ -1159,7 +1159,7 @@ To connect: Get your API Key at https://calendly.com/integrations/api_webhooks',
     '["Productivity"]',
     '["API Key (https://calendly.com/integrations/api_webhooks)"]',
     '[{"label":"Calendly MCP Server","url":"https://mcp.calendly.com"},{"label":"Get your API Key","url":"https://calendly.com/integrations/api_webhooks"}]',
-    'https://cdn.simpleicons.org/calendly'
+    'https://www.google.com/s2/favicons?domain=calendly.com&sz=128'
   ),
   (
     'Cal.com Agent',
@@ -1185,7 +1185,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Productivity"]',
     '["Cal.com account (OAuth connection required)"]',
     '[{"label":"Cal.com MCP Server","url":"https://mcp.cal.com/sse"}]',
-    'https://cdn.simpleicons.org/calcom/white'
+    'https://www.google.com/s2/favicons?domain=cal.com&sz=128'
   ),
   (
     'Hugging Face Agent',
@@ -1211,7 +1211,7 @@ To connect: Get your Access Token at https://huggingface.co/settings/tokens',
     '["AI & ML"]',
     '["Access Token (https://huggingface.co/settings/tokens)"]',
     '[{"label":"Hugging Face MCP Server","url":"https://huggingface.co/mcp/sse"},{"label":"Get your Access Token","url":"https://huggingface.co/settings/tokens"}]',
-    'https://cdn.simpleicons.org/huggingface'
+    'https://www.google.com/s2/favicons?domain=huggingface.co&sz=128'
   ),
   (
     'OpenRouter Agent',
@@ -1237,7 +1237,7 @@ To connect: Get your API Key at https://openrouter.ai/keys',
     '["AI & ML"]',
     '["API Key (https://openrouter.ai/keys)"]',
     '[{"label":"OpenRouter MCP Server","url":"https://mcp.openrouter.ai/sse"},{"label":"Get your API Key","url":"https://openrouter.ai/keys"}]',
-    'https://cdn.simpleicons.org/openrouter/white'
+    'https://www.google.com/s2/favicons?domain=openrouter.ai&sz=128'
   ),
   (
     'Postman Agent',
@@ -1263,7 +1263,7 @@ To connect: Get your API Key at https://postman.postman.co/settings/me/api-keys'
     '["Development"]',
     '["API Key (https://postman.postman.co/settings/me/api-keys)"]',
     '[{"label":"Postman MCP Server","url":"https://mcp.postman.com/minimal"},{"label":"Get your API Key","url":"https://postman.postman.co/settings/me/api-keys"}]',
-    'https://cdn.simpleicons.org/postman/white'
+    'https://www.google.com/s2/favicons?domain=postman.com&sz=128'
   ),
   (
     'Miro Agent',
@@ -1289,7 +1289,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Miro account (OAuth connection required)"]',
     '[{"label":"Miro MCP Server","url":"https://mcp.miro.com/"}]',
-    'https://cdn.simpleicons.org/miro/white'
+    'https://www.google.com/s2/favicons?domain=miro.com&sz=128'
   ),
   (
     'Lucid Agent',
@@ -1315,7 +1315,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Lucid account (OAuth connection required)"]',
     '[{"label":"Lucid MCP Server","url":"https://mcp.lucid.app/mcp"}]',
-    'https://cdn.simpleicons.org/lucid/white'
+    'https://www.google.com/s2/favicons?domain=lucid.app&sz=128'
   ),
   (
     'tldraw Agent',
@@ -1341,7 +1341,7 @@ No authentication required — works immediately.',
     '["Design"]',
     '["No authentication required — works immediately"]',
     '[{"label":"tldraw MCP Server","url":"https://tldraw-mcp-app.tldraw.workers.dev/mcp"}]',
-    'https://cdn.simpleicons.org/tldraw/white'
+    'https://www.google.com/s2/favicons?domain=workers.dev&sz=128'
   ),
   (
     'Mermaid Chart Agent',
@@ -1367,7 +1367,7 @@ To connect: Get your API Key at https://www.mermaidchart.com/app/settings/api-ke
     '["Design"]',
     '["API Key (https://www.mermaidchart.com/app/settings/api-keys)"]',
     '[{"label":"Mermaid Chart MCP Server","url":"https://mcp.mermaid.ai/mcp"},{"label":"Get your API Key","url":"https://www.mermaidchart.com/app/settings/api-keys"}]',
-    'https://cdn.simpleicons.org/mermaid/white'
+    'https://www.google.com/s2/favicons?domain=mermaid.ai&sz=128'
   ),
   (
     'Strava Agent',
@@ -1393,7 +1393,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Strava account (OAuth connection required)"]',
     '[{"label":"Strava MCP Server","url":"https://mcp.strava.com/mcp"}]',
-    'https://cdn.simpleicons.org/strava/white'
+    'https://www.google.com/s2/favicons?domain=strava.com&sz=128'
   ),
   (
     'Uber Agent',
@@ -1419,7 +1419,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Uber account (OAuth connection required)"]',
     '[{"label":"Uber MCP Server","url":"https://mcp.uber.com/claude/rides-3p/mcp"}]',
-    'https://cdn.simpleicons.org/uber/white'
+    'https://www.google.com/s2/favicons?domain=uber.com&sz=128'
   ),
   (
     'Instacart Agent',
@@ -1445,7 +1445,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Instacart account (OAuth connection required)"]',
     '[{"label":"Instacart MCP Server","url":"https://fig-mcp.instacart.com/mcp"}]',
-    'https://cdn.simpleicons.org/instacart/white'
+    'https://www.google.com/s2/favicons?domain=instacart.com&sz=128'
   ),
   (
     'DoorDash Agent',
@@ -1471,7 +1471,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["DoorDash account (OAuth connection required)"]',
     '[{"label":"DoorDash MCP Server","url":"https://openapi.doordash.com/mcp/consumer"}]',
-    'https://cdn.simpleicons.org/doordash/white'
+    'https://www.google.com/s2/favicons?domain=doordash.com&sz=128'
   ),
   (
     'Intercom Agent',
@@ -1497,7 +1497,7 @@ To connect: Get your Access Token at https://developers.intercom.com/docs/refere
     '["Communication"]',
     '["Access Token (https://developers.intercom.com/docs/references/authentication/)"]',
     '[{"label":"Intercom MCP Server","url":"https://mcp.intercom.com/mcp"},{"label":"Get your Access Token","url":"https://developers.intercom.com/docs/references/authentication/"}]',
-    'https://cdn.simpleicons.org/intercom/white'
+    'https://www.google.com/s2/favicons?domain=intercom.com&sz=128'
   ),
   (
     'PagerDuty Agent',
@@ -1523,7 +1523,7 @@ To connect: Get your API Token at https://support.pagerduty.com/docs/generating-
     '["Infrastructure"]',
     '["API Token (https://support.pagerduty.com/docs/generating-api-keys)"]',
     '[{"label":"PagerDuty MCP Server","url":"https://mcp.pagerduty.com/mcp"},{"label":"Get your API Token","url":"https://support.pagerduty.com/docs/generating-api-keys"}]',
-    'https://cdn.simpleicons.org/pagerduty/white'
+    'https://www.google.com/s2/favicons?domain=pagerduty.com&sz=128'
   ),
   (
     'incident.io Agent',
@@ -1549,7 +1549,7 @@ To connect: Get your API Key at https://api-docs.incident.io/',
     '["Infrastructure"]',
     '["API Key (https://api-docs.incident.io/)"]',
     '[{"label":"incident.io MCP Server","url":"https://mcp.incident.io/mcp"},{"label":"Get your API Key","url":"https://api-docs.incident.io/"}]',
-    'https://cdn.simpleicons.org/incidentdotio/white'
+    'https://www.google.com/s2/favicons?domain=incident.io&sz=128'
   ),
   (
     'Honeycomb Agent',
@@ -1575,7 +1575,7 @@ To connect: Get your API Key at https://docs.honeycomb.io/manage-api-keys/',
     '["Data & Analytics"]',
     '["API Key (https://docs.honeycomb.io/manage-api-keys/)"]',
     '[{"label":"Honeycomb MCP Server","url":"https://mcp.honeycomb.io/mcp"},{"label":"Get your API Key","url":"https://docs.honeycomb.io/manage-api-keys/"}]',
-    'https://cdn.simpleicons.org/honeycomb/white'
+    'https://www.google.com/s2/favicons?domain=honeycomb.io&sz=128'
   ),
   (
     'Mixpanel Agent',
@@ -1602,7 +1602,7 @@ To connect: Get your Service Account at https://mixpanel.com/settings/project#se
     '["Data & Analytics"]',
     '["Service Account (https://mixpanel.com/settings/project#service-accounts)"]',
     '[{"label":"Mixpanel MCP Server","url":"https://mcp.mixpanel.com/mcp"},{"label":"Get your Service Account","url":"https://mixpanel.com/settings/project#service-accounts"}]',
-    'https://cdn.simpleicons.org/mixpanel/white'
+    'https://www.google.com/s2/favicons?domain=mixpanel.com&sz=128'
   ),
   (
     'Amplitude Agent',
@@ -1628,7 +1628,7 @@ To connect: Get your API Key at https://amplitude.com/docs/find-amplitude-api-id
     '["Data & Analytics"]',
     '["API Key (https://amplitude.com/docs/find-amplitude-api-id-and-key)"]',
     '[{"label":"Amplitude MCP Server","url":"https://mcp.amplitude.com/mcp"},{"label":"Get your API Key","url":"https://amplitude.com/docs/find-amplitude-api-id-and-key"}]',
-    'https://cdn.simpleicons.org/amplitude/white'
+    'https://www.google.com/s2/favicons?domain=amplitude.com&sz=128'
   ),
   (
     'Ramp Agent',
@@ -1655,7 +1655,7 @@ To connect: Get your API Key at https://docs.ramp.com/developer-api/v1/overview'
     '["Finance"]',
     '["API Key (https://docs.ramp.com/developer-api/v1/overview)"]',
     '[{"label":"Ramp MCP Server","url":"https://ramp-mcp-remote.ramp.com/mcp"},{"label":"Get your API Key","url":"https://docs.ramp.com/developer-api/v1/overview"}]',
-    'https://cdn.simpleicons.org/ramp/white'
+    'https://www.google.com/s2/favicons?domain=ramp.com&sz=128'
   ),
   (
     'Xero Agent',
@@ -1681,7 +1681,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Xero account (OAuth connection required)"]',
     '[{"label":"Xero MCP Server","url":"https://mcp.xero.com/mcp"}]',
-    'https://cdn.simpleicons.org/xero/white'
+    'https://www.google.com/s2/favicons?domain=xero.com&sz=128'
   ),
   (
     'Apollo.io Agent',
@@ -1707,7 +1707,7 @@ To connect: Get your API Key at https://app.apollo.io/settings/integrations/api-
     '["Business"]',
     '["API Key (https://app.apollo.io/settings/integrations/api-key)"]',
     '[{"label":"Apollo.io MCP Server","url":"https://mcp.apollo.io/mcp"},{"label":"Get your API Key","url":"https://app.apollo.io/settings/integrations/api-key"}]',
-    'https://cdn.simpleicons.org/apolloio/white'
+    'https://www.google.com/s2/favicons?domain=apollo.io&sz=128'
   ),
   (
     'Attio Agent',
@@ -1733,7 +1733,7 @@ To connect: Get your API Key at https://developers.attio.com/docs/api-key',
     '["Business"]',
     '["API Key (https://developers.attio.com/docs/api-key)"]',
     '[{"label":"Attio MCP Server","url":"https://mcp.attio.com/mcp"},{"label":"Get your API Key","url":"https://developers.attio.com/docs/api-key"}]',
-    'https://cdn.simpleicons.org/attio/white'
+    'https://www.google.com/s2/favicons?domain=attio.com&sz=128'
   ),
   (
     'Close Agent',
@@ -1759,7 +1759,7 @@ To connect: Get your API Key at https://app.close.com/settings/api/',
     '["Business"]',
     '["API Key (https://app.close.com/settings/api/)"]',
     '[{"label":"Close MCP Server","url":"https://mcp.close.com/mcp"},{"label":"Get your API Key","url":"https://app.close.com/settings/api/"}]',
-    'https://cdn.simpleicons.org/close/white'
+    'https://www.google.com/s2/favicons?domain=close.com&sz=128'
   ),
   (
     'DocuSign Agent',
@@ -1785,7 +1785,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["DocuSign account (OAuth connection required)"]',
     '[{"label":"DocuSign MCP Server","url":"https://mcp.docusign.com/sse"}]',
-    'https://cdn.simpleicons.org/docusign/white'
+    'https://www.google.com/s2/favicons?domain=docusign.com&sz=128'
   ),
   (
     'Sanity Agent',
@@ -1811,7 +1811,7 @@ To connect: Get your API Token at https://www.sanity.io/manage/personal/api-toke
     '["Business"]',
     '["API Token (https://www.sanity.io/manage/personal/api-tokens)"]',
     '[{"label":"Sanity MCP Server","url":"https://mcp.sanity.io"},{"label":"Get your API Token","url":"https://www.sanity.io/manage/personal/api-tokens"}]',
-    'https://cdn.simpleicons.org/sanity/white'
+    'https://www.google.com/s2/favicons?domain=sanity.io&sz=128'
   ),
   (
     'WordPress.com Agent',
@@ -1837,7 +1837,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["WordPress.com account (OAuth connection required)"]',
     '[{"label":"WordPress.com MCP Server","url":"https://mcp.wordpress.com/sse"}]',
-    'https://cdn.simpleicons.org/wordpress/white'
+    'https://www.google.com/s2/favicons?domain=wordpress.com&sz=128'
   ),
   (
     'Wix Agent',
@@ -1863,7 +1863,7 @@ To connect: Get your API Key at https://dev.wix.com/docs/go/api/wix-business-man
     '["Business"]',
     '["API Key (https://dev.wix.com/docs/go/api/wix-business-management/app-keys)"]',
     '[{"label":"Wix MCP Server","url":"https://mcp.wix.com/mcp"},{"label":"Get your API Key","url":"https://dev.wix.com/docs/go/api/wix-business-management/app-keys"}]',
-    'https://cdn.simpleicons.org/wix/white'
+    'https://www.google.com/s2/favicons?domain=wix.com&sz=128'
   ),
   (
     'Make Agent',
@@ -1889,7 +1889,7 @@ To connect: Get your API Key at https://www.make.com/en/help/api-documentation',
     '["AI & ML"]',
     '["API Key (https://www.make.com/en/help/api-documentation)"]',
     '[{"label":"Make MCP Server","url":"https://mcp.make.com"},{"label":"Get your API Key","url":"https://www.make.com/en/help/api-documentation"}]',
-    'https://cdn.simpleicons.org/make/white'
+    'https://www.google.com/s2/favicons?domain=make.com&sz=128'
   ),
   (
     'Neon Agent',
@@ -1915,7 +1915,7 @@ To connect: Get your API Key at https://neon.tech/docs/manage/api-keys',
     '["Data & Analytics"]',
     '["API Key (https://neon.tech/docs/manage/api-keys)"]',
     '[{"label":"Neon MCP Server","url":"https://mcp.neon.tech/mcp"},{"label":"Get your API Key","url":"https://neon.tech/docs/manage/api-keys"}]',
-    'https://cdn.simpleicons.org/neon/white'
+    'https://www.google.com/s2/favicons?domain=neon.tech&sz=128'
   ),
   (
     'Microsoft Learn Agent',
@@ -1941,7 +1941,7 @@ No authentication required — works immediately.',
     '["Development"]',
     '["No authentication required — works immediately"]',
     '[{"label":"Microsoft Learn MCP Server","url":"https://learn.microsoft.com/api/mcp"}]',
-    'https://cdn.simpleicons.org/microsoft/white'
+    'https://www.google.com/s2/favicons?domain=microsoft.com&sz=128'
   ),
   (
     'Mintlify Agent',
@@ -1967,7 +1967,7 @@ To connect: Get your API Key at https://mintlify.com/docs/api',
     '["Development"]',
     '["API Key (https://mintlify.com/docs/api)"]',
     '[{"label":"Mintlify MCP Server","url":"https://mcp.mintlify.com"},{"label":"Get your API Key","url":"https://mintlify.com/docs/api"}]',
-    'https://cdn.simpleicons.org/mintlify/white'
+    'https://www.google.com/s2/favicons?domain=mintlify.com&sz=128'
   ),
   (
     'Browserbase Agent',
@@ -1993,7 +1993,7 @@ To connect: Get your API Key at https://www.browserbase.com/settings',
     '["Development"]',
     '["API Key (https://www.browserbase.com/settings)"]',
     '[{"label":"Browserbase MCP Server","url":"https://mcp.browserbase.com/sse"},{"label":"Get your API Key","url":"https://www.browserbase.com/settings"}]',
-    'https://cdn.simpleicons.org/browserbase/white'
+    'https://www.google.com/s2/favicons?domain=browserbase.com&sz=128'
   ),
   (
     'Parallel Search Agent',
@@ -2019,7 +2019,7 @@ To connect: Get your API Key at https://parallel.ai/settings',
     '["Data & Analytics"]',
     '["API Key (https://parallel.ai/settings)"]',
     '[{"label":"Parallel Search MCP Server","url":"https://mcp.parallel.ai/sse"},{"label":"Get your API Key","url":"https://parallel.ai/settings"}]',
-    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2216%22%20fill%3D%22%238E44AD%22%2F%3E%3Ctext%20x%3D%2264%22%20y%3D%2286%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2264%22%20font-weight%3D%22bold%22%20fill%3D%22white%22%3EP%3C%2Ftext%3E%3C%2Fsvg%3E'
+    'https://www.google.com/s2/favicons?domain=parallel.ai&sz=128'
   ),
   (
     'Mercury Agent',
@@ -2045,7 +2045,7 @@ To connect: Get your API Token at https://docs.mercury.com/reference',
     '["Finance"]',
     '["API Token (https://docs.mercury.com/reference)"]',
     '[{"label":"Mercury MCP Server","url":"https://mcp.mercury.com/mcp"},{"label":"Get your API Token","url":"https://docs.mercury.com/reference"}]',
-    'https://cdn.simpleicons.org/mercury/white'
+    'https://www.google.com/s2/favicons?domain=mercury.com&sz=128'
   ),
   (
     'Ahrefs Agent',
@@ -2071,7 +2071,7 @@ To connect: Get your API Token at https://ahrefs.com/api/profile',
     '["Data & Analytics"]',
     '["API Token (https://ahrefs.com/api/profile)"]',
     '[{"label":"Ahrefs MCP Server","url":"https://api.ahrefs.com/mcp/mcp"},{"label":"Get your API Token","url":"https://ahrefs.com/api/profile"}]',
-    'https://cdn.simpleicons.org/ahrefs/white'
+    'https://www.google.com/s2/favicons?domain=ahrefs.com&sz=128'
   ),
   (
     'Semrush Agent',
@@ -2097,7 +2097,7 @@ To connect: Get your API Key at https://www.semrush.com/kb/41-api-keys',
     '["Data & Analytics"]',
     '["API Key (https://www.semrush.com/kb/41-api-keys)"]',
     '[{"label":"Semrush MCP Server","url":"https://mcp.semrush.com/claude/v1/mcp"},{"label":"Get your API Key","url":"https://www.semrush.com/kb/41-api-keys"}]',
-    'https://cdn.simpleicons.org/semrush/white'
+    'https://www.google.com/s2/favicons?domain=semrush.com&sz=128'
   ),
   (
     'Similarweb Agent',
@@ -2123,7 +2123,7 @@ To connect: Get your API Key at https://www.similarweb.com/corp/api/',
     '["Data & Analytics"]',
     '["API Key (https://www.similarweb.com/corp/api/)"]',
     '[{"label":"Similarweb MCP Server","url":"https://mcp.similarweb.com"},{"label":"Get your API Key","url":"https://www.similarweb.com/corp/api/"}]',
-    'https://cdn.simpleicons.org/similarweb/white'
+    'https://www.google.com/s2/favicons?domain=similarweb.com&sz=128'
   ),
   (
     'Granola Agent',
@@ -2149,7 +2149,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Granola account (OAuth connection required)"]',
     '[{"label":"Granola MCP Server","url":"https://mcp.granola.ai/mcp"}]',
-    'https://cdn.simpleicons.org/granola/white'
+    'https://www.google.com/s2/favicons?domain=granola.ai&sz=128'
   ),
   (
     'Fireflies Agent',
@@ -2175,7 +2175,7 @@ To connect: Get your API Key at https://app.fireflies.ai/api/webhooks',
     '["Communication"]',
     '["API Key (https://app.fireflies.ai/api/webhooks)"]',
     '[{"label":"Fireflies MCP Server","url":"https://api.fireflies.ai/mcp"},{"label":"Get your API Key","url":"https://app.fireflies.ai/api/webhooks"}]',
-    'https://cdn.simpleicons.org/fireflies/white'
+    'https://www.google.com/s2/favicons?domain=fireflies.ai&sz=128'
   ),
   (
     'Otter.ai Agent',
@@ -2201,7 +2201,7 @@ To connect: Get your API Key at https://otter.ai/api',
     '["Communication"]',
     '["API Key (https://otter.ai/api)"]',
     '[{"label":"Otter.ai MCP Server","url":"https://mcp.otter.ai/mcp"},{"label":"Get your API Key","url":"https://otter.ai/api"}]',
-    'https://cdn.simpleicons.org/otterai/white'
+    'https://www.google.com/s2/favicons?domain=otter.ai&sz=128'
   ),
   (
     'Gamma Agent',
@@ -2227,7 +2227,7 @@ To connect: Get your API Key at https://gamma.app/docs/api',
     '["Design"]',
     '["API Key (https://gamma.app/docs/api)"]',
     '[{"label":"Gamma MCP Server","url":"https://mcp.gamma.app/mcp"},{"label":"Get your API Key","url":"https://gamma.app/docs/api"}]',
-    'https://cdn.simpleicons.org/gamma/white'
+    'https://www.google.com/s2/favicons?domain=gamma.app&sz=128'
   ),
   (
     'Workable Agent',
@@ -2253,7 +2253,7 @@ To connect: Get your API Key at https://dev.workable.com/',
     '["Business"]',
     '["API Key (https://dev.workable.com/)"]',
     '[{"label":"Workable MCP Server","url":"https://mcp.workable.com/sse"},{"label":"Get your API Key","url":"https://dev.workable.com/"}]',
-    'https://cdn.simpleicons.org/workable/white'
+    'https://www.google.com/s2/favicons?domain=workable.com&sz=128'
   ),
   (
     'Indeed Agent',
@@ -2279,7 +2279,7 @@ To connect: Get your API Key at https://developers.indeed.com/',
     '["Business"]',
     '["API Key (https://developers.indeed.com/)"]',
     '[{"label":"Indeed MCP Server","url":"https://mcp.indeed.com/claude/mcp"},{"label":"Get your API Key","url":"https://developers.indeed.com/"}]',
-    'https://cdn.simpleicons.org/indeed/white'
+    'https://www.google.com/s2/favicons?domain=indeed.com&sz=128'
   ),
   (
     'SurveyMonkey Agent',
@@ -2305,7 +2305,7 @@ To connect: Get your Access Token at https://developer.surveymonkey.com/api/v3/'
     '["Data & Analytics"]',
     '["Access Token (https://developer.surveymonkey.com/api/v3/)"]',
     '[{"label":"SurveyMonkey MCP Server","url":"https://mcp.surveymonkey.com/sse"},{"label":"Get your Access Token","url":"https://developer.surveymonkey.com/api/v3/"}]',
-    'https://cdn.simpleicons.org/surveymonkey/white'
+    'https://www.google.com/s2/favicons?domain=surveymonkey.com&sz=128'
   ),
   (
     'Cloudinary Agent',
@@ -2331,7 +2331,7 @@ To connect: Get your API Key at https://cloudinary.com/documentation/api_keys',
     '["Design"]',
     '["API Key (https://cloudinary.com/documentation/api_keys)"]',
     '[{"label":"Cloudinary MCP Server","url":"https://asset-management.mcp.cloudinary.com/sse"},{"label":"Get your API Key","url":"https://cloudinary.com/documentation/api_keys"}]',
-    'https://cdn.simpleicons.org/cloudinary/white'
+    'https://www.google.com/s2/favicons?domain=cloudinary.com&sz=128'
   ),
   (
     'Railway Agent',
@@ -2357,7 +2357,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Infrastructure"]',
     '["Railway account (OAuth connection required)"]',
     '[{"label":"Railway MCP Server","url":"https://mcp.railway.com"}]',
-    'https://cdn.simpleicons.org/railway/white'
+    'https://www.google.com/s2/favicons?domain=railway.com&sz=128'
   ),
   (
     'Aiera Agent',
@@ -2383,7 +2383,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Aiera account (OAuth connection required)"]',
     '[{"label":"Aiera MCP Server","url":"https://mcp-pub.aiera.com/"}]',
-    'https://cdn.simpleicons.org/aiera/white'
+    'https://www.google.com/s2/favicons?domain=aiera.com&sz=128'
   ),
   (
     'Box Agent',
@@ -2409,7 +2409,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Box account (OAuth connection required)"]',
     '[{"label":"Box MCP Server","url":"https://mcp.box.com"}]',
-    'https://cdn.simpleicons.org/box/white'
+    'https://www.google.com/s2/favicons?domain=box.com&sz=128'
   ),
   (
     'AdisInsight Agent',
@@ -2435,7 +2435,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["AdisInsight account (OAuth connection required)"]',
     '[{"label":"AdisInsight MCP Server","url":"https://adisinsight-mcp.springer.com/mcp"}]',
-    'https://cdn.simpleicons.org/adisinsight/white'
+    'https://www.google.com/s2/favicons?domain=springer.com&sz=128'
   ),
   (
     'Adobe Experience Manager Agent',
@@ -2461,7 +2461,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Adobe Experience Manager account (OAuth connection required)"]',
     '[{"label":"Adobe Experience Manager MCP Server","url":"https://mcp.adobeaemcloud.com/adobe/mcp/aem"}]',
-    'https://cdn.simpleicons.org/adobeexperiencemanager/white'
+    'https://www.google.com/s2/favicons?domain=adobeaemcloud.com&sz=128'
   ),
   (
     'Adobe for creativity Agent',
@@ -2487,7 +2487,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Adobe for creativity account (OAuth connection required)"]',
     '[{"label":"Adobe for creativity MCP Server","url":"https://adobe-creativity.adobe.io/mcp"}]',
-    'https://cdn.simpleicons.org/adobeforcreativity/white'
+    'https://www.google.com/s2/favicons?domain=adobe.io&sz=128'
   ),
   (
     'Adobe Journey Optimizer Agent',
@@ -2513,7 +2513,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Adobe Journey Optimizer account (OAuth connection required)"]',
     '[{"label":"Adobe Journey Optimizer MCP Server","url":"https://ajo-mcp.adobe.io/mcp"}]',
-    'https://cdn.simpleicons.org/adobejourneyoptimizer/white'
+    'https://www.google.com/s2/favicons?domain=adobe.io&sz=128'
   ),
   (
     'Adobe Marketing Agent Agent',
@@ -2539,7 +2539,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Adobe Marketing Agent account (OAuth connection required)"]',
     '[{"label":"Adobe Marketing Agent MCP Server","url":"https://aep-ai-ama.adobe.io/mcp"}]',
-    'https://cdn.simpleicons.org/adobemarketingagent/white'
+    'https://www.google.com/s2/favicons?domain=adobe.io&sz=128'
   ),
   (
     'Airwallex Agent',
@@ -2565,7 +2565,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Airwallex account (OAuth connection required)"]',
     '[{"label":"Airwallex MCP Server","url":"https://mcp-demo.airwallex.com/developer"}]',
-    'https://cdn.simpleicons.org/airwallex/white'
+    'https://www.google.com/s2/favicons?domain=airwallex.com&sz=128'
   ),
   (
     'Aiwyn Tax Agent',
@@ -2591,7 +2591,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Aiwyn Tax account (OAuth connection required)"]',
     '[{"label":"Aiwyn Tax MCP Server","url":"https://mcp.columnapi.com/mcp"}]',
-    'https://cdn.simpleicons.org/aiwyntax/white'
+    'https://www.google.com/s2/favicons?domain=columnapi.com&sz=128'
   ),
   (
     'AllTrails Agent',
@@ -2617,7 +2617,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["AllTrails account (OAuth connection required)"]',
     '[{"label":"AllTrails MCP Server","url":"https://www.alltrails.com/mcp"}]',
-    'https://cdn.simpleicons.org/alltrails/white'
+    'https://www.google.com/s2/favicons?domain=alltrails.com&sz=128'
   ),
   (
     'Audible Agent',
@@ -2643,7 +2643,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Audible account (OAuth connection required)"]',
     '[{"label":"Audible MCP Server","url":"https://mcp.audible.com/mcp"}]',
-    'https://cdn.simpleicons.org/audible/white'
+    'https://www.google.com/s2/favicons?domain=audible.com&sz=128'
   ),
   (
     'Aura Agent',
@@ -2669,7 +2669,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Aura account (OAuth connection required)"]',
     '[{"label":"Aura MCP Server","url":"https://mcp.auraintelligence.com/mcp"}]',
-    'https://cdn.simpleicons.org/aura/white'
+    'https://www.google.com/s2/favicons?domain=auraintelligence.com&sz=128'
   ),
   (
     'Aurora Agent',
@@ -2695,7 +2695,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Aurora account (OAuth connection required)"]',
     '[{"label":"Aurora MCP Server","url":"https://mcp.ai.consilio.com"}]',
-    'https://cdn.simpleicons.org/aurora/white'
+    'https://www.google.com/s2/favicons?domain=consilio.com&sz=128'
   ),
   (
     'Autodesk Product Help Agent',
@@ -2721,7 +2721,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Autodesk Product Help account (OAuth connection required)"]',
     '[{"label":"Autodesk Product Help MCP Server","url":"https://developer.api.autodesk.com/knowledge/public/v1/mcp"}]',
-    'https://cdn.simpleicons.org/autodeskproducthelp/white'
+    'https://www.google.com/s2/favicons?domain=autodesk.com&sz=128'
   ),
   (
     'AWS Marketplace Agent',
@@ -2747,7 +2747,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["AWS Marketplace account (OAuth connection required)"]',
     '[{"label":"AWS Marketplace MCP Server","url":"https://marketplace-mcp.us-east-1.api.aws/"}]',
-    'https://cdn.simpleicons.org/awsmarketplace/white'
+    'https://www.google.com/s2/favicons?domain=api.aws&sz=128'
   ),
   (
     'B12 Agent',
@@ -2773,7 +2773,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["B12 account (OAuth connection required)"]',
     '[{"label":"B12 MCP Server","url":"https://b12.io/mcp"}]',
-    'https://cdn.simpleicons.org/b12/white'
+    'https://www.google.com/s2/favicons?domain=b12.io&sz=128'
   ),
   (
     'Base44 Agent',
@@ -2799,7 +2799,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Base44 account (OAuth connection required)"]',
     '[{"label":"Base44 MCP Server","url":"https://app.base44.com/mcp"}]',
-    'https://cdn.simpleicons.org/base44/white'
+    'https://www.google.com/s2/favicons?domain=base44.com&sz=128'
   ),
   (
     'Bigdata.com Agent',
@@ -2825,7 +2825,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Bigdata.com account (OAuth connection required)"]',
     '[{"label":"Bigdata.com MCP Server","url":"https://mcp.bigdata.com/"}]',
-    'https://cdn.simpleicons.org/bigdatacom/white'
+    'https://www.google.com/s2/favicons?domain=bigdata.com&sz=128'
   ),
   (
     'BioRender Agent',
@@ -2851,7 +2851,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["BioRender account (OAuth connection required)"]',
     '[{"label":"BioRender MCP Server","url":"https://mcp.services.biorender.com/mcp"}]',
-    'https://cdn.simpleicons.org/biorender/white'
+    'https://www.google.com/s2/favicons?domain=biorender.com&sz=128'
   ),
   (
     'Blockscout Agent',
@@ -2877,7 +2877,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Blockscout account (OAuth connection required)"]',
     '[{"label":"Blockscout MCP Server","url":"https://mcp.blockscout.com/mcp"}]',
-    'https://cdn.simpleicons.org/blockscout/white'
+    'https://www.google.com/s2/favicons?domain=blockscout.com&sz=128'
   ),
   (
     'BoardWise Agent',
@@ -2903,7 +2903,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["BoardWise account (OAuth connection required)"]',
     '[{"label":"BoardWise MCP Server","url":"https://uakozrqrztgrgwoywxkx.supabase.co/functions/v1/mcp-server"}]',
-    'https://cdn.simpleicons.org/boardwise/white'
+    'https://www.google.com/s2/favicons?domain=supabase.co&sz=128'
   ),
   (
     'Booking.com Agent',
@@ -2929,7 +2929,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Booking.com account (OAuth connection required)"]',
     '[{"label":"Booking.com MCP Server","url":"https://demandapi-mcp.booking.com/v1/mcp/8132308"}]',
-    'https://cdn.simpleicons.org/bookingcom/white'
+    'https://www.google.com/s2/favicons?domain=booking.com&sz=128'
   ),
   (
     'Brex Agent',
@@ -2955,7 +2955,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Brex account (OAuth connection required)"]',
     '[{"label":"Brex MCP Server","url":"https://api.brex.com/mcp"}]',
-    'https://cdn.simpleicons.org/brex/white'
+    'https://www.google.com/s2/favicons?domain=brex.com&sz=128'
   ),
   (
     'Carta Agent',
@@ -2981,7 +2981,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Carta account (OAuth connection required)"]',
     '[{"label":"Carta MCP Server","url":"https://mcp.app.carta.com/mcp"}]',
-    'https://cdn.simpleicons.org/carta/white'
+    'https://www.google.com/s2/favicons?domain=carta.com&sz=128'
   ),
   (
     'Cash App Agent',
@@ -3007,7 +3007,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Cash App account (OAuth connection required)"]',
     '[{"label":"Cash App MCP Server","url":"https://connect.squareup.com/v2/mcp/cash-app"}]',
-    'https://cdn.simpleicons.org/cashapp/white'
+    'https://www.google.com/s2/favicons?domain=squareup.com&sz=128'
   ),
   (
     'CB Insights Agent',
@@ -3033,7 +3033,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["CB Insights account (OAuth connection required)"]',
     '[{"label":"CB Insights MCP Server","url":"https://mcp.cbinsights.com"}]',
-    'https://cdn.simpleicons.org/cbinsights/white'
+    'https://www.google.com/s2/favicons?domain=cbinsights.com&sz=128'
   ),
   (
     'Chronograph Agent',
@@ -3059,7 +3059,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Chronograph account (OAuth connection required)"]',
     '[{"label":"Chronograph MCP Server","url":"https://ai.chronograph.pe/mcp"}]',
-    'https://cdn.simpleicons.org/chronograph/white'
+    'https://www.google.com/s2/favicons?domain=chronograph.pe&sz=128'
   ),
   (
     'Circleback Agent',
@@ -3085,7 +3085,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Circleback account (OAuth connection required)"]',
     '[{"label":"Circleback MCP Server","url":"https://app.circleback.ai/api/mcp"}]',
-    'https://cdn.simpleicons.org/circleback/white'
+    'https://www.google.com/s2/favicons?domain=circleback.ai&sz=128'
   ),
   (
     'Clarify Agent',
@@ -3111,7 +3111,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Clarify account (OAuth connection required)"]',
     '[{"label":"Clarify MCP Server","url":"https://api.clarify.ai/mcp"}]',
-    'https://cdn.simpleicons.org/clarify/white'
+    'https://www.google.com/s2/favicons?domain=clarify.ai&sz=128'
   ),
   (
     'Clarity AI Agent',
@@ -3137,7 +3137,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Clarity AI account (OAuth connection required)"]',
     '[{"label":"Clarity AI MCP Server","url":"https://clarity-sfdr20-mcp.pro.clarity.ai/mcp"}]',
-    'https://cdn.simpleicons.org/clarityai/white'
+    'https://www.google.com/s2/favicons?domain=clarity.ai&sz=128'
   ),
   (
     'Clay Agent',
@@ -3163,7 +3163,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Clay account (OAuth connection required)"]',
     '[{"label":"Clay MCP Server","url":"https://api.clay.com/v3/mcp"}]',
-    'https://cdn.simpleicons.org/clay/white'
+    'https://www.google.com/s2/favicons?domain=clay.com&sz=128'
   ),
   (
     'Clerk Agent',
@@ -3189,7 +3189,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Clerk account (OAuth connection required)"]',
     '[{"label":"Clerk MCP Server","url":"https://mcp.clerk.com/mcp"}]',
-    'https://cdn.simpleicons.org/clerk/white'
+    'https://www.google.com/s2/favicons?domain=clerk.com&sz=128'
   ),
   (
     'Clockwise Agent',
@@ -3215,7 +3215,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Clockwise account (OAuth connection required)"]',
     '[{"label":"Clockwise MCP Server","url":"https://mcp.getclockwise.com/mcp"}]',
-    'https://cdn.simpleicons.org/clockwise/white'
+    'https://www.google.com/s2/favicons?domain=getclockwise.com&sz=128'
   ),
   (
     'CoinDesk Agent',
@@ -3241,7 +3241,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["CoinDesk account (OAuth connection required)"]',
     '[{"label":"CoinDesk MCP Server","url":"https://mcp.coindesk.com/mcp"}]',
-    'https://cdn.simpleicons.org/coindesk/white'
+    'https://www.google.com/s2/favicons?domain=coindesk.com&sz=128'
   ),
   (
     'Common Room Agent',
@@ -3267,7 +3267,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Common Room account (OAuth connection required)"]',
     '[{"label":"Common Room MCP Server","url":"https://mcp.commonroom.io/mcp"}]',
-    'https://cdn.simpleicons.org/commonroom/white'
+    'https://www.google.com/s2/favicons?domain=commonroom.io&sz=128'
   ),
   (
     'Consensus Agent',
@@ -3293,7 +3293,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Consensus account (OAuth connection required)"]',
     '[{"label":"Consensus MCP Server","url":"https://mcp.consensus.app/mcp"}]',
-    'https://cdn.simpleicons.org/consensus/white'
+    'https://www.google.com/s2/favicons?domain=consensus.app&sz=128'
   ),
   (
     'Contentsquare Agent',
@@ -3319,7 +3319,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Contentsquare account (OAuth connection required)"]',
     '[{"label":"Contentsquare MCP Server","url":"https://api.contentsquare.com/mcp"}]',
-    'https://cdn.simpleicons.org/contentsquare/white'
+    'https://www.google.com/s2/favicons?domain=contentsquare.com&sz=128'
   ),
   (
     'Control Plane Agent',
@@ -3345,7 +3345,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Control Plane account (OAuth connection required)"]',
     '[{"label":"Control Plane MCP Server","url":"https://mcp.cpln.io/mcp"}]',
-    'https://cdn.simpleicons.org/controlplane/white'
+    'https://www.google.com/s2/favicons?domain=cpln.io&sz=128'
   ),
   (
     'COROS Agent',
@@ -3371,7 +3371,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["COROS account (OAuth connection required)"]',
     '[{"label":"COROS MCP Server","url":"https://mcp.coros.com/mcp"}]',
-    'https://cdn.simpleicons.org/coros/white'
+    'https://www.google.com/s2/favicons?domain=coros.com&sz=128'
   ),
   (
     'Cortellis Regulatory Intelligence Agent',
@@ -3397,7 +3397,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Cortellis Regulatory Intelligence account (OAuth connection required)"]',
     '[{"label":"Cortellis Regulatory Intelligence MCP Server","url":"https://api.clarivate.com/lifesciences/mcp-regulatory/mcp"}]',
-    'https://cdn.simpleicons.org/cortellisregulatoryintelligence/white'
+    'https://www.google.com/s2/favicons?domain=clarivate.com&sz=128'
   ),
   (
     'Coupler.io Agent',
@@ -3423,7 +3423,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Coupler.io account (OAuth connection required)"]',
     '[{"label":"Coupler.io MCP Server","url":"https://mcp.coupler.io/mcp"}]',
-    'https://cdn.simpleicons.org/couplerio/white'
+    'https://www.google.com/s2/favicons?domain=coupler.io&sz=128'
   ),
   (
     'CourtListener Agent',
@@ -3449,7 +3449,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["CourtListener account (OAuth connection required)"]',
     '[{"label":"CourtListener MCP Server","url":"https://mcp.courtlistener.com/"}]',
-    'https://cdn.simpleicons.org/courtlistener/white'
+    'https://www.google.com/s2/favicons?domain=courtlistener.com&sz=128'
   ),
   (
     'Courtroom5 Agent',
@@ -3475,7 +3475,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Courtroom5 account (OAuth connection required)"]',
     '[{"label":"Courtroom5 MCP Server","url":"https://mcp.courtroom5.com/v1"}]',
-    'https://cdn.simpleicons.org/courtroom5/white'
+    'https://www.google.com/s2/favicons?domain=courtroom5.com&sz=128'
   ),
   (
     'Craft Agent',
@@ -3501,7 +3501,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Craft account (OAuth connection required)"]',
     '[{"label":"Craft MCP Server","url":"https://mcp.craft.do/my/mcp"}]',
-    'https://cdn.simpleicons.org/craft/white'
+    'https://www.google.com/s2/favicons?domain=craft.do&sz=128'
   ),
   (
     'Credit Karma Agent',
@@ -3527,7 +3527,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Credit Karma account (OAuth connection required)"]',
     '[{"label":"Credit Karma MCP Server","url":"https://mcp.creditkarma.com/mcp"}]',
-    'https://cdn.simpleicons.org/creditkarma/white'
+    'https://www.google.com/s2/favicons?domain=creditkarma.com&sz=128'
   ),
   (
     'Crossbeam Agent',
@@ -3553,7 +3553,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Crossbeam account (OAuth connection required)"]',
     '[{"label":"Crossbeam MCP Server","url":"https://mcp.crossbeam.com"}]',
-    'https://cdn.simpleicons.org/crossbeam/white'
+    'https://www.google.com/s2/favicons?domain=crossbeam.com&sz=128'
   ),
   (
     'Crypto.com Agent',
@@ -3579,7 +3579,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Crypto.com account (OAuth connection required)"]',
     '[{"label":"Crypto.com MCP Server","url":"https://mcp.crypto.com/market-data/mcp"}]',
-    'https://cdn.simpleicons.org/cryptocom/white'
+    'https://www.google.com/s2/favicons?domain=crypto.com&sz=128'
   ),
   (
     'D&B Risk Analytics Agent',
@@ -3605,7 +3605,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["D&B Risk Analytics account (OAuth connection required)"]',
     '[{"label":"D&B Risk Analytics MCP Server","url":"https://agents.riskanalytics.dnb.com/mcp"}]',
-    'https://cdn.simpleicons.org/dampbriskanalytics/white'
+    'https://www.google.com/s2/favicons?domain=dnb.com&sz=128'
   ),
   (
     'Daloopa Agent',
@@ -3631,7 +3631,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Daloopa account (OAuth connection required)"]',
     '[{"label":"Daloopa MCP Server","url":"https://mcp.daloopa.com/server/mcp"}]',
-    'https://cdn.simpleicons.org/daloopa/white'
+    'https://www.google.com/s2/favicons?domain=daloopa.com&sz=128'
   ),
   (
     'Datasite Agent',
@@ -3657,7 +3657,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Datasite account (OAuth connection required)"]',
     '[{"label":"Datasite MCP Server","url":"https://mcp.global.datasite.com/mcp"}]',
-    'https://cdn.simpleicons.org/datasite/white'
+    'https://www.google.com/s2/favicons?domain=datasite.com&sz=128'
   ),
   (
     'Day AI Agent',
@@ -3683,7 +3683,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Day AI account (OAuth connection required)"]',
     '[{"label":"Day AI MCP Server","url":"https://day.ai/api/mcp"}]',
-    'https://cdn.simpleicons.org/dayai/white'
+    'https://www.google.com/s2/favicons?domain=day.ai&sz=128'
   ),
   (
     'Definely Agent',
@@ -3709,7 +3709,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Definely account (OAuth connection required)"]',
     '[{"label":"Definely MCP Server","url":"https://mcp.eu.definely.com/api/proxy/core-mcp"}]',
-    'https://cdn.simpleicons.org/definely/white'
+    'https://www.google.com/s2/favicons?domain=definely.com&sz=128'
   ),
   (
     'Descrybe Legal Engine Agent',
@@ -3735,7 +3735,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Descrybe Legal Engine account (OAuth connection required)"]',
     '[{"label":"Descrybe Legal Engine MCP Server","url":"https://mcp.descrybe.com/mcp"}]',
-    'https://cdn.simpleicons.org/descrybelegalengine/white'
+    'https://www.google.com/s2/favicons?domain=descrybe.com&sz=128'
   ),
   (
     'Digits Agent',
@@ -3761,7 +3761,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Digits account (OAuth connection required)"]',
     '[{"label":"Digits MCP Server","url":"https://api.digits.com/mcp"}]',
-    'https://cdn.simpleicons.org/digits/white'
+    'https://www.google.com/s2/favicons?domain=digits.com&sz=128'
   ),
   (
     'DirectBooker Agent',
@@ -3787,7 +3787,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["DirectBooker account (OAuth connection required)"]',
     '[{"label":"DirectBooker MCP Server","url":"https://www.directbooker.ai/claude"}]',
-    'https://cdn.simpleicons.org/directbooker/white'
+    'https://www.google.com/s2/favicons?domain=directbooker.ai&sz=128'
   ),
   (
     'Dovetail Agent',
@@ -3813,7 +3813,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Dovetail account (OAuth connection required)"]',
     '[{"label":"Dovetail MCP Server","url":"https://dovetail.com/api/mcp"}]',
-    'https://cdn.simpleicons.org/dovetail/white'
+    'https://www.google.com/s2/favicons?domain=dovetail.com&sz=128'
   ),
   (
     'Egnyte Agent',
@@ -3839,7 +3839,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Egnyte account (OAuth connection required)"]',
     '[{"label":"Egnyte MCP Server","url":"https://mcp-server.egnyte.com/mcp"}]',
-    'https://cdn.simpleicons.org/egnyte/white'
+    'https://www.google.com/s2/favicons?domain=egnyte.com&sz=128'
   ),
   (
     'Enterpret Agent',
@@ -3865,7 +3865,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Enterpret account (OAuth connection required)"]',
     '[{"label":"Enterpret MCP Server","url":"https://wisdom-api.enterpret.com/server/mcp"}]',
-    'https://cdn.simpleicons.org/enterpret/white'
+    'https://www.google.com/s2/favicons?domain=enterpret.com&sz=128'
   ),
   (
     'Era Context Agent',
@@ -3891,7 +3891,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Era Context account (OAuth connection required)"]',
     '[{"label":"Era Context MCP Server","url":"https://context.era.app"}]',
-    'https://cdn.simpleicons.org/eracontext/white'
+    'https://www.google.com/s2/favicons?domain=era.app&sz=128'
   ),
   (
     'Eraser Agent',
@@ -3917,7 +3917,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Eraser account (OAuth connection required)"]',
     '[{"label":"Eraser MCP Server","url":"https://app.eraser.io/api/mcp"}]',
-    'https://cdn.simpleicons.org/eraser/white'
+    'https://www.google.com/s2/favicons?domain=eraser.io&sz=128'
   ),
   (
     'Everlaw Agent',
@@ -3943,7 +3943,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Everlaw account (OAuth connection required)"]',
     '[{"label":"Everlaw MCP Server","url":"https://api.everlaw.com/v1/mcp"}]',
-    'https://cdn.simpleicons.org/everlaw/white'
+    'https://www.google.com/s2/favicons?domain=everlaw.com&sz=128'
   ),
   (
     'Excalidraw Agent',
@@ -3969,7 +3969,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Excalidraw account (OAuth connection required)"]',
     '[{"label":"Excalidraw MCP Server","url":"https://excalidraw-mcp-app.vercel.app/mcp"}]',
-    'https://cdn.simpleicons.org/excalidraw/white'
+    'https://www.google.com/s2/favicons?domain=vercel.app&sz=128'
   ),
   (
     'Expedia Agent',
@@ -3995,7 +3995,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Expedia account (OAuth connection required)"]',
     '[{"label":"Expedia MCP Server","url":"https://www.expedia.com/mcp"}]',
-    'https://cdn.simpleicons.org/expedia/white'
+    'https://www.google.com/s2/favicons?domain=expedia.com&sz=128'
   ),
   (
     'FactSet Agent',
@@ -4021,7 +4021,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["FactSet account (OAuth connection required)"]',
     '[{"label":"FactSet MCP Server","url":"https://mcp.factset.com/content/v1"}]',
-    'https://cdn.simpleicons.org/factset/white'
+    'https://www.google.com/s2/favicons?domain=factset.com&sz=128'
   ),
   (
     'Fathom Agent',
@@ -4047,7 +4047,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Fathom account (OAuth connection required)"]',
     '[{"label":"Fathom MCP Server","url":"https://api.fathom.ai/mcp"}]',
-    'https://cdn.simpleicons.org/fathom/white'
+    'https://www.google.com/s2/favicons?domain=fathom.ai&sz=128'
   ),
   (
     'Fever Event Discovery Agent',
@@ -4073,7 +4073,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Fever Event Discovery account (OAuth connection required)"]',
     '[{"label":"Fever Event Discovery MCP Server","url":"https://data-search.apigw.feverup.com/mcp"}]',
-    'https://cdn.simpleicons.org/fevereventdiscovery/white'
+    'https://www.google.com/s2/favicons?domain=feverup.com&sz=128'
   ),
   (
     'Fiscal.ai Agent',
@@ -4099,7 +4099,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Fiscal.ai account (OAuth connection required)"]',
     '[{"label":"Fiscal.ai MCP Server","url":"https://api.fiscal.ai/mcp/sse"}]',
-    'https://cdn.simpleicons.org/fiscalai/white'
+    'https://www.google.com/s2/favicons?domain=fiscal.ai&sz=128'
   ),
   (
     'FMP Agent',
@@ -4125,7 +4125,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["FMP account (OAuth connection required)"]',
     '[{"label":"FMP MCP Server","url":"https://financialmodelingprep.com/mcp"}]',
-    'https://cdn.simpleicons.org/fmp/white'
+    'https://www.google.com/s2/favicons?domain=financialmodelingprep.com&sz=128'
   ),
   (
     'Gainsight (Staircase AI) Agent',
@@ -4151,7 +4151,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Gainsight (Staircase AI) account (OAuth connection required)"]',
     '[{"label":"Gainsight (Staircase AI) MCP Server","url":"https://mcp.staircase.ai/mcp"}]',
-    'https://cdn.simpleicons.org/gainsightstaircaseai/white'
+    'https://www.google.com/s2/favicons?domain=staircase.ai&sz=128'
   ),
   (
     'GoCardless Agent',
@@ -4177,7 +4177,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["GoCardless account (OAuth connection required)"]',
     '[{"label":"GoCardless MCP Server","url":"https://mcp.gocardless.com"}]',
-    'https://cdn.simpleicons.org/gocardless/white'
+    'https://www.google.com/s2/favicons?domain=gocardless.com&sz=128'
   ),
   (
     'GoDaddy Agent',
@@ -4203,7 +4203,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["GoDaddy account (OAuth connection required)"]',
     '[{"label":"GoDaddy MCP Server","url":"https://api.godaddy.com/v1/domains/mcp"}]',
-    'https://cdn.simpleicons.org/godaddy/white'
+    'https://www.google.com/s2/favicons?domain=godaddy.com&sz=128'
   ),
   (
     'Goodnotes Agent',
@@ -4229,7 +4229,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Goodnotes account (OAuth connection required)"]',
     '[{"label":"Goodnotes MCP Server","url":"https://claude-mcp-api.ml.goodnotes.com/mcp"}]',
-    'https://cdn.simpleicons.org/goodnotes/white'
+    'https://www.google.com/s2/favicons?domain=goodnotes.com&sz=128'
   ),
   (
     'Google Cloud BigQuery Agent',
@@ -4255,7 +4255,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Google Cloud BigQuery account (OAuth connection required)"]',
     '[{"label":"Google Cloud BigQuery MCP Server","url":"https://bigquery.googleapis.com/mcp"}]',
-    'https://cdn.simpleicons.org/googlecloudbigquery/white'
+    'https://www.google.com/s2/favicons?domain=googleapis.com&sz=128'
   ),
   (
     'Docusign Agent',
@@ -4281,7 +4281,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Docusign account (OAuth connection required)"]',
     '[{"label":"Docusign MCP Server","url":"https://mcp.docusign.com/mcp"}]',
-    'https://cdn.simpleicons.org/docusign/white'
+    'https://www.google.com/s2/favicons?domain=docusign.com&sz=128'
   ),
   (
     'Explorium Agent',
@@ -4307,7 +4307,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Explorium account (OAuth connection required)"]',
     '[{"label":"Explorium MCP Server","url":"https://mcp.explorium.ai/mcp"}]',
-    'https://cdn.simpleicons.org/explorium/white'
+    'https://www.google.com/s2/favicons?domain=explorium.ai&sz=128'
   ),
   (
     'GovTribe Agent',
@@ -4333,7 +4333,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["GovTribe account (OAuth connection required)"]',
     '[{"label":"GovTribe MCP Server","url":"https://govtribe.com/mcp"}]',
-    'https://cdn.simpleicons.org/govtribe/white'
+    'https://www.google.com/s2/favicons?domain=govtribe.com&sz=128'
   ),
   (
     'Grain Agent',
@@ -4359,7 +4359,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Grain account (OAuth connection required)"]',
     '[{"label":"Grain MCP Server","url":"https://api.grain.com/_/mcp"}]',
-    'https://cdn.simpleicons.org/grain/white'
+    'https://www.google.com/s2/favicons?domain=grain.com&sz=128'
   ),
   (
     'Granted Agent',
@@ -4385,7 +4385,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Granted account (OAuth connection required)"]',
     '[{"label":"Granted MCP Server","url":"https://grantedai.com/api/mcp/mcp"}]',
-    'https://cdn.simpleicons.org/granted/white'
+    'https://www.google.com/s2/favicons?domain=grantedai.com&sz=128'
   ),
   (
     'GraphOS MCP Tools Agent',
@@ -4411,7 +4411,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["GraphOS MCP Tools account (OAuth connection required)"]',
     '[{"label":"GraphOS MCP Tools MCP Server","url":"https://mcp.apollographql.com"}]',
-    'https://cdn.simpleicons.org/graphosmcptools/white'
+    'https://www.google.com/s2/favicons?domain=apollographql.com&sz=128'
   ),
   (
     'Guidepoint Agent',
@@ -4437,7 +4437,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Guidepoint account (OAuth connection required)"]',
     '[{"label":"Guidepoint MCP Server","url":"https://clapi.guidepoint.io/mcp-server/v1/mcp"}]',
-    'https://cdn.simpleicons.org/guidepoint/white'
+    'https://www.google.com/s2/favicons?domain=guidepoint.io&sz=128'
   ),
   (
     'Guru Agent',
@@ -4463,7 +4463,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Guru account (OAuth connection required)"]',
     '[{"label":"Guru MCP Server","url":"https://mcp.api.getguru.com/mcp"}]',
-    'https://cdn.simpleicons.org/guru/white'
+    'https://www.google.com/s2/favicons?domain=getguru.com&sz=128'
   ),
   (
     'Gusto Agent',
@@ -4489,7 +4489,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Gusto account (OAuth connection required)"]',
     '[{"label":"Gusto MCP Server","url":"https://mcp.api.gusto.com/anthropic"}]',
-    'https://cdn.simpleicons.org/gusto/white'
+    'https://www.google.com/s2/favicons?domain=gusto.com&sz=128'
   ),
   (
     'Harmonic Agent',
@@ -4515,7 +4515,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Harmonic account (OAuth connection required)"]',
     '[{"label":"Harmonic MCP Server","url":"https://mcp.api.harmonic.ai"}]',
-    'https://cdn.simpleicons.org/harmonic/white'
+    'https://www.google.com/s2/favicons?domain=harmonic.ai&sz=128'
   ),
   (
     'Harvey Agent',
@@ -4541,7 +4541,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Harvey account (OAuth connection required)"]',
     '[{"label":"Harvey MCP Server","url":"https://api.harvey.ai/hosted_mcp/mcp"}]',
-    'https://cdn.simpleicons.org/harvey/white'
+    'https://www.google.com/s2/favicons?domain=harvey.ai&sz=128'
   ),
   (
     'Hex Agent',
@@ -4567,7 +4567,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Hex account (OAuth connection required)"]',
     '[{"label":"Hex MCP Server","url":"https://app.hex.tech/mcp"}]',
-    'https://cdn.simpleicons.org/hex/white'
+    'https://www.google.com/s2/favicons?domain=hex.tech&sz=128'
   ),
   (
     'IBISWorld Agent',
@@ -4593,7 +4593,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["IBISWorld account (OAuth connection required)"]',
     '[{"label":"IBISWorld MCP Server","url":"https://mcp.ibisworld.com"}]',
-    'https://cdn.simpleicons.org/ibisworld/white'
+    'https://www.google.com/s2/favicons?domain=ibisworld.com&sz=128'
   ),
   (
     'ICE Data Services Agent',
@@ -4619,7 +4619,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["ICE Data Services account (OAuth connection required)"]',
     '[{"label":"ICE Data Services MCP Server","url":"https://fids-mcp.ice.com/mcp"}]',
-    'https://cdn.simpleicons.org/icedataservices/white'
+    'https://www.google.com/s2/favicons?domain=ice.com&sz=128'
   ),
   (
     'IFTTT Agent',
@@ -4645,7 +4645,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["IFTTT account (OAuth connection required)"]',
     '[{"label":"IFTTT MCP Server","url":"https://ifttt.com/mcp"}]',
-    'https://cdn.simpleicons.org/ifttt/white'
+    'https://www.google.com/s2/favicons?domain=ifttt.com&sz=128'
   ),
   (
     'iManage Work Agent',
@@ -4671,7 +4671,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["iManage Work account (OAuth connection required)"]',
     '[{"label":"iManage Work MCP Server","url":"https://cloudimanage.com/mcp/work"}]',
-    'https://cdn.simpleicons.org/imanagework/white'
+    'https://www.google.com/s2/favicons?domain=cloudimanage.com&sz=128'
   ),
   (
     'Ironclad Contracts Agent',
@@ -4697,7 +4697,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Ironclad Contracts account (OAuth connection required)"]',
     '[{"label":"Ironclad Contracts MCP Server","url":"https://mcp.na1.ironcladapp.com/mcp"}]',
-    'https://cdn.simpleicons.org/ironcladcontracts/white'
+    'https://www.google.com/s2/favicons?domain=ironcladapp.com&sz=128'
   ),
   (
     'Jam Agent',
@@ -4723,7 +4723,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Jam account (OAuth connection required)"]',
     '[{"label":"Jam MCP Server","url":"https://mcp.jam.dev/mcp"}]',
-    'https://cdn.simpleicons.org/jam/white'
+    'https://www.google.com/s2/favicons?domain=jam.dev&sz=128'
   ),
   (
     'Jotform Agent',
@@ -4749,7 +4749,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Jotform account (OAuth connection required)"]',
     '[{"label":"Jotform MCP Server","url":"https://mcp.jotform.com/mcp-app"}]',
-    'https://cdn.simpleicons.org/jotform/white'
+    'https://www.google.com/s2/favicons?domain=jotform.com&sz=128'
   ),
   (
     'Ketryx Agent',
@@ -4775,7 +4775,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Ketryx account (OAuth connection required)"]',
     '[{"label":"Ketryx MCP Server","url":"https://app.ketryx.com/api/mcp"}]',
-    'https://cdn.simpleicons.org/ketryx/white'
+    'https://www.google.com/s2/favicons?domain=ketryx.com&sz=128'
   ),
   (
     'Kindora Funder Discovery Agent',
@@ -4801,7 +4801,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Kindora Funder Discovery account (OAuth connection required)"]',
     '[{"label":"Kindora Funder Discovery MCP Server","url":"https://kindora-mcp.azurewebsites.net/mcp/"}]',
-    'https://cdn.simpleicons.org/kindorafunderdiscovery/white'
+    'https://www.google.com/s2/favicons?domain=azurewebsites.net&sz=128'
   ),
   (
     'Kiwi.com Agent',
@@ -4827,7 +4827,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Kiwi.com account (OAuth connection required)"]',
     '[{"label":"Kiwi.com MCP Server","url":"https://mcp.kiwi.com"}]',
-    'https://cdn.simpleicons.org/kiwicom/white'
+    'https://www.google.com/s2/favicons?domain=kiwi.com&sz=128'
   ),
   (
     'Klaviyo Agent',
@@ -4853,7 +4853,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Klaviyo account (OAuth connection required)"]',
     '[{"label":"Klaviyo MCP Server","url":"https://mcp.klaviyo.com/mcp"}]',
-    'https://cdn.simpleicons.org/klaviyo/white'
+    'https://www.google.com/s2/favicons?domain=klaviyo.com&sz=128'
   ),
   (
     'Krisp Agent',
@@ -4879,7 +4879,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Krisp account (OAuth connection required)"]',
     '[{"label":"Krisp MCP Server","url":"https://mcp.krisp.ai/mcp"}]',
-    'https://cdn.simpleicons.org/krisp/white'
+    'https://www.google.com/s2/favicons?domain=krisp.ai&sz=128'
   ),
   (
     'lastminute.com Agent',
@@ -4905,7 +4905,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["lastminute.com account (OAuth connection required)"]',
     '[{"label":"lastminute.com MCP Server","url":"https://mcp.lastminute.com/mcp"}]',
-    'https://cdn.simpleicons.org/lastminutecom/white'
+    'https://www.google.com/s2/favicons?domain=lastminute.com&sz=128'
   ),
   (
     'Lawve AI Agent',
@@ -4931,7 +4931,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Lawve AI account (OAuth connection required)"]',
     '[{"label":"Lawve AI MCP Server","url":"https://mcp.lawve.ai/mcp"}]',
-    'https://cdn.simpleicons.org/lawveai/white'
+    'https://www.google.com/s2/favicons?domain=lawve.ai&sz=128'
   ),
   (
     'Legal Data Hunter Agent',
@@ -4957,7 +4957,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Legal Data Hunter account (OAuth connection required)"]',
     '[{"label":"Legal Data Hunter MCP Server","url":"https://legaldatahunter.com/mcp"}]',
-    'https://cdn.simpleicons.org/legaldatahunter/white'
+    'https://www.google.com/s2/favicons?domain=legaldatahunter.com&sz=128'
   ),
   (
     'LegalZoom Agent',
@@ -4983,7 +4983,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["LegalZoom account (OAuth connection required)"]',
     '[{"label":"LegalZoom MCP Server","url":"https://www.legalzoom.com/mcp/claude/v1"}]',
-    'https://cdn.simpleicons.org/legalzoom/white'
+    'https://www.google.com/s2/favicons?domain=legalzoom.com&sz=128'
   ),
   (
     'LILT Agent',
@@ -5009,7 +5009,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["LILT account (OAuth connection required)"]',
     '[{"label":"LILT MCP Server","url":"https://mcp.lilt.com/mcp"}]',
-    'https://cdn.simpleicons.org/lilt/white'
+    'https://www.google.com/s2/favicons?domain=lilt.com&sz=128'
   ),
   (
     'Local Falcon Agent',
@@ -5035,7 +5035,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Local Falcon account (OAuth connection required)"]',
     '[{"label":"Local Falcon MCP Server","url":"https://mcp.localfalcon.com"}]',
-    'https://cdn.simpleicons.org/localfalcon/white'
+    'https://www.google.com/s2/favicons?domain=localfalcon.com&sz=128'
   ),
   (
     'Longbridge Agent',
@@ -5061,7 +5061,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Longbridge account (OAuth connection required)"]',
     '[{"label":"Longbridge MCP Server","url":"https://mcp.longbridge.com"}]',
-    'https://cdn.simpleicons.org/longbridge/white'
+    'https://www.google.com/s2/favicons?domain=longbridge.com&sz=128'
   ),
   (
     'Lorikeet Agent',
@@ -5087,7 +5087,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Lorikeet account (OAuth connection required)"]',
     '[{"label":"Lorikeet MCP Server","url":"https://api.lorikeetcx.ai/v1/mcp"}]',
-    'https://cdn.simpleicons.org/lorikeet/white'
+    'https://www.google.com/s2/favicons?domain=lorikeetcx.ai&sz=128'
   ),
   (
     'LSEG Agent',
@@ -5113,7 +5113,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["LSEG account (OAuth connection required)"]',
     '[{"label":"LSEG MCP Server","url":"https://api.analytics.lseg.com/lfa/mcp/server-cl"}]',
-    'https://cdn.simpleicons.org/lseg/white'
+    'https://www.google.com/s2/favicons?domain=lseg.com&sz=128'
   ),
   (
     'Lumin Agent',
@@ -5139,7 +5139,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Lumin account (OAuth connection required)"]',
     '[{"label":"Lumin MCP Server","url":"https://mcp.luminpdf.com/mcp"}]',
-    'https://cdn.simpleicons.org/lumin/white'
+    'https://www.google.com/s2/favicons?domain=luminpdf.com&sz=128'
   ),
   (
     'Lusha Agent',
@@ -5165,7 +5165,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Lusha account (OAuth connection required)"]',
     '[{"label":"Lusha MCP Server","url":"https://mcp.lusha.com/mcp/claude"}]',
-    'https://cdn.simpleicons.org/lusha/white'
+    'https://www.google.com/s2/favicons?domain=lusha.com&sz=128'
   ),
   (
     'Magic Patterns Agent',
@@ -5191,7 +5191,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Magic Patterns account (OAuth connection required)"]',
     '[{"label":"Magic Patterns MCP Server","url":"https://mcp.magicpatterns.com/mcp"}]',
-    'https://cdn.simpleicons.org/magicpatterns/white'
+    'https://www.google.com/s2/favicons?domain=magicpatterns.com&sz=128'
   ),
   (
     'Mailchimp Agent',
@@ -5217,7 +5217,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Mailchimp account (OAuth connection required)"]',
     '[{"label":"Mailchimp MCP Server","url":"https://ai-inc.mailchimp.com/claude/mcp/v2"}]',
-    'https://cdn.simpleicons.org/mailchimp/white'
+    'https://www.google.com/s2/favicons?domain=mailchimp.com&sz=128'
   ),
   (
     'MailerLite Agent',
@@ -5243,7 +5243,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["MailerLite account (OAuth connection required)"]',
     '[{"label":"MailerLite MCP Server","url":"https://mcp.mailerlite.com/mcp"}]',
-    'https://cdn.simpleicons.org/mailerlite/white'
+    'https://www.google.com/s2/favicons?domain=mailerlite.com&sz=128'
   ),
   (
     'Malwarebytes Agent',
@@ -5269,7 +5269,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Malwarebytes account (OAuth connection required)"]',
     '[{"label":"Malwarebytes MCP Server","url":"https://scamguard.malwarebytes.com/claude/mcp"}]',
-    'https://cdn.simpleicons.org/malwarebytes/white'
+    'https://www.google.com/s2/favicons?domain=malwarebytes.com&sz=128'
   ),
   (
     'MDN Agent',
@@ -5295,7 +5295,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["MDN account (OAuth connection required)"]',
     '[{"label":"MDN MCP Server","url":"https://mcp.mdn.mozilla.net/"}]',
-    'https://cdn.simpleicons.org/mdn/white'
+    'https://www.google.com/s2/favicons?domain=mozilla.net&sz=128'
   ),
   (
     'Melon Agent',
@@ -5321,7 +5321,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Melon account (OAuth connection required)"]',
     '[{"label":"Melon MCP Server","url":"https://mcp.melon.com/mcp/"}]',
-    'https://cdn.simpleicons.org/melon/white'
+    'https://www.google.com/s2/favicons?domain=melon.com&sz=128'
   ),
   (
     'Mem Agent',
@@ -5347,7 +5347,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Mem account (OAuth connection required)"]',
     '[{"label":"Mem MCP Server","url":"https://mcp.mem.ai/mcp"}]',
-    'https://cdn.simpleicons.org/mem/white'
+    'https://www.google.com/s2/favicons?domain=mem.ai&sz=128'
   ),
   (
     'Metaview Agent',
@@ -5373,7 +5373,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Metaview account (OAuth connection required)"]',
     '[{"label":"Metaview MCP Server","url":"https://mcp.metaview.ai/mcp"}]',
-    'https://cdn.simpleicons.org/metaview/white'
+    'https://www.google.com/s2/favicons?domain=metaview.ai&sz=128'
   ),
   (
     'Midpage Legal Research Agent',
@@ -5400,7 +5400,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Midpage Legal Research account (OAuth connection required)"]',
     '[{"label":"Midpage Legal Research MCP Server","url":"https://app.midpage.ai/mcp"}]',
-    'https://cdn.simpleicons.org/midpagelegalresearch/white'
+    'https://www.google.com/s2/favicons?domain=midpage.ai&sz=128'
   ),
   (
     'Monday Agent',
@@ -5426,7 +5426,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Monday account (OAuth connection required)"]',
     '[{"label":"Monday MCP Server","url":"https://mcp.monday.com/mcp"}]',
-    'https://cdn.simpleicons.org/monday/white'
+    'https://www.google.com/s2/favicons?domain=monday.com&sz=128'
   ),
   (
     'Monte Carlo Agent',
@@ -5452,7 +5452,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Monte Carlo account (OAuth connection required)"]',
     '[{"label":"Monte Carlo MCP Server","url":"https://integrations.getmontecarlo.com/mcp"}]',
-    'https://cdn.simpleicons.org/montecarlo/white'
+    'https://www.google.com/s2/favicons?domain=getmontecarlo.com&sz=128'
   ),
   (
     'Moody''s Agent',
@@ -5478,7 +5478,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Moody''s account (OAuth connection required)"]',
     '[{"label":"Moody''s MCP Server","url":"https://api.moodys.com/genai-ready-data/m1/mcp"}]',
-    'https://cdn.simpleicons.org/moodyx27s/white'
+    'https://www.google.com/s2/favicons?domain=moodys.com&sz=128'
   ),
   (
     'Morningstar Agent',
@@ -5504,7 +5504,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Morningstar account (OAuth connection required)"]',
     '[{"label":"Morningstar MCP Server","url":"https://mcp.morningstar.com/mcp"}]',
-    'https://cdn.simpleicons.org/morningstar/white'
+    'https://www.google.com/s2/favicons?domain=morningstar.com&sz=128'
   ),
   (
     'MotherDuck Agent',
@@ -5530,7 +5530,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Infrastructure"]',
     '["MotherDuck account (OAuth connection required)"]',
     '[{"label":"MotherDuck MCP Server","url":"https://api.motherduck.com/mcp"}]',
-    'https://cdn.simpleicons.org/motherduck/white'
+    'https://www.google.com/s2/favicons?domain=motherduck.com&sz=128'
   ),
   (
     'Motion Creative Analytics Agent',
@@ -5556,7 +5556,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Motion Creative Analytics account (OAuth connection required)"]',
     '[{"label":"Motion Creative Analytics MCP Server","url":"https://projects.motionapp.com/mcp"}]',
-    'https://cdn.simpleicons.org/motioncreativeanalytics/white'
+    'https://www.google.com/s2/favicons?domain=motionapp.com&sz=128'
   ),
   (
     'MSCI Agent',
@@ -5582,7 +5582,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["MSCI account (OAuth connection required)"]',
     '[{"label":"MSCI MCP Server","url":"https://mcp.msci.com/mcp/v1.0/mcp"}]',
-    'https://cdn.simpleicons.org/msci/white'
+    'https://www.google.com/s2/favicons?domain=msci.com&sz=128'
   ),
   (
     'MT Newswires Agent',
@@ -5608,7 +5608,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["MT Newswires account (OAuth connection required)"]',
     '[{"label":"MT Newswires MCP Server","url":"https://mcp.mtnewswires.com/mcp"}]',
-    'https://cdn.simpleicons.org/mtnewswires/white'
+    'https://www.google.com/s2/favicons?domain=mtnewswires.com&sz=128'
   ),
   (
     'NetDocuments Agent',
@@ -5634,7 +5634,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["NetDocuments account (OAuth connection required)"]',
     '[{"label":"NetDocuments MCP Server","url":"https://web-api.us.netdocuments.app/connect/mcp"}]',
-    'https://cdn.simpleicons.org/netdocuments/white'
+    'https://www.google.com/s2/favicons?domain=netdocuments.app&sz=128'
   ),
   (
     'Omni Analytics Agent',
@@ -5660,7 +5660,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Omni Analytics account (OAuth connection required)"]',
     '[{"label":"Omni Analytics MCP Server","url":"https://callbacks.omniapp.co/callback/mcp"}]',
-    'https://cdn.simpleicons.org/omnianalytics/white'
+    'https://www.google.com/s2/favicons?domain=omniapp.co&sz=128'
   ),
   (
     'Open Targets Agent',
@@ -5686,7 +5686,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Open Targets account (OAuth connection required)"]',
     '[{"label":"Open Targets MCP Server","url":"https://mcp.platform.opentargets.org/mcp"}]',
-    'https://cdn.simpleicons.org/opentargets/white'
+    'https://www.google.com/s2/favicons?domain=opentargets.org&sz=128'
   ),
   (
     'Orion by Gravity Agent',
@@ -5712,7 +5712,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Orion by Gravity account (OAuth connection required)"]',
     '[{"label":"Orion by Gravity MCP Server","url":"https://g.runorion.com/mcp"}]',
-    'https://cdn.simpleicons.org/orionbygravity/white'
+    'https://www.google.com/s2/favicons?domain=runorion.com&sz=128'
   ),
   (
     'Outreach Agent',
@@ -5738,7 +5738,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Outreach account (OAuth connection required)"]',
     '[{"label":"Outreach MCP Server","url":"https://api.outreach.io/mcp/"}]',
-    'https://cdn.simpleicons.org/outreach/white'
+    'https://www.google.com/s2/favicons?domain=outreach.io&sz=128'
   ),
   (
     'Peec AI Agent',
@@ -5764,7 +5764,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Peec AI account (OAuth connection required)"]',
     '[{"label":"Peec AI MCP Server","url":"https://api.peec.ai/mcp"}]',
-    'https://cdn.simpleicons.org/peecai/white'
+    'https://www.google.com/s2/favicons?domain=peec.ai&sz=128'
   ),
   (
     'Pendo Agent',
@@ -5790,7 +5790,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Pendo account (OAuth connection required)"]',
     '[{"label":"Pendo MCP Server","url":"https://app.pendo.io/mcp/v0/shttp"}]',
-    'https://cdn.simpleicons.org/pendo/white'
+    'https://www.google.com/s2/favicons?domain=pendo.io&sz=128'
   ),
   (
     'pg-aiguide Agent',
@@ -5816,7 +5816,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["pg-aiguide account (OAuth connection required)"]',
     '[{"label":"pg-aiguide MCP Server","url":"https://mcp.tigerdata.com/docs"}]',
-    'https://cdn.simpleicons.org/pgaiguide/white'
+    'https://www.google.com/s2/favicons?domain=tigerdata.com&sz=128'
   ),
   (
     'PitchBook Agent',
@@ -5842,7 +5842,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["PitchBook account (OAuth connection required)"]',
     '[{"label":"PitchBook MCP Server","url":"https://premium.mcp.pitchbook.com/mcp"}]',
-    'https://cdn.simpleicons.org/pitchbook/white'
+    'https://www.google.com/s2/favicons?domain=pitchbook.com&sz=128'
   ),
   (
     'PlanetScale Agent',
@@ -5868,7 +5868,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["PlanetScale account (OAuth connection required)"]',
     '[{"label":"PlanetScale MCP Server","url":"https://mcp.pscale.dev/mcp/planetscale\\n"}]',
-    'https://cdn.simpleicons.org/planetscale/white'
+    'https://www.google.com/s2/favicons?domain=pscale.dev&sz=128'
   ),
   (
     'Polar Analytics Agent',
@@ -5894,7 +5894,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Polar Analytics account (OAuth connection required)"]',
     '[{"label":"Polar Analytics MCP Server","url":"https://api.polaranalytics.com/mcp"}]',
-    'https://cdn.simpleicons.org/polaranalytics/white'
+    'https://www.google.com/s2/favicons?domain=polaranalytics.com&sz=128'
   ),
   (
     'Privacy.com Agent',
@@ -5920,7 +5920,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Privacy.com account (OAuth connection required)"]',
     '[{"label":"Privacy.com MCP Server","url":"https://mcp.privacy.com"}]',
-    'https://cdn.simpleicons.org/privacycom/white'
+    'https://www.google.com/s2/favicons?domain=privacy.com&sz=128'
   ),
   (
     'Pylon Agent',
@@ -5947,7 +5947,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Pylon account (OAuth connection required)"]',
     '[{"label":"Pylon MCP Server","url":"https://mcp.usepylon.com/"}]',
-    'https://cdn.simpleicons.org/pylon/white'
+    'https://www.google.com/s2/favicons?domain=usepylon.com&sz=128'
   ),
   (
     'Quartr Agent',
@@ -5973,7 +5973,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Infrastructure"]',
     '["Quartr account (OAuth connection required)"]',
     '[{"label":"Quartr MCP Server","url":"https://mcp.quartr.com/mcp"}]',
-    'https://cdn.simpleicons.org/quartr/white'
+    'https://www.google.com/s2/favicons?domain=quartr.com&sz=128'
   ),
   (
     'QuickBooks Agent',
@@ -5999,7 +5999,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["QuickBooks account (OAuth connection required)"]',
     '[{"label":"QuickBooks MCP Server","url":"https://ai-inc.quickbooks.intuit.com/v1/mcp"}]',
-    'https://cdn.simpleicons.org/quickbooks/white'
+    'https://www.google.com/s2/favicons?domain=intuit.com&sz=128'
   ),
   (
     'Quo Agent',
@@ -6025,7 +6025,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Quo account (OAuth connection required)"]',
     '[{"label":"Quo MCP Server","url":"https://mcp.quo.com/mcp"}]',
-    'https://cdn.simpleicons.org/quo/white'
+    'https://www.google.com/s2/favicons?domain=quo.com&sz=128'
   ),
   (
     'Ramp Data Agent',
@@ -6052,7 +6052,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Ramp Data account (OAuth connection required)"]',
     '[{"label":"Ramp Data MCP Server","url":"https://mcp.ramp.com/ramp-data/anthropic/mcp"}]',
-    'https://cdn.simpleicons.org/rampdata/white'
+    'https://www.google.com/s2/favicons?domain=ramp.com&sz=128'
   ),
   (
     'Razorpay Agent',
@@ -6078,7 +6078,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Razorpay account (OAuth connection required)"]',
     '[{"label":"Razorpay MCP Server","url":"https://mcp.razorpay.com/mcp"}]',
-    'https://cdn.simpleicons.org/razorpay/white'
+    'https://www.google.com/s2/favicons?domain=razorpay.com&sz=128'
   ),
   (
     'Resy Agent',
@@ -6104,7 +6104,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Resy account (OAuth connection required)"]',
     '[{"label":"Resy MCP Server","url":"https://apigw.americanexpress.com/dining/v1/mcp"}]',
-    'https://cdn.simpleicons.org/resy/white'
+    'https://www.google.com/s2/favicons?domain=americanexpress.com&sz=128'
   ),
   (
     'Rillet Agent',
@@ -6130,7 +6130,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Rillet account (OAuth connection required)"]',
     '[{"label":"Rillet MCP Server","url":"https://api.rillet.com/mcp"}]',
-    'https://cdn.simpleicons.org/rillet/white'
+    'https://www.google.com/s2/favicons?domain=rillet.com&sz=128'
   ),
   (
     'Scholar Gateway Agent',
@@ -6156,7 +6156,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Scholar Gateway account (OAuth connection required)"]',
     '[{"label":"Scholar Gateway MCP Server","url":"https://connector.scholargateway.ai/mcp"}]',
-    'https://cdn.simpleicons.org/scholargateway/white'
+    'https://www.google.com/s2/favicons?domain=scholargateway.ai&sz=128'
   ),
   (
     'Scite Agent',
@@ -6182,7 +6182,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Scite account (OAuth connection required)"]',
     '[{"label":"Scite MCP Server","url":"https://api.scite.ai/mcp"}]',
-    'https://cdn.simpleicons.org/scite/white'
+    'https://www.google.com/s2/favicons?domain=scite.ai&sz=128'
   ),
   (
     'Send Agent',
@@ -6208,7 +6208,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["Send account (OAuth connection required)"]',
     '[{"label":"Send MCP Server","url":"https://www.send.co/mcp"}]',
-    'https://cdn.simpleicons.org/send/white'
+    'https://www.google.com/s2/favicons?domain=send.co&sz=128'
   ),
   (
     'Shapes Agent',
@@ -6234,7 +6234,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Shapes account (OAuth connection required)"]',
     '[{"label":"Shapes MCP Server","url":"https://mcp.shapes.co/"}]',
-    'https://cdn.simpleicons.org/shapes/white'
+    'https://www.google.com/s2/favicons?domain=shapes.co&sz=128'
   ),
   (
     'SignNow Agent',
@@ -6260,7 +6260,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Development"]',
     '["SignNow account (OAuth connection required)"]',
     '[{"label":"SignNow MCP Server","url":"https://mcp-server.signnow.com/mcp"}]',
-    'https://cdn.simpleicons.org/signnow/white'
+    'https://www.google.com/s2/favicons?domain=signnow.com&sz=128'
   ),
   (
     'Solve Intelligence Agent',
@@ -6286,7 +6286,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Solve Intelligence account (OAuth connection required)"]',
     '[{"label":"Solve Intelligence MCP Server","url":"https://api.solveintelligence.com/mcp/"}]',
-    'https://cdn.simpleicons.org/solveintelligence/white'
+    'https://www.google.com/s2/favicons?domain=solveintelligence.com&sz=128'
   ),
   (
     'S&P Global Agent',
@@ -6312,7 +6312,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["S&P Global account (OAuth connection required)"]',
     '[{"label":"S&P Global MCP Server","url":"https://kfinance.kensho.com/integrations/mcp"}]',
-    'https://cdn.simpleicons.org/samppglobal/white'
+    'https://www.google.com/s2/favicons?domain=kensho.com&sz=128'
   ),
   (
     'Splice Agent',
@@ -6338,7 +6338,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Splice account (OAuth connection required)"]',
     '[{"label":"Splice MCP Server","url":"https://mcp.splice.com/mcp"}]',
-    'https://cdn.simpleicons.org/splice/white'
+    'https://www.google.com/s2/favicons?domain=splice.com&sz=128'
   ),
   (
     'Spotify Agent',
@@ -6364,7 +6364,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["Spotify account (OAuth connection required)"]',
     '[{"label":"Spotify MCP Server","url":"https://mcp-gateway-external-pilot.spotify.net/mcp"}]',
-    'https://cdn.simpleicons.org/spotify/white'
+    'https://www.google.com/s2/favicons?domain=spotify.net&sz=128'
   ),
   (
     'Sprouts Data Intelligence Agent',
@@ -6390,7 +6390,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Sprouts Data Intelligence account (OAuth connection required)"]',
     '[{"label":"Sprouts Data Intelligence MCP Server","url":"https://sprouts-mcp-server.kartikay-dhar.workers.dev"}]',
-    'https://cdn.simpleicons.org/sproutsdataintelligence/white'
+    'https://www.google.com/s2/favicons?domain=workers.dev&sz=128'
   ),
   (
     'Square Agent',
@@ -6417,7 +6417,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Square account (OAuth connection required)"]',
     '[{"label":"Square MCP Server","url":"https://mcp.squareup.com/sse"}]',
-    'https://cdn.simpleicons.org/square/white'
+    'https://www.google.com/s2/favicons?domain=squareup.com&sz=128'
   ),
   (
     'StubHub Agent',
@@ -6443,7 +6443,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["StubHub account (OAuth connection required)"]',
     '[{"label":"StubHub MCP Server","url":"https://open-ai-app.stubhub.net/mcp"}]',
-    'https://cdn.simpleicons.org/stubhub/white'
+    'https://www.google.com/s2/favicons?domain=stubhub.net&sz=128'
   ),
   (
     'Superhuman Mail Agent',
@@ -6469,7 +6469,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Productivity"]',
     '["Superhuman Mail account (OAuth connection required)"]',
     '[{"label":"Superhuman Mail MCP Server","url":"https://mcp.mail.superhuman.com/mcp"}]',
-    'https://cdn.simpleicons.org/superhumanmail/white'
+    'https://www.google.com/s2/favicons?domain=superhuman.com&sz=128'
   ),
   (
     'Supermetrics Agent',
@@ -6495,7 +6495,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Supermetrics account (OAuth connection required)"]',
     '[{"label":"Supermetrics MCP Server","url":"https://mcp.supermetrics.com/mcp"}]',
-    'https://cdn.simpleicons.org/supermetrics/white'
+    'https://www.google.com/s2/favicons?domain=supermetrics.com&sz=128'
   ),
   (
     'SurveyMonkey Agent',
@@ -6521,7 +6521,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Design"]',
     '["SurveyMonkey account (OAuth connection required)"]',
     '[{"label":"SurveyMonkey MCP Server","url":"https://mcp.surveymonkey.com/mcp"}]',
-    'https://cdn.simpleicons.org/surveymonkey/white'
+    'https://www.google.com/s2/favicons?domain=surveymonkey.com&sz=128'
   ),
   (
     'Synthesize Bio Agent',
@@ -6547,7 +6547,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Synthesize Bio account (OAuth connection required)"]',
     '[{"label":"Synthesize Bio MCP Server","url":"https://app.synthesize.bio/api/mcp"}]',
-    'https://cdn.simpleicons.org/synthesizebio/white'
+    'https://www.google.com/s2/favicons?domain=synthesize.bio&sz=128'
   ),
   (
     'Taskrabbit Booking Assistance Agent',
@@ -6573,7 +6573,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Productivity"]',
     '["Taskrabbit Booking Assistance account (OAuth connection required)"]',
     '[{"label":"Taskrabbit Booking Assistance MCP Server","url":"https://mcp.taskrabbit.com/mcp"}]',
-    'https://cdn.simpleicons.org/taskrabbitbookingassistance/white'
+    'https://www.google.com/s2/favicons?domain=taskrabbit.com&sz=128'
   ),
   (
     'Third Bridge Agent',
@@ -6599,7 +6599,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Third Bridge account (OAuth connection required)"]',
     '[{"label":"Third Bridge MCP Server","url":"https://ai.thirdbridge.com/mcp/sse"}]',
-    'https://cdn.simpleicons.org/thirdbridge/white'
+    'https://www.google.com/s2/favicons?domain=thirdbridge.com&sz=128'
   ),
   (
     'Thumbtack Agent',
@@ -6625,7 +6625,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Thumbtack account (OAuth connection required)"]',
     '[{"label":"Thumbtack MCP Server","url":"https://mcp.thumbtack.com/mcp"}]',
-    'https://cdn.simpleicons.org/thumbtack/white'
+    'https://www.google.com/s2/favicons?domain=thumbtack.com&sz=128'
   ),
   (
     'Ticket Tailor Agent',
@@ -6651,7 +6651,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Communication"]',
     '["Ticket Tailor account (OAuth connection required)"]',
     '[{"label":"Ticket Tailor MCP Server","url":"https://mcp.tickettailor.ai/mcp"}]',
-    'https://cdn.simpleicons.org/tickettailor/white'
+    'https://www.google.com/s2/favicons?domain=tickettailor.ai&sz=128'
   ),
   (
     'Todoist Agent',
@@ -6678,7 +6678,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Todoist account (OAuth connection required)"]',
     '[{"label":"Todoist MCP Server","url":"https://ai.todoist.net/mcp"}]',
-    'https://cdn.simpleicons.org/todoist/white'
+    'https://www.google.com/s2/favicons?domain=todoist.net&sz=128'
   ),
   (
     'TopCounsel by The L Suite Agent',
@@ -6704,7 +6704,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["TopCounsel by The L Suite account (OAuth connection required)"]',
     '[{"label":"TopCounsel by The L Suite MCP Server","url":"https://api.techgc.co/api/mcp/topcounsel"}]',
-    'https://cdn.simpleicons.org/topcounselbythelsuite/white'
+    'https://www.google.com/s2/favicons?domain=techgc.co&sz=128'
   ),
   (
     'Trellis Agent',
@@ -6730,7 +6730,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Trellis account (OAuth connection required)"]',
     '[{"label":"Trellis MCP Server","url":"https://mcp.trellis.law/anthropic"}]',
-    'https://cdn.simpleicons.org/trellis/white'
+    'https://www.google.com/s2/favicons?domain=trellis.law&sz=128'
   ),
   (
     'Trimble SketchUp Agent',
@@ -6756,7 +6756,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["Trimble SketchUp account (OAuth connection required)"]',
     '[{"label":"Trimble SketchUp MCP Server","url":"https://api.sketchup.com/mcp/v1/sketchup/mcp"}]',
-    'https://cdn.simpleicons.org/trimblesketchup/white'
+    'https://www.google.com/s2/favicons?domain=sketchup.com&sz=128'
   ),
   (
     'Tripadvisor Agent',
@@ -6782,7 +6782,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Tripadvisor account (OAuth connection required)"]',
     '[{"label":"Tripadvisor MCP Server","url":"https://production.ai-mcp-extensibility-prd.tamg.cloud/ogMvjY4De1G7CiHanMOAgddl/mcp"}]',
-    'https://cdn.simpleicons.org/tripadvisor/white'
+    'https://www.google.com/s2/favicons?domain=tamg.cloud&sz=128'
   ),
   (
     'Trivago Agent',
@@ -6808,7 +6808,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Trivago account (OAuth connection required)"]',
     '[{"label":"Trivago MCP Server","url":"https://mcp.trivago.com/mcp"}]',
-    'https://cdn.simpleicons.org/trivago/white'
+    'https://www.google.com/s2/favicons?domain=trivago.com&sz=128'
   ),
   (
     'Tropic Agent',
@@ -6834,7 +6834,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Tropic account (OAuth connection required)"]',
     '[{"label":"Tropic MCP Server","url":"https://app.tropicapp.io/mcp"}]',
-    'https://cdn.simpleicons.org/tropic/white'
+    'https://www.google.com/s2/favicons?domain=tropicapp.io&sz=128'
   ),
   (
     'TurboTax Agent',
@@ -6860,7 +6860,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["TurboTax account (OAuth connection required)"]',
     '[{"label":"TurboTax MCP Server","url":"https://ai-inc.turbotax.intuit.com/358A1C1B-F73B-46A7-B130-4B14916E6843/v1/mcp"}]',
-    'https://cdn.simpleicons.org/turbotax/white'
+    'https://www.google.com/s2/favicons?domain=intuit.com&sz=128'
   ),
   (
     'Uber Eats Agent',
@@ -6886,7 +6886,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Uber Eats account (OAuth connection required)"]',
     '[{"label":"Uber Eats MCP Server","url":"https://mcp.ubereats.com/eats-claude/mcp"}]',
-    'https://cdn.simpleicons.org/ubereats/white'
+    'https://www.google.com/s2/favicons?domain=ubereats.com&sz=128'
   ),
   (
     'Udemy Business Agent',
@@ -6912,7 +6912,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Udemy Business account (OAuth connection required)"]',
     '[{"label":"Udemy Business MCP Server","url":"https://api.udemy.com/mcp"}]',
-    'https://cdn.simpleicons.org/udemybusiness/white'
+    'https://www.google.com/s2/favicons?domain=udemy.com&sz=128'
   ),
   (
     'Unthread Agent',
@@ -6938,7 +6938,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Unthread account (OAuth connection required)"]',
     '[{"label":"Unthread MCP Server","url":"https://app.unthread.io/api/mcp"}]',
-    'https://cdn.simpleicons.org/unthread/white'
+    'https://www.google.com/s2/favicons?domain=unthread.io&sz=128'
   ),
   (
     'Verisk Underwriting Intelligence Agent',
@@ -6964,7 +6964,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Verisk Underwriting Intelligence account (OAuth connection required)"]',
     '[{"label":"Verisk Underwriting Intelligence MCP Server","url":"https://gatewaymcp.verisk.com/underwriting/intelligencemcp/v1"}]',
-    'https://cdn.simpleicons.org/veriskunderwritingintelligence/white'
+    'https://www.google.com/s2/favicons?domain=verisk.com&sz=128'
   ),
   (
     'Verisk XactRestore Agent',
@@ -6990,7 +6990,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Verisk XactRestore account (OAuth connection required)"]',
     '[{"label":"Verisk XactRestore MCP Server","url":"https://xactrestore-xactremodelserver-usw2-prod.propsol.io/mcp"}]',
-    'https://cdn.simpleicons.org/veriskxactrestore/white'
+    'https://www.google.com/s2/favicons?domain=propsol.io&sz=128'
   ),
   (
     'Viator Agent',
@@ -7016,7 +7016,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Viator account (OAuth connection required)"]',
     '[{"label":"Viator MCP Server","url":"https://exp-app-mcp.prod.ep.viator.com/mcp"}]',
-    'https://cdn.simpleicons.org/viator/white'
+    'https://www.google.com/s2/favicons?domain=viator.com&sz=128'
   ),
   (
     'Windsor.ai Agent',
@@ -7042,7 +7042,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Finance"]',
     '["Windsor.ai account (OAuth connection required)"]',
     '[{"label":"Windsor.ai MCP Server","url":"https://mcp.windsor.ai"}]',
-    'https://cdn.simpleicons.org/windsorai/white'
+    'https://www.google.com/s2/favicons?domain=windsor.ai&sz=128'
   ),
   (
     'WordPress.com Agent',
@@ -7068,7 +7068,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["AI & ML"]',
     '["WordPress.com account (OAuth connection required)"]',
     '[{"label":"WordPress.com MCP Server","url":"https://public-api.wordpress.com/wpcom/v2/mcp/v1"}]',
-    'https://cdn.simpleicons.org/wordpresscom/white'
+    'https://www.google.com/s2/favicons?domain=wordpress.com&sz=128'
   ),
   (
     'Workable Agent',
@@ -7094,7 +7094,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["Workable account (OAuth connection required)"]',
     '[{"label":"Workable MCP Server","url":"https://mcp.workable.com/mcp"}]',
-    'https://cdn.simpleicons.org/workable/white'
+    'https://www.google.com/s2/favicons?domain=workable.com&sz=128'
   ),
   (
     'Wyndham Hotels and Resorts Agent',
@@ -7120,7 +7120,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Lifestyle"]',
     '["Wyndham Hotels and Resorts account (OAuth connection required)"]',
     '[{"label":"Wyndham Hotels and Resorts MCP Server","url":"https://mcp.wyndhamhotels.com/claude/mcp"}]',
-    'https://cdn.simpleicons.org/wyndhamhotelsandresorts/white'
+    'https://www.google.com/s2/favicons?domain=wyndhamhotels.com&sz=128'
   ),
   (
     'ZipRecruiter Agent',
@@ -7146,7 +7146,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["ZipRecruiter account (OAuth connection required)"]',
     '[{"label":"ZipRecruiter MCP Server","url":"https://api.ziprecruiter.com/mcp"}]',
-    'https://cdn.simpleicons.org/ziprecruiter/white'
+    'https://www.google.com/s2/favicons?domain=ziprecruiter.com&sz=128'
   ),
   (
     'Zocks Agent',
@@ -7172,7 +7172,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Data & Analytics"]',
     '["Zocks account (OAuth connection required)"]',
     '[{"label":"Zocks MCP Server","url":"https://mcp.zocks.io/v1/mcp"}]',
-    'https://cdn.simpleicons.org/zocks/white'
+    'https://www.google.com/s2/favicons?domain=zocks.io&sz=128'
   ),
   (
     'ZoomInfo Agent',
@@ -7198,5 +7198,5 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Business"]',
     '["ZoomInfo account (OAuth connection required)"]',
     '[{"label":"ZoomInfo MCP Server","url":"https://mcp.zoominfo.com/mcp"}]',
-    'https://cdn.simpleicons.org/zoominfo/white'
+    'https://www.google.com/s2/favicons?domain=zoominfo.com&sz=128'
   );
