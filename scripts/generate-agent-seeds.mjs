@@ -297,7 +297,7 @@ for (let i = 0; i < newEntries.length; i++) {
   const useCases = genUseCases(e);
   const requirements = genRequirements(e);
   const links = genLinks(e);
-  const imageUrl = genLetterAvatar(agentName);
+  const imageUrl = (e.icon && e.icon.startsWith("http")) ? e.icon : genLetterAvatar(agentName);
 
   sqlParts.push(`  (`);
   sqlParts.push(`    '${sqlEscape(agentName)}',`);
