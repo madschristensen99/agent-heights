@@ -221,7 +221,7 @@ function getFaviconUrl(url) {
     if (parts.length > 2) {
       host = parts.slice(-2).join(".");
     }
-    return `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
+    return `https://icons.duckduckgo.com/ip3/${host}.ico`;
   } catch {
     return null;
   }
