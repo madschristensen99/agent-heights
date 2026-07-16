@@ -23,6 +23,9 @@ const LIMITS: Record<string, { max: number; refillPerSec: number }> = {
   voice_answer: { max: 20, refillPerSec: 2 },
   voice_start: { max: 10, refillPerSec: 10 / 60 },
   voice_stop: { max: 10, refillPerSec: 10 / 60 },
+  agent_fs_write: { max: 30, refillPerSec: 30 / 60 },
+  agent_fs_delete: { max: 20, refillPerSec: 20 / 60 },
+  agent_fs_upload: { max: 20, refillPerSec: 20 / 60 },
 };
 
 /** Default limit for any message type not explicitly listed. */

@@ -312,7 +312,7 @@ for (let i = 0; i < newEntries.length; i++) {
     model: "claude-sonnet-4-20250514",
     systemPrompt,
     provider: "cline",
-    source: "sprite-heights",
+    source: "agent-heights",
     appearance,
     mcpServers: [mcpServer],
   };

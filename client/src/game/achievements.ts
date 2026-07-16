@@ -87,7 +87,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "hostile_ghost", name: "Don't Come Near Me", desc: "Hear a hostile ghost.", tier: "Ghosts", icon: "😠" },
 
   // ── Secret ──
-  { id: "spriteHeights_mode", name: "Brand Loyalty", desc: "Switch to the Sprite Heights office theme.", tier: "Secret", icon: "🏢" },
+  { id: "agentHeights_mode", name: "Brand Loyalty", desc: "Switch to the Agent Heights office theme.", tier: "Secret", icon: "🏢" },
   { id: "insomniac", name: "Burning the Midnight Oil", desc: "Play for 60+ minutes in one session.", tier: "Secret", icon: "🌙" },
   { id: "speed_demon", name: "Need for Speed", desc: "Stack coffee + sofa speed buffs at once.", tier: "Secret", icon: "⚡" },
   { id: "board_master", name: "Kanban King", desc: "Move 20 cards to done on the task board.", tier: "Secret", icon: "📌" },
@@ -104,7 +104,17 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "expedition_success", name: "Bring Back Treasure", desc: "An agent returns from a successful expedition.", tier: "Coming Soon", icon: "💎", comingSoon: true },
 ];
 
-const STORAGE_KEY = "sprite-heights-achievements";
+const STORAGE_KEY = "agent-heights-achievements";
+const OLD_STORAGE_KEY = "sprite-heights-achievements";
+
+// One-time migration: copy achievements from old key to new key
+try {
+  const oldData = localStorage.getItem(OLD_STORAGE_KEY);
+  if (oldData && !localStorage.getItem(STORAGE_KEY)) {
+    localStorage.setItem(STORAGE_KEY, oldData);
+    localStorage.removeItem(OLD_STORAGE_KEY);
+  }
+} catch {}
 
 export class AchievementTracker {
   private unlocked = new Set<string>();

@@ -65,11 +65,11 @@ CREATE INDEX IF NOT EXISTS idx_sprite_heights_rooms_org
 -- Allow org rooms to have NULL owner_id (owned by the org, not a single user)
 -- This is handled at the application level; the DB column stays nullable.
 
--- ── Seed the Sprite Heights HQ organization ───────────────────────────────────────
--- Pre-seed the "Sprite Heights HQ" org. Members are added at runtime when the
+-- ── Seed the Agent Heights HQ organization ───────────────────────────────────────
+-- Pre-seed the "Agent Heights HQ" org. Members are added at runtime when the
 -- whitelisted users (remseechannel@gmail.com, madschristensen99@icloud.com)
 -- connect for the first time.
 
 INSERT INTO public.sprite_heights_organizations (name, slug, github_org)
-  VALUES ('Sprite Heights HQ', 'sprite-heights-hq', 'sprite-heights')
+  VALUES ('Agent Heights HQ', 'agent-heights-hq', 'agent-heights')
   ON CONFLICT (slug) DO NOTHING;

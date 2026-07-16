@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize, resolve, relative } from "node:path";
-import { readFile, stat, readdir, writeFile, unlink, mkdir } from "node:fs/promises";
+import { readFile, stat, readdir, writeFile, unlink, mkdir, lstat } from "node:fs/promises";
 import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance } from "../shared/types.js";
 import { SERVER_PORT, isValidAppearance } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
@@ -291,7 +291,7 @@ const server = createServer((req, res) => {
       }
       res.writeHead(200, { "Content-Type": "text/html" });
       if (result.success) {
-        res.end(`<html><body><h2>✓ Connected!</h2><p>Redirecting back to Sprite Heights...</p><script>setTimeout(function(){window.location.href='/';},1500);</script></body></html>`);
+        res.end(`<html><body><h2>✓ Connected!</h2><p>Redirecting back to Agent Heights...</p><script>setTimeout(function(){window.location.href='/';},1500);</script></body></html>`);
       } else {
         res.end(`<html><body><h2>Authentication failed</h2><p>${result.error ?? "Unknown error"}</p><script>setTimeout(function(){window.location.href='/';},3000);</script></body></html>`);
       }
@@ -379,6 +379,10 @@ wss.on("connection", async (ws, req) => {
       schedules: sess.manager.snapshotSchedules(),
       world: sess.manager.worldState(),
     } satisfies ServerMsg));
+    // Send mailbox states so flags are correct on initial load
+    for (const mb of sess.manager.getMailboxSnapshots()) {
+      ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
+    }
   } else if (currentRoom && currentRoom.isPrivate && currentRoom.ownerId !== sess.user.id) {
     // Visitor in someone else's office — owner's snapshot
     const ownerSess = tenants.get(currentRoom.ownerId);
@@ -394,6 +398,10 @@ wss.on("connection", async (ws, req) => {
         schedules: ownerSess.manager.snapshotSchedules(),
         world: ownerSess.manager.worldState(),
       } satisfies ServerMsg));
+      // Send mailbox states so flags are correct on initial load
+      for (const mb of ownerSess.manager.getMailboxSnapshots()) {
+        ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
+      }
     } else {
       ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], schedules: [], player: sess.player, settings: sess.manager.settings, world: null } satisfies ServerMsg));
     }
@@ -1506,11 +1514,41 @@ wss.on("connection", async (ws, req) => {
             break;
           }
           const relPath = isShared ? ws_path.slice("shared/".length) : ws_path;
+
+          // Filename sanitization — reject dangerous patterns
+          if (/(^|\/)\.\.(\/|$)/.test(relPath) || /[\x00-\x1f]/.test(relPath)) {
+            sess.broadcast({ type: "toast", text: "Invalid file path." });
+            break;
+          }
+
           const safePath = resolve(agentWs, relPath);
           const rel = relative(agentWs, safePath);
           if (rel.startsWith("..")) {
             sess.broadcast({ type: "toast", text: "Path outside workspace." });
             break;
+          }
+
+          // Symlink protection — reject if the resolved path is a symlink
+          // or if any parent directory in the workspace is a symlink
+          try {
+            const linkInfo = await lstat(safePath).catch(() => null);
+            if (linkInfo?.isSymbolicLink()) {
+              sess.broadcast({ type: "toast", text: "Symlinks are not allowed." });
+              break;
+            }
+          } catch { /* file doesn't exist yet — fine for write/upload */ }
+
+          // File size limit for write/upload (10MB)
+          const MAX_FILE_SIZE = 10 * 1024 * 1024;
+          if (msg.type === "agent_fs_write" || msg.type === "agent_fs_upload") {
+            const content = (msg as any).content ?? "";
+            const sizeBytes = (msg as any).encoding === "base64"
+              ? Buffer.from(content, "base64").length
+              : typeof content === "string" ? Buffer.byteLength(content, "utf-8") : 0;
+            if (sizeBytes > MAX_FILE_SIZE) {
+              sess.broadcast({ type: "toast", text: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB).` });
+              break;
+            }
           }
 
           if (msg.type === "agent_fs_list") {
@@ -1639,6 +1677,17 @@ wss.on("connection", async (ws, req) => {
             return { role, content: content.slice(0, 2000) };
           });
           sess.broadcast({ type: "agent_memory", agentId: msg.agentId, messages });
+          break;
+        }
+        // ── Platform mailbox ──────────────────────────────────────────────
+        case "check_mailbox": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          const events = ownerSess.manager.checkMailbox(msg.platform);
+          sess.broadcast({ type: "mailbox_messages", platform: msg.platform, events });
           break;
         }
         case "create_org": {
@@ -1855,25 +1904,29 @@ wss.on("connection", async (ws, req) => {
 const logMaintenanceInterval = startLogMaintenance();
 
 server.listen(SERVER_PORT, () => {
-  console.log(`[sprite-heights] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
+  console.log(`[agent-heights] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
   if (isSupabaseConfigured) {
-    console.log(`[sprite-heights] Supabase auth enabled`);
+    console.log(`[agent-heights] Supabase auth enabled`);
   } else {
-    console.log(`[sprite-heights] Supabase not configured — running in dev mode (no auth)`);
-    console.log(`[sprite-heights]   Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable auth`);
+    console.log(`[agent-heights] Supabase not configured — running in dev mode (no auth)`);
+    console.log(`[agent-heights]   Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to enable auth`);
   }
-  console.log(`[sprite-heights] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
+  console.log(`[agent-heights] game data in ${join(rootDir, "ag")} (users/<id>/, logs/, workspace/)`);
   if (isRedisConfigured) {
-    console.log(`[sprite-heights] Redis enabled — pub/sub + presence (server ${serverId})`);
+    console.log(`[agent-heights] Redis enabled — pub/sub + presence (server ${serverId})`);
   } else {
-    console.log(`[sprite-heights] Redis not configured — single-server mode`);
-    console.log(`[sprite-heights]   Set REDIS_URL to enable pub/sub + presence`);
+    console.log(`[agent-heights] Redis not configured — single-server mode`);
+    console.log(`[agent-heights]   Set REDIS_URL to enable pub/sub + presence`);
   }
-  console.log(`[sprite-heights] global multiplayer room: ${HQ2_ROOM_ID}`);
+  console.log(`[agent-heights] global multiplayer room: ${HQ2_ROOM_ID}`);
+
+  // Restore user sessions at boot so agents resume immediately after a
+  // server restart, without waiting for each user to reconnect.
+  void tenants.restoreSessionsAtBoot();
 });
 
 async function shutdown(): Promise<void> {
-  console.log("[sprite-heights] graceful shutdown initiated — notifying clients & saving agent tasks");
+  console.log("[agent-heights] graceful shutdown initiated — notifying clients & saving agent tasks");
 
   // 1. Broadcast "server_restarting" to all connected clients so they show
   //    a friendly overlay instead of a scary disconnect.
@@ -1900,7 +1953,7 @@ async function shutdown(): Promise<void> {
   }
   await Promise.all(flushes);
 
-  console.log("[sprite-heights] graceful shutdown complete — exiting");
+  console.log("[agent-heights] graceful shutdown complete — exiting");
   process.exit(0);
 }
 

@@ -145,5 +145,5 @@ END $$;
 
 -- ── Update org data: rename the seeded org ─────────────────────────────────
 UPDATE public.sprite_heights_organizations
-  SET name = 'Sprite Heights HQ', slug = 'sprite-heights-hq', github_org = 'sprite-heights'
+  SET name = 'Agent Heights HQ', slug = 'agent-heights-hq', github_org = 'agent-heights'
   WHERE slug = 'agent-hq-hq';

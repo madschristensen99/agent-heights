@@ -170,10 +170,11 @@ export class OfficeScene extends Phaser.Scene {
   private heliAgent: Phaser.GameObjects.Container | null = null;
   private heliElevatorGfx: Phaser.GameObjects.Graphics | null = null;
   private heliDelivery: HelicopterDelivery | null = null;
+  private heliSound: { stop: () => void } | null = null;
   private initialSyncDone = false;
 
   private world!: WorldLayer;
-  private theme: "classic" | "spriteHeights" = "classic";
+  private theme: "classic" | "agentHeights" = "classic";
   /** Pixel positions of chimney tiles — for smoke when devops agents work. */
   private chimneyPositions: { x: number; y: number }[] = [];
   /** Server rack tile positions for E-interaction. */
@@ -367,11 +368,11 @@ export class OfficeScene extends Phaser.Scene {
       this.monitorMatrixOverlays.clear();
       this.matrixColumns = [];
     });
-    // HQ2 and org rooms use the spriteHeights (big open office) theme; private offices use user's chosen theme.
+    // HQ2 and org rooms use the agentHeights (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
     // players start. This prevents a brief flash of the wrong room layout.
     const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null || this.store.isOrgRoom;
-    this.theme = isHq2 ? "spriteHeights" : (this.store.settings.game.theme === "spriteHeights" ? "spriteHeights" : "classic");
+    this.theme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
     this.ready = false;
 
     // Remove any stale overlay from a previous scene restart
@@ -510,12 +511,12 @@ export class OfficeScene extends Phaser.Scene {
         fn: () => {
           map = this.make.tilemap({ key: `map-${this.theme}` });
           const tiles = map.addTilesetImage(
-            this.theme === "spriteHeights" ? "spriteHeights" : "office",
+            this.theme === "agentHeights" ? "agentHeights" : "office",
             `tiles-${this.theme}`,
           )!;
 
           // draw a floor-colored backdrop so empty map tiles aren't white
-          const floorColor = this.theme === "spriteHeights" ? 0x4a6a8a : 0xd4d0c8;
+          const floorColor = this.theme === "agentHeights" ? 0x4a6a8a : 0xd4d0c8;
           const bg = this.add.graphics().setDepth(-1);
           bg.fillStyle(floorColor, 1);
           bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
@@ -810,6 +811,66 @@ export class OfficeScene extends Phaser.Scene {
           }));
           this.platformMailboxGfx = this.add.graphics().setDepth(6);
           this.drawPlatformMailboxes();
+
+          // Sync mailbox state from the store (populated by server on connect)
+          for (const mb of this.platformMailboxes) {
+            const state = this.store.platformMailboxes.get(mb.platform);
+            if (state) {
+              mb.flagUp = state.flagUp;
+              mb.pendingCount = state.pendingCount;
+              mb.lastMessage = state.lastMessage;
+            }
+          }
+          this.drawPlatformMailboxes();
+
+          // Subscribe to live mailbox updates from the server
+          this.store.onMailboxUpdate((platform, flagUp, pendingCount, lastMessage) => {
+            const mb = this.platformMailboxes.find((m) => m.platform === platform);
+            if (!mb) return;
+            const wasUp = mb.flagUp;
+            mb.flagUp = flagUp;
+            mb.pendingCount = pendingCount;
+            mb.lastMessage = lastMessage;
+            this.drawPlatformMailboxes();
+
+            // When a flag goes up, have Hermes walk to the mailbox to sort
+            if (flagUp && !wasUp && this.hermes) {
+              this.hermes.sortMail(mb.tile);
+
+              // After sorting (~4s), deliver to a random idle agent's desk
+              this.time.delayedCall(4500, () => {
+                if (!this.hermes) return;
+                const idleAgents: { id: string; tile: import("./path").Tile }[] = [];
+                for (const [id, npc] of this.npcs) {
+                  const info = this.store.agents.get(id);
+                  if (info && info.status === "idle" && info.role !== "manager") {
+                    idleAgents.push({ id, tile: npc.tile() });
+                  }
+                }
+                if (idleAgents.length > 0) {
+                  const target = idleAgents[Math.floor(Math.random() * idleAgents.length)];
+                  this.hermes.deliverTo(target.tile);
+                }
+              });
+            }
+          });
+
+          // Subscribe to mailbox message responses (when player presses E)
+          this.store.onMailboxMessages((platform, events) => {
+            if (events.length === 0) {
+              this.store.toast(`[${platform}] No messages.`);
+              return;
+            }
+            const latest = events[0];
+            const dir = latest.direction === "inbound" ? "←" : "→";
+            this.store.toast(`[${platform}] ${dir} ${latest.sender}: ${latest.text.slice(0, 150)}`);
+            const mb = this.platformMailboxes.find((m) => m.platform === platform);
+            if (mb) {
+              const mbPx = { x: mb.tile.x * TILE_PX + TILE_PX / 2, y: mb.tile.y * TILE_PX + TILE_PX / 2 };
+              this.world.vfx.sparkBurst(mbPx.x, mbPx.y, mb.color, 8, 50);
+              this.world.audio.uiClick();
+            }
+          });
         },
       },
       {
@@ -969,10 +1030,10 @@ export class OfficeScene extends Phaser.Scene {
               console.log("[scene] store emit fired — calling syncAgents. agents in store:", [...this.store.agents.keys()]);
               if (this.store.roomId === null) return; // room_state not yet received — skip theme check
               const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
-              const desiredTheme = isHq2 ? "spriteHeights" : (this.store.settings.game.theme === "spriteHeights" ? "spriteHeights" : "classic");
+              const desiredTheme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
               if (desiredTheme !== this.theme) {
                 console.log("[scene] theme changed — restarting scene");
-                if (desiredTheme === "spriteHeights") achievements.unlock("spriteHeights_mode");
+                if (desiredTheme === "agentHeights") achievements.unlock("agentHeights_mode");
                 this.ready = false;
                 this.remotePlayers.clear();
                 this.scene.restart();
@@ -1032,10 +1093,10 @@ export class OfficeScene extends Phaser.Scene {
           // Theme consistency check: room_state may have arrived during the
           // phased init (before the store listener was wired), so lastRoomId
           // already matches but the theme was set from a null roomId default
-          // to "spriteHeights".  Restart if the current room requires a different theme.
+          // to "agentHeights".  Restart if the current room requires a different theme.
           if (this.store.roomId !== null) {
             const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
-            const desiredTheme = isHq2 ? "spriteHeights" : (this.store.settings.game.theme === "spriteHeights" ? "spriteHeights" : "classic");
+            const desiredTheme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
             if (desiredTheme !== this.theme) {
               console.log(`[scene] ready but theme mismatch: theme=${this.theme} desired=${desiredTheme} (roomId=${this.store.roomId}) — restarting`);
               this.ready = false;
@@ -1295,7 +1356,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Set interactable tile positions based on the current theme. */
   private setupInteractables(): void {
-    if (this.theme === "spriteHeights") {
+    if (this.theme === "agentHeights") {
       this.clockTile = { x: 1, y: 3 };
       this.projectorControlTile = { x: 6, y: 1 };
       this.projectorSpeakerTile = { x: 7, y: 1 };
@@ -1363,17 +1424,8 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     if (!nearest) return false;
-    const mbPx = { x: nearest.tile.x * TILE_PX + TILE_PX / 2, y: nearest.tile.y * TILE_PX + TILE_PX / 2 };
-    if (nearest.flagUp && nearest.lastMessage) {
-      this.store.toast(`[${nearest.platform}] ${nearest.lastMessage}`);
-      nearest.flagUp = false;
-      nearest.pendingCount = 0;
-      this.drawPlatformMailboxes();
-      this.world.vfx.sparkBurst(mbPx.x, mbPx.y, nearest.color, 8, 50);
-      this.world.audio.uiClick();
-    } else {
-      this.store.toast(`[${nearest.platform}] No new messages.`);
-    }
+    const net = this.game.registry.get("net") as import("../net").Net;
+    net.send({ type: "check_mailbox", platform: nearest.platform });
     return true;
   }
 
@@ -2618,7 +2670,7 @@ export class OfficeScene extends Phaser.Scene {
     this.heliDelivery = delivery ?? null;
     const agentName = delivery?.name ?? "Agent";
     this.store.toast(`Helicopter summoned! ${agentName} incoming...`);
-    this.world?.audio.uiClick();
+    this.heliSound = this.world?.audio.helicopter() ?? null;
 
     const padCx = this.padCenter.x;
     const padCy = this.padCenter.y;
@@ -2832,6 +2884,8 @@ export class OfficeScene extends Phaser.Scene {
     this.heliElevatorGfx = null;
     this.heliActive = false;
     this.heliDelivery = null;
+    this.heliSound?.stop();
+    this.heliSound = null;
   }
 
   /** Draw the projector screen frame on the top-left wall. */

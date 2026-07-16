@@ -225,6 +225,96 @@ export class AudioSystem {
     this.tone(40, 0.8, "sine", 0.2);
   }
 
+  /** Helicopter rotor whirring — looping blade chops + turbine whine.
+   *  Returns a handle whose stop() fades out and tears down all nodes. */
+  helicopter(): { stop: () => void } {
+    if (!this.ctx || !this.sfxGain || !this.enabled) return { stop: () => {} };
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // --- Blade-pass "whomp whomp" via amplitude-modulated noise ---
+    // Generate 2s of filtered noise, loop it
+    const noiseLen = ctx.sampleRate * 2;
+    const noiseBuf = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) noiseData[i] = Math.random() * 2 - 1;
+    const noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = noiseBuf;
+    noiseSrc.loop = true;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = "lowpass";
+    noiseFilter.frequency.value = 600;
+    noiseFilter.Q.value = 0.7;
+
+    // Amplitude modulation via LFO → gain to create blade chops (~14 Hz = 2 blades)
+    const bladeLfo = ctx.createOscillator();
+    bladeLfo.type = "sine";
+    bladeLfo.frequency.value = 14;
+    const bladeLfoGain = ctx.createGain();
+    bladeLfoGain.gain.value = 0.25; // modulation depth
+    const bladeGain = ctx.createGain();
+    bladeGain.gain.value = 0.25; // baseline level
+    bladeLfo.connect(bladeLfoGain);
+    bladeLfoGain.connect(bladeGain.gain);
+
+    noiseSrc.connect(noiseFilter);
+    noiseFilter.connect(bladeGain);
+    bladeGain.connect(this.sfxGain);
+
+    // --- Rotor thump — low sine at blade-pass frequency ---
+    const thumpOsc = ctx.createOscillator();
+    thumpOsc.type = "sine";
+    thumpOsc.frequency.value = 14;
+    const thumpGain = ctx.createGain();
+    thumpGain.gain.value = 0;
+    thumpGain.gain.linearRampToValueAtTime(0.12, now + 0.5);
+    thumpOsc.connect(thumpGain);
+    thumpGain.connect(this.sfxGain);
+
+    // --- Turbine whine — mid sawtooth, low volume ---
+    const turbineOsc = ctx.createOscillator();
+    turbineOsc.type = "sawtooth";
+    turbineOsc.frequency.value = 320;
+    const turbineGain = ctx.createGain();
+    turbineGain.gain.value = 0;
+    turbineGain.gain.linearRampToValueAtTime(0.04, now + 1);
+    turbineOsc.connect(turbineGain);
+    turbineGain.connect(this.sfxGain);
+
+    // Start everything
+    noiseSrc.start(now);
+    bladeLfo.start(now);
+    thumpOsc.start(now);
+    turbineOsc.start(now);
+
+    // Fade in the blade gain
+    bladeGain.gain.setValueAtTime(0, now);
+    bladeGain.gain.linearRampToValueAtTime(0.25, now + 0.5);
+
+    return {
+      stop: () => {
+        const stopTime = ctx.currentTime;
+        const fadeDuration = 1.5;
+        bladeGain.gain.cancelScheduledValues(stopTime);
+        bladeGain.gain.setValueAtTime(bladeGain.gain.value, stopTime);
+        bladeGain.gain.linearRampToValueAtTime(0, stopTime + fadeDuration);
+        thumpGain.gain.cancelScheduledValues(stopTime);
+        thumpGain.gain.setValueAtTime(thumpGain.gain.value, stopTime);
+        thumpGain.gain.linearRampToValueAtTime(0, stopTime + fadeDuration);
+        turbineGain.gain.cancelScheduledValues(stopTime);
+        turbineGain.gain.setValueAtTime(turbineGain.gain.value, stopTime);
+        turbineGain.gain.linearRampToValueAtTime(0, stopTime + fadeDuration);
+
+        const end = stopTime + fadeDuration + 0.1;
+        try { noiseSrc.stop(end); } catch {}
+        try { bladeLfo.stop(end); } catch {}
+        try { thumpOsc.stop(end); } catch {}
+        try { turbineOsc.stop(end); } catch {}
+      },
+    };
+  }
+
   // ============================================================
   // Ambient Music
   // ============================================================

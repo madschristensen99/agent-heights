@@ -1,4 +1,4 @@
-# Sprite Heights — Robot Expeditions
+# Agent Heights — Robot Expeditions
 
 Idle office agents collectively plan, fund, and deploy robots into the
 Labyrinth. The agents never leave the office — they build proxies that

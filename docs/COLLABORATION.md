@@ -1,4 +1,4 @@
-# Sprite Heights — Cross-Agent Collaboration & World-Awareness
+# Agent Heights — Cross-Agent Collaboration & World-Awareness
 
 The agents today are **capable but blind**. The `@cline/sdk` loop gives them
 real iterative tool-calling power — they can read, write, and execute. But
@@ -31,16 +31,16 @@ provides for free, and proposes a prioritized path to genuine collaboration.
   path traversal protection on file tools (but NOT on `run_commands` —
   `bash -c` can escape)
 
-### What the SDK ships with (but Sprite Heights doesn't use)
+### What the SDK ships with (but Agent Heights doesn't use)
 
 `@cline/sdk` (via `@cline/core`) exports `createBuiltinTools()` and
 `createDefaultToolsWithPreset()` — a full toolset with working Node.js
-executors that Sprite Heights completely ignores. The current `cline.ts`
+executors that Agent Heights completely ignores. The current `cline.ts`
 hand-rolls 5 tools from scratch and leaves the rest on the shelf.
 
 **Built-in tools available in the SDK:**
 
-| Tool | SDK name | Sprite Heights status | What it does |
+| Tool | SDK name | Agent Heights status | What it does |
 |---|---|---|---|
 | `read_files` | `DefaultToolNames.READ_FILES` | ✅ Hand-rolled (reimplements built-in) | Read file contents with line ranges |
 | `run_commands` | `DefaultToolNames.RUN_COMMANDS` | ✅ Hand-rolled (reimplements built-in) | Execute shell commands |
@@ -82,7 +82,7 @@ multi-agent coordination system:
 
 This is a complete inter-agent communication and coordination layer —
 message passing, task delegation, progress tracking, outcome management —
-that Sprite Heights reimplements poorly with JSON-plan parsing and one-shot
+that Agent Heights reimplements poorly with JSON-plan parsing and one-shot
 handoffs.
 
 ### What the docs envision (but isn't built)
@@ -99,13 +99,13 @@ handoffs.
 
 ## 2. The Gaps
 
-Some gaps are Sprite Heights-specific (prompt layer, shared workspace, office
-context). Others exist only because Sprite Heights doesn't wire up tools the
+Some gaps are Agent Heights-specific (prompt layer, shared workspace, office
+context). Others exist only because Agent Heights doesn't wire up tools the
 SDK already ships. Each gap below is tagged:
 
 - **[SDK]** — the SDK already provides this; we just need to wire it up
-- **[CUSTOM]** — Sprite Heights-specific; we need to build it ourselves
-- **[HYBRID]** — the SDK provides primitives, but Sprite Heights needs to
+- **[CUSTOM]** — Agent Heights-specific; we need to build it ourselves
+- **[HYBRID]** — the SDK provides primitives, but Agent Heights needs to
   bridge them to the office model
 
 ### 2.1 No Inter-Agent Communication Channel [HYBRID]
@@ -121,10 +121,10 @@ that Agent B should know about, there's no mechanism to communicate that.
 - `team_read_mailbox()` — read incoming messages
 - `team_status()` — see who's on the team and what they're doing
 
-**What Sprite Heights needs to bridge:**
+**What Agent Heights needs to bridge:**
 
 The SDK's team tools operate within a single `Agent` instance's team
-context (spawned teammates). Sprite Heights's agents are independent processes
+context (spawned teammates). Agent Heights's agents are independent processes
 with separate `Agent` instances. We need to either:
 
 1. **Adopt the SDK's team model** — make the manager agent a "team lead"
@@ -165,7 +165,7 @@ but:
 The system prompt (`server/manager.ts → buildSystemPrompt()`) is minimal:
 
 ```
-You are {name}, job title "{title}", an agent employed in Sprite Heights.
+You are {name}, job title "{title}", an agent employed in Agent Heights.
 {personality}
 Stay in character.
 Your boss is {bossName}. This is one ongoing conversation.
@@ -217,12 +217,12 @@ parallel with:
 - `team_attach_outcome_fragment` / `team_review_outcome_fragment` —
   attach artifacts to outcomes and review them
 
-**What Sprite Heights needs to bridge:**
+**What Agent Heights needs to bridge:**
 
 If we adopt the SDK's team model (see §2.1 option 1), most of this comes
 for free — the manager spawns teammates, assigns tasks with
 `team_run_task`, awaits completion with `team_await_runs`, and tracks
-deliverables with the outcome tools. The custom work is mapping Sprite Heights's
+deliverables with the outcome tools. The custom work is mapping Agent Heights's
 office concepts (desk, sprite, status) to the SDK's team concepts
 (teammate, run, outcome).
 
@@ -251,11 +251,11 @@ no:
   from experience, which is a form of persistent learning
 - Outcome tracking tools — structured deliverables with review steps
 
-**What Sprite Heights needs to build:**
+**What Agent Heights needs to build:**
 
 - **Context window management** — Summarize older messages when
   approaching token limits, preserving key decisions and file state.
-  The SDK doesn't provide this; it's Sprite Heights's responsibility since we
+  The SDK doesn't provide this; it's Agent Heights's responsibility since we
   manage the `messageStore` and call `agent.restore()`.
 - **Pre-submit verification** — Before `submit_and_exit` is accepted,
   run tests/typecheck and feed results back. The SDK's `submit_and_exit`
@@ -264,7 +264,7 @@ no:
 ### 2.6 Missing Tools for Effectiveness [SDK]
 
 The current 5 hand-rolled tools are minimal. The SDK ships with 9
-built-in tools, of which Sprite Heights uses 0 (it reimplements 3 from
+built-in tools, of which Agent Heights uses 0 (it reimplements 3 from
 scratch). The missing ones:
 
 - **`search_codebase`** — Grep/ripgrep across the workspace. `list_files`
@@ -287,8 +287,8 @@ scratch). The missing ones:
 - **`git_operations`** — Branch, commit, diff, log. Agents can do this
   via `run_commands` but a structured tool would be cleaner.
 - **`read_other_workspace`** — Read from a named agent's workspace (with
-  permission). Sprite Heights-specific concept.
-- **`read_board`** — See the Sprite Heights task board. Sprite Heights-specific.
+  permission). Agent Heights-specific concept.
+- **`read_board`** — See the Agent Heights task board. Agent Heights-specific.
 
 ### 2.7 No Verification or Quality Gate [HYBRID]
 
@@ -303,10 +303,10 @@ Agents call `submit_and_exit` when they think they're done. There's no:
 **What the SDK provides:**
 
 The built-in `submit_and_exit` schema has a `verified: boolean` field —
-the SDK expects the agent to verify its work before submitting. Sprite Heights's
+the SDK expects the agent to verify its work before submitting. Agent Heights's
 hand-rolled version only has `summary: string` and ignores verification.
 
-**What Sprite Heights needs to build:**
+**What Agent Heights needs to build:**
 
 - A **pre-submit hook** — When `submit_and_exit` is called, run
   `tsc --noEmit` and any test files in the workspace. Feed results back
@@ -336,7 +336,7 @@ building the small number of truly custom pieces the SDK doesn't cover.
 
 | Step | What | Type | Cost | Impact |
 |---|---|---|---|---|
-| 5 | **Evaluate SDK team tools** — Spike: try `bootstrapAgentTeams()` with the manager as team lead. If it works within Sprite Heights's architecture, adopt it and replace `delegate()` + `completeHandoff()`. If not, fall back to step 5b. | [HYBRID] | ~1 day spike | Determines architecture for all coordination |
+| 5 | **Evaluate SDK team tools** — Spike: try `bootstrapAgentTeams()` with the manager as team lead. If it works within Agent Heights's architecture, adopt it and replace `delegate()` + `completeHandoff()`. If not, fall back to step 5b. | [HYBRID] | ~1 day spike | Determines architecture for all coordination |
 | 5b | **Filesystem-based agent messaging** (fallback) — `post_message(toAgent, text)` writes to `workspace/{recipient-id}/inbox.jsonl`. `read_messages()` reads from own inbox. Messages injected into the next task prompt. | [CUSTOM] | ~80 lines | Enables agent-to-agent communication |
 | 6 | **Dependency-aware delegation** — Either via SDK team tools (`team_run_task` + `team_await_runs`) or by extending `managerBrief` to ask for `dependsOn` / `produces` fields and enforcing ordering in `delegate()`. | [HYBRID] | ~100 lines or less with SDK | Enables real multi-agent projects |
 | 7 | **Progress callbacks for managers** — When a delegated subtask completes, the manager agent gets a new conversation turn: "Pixel completed their subtask. Here's their report: ...". With SDK team tools, this is `team_await_runs()`. Custom: poll subtask status and inject results. | [HYBRID] | ~70 lines or near-zero with SDK | Closes the delegation loop |
@@ -370,19 +370,19 @@ outcome management) is available via the SDK's team tools.
 
 The agent intelligence gaps fall into three categories:
 
-1. **Wiring gaps [SDK]** — the SDK has the tool, Sprite Heights just doesn't use
+1. **Wiring gaps [SDK]** — the SDK has the tool, Agent Heights just doesn't use
    it. Fix: replace hand-rolled `makeTools()` with `createBuiltinTools()`.
    Cost: ~40 lines changed. Impact: 6 new capabilities.
 
 2. **Office context gaps [CUSTOM]** — the SDK has no concept of "the
    office," the roster, the task board, or game world events. These are
-   Sprite Heights's unique value and must be built custom. Fix: context
+   Agent Heights's unique value and must be built custom. Fix: context
    injection in `buildSystemPrompt()`, `read_board()` tool, event feed.
    Cost: ~155 lines total. Impact: agents become world-aware.
 
 3. **Architecture gaps [HYBRID]** — the SDK has multi-agent primitives
    (team tools), but they assume a single `Agent` instance spawning
-   teammates. Sprite Heights has independent `Agent` instances per agent. We
+   teammates. Agent Heights has independent `Agent` instances per agent. We
    need to either adopt the SDK's team model or bridge it. Cost: 1-day
    spike to decide, then ~80-100 lines. Impact: real collaboration.
 
@@ -430,7 +430,7 @@ else builds on that foundation.
 │    ├── skills (built-in)                            ← NEW    │
 │    └── submit_and_exit (built-in, with verified)    ← SWAP    │
 │                                                              │
-│  Tools (custom, Sprite Heights-specific):               ← NEW      │
+│  Tools (custom, Agent Heights-specific):               ← NEW      │
 │    ├── write_files (full-file write, no SDK equiv)           │
 │    ├── list_files (directory listing, no SDK equiv)          │
 │    ├── read_shared / write_shared                   ← NEW    │

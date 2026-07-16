@@ -123,7 +123,7 @@ class StdioMCPClient {
       this.rpc("initialize", {
         protocolVersion: "2024-11-05",
         capabilities: {},
-        clientInfo: { name: "sprite-heights", version: "0.1.0" },
+        clientInfo: { name: "agent-heights", version: "0.1.0" },
       }).then((result) => {
         this.notify("notifications/initialized", {});
         console.log(`[mcp:${this.label}] connected:`, JSON.stringify((result as { capabilities?: unknown })?.capabilities ?? {}));
@@ -228,7 +228,7 @@ class HttpMCPClient {
     const initResult = await this.rpc("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "sprite-heights", version: "0.1.0" },
+      clientInfo: { name: "agent-heights", version: "0.1.0" },
     });
     console.log(`[mcp:${this.label}] connected:`, JSON.stringify((initResult as { capabilities?: unknown })?.capabilities ?? {}));
     // Send initialized notification (fire-and-forget)

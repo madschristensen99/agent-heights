@@ -1,4 +1,4 @@
--- Sprite Heights tables — shared Supabase project with the Swarms Marketplace.
+-- Agent Heights tables — shared Supabase project with the Swarms Marketplace.
 -- Stores per-user game state as a JSONB blob (same shape as the old save.json).
 
 CREATE TABLE IF NOT EXISTS public.sprite_heights_saves (

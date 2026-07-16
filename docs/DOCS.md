@@ -1,4 +1,4 @@
-# Sprite Heights — Agent Architecture & Logic
+# Agent Heights — Agent Architecture & Logic
 
 Everything agent-related: how agents are structured, how tasks flow through the
 system, how memory works, and where every byte of agent data lives.
@@ -226,7 +226,7 @@ never decides anything about tasks; it only animates what the store says.
 | `ag/save.json` | **the** save: player, settings, full roster (incl. `sessionId`s), last 500 log entries per agent | `server/persistence.ts`, debounced 400 ms, reloaded on boot |
 | `ag/logs/<ISO-time>-<uuid>.json` | append-only transcript of one server session: every hire/assign/status/log/fire/settings event with timestamps | `server/logger.ts`, debounced 300 ms |
 | `ag/workspace/<slug>-<id>/` | the agent's real working directory | the agents themselves |
-| browser `localStorage` (`sprite-heights-player`) | your boss name + workspace (skips onboarding) | the HUD |
+| browser `localStorage` (`agent-heights-player`) | your boss name + workspace (skips onboarding) | the HUD |
 
 **Export**: ⚙ SETTINGS → "EXPORT CHATS & LOGS" downloads
 `{ exportedAt, player, settings, agents[], logs{} }` as a single JSON file,

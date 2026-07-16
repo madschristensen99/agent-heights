@@ -1,4 +1,4 @@
-# Sprite Heights — The Labyrinth
+# Agent Heights — The Labyrinth
 
 The infinite generative world outside the office door.
 
@@ -13,7 +13,7 @@ no end. Your agents stay behind working; the Labyrinth is a solo journey.
 
 ### Three layers of the product
 
-1. **Sprite Heights HQ** — The meta-office, the product's own office where it builds
+1. **Agent Heights HQ** — The meta-office, the product's own office where it builds
    itself. The lobby/hub players spawn into. Showcase, onboarding, and the door
    to everywhere.
 2. **Personal Offices** — Each player's own office with their own agents.

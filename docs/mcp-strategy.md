@@ -1,8 +1,8 @@
-# SpriteHeights MCP Strategy
+# AgentHeights MCP Strategy
 
 ## Overview
 
-SpriteHeights is a gamified AI agent office — a tile-based multiplayer game where players hire AI agents as NPCs with personalities, moods, and custom appearances. Agents work in a shared workspace, communicate via inboxes, manage a task board, and can be fired into a "Labyrinth."
+AgentHeights is a gamified AI agent office — a tile-based multiplayer game where players hire AI agents as NPCs with personalities, moods, and custom appearances. Agents work in a shared workspace, communicate via inboxes, manage a task board, and can be fired into a "Labyrinth."
 
 This document outlines the current MCP (Model Context Protocol) integration, analyzes the [PulseMCP directory](https://www.pulsemcp.com/servers) (22,305 servers), and proposes a strategy for leveraging it as the primary tool/server marketplace.
 
@@ -22,7 +22,7 @@ This document outlines the current MCP (Model Context Protocol) integration, ana
 
 ### MCP Client Infrastructure
 
-SpriteHeights already has a solid MCP foundation:
+AgentHeights already has a solid MCP foundation:
 
 #### Generalized MCP Client (`server/providers/mcp-client.ts`)
 
@@ -174,7 +174,7 @@ These are HTTP-based, require auth, and connect to external SaaS. They map perfe
 - **FireCrawl** — web scraping
 - **n8n** — workflow automation
 - **Vercel** — deployment management
-- **Supabase** — DB management (already used by SpriteHeights)
+- **Supabase** — DB management (already used by AgentHeights)
 - **AWS Documentation** — infra docs lookup
 
 ### Tier 2: Local MCPs for Native Game Integration
@@ -243,7 +243,7 @@ These overlap with existing built-in tools or are too niche for broad adoption:
 - **Telnyx** — telecom niche
 - **Edgar Tools** — SEC filings niche
 - **WeRead Finance** — niche finance data
-- **Home Assistant** — smart home (cool but not core to SpriteHeights)
+- **Home Assistant** — smart home (cool but not core to AgentHeights)
 
 ---
 

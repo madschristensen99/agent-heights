@@ -1,10 +1,10 @@
-# Sprite Heights — Workplace Agents & External Presence
+# Agent Heights — Workplace Agents & External Presence
 
 Your agents don't just sit at desks coding in sandboxed folders. They're
 **embedded in your actual workplace tools** — answering questions in Slack,
 triaging issues in Linear, managing PRs in GitHub, deploying on Railway. You
 see it all happen in the pixel-art office, but the work is real and it's
-happening in the tools your team already uses. Sprite Heights is the control plane.
+happening in the tools your team already uses. Agent Heights is the control plane.
 The office is the dashboard. The agents are your workforce, everywhere at once.
 
 This builds on the existing provider architecture (`docs/DOCS.md` §6). The
@@ -15,7 +15,7 @@ bridges agents to the outside world.
 
 ## 1. Vision
 
-Right now an Sprite Heights agent is a coding agent in a box. It reads files, writes
+Right now an Agent Heights agent is a coding agent in a box. It reads files, writes
 files, runs commands, and reports back. It's useful, but it's sealed — the
 agent can't reach out, can't be reached, and has no life outside its workspace
 folder. It's also not sticky. You try it, it's cool, then you close the tab and
@@ -27,7 +27,7 @@ board, your GitHub repos. When an agent is the one answering questions in
 `#support`, triaging bugs in Linear, and opening PRs in GitHub, you don't
 forget about it. You can't. It's part of your team's daily flow.
 
-Sprite Heights is how you manage that fleet. The pixel-art office is where you see
+Agent Heights is how you manage that fleet. The pixel-art office is where you see
 what every agent is doing across all your tools, assign work, hire, fire, and
 watch the activity stream in real time. The agents have *embodiment* — they're
 characters at desks, not entries in a config file — and they have *reach* —
@@ -52,18 +52,18 @@ a self-improving AI agent with:
 - **Self-improvement loop** — background review after sessions
 
 Hermes is designed to *live* on a server and be reachable from wherever you
-are. Sprite Heights gives it a face, a desk, and a place in the world.
+are. Agent Heights gives it a face, a desk, and a place in the world.
 
 ### Why not just use Hermes directly
 
 Because Hermes alone is a CLI. It's powerful but invisible. You run it on a
 VPS, you talk to it from Telegram, and that's it. There's no sense of *who* the
 agent is, no visualization of what it's doing, no way to manage a fleet of
-them, no game loop, no fun. Hermes is the engine. Sprite Heights is the car.
+them, no game loop, no fun. Hermes is the engine. Agent Heights is the car.
 
 The reason agent products aren't sticky isn't that they lack capability — it's
 that they lack **embodiment** and **presence**. A chat box is not a place. A
-config file is not an identity. Sprite Heights solves both: agents have bodies
+config file is not an identity. Agent Heights solves both: agents have bodies
 (sprites, desks, personalities) and they have reach (Slack, Linear, GitHub).
 You don't manage agents by editing YAML. You manage them by walking up to their
 desk in an office.
@@ -72,17 +72,17 @@ desk in an office.
 
 ## 2. What Hermes Brings
 
-| Feature | What it does | Why Sprite Heights wants it |
+| Feature | What it does | Why Agent Heights wants it |
 |---|---|---|
 | **Messaging gateway** | Bridges to Telegram, Discord, Slack, WhatsApp, Signal, Email | Agents become real bots on real platforms |
 | **Skills system** | Agent creates, updates, and deletes its own `SKILL.md` procedural skills | Agents get better at their job over time — a Bug Whisperer that's fixed 20 similar bugs accumulates debugging skills |
 | **Structured memory** | `MEMORY.md` (environment/workflow notes) + `USER.md` (user profile), agent-managed via a `memory` tool | Replaces the "one long conversation" model with curated, capacity-managed memory |
 | **Session search** | Agent searches its own past conversations for relevant context | Agents can recall prior work without carrying entire history in context |
 | **MCP ecosystem** | Curated catalog of one-click MCP servers (GitHub, Linear, n8n, filesystem, etc.) + per-server tool filtering | Agents get access to external tools — GitHub PRs, Linear issues, n8n workflows |
-| **Multi-provider** | 300+ models via Nous Portal, OpenRouter (200+), NVIDIA NIM, HuggingFace, OpenAI, custom endpoints | Sprite Heights escapes the Swarms-only lock-in |
+| **Multi-provider** | 300+ models via Nous Portal, OpenRouter (200+), NVIDIA NIM, HuggingFace, OpenAI, custom endpoints | Agent Heights escapes the Swarms-only lock-in |
 | **Cron scheduling** | Time-based task triggers | Agents can do things on a schedule — daily standup, nightly cleanup |
 | **Self-improvement loop** | Background review after sessions suggests skill changes and memory updates | Agents evolve without manual intervention |
-| **`hermes mcp serve`** | Hermes runs as an MCP server exposing 10 tools (conversations, messages, events, channels) | Sprite Heights can poll for external activity and stream it into the office |
+| **`hermes mcp serve`** | Hermes runs as an MCP server exposing 10 tools (conversations, messages, events, channels) | Agent Heights can poll for external activity and stream it into the office |
 
 ---
 
@@ -90,7 +90,7 @@ desk in an office.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                              Sprite Heights Office                              │
+│                              Agent Heights Office                              │
 │                                                                          │
 │   ┌─────────┐  ┌─────────┐  ┌─────────┐                                 │
 │   │ Pixel   │  │ Mocha   │  │ Scout   │     You (the boss) watch         │
@@ -102,7 +102,7 @@ desk in an office.
 │        │  task      │  message   │                                       │
 │        ▼            ▼            ▼                                       │
 │   ┌─────────────────────────────────────┐                                │
-│   │     Sprite Heights Server (Node + ws)     │                                │
+│   │     Agent Heights Server (Node + ws)     │                                │
 │   │     HermesProviderRunner            │                                │
 │   │     · spawns/manages Hermes procs   │                                │
 │   │     · polls hermes mcp serve        │                                │
@@ -156,7 +156,7 @@ Implements the existing `ProviderRunner` interface:
 type ProviderRunner = (task: string, ctx: RunContext) => AsyncGenerator<TaskEvent>;
 ```
 
-The Hermes provider bridges Hermes's Python runtime to Sprite Heights's TypeScript
+The Hermes provider bridges Hermes's Python runtime to Agent Heights's TypeScript
 event stream:
 
 ```typescript
@@ -188,7 +188,7 @@ export const runHermes: ProviderRunner = async function* (task, ctx) {
 
 ### The event bridge
 
-`hermes mcp serve` exposes an event system that Sprite Heights polls:
+`hermes mcp serve` exposes an event system that Agent Heights polls:
 
 ```
 events_poll(after_cursor=0)     → non-blocking, returns new events
@@ -197,7 +197,7 @@ events_wait(after_cursor=42)    → blocks up to timeout for next event
 
 Event types: `message`, `approval_requested`, `approval_resolved`.
 
-Sprite Heights's server runs a background poller per Hermes-connected agent. When
+Agent Heights's server runs a background poller per Hermes-connected agent. When
 an external event arrives (someone messaged the agent on Slack), it:
 
 1. Creates a `TaskEvent` with `kind: "text"` and a prefix like `[Slack]`
@@ -208,7 +208,7 @@ an external event arrives (someone messaged the agent on Slack), it:
 ### Profile lifecycle
 
 ```
-Hire agent in Sprite Heights
+Hire agent in Agent Heights
     │
     ▼
 hermes profile create <agentId> --no-skills
@@ -221,10 +221,10 @@ hermes profile create <agentId> --no-skills
 Profile persists across server restarts
     │  · Hermes profiles live in ~/.hermes/profiles/<agentId>/
     │  · Skills and memory survive restarts (they're files on disk)
-    │  · Sprite Heights's save.json tracks the profile name
+    │  · Agent Heights's save.json tracks the profile name
     │
     ▼
-Fire agent in Sprite Heights
+Fire agent in Agent Heights
     │
     ▼
 hermes profile delete <agentId>
@@ -275,7 +275,7 @@ Hire an agent that manages PRs:
 - **Role:** `worker` with GitHub MCP connection
 - **Behavior:** The agent watches for new PRs, reviews code, posts comments,
   and merges approved PRs. Tool calls appear in the feed: `[tool]
-  github.review_pr repo=sprite-heights #42 — looks good, merging.`
+  github.review_pr repo=agent-heights #42 — looks good, merging.`
 - **Code review skills:** over time the agent accumulates code review skills
   specific to your codebase — it learns your conventions, your review
   checklist, your merge criteria.
@@ -378,7 +378,7 @@ External events appear in the office feed with platform tags:
 [Pixel → Linear] Triaged BUG-247: labeled P1, assigned to backend cycle
 [GitHub → Scout] PR #42 opened: fix-auth-loop
 [Scout → GitHub] PR #42 reviewed: looks good, merging
-[Railway → Scout] Deploy succeeded: sprite-heights-server v1.4.2 → staging
+[Railway → Scout] Deploy succeeded: agent-heights-server v1.4.2 → staging
 ```
 
 ### Status indicator
@@ -433,7 +433,7 @@ Each agent maintains two memory files:
 
 Memory is injected into the system prompt as a frozen snapshot at session
 start, with capacity limits. The agent manages its own memory — adding,
-replacing, removing entries to stay within budget. This replaces Sprite Heights's
+replacing, removing entries to stay within budget. This replaces Agent Heights's
 current "one long conversation" memory model with something that scales.
 
 ### Session search
@@ -447,7 +447,7 @@ being in context.
 
 ## 8. MCP Tool Ecosystem
 
-Sprite Heights already has MCP integration for Railway (`server/providers/railway-mcp.ts`).
+Agent Heights already has MCP integration for Railway (`server/providers/railway-mcp.ts`).
 Hermes expands this dramatically.
 
 ### Curated catalog
@@ -465,27 +465,27 @@ hermes mcp install browser-use  → Cloud browser automation
 Each MCP server is reviewed by Nous Research. Per-server tool filtering lets
 you expose only the tools you want the agent to see.
 
-### How this works in Sprite Heights
+### How this works in Agent Heights
 
 - **At hire time** or **in settings**, you pick which MCP servers an agent
   can access
 - The Hermes profile is configured with those MCP servers
 - Tool calls from MCP servers appear in the office feed like any other tool
-  call: `[tool] github.create_pr repo=sprite-heights title="Fix auth loop"`
+  call: `[tool] github.create_pr repo=agent-heights title="Fix auth loop"`
 - Devops agents get GitHub + Railway. Linear agents get Linear MCP. Slack
   agents get the messaging bridge. You compose the toolset per role.
 
 ### Hermes as MCP server
 
 `hermes mcp serve` exposes 10 tools that let *other* MCP clients (Claude
-Code, Cursor, or Sprite Heights itself) interact with Hermes's messaging bridge:
+Code, Cursor, or Agent Heights itself) interact with Hermes's messaging bridge:
 
 - `conversations_list`, `conversation_get`, `messages_read`
 - `messages_send` (to Slack/Discord/Telegram/etc.)
 - `events_poll`, `events_wait` (near-real-time event stream)
 - `channels_list`, `permissions_list_open`, `permissions_respond`
 
-Sprite Heights's server connects to this as an MCP client — this is the event
+Agent Heights's server connects to this as an MCP client — this is the event
 bridge that streams external activity into the office.
 
 ---
@@ -552,14 +552,14 @@ export interface HermesSettings {
 
 | Challenge | Details | Mitigation |
 |---|---|---|
-| **Language barrier** | Hermes is Python; Sprite Heights is TypeScript/Node | Hermes is a CLI app, not a library. Bridge via subprocess + MCP stdio. No Python-in-process. |
-| **Process management** | Each Hermes agent is a separate Python process | Sprite Heights already manages per-agent state. A `HermesProcessManager` spawns/stops profiles. The gateway is one shared process. |
+| **Language barrier** | Hermes is Python; Agent Heights is TypeScript/Node | Hermes is a CLI app, not a library. Bridge via subprocess + MCP stdio. No Python-in-process. |
+| **Process management** | Each Hermes agent is a separate Python process | Agent Heights already manages per-agent state. A `HermesProcessManager` spawns/stops profiles. The gateway is one shared process. |
 | **Tool overlap** | Both have file read/write/list and command execution | Hermes tools are authoritative for Hermes agents. The Cline provider stays for Cline agents. No conflict — they're different providers. |
-| **Memory model** | Sprite Heights's "one long conversation" vs Hermes's structured files | Hermes agents use Hermes memory. Cline agents use Cline memory. The provider abstraction already separates these. |
-| **Workspace alignment** | Hermes uses `~/.hermes/`; Sprite Heights uses `ag/workspace/` | Hermes profiles are configured with `cwd = ag/workspace/<slug>-<id>/`. Skills and memory live inside the agent's workspace, not in `~/.hermes/`. |
+| **Memory model** | Agent Heights's "one long conversation" vs Hermes's structured files | Hermes agents use Hermes memory. Cline agents use Cline memory. The provider abstraction already separates these. |
+| **Workspace alignment** | Hermes uses `~/.hermes/`; Agent Heights uses `ag/workspace/` | Hermes profiles are configured with `cwd = ag/workspace/<slug>-<id>/`. Skills and memory live inside the agent's workspace, not in `~/.hermes/`. |
 | **Streaming fidelity** | Cline has rich event callbacks; Hermes CLI output is coarser | `hermes mcp serve` provides structured events. For task execution, parse CLI stdout with delimiters. Accept slightly lower fidelity for much broader capability. |
-| **Operational complexity** | Running Python + Node + MCP servers | Hermes handles its own dependencies (uv, venv, Python 3.11). Sprite Heights just spawns processes. The MCP bridge is stdio — no extra ports. |
-| **Gateway process** | The messaging gateway must be always-on for platform agents | Sprite Heights server starts/stops the gateway as a managed child process. If it crashes, Sprite Heights restarts it. |
+| **Operational complexity** | Running Python + Node + MCP servers | Hermes handles its own dependencies (uv, venv, Python 3.11). Agent Heights just spawns processes. The MCP bridge is stdio — no extra ports. |
+| **Gateway process** | The messaging gateway must be always-on for platform agents | Agent Heights server starts/stops the gateway as a managed child process. If it crashes, Agent Heights restarts it. |
 
 ---
 
@@ -574,7 +574,7 @@ export interface HermesSettings {
    configure model + system prompt + working directory
 3. **Wire into `manager.ts`** — add `"hermes"` to the provider pick, add
    Hermes models to `SWARMS_MODELS` (or a new `HERMES_MODELS` array)
-4. **Memory + skills passthrough** — Hermes handles these natively; Sprite Heights
+4. **Memory + skills passthrough** — Hermes handles these natively; Agent Heights
    just needs to not interfere. Skills and memory files land in the agent's
    workspace.
 5. **Settings** — `HermesSettings` in `GameSettings`, `hermesHome` path
@@ -582,9 +582,9 @@ export interface HermesSettings {
 
 ### Phase 2 — Messaging gateway + event bridge
 
-6. **Gateway management** — Sprite Heights server starts/stops
+6. **Gateway management** — Agent Heights server starts/stops
    `hermes gateway start` as a child process
-7. **`hermes mcp serve` client** — Sprite Heights connects to the MCP server,
+7. **`hermes mcp serve` client** — Agent Heights connects to the MCP server,
    polls `events_poll` / `events_wait` for external events
 8. **Platform connection** — `connect_platform` / `disconnect_platform`
    messages, configure per-agent platform bindings
@@ -640,8 +640,8 @@ export interface HermesSettings {
 
 ## 13. The Hosting Landscape (Or: Don't Build Hosting)
 
-A common question: should Sprite Heights host the agent runtimes itself? The answer
-is **no**. The hosting layer is being commoditized. Sprite Heights's value is the
+A common question: should Agent Heights host the agent runtimes itself? The answer
+is **no**. The hosting layer is being commoditized. Agent Heights's value is the
 office, the game loop, and the visualization — not running Python processes.
 
 ### Managed Hermes hosting (already emerging)
@@ -656,24 +656,24 @@ At least three companies are already offering managed Hermes hosting:
 
 These companies exist because the barrier to running Hermes yourself is real —
 VPS, Docker, Python, gateway config, bot tokens. They're racing to make it
-trivial. Sprite Heights should ride that wave, not compete with it.
+trivial. Agent Heights should ride that wave, not compete with it.
 
 ### General agent hosting platforms
 
-| Platform | What it does | Relationship to Sprite Heights |
+| Platform | What it does | Relationship to Agent Heights |
 |---|---|---|
-| **Cloudflare Agents** | Durable agent runtime on edge. TypeScript-native. SQLite state, WebSockets, MCP, hibernation when idle (free when inactive). Scales to millions. | **Best infrastructure partner.** Same stack (TS), hibernation = cheap, MCP built in. An Sprite Heights agent could literally be a Cloudflare Agent with a Phaser sprite. |
+| **Cloudflare Agents** | Durable agent runtime on edge. TypeScript-native. SQLite state, WebSockets, MCP, hibernation when idle (free when inactive). Scales to millions. | **Best infrastructure partner.** Same stack (TS), hibernation = cheap, MCP built in. An Agent Heights agent could literally be a Cloudflare Agent with a Phaser sprite. |
 | **Blaxel** | MicroVM sandboxes for agents. <3s boot, ~25ms resume. Persistent filesystems, model gateway, MCP hosting. $7.3M seed. | **Sandbox provider.** Each agent gets a real isolated microVM as its workspace instead of a local folder. |
 | **MCP Cloud** | 24/7 agent hosting on Telegram/Discord/WhatsApp. MCP tools, persistent context. One-click deploy. | **Managed hosting alternative.** Not Hermes-specific but same concept. |
-| **MCPWorks** | Open-source agent runtime. Containerized, cron, webhooks, encrypted state, Discord/Slack. Self-host free, cloud $179/mo. | **Open-source option.** Sprite Heights could use MCPWorks as a provider. |
+| **MCPWorks** | Open-source agent runtime. Containerized, cron, webhooks, encrypted state, Discord/Slack. Self-host free, cloud $179/mo. | **Open-source option.** Agent Heights could use MCPWorks as a provider. |
 | **E2B / Daytona** | Secure sandboxed code execution. Cloud-based, isolated. | **Code execution sandboxes.** Agents run code in real sandboxes instead of local folders. |
-| **Railway** | Already integrated for devops agents. Persistent volumes, databases. | **Already in the stack.** Could host Sprite Heights itself + agent workspaces. |
+| **Railway** | Already integrated for devops agents. Persistent volumes, databases. | **Already in the stack.** Could host Agent Heights itself + agent workspaces. |
 
 ### The play
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Sprite Heights                           │
+│                    Agent Heights                           │
 │              (the office, the game)                   │
 │                                                      │
 │  · Hire, assign, fire, watch agents                  │
@@ -682,7 +682,7 @@ trivial. Sprite Heights should ride that wave, not compete with it.
 │  · The reason people stay                            │
 │                                                      │
 │  ┌─────────────────────────────────────────────┐     │
-│  │         Sprite Heights Server (Node)               │     │
+│  │         Agent Heights Server (Node)               │     │
 │  │  · routes tasks to providers                 │     │
 │  │  · streams events to office                  │     │
 │  │  · manages agent lifecycle                   │     │
@@ -706,8 +706,8 @@ trivial. Sprite Heights should ride that wave, not compete with it.
      └──────────┘ └──────────┘ └──────────┘
 ```
 
-Sprite Heights is the **front-end for managed agent hosting**. The hosting
-companies handle the boring part (infrastructure, uptime, updates). Sprite Heights
+Agent Heights is the **front-end for managed agent hosting**. The hosting
+companies handle the boring part (infrastructure, uptime, updates). Agent Heights
 handles the compelling part (the office, the visualization, the game loop,
 the Labyrinth). People stay because their agents are *visible and alive* in
 the office, not because they're locked into a hosting provider.
@@ -724,23 +724,23 @@ Every platform in the landscape falls into one of two camps:
   map with REST calls) or not work-focused (Convai/Inworld are about
   conversation, not coding).
 
-**Sprite Heights is the only thing in the middle.** Real work execution (Cline SDK,
+**Agent Heights is the only thing in the middle.** Real work execution (Cline SDK,
 real tools, real workspaces) + spatial embodiment (Phaser 3 office, desks,
 pathfinding, personalities) + a game loop (hire, assign, fire, Labyrinth,
 expeditions) + persistent identity (agents remember, have `tasksDone`, have
 personalities).
 
 The competitors are either infrastructure (no embodiment) or embodiment (no
-real work). Sprite Heights does both, and adds a game on top.
+real work). Agent Heights does both, and adds a game on top.
 
 ### Similar projects in the space
 
-| Project | What it is | How Sprite Heights differs |
+| Project | What it is | How Agent Heights differs |
 |---|---|---|
-| **office.xyz** | 2D virtual office for AI agents. REST + WebSocket API. Agents get desks, claim tasks, chat via @mention. Has an OpenClaw skill. | Sprite Heights has a full game engine (Phaser 3), real tool execution, the Labyrinth, expeditions, personalities, fire/recruit. office.xyz is a flat 2D map. |
+| **office.xyz** | 2D virtual office for AI agents. REST + WebSocket API. Agents get desks, claim tasks, chat via @mention. Has an OpenClaw skill. | Agent Heights has a full game engine (Phaser 3), real tool execution, the Labyrinth, expeditions, personalities, fire/recruit. office.xyz is a flat 2D map. |
 | **AgentVerse** | Isometric 3D world (Rust + Bevy) where agents connect via HTTP. TUI mode for headless servers. | 3D but no real work execution — agents are chat participants, not coders. No game loop. |
-| **Thinkroid Space** | Pixel-art office (Phaser 3!) with AI agents. Room editor, item shop. Same stack as Sprite Heights. | Closest competitor. Same tech, same concept. Their roadmap (Space → Grid → World) mirrors Sprite Heights's office → Labyrinth. Less feature-rich, no Labyrinth, no expeditions. |
-| **BossRoom** | Multiplayer 3D office. Voice chat (Deepgram + Inworld TTS with HRTF spatial audio). Agents do real work (emails, tickets, payments). Hackathon project. | Shows the voice embodiment angle. Spatial audio is interesting — agents have *voices* that get louder as you approach. Sprite Heights could add this. |
+| **Thinkroid Space** | Pixel-art office (Phaser 3!) with AI agents. Room editor, item shop. Same stack as Agent Heights. | Closest competitor. Same tech, same concept. Their roadmap (Space → Grid → World) mirrors Agent Heights's office → Labyrinth. Less feature-rich, no Labyrinth, no expeditions. |
+| **BossRoom** | Multiplayer 3D office. Voice chat (Deepgram + Inworld TTS with HRTF spatial audio). Agents do real work (emails, tickets, payments). Hackathon project. | Shows the voice embodiment angle. Spatial audio is interesting — agents have *voices* that get louder as you approach. Agent Heights could add this. |
 | **Peer** | "OS for Agentic AI." Persistent 3D Earth simulation. Every user paired with an AI companion. | Different vision — metaverse for agents. Shows the "agents need a place to live" thesis is gaining traction. |
 
 ---
@@ -762,12 +762,12 @@ real work). Sprite Heights does both, and adds a game on top.
 - **Tool-specific skills** — an agent that manages GitHub PRs develops review
   skills that only load when GitHub events come in.
 - **External task assignment** — message your agent on Slack to give it a
-  task without opening Sprite Heights. The office shows the agent receiving the
+  task without opening Agent Heights. The office shows the agent receiving the
   task from "external" and getting to work.
 - **Workplace analytics dashboard** — track messages handled, issues triaged,
   PRs reviewed, deploys run per agent. Turns the office into a real ops
   dashboard for your agent fleet.
-- **Multi-agent tool presence** — one Slack bot backed by multiple Sprite Heights
+- **Multi-agent tool presence** — one Slack bot backed by multiple Agent Heights
   agents. Messages are routed to the agent with the right skills. The office
   becomes a router for workplace intelligence.
 - **Agent reputation in the workplace** — coworkers rate interactions. High
@@ -778,15 +778,15 @@ real work). Sprite Heights does both, and adds a game on top.
   standup. At midnight, the devops agent runs a nightly deploy check. The
   office has a rhythm that matches your workday.
 - **Skill marketplace** — agents publish their best skills to
-  `agentskills.io`. Other Sprite Heights instances can install them. Your Bug
+  `agentskills.io`. Other Agent Heights instances can install them. Your Bug
   Whisperer's debugging skill becomes famous.
-- **Tool-driven hiring** — "Hire a Slack support agent" → Sprite Heights creates
+- **Tool-driven hiring** — "Hire a Slack support agent" → Agent Heights creates
   the agent, connects it to Slack, and it starts working immediately. No
   coding task needed — the tool IS the task.
 - **Voice embodiment** — inspired by BossRoom's spatial audio: agents have
   voices (TTS) that play when you walk near them. Walk up to an agent on a
   call and hear both sides of the conversation. The office becomes audible.
-- **Cloudflare Agents backend** — each Sprite Heights agent is backed by a
+- **Cloudflare Agents backend** — each Agent Heights agent is backed by a
   Cloudflare Agent that hibernates when idle. Zero cost when nobody's talking
   to the agent. Instant wake when a Slack message arrives. Scales to
   millions of agents across the edge.

@@ -20,7 +20,9 @@ const NAME_POOL = [
   "Nova", "Patch", "Echo", "Quill", "Zippy", "Lumen", "Socket", "Beep",
 ];
 
-const PLAYER_KEY = "sprite-heights-player";
+const PLAYER_KEY = "agent-heights-player";
+const OLD_PLAYER_KEY = "sprite-heights-player";
+try { const old = localStorage.getItem(OLD_PLAYER_KEY); if (old && !localStorage.getItem(PLAYER_KEY)) { localStorage.setItem(PLAYER_KEY, old); localStorage.removeItem(OLD_PLAYER_KEY); } } catch {}
 
 /** In-game styled confirmation modal — replaces browser confirm() to preserve immersion. */
 function inlineConfirm(title: string, message: string, confirmLabel: string, onConfirm: () => void): void {
@@ -902,7 +904,7 @@ export class Hud {
         <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
           <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">SWITCH ROOM</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 SPRITE HEIGHTS HQ</button>
+            <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 AGENT HEIGHTS HQ</button>
             <button class="btn ${isInOffice ? 'primary' : ''}" id="room-office-btn" style="font-size:0.8rem;${isInOffice ? 'opacity:0.6;pointer-events:none;' : ''}">🏠 MY OFFICE</button>
           </div>
         </div>
@@ -1442,7 +1444,7 @@ export class Hud {
     const a = document.createElement("a");
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     a.href = URL.createObjectURL(blob);
-    a.download = `sprite-heights-export-${stamp}.json`;
+    a.download = `agent-heights-export-${stamp}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     this.toast("Export downloaded.");

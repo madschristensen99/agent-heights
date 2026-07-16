@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit, PlatformEvent } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -84,7 +84,7 @@ export class Store {
   /** Members of the currently viewed org. */
   orgMembers: { orgId: string; members: OrgMember[] } | null = null;
 
-  /** True if the current room is an organization room (uses the spriteHeights theme). */
+  /** True if the current room is an organization room (uses the agentHeights theme). */
   get isOrgRoom(): boolean {
     if (!this.roomId) return false;
     return this.roomsList.some(r => r.roomId === this.roomId && r.roomType === "organization");
@@ -130,6 +130,11 @@ export class Store {
   private agentLogHistoryListeners = new Set<(agentId: string, entries: LogEntry[]) => void>();
   private agentTaskInfoListeners = new Set<(agentId: string, currentTask: string | null, queue: { task: string; handoffTo: string | null }[], history: { task: string; success: boolean; ts: number; durationMs: number }[]) => void>();
   private agentMemoryListeners = new Set<(agentId: string, messages: { role: string; content: string }[]) => void>();
+  private mailboxUpdateListeners = new Set<(platform: string, flagUp: boolean, pendingCount: number, lastMessage: string) => void>();
+  private mailboxMessagesListeners = new Set<(platform: string, events: PlatformEvent[]) => void>();
+
+  /** Platform mailbox state: platform -> { flagUp, pendingCount, lastMessage } */
+  platformMailboxes = new Map<string, { flagUp: boolean; pendingCount: number; lastMessage: string }>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -336,6 +341,14 @@ export class Store {
 
   offAgentMemory(fn: (agentId: string, messages: { role: string; content: string }[]) => void): void {
     this.agentMemoryListeners.delete(fn);
+  }
+
+  onMailboxUpdate(fn: (platform: string, flagUp: boolean, pendingCount: number, lastMessage: string) => void): void {
+    this.mailboxUpdateListeners.add(fn);
+  }
+
+  onMailboxMessages(fn: (platform: string, events: PlatformEvent[]) => void): void {
+    this.mailboxMessagesListeners.add(fn);
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -947,6 +960,19 @@ export class Store {
       }
       case "agent_memory": {
         for (const fn of this.agentMemoryListeners) fn(msg.agentId, msg.messages);
+        return;
+      }
+      case "mailbox_update": {
+        this.platformMailboxes.set(msg.platform, {
+          flagUp: msg.flagUp,
+          pendingCount: msg.pendingCount,
+          lastMessage: msg.lastMessage,
+        });
+        for (const fn of this.mailboxUpdateListeners) fn(msg.platform, msg.flagUp, msg.pendingCount, msg.lastMessage);
+        return;
+      }
+      case "mailbox_messages": {
+        for (const fn of this.mailboxMessagesListeners) fn(msg.platform, msg.events);
         return;
       }
     }

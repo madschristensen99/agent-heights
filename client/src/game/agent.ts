@@ -181,7 +181,7 @@ export class AgentNPC {
   }
 
   /** Emote name → frame index in the emote-icons spritesheet. */
-  private static readonly EMOTE_MAP: Record<string, number> = {
+  static readonly EMOTE_MAP: Record<string, number> = {
     "💡": 0, // lightbulb
     "☕": 1, // coffee
     "💤": 2, // zzz
@@ -661,7 +661,11 @@ export class YukiNPC {
   }
 }
 
-/** Hermes — the devops core engineer. Sits at his desk in the mail room, facing right. */
+type HermesState = "idle" | "sorting" | "delivering" | "collecting";
+
+/** Hermes — the devops core engineer and mail clerk. Sits at his desk in the mail room.
+ *  When platform mail arrives, he walks to the mailbox (sorting), then to the target
+ *  agent's desk (delivering), then back to his seat (collecting). */
 export class HermesNPC {
   container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite;
@@ -669,15 +673,26 @@ export class HermesNPC {
   private nameBg: Phaser.GameObjects.Graphics;
   private shadow: Phaser.GameObjects.Ellipse;
   private dot: Phaser.GameObjects.Arc;
+  private emoteSprite: Phaser.GameObjects.Sprite;
+  private emoteUntil = 0;
 
   info!: AgentInfo;
+  private seat: Tile;
+  private path: Tile[] = [];
+  private dir: Dir = "right";
+  private state: HermesState = "idle";
+  private sortUntil = 0;
+  private deliverUntil = 0;
+  private scene: Phaser.Scene;
 
   constructor(
     scene: Phaser.Scene,
-    _grid: Grid,
+    private grid: Grid,
     seat: Tile,
     onClick: (id: string) => void,
   ) {
+    this.seat = seat;
+    this.scene = scene;
     const c = "char-hermes";
 
     const feet = feetOf(seat);
@@ -697,6 +712,9 @@ export class HermesNPC {
       .setScale(0.7);
     this.drawNameBg();
     this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS.idle).setStrokeStyle(1, 0x000000, 0.3);
+    this.emoteSprite = scene.add.sprite(0, -140, "emote-icons", 0)
+      .setVisible(false)
+      .setScale(1.5);
 
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
@@ -704,6 +722,7 @@ export class HermesNPC {
       this.nameBg,
       this.label,
       this.dot,
+      this.emoteSprite,
     ]);
     this.container.setDepth(10 + this.container.y);
     this.sprite.play(`${c}-idle-right`);
@@ -722,17 +741,55 @@ export class HermesNPC {
     return {
       x: this.container.x,
       y: this.container.y,
-      dir: "right",
-      state: "sitting",
+      dir: this.dir,
+      state: this.state,
     };
   }
 
   /** Apply remote state from the owner's client — used by visitors. */
-  remoteUpdate(x: number, y: number, dir: Dir, _state: string): void {
+  remoteUpdate(x: number, y: number, dir: Dir, state: string): void {
     this.container.setPosition(x, y);
+    this.dir = dir;
+    this.state = state as HermesState;
+    this.path = [];
     const c = "char-hermes";
-    this.sprite.play(`${c}-idle-${dir}`, true);
+    this.play(`${c}-idle-${this.dir}`);
     this.container.setDepth(10 + this.container.y);
+  }
+
+  /** Trigger Hermes to sort mail at a specific mailbox tile. */
+  sortMail(mailboxTile: Tile): void {
+    if (this.state !== "idle") return;
+    this.state = "sorting";
+    this.path = findPath(this.grid, this.tile(), mailboxTile);
+    this.sortUntil = 0;
+    this.showEmote("📋", 3000);
+  }
+
+  /** Trigger Hermes to deliver a message to an agent's desk tile. */
+  deliverTo(deskTile: Tile): void {
+    if (this.state === "delivering") return;
+    this.state = "delivering";
+    this.path = findPath(this.grid, this.tile(), deskTile);
+    this.deliverUntil = 0;
+    this.showEmote("💬", 4000);
+  }
+
+  private showEmote(emote: string, duration = 3000): void {
+    const frame = AgentNPC.EMOTE_MAP[emote] ?? 5;
+    this.emoteSprite.setFrame(frame);
+    this.emoteSprite.setVisible(true);
+    this.emoteUntil = this.scene.time.now + duration;
+  }
+
+  private play(key: string): void {
+    if (this.sprite.anims.currentAnim?.key !== key || !this.sprite.anims.isPlaying) {
+      this.sprite.play(key, true);
+    }
+  }
+
+  private tile(): Tile {
+    return tileOf(this.container.x, this.container.y);
   }
 
   private drawNameBg(): void {
@@ -749,9 +806,78 @@ export class HermesNPC {
     g.strokeRoundedRect(x, y, w, h, r);
   }
 
-  update(_time: number, _dt: number): void {
+  update(time: number, dt: number): void {
     const c = "char-hermes";
-    this.sprite.play(`${c}-idle-right`, true);
+    dt = Math.min(dt, 100);
+
+    if (this.emoteUntil > 0 && time >= this.emoteUntil) {
+      this.emoteUntil = 0;
+      this.emoteSprite.setVisible(false);
+    }
+
+    // --- follow path ---
+    if (this.path.length > 0) {
+      const next = feetOf(this.path[0]);
+      const dx = next.x - this.container.x;
+      const dy = next.y - this.container.y;
+      const dist = Math.hypot(dx, dy);
+      const step = (WALK_SPEED * dt) / 1000;
+      if (dist <= step) {
+        this.container.setPosition(next.x, next.y);
+        this.path.shift();
+      } else {
+        this.container.x += (dx / dist) * step;
+        this.container.y += (dy / dist) * step;
+        this.dir =
+          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+      }
+      this.play(`${c}-walk-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+      return;
+    }
+
+    // --- state-specific behaviour ---
+    if (this.state === "sorting") {
+      // Arrived at mailbox — sort for a moment, then return to idle
+      this.play(`${c}-idle-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+      if (this.sortUntil === 0) this.sortUntil = time + 2000;
+      if (time >= this.sortUntil) {
+        this.state = "idle";
+        this.sortUntil = 0;
+        this.path = findPath(this.grid, this.tile(), this.seat);
+      }
+      return;
+    }
+
+    if (this.state === "delivering") {
+      // Arrived at agent's desk — hand off the message, then head back
+      this.play(`${c}-idle-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+      if (this.deliverUntil === 0) this.deliverUntil = time + 2500;
+      if (time >= this.deliverUntil) {
+        this.state = "collecting";
+        this.deliverUntil = 0;
+        this.path = findPath(this.grid, this.tile(), this.seat);
+      }
+      return;
+    }
+
+    if (this.state === "collecting") {
+      // Arrived back at seat — return to idle
+      const at = this.tile();
+      if (at.x === this.seat.x && at.y === this.seat.y) {
+        this.state = "idle";
+        this.dir = "right";
+      }
+      this.play(`${c}-idle-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+      return;
+    }
+
+    // idle — sitting at desk, facing right
+    this.dir = "right";
+    this.play(`${c}-idle-right`);
     this.container.setDepth(10 + this.container.y);
   }
 

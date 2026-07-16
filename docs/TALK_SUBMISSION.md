@@ -6,12 +6,12 @@ notifications@swarms.world
 ## Talk Title (Required)
 *Give your talk a compelling title*
 
-**Sprite Heights: A Pixel-Art Office Where Every Desk Is a Live Coding Agent**
+**Agent Heights: A Pixel-Art Office Where Every Desk Is a Live Coding Agent**
 
 ## What did you build? (Required)
 *Start with one clear sentence that says what the project is, then add the demo context. Mention what you'll show live: code, workflow, architecture, eval, repo, logs, or a working system.*
 
-Sprite Heights is a retro top-down office game where you hire real AI coding agents — each employee at a desk is a live Cline SDK agent routed through the Swarms API that actually reads, writes, and runs code in its own sandboxed workspace folder while you watch from a Phaser game world.
+Agent Heights is a retro top-down office game where you hire real AI coding agents — each employee at a desk is a live Cline SDK agent routed through the Swarms API that actually reads, writes, and runs code in its own sandboxed workspace folder while you watch from a Phaser game world.
 
 In the demo I'll run the working system live: hire an agent in the office, give it a name and model, type a real task, and watch it walk to its desk and start working. Speech bubbles and the office feed stream its actual tool calls, assistant text, and results in real time. I'll show the architecture (Phaser client ↔ WebSocket server ↔ provider runners), the per-agent workspace folders on disk, the persisted save file and JSON session transcripts, and the wire protocol that drives it all. Repo and logs will be on screen.
 

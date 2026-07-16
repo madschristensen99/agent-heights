@@ -1,12 +1,13 @@
 import { mkdirSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType } from "../shared/types.js";
-import { SPRITE_HEIGHTS_HQ_SLUG, SPRITE_HEIGHTS_HQ_ADMINS } from "../shared/types.js";
+import { AGENT_HEIGHTS_HQ_SLUG, AGENT_HEIGHTS_HQ_ADMINS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
 import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
 import { RelationalPersistence } from "./db-relational.js";
-import { isSupabaseConfigured, type AuthUser } from "./supabase.js";
+import { isSupabaseConfigured, supabaseAdmin, type AuthUser } from "./supabase.js";
 import { getUserApiKey, getUserMcpKeys } from "./apikeys.js";
 import {
   isRedisConfigured,
@@ -96,25 +97,27 @@ export class TenantManager {
   private lastPositions = new Map<string, { x: number; y: number; dir: Dir }>();
   /** Last room the user was in — used to restore on reconnect. */
   private lastRoomIds = new Map<string, string>();
+  /** In-progress session creations — prevents duplicate sessions from concurrent calls. */
+  private pendingCreations = new Map<string, Promise<UserSession>>();
 
   constructor(private rootDir: string) {
-    // Pre-seed the Sprite Heights HQ organization
-    const hqOrgId = "org-sprite-heights-hq";
+    // Pre-seed the Agent Heights HQ organization
+    const hqOrgId = "org-agent-heights-hq";
     const hqOrg: OrgEntry = {
       id: hqOrgId,
-      name: "Sprite Heights HQ",
-      slug: SPRITE_HEIGHTS_HQ_SLUG,
-      githubOrg: "sprite-heights",
+      name: "Agent Heights HQ",
+      slug: AGENT_HEIGHTS_HQ_SLUG,
+      githubOrg: "agent-heights",
       createdAt: Date.now(),
       members: new Map(),
     };
     this.orgs.set(hqOrgId, hqOrg);
-    this.orgsBySlug.set(SPRITE_HEIGHTS_HQ_SLUG, hqOrgId);
+    this.orgsBySlug.set(AGENT_HEIGHTS_HQ_SLUG, hqOrgId);
 
-    // Create the global HQ2 room — it IS the Sprite Heights HQ org room
+    // Create the global HQ2 room — it IS the Agent Heights HQ org room
     this.rooms.set(HQ2_ROOM_ID, {
       id: HQ2_ROOM_ID,
-      name: "Sprite Heights HQ",
+      name: "Agent Heights HQ",
       ownerId: "system",
       players: new Map(),
       isPrivate: false,
@@ -322,8 +325,29 @@ export class TenantManager {
 
   async getOrCreate(user: AuthUser): Promise<UserSession> {
     const existing = this.sessions.get(user.id);
-    if (existing) return existing;
+    if (existing) {
+      // Update email if the existing session was created at boot without one
+      if (user.email && !existing.user.email) {
+        existing.user.email = user.email;
+        this.processOrgMemberships(user);
+      }
+      return existing;
+    }
 
+    // Deduplicate concurrent session creations for the same user
+    const pending = this.pendingCreations.get(user.id);
+    if (pending) return pending;
+
+    const promise = this.doCreateSession(user);
+    this.pendingCreations.set(user.id, promise);
+    try {
+      return await promise;
+    } finally {
+      this.pendingCreations.delete(user.id);
+    }
+  }
+
+  private async doCreateSession(user: AuthUser): Promise<UserSession> {
     const userDir = join(this.rootDir, "ag", "users", user.id);
     mkdirSync(userDir, { recursive: true });
 
@@ -417,9 +441,31 @@ export class TenantManager {
     // Register session before joining rooms so joinRoom can update sess.roomId
     this.sessions.set(user.id, sess);
 
-    // Auto-add whitelisted admins to the Sprite Heights HQ organization
-    if (user.email && SPRITE_HEIGHTS_HQ_ADMINS.includes(user.email)) {
-      const hqOrg = this.orgsBySlug.get(SPRITE_HEIGHTS_HQ_SLUG);
+    // Process org memberships (admin auto-add + pending invitations)
+    this.processOrgMemberships(user);
+
+    // Create the user's private office (invite-only)
+    const privateOfficeId = this.createRoom(user.id, `${player?.name ?? "Boss"}'s Office`, undefined, true);
+    sess.privateOfficeId = privateOfficeId;
+
+    // Join HQ2 first (so the player exists in the global lobby), then
+    // immediately switch to their private office where their agents live.
+    // This ensures returning users land in their office, not HQ2, after a
+    // server restart.
+    this.joinRoom(HQ2_ROOM_ID, user, player);
+    this.switchRoom(user.id, privateOfficeId);
+    console.log(
+      `[agent-heights] created session for user ${user.id} (${user.email ?? "no email"})` +
+      (isRedisConfigured ? " [redis]" : ""),
+    );
+    return sess;
+  }
+
+  /** Process org memberships for a user (admin auto-add + pending email invitations). */
+  private processOrgMemberships(user: AuthUser): void {
+    // Auto-add whitelisted admins to the Agent Heights HQ organization
+    if (user.email && AGENT_HEIGHTS_HQ_ADMINS.includes(user.email)) {
+      const hqOrg = this.orgsBySlug.get(AGENT_HEIGHTS_HQ_SLUG);
       if (hqOrg) {
         const org = this.orgs.get(hqOrg);
         if (org && !org.members.has(user.id)) {
@@ -430,7 +476,7 @@ export class TenantManager {
             role: "admin",
             joinedAt: Date.now(),
           });
-          console.log(`[sprite-heights] auto-added ${user.email} as admin to Sprite Heights HQ org`);
+          console.log(`[agent-heights] auto-added ${user.email} as admin to Agent Heights HQ org`);
         }
       }
     }
@@ -449,26 +495,76 @@ export class TenantManager {
             role: pending.role,
             joinedAt: Date.now(),
           });
-          console.log(`[sprite-heights] converted pending invite for ${user.email} in org ${org.name}`);
+          console.log(`[agent-heights] converted pending invite for ${user.email} in org ${org.name}`);
         }
       }
     }
+  }
 
-    // Create the user's private office (invite-only)
-    const privateOfficeId = this.createRoom(user.id, `${player?.name ?? "Boss"}'s Office`, undefined, true);
-    sess.privateOfficeId = privateOfficeId;
+  /**
+   * Restore user sessions at boot time so agents resume immediately after
+   * a server restart, without waiting for the user to reconnect via WebSocket.
+   *
+   * In Supabase mode: queries the agents table for distinct owner_ids.
+   * In file/dev mode: scans the users directory for save files with agents.
+   */
+  async restoreSessionsAtBoot(): Promise<void> {
+    let userIds: string[] = [];
 
-    // Join HQ2 first (so the player exists in the global lobby), then
-    // immediately switch to their private office where their agents live.
-    // This ensures returning users land in their office, not HQ2, after a
-    // server restart.
-    this.joinRoom(HQ2_ROOM_ID, user, player);
-    this.switchRoom(user.id, privateOfficeId);
-    console.log(
-      `[sprite-heights] created session for user ${user.id} (${user.email ?? "no email"})` +
-      (isRedisConfigured ? " [redis]" : ""),
-    );
-    return sess;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabaseAdmin
+          .from("sprite_heights_agents")
+          .select("owner_id");
+
+        if (error || !data) {
+          console.log("[agent-heights] boot restore: could not query agents table:", error?.message);
+          return;
+        }
+
+        userIds = [...new Set(data.map((r: any) => r.owner_id))];
+      } catch (err) {
+        console.error("[agent-heights] boot restore: failed to query users:", err);
+        return;
+      }
+    } else {
+      // File mode: scan ag/users/*/save.json for users with agents
+      const usersDir = join(this.rootDir, "ag", "users");
+      try {
+        const entries = await readdir(usersDir);
+        for (const userId of entries) {
+          try {
+            const raw = await readFile(join(usersDir, userId, "save.json"), "utf8");
+            const parsed = JSON.parse(raw);
+            if (parsed.agents && Array.isArray(parsed.agents) && parsed.agents.length > 0) {
+              userIds.push(userId);
+            }
+          } catch { /* no save file or invalid — skip */ }
+        }
+      } catch {
+        // No users directory — nothing to restore
+        return;
+      }
+    }
+
+    if (userIds.length === 0) {
+      console.log("[agent-heights] boot restore: no users with agents found");
+      return;
+    }
+
+    console.log(`[agent-heights] boot restore: restoring sessions for ${userIds.length} user(s)...`);
+
+    let restored = 0;
+    for (const userId of userIds) {
+      try {
+        await this.getOrCreate({ id: userId, email: null });
+        restored++;
+      } catch (err) {
+        console.error(`[agent-heights] boot restore: failed for user ${userId}:`, err);
+      }
+    }
+
+    console.log(`[agent-heights] boot restore: complete (${restored}/${userIds.length} session(s) restored, ${this.sessions.size} total active)`);
   }
 
   /** Called when a WebSocket closes. If it was the last client, start a grace timer. */
@@ -704,7 +800,7 @@ export class TenantManager {
   canJoinRoom(roomId: string, userId: string): boolean {
     const room = this.rooms.get(roomId);
     if (!room) return false;
-    // HQ2 is always open to everyone, even though it's the Sprite Heights HQ org room
+    // HQ2 is always open to everyone, even though it's the Agent Heights HQ org room
     if (roomId === HQ2_ROOM_ID) return true;
     if (room.roomType === "public") return true;
     if (room.roomType === "private") return room.ownerId === userId;

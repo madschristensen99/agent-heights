@@ -74,7 +74,7 @@ const yahooResult = await sb.from('swarms_cloud_agents')
     model: "claude-sonnet-4-20250514",
     systemPrompt: yahooPrompt,
     provider: "cline",
-    source: "sprite-heights",
+    source: "agent-heights",
     appearance: { skin: 0, hairStyle: 2, hair: 6, shirt: 6, pants: 2, accessory: 2, accent: 6, beard: 0, eyeColor: 1, headFeature: 0 },
     mcpServers: [{ url: "https://gateway.mcpservers.org/yahoo-finance/mcp", name: "yahoo-finance" }]
   })})
@@ -122,7 +122,7 @@ const robinhoodResult = await sb.from('swarms_cloud_agents')
     model: "claude-sonnet-4-20250514",
     systemPrompt: robinhoodPrompt,
     provider: "cline",
-    source: "sprite-heights",
+    source: "agent-heights",
     appearance: { skin: 1, hairStyle: 5, hair: 0, shirt: 12, pants: 1, accessory: 4, accent: 12, beard: 0, eyeColor: 0, headFeature: 0 },
     mcpServers: [{ url: "https://agent.robinhood.com/mcp/trading", name: "robinhood", authType: "oauth" }]
   })})

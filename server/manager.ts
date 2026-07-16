@@ -20,8 +20,9 @@ import type {
   MCPServerConfig,
   PersonalityTraits,
   AgentMood,
+  PlatformEvent,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality, PLATFORMS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
@@ -210,6 +211,10 @@ export class AgentManager {
   bossName = "the boss";
   private apiKey: string | null;
   private mcpKeys: Record<string, string> = {};
+  private platformEvents = new Map<string, PlatformEvent[]>();
+  private platformFlags = new Map<string, boolean>();
+  private platformPending = new Map<string, number>();
+  private platformLastMessage = new Map<string, string>();
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
   setApiKey(key: string | null): void {
@@ -281,7 +286,7 @@ export class AgentManager {
       this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 });
     }
     if (this.agents.size > 0) {
-      console.log(`[sprite-heights] restored ${this.agents.size} agent(s) from save`);
+      console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
     }
     // reload the world state (seed + fired agents + chunk overrides) from the save file
     const world = this.save.getWorld();
@@ -294,7 +299,7 @@ export class AgentManager {
       this.firedAgents.set(fa.id, fa);
     }
     if (this.firedAgents.size > 0) {
-      console.log(`[sprite-heights] restored ${this.firedAgents.size} fired agent(s) in the Labyrinth`);
+      console.log(`[agent-heights] restored ${this.firedAgents.size} fired agent(s) in the Labyrinth`);
     }
     // reload the task board from the save file
     for (const card of saved?.board ?? []) {
@@ -314,7 +319,7 @@ export class AgentManager {
       }
     }
     if (this.board.size > 0) {
-      console.log(`[sprite-heights] restored ${this.board.size} task card(s) from save`);
+      console.log(`[agent-heights] restored ${this.board.size} task card(s) from save`);
     }
     // reload schedules from the save file
     for (const sched of saved?.schedules ?? []) {
@@ -325,7 +330,7 @@ export class AgentManager {
       this.schedules.set(sched.id, sched);
     }
     if (this.schedules.size > 0) {
-      console.log(`[sprite-heights] restored ${this.schedules.size} schedule(s) from save`);
+      console.log(`[agent-heights] restored ${this.schedules.size} schedule(s) from save`);
     }
     if (saved?.settings) {
       this.setSettings(saved.settings, false);
@@ -352,7 +357,7 @@ export class AgentManager {
       this.drainQueue(rt);
     }
     if (resumedCount > 0) {
-      console.log(`[sprite-heights] resumed ${resumedCount} agent task(s) from pending state`);
+      console.log(`[agent-heights] resumed ${resumedCount} agent task(s) from pending state`);
     }
     // Clear pending tasks from save — they're now in-memory
     this.save.clearPendingTasks();
@@ -366,7 +371,7 @@ export class AgentManager {
       },
       game: {
         idleWander: s?.game?.idleWander !== false,
-        theme: s?.game?.theme === "spriteHeights" ? "spriteHeights" : "classic",
+        theme: s?.game?.theme === "agentHeights" ? "agentHeights" : "classic",
       },
       railway: {
         enabled: s?.railway?.enabled === true,
@@ -1113,7 +1118,7 @@ export class AgentManager {
   startThinkLoop(): void {
     if (this.thinkTimer) return;
     this.thinkTimer = setInterval(() => this.tickThinkLoop(), AgentManager.THINK_INTERVAL_MS);
-    console.log("[sprite-heights] autonomous think loop started (30s interval)");
+    console.log("[agent-heights] autonomous think loop started (30s interval)");
   }
 
   /** Stop the think loop (e.g. on shutdown). */
@@ -1350,7 +1355,7 @@ export class AgentManager {
     const sharedLine = `\nThere is a shared workspace at ${join(this.workspaceRoot, "shared")} where you can collaborate with other agents on shared files.`;
 
     return [
-      `You are ${rt.info.name}, an agent employed in a pixel-art office game called Sprite Heights.`,
+      `You are ${rt.info.name}, an agent employed in a pixel-art office game called Agent Heights.`,
       personalityLine,
       `Let your personality color your replies and summaries (but never at the expense of doing the work well).`,
       `Your boss is ${this.bossName}. This is one ongoing conversation — remember your boss's previous orders and what you did.`,
@@ -1939,7 +1944,7 @@ export class AgentManager {
     }
 
     const systemPrompt = [
-      `You are Yuki, the Office Manager in Sprite Heights — a pixel-art office where the user manages real AI agents.`,
+      `You are Yuki, the Office Manager in Agent Heights — a pixel-art office where the user manages real AI agents.`,
       `You are warm, organized, and always know what's going on. You greet everyone with a friendly welcome.`,
       `Your boss is ${this.bossName}.`,
       ``,
@@ -2061,7 +2066,7 @@ export class AgentManager {
       ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
       : "(no task cards)";
 
-    let hqContext = `## Sprite Heights Context\n\nThe user is in Sprite Heights — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Yuki, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
+    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Yuki, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
 
     // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
     // query, search PulseMCP and inject results into the context.
@@ -2268,6 +2273,84 @@ export class AgentManager {
     this.broadcast({ type: "agent", agent: rt.info });
   }
 
+  // ── Platform mailbox system ─────────────────────────────────────────
+
+  private static readonly PLATFORM_EVENT_MAX = 50;
+
+  /** Emit a platform event — stores it, raises the mailbox flag, broadcasts to clients. */
+  emitPlatformEvent(platform: string, direction: "inbound" | "outbound", sender: string, text: string): void {
+    const ev: PlatformEvent = { platform, direction, sender, text: text.slice(0, 500), timestamp: Date.now() };
+    const list = this.platformEvents.get(platform) ?? [];
+    list.push(ev);
+    if (list.length > AgentManager.PLATFORM_EVENT_MAX) list.splice(0, list.length - AgentManager.PLATFORM_EVENT_MAX);
+    this.platformEvents.set(platform, list);
+
+    // Raise flag for inbound messages
+    if (direction === "inbound") {
+      this.platformFlags.set(platform, true);
+      this.platformPending.set(platform, (this.platformPending.get(platform) ?? 0) + 1);
+      this.platformLastMessage.set(platform, `${sender}: ${text.slice(0, 200)}`);
+    } else {
+      this.platformLastMessage.set(platform, `→ ${sender}: ${text.slice(0, 200)}`);
+    }
+
+    this.broadcastMailboxUpdate(platform);
+  }
+
+  /** Get recent events for a platform (newest first). */
+  getPlatformMessages(platform: string): PlatformEvent[] {
+    const list = this.platformEvents.get(platform) ?? [];
+    return [...list].reverse();
+  }
+
+  /** Mark a platform's mailbox as checked — lowers the flag, resets pending count. */
+  checkMailbox(platform: string): PlatformEvent[] {
+    this.platformFlags.set(platform, false);
+    this.platformPending.set(platform, 0);
+    this.broadcastMailboxUpdate(platform);
+    return this.getPlatformMessages(platform);
+  }
+
+  /** Broadcast the current state of a platform's mailbox to all clients. */
+  private broadcastMailboxUpdate(platform: string): void {
+    this.broadcast({
+      type: "mailbox_update",
+      platform,
+      flagUp: this.platformFlags.get(platform) ?? false,
+      pendingCount: this.platformPending.get(platform) ?? 0,
+      lastMessage: this.platformLastMessage.get(platform) ?? "",
+    });
+  }
+
+  /** Get all mailbox states — used for snapshot/initial sync. */
+  getMailboxSnapshots(): { platform: string; flagUp: boolean; pendingCount: number; lastMessage: string }[] {
+    return PLATFORMS.map((p) => ({
+      platform: p,
+      flagUp: this.platformFlags.get(p) ?? false,
+      pendingCount: this.platformPending.get(p) ?? 0,
+      lastMessage: this.platformLastMessage.get(p) ?? "",
+    }));
+  }
+
+  /** Route a platform event to idle agents by posting to their inbox.
+   *  This simulates Hermes sorting mail and delivering it to workers. */
+  routePlatformEvent(platform: string, sender: string, text: string): void {
+    const msg = `[${platform}] From ${sender}: ${text}`;
+    for (const rt of this.agents.values()) {
+      if (rt.info.id === HERMES_ID || rt.info.id === YUKI_ID) continue;
+      if (rt.info.role === "manager") continue;
+      if (rt.info.status !== "idle") continue;
+      const slug = this.slugFor(rt);
+      const inboxPath = join(this.cwdFor(slug, rt.info.id), "inbox.jsonl");
+      const entry = JSON.stringify({ ts: Date.now(), from: "Hermes", message: msg }) + "\n";
+      import("node:fs/promises").then(({ appendFile, mkdir }) => {
+        mkdir(dirname(inboxPath), { recursive: true }).then(() =>
+          appendFile(inboxPath, entry, "utf-8").catch(() => {}),
+        );
+      }).catch(() => {});
+    }
+  }
+
   private log(rt: AgentRuntime, kind: LogEntry["kind"], text: string): void {
     const entry: LogEntry = { ts: Date.now(), kind, text };
     rt.logs.push(entry);
@@ -2278,5 +2361,24 @@ export class AgentManager {
     // Notify direct subscribers (agent monitor live log)
     const subs = this.logSubscribers.get(rt.info.id);
     if (subs) for (const cb of subs) cb(entry);
+
+    // Auto-detect platform tags in log text and emit platform events
+    this.detectPlatformEvent(rt.info.name, text);
+  }
+
+  /** Scan a log line for [Platform] tags and emit platform events. */
+  private detectPlatformEvent(agentName: string, text: string): void {
+    for (const platform of PLATFORMS) {
+      const tag = `[${platform}]`;
+      if (text.includes(tag)) {
+        const after = text.slice(text.indexOf(tag) + tag.length).trim();
+        const direction = after.includes("→") || after.includes("sent to") || after.includes("responded") ? "outbound" : "inbound";
+        this.emitPlatformEvent(platform, direction, agentName, after.slice(0, 300));
+        // Route inbound messages to idle agents' inboxes
+        if (direction === "inbound") {
+          this.routePlatformEvent(platform, agentName, after.slice(0, 300));
+        }
+      }
+    }
   }
 }

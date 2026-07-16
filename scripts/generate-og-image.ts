@@ -1,7 +1,7 @@
 /**
  * Generates an Open Graph preview image (1200×630) for social media link previews.
  * Composites the office tileset as a background with character sprites and
- * a pixel-font "SPRITE HEIGHTS" title.
+ * a pixel-font "AGENT HEIGHTS" title.
  *
  * Run: pnpm exec tsx scripts/generate-og-image.ts
  */
@@ -153,8 +153,8 @@ for (let y = floorY; y < H; y += TILE * FLOOR_SCALE) {
   }
 }
 
-// ── "SPRITE HEIGHTS" title in pixel font ────────────────────────────────────
-const title = "SPRITE HEIGHTS";
+// ── "AGENT HEIGHTS" title in pixel font ────────────────────────────────────
+const title = "AGENT HEIGHTS";
 const titleScale = 12;
 const titleW = textWidth(title, titleScale);
 const titleX = Math.floor((W - titleW) / 2);

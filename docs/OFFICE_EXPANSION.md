@@ -1,4 +1,4 @@
-# Sprite Heights — Office Expansion
+# Agent Heights — Office Expansion
 
 The office starts small: **6 desks, 6 agents max**. When the player outgrows it,
 they press **E** near the expansion zone and the building physically grows —

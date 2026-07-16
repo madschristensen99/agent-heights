@@ -169,7 +169,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
 
   overlay.innerHTML = `
     <div style="position:relative;z-index:1;text-align:center;max-width:400px;width:90vw;">
-      <h1 style="font-size:2.6rem;font-weight:800;margin:0 0 0.3rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">SPRITE HEIGHTS</h1>
+      <h1 style="font-size:2.6rem;font-weight:800;margin:0 0 0.3rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HEIGHTS</h1>
       <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 0.5rem;letter-spacing:0.15em;text-transform:uppercase;">Manage AI Agents in a Pixel-Art Office</p>
       <div id="auth-sprites"></div>
       <p id="auth-welcome" style="color:#7a8090;font-size:0.9rem;margin:0 0 1.5rem;">Welcome! Sign in to enter your office.</p>
@@ -204,7 +204,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   `;
   document.body.appendChild(overlay);
 
-  // Office preview — a mini isometric-style preview of the Sprite Heights office
+  // Office preview — a mini isometric-style preview of the Agent Heights office
   const officePreview = document.createElement("div");
   officePreview.style.cssText = `
     position: relative; z-index: 1; margin: 0 auto 1.2rem; width: 280px; height: 140px;
@@ -216,7 +216,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   const previewFloor = document.createElement("div");
   previewFloor.style.cssText = `
     position: absolute; bottom: 0; left: 0; right: 0; height: 65%;
-    background-image: url(/assets/tilesets/spriteHeights.png);
+    background-image: url(/assets/tilesets/agentHeights.png);
     background-size: 128px 128px;
     background-repeat: repeat;
     opacity: 0.7;

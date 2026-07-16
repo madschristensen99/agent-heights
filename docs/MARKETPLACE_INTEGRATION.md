@@ -1,6 +1,6 @@
 # Marketplace Integration
 
-Complete documentation of how Sprite Heights integrates with the Swarms Marketplace (`swarms.world`), hosted on Vercel.
+Complete documentation of how Agent Heights integrates with the Swarms Marketplace (`swarms.world`), hosted on Vercel.
 
 ---
 
@@ -8,7 +8,7 @@ Complete documentation of how Sprite Heights integrates with the Swarms Marketpl
 
 ```
 ┌──────────────────────────────┐         ┌──────────────────────────────┐
-│        Sprite Heights (Railway)     │         │   Swarms Marketplace (Vercel) │
+│        Agent Heights (Railway)     │         │   Swarms Marketplace (Vercel) │
 │                                │         │                                │
 │  ┌──────────┐  ┌───────────┐  │         │  ┌──────────┐  ┌───────────┐  │
 │  │  Client   │  │  Server   │  │         │  │ Next.js   │  │  API      │  │
@@ -37,7 +37,7 @@ Complete documentation of how Sprite Heights integrates with the Swarms Marketpl
 
 ### Key Insight
 
-Sprite Heights and the Swarms Marketplace share a **single Supabase project**. Most marketplace data operations go directly to Supabase, bypassing swarms.world entirely. Only the Yuki chat proxy hits the Vercel deployment.
+Agent Heights and the Swarms Marketplace share a **single Supabase project**. Most marketplace data operations go directly to Supabase, bypassing swarms.world entirely. Only the Yuki chat proxy hits the Vercel deployment.
 
 ---
 
@@ -45,7 +45,7 @@ Sprite Heights and the Swarms Marketplace share a **single Supabase project**. M
 
 ### 1. Marketplace Browsing (Supabase Direct)
 
-**Sprite Heights server** queries Supabase directly — does NOT call swarms.world.
+**Agent Heights server** queries Supabase directly — does NOT call swarms.world.
 
 - **Client**: `client/src/ui/marketplace.ts` — fetches `/api/marketplace?type=agent|prompt|tool`
 - **Server**: `server/marketplace.ts` — queries Supabase tables using the service role key
@@ -66,7 +66,7 @@ Client (browser)
 
 ### 2. Agent Publishing (Supabase Direct)
 
-**Sprite Heights server** writes to Supabase directly — does NOT call swarms.world.
+**Agent Heights server** writes to Supabase directly — does NOT call swarms.world.
 
 - **Server**: `server/publish.ts` — inserts into `swarms_cloud_agents` with `status: "pending"`
 - **Auth**: Supabase JWT Bearer token (verified via `verifyToken()`)
@@ -85,10 +85,10 @@ Client (browser)
 
 ### 3. Hiring Marketplace Agents
 
-When a user clicks "Hire into HQ" on a marketplace agent, the agent's config (model, systemPrompt, provider) is already included in the Supabase query result (the `agent` column). Sprite Heights uses this to instantiate the agent via the Cline SDK.
+When a user clicks "Hire into HQ" on a marketplace agent, the agent's config (model, systemPrompt, provider) is already included in the Supabase query result (the `agent` column). Agent Heights uses this to instantiate the agent via the Cline SDK.
 
 - **Free agents**: `agent` config JSON is always returned by Supabase query
-- **Paid agents**: The marketplace's public API (`/api/get-agents/[id]`) gates the `agent` field behind purchase verification. However, Sprite Heights uses the Supabase **service role key**, which bypasses RLS and returns all columns including `agent`
+- **Paid agents**: The marketplace's public API (`/api/get-agents/[id]`) gates the `agent` field behind purchase verification. However, Agent Heights uses the Supabase **service role key**, which bypasses RLS and returns all columns including `agent`
 
 ```
 Client: user clicks "Hire into HQ"
@@ -101,7 +101,7 @@ Client: user clicks "Hire into HQ"
 
 **This is the only path that hits the Vercel deployment.**
 
-- **Sprite Heights server**: `server/yuki.ts` — proxies POST to `${MARKETPLACE_URL}/api/yuki`
+- **Agent Heights server**: `server/yuki.ts` — proxies POST to `${MARKETPLACE_URL}/api/yuki`
 - **Marketplace server**: `app/api/yuki/route.ts` — calls Anthropic Claude Haiku directly
 - **No auth** on the Yuki endpoint
 - **Rate limited**: 300 requests / 60 seconds per IP (via Upstash + Vercel KV middleware)
@@ -131,7 +131,7 @@ All agent LLM calls go through the Swarms API at `api.swarms.world/v1`.
 
 ## Environment Variables
 
-### Sprite Heights (Railway)
+### Agent Heights (Railway)
 
 | Variable | Required | Description |
 |---|---|---|
@@ -158,7 +158,7 @@ All agent LLM calls go through the Swarms API at `api.swarms.world/v1`.
 
 ## Supabase Schema (Shared)
 
-Both Sprite Heights and the Swarms Marketplace read/write to the same Supabase project.
+Both Agent Heights and the Swarms Marketplace read/write to the same Supabase project.
 
 ### Marketplace Tables
 
@@ -170,7 +170,7 @@ Both Sprite Heights and the Swarms Marketplace read/write to the same Supabase p
 | `swarms_cloud_api_keys` | API keys for programmatic access (validated by `HybridAuthGuard`) |
 | `marketplace_transactions` | Purchase records (used for paid agent access control) |
 
-### Sprite Heights Tables
+### Agent Heights Tables
 
 | Table | Description |
 |---|---|
@@ -185,12 +185,12 @@ The `agent` column in `swarms_cloud_agents` stores a JSON string with the agent'
   "model": "claude-sonnet-4-20250514",
   "systemPrompt": "You are a helpful coding agent...",
   "provider": "cline",
-  "source": "sprite-heights",
+  "source": "agent-heights",
   "agentId": "abc-123"
 }
 ```
 
-When a user hires a marketplace agent, Sprite Heights parses this JSON to configure the Cline SDK instance.
+When a user hires a marketplace agent, Agent Heights parses this JSON to configure the Cline SDK instance.
 
 ---
 
@@ -212,7 +212,7 @@ The Swarms Marketplace supports two authentication methods for its API routes:
 - `optionalAuthenticate()` — works without auth, but may restrict access to paid content
 - `authenticate()` — requires valid auth, returns 401 if missing
 
-Most public endpoints (get-agents, get-prompts, get-tools) use optional auth. Sprite Heights does not use these endpoints — it queries Supabase directly with the service role key.
+Most public endpoints (get-agents, get-prompts, get-tools) use optional auth. Agent Heights does not use these endpoints — it queries Supabase directly with the service role key.
 
 ---
 
@@ -251,15 +251,15 @@ Railway does **not** provide static egress IPs. The outbound IP can change on re
 
 ### Recommended Mitigations
 
-1. **For Yuki chat**: Move Yuki into Sprite Heights directly (use Anthropic API key in Sprite Heights, eliminate the proxy to swarms.world). The marketplace's Yuki route is a thin wrapper around the Anthropic API — the system prompt and HQ context injection already live in Sprite Heights's `server/yuki.ts`.
+1. **For Yuki chat**: Move Yuki into Agent Heights directly (use Anthropic API key in Agent Heights, eliminate the proxy to swarms.world). The marketplace's Yuki route is a thin wrapper around the Anthropic API — the system prompt and HQ context injection already live in Agent Heights's `server/yuki.ts`.
 
-2. **For programmatic marketplace API access**: If Sprite Heights needs to call swarms.world API routes in the future, add a secret header bypass in the marketplace's `withRateLimit` middleware:
+2. **For programmatic marketplace API access**: If Agent Heights needs to call swarms.world API routes in the future, add a secret header bypass in the marketplace's `withRateLimit` middleware:
    ```ts
    if (request.headers.get('x-hq-secret') === process.env.HQ_PROXY_SECRET) {
      return next(request, event);
    }
    ```
-   Then Sprite Heights sends `x-hq-secret` on outbound requests. This bypasses rate limiting but not Vercel's infrastructure-level DDoS protection.
+   Then Agent Heights sends `x-hq-secret` on outbound requests. This bypasses rate limiting but not Vercel's infrastructure-level DDoS protection.
 
 3. **For Vercel DDoS protection bypass**: Vercel does not offer IP allowlisting at the infrastructure level. Options:
    - Vercel Firewall custom rules (Pro/Enterprise) — can skip challenges for requests with specific headers
@@ -283,7 +283,7 @@ Marketplace queries go to Supabase directly — they should work regardless of s
 
 ### Step 2: Make the Yuki proxy reliable (Short-term)
 
-Yuki stays on the marketplace — one Yuki, unified across platforms. Sprite Heights already injects HQ context (office roster, task board, boss name) via the `entityContext` field in the proxy request, so the marketplace Yuki already knows about the user's HQ state. The problem is just that the proxy breaks when swarms.world is under DDoS.
+Yuki stays on the marketplace — one Yuki, unified across platforms. Agent Heights already injects HQ context (office roster, task board, boss name) via the `entityContext` field in the proxy request, so the marketplace Yuki already knows about the user's HQ state. The problem is just that the proxy breaks when swarms.world is under DDoS.
 
 **Approach: Secret header bypass on the marketplace + Vercel Firewall rule**
 
@@ -299,20 +299,20 @@ Yuki stays on the marketplace — one Yuki, unified across platforms. Sprite Hei
    - Create a custom firewall rule that skips DDoS challenge/block for requests to `/api/yuki` with the `x-hq-secret` header
    - This is IP-independent — works regardless of Railway's changing egress IP
    - Requires Vercel Pro or Enterprise plan for custom firewall rules
-3. **On Sprite Heights** (`server/yuki.ts`):
+3. **On Agent Heights** (`server/yuki.ts`):
    - Set `HQ_PROXY_SECRET` env var on Railway (same value as marketplace)
    - Add `x-hq-secret` header to the outbound `fetch()` to `${MARKETPLACE_URL}/api/yuki`
    - Add a retry with backoff in case of transient failures
 4. **Fallback**: If Vercel Firewall isn't available (Free plan), use an egress proxy with a static IP (see Step 3) so Railway's requests come from a known, allowlisted IP
 
-**Why not duplicate Yuki into Sprite Heights?**
+**Why not duplicate Yuki into Agent Heights?**
 Keeping Yuki on the marketplace ensures she stays unified across platforms. Any changes to her system prompt, personality, or capabilities only need to be made in one place. The HQ context injection already makes her aware of the user's office state, so she can be both a marketplace support agent and an HQ office manager through the same instance.
 
-The same `x-hq-secret` header mechanism also covers any future programmatic API calls from Sprite Heights to swarms.world (e.g., paid agent verification, marketplace search with different filters). Just add the header to any outbound `fetch()` to swarms.world.
+The same `x-hq-secret` header mechanism also covers any future programmatic API calls from Agent Heights to swarms.world (e.g., paid agent verification, marketplace search with different filters). Just add the header to any outbound `fetch()` to swarms.world.
 
 ### Step 3: Vercel DDoS protection bypass (If swarms.world stays under attack)
 
-If swarms.world remains DDoS'd and Sprite Heights needs reliable programmatic access:
+If swarms.world remains DDoS'd and Agent Heights needs reliable programmatic access:
 
 1. **Option A — Vercel Firewall custom rule** (requires Vercel Pro/Enterprise):
    - Create a WAF rule that skips challenge/block for requests with `x-hq-secret` header
@@ -333,9 +333,9 @@ If swarms.world remains DDoS'd and Sprite Heights needs reliable programmatic ac
 
 ### Step 4: Verify paid agent hiring flow (Future)
 
-Currently Sprite Heights reads the `agent` config JSON from Supabase using the service role key, which bypasses RLS and returns the config even for paid agents. This works but bypasses the marketplace's purchase verification.
+Currently Agent Heights reads the `agent` config JSON from Supabase using the service role key, which bypasses RLS and returns the config even for paid agents. This works but bypasses the marketplace's purchase verification.
 
-1. Decide whether Sprite Heights should respect the paywall (require purchase before hiring paid agents)
+1. Decide whether Agent Heights should respect the paywall (require purchase before hiring paid agents)
 2. If yes: call the marketplace API `/api/get-agents/[id]` with an API key (via `HybridAuthGuard` Bearer auth) and check `access_info.has_access` before allowing hire
 3. If no: current behavior is fine — service role key reads everything
 
@@ -343,7 +343,7 @@ Currently Sprite Heights reads the `agent` config JSON from Supabase using the s
 
 ## File Reference
 
-### Sprite Heights
+### Agent Heights
 
 | File | Role |
 |---|---|

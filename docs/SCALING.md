@@ -1,6 +1,6 @@
-# Sprite Heights — Scaling Roadmap: The System Builds the System
+# Agent Heights — Scaling Roadmap: The System Builds the System
 
-> Sprite Heights is not just a product. It's a factory. The HQ HQ is the factory
+> Agent Heights is not just a product. It's a factory. The HQ HQ is the factory
 > floor. The agents are the workers. The product is the platform. Each phase
 > of this roadmap is a construction project that the agents undertake, and
 > each completed project makes the factory more capable.
@@ -13,7 +13,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      HQ HQ (The Platform)                     │
 │                                                              │
-│  The master Sprite Heights instance. Runs on Railway.              │
+│  The master Agent Heights instance. Runs on Railway.              │
 │  You (the founder) manage agents HERE that build             │
 │  and operate the platform itself.                            │
 │                                                              │
@@ -28,8 +28,8 @@
 │  └──────────┘  └──────────┘  └──────────┘                   │
 │       │                                                      │
 │       ▼                                                      │
-│  Railway: sprite-heights-api, sprite-heights-redis,                      │
-│           sprite-heights-worker, sprite-heights-db, ...                  │
+│  Railway: agent-heights-api, agent-heights-redis,                      │
+│           agent-heights-worker, agent-heights-db, ...                  │
 │                                                              │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -52,8 +52,8 @@
 
 ### HQ HQ
 
-The meta-office. An Sprite Heights instance where the "product" being built IS
-Sprite Heights. The agents there work on the real codebase, deploy to Railway,
+The meta-office. An Agent Heights instance where the "product" being built IS
+Agent Heights. The agents there work on the real codebase, deploy to Railway,
 manage infrastructure. You're the boss of the HQ HQ.
 
 Hermes is the platform's SRE — it deploys services, scales them, checks
@@ -62,7 +62,7 @@ work that a human would otherwise do manually.
 
 ### Private HQs
 
-What users get when they sign up. Each is a fully isolated Sprite Heights office
+What users get when they sign up. Each is a fully isolated Agent Heights office
 — their own agents, their own workspaces, their own API key/credits. A
 Private HQ starts solo (the current single-player experience) but can
 later be opened to guests (multiplayer).
@@ -71,7 +71,7 @@ later be opened to guests (multiplayer).
 
 1. **HQ HQ is a special tenant, not a separate codebase.** The HQ HQ is
    just a Private HQ that has been granted "platform admin" role. Its
-   agents work on the Sprite Heights codebase (their workspace is a clone of the
+   agents work on the Agent Heights codebase (their workspace is a clone of the
    repo). Hermes has elevated Railway MCP permissions. The code is the
    same — it's the configuration and permissions that differ.
 
@@ -189,7 +189,7 @@ The only "isolation" is `cwd` being set to the agent's workspace folder. But:
 
 **Level 4: External execution service**
 
-- Don't run agents on the Sprite Heights server at all. Offload to:
+- Don't run agents on the Agent Heights server at all. Offload to:
   - **E2B / Daytona** — cloud sandboxes, sub-second boot, API-based.
   - **Cloudflare Agents** — edge runtime, hibernates when idle.
   - **Railway services** — each agent workspace is a Railway service with a
@@ -198,7 +198,7 @@ The only "isolation" is `cwd` being set to the agent's workspace folder. But:
   provider that sends commands to a remote sandbox instead of local
   `execFile`.
 - **Pros**: True horizontal scaling, agents can't touch the server, works
-  across multiple Sprite Heights instances.
+  across multiple Agent Heights instances.
 - **Cons**: Network latency, external dependency, cost per sandbox.
 - **When**: Phase 5+ (agent execution workers) and beyond.
 
@@ -251,7 +251,7 @@ Phase 7: Ecosystem + Billing
 
 **Built by**: Current HQ HQ agents (Hermes + workers on single process).
 
-**No new infrastructure needed.** Uses the existing single-process Sprite Heights
+**No new infrastructure needed.** Uses the existing single-process Agent Heights
 + Hermes Railway MCP.
 
 #### Tasks
@@ -417,7 +417,7 @@ CREATE TABLE world_state (
 
 | Agent | Task |
 |---|---|
-| Hermes | "Deploy a Redis service on Railway. Create a service called `sprite-heights-redis`. Get the connection URL and set it as an env var on the main service." |
+| Hermes | "Deploy a Redis service on Railway. Create a service called `agent-heights-redis`. Get the connection URL and set it as an env var on the main service." |
 | Worker "backend" | "Write `server/redis.ts` — a Redis client wrapper. Replace the in-memory `sessions` Map with Redis hashes: `tenant:{userId}:agents`, `tenant:{userId}:logs:{agentId}` (Redis lists, capped at 500). Add a Redis pub/sub channel `tenant:{userId}:events` for cross-server broadcast." |
 | Worker "backend" | "Refactor `broadcast()` in `server/index.ts` to publish to the Redis pub/sub channel instead of iterating `sess.clients`. Each server instance subscribes to the channels for its connected users and forwards messages to its local WebSockets." |
 | Worker "backend" | "Add presence: each WS connection sets a Redis key `presence:{userId}` with a 30s TTL. Heartbeat every 10s to renew. Other servers can check who's online." |
@@ -448,7 +448,7 @@ task:{taskId}:result          → SSE stream key
 
 #### What it unlocks
 
-- Multiple Sprite Heights server instances can share state — any server can
+- Multiple Agent Heights server instances can share state — any server can
   handle any user's connection.
 - Presence system (who's online) — prerequisite for multiplayer.
 - Pub/sub broadcast — prerequisite for cross-server room events.
@@ -530,7 +530,7 @@ interface PlayerPresence {
 
 | Agent | Task |
 |---|---|
-| Hermes | "Deploy a new Railway service called `sprite-heights-worker`. It's a Node process that accepts task requests via HTTP and runs them in isolated sandboxes. Give it its own volume for agent workspaces." |
+| Hermes | "Deploy a new Railway service called `agent-heights-worker`. It's a Node process that accepts task requests via HTTP and runs them in isolated sandboxes. Give it its own volume for agent workspaces." |
 | Worker "backend" | "Write `server/providers/remote-worker.ts` — a new `ProviderRunner` that sends task requests to the worker service via HTTP instead of running Cline locally. The worker service runs the Cline SDK in a sandboxed process and streams events back via SSE." |
 | Worker "backend" | "Write the worker service (`worker/index.ts`). It receives task requests, creates a sandboxed environment (Docker container or bubblewrap namespace), runs the Cline agent, and streams `TaskEvent`s back. Workspaces are stored on the worker's volume, not the API server's filesystem." |
 | Worker "backend" | "Add a task queue (BullMQ on Redis). The API server enqueues tasks; workers pull from the queue. This decouples agent execution from the WebSocket server — the API server becomes a thin relay." |
@@ -540,7 +540,7 @@ interface PlayerPresence {
 
 ```
                     ┌─────────────────────────┐
-                    │   Sprite Heights API Server    │
+                    │   Agent Heights API Server    │
                     │   (stateless, scalable)  │
                     │                          │
                     │  WebSocket ←→ Redis      │
@@ -586,7 +586,7 @@ interface PlayerPresence {
 
 | Agent | Task |
 |---|---|
-| Hermes | "Configure a Railway load balancer / reverse proxy in front of the Sprite Heights API service. Enable sticky sessions or verify that stateless operation works without stickiness." |
+| Hermes | "Configure a Railway load balancer / reverse proxy in front of the Agent Heights API service. Enable sticky sessions or verify that stateless operation works without stickiness." |
 | Worker "backend" | "Add a health check endpoint to the API server. Add graceful WebSocket disconnect handling — if a server is shutting down, send a `reconnect` message to clients so they reconnect to another instance immediately." |
 | Worker "backend" | "Add connection draining — when a server receives SIGTERM, stop accepting new connections, let existing connections finish their current operation, then close." |
 | Worker "backend" | "Scale the API service to 3 instances on Railway. Verify that users connected to different instances can be in the same room (via Redis pub/sub)." |
@@ -642,10 +642,10 @@ breaks it down, workers execute in parallel.
 reading their output), then merge their workspace files into the main
 codebase.
 
-**Step 3**: Hermes deploys the updated Sprite Heights to Railway using the
+**Step 3**: Hermes deploys the updated Agent Heights to Railway using the
 Railway MCP tools.
 
-**Step 4**: The updated Sprite Heights now has new capabilities. You use it to
+**Step 4**: The updated Agent Heights now has new capabilities. You use it to
 hire more agents to build the next phase.
 
 ### Why this works
@@ -655,9 +655,9 @@ hire more agents to build the next phase.
   `tsc`, run tests, and iterate.
 - **Hermes can deploy** — the Railway MCP integration means Hermes can
   create services, set env vars, trigger deployments. You don't need to
-  leave Sprite Heights to deploy changes.
+  leave Agent Heights to deploy changes.
 - **The workspace is the codebase** — if you point an agent's workspace
-  at a clone of the Sprite Heights repo, they can work directly on the codebase.
+  at a clone of the Agent Heights repo, they can work directly on the codebase.
 - **Manager delegation works** — you give a high-level goal, the manager
   breaks it down, workers execute in parallel.
 - **You see everything** — the office feed shows every tool call, every
@@ -665,11 +665,11 @@ hire more agents to build the next phase.
 
 ### The bootstrapping problem
 
-The catch-22: to have multiplayer Sprite Heights, you need to scale Sprite Heights,
-and to scale Sprite Heights, you're using Sprite Heights which isn't scaled yet. But
+The catch-22: to have multiplayer Agent Heights, you need to scale Agent Heights,
+and to scale Agent Heights, you're using Agent Heights which isn't scaled yet. But
 this is fine because:
 
-1. You're a single user (the developer) using Sprite Heights to build Sprite Heights.
+1. You're a single user (the developer) using Agent Heights to build Agent Heights.
 2. The current single-process architecture handles one user fine.
 3. Each scaling phase makes the next phase easier to build with more
    agents.
@@ -712,7 +712,7 @@ this is fine because:
 
 ## 8. Future Directions (Post-Phase 7)
 
-- **Cloudflare Agents backend** — each Sprite Heights agent is backed by a
+- **Cloudflare Agents backend** — each Agent Heights agent is backed by a
   Cloudflare Agent that hibernates when idle. Zero cost when nobody's
   talking to the agent. Instant wake when a message arrives. Scales to
   millions of agents across the edge.

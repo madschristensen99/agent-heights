@@ -80,7 +80,7 @@ export async function handlePublishRequest(
     model: parsed.model,
     systemPrompt: parsed.systemPrompt,
     provider: "cline",
-    source: "sprite-heights",
+    source: "agent-heights",
     agentId: parsed.agentId,
   };
 
