@@ -211,23 +211,18 @@ function genLinks(server) {
   return links;
 }
 
-// ── Extract domain for favicon (strip common MCP subdomain prefixes) ────
-function getFaviconUrl(url) {
-  try {
-    const u = new URL(url);
-    let host = u.hostname;
-    // Strip common MCP subdomain prefixes to get the brand domain
-    host = host.replace(/^(mcp|docs|api|setup|agent|gateway|fig-mcp)\./, "");
-    // For compound subdomains like netlify-mcp.netlify.app, use the root domain
-    const parts = host.split(".");
-    if (parts.length > 2) {
-      // Use last 2 parts (e.g. netlify.app from netlify-mcp.netlify.app)
-      host = parts.slice(-2).join(".");
-    }
-    return `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
-  } catch {
-    return null;
-  }
+// ── Generate a letter avatar SVG data URI (no external requests) ─────────
+function genLetterAvatar(name) {
+  const letter = (name || "?").charAt(0).toUpperCase();
+  // Pick a color from a palette based on the name hash
+  const colors = ["#4A90D9", "#D94A4A", "#50B83C", "#D9A441", "#9B59B6",
+    "#1ABC9C", "#E67E22", "#3498DB", "#E74C3C", "#2ECC71",
+    "#F39C12", "#8E44AD", "#16A085", "#D35400", "#2980B9"];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  const bg = colors[Math.abs(hash) % colors.length];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="16" fill="${bg}"/><text x="64" y="86" text-anchor="middle" font-family="sans-serif" font-size="64" font-weight="bold" fill="white">${letter}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 // ── SQL escape ───────────────────────────────────────────────────────────
@@ -302,7 +297,7 @@ for (let i = 0; i < newEntries.length; i++) {
   const useCases = genUseCases(e);
   const requirements = genRequirements(e);
   const links = genLinks(e);
-  const imageUrl = getFaviconUrl(e.url);
+  const imageUrl = genLetterAvatar(agentName);
 
   sqlParts.push(`  (`);
   sqlParts.push(`    '${sqlEscape(agentName)}',`);
