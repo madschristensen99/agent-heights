@@ -110,7 +110,7 @@ function parseCatalog(src) {
       "shopping": "Lifestyle",
       "food": "Lifestyle",
       "travel": "Lifestyle",
-      "legal": "Lifestyle",
+      "legal": "Business",
     };
     const seen = new Set();
     const category = rawCategory
