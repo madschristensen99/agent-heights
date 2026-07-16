@@ -351,6 +351,10 @@ export class Store {
     this.mailboxMessagesListeners.add(fn);
   }
 
+  offMailboxMessages(fn: (platform: string, events: PlatformEvent[]) => void): void {
+    this.mailboxMessagesListeners.delete(fn);
+  }
+
   triggerHelicopter(agent: HelicopterDelivery): void {
     for (const fn of this.heliListeners) fn(agent);
   }

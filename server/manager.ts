@@ -338,6 +338,7 @@ export class AgentManager {
 
     this.ensureYuki();
     this.ensureHermes();
+    this.seedTestMail();
 
     // Start the scheduler tick
     this.schedulerTimer = setInterval(() => this.tickSchedules(), SCHEDULER_TICK_MS);
@@ -440,6 +441,29 @@ export class AgentManager {
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
+  }
+
+  /** Seed test platform events so mailboxes have content on a fresh server. */
+  private seedTestMail(): void {
+    if (this.platformEvents.size > 0) return;
+    const testEvents: [string, "inbound" | "outbound", string, string][] = [
+      ["Slack", "inbound", "sarah@design", "Can someone review the new landing page?"],
+      ["Slack", "inbound", "mike@eng", "Deploy is stuck — need devops help"],
+      ["Discord", "inbound", "moderator", "New feature request: dark mode for the dashboard"],
+      ["Telegram", "inbound", "client_4823", "When will my project be ready?"],
+      ["WhatsApp", "inbound", "+1-555-0100", "Meeting moved to 3pm"],
+      ["Signal", "inbound", "ops-team", "Server CPU spike on prod-04"],
+      ["Email", "inbound", "boss@company.com", "Q3 roadmap review needed by Friday"],
+    ];
+    for (const [platform, direction, sender, text] of testEvents) {
+      const ev: PlatformEvent = { platform, direction, sender, text, timestamp: Date.now() - Math.random() * 3600_000 };
+      const list = this.platformEvents.get(platform) ?? [];
+      list.push(ev);
+      this.platformEvents.set(platform, list);
+      this.platformFlags.set(platform, true);
+      this.platformPending.set(platform, 1);
+      this.platformLastMessage.set(platform, `${sender}: ${text}`);
+    }
   }
 
   private persist(): void {

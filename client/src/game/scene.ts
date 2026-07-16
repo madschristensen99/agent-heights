@@ -1424,8 +1424,27 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     if (!nearest) return false;
+    const platform = nearest.platform;
     const net = this.game.registry.get("net") as import("../net").Net;
-    net.send({ type: "check_mailbox", platform: nearest.platform });
+    
+    // Set up a one-time listener for the response, with a timeout fallback
+    let responded = false;
+    const timeout = this.time.delayedCall(2000, () => {
+      if (!responded) {
+        responded = true;
+        this.store.toast(`[${platform}] No response from server. Make sure you're in your office.`);
+      }
+    });
+    
+    const onMessages = (respPlatform: string, events: any[]) => {
+      if (responded || respPlatform !== platform) return;
+      responded = true;
+      timeout.remove();
+      this.store.offMailboxMessages(onMessages);
+    };
+    this.store.onMailboxMessages(onMessages);
+    
+    net.send({ type: "check_mailbox", platform });
     return true;
   }
 
