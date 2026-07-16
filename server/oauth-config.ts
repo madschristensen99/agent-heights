@@ -19,10 +19,8 @@ export interface KnownOAuthConfig {
 }
 
 export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
-  "https://agent.robinhood.com/mcp/trading": {
-    clientId: "LtLiNmbs9owbYfWgBlC68Z2V-claude",
-    tokenEndpoint: "https://api.robinhood.com/oauth2/token/",
-    authorizationEndpoint: "https://robinhood.com/oauth",
-    scopes: ["internal"],
-  },
+  // Robinhood was previously hardcoded here with a pre-registered clientId
+  // that used localhost:1/callback as the redirect URI. Now that we use
+  // dynamic redirect URIs (baseUrl/oauth/callback), all servers use DCR.
+  // Robinhood supports Dynamic Client Registration so this works automatically.
 };

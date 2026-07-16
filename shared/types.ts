@@ -615,8 +615,8 @@ export type ServerMsg =
   | { type: "api_key_status"; hasKey: boolean }
   | { type: "mcp_key_status"; serverUrl: string; hasKey: boolean }
   | { type: "mcp_keys_status"; results: { serverUrl: string; hasKey: boolean }[] }
-  | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string }
-  | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string }
+  | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
+  | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string }

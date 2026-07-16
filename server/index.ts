@@ -291,9 +291,9 @@ const server = createServer((req, res) => {
       }
       res.writeHead(200, { "Content-Type": "text/html" });
       if (result.success) {
-        res.end(`<html><body><h2>✓ Connected!</h2><p>Redirecting back to Agent Heights...</p><script>setTimeout(function(){window.location.href='/';},1500);</script></body></html>`);
+        res.end(`<html><body style="background:#111;color:#e0e0e0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2 style="color:#53b86b;">✓ Connected!</h2><p>You can close this window.</p></div><script>setTimeout(function(){try{window.close();}catch(e){}setTimeout(function(){window.location.href='/';},1000);},500);</script></body></html>`);
       } else {
-        res.end(`<html><body><h2>Authentication failed</h2><p>${result.error ?? "Unknown error"}</p><script>setTimeout(function(){window.location.href='/';},3000);</script></body></html>`);
+        res.end(`<html><body style="background:#111;color:#e0e0e0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2 style="color:#e05d5d;">Authentication failed</h2><p>${result.error ?? "Unknown error"}</p></div><script>setTimeout(function(){try{window.close();}catch(e){}setTimeout(function(){window.location.href='/';},2000);},1000);</script></body></html>`);
       }
     });
     return;
@@ -735,8 +735,8 @@ wss.on("connection", async (ws, req) => {
           const baseUrl = publicUrl || `${proto}://${host}`;
           console.log(`[mcp-oauth] startOAuthFlow baseUrl=${baseUrl} (PUBLIC_URL=${publicUrl ?? "unset"}, proto=${proto}, host=${host})`);
           try {
-            const { authUrl } = await startOAuthFlow(msg.serverUrl, sess.user.id, baseUrl);
-            sess.broadcast({ type: "mcp_oauth_code_needed", serverUrl: msg.serverUrl, authUrl });
+            const { authUrl, redirectMode } = await startOAuthFlow(msg.serverUrl, sess.user.id, baseUrl);
+            sess.broadcast({ type: "mcp_oauth_code_needed", serverUrl: msg.serverUrl, authUrl, redirectMode });
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
             sess.broadcast({ type: "mcp_oauth_complete", serverUrl: msg.serverUrl, success: false, error: msg2 });

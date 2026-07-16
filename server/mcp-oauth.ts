@@ -77,7 +77,7 @@ export async function refreshMcpToken(
  * 4. Dynamic client registration → get client_id
  * 5. Generate PKCE code_verifier + code_challenge
  * 6. Build authorization URL with redirect_uri pointing to our /oauth/callback
- * 7. User authenticates in browser → Robinhood redirects to /oauth/callback?code=...&state=...
+ * 7. User authenticates in browser → provider redirects to /oauth/callback?code=...&state=...
  * 8. Exchange code + code_verifier for access_token at token_endpoint
  * 9. Store token encrypted in user_mcp_keys table
  */
@@ -171,8 +171,8 @@ const REGISTRATION_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 export async function startOAuthFlow(
   serverUrl: string,
   userId: string,
-  _baseUrl: string,
-): Promise<{ authUrl: string }> {
+  baseUrl: string,
+): Promise<{ authUrl: string; redirectMode: "auto" | "manual" }> {
   cleanupExpired();
 
   // 1. Check known configs first (no network calls needed)
@@ -239,7 +239,7 @@ export async function startOAuthFlow(
       throw new Error("Missing authorization_endpoint or token_endpoint in metadata");
     }
 
-    const redirectUri = `http://localhost:1/callback`;
+    const redirectUri = baseUrl ? `${baseUrl}/oauth/callback` : `http://localhost:1/callback`;
     console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
 
     if (!metadata.registration_endpoint) {
@@ -280,7 +280,7 @@ export async function startOAuthFlow(
 
   // 5. Build authorization URL
   const state = randomUUID();
-  const redirectUri = `http://localhost:1/callback`;
+  const redirectUri = baseUrl ? `${baseUrl}/oauth/callback` : `http://localhost:1/callback`;
 
   const authUrl = new URL(authorizationEndpoint);
   authUrl.searchParams.set("response_type", "code");
@@ -304,13 +304,13 @@ export async function startOAuthFlow(
     createdAt: Date.now(),
   });
 
-  return { authUrl: authUrl.toString() };
+  return { authUrl: authUrl.toString(), redirectMode: baseUrl ? "auto" : "manual" };
 }
 
 /**
  * Exchange an OAuth code from a pasted callback URL.
- * The user authenticates on Robinhood, gets redirected to localhost (which fails),
- * then copies the URL and pastes it back to us.
+ * The user authenticates on the provider's site, gets redirected to localhost (which fails),
+ * then copies the URL and pastes it back to us. This is only used when no public URL is available.
  */
 export async function exchangeOAuthCode(
   callbackUrl: string,
