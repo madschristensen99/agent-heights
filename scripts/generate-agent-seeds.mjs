@@ -52,12 +52,71 @@ function parseCatalog(src) {
 
     // Parse category array
     const catMatch = block.match(/category:\s*\[([^\]]*)\]/);
-    const category = catMatch
+    const rawCategory = catMatch
       ? catMatch[1].split(",").map(s => s.trim().replace(/^"|"$/g, "")).filter(Boolean)
       : ["business"];
 
     // Only remote servers
     if (transport !== "remote" || !url) continue;
+
+    // Consolidate granular categories into a clean set
+    const CATEGORY_MAP = {
+      "productivity": "Productivity",
+      "knowledge": "Productivity",
+      "project-management": "Productivity",
+      "scheduling": "Productivity",
+      "communication": "Communication",
+      "support": "Communication",
+      "development": "Development",
+      "git": "Development",
+      "documentation": "Development",
+      "hosting": "Development",
+      "backend": "Development",
+      "browser": "Development",
+      "design": "Design",
+      "media": "Design",
+      "finance": "Finance",
+      "trading": "Finance",
+      "accounting": "Finance",
+      "crypto": "Finance",
+      "crm": "Business",
+      "sales": "Business",
+      "commerce": "Business",
+      "business": "Business",
+      "hr": "Business",
+      "jobs": "Business",
+      "cms": "Business",
+      "monitoring": "Data & Analytics",
+      "analytics": "Data & Analytics",
+      "data": "Data & Analytics",
+      "database": "Data & Analytics",
+      "search": "Data & Analytics",
+      "seo": "Data & Analytics",
+      "research": "Data & Analytics",
+      "analysis": "Data & Analytics",
+      "ai": "AI & ML",
+      "ml": "AI & ML",
+      "automation": "AI & ML",
+      "cloud": "Infrastructure",
+      "devops": "Infrastructure",
+      "security": "Infrastructure",
+      "iot": "Infrastructure",
+      "smart-home": "Infrastructure",
+      "web": "Infrastructure",
+      "fitness": "Lifestyle",
+      "health": "Lifestyle",
+      "transport": "Lifestyle",
+      "lifestyle": "Lifestyle",
+      "shopping": "Lifestyle",
+      "food": "Lifestyle",
+      "travel": "Lifestyle",
+      "legal": "Lifestyle",
+    };
+    const seen = new Set();
+    const category = rawCategory
+      .map(c => CATEGORY_MAP[c] || "Business")
+      .filter(c => seen.has(c) ? false : (seen.add(c), true))
+      .slice(0, 1); // Only primary category to keep filters clean
 
     entries.push({
       id: id_field,
