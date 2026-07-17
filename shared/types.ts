@@ -531,7 +531,7 @@ export type ClientMsg =
   | { type: "set_api_key"; apiKey: string }
   | { type: "set_mcp_key"; serverUrl: string; apiKey: string }
   | { type: "check_mcp_keys"; serverUrls: string[] }
-  | { type: "start_mcp_oauth"; serverUrl: string }
+  | { type: "start_mcp_oauth"; serverUrl: string; clientOrigin?: string }
   | { type: "submit_mcp_oauth_code"; serverUrl: string; callbackUrl: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme; orgId?: string }

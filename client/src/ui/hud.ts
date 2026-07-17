@@ -378,7 +378,7 @@ export class Hud {
       this.net.send({ type: "check_mcp_keys", serverUrls });
     };
     mqBrowser.onStartMcpOAuth = (serverUrl: string) => {
-      this.net.send({ type: "start_mcp_oauth", serverUrl });
+      this.net.send({ type: "start_mcp_oauth", serverUrl, clientOrigin: window.location.origin });
     };
     const mcpKeysListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
       if (mqBrowser.onMcpKeysStatusHandler) mqBrowser.onMcpKeysStatusHandler(results);
@@ -1958,7 +1958,7 @@ export class Hud {
         const connectBtn = mcpSection.querySelector(`#d-mcp-connect-${i}`) as HTMLButtonElement | null;
         if (connectBtn && s.url) {
           connectBtn.addEventListener("click", () => {
-            this.net.send({ type: "start_mcp_oauth", serverUrl: s.url! });
+            this.net.send({ type: "start_mcp_oauth", serverUrl: s.url!, clientOrigin: window.location.origin });
             connectBtn.textContent = "Opening login...";
             connectBtn.disabled = true;
             setTimeout(() => { connectBtn.textContent = "🔗 Reconnect via OAuth"; connectBtn.disabled = false; }, 5000);

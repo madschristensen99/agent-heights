@@ -728,19 +728,19 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "start_mcp_oauth": {
-          // Build base URL: prefer PUBLIC_URL env var, then x-forwarded-host, then origin header, then host
+          // Build base URL: prefer clientOrigin (browser's window.location.origin),
+          // then PUBLIC_URL env, then origin/forwarded-host headers, then host
           const publicUrl = process.env.PUBLIC_URL || process.env.VITE_APP_URL;
           const forwardedHost = (req.headers["x-forwarded-host"] as string) || "";
           const originHeader = (req.headers["origin"] as string) || "";
           const proto = (req.headers["x-forwarded-proto"] as string) || "https";
           const host = (req.headers["host"] as string) || "localhost:8080";
-          // Prefer PUBLIC_URL, then origin header (browser-sent, accurate for custom domains),
-          // then x-forwarded-host (proxy-set), then raw host
-          const baseUrl = publicUrl
+          const baseUrl = msg.clientOrigin
+            || publicUrl
             || (originHeader ? originHeader.replace(/\/$/, "") : "")
             || (forwardedHost ? `${proto}://${forwardedHost}` : "")
             || `${proto}://${host}`;
-          console.log(`[mcp-oauth] startOAuthFlow baseUrl=${baseUrl} (PUBLIC_URL=${publicUrl ?? "unset"}, origin=${originHeader || "none"}, forwardedHost=${forwardedHost || "none"}, host=${host})`);
+          console.log(`[mcp-oauth] startOAuthFlow baseUrl=${baseUrl} (clientOrigin=${msg.clientOrigin || "none"}, PUBLIC_URL=${publicUrl ?? "unset"}, origin=${originHeader || "none"}, forwardedHost=${forwardedHost || "none"}, host=${host})`);
           try {
             const { authUrl, redirectMode } = await startOAuthFlow(msg.serverUrl, sess.user.id, baseUrl);
             sess.broadcast({ type: "mcp_oauth_code_needed", serverUrl: msg.serverUrl, authUrl, redirectMode });
