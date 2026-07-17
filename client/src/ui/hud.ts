@@ -2062,15 +2062,13 @@ export class Hud {
     }
     if (sayBtn) sayBtn.disabled = isBusy;
 
-    this.renderSchedules(agent.id);
+    if (!this._scheduleEditing && !this._scheduleCreateOpen) {
+      this.renderSchedules(agent.id);
+    }
   }
 
   private renderSchedules(agentId: string): void {
     const container = document.getElementById("d-schedules")!;
-
-    // Skip re-render if the user is actively editing or creating a schedule
-    // to avoid wiping out their in-progress form inputs.
-    if (this._scheduleEditing || this._scheduleCreateOpen) return;
 
     const agentSchedules = [...this.store.schedules.values()].filter((s) => s.agentId === agentId);
 
