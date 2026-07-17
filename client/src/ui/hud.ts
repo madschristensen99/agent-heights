@@ -201,6 +201,7 @@ export class Hud {
   private lastBoardSig = "";
   private detailMcpListener: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
   private _scheduleCreateOpen = false;
+  private _renaming = false;
   private feedCollapsed = false;
   private feedExpanded = false;
   private rosterCollapsed = false;
@@ -1875,14 +1876,17 @@ export class Hud {
     }
     panel.hidden = false;
 
-    document.getElementById("d-title")!.innerHTML =
-      `<span style="color:${agent.accent}">${esc(agent.name)}</span>` +
-      `<button class="rename-btn" id="d-rename" title="Rename agent" style="background:none;border:none;color:${agent.accent};cursor:pointer;font-size:1.1rem;padding:0 0.25rem;opacity:0.7;">✎</button>`;
-    document.getElementById("d-titlebar")!.style.borderColor = agent.accent;
+    if (!this._renaming) {
+      document.getElementById("d-title")!.innerHTML =
+        `<span style="color:${agent.accent}">${esc(agent.name)}</span>` +
+        `<button class="rename-btn" id="d-rename" title="Rename agent" style="background:none;border:none;color:${agent.accent};cursor:pointer;font-size:1.1rem;padding:0 0.25rem;opacity:0.7;">✎</button>`;
+      document.getElementById("d-titlebar")!.style.borderColor = agent.accent;
+    }
 
     const renameBtn = document.getElementById("d-rename") as HTMLButtonElement | null;
     if (renameBtn) {
       renameBtn.addEventListener("click", () => {
+        this._renaming = true;
         const titleEl = document.getElementById("d-title")!;
         const input = document.createElement("input");
         input.type = "text";
@@ -1894,6 +1898,8 @@ export class Hud {
         input.focus();
         input.select();
         const commit = () => {
+          if (!this._renaming) return;
+          this._renaming = false;
           const newName = input.value.trim();
           if (newName && newName !== agent.name) {
             this.net.send({ type: "rename", agentId: agent.id, name: newName });
@@ -1902,7 +1908,7 @@ export class Hud {
         };
         input.addEventListener("keydown", (e) => {
           if (e.key === "Enter") { e.preventDefault(); commit(); }
-          if (e.key === "Escape") { this.renderDetail(); }
+          if (e.key === "Escape") { this._renaming = false; this.renderDetail(); }
         });
         input.addEventListener("blur", commit);
       });
