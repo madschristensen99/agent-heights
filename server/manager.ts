@@ -21,12 +21,14 @@ import type {
   PersonalityTraits,
   AgentMood,
   PlatformEvent,
+  PlatformConnectionState,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality, PLATFORMS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
 import { runTextTools, clearTextToolMemory, getAgentConversations } from "./providers/text-tools.js";
+import { HermesClient } from "./hermes-client.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
@@ -215,6 +217,8 @@ export class AgentManager {
   private platformFlags = new Map<string, boolean>();
   private platformPending = new Map<string, number>();
   private platformLastMessage = new Map<string, string>();
+  private platformStates: PlatformConnectionState[] = [];
+  private hermesClient: HermesClient | null = null;
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
   setApiKey(key: string | null): void {
@@ -344,6 +348,7 @@ export class AgentManager {
     this.ensureYuki();
     this.ensureHermes();
     this.seedTestMail();
+    this.startHermesClient();
 
     // Start the scheduler tick
     this.schedulerTimer = setInterval(() => this.tickSchedules(), SCHEDULER_TICK_MS);
@@ -469,6 +474,34 @@ export class AgentManager {
       this.platformPending.set(platform, 1);
       this.platformLastMessage.set(platform, `${sender}: ${text}`);
     }
+  }
+
+  /** Start the Hermes Agent gateway client — polls hermes serve for platform status + messages. */
+  private startHermesClient(): void {
+    this.hermesClient = new HermesClient();
+    this.hermesClient.start(
+      (states) => {
+        this.platformStates = states;
+        this.broadcast({ type: "platform_connection", states });
+      },
+      (event) => {
+        // Real inbound message from a platform via Hermes
+        this.emitPlatformEvent(event.platform, event.direction, event.sender, event.text);
+        if (event.direction === "inbound") {
+          this.routePlatformEvent(event.platform, event.sender, event.text);
+        }
+      },
+    );
+  }
+
+  /** Get current platform connection states. */
+  getPlatformConnectionStates(): PlatformConnectionState[] {
+    return this.platformStates;
+  }
+
+  /** Broadcast current platform connection states to all clients. */
+  broadcastPlatformStates(): void {
+    this.broadcast({ type: "platform_connection", states: this.platformStates });
   }
 
   private persist(): void {

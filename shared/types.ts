@@ -666,6 +666,7 @@ export type ServerMsg =
   | { type: "agent_memory"; agentId: string; messages: { role: string; content: string }[] }
   | { type: "mailbox_update"; platform: string; flagUp: boolean; pendingCount: number; lastMessage: string }
   | { type: "mailbox_messages"; platform: string; events: PlatformEvent[] }
+  | { type: "platform_connection"; states: PlatformConnectionState[] }
   | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }
   | { type: "schedules"; schedules: AgentSchedule[] }
   | { type: "schedule"; schedule: AgentSchedule }

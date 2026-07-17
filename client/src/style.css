@@ -407,7 +407,7 @@ body {
   max-height: none;
 }
 .log.collapsible::after {
-  content: '▸ click to expand';
+  content: '▸';
   position: absolute;
   bottom: 0;
   right: 0;
@@ -415,10 +415,9 @@ body {
   padding: 0 4px;
   font-size: 10px;
   color: var(--dim);
-  font-style: italic;
 }
 .log.collapsible.expanded::after {
-  content: '▾ click to collapse';
+  content: '▾';
   position: static;
   display: block;
   margin-top: 2px;
