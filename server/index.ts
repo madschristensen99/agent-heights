@@ -272,6 +272,7 @@ const server = createServer((req, res) => {
     }
 
     void handleOAuthCallback(code, state).then(async (result) => {
+      console.log(`[oauth-callback] result: success=${result.success}, serverUrl=${result.serverUrl}, userId=${result.userId ?? "none"}, error=${result.error ?? "none"}`);
       // Notify the user's WS session if they're online
       if (result.userId) {
         const sess = tenants.get(result.userId);
@@ -280,6 +281,7 @@ const server = createServer((req, res) => {
             // Refresh manager keys
             const mcpKeys = await getUserMcpKeys(sess.user.id);
             sess.manager.setMcpKeys(mcpKeys);
+            console.log(`[oauth-callback] Updated MCP keys for user ${result.userId}, keys: ${Object.keys(mcpKeys).join(", ")}`);
           }
           sess.broadcast({
             type: "mcp_oauth_complete",
