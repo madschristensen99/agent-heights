@@ -8,6 +8,7 @@ export interface StoredToken {
   refresh_token?: string;
   expires_at?: number;
   client_id?: string;
+  client_secret?: string;
   token_endpoint?: string;
 }
 
@@ -35,14 +36,19 @@ export async function refreshMcpToken(
 
   console.log(`[mcp-oauth] Refreshing token for ${serverUrl}`);
   try {
+    const refreshParams: Record<string, string> = {
+      grant_type: "refresh_token",
+      refresh_token: stored.refresh_token,
+      client_id: stored.client_id,
+    };
+    if (stored.client_secret) {
+      refreshParams.client_secret = stored.client_secret;
+    }
+
     const res = await fetch(stored.token_endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: stored.refresh_token,
-        client_id: stored.client_id,
-      }),
+      body: new URLSearchParams(refreshParams),
     });
 
     if (!res.ok) {
@@ -56,6 +62,7 @@ export async function refreshMcpToken(
       refresh_token: data.refresh_token ?? stored.refresh_token,
       expires_at: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
       client_id: stored.client_id,
+      client_secret: stored.client_secret,
       token_endpoint: stored.token_endpoint,
     });
     await setUserMcpKey(userId, serverUrl, newBlob);
@@ -86,6 +93,7 @@ interface PendingOAuth {
   userId: string;
   serverUrl: string;
   clientId: string;
+  clientSecret?: string;
   codeVerifier: string;
   tokenEndpoint: string;
   redirectUri: string;
@@ -121,6 +129,7 @@ interface AuthServerMetadata {
   registration_endpoint?: string;
   code_challenge_methods_supported?: string[];
   scopes_supported?: string[];
+  token_endpoint_auth_methods_supported?: string[];
 }
 
 interface ProtectedResourceMetadata {
@@ -156,6 +165,7 @@ function deriveAuthServerMetadataUrl(mcpServerUrl: string): string {
 /** Cached OAuth metadata + client registration per server URL (avoids 429s). */
 interface CachedRegistration {
   clientId: string;
+  clientSecret?: string;
   tokenEndpoint: string;
   authorizationEndpoint: string;
   scopes: string[];
@@ -179,6 +189,7 @@ export async function startOAuthFlow(
   const known = KNOWN_OAUTH_CONFIGS[serverUrl];
   const cached = registrationCache.get(serverUrl);
   let clientId: string;
+  let clientSecret: string | undefined;
   let tokenEndpoint: string;
   let authorizationEndpoint: string;
   let scopes: string[];
@@ -191,6 +202,7 @@ export async function startOAuthFlow(
     console.log(`[mcp-oauth] Using known OAuth config for ${serverUrl}`);
   } else if (cached && Date.now() - cached.cachedAt < REGISTRATION_CACHE_MS) {
     clientId = cached.clientId;
+    clientSecret = cached.clientSecret;
     tokenEndpoint = cached.tokenEndpoint;
     authorizationEndpoint = cached.authorizationEndpoint;
     scopes = cached.scopes;
@@ -246,28 +258,34 @@ export async function startOAuthFlow(
       throw new Error("This MCP server does not support automatic OAuth registration. It may require a pre-registered API key or a specific OAuth app — try using the API Key option instead.");
     }
 
+    // Determine the best auth method supported by the server
+    const supportedMethods = metadata.token_endpoint_auth_methods_supported || ["none"];
+    const authMethod = supportedMethods.includes("none") ? "none" : supportedMethods[0] || "none";
+
     const registration = await fetch(`${metadata.registration_endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_name: "Claude Code",
+        client_name: "Agent Heights",
         redirect_uris: [redirectUri],
         grant_types: ["authorization_code", "refresh_token"],
-        token_endpoint_auth_method: "none",
+        token_endpoint_auth_method: authMethod,
       }),
     });
     if (!registration.ok) {
       const errText = await registration.text().catch(() => "");
       throw new Error(`Dynamic client registration failed: ${registration.status} ${errText}`);
     }
-    const regData = await registration.json() as { client_id: string };
+    const regData = await registration.json() as { client_id: string; client_secret?: string };
     clientId = regData.client_id;
+    clientSecret = regData.client_secret;
     tokenEndpoint = metadata.token_endpoint;
     authorizationEndpoint = metadata.authorization_endpoint;
     scopes = metadata.scopes_supported || [];
 
     registrationCache.set(serverUrl, {
       clientId,
+      clientSecret,
       tokenEndpoint,
       authorizationEndpoint,
       scopes,
@@ -298,6 +316,7 @@ export async function startOAuthFlow(
     userId,
     serverUrl,
     clientId,
+    clientSecret,
     codeVerifier: verifier,
     tokenEndpoint,
     redirectUri,
@@ -352,23 +371,30 @@ export async function handleOAuthCallback(
 
   const flow = pendingFlows.get(state);
   if (!flow) {
+    console.error("[mcp-oauth] No pending flow for state:", state, "(may have expired or server restarted)");
     return { success: false, error: "Invalid or expired OAuth state. Please try again." };
   }
 
   pendingFlows.delete(state);
+  console.log(`[mcp-oauth] Handling callback for ${flow.serverUrl}, state=${state}`);
 
   try {
     // Exchange code for token
+    const tokenParams: Record<string, string> = {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: flow.redirectUri,
+      client_id: flow.clientId,
+      code_verifier: flow.codeVerifier,
+    };
+    if (flow.clientSecret) {
+      tokenParams.client_secret = flow.clientSecret;
+    }
+
     const tokenRes = await fetch(flow.tokenEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: flow.redirectUri,
-        client_id: flow.clientId,
-        code_verifier: flow.codeVerifier,
-      }),
+      body: new URLSearchParams(tokenParams),
     });
 
     if (!tokenRes.ok) {
@@ -385,6 +411,7 @@ export async function handleOAuthCallback(
       refresh_token: tokenData.refresh_token,
       expires_at: tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : undefined,
       client_id: flow.clientId,
+      client_secret: flow.clientSecret,
       token_endpoint: flow.tokenEndpoint,
     });
     const { error } = await setUserMcpKey(flow.userId, flow.serverUrl, tokenBlob);
