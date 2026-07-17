@@ -248,9 +248,13 @@ export class Hud {
         <div id="d-mcp-section" hidden></div>
         <div class="d-schedules" id="d-schedules" hidden></div>
         <div class="logs" id="logs"></div>
-        <textarea id="task-input" rows="3" placeholder="Give them a task…"></textarea>
+        <textarea id="task-input" rows="4" placeholder="Give them a task…"></textarea>
         <div class="handoff">WHEN DONE, HAND OFF TO
           <select id="d-handoff"><option value="">— nobody —</option></select>
+        </div>
+        <div class="row chat-row">
+          <input id="d-chat" placeholder="Say something… (chat, not a task)" />
+          <button class="btn" id="d-say">SAY</button>
         </div>
         <div class="row">
           <button class="btn primary" id="d-assign">ASSIGN ▶</button>
@@ -258,10 +262,6 @@ export class Hud {
           <button class="btn" id="d-clear">NEW CHAT</button>
           <button class="btn" id="d-publish">📤 PUBLISH</button>
           <button class="btn danger" id="d-fire">FIRE</button>
-        </div>
-        <div class="row chat-row">
-          <input id="d-chat" placeholder="Say something… (chat, not a task)" />
-          <button class="btn" id="d-say">SAY</button>
         </div>
       </div>
       <div class="modal-backdrop" id="publish-modal" hidden></div>

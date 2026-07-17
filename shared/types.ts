@@ -579,6 +579,7 @@ export type ClientMsg =
   | { type: "agent_inject_task"; agentId: string; task: string; handoffTo?: string }
   | { type: "agent_memory_request"; agentId: string }
   | { type: "check_mailbox"; platform: string }
+  | { type: "connect_platform"; platform: string }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
@@ -702,4 +703,14 @@ export interface PlatformEvent {
   sender: string;
   text: string;
   timestamp: number;
+}
+
+/** Connection state for a messaging platform (mirrors Hermes Agent gateway status). */
+export interface PlatformConnectionState {
+  platform: string;
+  connected: boolean;
+  /** Human-readable status (e.g. "Bot token configured", "Not configured") */
+  status: string;
+  /** Whether the Hermes Agent gateway itself is running */
+  gatewayRunning: boolean;
 }
