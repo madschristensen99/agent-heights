@@ -369,7 +369,6 @@ body {
 .logs {
   flex: 1;
   min-height: 120px;
-  max-height: 40vh;
   overflow-y: auto;
   background: var(--panel-soft);
   border: 1px solid var(--panel-edge-soft);
@@ -387,6 +386,40 @@ body {
 .log.result { color: var(--green); }
 .log.error { color: var(--red); }
 .log.boss { color: var(--accent); font-weight: 700; }
+
+.log.collapsible {
+  cursor: pointer;
+  max-height: 3.6em;
+  overflow: hidden;
+  position: relative;
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  margin-left: -4px;
+  transition: max-height 0.2s ease;
+}
+.log.collapsible:hover {
+  background: rgba(58, 140, 212, 0.06);
+}
+.log.collapsible.expanded {
+  max-height: none;
+}
+.log.collapsible::after {
+  content: '▸ click to expand';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: var(--panel-soft);
+  padding: 0 4px;
+  font-size: 10px;
+  color: var(--dim);
+  font-style: italic;
+}
+.log.collapsible.expanded::after {
+  content: '▾ click to collapse';
+  position: static;
+  display: block;
+  margin-top: 2px;
+}
 
 /* ------------------------------------------------- markdown in agent text */
 

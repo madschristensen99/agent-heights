@@ -233,9 +233,14 @@ export class AgentManager {
     const result: MCPServerConfig[] = [];
     for (const s of servers) {
       const raw = s.url ? this.mcpKeys[s.url] : undefined;
-      if (!raw) { result.push(s); continue; }
+      if (!raw) {
+        console.log(`[mcp-inject] No key for ${s.url} (available keys: ${Object.keys(this.mcpKeys).join(", ") || "none"})`);
+        result.push(s);
+        continue;
+      }
       const stored = parseStoredToken(raw);
       let token = stored.access_token;
+      console.log(`[mcp-inject] Found token for ${s.url}, token length=${token.length}, expires_at=${stored.expires_at ?? "none"}, has_refresh=${!!stored.refresh_token}`);
       // Check if token is expired (or will expire in the next 60s)
       if (stored.expires_at && stored.expires_at < Date.now() + 60_000) {
         console.log(`[mcp] Token for ${s.url} expired, attempting refresh...`);

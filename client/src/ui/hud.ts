@@ -248,20 +248,20 @@ export class Hud {
         <div id="d-mcp-section" hidden></div>
         <div class="d-schedules" id="d-schedules" hidden></div>
         <div class="logs" id="logs"></div>
-        <div class="row chat-row">
-          <input id="d-chat" placeholder="Say something… (chat, not a task)" />
-          <button class="btn" id="d-say">SAY</button>
-        </div>
+        <textarea id="task-input" rows="3" placeholder="Give them a task…"></textarea>
         <div class="handoff">WHEN DONE, HAND OFF TO
           <select id="d-handoff"><option value="">— nobody —</option></select>
         </div>
-        <textarea id="task-input" rows="3" placeholder="Give them a task…"></textarea>
         <div class="row">
           <button class="btn primary" id="d-assign">ASSIGN ▶</button>
           <button class="btn" id="d-stop">STOP</button>
           <button class="btn" id="d-clear">NEW CHAT</button>
           <button class="btn" id="d-publish">📤 PUBLISH</button>
           <button class="btn danger" id="d-fire">FIRE</button>
+        </div>
+        <div class="row chat-row">
+          <input id="d-chat" placeholder="Say something… (chat, not a task)" />
+          <button class="btn" id="d-say">SAY</button>
         </div>
       </div>
       <div class="modal-backdrop" id="publish-modal" hidden></div>
@@ -419,6 +419,11 @@ export class Hud {
   private bindDetail(): void {
     const input = document.getElementById("task-input") as HTMLTextAreaElement;
     document.getElementById("d-close")!.addEventListener("click", () => this.store.select(null));
+    const logsEl = document.getElementById("logs")!;
+    logsEl.addEventListener("click", (e) => {
+      const target = (e.target as HTMLElement).closest(".log.collapsible") as HTMLElement | null;
+      if (target) target.classList.toggle("expanded");
+    });
     const handoffSel = document.getElementById("d-handoff") as HTMLSelectElement;
     document.getElementById("d-assign")!.addEventListener("click", () => {
       const id = this.store.selectedId;
@@ -1986,7 +1991,11 @@ export class Hud {
 
     const logs = this.store.logs.get(agent.id) ?? [];
     const logsEl = document.getElementById("logs")!;
-    const logHtml = (l: LogEntry) => `<div class="log ${l.kind}">${renderEntry(l)}</div>`;
+    const logHtml = (l: LogEntry) => {
+      const html = renderEntry(l);
+      const isLong = l.text.length > 200;
+      return `<div class="log ${l.kind}${isLong ? " collapsible" : ""}">${html}</div>`;
+    };
     // append-only fast path; rebuild when switching agents, after a clear, or
     // when the 500-entry cap shifted the window (tail no longer matches)
     const shifted =

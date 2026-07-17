@@ -286,6 +286,8 @@ class HttpMCPClient {
         headers["Mcp-Session-Id"] = this.sessionId;
       }
 
+      console.log(`[mcp:${this.label}] rpc ${method} → ${this.baseUrl} (auth=${!!this.config.authToken}, session=${!!this.sessionId})`);
+
       const res = await fetch(this.baseUrl, {
         method: "POST",
         headers,
@@ -294,7 +296,9 @@ class HttpMCPClient {
       });
 
       if (!res.ok) {
-        throw new Error(`MCP HTTP ${res.status}: ${await res.text().catch(() => res.statusText)}`);
+        const errBody = await res.text().catch(() => res.statusText);
+        console.error(`[mcp:${this.label}] rpc ${method} failed: ${res.status} ${errBody.slice(0, 200)}`);
+        throw new Error(`MCP HTTP ${res.status}: ${errBody}`);
       }
 
       // Capture session ID from initialize response (Streamable HTTP transport)
