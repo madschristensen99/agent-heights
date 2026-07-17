@@ -171,6 +171,7 @@ export class OfficeScene extends Phaser.Scene {
   private heliElevatorGfx: Phaser.GameObjects.Graphics | null = null;
   private heliDelivery: HelicopterDelivery | null = null;
   private heliSound: { stop: () => void } | null = null;
+  private pendingHeliAgents: string[] = [];
   private initialSyncDone = false;
 
   private world!: WorldLayer;
@@ -2836,6 +2837,11 @@ export class OfficeScene extends Phaser.Scene {
       duration: 2000,
       ease: "Cubic.inOut",
       onComplete: () => {
+        // Process any agents that were deferred during the helicopter
+        // animation — spawn them at the elevator exit now.
+        if (this.pendingHeliAgents.length > 0) {
+          this.syncPendingHeliAgents(exitX, exitY);
+        }
         if (this.heliAgent && sprite.active) {
           this.heliAgent.setPosition(exitX, exitY);
           this.heliAgent.setVisible(true);
@@ -2895,6 +2901,33 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** Create NPCs for agents deferred during the helicopter animation.
+   *  Called when the elevator lands — spawns each pending agent at the
+   *  elevator exit so they walk into the office naturally. */
+  private syncPendingHeliAgents(exitX: number, exitY: number): void {
+    const pending = this.pendingHeliAgents.splice(0);
+    for (const id of pending) {
+      const info = this.store.agents.get(id);
+      if (!info) continue;
+      if (info.appearance) {
+        const key = agentTextureKey(info);
+        generateCharTexture(this, key, info.appearance);
+        this.ensureCharAnimations(key);
+      }
+      const overflow = info.deskIndex - this.seats.length;
+      const seat =
+        this.seats[info.deskIndex] ??
+        this.extraSpots[overflow % Math.max(this.extraSpots.length, 1)] ??
+        this.spawnTile;
+      const spawnPx = { x: exitX / TILE_PX, y: exitY / TILE_PX };
+      const npc = new AgentNPC(this, this.grid, info, spawnPx, seat, (clicked) =>
+        this.store.select(clicked),
+      );
+      this.npcs.set(id, npc);
+      console.log(`[syncPendingHeliAgents] created NPC for ${info.name} (${id}) at elevator exit — total NPCs: ${this.npcs.size}`);
+    }
+  }
+
   /** Tear down all helicopter cosmetic state.  Called either from
    *  syncAgents (when the real NPC arrives) or from heliTakeoff's
    *  delayed call (fallback if the server is slow to confirm). */
@@ -2908,6 +2941,13 @@ export class OfficeScene extends Phaser.Scene {
     this.heliDelivery = null;
     this.heliSound?.stop();
     this.heliSound = null;
+    // Fallback: if the elevator never completed but we're tearing down,
+    // spawn any pending agents at the elevator exit inside the office.
+    if (this.pendingHeliAgents.length > 0) {
+      const exitX = 14 * TILE_PX + 32;
+      const exitY = 3 * TILE_PX + 52;
+      this.syncPendingHeliAgents(exitX, exitY);
+    }
   }
 
   /** Draw the projector screen frame on the top-left wall. */
@@ -3643,9 +3683,15 @@ export class OfficeScene extends Phaser.Scene {
         existing.sync(info);
       } else {
         console.log(`[syncAgents] NEW agent detected: id=${id} name=${info.name} desk=${info.deskIndex} appearance=${!!info.appearance}`);
-        // If the helicopter cinematic is still playing, tear it down — the
-        // real NPC replaces the cosmetic sprite immediately.
-        if (this.heliActive) this.endHelicopter();
+        // If the helicopter cinematic is still playing, defer NPC creation
+        // until the agent walks out of the elevator. The agent is already
+        // in the sidebar and interactable — they just shouldn't appear in
+        // the office until the animation completes.
+        if (this.heliActive) {
+          this.pendingHeliAgents.push(id);
+          console.log(`[syncAgents] deferring NPC for ${info.name} — helicopter active`);
+          continue;
+        }
         // Generate custom texture if agent has an appearance
         if (info.appearance) {
           const key = agentTextureKey(info);
@@ -3658,12 +3704,9 @@ export class OfficeScene extends Phaser.Scene {
           this.seats[info.deskIndex] ??
           this.extraSpots[overflow % Math.max(this.extraSpots.length, 1)] ??
           this.spawnTile;
-        // When delivered via helicopter, spawn at the elevator exit (top of
-        // office) instead of the front door.
         // On initial page load, spawn agents at their desk so they don't all
         // walk in from the door.
-        const spawnTile = this.heliActive ? { x: 14, y: 3 }
-          : !this.initialSyncDone ? seat
+        const spawnTile = !this.initialSyncDone ? seat
           : this.doorTile;
         const npc = new AgentNPC(this, this.grid, info, spawnTile, seat, (clicked) =>
           this.store.select(clicked),
