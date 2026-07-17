@@ -1877,7 +1877,7 @@ export class Hud {
 
     document.getElementById("d-title")!.innerHTML =
       `<span style="color:${agent.accent}">${esc(agent.name)}</span>` +
-      `<button class="rename-btn" id="d-rename" title="Rename agent" style="background:none;border:none;color:${agent.accent};cursor:pointer;font-size:0.75rem;padding:0 0.25rem;opacity:0.6;">✎</button>`;
+      `<button class="rename-btn" id="d-rename" title="Rename agent" style="background:none;border:none;color:${agent.accent};cursor:pointer;font-size:1.1rem;padding:0 0.25rem;opacity:0.7;">✎</button>`;
     document.getElementById("d-titlebar")!.style.borderColor = agent.accent;
 
     const renameBtn = document.getElementById("d-rename") as HTMLButtonElement | null;

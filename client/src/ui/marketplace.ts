@@ -18,19 +18,28 @@ const KNOWN_CATEGORIES = [
   "All",
   "Trading & Finance",
   "Development",
-  "Research & Analysis",
-  "Content & Writing",
-  "DevOps",
   "Data",
+  "Productivity",
+  "Communication",
+  "Design",
+  "Business",
+  "AI & ML",
+  "Lifestyle",
 ];
 
 function normalizeCategory(cat: string): string {
   const c = cat.toLowerCase().trim();
-  if (["trading", "finance", "payments", "banking"].some((k) => c.includes(k))) return "Trading & Finance";
-  if (["development", "git", "code", "devops", "infrastructure", "api"].some((k) => c.includes(k))) return "Development";
-  if (["research", "analysis"].some((k) => c.includes(k))) return "Research & Analysis";
-  if (["content", "writing", "marketing"].some((k) => c.includes(k))) return "Content & Writing";
+  if (["trading", "finance", "payments", "banking", "crypto", "commerce"].some((k) => c.includes(k))) return "Trading & Finance";
+  if (["development", "git", "code", "infrastructure", "api", "debugging", "testing"].some((k) => c.includes(k))) return "Development";
   if (["data", "analytics", "database"].some((k) => c.includes(k))) return "Data";
+  if (["productivity", "automation", "scheduling", "project-management", "project management"].some((k) => c.includes(k))) return "Productivity";
+  if (["communication", "support", "crm", "email", "chat"].some((k) => c.includes(k))) return "Communication";
+  if (["design", "ui", "ux", "browser", "media", "content", "writing", "cms"].some((k) => c.includes(k))) return "Design";
+  if (["business", "sales", "marketing", "hr", "legal", "seo"].some((k) => c.includes(k))) return "Business";
+  if (["ai", "ml", "machine learning", "reasoning", "memory", "search", "research", "documentation"].some((k) => c.includes(k))) return "AI & ML";
+  if (["lifestyle", "travel", "transport", "health", "personal"].some((k) => c.includes(k))) return "Lifestyle";
+  if (["devops", "cloud", "hosting", "monitoring"].some((k) => c.includes(k))) return "Development";
+  if (["security", "utility"].some((k) => c.includes(k))) return "Development";
   return cat.trim();
 }
 
