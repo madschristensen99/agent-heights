@@ -19,20 +19,20 @@
   <rect x="6" y="8" width="1" height="18" fill="#3a4a62"/>
   <!-- Right edge shadow -->
   <rect x="25" y="8" width="1" height="18" fill="#1a2a42"/>
-  <!-- Windows row 1 -->
-  <rect x="9" y="10" width="3" height="2" fill="#e878a0"/>
-  <rect x="14.5" y="10" width="3" height="2" fill="#e8a838"/>
+  <!-- Windows row 1 — purple (left) → magenta (mid) → red (right) -->
+  <rect x="9" y="10" width="3" height="2" fill="#9b6dd6"/>
+  <rect x="14.5" y="10" width="3" height="2" fill="#b8609a"/>
   <rect x="20" y="10" width="3" height="2" fill="#d65d5d"/>
-  <!-- Windows row 2 -->
-  <rect x="9" y="14" width="3" height="2" fill="#e87838"/>
-  <rect x="14.5" y="14" width="3" height="2" fill="#d65db1"/>
-  <rect x="20" y="14" width="3" height="2" fill="#e8c838"/>
-  <!-- Windows row 3 (side columns only — door below middle) -->
-  <rect x="9" y="18" width="3" height="2" fill="#d65d5d"/>
-  <rect x="20" y="18" width="3" height="2" fill="#e878a0"/>
-  <!-- Windows row 4 (side columns only — first floor flanking door) -->
-  <rect x="9" y="22" width="3" height="2" fill="#c9852c"/>
-  <rect x="20" y="22" width="3" height="2" fill="#e87838"/>
+  <!-- Windows row 2 — light purple (left) → pink (mid) → orange (right) -->
+  <rect x="9" y="14" width="3" height="2" fill="#c8a8d0"/>
+  <rect x="14.5" y="14" width="3" height="2" fill="#d090a0"/>
+  <rect x="20" y="14" width="3" height="2" fill="#d87838"/>
+  <!-- Windows row 3 (side only) — pale lavender (left) → orange (right) -->
+  <rect x="9" y="18" width="3" height="2" fill="#dcc8d8"/>
+  <rect x="20" y="18" width="3" height="2" fill="#dca838"/>
+  <!-- Windows row 4 (side only) — white-ish (left) → yellow (right) -->
+  <rect x="9" y="22" width="3" height="2" fill="#f0e8e0"/>
+  <rect x="20" y="22" width="3" height="2" fill="#e8c838"/>
   <!-- Door (4x8, centered, touches building base) -->
   <rect x="14" y="18" width="4" height="8" fill="#1a1e2e"/>
   <!-- Green yard spanning full width from building base to bottom -->
