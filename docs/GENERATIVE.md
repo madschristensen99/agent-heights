@@ -884,7 +884,7 @@ generates ~10 calls = ~$0.10. Very affordable.
 - **Generative office decor** — the transmogrifier pattern extends to office
   items. Type a description, get a custom plant, rug, or wall art with
   LLM-chosen colors and style. Premium decor is generated, not picked from a
-  catalog. See `OFFICE_CUSTOMIZATION.md` for the integration point.
+  catalog.
 - **Transmogrifier as creative hub** — the transmogrifier becomes the central
   object for all generative customization in the office. Beyond accessories,
   future versions could generate: custom desk skins, custom chair styles,
