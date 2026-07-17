@@ -379,7 +379,19 @@ body {
 
 .detail .logs {
   flex: 1;
-  min-height: 120px;
+  min-height: 60px;
+}
+
+.detail #d-mcp-section {
+  max-height: 180px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.detail #d-schedules {
+  max-height: 240px;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .log { margin-bottom: 6px; white-space: pre-wrap; word-break: break-word; }
@@ -2470,6 +2482,7 @@ kbd {
 /* ─── Agent Schedules ─── */
 .d-schedules {
   margin: 0.5rem 0;
+  flex-shrink: 0;
 }
 
 .sched-header {
