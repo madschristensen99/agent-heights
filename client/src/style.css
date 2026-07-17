@@ -2533,6 +2533,20 @@ kbd {
   color: var(--text);
 }
 
+.sched-enabled-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  background: var(--green);
+  color: #000;
+}
+
+.sched-item.disabled .sched-enabled-label {
+  background: var(--dim);
+  color: var(--text);
+}
+
 .sched-item-actions {
   display: flex;
   gap: 0.2rem;

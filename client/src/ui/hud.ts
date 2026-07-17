@@ -203,6 +203,7 @@ export class Hud {
   private _scheduleCreateOpen = false;
   private _renaming = false;
   private _scheduleEditing = false;
+  private scheduleCountdownTimer: ReturnType<typeof setInterval> | null = null;
   private feedCollapsed = false;
   private feedExpanded = false;
   private rosterCollapsed = false;
@@ -413,7 +414,35 @@ export class Hud {
       }
     });
 
+    // Live countdown for scheduled tasks
+    this.scheduleCountdownTimer = setInterval(() => this.updateScheduleCountdowns(), 1000);
+
     this.maybeOnboard();
+  }
+
+  private updateScheduleCountdowns(): void {
+    const els = document.querySelectorAll<HTMLElement>("[data-next-run]");
+    if (els.length === 0) return;
+    const now = Date.now();
+    for (const el of els) {
+      const ts = Number(el.dataset.nextRun);
+      if (!ts) continue;
+      const diff = ts - now;
+      if (diff <= 0) {
+        el.textContent = "now";
+        el.style.color = "var(--green)";
+      } else {
+        const h = Math.floor(diff / 3_600_000);
+        const m = Math.floor((diff % 3_600_000) / 60_000);
+        const s = Math.floor((diff % 60_000) / 1000);
+        el.textContent = h > 0 ? `in ${h}h ${m}m ${s}s` : m > 0 ? `in ${m}m ${s}s` : `in ${s}s`;
+      }
+    }
+  }
+
+  /** Stop the countdown timer (called on page unload). */
+  destroy(): void {
+    if (this.scheduleCountdownTimer) clearInterval(this.scheduleCountdownTimer);
   }
 
   // ---------------------------------------------------------- static wiring
@@ -2109,6 +2138,7 @@ export class Hud {
             <label class="sched-toggle">
               <input type="checkbox" data-sched-toggle="${s.id}" ${s.enabled ? "checked" : ""} />
               <span class="sched-name">${esc(s.name)}</span>
+              <span class="sched-enabled-label">${s.enabled ? "ON" : "OFF"}</span>
             </label>
             <div class="sched-item-actions">
               <button class="btn sched-edit" data-sched-edit="${s.id}" title="Edit">✎</button>
@@ -2118,7 +2148,8 @@ export class Hud {
           <div class="sched-task">${esc(s.task.slice(0, 120))}${s.task.length > 120 ? "…" : ""}</div>
           <div class="sched-meta">
             <span class="sched-cron">${esc(s.cronExpression)}</span>
-            · run #${s.runCount} · last: ${fmtRel(s.lastRunAt)} · next: ${fmtNext(s.nextRunAt)}
+            · run #${s.runCount} · last: ${fmtRel(s.lastRunAt)}
+            · next: <span data-next-run="${s.nextRunAt}">${fmtNext(s.nextRunAt)}</span>
             ${s.handoffTo ? ` · → ${esc(this.store.agents.get(s.handoffTo)?.name ?? "?")}` : ""}
           </div>
         </div>`;
@@ -2130,7 +2161,7 @@ export class Hud {
           <input class="sched-input" id="sched-name" placeholder="Schedule name (e.g. Daily Standup)" maxlength="100" />
           <textarea class="sched-input" id="sched-task" rows="2" placeholder="Task prompt…" maxlength="4000"></textarea>
           <div class="sched-form-row">
-            <select id="sched-preset">${presetOpts()}</select>
+            <select id="sched-preset"><option value="">Select preset…</option>${presetOpts()}</select>
             <input class="sched-input" id="sched-cron" placeholder="cron (min hour day month weekday)" value="0 9 * * *" />
           </div>
           <div class="sched-form-row">
