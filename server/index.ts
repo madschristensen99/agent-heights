@@ -385,6 +385,8 @@ wss.on("connection", async (ws, req) => {
     for (const mb of sess.manager.getMailboxSnapshots()) {
       ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
     }
+    // Send platform connection states so client knows which platforms are connected
+    ws.send(JSON.stringify({ type: "platform_connection", states: sess.manager.getPlatformConnectionStates() } satisfies ServerMsg));
   } else if (currentRoom && currentRoom.isPrivate && currentRoom.ownerId !== sess.user.id) {
     // Visitor in someone else's office — owner's snapshot
     const ownerSess = tenants.get(currentRoom.ownerId);
@@ -404,6 +406,8 @@ wss.on("connection", async (ws, req) => {
       for (const mb of ownerSess.manager.getMailboxSnapshots()) {
         ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
       }
+      // Send platform connection states
+      ws.send(JSON.stringify({ type: "platform_connection", states: ownerSess.manager.getPlatformConnectionStates() } satisfies ServerMsg));
     } else {
       ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], schedules: [], player: sess.player, settings: sess.manager.settings, world: null } satisfies ServerMsg));
     }
@@ -1697,6 +1701,19 @@ wss.on("connection", async (ws, req) => {
           if (!ownerSess) break;
           const events = ownerSess.manager.checkMailbox(msg.platform);
           sess.broadcast({ type: "mailbox_messages", platform: msg.platform, events });
+          break;
+        }
+        case "connect_platform": {
+          // Return current platform connection states so the client can show
+          // the appropriate auth modal. The actual connection happens via
+          // `hermes gateway setup` on the server side — this just triggers
+          // a fresh status poll and sends the result back.
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          ownerSess.manager.broadcastPlatformStates();
           break;
         }
         case "create_org": {

@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit, PlatformEvent } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -132,6 +132,10 @@ export class Store {
   private agentMemoryListeners = new Set<(agentId: string, messages: { role: string; content: string }[]) => void>();
   private mailboxUpdateListeners = new Set<(platform: string, flagUp: boolean, pendingCount: number, lastMessage: string) => void>();
   private mailboxMessagesListeners = new Set<(platform: string, events: PlatformEvent[]) => void>();
+  private platformConnectionListeners = new Set<(states: PlatformConnectionState[]) => void>();
+
+  /** Platform connection states from Hermes Agent gateway */
+  platformStates: PlatformConnectionState[] = [];
 
   /** Platform mailbox state: platform -> { flagUp, pendingCount, lastMessage } */
   platformMailboxes = new Map<string, { flagUp: boolean; pendingCount: number; lastMessage: string }>();
@@ -353,6 +357,20 @@ export class Store {
 
   offMailboxMessages(fn: (platform: string, events: PlatformEvent[]) => void): void {
     this.mailboxMessagesListeners.delete(fn);
+  }
+
+  onPlatformConnection(fn: (states: PlatformConnectionState[]) => void): void {
+    this.platformConnectionListeners.add(fn);
+  }
+
+  offPlatformConnection(fn: (states: PlatformConnectionState[]) => void): void {
+    this.platformConnectionListeners.delete(fn);
+  }
+
+  /** Check if a platform is connected via Hermes Agent gateway */
+  isPlatformConnected(platform: string): boolean {
+    const state = this.platformStates.find((s) => s.platform === platform);
+    return state?.connected ?? false;
   }
 
   triggerHelicopter(agent: HelicopterDelivery): void {
@@ -923,6 +941,11 @@ export class Store {
       }
       case "mailbox_messages": {
         for (const fn of this.mailboxMessagesListeners) fn(msg.platform, msg.events);
+        return;
+      }
+      case "platform_connection": {
+        this.platformStates = msg.states;
+        for (const fn of this.platformConnectionListeners) fn(msg.states);
         return;
       }
     }

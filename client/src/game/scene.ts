@@ -825,6 +825,11 @@ export class OfficeScene extends Phaser.Scene {
           }
           this.drawPlatformMailboxes();
 
+          // Subscribe to platform connection state updates (Hermes Agent gateway)
+          this.store.onPlatformConnection(() => {
+            this.drawPlatformMailboxes();
+          });
+
           // Subscribe to live mailbox updates from the server
           this.store.onMailboxUpdate((platform, flagUp, pendingCount, lastMessage) => {
             const mb = this.platformMailboxes.find((m) => m.platform === platform);
@@ -1428,8 +1433,17 @@ export class OfficeScene extends Phaser.Scene {
     if (!nearest) return false;
     const platform = nearest.platform;
     const net = this.game.registry.get("net") as import("../net").Net;
-    
-    // Set up a one-time listener for the response, with a timeout fallback
+
+    // Check if this platform is connected via Hermes Agent gateway
+    if (!this.store.isPlatformConnected(platform)) {
+      // Platform not connected — prompt the user to connect
+      this.showPlatformConnectModal(platform);
+      // Also ask server for fresh connection states
+      net.send({ type: "connect_platform", platform });
+      return true;
+    }
+
+    // Platform is connected — check mailbox as normal
     let responded = false;
     const timeout = this.time.delayedCall(2000, () => {
       if (!responded) {
@@ -1437,7 +1451,7 @@ export class OfficeScene extends Phaser.Scene {
         this.store.toast(`[${platform}] No response from server. Make sure you're in your office.`);
       }
     });
-    
+
     const onMessages = (respPlatform: string, events: any[]) => {
       if (responded || respPlatform !== platform) return;
       responded = true;
@@ -1445,9 +1459,43 @@ export class OfficeScene extends Phaser.Scene {
       this.store.offMailboxMessages(onMessages);
     };
     this.store.onMailboxMessages(onMessages);
-    
+
     net.send({ type: "check_mailbox", platform });
     return true;
+  }
+
+  /** Show a modal prompting the user to connect a platform via Hermes Agent. */
+  private showPlatformConnectModal(platform: string): void {
+    const state = this.store.platformStates.find((s) => s.platform === platform);
+    const status = state?.status ?? "Not configured";
+    const gatewayRunning = state?.gatewayRunning ?? false;
+
+    // Create a simple modal overlay
+    const cam = this.cameras.main;
+    const bg = this.add.rectangle(cam.centerX, cam.centerY, cam.width, cam.height, 0x000000, 0.7)
+      .setScrollFactor(0).setDepth(10000);
+
+    const panel = this.add.rectangle(cam.centerX, cam.centerY, 420, 260, 0x1a1a2e, 0.95)
+      .setStrokeStyle(2, 0x6c5ce7).setScrollFactor(0).setDepth(10001);
+
+    const title = this.add.text(cam.centerX, cam.centerY - 90, `Connect ${platform}`, {
+      fontSize: "20px", color: "#ffffff", fontStyle: "bold",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
+
+    const desc = this.add.text(cam.centerX, cam.centerY - 40,
+      `${platform} is not connected yet.\n\nHermes Agent gateway: ${gatewayRunning ? "Running" : "Not running"}\nStatus: ${status}\n\nRun this on your server:\nhermes gateway setup`,
+      { fontSize: "13px", color: "#a0a0b0", align: "center", wordWrap: { width: 380 } }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
+
+    const closeBtn = this.add.text(cam.centerX, cam.centerY + 80, "[ Close ]", {
+      fontSize: "16px", color: "#6c5ce7", fontStyle: "bold",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
+
+    const closeModal = () => {
+      bg.destroy(); panel.destroy(); title.destroy(); desc.destroy(); closeBtn.destroy();
+    };
+    closeBtn.on("pointerdown", closeModal);
+    bg.setInteractive().on("pointerdown", closeModal);
   }
 
   /** Try interacting with any new office object. Returns true if an interaction fired. */
@@ -2162,6 +2210,15 @@ export class OfficeScene extends Phaser.Scene {
         g.fillStyle(0xe84848, 1);
         g.fillRect(px + 13, py - 1, 1, 8);
         g.fillRect(px + 13, py + 7, 6, 1);
+      }
+
+      // Disconnected indicator — show a small red dot if platform not connected via Hermes
+      if (!this.store.isPlatformConnected(mb.platform)) {
+        g.fillStyle(0xff4444, 0.9);
+        g.fillCircle(px - 14, py - 10, 3);
+        g.fillStyle(0xffffff, 0.8);
+        g.fillRect(px - 15, py - 11, 2, 1);
+        g.fillRect(px - 15, py - 9, 2, 1);
       }
     }
   }
