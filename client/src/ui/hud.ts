@@ -202,6 +202,7 @@ export class Hud {
   private detailMcpListener: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
   private _scheduleCreateOpen = false;
   private _renaming = false;
+  private _scheduleEditing = false;
   private feedCollapsed = false;
   private feedExpanded = false;
   private rosterCollapsed = false;
@@ -2066,6 +2067,11 @@ export class Hud {
 
   private renderSchedules(agentId: string): void {
     const container = document.getElementById("d-schedules")!;
+
+    // Skip re-render if the user is actively editing or creating a schedule
+    // to avoid wiping out their in-progress form inputs.
+    if (this._scheduleEditing || this._scheduleCreateOpen) return;
+
     const agentSchedules = [...this.store.schedules.values()].filter((s) => s.agentId === agentId);
 
     container.hidden = false;
@@ -2145,6 +2151,7 @@ export class Hud {
     const addBtn = container.querySelector("#sched-add") as HTMLButtonElement | null;
     if (addBtn) addBtn.addEventListener("click", () => {
       this._scheduleCreateOpen = true;
+      this._scheduleEditing = false;
       this.renderSchedules(agentId);
     });
 
@@ -2152,6 +2159,13 @@ export class Hud {
     if (cancelBtn) cancelBtn.addEventListener("click", () => {
       this._scheduleCreateOpen = false;
       this.renderSchedules(agentId);
+    });
+
+    // Mark editing when create form inputs are focused
+    const createInputs = container.querySelectorAll<HTMLElement>("#sched-name, #sched-task, #sched-cron, #sched-preset, #sched-handoff");
+    createInputs.forEach((el) => {
+      el.addEventListener("focus", () => { this._scheduleEditing = true; });
+      el.addEventListener("blur", () => { this._scheduleEditing = false; });
     });
 
     const createBtn = container.querySelector("#sched-create") as HTMLButtonElement | null;
@@ -2163,6 +2177,7 @@ export class Hud {
       if (!name.trim() || !task.trim()) return;
       this.net.send({ type: "create_schedule", agentId, name, task, cronExpression: cron, handoffTo: handoff || undefined });
       this._scheduleCreateOpen = false;
+      this._scheduleEditing = false;
       this.renderSchedules(agentId);
     });
 
@@ -2209,15 +2224,23 @@ export class Hud {
               <button class="btn" id="sched-edit-cancel">CANCEL</button>
             </div>
           </div>`;
+        this._scheduleEditing = true;
+        const editInputs = item.querySelectorAll<HTMLElement>("#sched-edit-name, #sched-edit-task, #sched-edit-cron");
+        editInputs.forEach((el) => {
+          el.addEventListener("focus", () => { this._scheduleEditing = true; });
+        });
         const saveBtn = item.querySelector("#sched-edit-save") as HTMLButtonElement;
         saveBtn.addEventListener("click", () => {
           const name = (item.querySelector("#sched-edit-name") as HTMLInputElement).value;
           const task = (item.querySelector("#sched-edit-task") as HTMLTextAreaElement).value;
           const cron = (item.querySelector("#sched-edit-cron") as HTMLInputElement).value;
           this.net.send({ type: "update_schedule", scheduleId: id, name, task, cronExpression: cron });
+          this._scheduleEditing = false;
+          this.renderSchedules(agentId);
         });
         const cancelBtn = item.querySelector("#sched-edit-cancel") as HTMLButtonElement;
         cancelBtn.addEventListener("click", () => {
+          this._scheduleEditing = false;
           this.renderSchedules(agentId);
         });
       });
