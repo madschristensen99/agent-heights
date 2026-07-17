@@ -584,7 +584,8 @@ export type ClientMsg =
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
   | { type: "update_schedule"; scheduleId: string; enabled?: boolean; name?: string; task?: string; cronExpression?: string }
-  | { type: "delete_schedule"; scheduleId: string };
+  | { type: "delete_schedule"; scheduleId: string }
+  | { type: "rename"; agentId: string; name: string };
 
 export type ServerMsg =
   | {
@@ -634,7 +635,7 @@ export type ServerMsg =
   | { type: "org_members"; orgId: string; members: OrgMember[] }
   | { type: "org_created"; org: Organization }
   | { type: "org_error"; message: string }
-  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; currentPeriodEnd: number | null }
+  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null }
   | { type: "payment_required"; reason: "entrance" | "subscription"; message: string }
   | { type: "emote"; agentId: string; emote: string }
   | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string }

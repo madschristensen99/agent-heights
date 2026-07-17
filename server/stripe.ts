@@ -14,16 +14,47 @@ const ENTRANCE_FEE = 100;
 const SUBSCRIPTION_PRICE = 2000;
 const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
 
+// ── Free trial: 2 minutes per day for authed users who haven't paid entrance ──
+const FREE_TRIAL_DURATION_MS = 2 * 60 * 1000;
+const freeTrialMap = new Map<string, { date: string; expiresAt: number }>();
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function getFreeTrialStatus(userId: string): { active: boolean; expiresAt: number | null } {
+  const today = todayKey();
+  const entry = freeTrialMap.get(userId);
+  if (!entry || entry.date !== today) return { active: false, expiresAt: null };
+  const now = Date.now();
+  if (now >= entry.expiresAt) return { active: false, expiresAt: null };
+  return { active: true, expiresAt: entry.expiresAt };
+}
+
+export function startFreeTrial(userId: string): number | null {
+  const today = todayKey();
+  const now = Date.now();
+  const entry = freeTrialMap.get(userId);
+  if (entry && entry.date === today) {
+    return now < entry.expiresAt ? entry.expiresAt : null;
+  }
+  const expiresAt = now + FREE_TRIAL_DURATION_MS;
+  freeTrialMap.set(userId, { date: today, expiresAt });
+  console.log(`[free-trial] started for user ${userId}, expires at ${new Date(expiresAt).toISOString()}`);
+  return expiresAt;
+}
+
 export interface PaymentStatus {
   entrancePaid: boolean;
   subscriptionStatus: string;
   subscriptionActive: boolean;
   currentPeriodEnd: number | null;
+  freeTrialExpiresAt: number | null;
 }
 
 export async function getUserPaymentStatus(userId: string): Promise<PaymentStatus> {
   if (!isSupabaseConfigured || !isStripeConfigured) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, currentPeriodEnd: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, currentPeriodEnd: null, freeTrialExpiresAt: null };
   }
   try {
     const { data, error } = await supabaseAdmin
@@ -33,7 +64,8 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
       .maybeSingle();
 
     if (error || !data) {
-      return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null };
+      const trial = getFreeTrialStatus(userId);
+      return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -42,14 +74,19 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
       (data.subscription_status === "trialing") ||
       (data.subscription_status === "past_due" && data.current_period_end && data.current_period_end > now);
 
+    const entrancePaid = data.entrance_paid ?? false;
+    const freeTrialExpiresAt = entrancePaid ? null : getFreeTrialStatus(userId).expiresAt;
+
     return {
-      entrancePaid: data.entrance_paid ?? false,
+      entrancePaid,
       subscriptionStatus: data.subscription_status ?? "none",
       subscriptionActive,
       currentPeriodEnd: data.current_period_end ?? null,
+      freeTrialExpiresAt,
     };
   } catch {
-    return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null };
+    const trial = getFreeTrialStatus(userId);
+    return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
   }
 }
 

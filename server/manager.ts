@@ -852,6 +852,21 @@ export class AgentManager {
     });
   }
 
+  /** Rename an agent. */
+  rename(agentId: string, name: string): void {
+    const rt = this.agents.get(agentId);
+    if (!rt) return;
+    const cleanName = name.trim().slice(0, 24) || "Agent";
+    if (rt.info.name === cleanName) return;
+    const oldName = rt.info.name;
+    rt.info.name = cleanName;
+    this.session.record("rename", { agentId, oldName, newName: cleanName });
+    this.persist();
+    this.broadcast({ type: "agent", agent: rt.info });
+    void this.save.flushNow();
+    this.log(rt, "status", `Renamed from "${oldName}" to "${cleanName}".`);
+  }
+
   async fire(agentId: string): Promise<void> {
     if (agentId === YUKI_ID) {
       this.broadcast({ type: "toast", text: "You can't fire Yuki — she runs this office." });

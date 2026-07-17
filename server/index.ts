@@ -19,7 +19,7 @@ import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
-import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
+import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
@@ -432,16 +432,48 @@ wss.on("connection", async (ws, req) => {
   void sendOutfits(ws, sess);
 
   // Send payment status so the client can gate UI (entrance fee + subscription)
+  let freeTrialTimer: ReturnType<typeof setTimeout> | null = null;
   if (isSupabaseConfigured && isStripeConfigured) {
     try {
       const payStatus = await getUserPaymentStatus(user.id);
+
+      // Start a free trial for authed users who haven't paid the entrance fee
+      let freeTrialExpiresAt = payStatus.freeTrialExpiresAt;
+      if (!payStatus.entrancePaid && !freeTrialExpiresAt) {
+        freeTrialExpiresAt = startFreeTrial(user.id);
+      }
+
       ws.send(JSON.stringify({
         type: "payment_status",
         entrancePaid: payStatus.entrancePaid,
         subscriptionActive: payStatus.subscriptionActive,
         subscriptionStatus: payStatus.subscriptionStatus,
         currentPeriodEnd: payStatus.currentPeriodEnd,
+        freeTrialExpiresAt,
       } satisfies ServerMsg));
+
+      // Set timer to notify when free trial expires
+      if (freeTrialExpiresAt) {
+        const msUntilExpiry = freeTrialExpiresAt - Date.now();
+        if (msUntilExpiry > 0) {
+          freeTrialTimer = setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: "payment_required",
+                reason: "entrance",
+                message: "Your 2-minute free trial has ended. Pay the $1 entrance fee to keep playing.",
+              } satisfies ServerMsg));
+            }
+          }, msUntilExpiry);
+        } else {
+          // Already expired
+          ws.send(JSON.stringify({
+            type: "payment_required",
+            reason: "entrance",
+            message: "Your 2-minute free trial has ended. Pay the $1 entrance fee to keep playing.",
+          } satisfies ServerMsg));
+        }
+      }
     } catch (err) {
       console.error("[server] failed to get payment status:", err);
     }
@@ -542,7 +574,7 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all"]);
+      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all", "rename"]);
       if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
         sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
         return;
@@ -693,6 +725,9 @@ wss.on("connection", async (ws, req) => {
           break;
         case "recruit":
           await manager.recruit(msg.firedAgentId);
+          break;
+        case "rename":
+          manager.rename(msg.agentId, msg.name);
           break;
         case "railway_query":
           queryRailway().then((result) => {
@@ -1861,6 +1896,7 @@ wss.on("connection", async (ws, req) => {
     sess.clients.delete(ws);
     if (refreshTimer) clearTimeout(refreshTimer);
     if (expiryTimer) clearTimeout(expiryTimer);
+    if (freeTrialTimer) clearTimeout(freeTrialTimer);
     // Clean up agent log subscriptions
     if (sess.agentLogSubscriptions) {
       for (const unsub of sess.agentLogSubscriptions.values()) unsub();

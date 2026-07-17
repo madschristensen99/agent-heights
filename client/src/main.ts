@@ -17,6 +17,7 @@ net.onMessage = (msg) => {
       subscriptionActive: msg.subscriptionActive,
       subscriptionStatus: msg.subscriptionStatus,
       currentPeriodEnd: msg.currentPeriodEnd,
+      freeTrialExpiresAt: msg.freeTrialExpiresAt,
     });
   } else if (msg.type === "payment_required") {
     paymentOverlay.show();
@@ -33,10 +34,15 @@ net.onRefreshToken = async () => {
 const authOverlay = createAuthOverlay();
 const paymentOverlay = createPaymentOverlay();
 
-// Auto-show/hide payment overlay based on entrance fee status
+// Auto-show/hide payment overlay based on entrance fee + free trial status
 onPaymentChange((state) => {
   if (state && !state.entrancePaid) {
-    paymentOverlay.show();
+    const trialActive = state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
+    if (!trialActive) {
+      paymentOverlay.show();
+    } else {
+      paymentOverlay.hide();
+    }
   } else if (state && state.entrancePaid) {
     paymentOverlay.hide();
   }

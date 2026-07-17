@@ -5,6 +5,7 @@ export interface PaymentState {
   subscriptionActive: boolean;
   subscriptionStatus: string;
   currentPeriodEnd: number | null;
+  freeTrialExpiresAt: number | null;
 }
 
 type PaymentListener = (state: PaymentState | null) => void;
@@ -81,6 +82,7 @@ export async function refreshPaymentStatus(): Promise<void> {
       subscriptionActive: result.subscriptionActive as boolean,
       subscriptionStatus: result.subscriptionStatus as string,
       currentPeriodEnd: (result.currentPeriodEnd as number | null) ?? null,
+      freeTrialExpiresAt: (result.freeTrialExpiresAt as number | null) ?? null,
     });
   }
 }
@@ -101,6 +103,13 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
     <div style="position:relative;z-index:1;text-align:center;max-width:440px;width:90vw;">
       <h1 style="font-size:2.2rem;font-weight:800;margin:0 0 0.5rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HEIGHTS</h1>
       <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 1.5rem;letter-spacing:0.15em;text-transform:uppercase;">World Access & Agent Subscription</p>
+
+      <div id="payment-trial-section" style="display:none;flex-direction:column;gap:0.5rem;background:rgba(88,200,102,0.1);border:1px solid #3da64a;border-radius:12px;padding:1.2rem;margin-bottom:1rem;">
+        <h2 style="font-size:1rem;color:#58c866;margin:0;">Free Trial Active</h2>
+        <p style="color:#a0a5b4;font-size:0.85rem;margin:0;line-height:1.4;">You're playing for free! Time remaining:</p>
+        <p id="trial-countdown" style="font-size:1.6rem;font-weight:800;color:#58c866;margin:0;letter-spacing:0.05em;">2:00</p>
+        <p style="color:#7a8090;font-size:0.75rem;margin:0.3rem 0 0;line-height:1.3;">Pay the $1 entrance fee to keep playing after the trial ends.</p>
+      </div>
 
       <div id="payment-entrance-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
         <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">World Entrance Fee — $1</h2>
@@ -141,6 +150,8 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
   const entranceSection = overlay.querySelector("#payment-entrance-section") as HTMLDivElement;
   const subscriptionSection = overlay.querySelector("#payment-subscription-section") as HTMLDivElement;
   const activeSection = overlay.querySelector("#payment-active-section") as HTMLDivElement;
+  const trialSection = overlay.querySelector("#payment-trial-section") as HTMLDivElement;
+  const trialCountdown = overlay.querySelector("#trial-countdown") as HTMLParagraphElement;
   const loadingEl = overlay.querySelector("#payment-loading") as HTMLDivElement;
   const periodInfo = overlay.querySelector("#payment-period-info") as HTMLParagraphElement;
   const entranceBtn = overlay.querySelector("#pay-entrance-btn") as HTMLButtonElement;
@@ -148,15 +159,50 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
   const manageBtn = overlay.querySelector("#manage-subscription-btn") as HTMLButtonElement;
   const closeBtn = overlay.querySelector("#payment-close-btn") as HTMLButtonElement;
 
+  let countdownInterval: ReturnType<typeof setInterval> | null = null;
+
+  function updateCountdown() {
+    if (!currentState || !currentState.freeTrialExpiresAt) {
+      trialSection.style.display = "none";
+      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+      return;
+    }
+    const remaining = currentState.freeTrialExpiresAt - Date.now();
+    if (remaining <= 0) {
+      trialSection.style.display = "none";
+      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+      return;
+    }
+    trialSection.style.display = "flex";
+    const secs = Math.ceil(remaining / 1000);
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    trialCountdown.textContent = `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
   function renderState() {
     if (!currentState) {
       loadingEl.style.display = "block";
       entranceSection.style.display = "none";
       subscriptionSection.style.display = "none";
       activeSection.style.display = "none";
+      trialSection.style.display = "none";
+      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
       return;
     }
     loadingEl.style.display = "none";
+
+    // Show trial banner if trial is active
+    const trialActive = currentState.freeTrialExpiresAt && currentState.freeTrialExpiresAt > Date.now();
+    if (trialActive) {
+      trialSection.style.display = "flex";
+      if (!countdownInterval) countdownInterval = setInterval(updateCountdown, 1000);
+      updateCountdown();
+    } else {
+      trialSection.style.display = "none";
+      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+    }
+
     entranceSection.style.display = currentState.entrancePaid ? "none" : "flex";
     if (currentState.entrancePaid && !currentState.subscriptionActive) {
       subscriptionSection.style.display = "flex";

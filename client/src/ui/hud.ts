@@ -1285,8 +1285,12 @@ export class Hud {
             ? `<button class="btn" id="s-manage-sub">MANAGE SUBSCRIPTION</button>`
             : `<button class="btn primary" id="s-subscribe">SUBSCRIBE — $20/MONTH</button>`}
           <div class="sec" style="margin-top:1rem;">ENTRANCE FEE</div>
-          <div style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.entrancePaid ? "#53b86b" : "#e05d5d"};">
-            ${this.store.entrancePaid ? "✓ Paid — you have access to the world." : "⚠ Not paid — $1 one-time fee required."}
+          <div style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.entrancePaid ? "#53b86b" : this.store.freeTrialExpiresAt && this.store.freeTrialExpiresAt > Date.now() ? "#e8c44a" : "#e05d5d"};">
+            ${this.store.entrancePaid
+              ? "✓ Paid — you have access to the world."
+              : this.store.freeTrialExpiresAt && this.store.freeTrialExpiresAt > Date.now()
+                ? "⏳ Free trial active — 2 min/day. Pay $1 to keep playing."
+                : "⚠ Not paid — $1 one-time fee required."}
           </div>
         </div>
         <div class="tabpanel" data-panel="controls" hidden>
@@ -1872,8 +1876,37 @@ export class Hud {
     panel.hidden = false;
 
     document.getElementById("d-title")!.innerHTML =
-      `<span style="color:${agent.accent}">${esc(agent.name)}</span>`;
+      `<span style="color:${agent.accent}">${esc(agent.name)}</span>` +
+      `<button class="rename-btn" id="d-rename" title="Rename agent" style="background:none;border:none;color:${agent.accent};cursor:pointer;font-size:0.75rem;padding:0 0.25rem;opacity:0.6;">✎</button>`;
     document.getElementById("d-titlebar")!.style.borderColor = agent.accent;
+
+    const renameBtn = document.getElementById("d-rename") as HTMLButtonElement | null;
+    if (renameBtn) {
+      renameBtn.addEventListener("click", () => {
+        const titleEl = document.getElementById("d-title")!;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = agent.name;
+        input.maxLength = 24;
+        input.style.cssText = `color:${agent.accent};background:#111;border:1px solid ${agent.accent};border-radius:0.25rem;padding:0.15rem 0.4rem;font-size:0.9rem;font-family:inherit;width:10rem;`;
+        titleEl.innerHTML = "";
+        titleEl.appendChild(input);
+        input.focus();
+        input.select();
+        const commit = () => {
+          const newName = input.value.trim();
+          if (newName && newName !== agent.name) {
+            this.net.send({ type: "rename", agentId: agent.id, name: newName });
+          }
+          this.renderDetail();
+        };
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          if (e.key === "Escape") { this.renderDetail(); }
+        });
+        input.addEventListener("blur", commit);
+      });
+    }
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
       ${agent.role === "manager" ? "· 👔 MANAGER " : ""}· ${agent.provider} / ${esc(agent.model)}

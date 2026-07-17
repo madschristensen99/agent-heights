@@ -2976,7 +2976,7 @@ export class OfficeScene extends Phaser.Scene {
         this.seats[info.deskIndex] ??
         this.extraSpots[overflow % Math.max(this.extraSpots.length, 1)] ??
         this.spawnTile;
-      const spawnPx = { x: exitX / TILE_PX, y: exitY / TILE_PX };
+      const spawnPx = tileOf(exitX, exitY);
       const npc = new AgentNPC(this, this.grid, info, spawnPx, seat, (clicked) =>
         this.store.select(clicked),
       );

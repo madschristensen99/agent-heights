@@ -71,6 +71,7 @@ export class Store {
   subscriptionActive = true;
   subscriptionStatus = "none";
   currentPeriodEnd: number | null = null;
+  freeTrialExpiresAt: number | null = null;
   paymentRequired: { reason: "entrance" | "subscription"; message: string } | null = null;
   roomId: string | null = null;
   roomName: string = "";
@@ -165,6 +166,7 @@ export class Store {
     this.subscriptionActive = true;
     this.subscriptionStatus = "none";
     this.currentPeriodEnd = null;
+    this.freeTrialExpiresAt = null;
     this.paymentRequired = null;
     this.railwayData = null;
     this.railwayError = null;
@@ -724,6 +726,7 @@ export class Store {
         this.subscriptionActive = msg.subscriptionActive;
         this.subscriptionStatus = msg.subscriptionStatus;
         this.currentPeriodEnd = msg.currentPeriodEnd;
+        this.freeTrialExpiresAt = msg.freeTrialExpiresAt;
         break;
       case "payment_required":
         this.paymentRequired = { reason: msg.reason, message: msg.message };
