@@ -1,9 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <defs>
+    <clipPath id="icon-clip">
+      <rect width="32" height="32" rx="7"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#icon-clip)">
   <!-- Dark rounded background -->
   <rect width="32" height="32" rx="7" fill="#5a8fb8"/>
   <!-- Antenna with green signal light -->
   <rect x="15" y="3" width="2" height="3" fill="#3a4a62"/>
-  <rect x="15" y="2" width="2" height="1" fill="#58c866"/>
+  <rect x="15" y="2" width="2" height="1" fill="#e8a838"/>
   <!-- Roof overhang -->
   <rect x="9" y="6" width="14" height="2" fill="#3a4a62"/>
   <rect x="9" y="6" width="14" height="1" fill="#4a5a72"/>
@@ -14,19 +20,24 @@
   <!-- Right edge shadow -->
   <rect x="21" y="8" width="1" height="18" fill="#1a2a42"/>
   <!-- Windows row 1 -->
-  <rect x="11" y="10" width="2" height="2" fill="#58c866"/>
-  <rect x="15" y="10" width="2" height="2" fill="#3a8848"/>
-  <rect x="19" y="10" width="2" height="2" fill="#58c866"/>
+  <rect x="11" y="10" width="2" height="2" fill="#e878a0"/>
+  <rect x="15" y="10" width="2" height="2" fill="#36b5b0"/>
+  <rect x="19" y="10" width="2" height="2" fill="#d65d5d"/>
   <!-- Windows row 2 -->
-  <rect x="11" y="14" width="2" height="2" fill="#58c866"/>
-  <rect x="15" y="14" width="2" height="2" fill="#58c866"/>
-  <rect x="19" y="14" width="2" height="2" fill="#3a8848"/>
-  <!-- Windows row 3 -->
-  <rect x="11" y="18" width="2" height="2" fill="#3a8848"/>
-  <rect x="15" y="18" width="2" height="2" fill="#58c866"/>
-  <rect x="19" y="18" width="2" height="2" fill="#58c866"/>
-  <!-- Door -->
-  <rect x="15" y="22" width="2" height="4" fill="#1a1e2e"/>
-  <!-- Ground accent line (brand green) -->
-  <rect x="10" y="27" width="12" height="1" fill="#58c866" opacity="0.6"/>
+  <rect x="11" y="14" width="2" height="2" fill="#9b6dd6"/>
+  <rect x="15" y="14" width="2" height="2" fill="#d65db1"/>
+  <rect x="19" y="14" width="2" height="2" fill="#36b5b0"/>
+  <!-- Windows row 3 (side columns only — door below middle) -->
+  <rect x="11" y="18" width="2" height="2" fill="#d65d5d"/>
+  <rect x="19" y="18" width="2" height="2" fill="#e878a0"/>
+  <!-- Windows row 4 (side columns only — first floor flanking door) -->
+  <rect x="11" y="22" width="2" height="2" fill="#36b5b0"/>
+  <rect x="19" y="22" width="2" height="2" fill="#9b6dd6"/>
+  <!-- Door (4x8, centered, touches building base) -->
+  <rect x="14" y="18" width="4" height="8" fill="#1a1e2e"/>
+  <!-- Green yard spanning full width from building base to bottom -->
+  <rect x="0" y="26" width="32" height="6" fill="#3a8848"/>
+  <rect x="0" y="26" width="32" height="1" fill="#58c866"/>
+  <rect x="0" y="31" width="32" height="1" fill="#2a6838"/>
+  </g>
 </svg>
