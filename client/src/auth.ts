@@ -132,7 +132,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   overlay.style.cssText = `
     position: fixed; inset: 0; z-index: 9999;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background-image: linear-gradient(180deg, rgba(18,20,32,0.65) 0%, rgba(26,30,50,0.70) 100%), url(/assets/gameplay.png);
+    background-image: linear-gradient(180deg, rgba(18,20,32,0.90) 0%, rgba(26,30,50,0.92) 100%), url(/assets/gameplay.png);
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
