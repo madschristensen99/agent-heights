@@ -92,11 +92,51 @@ const TASK_IDLE_TIMEOUT_MS = 90 * 1000; // Abort if no events arrive for 90s (mo
 const SCHEDULER_TICK_MS = 30 * 1000;
 const MIN_SCHEDULE_INTERVAL_MS = 5 * 60 * 1000;
 
-/** Parse a 5-field cron expression and return the next run time after `from`.
- *  Supports: * / N ranges , and specific numbers. Does NOT support L, W, #, or names. */
-function nextCronRun(cron: string, from: Date = new Date()): number {
+/** Validate a 5-field cron expression and return a specific error message. */
+function validateCron(cron: string): { valid: boolean; error?: string } {
   const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) return Date.now() + 60_000;
+  if (parts.length !== 5)
+    return { valid: false, error: "Cron must have 5 fields: minute hour day-of-month month day-of-week." };
+  const fields: [string, number, number, string][] = [
+    [parts[0], 0, 59, "minute"],
+    [parts[1], 0, 23, "hour"],
+    [parts[2], 1, 31, "day of month"],
+    [parts[3], 1, 12, "month"],
+    [parts[4], 0, 6, "day of week"],
+  ];
+  for (const [field, min, max, name] of fields) {
+    for (const part of field.split(",")) {
+      if (part === "*") continue;
+      if (part.includes("/")) {
+        const [range, stepStr] = part.split("/");
+        const step = parseInt(stepStr, 10);
+        if (isNaN(step) || step <= 0)
+          return { valid: false, error: `Invalid step "${stepStr}" in ${name} field.` };
+        if (range !== "*") {
+          const [a, b] = range.split("-").map((n) => parseInt(n, 10));
+          if (isNaN(a) || isNaN(b) || a < min || a > max || b < min || b > max)
+            return { valid: false, error: `Invalid range "${range}" in ${name} field (valid: ${min}-${max}).` };
+        }
+      } else if (part.includes("-")) {
+        const [a, b] = part.split("-").map((n) => parseInt(n, 10));
+        if (isNaN(a) || isNaN(b) || a < min || a > max || b < min || b > max)
+          return { valid: false, error: `Invalid range "${part}" in ${name} field (valid: ${min}-${max}).` };
+      } else {
+        const v = parseInt(part, 10);
+        if (isNaN(v) || v < min || v > max)
+          return { valid: false, error: `Invalid value "${part}" in ${name} field (valid: ${min}-${max}).` };
+      }
+    }
+  }
+  return { valid: true };
+}
+
+/** Parse a 5-field cron expression and return the next run time after `from`.
+ *  Supports: * / N ranges , and specific numbers. Does NOT support L, W, #, or names.
+ *  Returns null for invalid expressions. */
+function nextCronRun(cron: string, from: Date = new Date()): number | null {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
   const [minF, hourF, domF, monthF, dowF] = parts;
 
   const parseField = (field: string, min: number, max: number): number[] => {
@@ -132,7 +172,7 @@ function nextCronRun(cron: string, from: Date = new Date()): number {
   const dows = parseField(dowF, 0, 6);
 
   if (minutes.length === 0 || hours.length === 0 || doms.length === 0 || months.length === 0 || dows.length === 0)
-    return Date.now() + 60_000;
+    return null;
 
   // Start from the next minute
   const d = new Date(from);
@@ -161,7 +201,7 @@ function nextCronRun(cron: string, from: Date = new Date()): number {
     }
     return d.getTime();
   }
-  return Date.now() + 60_000;
+  return null;
 }
 
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -334,7 +374,8 @@ export class AgentManager {
     for (const sched of saved?.schedules ?? []) {
       // recompute nextRunAt if it's in the past (server was down)
       if (sched.enabled && sched.nextRunAt <= Date.now()) {
-        sched.nextRunAt = nextCronRun(sched.cronExpression);
+        const recomputed = nextCronRun(sched.cronExpression);
+        sched.nextRunAt = recomputed ?? Date.now() + MIN_SCHEDULE_INTERVAL_MS;
       }
       this.schedules.set(sched.id, sched);
     }
@@ -1594,6 +1635,10 @@ export class AgentManager {
         },
       });
 
+      // Track tool calls to detect redundant loops
+      const toolCallCounts = new Map<string, number>();
+      const MAX_DUPLICATE_TOOL_CALLS = 5;
+
       for await (const ev of events) {
         if (abort.signal.aborted) return;
         resetIdleTimer();
@@ -1613,6 +1658,18 @@ export class AgentManager {
             finalText = ev.text;
           }
           this.log(rt, ev.kind, ev.text);
+
+          // Detect redundant tool calls — same tool+input signature repeated too many times
+          if (ev.kind === "tool") {
+            const sig = ev.text; // tool name + truncated input
+            const count = (toolCallCounts.get(sig) ?? 0) + 1;
+            toolCallCounts.set(sig, count);
+            if (count >= MAX_DUPLICATE_TOOL_CALLS) {
+              this.log(rt, "error", `Aborted: tool call repeated ${count} times — possible loop. Call: ${sig.slice(0, 100)}`);
+              abort.abort();
+              return;
+            }
+          }
         }
       }
 
@@ -1671,6 +1728,25 @@ export class AgentManager {
               this.setStatus(rt, "idle");
               this.persist();
             }, DONE_LINGER_MS);
+          }
+        }
+      } else if (abort.signal.aborted && this.agents.has(rt.info.id)) {
+        // Aborted — either by stop() or idle timeout.
+        // stop() already sets status to idle and clears the queue, so this branch
+        // is a no-op in that case. For idle timeout, the status is still
+        // "working"/"thinking" and needs cleanup to avoid the agent being
+        // permanently stuck and unresponsive to new tasks.
+        if (rt.info.status === "thinking" || rt.info.status === "working") {
+          if (rt.cardId) {
+            this.revertCard(rt.cardId);
+            rt.cardId = null;
+          }
+          rt.info.task = null;
+          if (rt.taskQueue.length > 0) {
+            this.drainQueue(rt);
+          } else {
+            this.setStatus(rt, "idle");
+            this.persist();
           }
         }
       }
@@ -2251,12 +2327,17 @@ export class AgentManager {
       return;
     }
     const cleanCron = cronExpression.trim();
-    if (!cleanCron || cleanCron.split(/\s+/).length !== 5) {
-      this.broadcast({ type: "toast", text: "Invalid cron expression. Use 5 fields: min hour day month weekday." });
+    const cronCheck = validateCron(cleanCron);
+    if (!cronCheck.valid) {
+      this.broadcast({ type: "toast", text: cronCheck.error! });
       return;
     }
     const now = Date.now();
     const nextRun = nextCronRun(cleanCron);
+    if (nextRun === null) {
+      this.broadcast({ type: "toast", text: "Invalid cron expression — could not compute next run time." });
+      return;
+    }
     // Enforce minimum interval
     if (nextRun - now < MIN_SCHEDULE_INTERVAL_MS) {
       this.broadcast({ type: "toast", text: `Schedule interval too short — minimum is ${MIN_SCHEDULE_INTERVAL_MS / 60000} minutes.` });
@@ -2290,9 +2371,23 @@ export class AgentManager {
     if (updates.task !== undefined) sched.task = updates.task.trim().slice(0, 4000) || sched.task;
     if (updates.cronExpression !== undefined) {
       const cleanCron = updates.cronExpression.trim();
-      if (cleanCron && cleanCron.split(/\s+/).length === 5) {
+      if (cleanCron) {
+        const cronCheck = validateCron(cleanCron);
+        if (!cronCheck.valid) {
+          this.broadcast({ type: "toast", text: cronCheck.error! });
+          return;
+        }
+        const nextRun = nextCronRun(cleanCron);
+        if (nextRun === null) {
+          this.broadcast({ type: "toast", text: "Invalid cron expression — could not compute next run time." });
+          return;
+        }
+        if (nextRun - Date.now() < MIN_SCHEDULE_INTERVAL_MS) {
+          this.broadcast({ type: "toast", text: `Schedule interval too short — minimum is ${MIN_SCHEDULE_INTERVAL_MS / 60000} minutes.` });
+          return;
+        }
         sched.cronExpression = cleanCron;
-        sched.nextRunAt = nextCronRun(cleanCron);
+        sched.nextRunAt = nextRun;
       }
     }
     this.persistSchedules();
@@ -2325,20 +2420,24 @@ export class AgentManager {
       const rt = this.agents.get(sched.agentId);
       if (!rt) continue;
 
-      // Update schedule metadata
-      sched.lastRunAt = now;
-      sched.runCount++;
-      sched.nextRunAt = nextCronRun(sched.cronExpression);
-      this.persistSchedules();
-      this.broadcast({ type: "schedule", schedule: sched });
+      // Agent busy — retry in 60s instead of permanently skipping
+      if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done") {
+        sched.nextRunAt = now + 60_000;
+        this.persistSchedules();
+        this.broadcast({ type: "schedule", schedule: sched });
+        this.log(rt, "status", `Schedule "${sched.name}" fired but ${rt.info.name} is busy — will retry in 1 min.`);
+        continue;
+      }
 
       // Fire the task
-      if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done") {
-        this.log(rt, "status", `Schedule "${sched.name}" fired but ${rt.info.name} is busy — skipping this run.`);
-      } else {
-        this.log(rt, "status", `Schedule fired: ${sched.name}`);
-        this.assign(sched.agentId, sched.task, sched.handoffTo ?? undefined);
-      }
+      sched.lastRunAt = now;
+      sched.runCount++;
+      const nextRun = nextCronRun(sched.cronExpression);
+      sched.nextRunAt = nextRun ?? Date.now() + MIN_SCHEDULE_INTERVAL_MS;
+      this.persistSchedules();
+      this.broadcast({ type: "schedule", schedule: sched });
+      this.log(rt, "status", `Schedule fired: ${sched.name}`);
+      this.assign(sched.agentId, sched.task, sched.handoffTo ?? undefined);
     }
   }
 

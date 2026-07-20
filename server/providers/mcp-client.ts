@@ -166,13 +166,25 @@ class StdioMCPClient {
     return result.content.map((c) => (c.type === "text" ? c.text ?? "" : "")).join("\n").trim();
   }
 
-  private async rpc(method: string, params: unknown): Promise<unknown> {
+  private async rpc(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
     if (!this.proc) throw new Error(`MCP server ${this.label} not started`);
     const id = this.nextId++;
     const req: JsonRpcRequest = { jsonrpc: "2.0", id, method, params };
     return new Promise<unknown>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       this.proc!.stdin.write(JSON.stringify(req) + "\n");
+
+      const onAbort = () => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+          reject(new Error(`MCP call aborted: ${method} (${this.label})`));
+        }
+      };
+      if (signal) {
+        if (signal.aborted) { onAbort(); return; }
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+
       setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
@@ -244,9 +256,9 @@ class HttpMCPClient {
     return this.toolsCache;
   }
 
-  async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+  async callTool(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
     await this.start();
-    const result = await this.rpc("tools/call", { name, arguments: args }) as {
+    const result = await this.rpc("tools/call", { name, arguments: args }, signal) as {
       content?: Array<{ type: string; text?: string }>;
       isError?: boolean;
     };
@@ -261,12 +273,21 @@ class HttpMCPClient {
     return result.content.map((c) => (c.type === "text" ? c.text ?? "" : "")).join("\n").trim();
   }
 
-  private async rpc(method: string, params: unknown): Promise<unknown> {
+  private async rpc(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
     const id = this.nextId++;
     const body: JsonRpcRequest = { jsonrpc: "2.0", id, method, params };
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    // Link external abort signal to our internal controller
+    if (signal) {
+      if (signal.aborted) {
+        controller.abort();
+      } else {
+        signal.addEventListener("abort", () => controller.abort(), { once: true });
+      }
+    }
 
     try {
       const headers: Record<string, string> = {
@@ -398,7 +419,7 @@ function clientKey(config: MCPServerConfig): string {
  * Returns Cline AgentTool objects ready to be passed to an agent.
  * Failures are logged and skipped — one broken server doesn't break the agent.
  */
-export async function loadMCPTools(servers: MCPServerConfig[]): Promise<AgentTool<any, any>[]> {
+export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { signal: AbortSignal }): Promise<AgentTool<any, any>[]> {
   const allTools: AgentTool<any, any>[] = [];
   const MIN_CALL_INTERVAL_MS = 500; // throttle to avoid API rate limits
 
@@ -434,7 +455,7 @@ export async function loadMCPTools(servers: MCPServerConfig[]): Promise<AgentToo
                 await new Promise((r) => setTimeout(r, MIN_CALL_INTERVAL_MS - elapsed));
               }
               lastCallTime = Date.now();
-              const result = await client!.callTool(def.name, input ?? {});
+              const result = await client!.callTool(def.name, input ?? {}, abortRef?.signal);
               return result || `(tool ${def.name} returned no output)`;
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);

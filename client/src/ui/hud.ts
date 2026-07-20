@@ -202,7 +202,7 @@ export class Hud {
   private detailMcpListener: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
   private _scheduleCreateOpen = false;
   private _renaming = false;
-  private _scheduleEditing = false;
+  private _scheduleEditingId: string | null = null;
   private scheduleCountdownTimer: ReturnType<typeof setInterval> | null = null;
   private feedCollapsed = false;
   private feedExpanded = false;
@@ -429,8 +429,13 @@ export class Hud {
       if (!ts) continue;
       const diff = ts - now;
       if (diff <= 0) {
-        el.textContent = "now";
-        el.style.color = "var(--green)";
+        if (diff < -120_000) {
+          el.textContent = "overdue";
+          el.style.color = "var(--red, #e05d5d)";
+        } else {
+          el.textContent = "now";
+          el.style.color = "var(--green)";
+        }
       } else {
         const h = Math.floor(diff / 3_600_000);
         const m = Math.floor((diff % 3_600_000) / 60_000);
@@ -2091,7 +2096,7 @@ export class Hud {
     }
     if (sayBtn) sayBtn.disabled = isBusy;
 
-    if (!this._scheduleEditing && !this._scheduleCreateOpen) {
+    if (!this._scheduleEditingId && !this._scheduleCreateOpen) {
       this.renderSchedules(agent.id);
     }
   }
@@ -2164,6 +2169,7 @@ export class Hud {
             <select id="sched-preset"><option value="">Select preset…</option>${presetOpts()}</select>
             <input class="sched-input" id="sched-cron" placeholder="cron (min hour day month weekday)" value="0 9 * * *" />
           </div>
+          <div class="sched-hint">Format: minute hour day-of-month month day-of-week · e.g. <code>0 9 * * *</code> = daily at 9 AM · <code>*/30 * * * *</code> = every 30 min</div>
           <div class="sched-form-row">
             <select id="sched-handoff">${handoffOpts()}</select>
             <button class="btn primary" id="sched-create">CREATE</button>
@@ -2180,7 +2186,7 @@ export class Hud {
     const addBtn = container.querySelector("#sched-add") as HTMLButtonElement | null;
     if (addBtn) addBtn.addEventListener("click", () => {
       this._scheduleCreateOpen = true;
-      this._scheduleEditing = false;
+      this._scheduleEditingId = null;
       this.renderSchedules(agentId);
     });
 
@@ -2190,12 +2196,6 @@ export class Hud {
       this.renderSchedules(agentId);
     });
 
-    // Mark editing when create form inputs are focused
-    const createInputs = container.querySelectorAll<HTMLElement>("#sched-name, #sched-task, #sched-cron, #sched-preset, #sched-handoff");
-    createInputs.forEach((el) => {
-      el.addEventListener("focus", () => { this._scheduleEditing = true; });
-      el.addEventListener("blur", () => { this._scheduleEditing = false; });
-    });
 
     const createBtn = container.querySelector("#sched-create") as HTMLButtonElement | null;
     if (createBtn) createBtn.addEventListener("click", () => {
@@ -2206,7 +2206,7 @@ export class Hud {
       if (!name.trim() || !task.trim()) return;
       this.net.send({ type: "create_schedule", agentId, name, task, cronExpression: cron, handoffTo: handoff || undefined });
       this._scheduleCreateOpen = false;
-      this._scheduleEditing = false;
+      this._scheduleEditingId = null;
       this.renderSchedules(agentId);
     });
 
@@ -2252,24 +2252,23 @@ export class Hud {
               <button class="btn primary" id="sched-edit-save" data-id="${id}">SAVE</button>
               <button class="btn" id="sched-edit-cancel">CANCEL</button>
             </div>
+            <div class="sched-hint">Format: minute hour day-of-month month day-of-week</div>
           </div>`;
-        this._scheduleEditing = true;
-        const editInputs = item.querySelectorAll<HTMLElement>("#sched-edit-name, #sched-edit-task, #sched-edit-cron");
-        editInputs.forEach((el) => {
-          el.addEventListener("focus", () => { this._scheduleEditing = true; });
-        });
+        this._scheduleEditingId = id;
+        const nameInput = item.querySelector("#sched-edit-name") as HTMLInputElement | null;
+        if (nameInput) nameInput.focus();
         const saveBtn = item.querySelector("#sched-edit-save") as HTMLButtonElement;
         saveBtn.addEventListener("click", () => {
           const name = (item.querySelector("#sched-edit-name") as HTMLInputElement).value;
           const task = (item.querySelector("#sched-edit-task") as HTMLTextAreaElement).value;
           const cron = (item.querySelector("#sched-edit-cron") as HTMLInputElement).value;
           this.net.send({ type: "update_schedule", scheduleId: id, name, task, cronExpression: cron });
-          this._scheduleEditing = false;
+          this._scheduleEditingId = null;
           this.renderSchedules(agentId);
         });
         const cancelBtn = item.querySelector("#sched-edit-cancel") as HTMLButtonElement;
         cancelBtn.addEventListener("click", () => {
-          this._scheduleEditing = false;
+          this._scheduleEditingId = null;
           this.renderSchedules(agentId);
         });
       });

@@ -116,6 +116,7 @@ export async function makeTools(cwd: string, opts?: {
   submitState?: { called: boolean; verified: boolean; callCount: number };
   mcpServers?: import("../../shared/types.js").MCPServerConfig[];
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
+  abortRef?: { signal: AbortSignal };
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -458,7 +459,7 @@ export async function makeTools(cwd: string, opts?: {
 
   // Load tools from any MCP servers declared in the agent config (e.g. Robinhood Trading MCP)
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
-    const mcpTools = await loadMCPTools(opts.mcpServers);
+    const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef);
     if (mcpTools.length > 0) {
       return [...baseWithWorld, ...mcpTools];
     }
@@ -490,6 +491,8 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   try {
     let agent = agents.get(agentId);
     const isExisting = !!agent;
+    // Mutable abort ref — updated before each run so MCP tools can check abort status
+    const abortRef = { signal: ctx.abort.signal };
     if (!agent) {
       const submitState = { called: false, verified: false, callCount: 0 };
       // Yuki chat with hireAgent capability gets special tools
@@ -575,6 +578,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         submitState: isChat ? undefined : submitState,
         mcpServers: ctx.mcpServers,
         onPostMessage: ctx.onPostMessage,
+        abortRef,
       });
       const maxIter = isChat ? (yukiHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
@@ -684,6 +688,9 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       }
     });
 
+    // Update abortRef so MCP tools (bound at agent creation time) use the current run's abort signal
+    abortRef.signal = ctx.abort.signal;
+
     // Start the run — use continue() if the agent already exists (has prior messages),
     // or if a sessionId was explicitly provided. Otherwise start fresh with run().
     const runPromise = (ctx.sessionId || isExisting)
@@ -718,6 +725,14 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
     ctx.abort.signal.removeEventListener("abort", onAbort);
     unsub();
+
+    // If aborted, return immediately without waiting for runPromise.
+    // runPromise may be blocked on an in-flight tool call (especially MCP tools)
+    // that doesn't respect the abort signal — awaiting it would hang the generator,
+    // preventing the caller's for-await loop from ever checking the abort flag.
+    if (ctx.abort.signal.aborted) {
+      return;
+    }
 
     // Get the final result
     let result;
