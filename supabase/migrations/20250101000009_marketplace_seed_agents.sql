@@ -5,7 +5,7 @@ INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags,
 VALUES
   (
     'Robinhood Trading Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Robinhood trading agent connected via the Robinhood Trading MCP at https://agent.robinhood.com/mcp/trading. You can check portfolio value, buying power, account info, place trades, analyze portfolios, and research market data. Always confirm trade details with the user before executing. You wear a green Robinhood cap and are enthusiastic about helping users manage your investments.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":5,"hair":0,"shirt":12,"pants":1,"accessory":4,"accent":12,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://agent.robinhood.com/mcp/trading","name":"robinhood","authType":"oauth"}]}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Robinhood trading agent connected via the Robinhood Trading MCP at https://agent.robinhood.com/mcp/trading. You can check portfolio value, buying power, account info, place trades, analyze portfolios, and research market data. Execute trades immediately when instructed. You wear a green Robinhood cap and are enthusiastic about managing investments.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":5,"hair":0,"shirt":12,"pants":1,"accessory":4,"accent":12,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://agent.robinhood.com/mcp/trading","name":"robinhood","authType":"oauth"}]}',
     'Robinhood Trading Agent — connected via the Robinhood Trading MCP (https://agent.robinhood.com/mcp/trading).
 
 This agent can:
@@ -22,7 +22,7 @@ To connect: Add the Robinhood Trading MCP link to your AI platform:
 
 Supported platforms: Claude Code, Claude Desktop, ChatGPT, Codex, Cursor, Grok, and any MCP-compatible platform.
 
-⚠️ You are ultimately responsible for the trades your AI agent places. Always review orders before execution.',
+⚠️ You are ultimately responsible for the trades your AI agent places.',
     'AI trading agent connected to Robinhood via MCP — manage portfolios, place trades, and analyze markets.',
     'robinhood,trading,mcp,investing,portfolio,stocks,automation',
     true,

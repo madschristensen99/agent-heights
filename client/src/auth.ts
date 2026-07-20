@@ -204,74 +204,16 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   `;
   document.body.appendChild(overlay);
 
-  // Office preview — a mini isometric-style preview of the Agent Heights office
-  const officePreview = document.createElement("div");
+  // Gameplay preview image
+  const officePreview = document.createElement("img");
+  officePreview.src = "/assets/gameplay.png";
+  officePreview.alt = "Agent Heights gameplay preview";
   officePreview.style.cssText = `
-    position: relative; z-index: 1; margin: 0 auto 1.2rem; width: 280px; height: 140px;
-    border-radius: 10px; overflow: hidden; border: 2px solid #2a2e42;
+    position: relative; z-index: 1; margin: 0 auto 1.2rem; width: 280px; height: auto;
+    border-radius: 10px; border: 2px solid #2a2e42;
     box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    background: linear-gradient(180deg, #2a3a52 0%, #3a5a7a 100%);
+    display: block;
   `;
-  // Floor tiles
-  const previewFloor = document.createElement("div");
-  previewFloor.style.cssText = `
-    position: absolute; bottom: 0; left: 0; right: 0; height: 65%;
-    background-image: url(/assets/tilesets/agentHeights.png);
-    background-size: 128px 128px;
-    background-repeat: repeat;
-    opacity: 0.7;
-  `;
-  officePreview.appendChild(previewFloor);
-  // Desks row
-  const previewDesks = document.createElement("div");
-  previewDesks.style.cssText = `
-    position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 6px;
-  `;
-  for (let i = 0; i < 4; i++) {
-    const desk = document.createElement("div");
-    desk.style.cssText = `
-      width: 28px; height: 18px; border-radius: 3px;
-      background: #6b5d4f; border: 1px solid #4a3f35;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    `;
-    const monitor = document.createElement("div");
-    monitor.style.cssText = `
-      position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-      width: 14px; height: 10px; background: #1a1a2e; border: 1px solid #333; border-radius: 2px;
-    `;
-    desk.appendChild(monitor);
-    previewDesks.appendChild(desk);
-  }
-  officePreview.appendChild(previewDesks);
-  // Mini character sprites sitting at desks
-  const previewChars = document.createElement("div");
-  previewChars.style.cssText = `
-    position: absolute; bottom: 22%; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 6px;
-  `;
-  for (let i = 0; i < 4; i++) {
-    const ch = document.createElement("div");
-    ch.style.cssText = `
-      width: 14px; height: 21px;
-      background-image: url(/assets/characters/char-${i}.png);
-      background-size: 112px 84px;
-      background-position: 0 0;
-      background-repeat: no-repeat;
-      image-rendering: pixelated;
-    `;
-    previewChars.appendChild(ch);
-  }
-  officePreview.appendChild(previewChars);
-  // Label
-  const previewLabel = document.createElement("div");
-  previewLabel.style.cssText = `
-    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
-    font-size: 0.6rem; color: #a0b0c0; letter-spacing: 0.1em; text-transform: uppercase;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-  `;
-  previewLabel.textContent = "Your Office";
-  officePreview.appendChild(previewLabel);
 
   // Insert office preview and character sprites into the placeholder
   const spritesContainer = overlay.querySelector("#auth-sprites") as HTMLDivElement;
