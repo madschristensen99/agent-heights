@@ -2134,6 +2134,12 @@ export class Hud {
     const presetOpts = (sel?: string) =>
       SCHEDULE_PRESETS.map((p) => `<option value="${p.cron}"${p.cron === sel ? " selected" : ""}>${esc(p.label)}</option>`).join("");
 
+    const cronToLabel = (cron: string): string => {
+      const preset = SCHEDULE_PRESETS.find((p) => p.cron === cron);
+      if (preset) return preset.label;
+      return cron;
+    };
+
     let html = `<div class="sched-header">⏰ SCHEDULED TASKS</div>`;
 
     for (const s of agentSchedules) {
@@ -2152,7 +2158,7 @@ export class Hud {
           </div>
           <div class="sched-task">${esc(s.task.slice(0, 120))}${s.task.length > 120 ? "…" : ""}</div>
           <div class="sched-meta">
-            <span class="sched-cron">${esc(s.cronExpression)}</span>
+            <span class="sched-cron">${esc(cronToLabel(s.cronExpression))}</span>
             · run #${s.runCount} · last: ${fmtRel(s.lastRunAt)}
             · next: <span data-next-run="${s.nextRunAt}">${fmtNext(s.nextRunAt)}</span>
             ${s.handoffTo ? ` · → ${esc(this.store.agents.get(s.handoffTo)?.name ?? "?")}` : ""}
@@ -2166,12 +2172,11 @@ export class Hud {
           <input class="sched-input" id="sched-name" placeholder="Schedule name (e.g. Daily Standup)" maxlength="100" />
           <textarea class="sched-input" id="sched-task" rows="2" placeholder="Task prompt…" maxlength="4000"></textarea>
           <div class="sched-form-row">
-            <select id="sched-preset"><option value="">Select preset…</option>${presetOpts()}</select>
-            <input class="sched-input" id="sched-cron" placeholder="cron (min hour day month weekday)" value="0 9 * * *" />
-          </div>
-          <div class="sched-hint">Format: minute hour day-of-month month day-of-week · e.g. <code>0 9 * * *</code> = daily at 9 AM · <code>*/30 * * * *</code> = every 30 min</div>
-          <div class="sched-form-row">
+            <select id="sched-preset"><option value="">Select frequency…</option>${presetOpts()}</select>
             <select id="sched-handoff">${handoffOpts()}</select>
+          </div>
+          <input class="sched-input" id="sched-cron" placeholder="Custom cron expression" value="0 9 * * *" style="display:none" />
+          <div class="sched-form-row">
             <button class="btn primary" id="sched-create">CREATE</button>
             <button class="btn" id="sched-cancel">CANCEL</button>
           </div>
@@ -2201,21 +2206,28 @@ export class Hud {
     if (createBtn) createBtn.addEventListener("click", () => {
       const name = (container.querySelector("#sched-name") as HTMLInputElement).value;
       const task = (container.querySelector("#sched-task") as HTMLTextAreaElement).value;
-      const cron = (container.querySelector("#sched-cron") as HTMLInputElement).value;
+      const presetSel = container.querySelector("#sched-preset") as HTMLSelectElement;
+      const cronInput = container.querySelector("#sched-cron") as HTMLInputElement;
+      const cron = presetSel.value === "__custom__" ? cronInput.value : presetSel.value;
       const handoff = (container.querySelector("#sched-handoff") as HTMLSelectElement).value;
-      if (!name.trim() || !task.trim()) return;
+      if (!name.trim() || !task.trim() || !cron.trim()) return;
       this.net.send({ type: "create_schedule", agentId, name, task, cronExpression: cron, handoffTo: handoff || undefined });
       this._scheduleCreateOpen = false;
       this._scheduleEditingId = null;
       this.renderSchedules(agentId);
     });
 
-    // Preset -> cron field sync
+    // Preset -> show/hide custom cron input
     const presetSel = container.querySelector("#sched-preset") as HTMLSelectElement | null;
     const cronInput = container.querySelector("#sched-cron") as HTMLInputElement | null;
     if (presetSel && cronInput) {
       presetSel.addEventListener("change", () => {
-        if (presetSel.value) cronInput.value = presetSel.value;
+        if (presetSel.value === "__custom__") {
+          cronInput.style.display = "block";
+          cronInput.focus();
+        } else {
+          cronInput.style.display = "none";
+        }
       });
     }
 
@@ -2248,20 +2260,32 @@ export class Hud {
             <input class="sched-input" id="sched-edit-name" value="${esc(sched.name)}" maxlength="100" />
             <textarea class="sched-input" id="sched-edit-task" rows="2" maxlength="4000">${esc(sched.task)}</textarea>
             <div class="sched-form-row">
-              <input class="sched-input" id="sched-edit-cron" value="${esc(sched.cronExpression)}" />
+              <select id="sched-edit-preset"><option value="">Select frequency…</option>${presetOpts(SCHEDULE_PRESETS.some((p) => p.cron === sched.cronExpression) ? sched.cronExpression : "__custom__")}</select>
               <button class="btn primary" id="sched-edit-save" data-id="${id}">SAVE</button>
               <button class="btn" id="sched-edit-cancel">CANCEL</button>
             </div>
-            <div class="sched-hint">Format: minute hour day-of-month month day-of-week</div>
+            <input class="sched-input" id="sched-edit-cron" value="${esc(sched.cronExpression)}" placeholder="Custom cron expression" style="display:${SCHEDULE_PRESETS.some((p) => p.cron === sched.cronExpression) ? "none" : "block"}" />
           </div>`;
         this._scheduleEditingId = id;
         const nameInput = item.querySelector("#sched-edit-name") as HTMLInputElement | null;
         if (nameInput) nameInput.focus();
+        const editPresetSel = item.querySelector("#sched-edit-preset") as HTMLSelectElement;
+        const editCronInput = item.querySelector("#sched-edit-cron") as HTMLInputElement;
+        if (editPresetSel && editCronInput) {
+          editPresetSel.addEventListener("change", () => {
+            if (editPresetSel.value === "__custom__") {
+              editCronInput.style.display = "block";
+              editCronInput.focus();
+            } else {
+              editCronInput.style.display = "none";
+            }
+          });
+        }
         const saveBtn = item.querySelector("#sched-edit-save") as HTMLButtonElement;
         saveBtn.addEventListener("click", () => {
           const name = (item.querySelector("#sched-edit-name") as HTMLInputElement).value;
           const task = (item.querySelector("#sched-edit-task") as HTMLTextAreaElement).value;
-          const cron = (item.querySelector("#sched-edit-cron") as HTMLInputElement).value;
+          const cron = editPresetSel.value === "__custom__" ? editCronInput.value : editPresetSel.value;
           this.net.send({ type: "update_schedule", scheduleId: id, name, task, cronExpression: cron });
           this._scheduleEditingId = null;
           this.renderSchedules(agentId);

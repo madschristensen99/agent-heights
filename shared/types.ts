@@ -383,7 +383,7 @@ export const SCHEDULE_PRESETS: SchedulePreset[] = [
   { label: "Daily at 5:00 PM", cron: "0 17 * * *" },
   { label: "Weekly (Mon 9:00 AM)", cron: "0 9 * * 1" },
   { label: "Weekly (Fri 5:00 PM)", cron: "0 17 * * 5" },
-  { label: "Custom cron…", cron: "" },
+  { label: "Custom…", cron: "__custom__" },
 ];
 
 export type LogKind = "status" | "text" | "tool" | "result" | "error" | "boss";

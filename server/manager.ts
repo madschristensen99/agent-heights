@@ -210,6 +210,8 @@ interface QueuedTask {
   task: string;
   handoffTo: string | null;
   cardId: string | null;
+  /** True when this task is being resumed after a server restart. */
+  isResume?: boolean;
 }
 
 interface TaskHistoryEntry {
@@ -259,6 +261,7 @@ export class AgentManager {
   private platformLastMessage = new Map<string, string>();
   private platformStates: PlatformConnectionState[] = [];
   private hermesClient: HermesClient | null = null;
+  private shuttingDown = false;
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
   setApiKey(key: string | null): void {
@@ -395,24 +398,36 @@ export class AgentManager {
     this.schedulerTimer = setInterval(() => this.tickSchedules(), SCHEDULER_TICK_MS);
 
     // Resume pending tasks for agents that were interrupted by a server restart
+    let resumedAny = false;
     for (const [agentId, tasks] of Object.entries(savedPendingTasks)) {
       if (tasks.length === 0) continue;
       const rt = this.agents.get(agentId);
       if (!rt) continue; // agent was fired or removed
       for (const t of tasks) {
-        rt.taskQueue.push({ task: t.task, handoffTo: t.handoffTo, cardId: t.cardId });
+        rt.taskQueue.push({ task: t.task, handoffTo: t.handoffTo, cardId: t.cardId, isResume: true });
       }
       const first = tasks[0];
       this.log(rt, "status", `Resuming task from before update: ${first.task}`);
       resumedCount++;
-      // Drain the first task immediately — the rest stay queued
+      resumedAny = true;
+      // Drain the first task immediately — the rest stay queued.
+      // The task string is passed as-is; the cline provider restores prior
+      // conversation history via loadMessages, so the agent sees the task
+      // again with full context of what it already did.
       this.drainQueue(rt);
     }
     if (resumedCount > 0) {
       console.log(`[agent-heights] resumed ${resumedCount} agent task(s) from pending state`);
     }
-    // Clear pending tasks from save — they're now in-memory
-    this.save.clearPendingTasks();
+    // Only clear pending tasks from save if we actually resumed them.
+    // If drainQueue started a task, persist() will have already written the
+    // new active task to pendingTasks — clearing here would race with that.
+    // drainQueue → startTask → runTask → persist() runs synchronously up to
+    // the first await, so by the time we get here the new pendingTasks are
+    // already set. We skip the clear so the latest state wins.
+    if (!resumedAny) {
+      this.save.clearPendingTasks();
+    }
   }
 
   setSettings(s: GameSettings, announce = true): void {
@@ -559,7 +574,6 @@ export class AgentManager {
   private persistPendingTasks(): void {
     const pendingTasks: Record<string, PendingTask[]> = {};
     for (const rt of this.agents.values()) {
-      if (rt.info.id === YUKI_ID || rt.info.id === HERMES_ID) continue;
       const tasks: PendingTask[] = [];
       if (rt.info.task && (rt.info.status === "thinking" || rt.info.status === "working")) {
         tasks.push({ task: rt.info.task, handoffTo: rt.handoffTo, cardId: rt.cardId });
@@ -572,6 +586,15 @@ export class AgentManager {
       }
     }
     this.save.setPendingTasks(pendingTasks);
+    // If there are active tasks, flush immediately rather than relying on the
+    // 400ms debounce. This ensures pending tasks survive an abrupt SIGKILL or
+    // crash that happens between persist() and the debounced flush.
+    if (Object.keys(pendingTasks).length > 0) {
+      const f = this.save.flushNow();
+      if (f && typeof (f as any).then === "function") {
+        void (f as Promise<void>).catch(() => {});
+      }
+    }
   }
 
   snapshot(): { agents: AgentInfo[]; logs: Record<string, LogEntry[]>; board: TaskCard[] } {
@@ -723,7 +746,7 @@ export class AgentManager {
   }
 
   /** Begin executing a task immediately (assumes agent is idle). */
-  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string): void {
+  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false): void {
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
@@ -742,7 +765,7 @@ export class AgentManager {
     this.log(rt, "status", `New task: ${cleanTask}`);
     if (target) this.log(rt, "status", `Will hand the result to ${target.info.name} when done.`);
     rt.cardId = cardId ?? null;
-    void this.runTask(rt, cleanTask);
+    void this.runTask(rt, cleanTask, isResume);
   }
 
   /** Drain the next queued task after the current one finishes. */
@@ -750,7 +773,7 @@ export class AgentManager {
     if (rt.taskQueue.length === 0) return;
     const next = rt.taskQueue.shift()!;
     this.log(rt, "status", `Starting queued task: ${next.task}`);
-    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined);
+    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume);
   }
 
   /** Hand the same task to every agent that isn't already busy. */
@@ -1253,6 +1276,7 @@ export class AgentManager {
    * Aborts in-flight tasks, stops loops, and persists everything to disk/DB.
    */
   prepareForShutdown(): void {
+    this.shuttingDown = true;
     // Stop autonomous loops so no new tasks start during drain
     this.stopThinkLoop();
     if (this.schedulerTimer) {
@@ -1261,7 +1285,6 @@ export class AgentManager {
     }
 
     for (const rt of this.agents.values()) {
-      if (rt.info.id === YUKI_ID || rt.info.id === HERMES_ID) continue;
 
       // Log the interruption for any agent with active work
       if (rt.info.task || rt.taskQueue.length > 0) {
@@ -1530,7 +1553,7 @@ export class AgentManager {
     ].join("\n\n");
   }
 
-  private async runTask(rt: AgentRuntime, task: string): Promise<void> {
+  private async runTask(rt: AgentRuntime, task: string, isResume = false): Promise<void> {
     rt.taskStartedAt = Date.now();
     // If Yuki receives a question as a task, answer it directly instead of delegating
     if (rt.info.id === YUKI_ID && isYukiQuestion(task)) {
@@ -1584,7 +1607,10 @@ export class AgentManager {
     // a review/assessment task (from notifyManagersOfCompletion or onPostMessage),
     // which the manager should process directly rather than delegate.
     const isReviewTask = isManager && /\b(failed|completed) their task\b.*\bReview\b/i.test(task);
-    const prompt = promptPrefix + (isManager && !isReviewTask ? this.managerBrief(task, rt) : task);
+    const resumePrefix = isResume
+      ? "You were interrupted mid-task by a server restart. Your previous conversation history has been restored. Continue where you left off — do NOT redo work you already completed. Here is your original task:\n\n"
+      : "";
+    const prompt = promptPrefix + resumePrefix + (isManager && !isReviewTask ? this.managerBrief(task, rt) : task);
 
     let sawError = false;
     let gotEvents = false;
@@ -1720,7 +1746,7 @@ export class AgentManager {
           this.setStatus(rt, "done");
           if (rt.cardId) this.completeCard(rt.cardId);
           rt.cardId = null;
-          if (rt.taskQueue.length > 0) {
+          if (rt.taskQueue.length > 0 && !this.shuttingDown) {
             this.drainQueue(rt);
           } else {
             rt.doneTimer = setTimeout(() => {
@@ -1730,12 +1756,14 @@ export class AgentManager {
             }, DONE_LINGER_MS);
           }
         }
-      } else if (abort.signal.aborted && this.agents.has(rt.info.id)) {
+      } else if (abort.signal.aborted && this.agents.has(rt.info.id) && !this.shuttingDown) {
         // Aborted — either by stop() or idle timeout.
         // stop() already sets status to idle and clears the queue, so this branch
         // is a no-op in that case. For idle timeout, the status is still
         // "working"/"thinking" and needs cleanup to avoid the agent being
         // permanently stuck and unresponsive to new tasks.
+        // During shutdown, prepareForShutdown handles state saving — skip cleanup
+        // to avoid racing with the final persist().
         if (rt.info.status === "thinking" || rt.info.status === "working") {
           if (rt.cardId) {
             this.revertCard(rt.cardId);

@@ -345,6 +345,7 @@ export class RelationalPersistence {
             seed: this.state.world.seed,
             fired_agents: this.state.world.firedAgents,
             chunk_overrides: this.state.world.chunkOverrides ?? {},
+            pending_tasks: this.state.pendingTasks ?? {},
           });
       } catch (err) {
         console.error("[db-rel] setWorld failed:", err);
