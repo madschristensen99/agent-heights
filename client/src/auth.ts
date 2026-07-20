@@ -132,7 +132,10 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   overlay.style.cssText = `
     position: fixed; inset: 0; z-index: 9999;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: linear-gradient(180deg, #121420 0%, #1a1e32 100%);
+    background-image: linear-gradient(180deg, rgba(18,20,32,0.82) 0%, rgba(26,30,50,0.85) 100%), url(/assets/gameplay.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     color: #e0e0e0;
     font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
     overflow-y: auto; padding: 2rem 1rem;
@@ -204,22 +207,10 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   `;
   document.body.appendChild(overlay);
 
-  // Gameplay preview image
-  const officePreview = document.createElement("img");
-  officePreview.src = "/assets/gameplay.png";
-  officePreview.alt = "Agent Heights gameplay preview";
-  officePreview.style.cssText = `
-    position: relative; z-index: 1; margin: 0 auto 1.2rem; width: 280px; height: auto;
-    border-radius: 10px; border: 2px solid #2a2e42;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    display: block;
-  `;
-
-  // Insert office preview and character sprites into the placeholder
+  // Insert character sprites into the placeholder
   const spritesContainer = overlay.querySelector("#auth-sprites") as HTMLDivElement;
   if (spritesContainer) {
     spritesContainer.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:0.8rem;margin-bottom:1.2rem;`;
-    spritesContainer.appendChild(officePreview);
     spritesContainer.appendChild(charRow);
   }
 
