@@ -335,10 +335,13 @@ export class OfficeScene extends Phaser.Scene {
     this.store.onAgentFrame((agentId, frame) => {
       // If this is the agent being viewed in the modal and on the screen tab, update the modal
       if (agentId === this.agentViewAgentId && this.agentViewTab === "screen") {
-        const content = document.getElementById("agent-view-content");
-        if (content) {
-          content.innerHTML = `<img src="data:image/jpeg;base64,${frame}" style="width: 100%; height: 100%; object-fit: contain;" />`;
+        const img = document.getElementById("agent-view-screen-img") as HTMLImageElement | null;
+        if (img) {
+          img.src = `data:image/jpeg;base64,${frame}`;
+          img.style.display = "block";
         }
+        const placeholder = document.getElementById("agent-view-screen-placeholder");
+        if (placeholder) placeholder.style.display = "none";
       }
       // If this agent is broadcasting, render on projector
       if (agentId === this.agentBroadcastAgentId) {
@@ -4503,7 +4506,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!agent) return;
 
     if (this.agentViewTab === "screen") {
-      content.innerHTML = this.renderAgentDashboard(agent);
+      content.innerHTML = this.renderAgentScreenTab(agent);
     } else if (this.agentViewTab === "files") {
       this.renderFilesTab(agentId, content);
     } else if (this.agentViewTab === "terminal") {
@@ -5079,6 +5082,31 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the Stats tab — agent info dashboard (reuses old dashboard layout). */
   private renderStatsTab(agent: AgentInfo): string {
     return this.renderAgentDashboard(agent);
+  }
+
+  /** Render the Screen tab — live browser screenshot with dashboard fallback. */
+  private renderAgentScreenTab(agent: AgentInfo): string {
+    const serverOrigin = window.location.origin;
+    return `
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:monospace;color:#c0c0d0;font-size:0.8rem;">
+        <div style="flex:1;position:relative;background:#0a0a12;overflow:hidden;">
+          <img id="agent-view-screen-img" src="${serverOrigin}/api/agent-screenshot/${agent.id}?t=${Date.now()}"
+            style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:auto;"
+            onerror="this.style.display='none';document.getElementById('agent-view-screen-placeholder').style.display='flex';"
+            onload="this.style.display='block';document.getElementById('agent-view-screen-placeholder').style.display='none';"
+          />
+          <div id="agent-view-screen-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#555;gap:8px;">
+            <div style="font-size:2rem;">🖥️</div>
+            <div style="font-size:0.85rem;color:#888;">Waiting for ${agent.name} to open a browser…</div>
+            <div style="font-size:0.7rem;color:#555;">The agent can use the <code style="color:#6aaadf;">browse_url</code> tool to navigate to websites.</div>
+          </div>
+        </div>
+        <div style="padding:6px 12px;background:#111122;border-top:1px solid #222244;display:flex;align-items:center;gap:8px;">
+          <span style="color:#555;font-size:0.7rem;">URL:</span>
+          <span id="agent-view-url" style="color:#6aaadf;font-size:0.7rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</span>
+        </div>
+      </div>
+    `;
   }
 
   /** Render an HTML dashboard for an agent — shown when no live screenshot is available. */

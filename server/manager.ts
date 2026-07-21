@@ -1506,6 +1506,7 @@ export class AgentManager {
       rosterLine,
       boardLine,
       `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
+      `You have a built-in browser! Use browse_url to navigate to any website, browser_screenshot to take a screenshot and visually inspect the page, browser_extract_text to read page content, browser_click to click elements, and browser_fill to fill input fields. When asked to look at, review, or test a website, use these tools.`,
       `=== API & TOOL BUDGET RULES (READ CAREFULLY) ===`,
       `You have a LIMITED number of tool calls per task. Wasting them on redundant API calls will cause your task to FAIL.`,
       ``,

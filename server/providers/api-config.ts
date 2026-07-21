@@ -28,7 +28,7 @@ const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_A
  * Map Swarms model names to Kimi equivalents.
  * When running on Kimi, the model id sent to the API must be a Kimi model.
  */
-const KIMI_DEFAULT_MODEL = "kimi-k2.7-code-highspeed";
+const KIMI_DEFAULT_MODEL = "kimi-k2.5";
 
 const SWARMS_TO_KIMI_MODEL: Record<string, string> = {
   "claude-sonnet-4-20250514": KIMI_DEFAULT_MODEL,
@@ -80,4 +80,45 @@ export function resolveModel(model: string, provider: ProviderName): string {
  */
 export function hasApiKey(): boolean {
   return !!KIMI_API_KEY || !!SWARMS_API_KEY;
+}
+
+/**
+ * Models known to support vision (image understanding).
+ * When an agent uses browser tools (screenshots), routing to a vision model
+ * gives the agent the ability to actually "see" and reason about screenshots.
+ */
+const VISION_CAPABLE_MODELS = new Set([
+  "claude-sonnet-4-20250514",
+  "claude-3-7-sonnet-latest",
+  "claude-opus-4",
+  "gpt-4o",
+  "gpt-4.1-mini",
+  "gpt-4.1-nano",
+  "gemini-1.5-pro",
+  "kimi-k2.5",
+  "kimi-k2.6",
+  "kimi-k2.7-code",
+  "kimi-k2.7-code-highspeed",
+  "kimi-k3",
+]);
+
+/**
+ * Check if a model supports vision (image input).
+ */
+export function isVisionCapable(model: string): boolean {
+  return VISION_CAPABLE_MODELS.has(model);
+}
+
+/**
+ * If the current provider maps to Kimi (which may not support vision),
+ * and the task requires vision, we still send the model as-is — the
+ * screenshot tool returns a text description. Vision-capable providers
+ * (Swarms with Claude/GPT-4o) will get the actual image in context.
+ *
+ * This function is a placeholder for future routing logic — for now,
+ * it just returns the resolved model. When per-user API keys support
+ * vision models, this can route accordingly.
+ */
+export function resolveVisionModel(model: string, provider: ProviderName): string {
+  return resolveModel(model, provider);
 }

@@ -1,9 +1,9 @@
 /**
  * Agent Screenshot Manager
  *
- * Captures screenshots from agents that have Playwright or Chrome DevTools
- * MCP servers configured.  Uses the MCP `callTool` interface to invoke the
- * screenshot tool periodically, then broadcasts frames to viewing clients.
+ * Captures screenshots from agents' browsers. Two sources:
+ *  1. Built-in Playwright browser (server/providers/browser.ts) — always available
+ *  2. MCP browser servers (Playwright/Chrome DevTools MCP) — when configured
  *
  * Two modes:
  *  - Private view: a single client requested frames for an agent modal
@@ -12,6 +12,7 @@
 import type { ServerMsg } from "../../shared/types.js";
 import type { MCPServerConfig } from "./mcp-client.js";
 import { clientCache } from "./mcp-client.js";
+import { browserScreenshot, browserLastFrame, hasBrowser } from "./browser.js";
 
 interface BroadcastFn {
   (msg: ServerMsg): void;
@@ -21,10 +22,14 @@ interface Viewer {
   broadcast: BroadcastFn;
 }
 
+type CaptureSource = "builtin" | "mcp";
+
 interface AgentCapture {
   agentId: string;
-  serverKey: string;
-  toolName: string;
+  source: CaptureSource;
+  /** For MCP captures: the server key + tool name. */
+  serverKey?: string;
+  toolName?: string;
   interval: ReturnType<typeof setInterval>;
   viewers: Map<string, Viewer>;
   broadcasting: boolean;
@@ -69,8 +74,9 @@ export class ScreenshotManager {
     viewer?: { id: string; broadcast: BroadcastFn },
     roomBroadcast?: BroadcastFn,
   ): boolean {
-    const detected = detectBrowserMCP(mcpServers);
-    if (!detected) return false;
+    // Determine capture source: prefer MCP if available, fall back to built-in
+    const mcpDetected = detectBrowserMCP(mcpServers);
+    const source: CaptureSource = mcpDetected ? "mcp" : "builtin";
 
     let capture = this.captures.get(agentId);
     if (capture) {
@@ -84,15 +90,16 @@ export class ScreenshotManager {
 
     capture = {
       agentId,
-      serverKey: detected.key,
-      toolName: detected.toolName,
+      source,
+      serverKey: mcpDetected?.key,
+      toolName: mcpDetected?.toolName,
       interval: setInterval(() => this.captureFrame(agentId), this.frameIntervalMs),
       viewers: viewer ? new Map([[viewer.id, viewer]]) : new Map(),
       broadcasting: !!roomBroadcast,
       roomBroadcast: roomBroadcast ?? null,
     };
     this.captures.set(agentId, capture);
-    console.log(`[screenshot] started capture for agent ${agentId} (tool: ${detected.toolName})`);
+    console.log(`[screenshot] started capture for agent ${agentId} (source: ${source})`);
     return true;
   }
 
@@ -134,14 +141,30 @@ export class ScreenshotManager {
     if (!capture) return;
 
     try {
-      const result = await callScreenshotTool(capture.serverKey, capture.toolName);
-      if (!result) return;
+      let frame: string | null = null;
 
-      let frame = result;
-      if (frame.startsWith("data:image/")) {
-        const commaIdx = frame.indexOf(",");
-        if (commaIdx > 0) frame = frame.slice(commaIdx + 1);
+      if (capture.source === "mcp" && capture.serverKey && capture.toolName) {
+        frame = await callScreenshotTool(capture.serverKey, capture.toolName);
+        if (frame && frame.startsWith("data:image/")) {
+          const commaIdx = frame.indexOf(",");
+          if (commaIdx > 0) frame = frame.slice(commaIdx + 1);
+        }
+      } else {
+        // Built-in Playwright browser
+        if (hasBrowser(agentId)) {
+          // Use cached frame if available (updated by browser_screenshot tool calls)
+          frame = browserLastFrame(agentId);
+          // If no cached frame, take one now
+          if (!frame) {
+            frame = await browserScreenshot(agentId);
+          }
+        } else {
+          // No browser session yet — skip
+          return;
+        }
       }
+
+      if (!frame) return;
 
       const msg: ServerMsg = { type: "agent_frame", agentId, frame };
 

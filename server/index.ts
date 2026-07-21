@@ -17,6 +17,7 @@ import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUs
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
+import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
@@ -298,6 +299,29 @@ const server = createServer((req, res) => {
         res.end(`<html><body style="background:#111;color:#e0e0e0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2 style="color:#e05d5d;">Authentication failed</h2><p>${result.error ?? "Unknown error"}</p></div><script>setTimeout(function(){try{window.close();}catch(e){}setTimeout(function(){window.location.href='/';},2000);},1000);</script></body></html>`);
       }
     });
+    return;
+  }
+
+  // Agent screenshot endpoint — serves the latest browser frame as JPEG for iframe src
+  if (req.url?.split("?")[0]?.startsWith("/api/agent-screenshot/")) {
+    const agentId = req.url.split("/api/agent-screenshot/")[1]?.split("?")[0];
+    if (!agentId) {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Missing agent id");
+      return;
+    }
+    const frame = browserLastFrame(agentId);
+    if (frame) {
+      res.writeHead(200, {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(Buffer.from(frame, "base64"));
+    } else {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("No screenshot available");
+    }
     return;
   }
 
@@ -695,6 +719,8 @@ wss.on("connection", async (ws, req) => {
           break;
         case "fire":
           await manager.fire(msg.agentId);
+          screenshots.stopAll(msg.agentId);
+          await closeAgentBrowser(msg.agentId);
           break;
         case "clear":
           manager.clearChat(msg.agentId);
@@ -1472,8 +1498,8 @@ wss.on("connection", async (ws, req) => {
             agent.info.mcpServers,
             { id: sess.user.id, broadcast: sess.broadcast },
           );
-          // If no browser MCP is available, the client dashboard stays visible.
-          // No toast needed — the dashboard is always useful.
+          // Built-in Playwright browser is always available; MCP is optional.
+          // The client shows a placeholder until the agent opens a browser session.
           break;
         }
         case "agent_view_stop": {
@@ -1965,6 +1991,9 @@ wss.on("connection", async (ws, req) => {
 
 const logMaintenanceInterval = startLogMaintenance();
 
+// Periodically clean up idle agent browser contexts (every 5 minutes)
+const browserCleanupInterval = setInterval(() => { void cleanupIdleBrowsers(); }, 5 * 60 * 1000);
+
 server.listen(SERVER_PORT, () => {
   console.log(`[agent-heights] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
   if (isSupabaseConfigured) {
@@ -2006,6 +2035,9 @@ async function shutdown(): Promise<void> {
   stopRailwayMCP();
   stopRedis();
   clearInterval(logMaintenanceInterval);
+  clearInterval(browserCleanupInterval);
+  screenshots.destroy();
+  await destroyAllBrowsers();
 
   // 4. Flush all saves to disk/DB (pending tasks are included)
   const flushes: Promise<void>[] = [];

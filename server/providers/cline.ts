@@ -13,6 +13,7 @@ import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
 import { loadMCPTools } from "./mcp-client.js";
 import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
+import { browserNavigate, browserScreenshot, browserExtractText, browserClick, browserFill } from "./browser.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -258,6 +259,96 @@ export async function makeTools(cwd: string, opts?: {
     },
   };
 
+  // ── Built-in browser tools (Playwright, no MCP required) ──────────
+  const browserTools: AgentTool<any, any>[] = [
+    {
+      name: "browse_url",
+      description: "Navigate your browser to a URL. Use this to open a website you need to look at or interact with. Returns the page title and final URL.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "The URL to navigate to (e.g. 'https://example.com')" },
+        },
+        required: ["url"],
+      },
+      async execute(input: any) {
+        try {
+          return await browserNavigate(opts?.agentId ?? "unknown", input.url);
+        } catch (err) {
+          return `Failed to navigate to ${input.url}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    },
+    {
+      name: "browser_screenshot",
+      description: "Take a screenshot of the current page in your browser. The screenshot is sent to your vision context so you can visually inspect the page. Use this after browse_url to see what the website looks like.",
+      inputSchema: { type: "object", properties: {} },
+      async execute() {
+        try {
+          const frame = await browserScreenshot(opts?.agentId ?? "unknown");
+          // Return image content for vision-capable models (Kimi K2.5, Claude, GPT-4o).
+          // The SDK's AgentImagePart format is { type: "image", image: dataUrl, mediaType }.
+          // If the model/provider doesn't support image content, it falls back to text.
+          return [
+            { type: "text", text: `Screenshot captured from the browser. The image is shown below for visual inspection.` },
+            { type: "image", image: `data:image/jpeg;base64,${frame}`, mediaType: "image/jpeg" },
+          ];
+        } catch (err) {
+          return `Screenshot failed: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    },
+    {
+      name: "browser_extract_text",
+      description: "Extract all visible text content from the current page. Useful for reading page content without taking a screenshot. Returns up to 8000 chars of text.",
+      inputSchema: { type: "object", properties: {} },
+      async execute() {
+        try {
+          return await browserExtractText(opts?.agentId ?? "unknown");
+        } catch (err) {
+          return `Text extraction failed: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    },
+    {
+      name: "browser_click",
+      description: "Click an element on the current page. Provide a CSS selector (e.g. 'button#submit') or visible text (e.g. 'Sign Up').",
+      inputSchema: {
+        type: "object",
+        properties: {
+          selector: { type: "string", description: "CSS selector or visible text of the element to click" },
+        },
+        required: ["selector"],
+      },
+      async execute(input: any) {
+        try {
+          return await browserClick(opts?.agentId ?? "unknown", input.selector);
+        } catch (err) {
+          return `Click failed: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    },
+    {
+      name: "browser_fill",
+      description: "Fill an input field on the current page with a value. Provide a CSS selector for the input element and the value to type.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          selector: { type: "string", description: "CSS selector for the input element (e.g. 'input#email')" },
+          value: { type: "string", description: "The value to fill into the field" },
+        },
+        required: ["selector", "value"],
+      },
+      async execute(input: any) {
+        try {
+          return await browserFill(opts?.agentId ?? "unknown", input.selector, input.value);
+        } catch (err) {
+          return `Fill failed: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    },
+  ];
+
   // ── Custom tools not provided by the SDK ───────────────────────────
 
   const writeFilesTool: AgentTool<any, any> = {
@@ -311,7 +402,7 @@ export async function makeTools(cwd: string, opts?: {
     },
   };
 
-  const base = [...builtinTools, submitTool, writeFilesTool, listFilesTool];
+  const base = [...builtinTools, ...browserTools, submitTool, writeFilesTool, listFilesTool];
 
   // ── Shared workspace tools ─────────────────────────────────────────
   const sharedReadTool: AgentTool<any, any> = {
