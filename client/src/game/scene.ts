@@ -4249,8 +4249,8 @@ export class OfficeScene extends Phaser.Scene {
             this.selectAgent(aid);
           } else if (this.pendingInteract) {
             this.pendingInteract = false;
-            // Simulate E press
-            this.tryOfficeInteract(time) || this.tryPlatformMailboxInteract();
+            // Simulate E press via touchInput so the full ePressed block runs next frame
+            touchInput.action = "interact";
           }
         }
       } else {
@@ -4271,7 +4271,7 @@ export class OfficeScene extends Phaser.Scene {
           this.selectAgent(aid);
         } else if (this.pendingInteract) {
           this.pendingInteract = false;
-          this.tryOfficeInteract(time) || this.tryPlatformMailboxInteract();
+          touchInput.action = "interact";
         }
       } else {
         vx = dx / dist;
