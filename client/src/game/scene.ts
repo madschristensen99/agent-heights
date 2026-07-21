@@ -255,6 +255,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerPath: Tile[] = [];
   private playerTargetPx: { x: number; y: number } | null = null;
   private pendingInteract: boolean = false;
+  private pendingAgentId: string | null = null;
   private pathMarker: Phaser.GameObjects.Arc | null = null;
 
   // ── Camera controls (pinch-zoom, pan, recenter) ──
@@ -675,7 +676,7 @@ export class OfficeScene extends Phaser.Scene {
               .setDepth(5 + this.yukiSeat.y * TILE_PX + 1);
 
             this.yuki = new YukiNPC(this, this.grid, this.yukiSeat, (clicked) =>
-              this.store.select(clicked),
+              this.walkToAgent(clicked),
             );
 
             // clickable zone over Yuki's office — clicking anywhere inside opens her chat
@@ -686,7 +687,7 @@ export class OfficeScene extends Phaser.Scene {
             const zh = (zo.y1 - zo.y0 + 1) * TILE_PX;
             this.yukiOfficeZone = this.add.zone(zx, zy, zw, zh);
             this.yukiOfficeZone.setInteractive({ useHandCursor: true });
-            this.yukiOfficeZone.on("pointerdown", () => this.store.select(YUKI_ID));
+            this.yukiOfficeZone.on("pointerdown", () => this.walkToAgent(YUKI_ID));
           }
 
           // Hermes — right-facing chair at the mail room desk
@@ -698,7 +699,7 @@ export class OfficeScene extends Phaser.Scene {
               .setDepth(5 + this.hermesSeat.y * TILE_PX + 1);
 
             this.hermes = new HermesNPC(this, this.grid, this.hermesSeat, (clicked) =>
-              this.store.select(clicked),
+              this.walkToAgent(clicked),
             );
           }
 
@@ -1019,7 +1020,11 @@ export class OfficeScene extends Phaser.Scene {
             .setScrollFactor(0);
 
           const onResize = () => {
-            if (this.userZoom === null) cam.setZoom(this.defaultZoom());
+            if (this.userZoom === null) {
+              cam.setZoom(this.defaultZoom());
+            } else {
+              cam.setZoom(this.clampZoom(this.userZoom));
+            }
             this.drawVignette();
             if (this.dayNightTint) this.dayNightTint.setSize(this.scale.width, this.scale.height);
             if (this.brightnessBoost) this.brightnessBoost.setSize(this.scale.width, this.scale.height);
@@ -1342,7 +1347,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private minZoom(): number {
-    return this.defaultZoom() * 0.4;
+    return this.defaultZoom();
   }
 
   private maxZoom(): number {
@@ -1472,34 +1477,18 @@ export class OfficeScene extends Phaser.Scene {
   private handleTapToWalk(pointer: Phaser.Input.Pointer): void {
     if (this.inPhoneBooth) return;
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const targetTile = tileOf(worldPoint.x, worldPoint.y);
 
-    // Check if tapping near an interactable
+    // Only walk when tapping near an interactable — not empty ground
     const interactable = this.findInteractableAt(worldPoint.x, worldPoint.y);
     if (interactable) {
-      // Walk to a tile adjacent to the interactable, then fire E
       const dest = this.findAdjacentWalkable(interactable.tile);
       if (dest) {
         this.walkToTile(dest);
         this.pendingInteract = true;
         this.showPathMarker(dest);
-        return;
       }
     }
-
-    // Otherwise, just walk to the tapped tile
-    this.pendingInteract = false;
-    const outside = this.world.isOutside(worldPoint.x, worldPoint.y);
-    if (outside) {
-      // Outside: use straight-line movement to pixel position
-      this.playerPath = [];
-      this.playerTargetPx = { x: worldPoint.x, y: worldPoint.y };
-      this.showPathMarkerPx(worldPoint.x, worldPoint.y);
-    } else {
-      // Inside office: use A* pathfinding
-      this.walkToTile(targetTile);
-      this.showPathMarker(targetTile);
-    }
+    // Tapping empty ground does nothing — use WASD/joystick to move
   }
 
   /** Walk player to a tile using A* pathfinding (office only). */
@@ -1512,6 +1501,53 @@ export class OfficeScene extends Phaser.Scene {
     }
     const path = findPath(this.grid, start, dest);
     this.playerPath = path;
+  }
+
+  /** Walk to an agent/NPC and then select+talk to them on arrival. */
+  private walkToAgent(id: string): void {
+    // Find the NPC position
+    let npcX = 0, npcY = 0;
+    if (id === YUKI_ID && this.yuki) {
+      npcX = this.yuki.container.x;
+      npcY = this.yuki.container.y;
+    } else if (id === HERMES_ID && this.hermes) {
+      npcX = this.hermes.container.x;
+      npcY = this.hermes.container.y;
+    } else {
+      const npc = this.npcs.get(id);
+      if (!npc) return;
+      npcX = npc.container.x;
+      npcY = npc.container.y;
+    }
+
+    // If already close enough, just interact now
+    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npcX, npcY);
+    if (dist < 144) {
+      this.selectAgent(id);
+      return;
+    }
+
+    // Walk to a tile adjacent to the agent, then interact
+    const agentTile = tileOf(npcX, npcY);
+    const dest = this.findAdjacentWalkable(agentTile);
+    if (dest) {
+      this.walkToTile(dest);
+      this.pendingAgentId = id;
+      this.pendingInteract = false;
+      this.showPathMarker(dest);
+    } else {
+      // No walkable adjacent tile — just select directly
+      this.selectAgent(id);
+    }
+  }
+
+  /** Select an agent and open chat. */
+  private selectAgent(id: string): void {
+    this.store.select(id);
+    if (id === YUKI_ID) achievements.unlock("yuki_visit");
+    setTimeout(() => {
+      (document.getElementById("d-chat") as HTMLInputElement | null)?.focus();
+    }, 0);
   }
 
   /** Show a visual marker at a tile destination. */
@@ -3277,7 +3313,7 @@ export class OfficeScene extends Phaser.Scene {
         this.spawnTile;
       const spawnPx = tileOf(exitX, exitY);
       const npc = new AgentNPC(this, this.grid, info, spawnPx, seat, (clicked) =>
-        this.store.select(clicked),
+        this.walkToAgent(clicked),
       );
       this.npcs.set(id, npc);
       console.log(`[syncPendingHeliAgents] created NPC for ${info.name} (${id}) at elevator exit — total NPCs: ${this.npcs.size}`);
@@ -4065,7 +4101,7 @@ export class OfficeScene extends Phaser.Scene {
         const spawnTile = !this.initialSyncDone ? seat
           : this.doorTile;
         const npc = new AgentNPC(this, this.grid, info, spawnTile, seat, (clicked) =>
-          this.store.select(clicked),
+          this.walkToAgent(clicked),
         );
         this.npcs.set(id, npc);
         console.log(`[syncAgents] created NPC for ${info.name} (${id}) at desk ${info.deskIndex} — total NPCs: ${this.npcs.size}`);
@@ -4192,6 +4228,7 @@ export class OfficeScene extends Phaser.Scene {
       this.playerPath = [];
       this.playerTargetPx = null;
       this.pendingInteract = false;
+      this.pendingAgentId = null;
       this.clearPathMarker();
     }
 
@@ -4208,7 +4245,11 @@ export class OfficeScene extends Phaser.Scene {
         if (this.playerPath.length === 0) {
           // Path complete
           this.clearPathMarker();
-          if (this.pendingInteract) {
+          if (this.pendingAgentId) {
+            const aid = this.pendingAgentId;
+            this.pendingAgentId = null;
+            this.selectAgent(aid);
+          } else if (this.pendingInteract) {
             this.pendingInteract = false;
             // Simulate E press
             this.tryOfficeInteract(time) || this.tryPlatformMailboxInteract();
@@ -4226,7 +4267,11 @@ export class OfficeScene extends Phaser.Scene {
       if (dist < 12) {
         this.playerTargetPx = null;
         this.clearPathMarker();
-        if (this.pendingInteract) {
+        if (this.pendingAgentId) {
+          const aid = this.pendingAgentId;
+          this.pendingAgentId = null;
+          this.selectAgent(aid);
+        } else if (this.pendingInteract) {
           this.pendingInteract = false;
           this.tryOfficeInteract(time) || this.tryPlatformMailboxInteract();
         }
@@ -4241,6 +4286,7 @@ export class OfficeScene extends Phaser.Scene {
       this.playerPath = [];
       this.playerTargetPx = null;
       this.pendingInteract = false;
+      this.pendingAgentId = null;
       this.clearPathMarker();
     }
 
