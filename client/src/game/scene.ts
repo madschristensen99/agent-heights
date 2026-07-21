@@ -1249,11 +1249,11 @@ export class OfficeScene extends Phaser.Scene {
     const cx = w / 2;
     const cy = h / 2;
     const maxR = Math.hypot(cx, cy);
-    const steps = 20;
+    const steps = 12;
     for (let i = 0; i < steps; i++) {
       const t = i / steps;
-      const ringW = Math.max(2, (maxR * 0.4) * (1 - t));
-      const alpha = Math.pow(t, 2) * 0.4;
+      const ringW = Math.max(2, (maxR * 0.25) * (1 - t));
+      const alpha = Math.pow(t, 2) * 0.25;
       g.fillStyle(0x000000, alpha);
       // top bar
       g.fillRect(0, 0, w, Math.ceil(ringW * 0.5));
