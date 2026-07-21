@@ -392,46 +392,28 @@ wss.on("connection", async (ws, req) => {
 
   // Send snapshot based on which room the user is in
   const currentRoom = sess.roomId ? tenants.getRoom(sess.roomId) : null;
-  if (currentRoom && currentRoom.isPrivate && currentRoom.ownerId === sess.user.id) {
-    // Own office — full agent snapshot
-    const snap = sess.manager.snapshot();
-    ws.send(JSON.stringify({
-      type: "snapshot",
-      agents: snap.agents,
-      logs: snap.logs,
-      player: sess.player,
-      settings: sess.manager.settings,
-      board: snap.board,
-      schedules: sess.manager.snapshotSchedules(),
-      world: sess.manager.worldState(),
-    } satisfies ServerMsg));
-    // Send mailbox states so flags are correct on initial load
-    for (const mb of sess.manager.getMailboxSnapshots()) {
-      ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
-    }
-    // Send platform connection states so client knows which platforms are connected
-    ws.send(JSON.stringify({ type: "platform_connection", states: sess.manager.getPlatformConnectionStates() } satisfies ServerMsg));
-  } else if (currentRoom && currentRoom.isPrivate && currentRoom.ownerId !== sess.user.id) {
-    // Visitor in someone else's office — owner's snapshot
-    const ownerSess = tenants.get(currentRoom.ownerId);
-    if (ownerSess) {
-      const snap = ownerSess.manager.snapshot();
+  const accessLevel = currentRoom ? tenants.computeAccessLevel(currentRoom, sess.user.id) : "no_access";
+  if (currentRoom && accessLevel !== "no_access") {
+    // Use the room's agent manager (personal for private, shared for org)
+    const roomMgr = tenants.getRoomManager(currentRoom.id);
+    if (roomMgr) {
+      const snap = roomMgr.snapshot();
       ws.send(JSON.stringify({
         type: "snapshot",
         agents: snap.agents,
         logs: snap.logs,
-        player: ownerSess.player,
-        settings: ownerSess.manager.settings,
+        player: sess.player,
+        settings: roomMgr.settings,
         board: snap.board,
-        schedules: ownerSess.manager.snapshotSchedules(),
-        world: ownerSess.manager.worldState(),
+        schedules: roomMgr.snapshotSchedules(),
+        world: roomMgr.worldState(),
       } satisfies ServerMsg));
       // Send mailbox states so flags are correct on initial load
-      for (const mb of ownerSess.manager.getMailboxSnapshots()) {
+      for (const mb of roomMgr.getMailboxSnapshots()) {
         ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
       }
-      // Send platform connection states
-      ws.send(JSON.stringify({ type: "platform_connection", states: ownerSess.manager.getPlatformConnectionStates() } satisfies ServerMsg));
+      // Send platform connection states so client knows which platforms are connected
+      ws.send(JSON.stringify({ type: "platform_connection", states: roomMgr.getPlatformConnectionStates() } satisfies ServerMsg));
     } else {
       ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], schedules: [], player: sess.player, settings: sess.manager.settings, world: null } satisfies ServerMsg));
     }
@@ -568,16 +550,14 @@ wss.on("connection", async (ws, req) => {
     try {
       const { manager, session: sessLog, save } = sess;
 
-      // Permission check: only private office owners can manage agents
-      // HQ2 is a social lobby — no hiring, assigning, etc.
-      const isVisitor = tenants.isRoomVisitor(sess.user.id);
-      const isInHq2 = sess.roomId === "hq2";
+      // Unified permission system: check access level for the current room
+      const accessLevel = tenants.getRoomAccessLevel(sess.user.id);
 
       // Pre-check: if this is a chat message to a busy agent, reject before
       // consuming a rate-limit token (prevents "too many requests" spam).
-      if (msg.type === "chat" && !isInHq2) {
-        const ownerSess0 = isVisitor ? tenants.getRoomOwnerSession(sess.user.id) : null;
-        const mgr0 = ownerSess0 ? ownerSess0.manager : manager;
+      if (msg.type === "chat" && accessLevel !== "no_access") {
+        const roomMgr = tenants.getRoomManager(sess.roomId!);
+        const mgr0 = roomMgr ?? manager;
         const agent0 = mgr0.getAgentInfo(msg.agentId);
         if (agent0 && (agent0.status === "thinking" || agent0.status === "working")) {
           sess.broadcast({ type: "toast", text: `${agent0.name} is heads-down right now.` });
@@ -598,9 +578,17 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      const OWNER_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all", "rename"]);
-      if ((isVisitor || isInHq2) && OWNER_ONLY.has(msg.type)) {
-        sess.broadcast({ type: "toast", text: isInHq2 ? "Go to your office to manage agents." : "Only the room owner can do that." });
+      // Permission tiers: manage > talk > tour > no_access
+      const MANAGE_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all", "rename", "set_agent_acl"]);
+      const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
+
+      if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
+        sess.broadcast({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can look around but not manage agents. Ask an admin for talk access." : "Only room managers can do that." });
+        return;
+      }
+
+      if (TALK_OR_ABOVE.has(msg.type) && accessLevel !== "talk" && accessLevel !== "manage") {
+        sess.broadcast({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can see agents but not interact. Ask an admin for talk access." : "No agents here — visit an office to chat." });
         return;
       }
 
@@ -612,15 +600,10 @@ wss.on("connection", async (ws, req) => {
           return;
         }
       }
-      // Chat is allowed in HQ2 and as a visitor, but only works in private rooms
-      if (isInHq2 && msg.type === "chat") {
-        sess.broadcast({ type: "toast", text: "No agents in HQ² — visit an office to chat." });
-        return;
-      }
 
-      // For visitors: use the owner's AgentManager instead of their own
-      const ownerSess = isVisitor ? tenants.getRoomOwnerSession(sess.user.id) : null;
-      const activeManager = ownerSess ? ownerSess.manager : manager;
+      // Use the room's agent manager (shared for org rooms, owner's for private rooms)
+      const roomMgr = sess.roomId ? tenants.getRoomManager(sess.roomId) : null;
+      const activeManager = roomMgr ?? manager;
 
       switch (msg.type) {
         case "setup": {
@@ -665,7 +648,7 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "set_settings":
-          manager.setSettings(msg.settings);
+          activeManager.setSettings(msg.settings);
           if (msg.settings.railway?.enabled) {
             checkRailwayStatus().then((status) => {
               sess.broadcast({ type: "railway_status", ok: status.ok, message: status.message });
@@ -673,7 +656,7 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         case "hire":
-          await manager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality);
+          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality);
           break;
         case "update_appearance": {
           if (!sess.player) break;
@@ -703,57 +686,95 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "assign":
-          manager.assign(msg.agentId, msg.task, msg.handoffTo);
+          activeManager.assign(msg.agentId, msg.task, msg.handoffTo);
           break;
-        case "chat":
+        case "chat": {
+          // Per-agent ACL check
+          const agentInfo = activeManager.getAgentInfo(msg.agentId);
+          if (agentInfo?.acl) {
+            const acl = agentInfo.acl;
+            // Manage level bypasses all ACL checks
+            if (accessLevel !== "manage") {
+              let allowed = true;
+              if (acl.allowedUserIds && acl.allowedUserIds.length > 0) {
+                allowed = acl.allowedUserIds.includes(sess.user.id);
+              }
+              if (allowed && acl.allowedRoles && acl.allowedRoles.length > 0 && sess.roomId) {
+                const room = tenants.getRoom(sess.roomId);
+                if (room?.orgId) {
+                  const org = tenants.getOrg(room.orgId);
+                  const member = org?.members.get(sess.user.id);
+                  if (member) {
+                    allowed = acl.allowedRoles.includes(member.role);
+                  } else {
+                    allowed = false; // non-member can't chat with role-restricted agent
+                  }
+                }
+              }
+              if (!allowed) {
+                sess.broadcast({ type: "toast", text: "You don't have permission to chat with this agent." });
+                break;
+              }
+            }
+          }
           activeManager.chat(msg.agentId, msg.text);
           break;
+        }
         case "assign_all":
-          manager.assignAll(msg.task);
+          activeManager.assignAll(msg.task);
           break;
         case "stop":
-          manager.stop(msg.agentId);
+          activeManager.stop(msg.agentId);
           break;
         case "stop_all":
-          manager.stopAll();
+          activeManager.stopAll();
           break;
         case "fire":
-          await manager.fire(msg.agentId);
+          await activeManager.fire(msg.agentId);
           screenshots.stopAll(msg.agentId);
           await closeAgentBrowser(msg.agentId);
           break;
+        case "vacation":
+          await activeManager.vacation(msg.agentId);
+          break;
+        case "restore":
+          await activeManager.restore(msg.agentId);
+          break;
         case "clear":
-          manager.clearChat(msg.agentId);
+          activeManager.clearChat(msg.agentId);
           break;
         case "clear_all":
-          manager.clearAllChats();
+          activeManager.clearAllChats();
           break;
         case "create_card":
-          manager.createCard(msg.title, msg.description);
+          activeManager.createCard(msg.title, msg.description);
           break;
         case "assign_card":
-          manager.assignCard(msg.cardId, msg.agentId);
+          activeManager.assignCard(msg.cardId, msg.agentId);
           break;
         case "move_card":
-          manager.moveCard(msg.cardId, msg.status);
+          activeManager.moveCard(msg.cardId, msg.status);
           break;
         case "delete_card":
-          manager.deleteCard(msg.cardId);
+          activeManager.deleteCard(msg.cardId);
           break;
         case "create_schedule":
-          manager.createSchedule(msg.agentId, msg.name, msg.task, msg.cronExpression, msg.handoffTo);
+          activeManager.createSchedule(msg.agentId, msg.name, msg.task, msg.cronExpression, msg.handoffTo);
           break;
         case "update_schedule":
-          manager.updateSchedule(msg.scheduleId, { enabled: msg.enabled, name: msg.name, task: msg.task, cronExpression: msg.cronExpression });
+          activeManager.updateSchedule(msg.scheduleId, { enabled: msg.enabled, name: msg.name, task: msg.task, cronExpression: msg.cronExpression });
           break;
         case "delete_schedule":
-          manager.deleteSchedule(msg.scheduleId);
+          activeManager.deleteSchedule(msg.scheduleId);
           break;
         case "recruit":
-          await manager.recruit(msg.firedAgentId);
+          await activeManager.recruit(msg.firedAgentId);
           break;
         case "rename":
-          manager.rename(msg.agentId, msg.name);
+          activeManager.rename(msg.agentId, msg.name);
+          break;
+        case "set_agent_acl":
+          activeManager.setAgentACL(msg.agentId, msg.acl);
           break;
         case "railway_query":
           queryRailway().then((result) => {
@@ -982,12 +1003,14 @@ wss.on("connection", async (ws, req) => {
           }
           const players = tenants.getRoomPlayers(msg.roomId);
           // Send full room state to the joining player
+          const joinAccessLevel = tenants.computeAccessLevel(room, sess.user.id);
           sess.broadcast({
             type: "room_state",
             roomId: msg.roomId,
             name: room.name,
             players,
             privateOfficeId: sess.privateOfficeId ?? undefined,
+            accessLevel: joinAccessLevel,
           });
           sendRoomsList();
           // Send outfits for the joined room's wardrobe
@@ -1038,6 +1061,7 @@ wss.on("connection", async (ws, req) => {
             break;
           }
           // Send new room state to the switching player
+          const newAccessLevel = tenants.computeAccessLevel(room, sess.user.id);
           sess.broadcast({
             type: "room_state",
             roomId: msg.roomId,
@@ -1045,39 +1069,25 @@ wss.on("connection", async (ws, req) => {
             players: tenants.getRoomPlayers(msg.roomId),
             privateOfficeId: sess.privateOfficeId ?? undefined,
             projectorChannel: room.projectorChannel,
+            accessLevel: newAccessLevel,
           });
           sendRoomsList();
-          // If switching to a private room they don't own, send the owner's agent snapshot
-          if (room.isPrivate && room.ownerId !== sess.user.id) {
-            const ownerSess = tenants.get(room.ownerId);
-            if (ownerSess) {
-              const snap = ownerSess.manager.snapshot();
-              sess.broadcast({
-                type: "snapshot",
-                agents: snap.agents,
-                logs: snap.logs,
-                player: ownerSess.player,
-                settings: ownerSess.manager.settings,
-                board: snap.board,
-                schedules: ownerSess.manager.snapshotSchedules(),
-                world: ownerSess.manager.worldState(),
-              });
-            }
-          } else if (room.isPrivate && room.ownerId === sess.user.id) {
-            // Back to own office — send own snapshot
-            const snap = sess.manager.snapshot();
+          // Send agent snapshot from the room's manager (personal, org shared, or empty)
+          const roomMgr = tenants.getRoomManager(msg.roomId);
+          if (roomMgr) {
+            const snap = roomMgr.snapshot();
             sess.broadcast({
               type: "snapshot",
               agents: snap.agents,
               logs: snap.logs,
               player: sess.player,
-              settings: sess.manager.settings,
+              settings: roomMgr.settings,
               board: snap.board,
-              schedules: sess.manager.snapshotSchedules(),
-              world: sess.manager.worldState(),
+              schedules: roomMgr.snapshotSchedules(),
+              world: roomMgr.worldState(),
             });
           } else {
-            // HQ2 lobby — no agents, just players
+            // No manager for this room (e.g. HQ2 with no org manager yet) — empty
             sess.broadcast({
               type: "snapshot",
               agents: [],
@@ -1144,6 +1154,9 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "toast", text: "You can only invite to your own rooms." });
             break;
           }
+          // Persist the invite with access level (default: talk)
+          const inviteLevel = msg.accessLevel ?? "talk";
+          tenants.inviteUser(msg.roomId, msg.userId, inviteLevel);
           const invitedSess = tenants.get(msg.userId);
           if (invitedSess) {
             invitedSess.broadcast({
@@ -1153,6 +1166,7 @@ wss.on("connection", async (ws, req) => {
               fromUserId: sess.user.id,
               fromName: sess.player?.name ?? "Someone",
               role: msg.role,
+              accessLevel: inviteLevel,
             });
           }
           break;
@@ -1186,6 +1200,7 @@ wss.on("connection", async (ws, req) => {
               // Switch the accepter into the room
               const joined = tenants.switchRoom(sess.user.id, msg.roomId);
               if (joined) {
+                const inviteAccessLevel = tenants.computeAccessLevel(room, sess.user.id);
                 sess.broadcast({
                   type: "room_state",
                   roomId: msg.roomId,
@@ -1193,20 +1208,22 @@ wss.on("connection", async (ws, req) => {
                   players: tenants.getRoomPlayers(msg.roomId),
                   privateOfficeId: sess.privateOfficeId ?? undefined,
                   projectorChannel: room.projectorChannel,
+                  accessLevel: inviteAccessLevel,
                 });
                 sendRoomsList();
-                // Send the owner's agent snapshot to the visitor
-                if (ownerSess) {
-                  const snap = ownerSess.manager.snapshot();
+                // Send the room's agent snapshot
+                const roomMgr = tenants.getRoomManager(msg.roomId);
+                if (roomMgr) {
+                  const snap = roomMgr.snapshot();
                   sess.broadcast({
                     type: "snapshot",
                     agents: snap.agents,
                     logs: snap.logs,
-                    player: ownerSess.player,
-                    settings: ownerSess.manager.settings,
+                    player: sess.player,
+                    settings: roomMgr.settings,
                     board: snap.board,
-                    schedules: ownerSess.manager.snapshotSchedules(),
-                    world: ownerSess.manager.worldState(),
+                    schedules: roomMgr.snapshotSchedules(),
+                    world: roomMgr.worldState(),
                   });
                 }
                 // Notify others in the room
@@ -1710,25 +1727,15 @@ wss.on("connection", async (ws, req) => {
         }
         // ── Agent task injection + task info ──────────────────────────────
         case "agent_inject_task": {
-          if (!sess.roomId) break;
-          const room = tenants.getRoom(sess.roomId);
-          if (!room) break;
-          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
-          if (!ownerSess) break;
-          ownerSess.manager.assign(msg.agentId, msg.task, msg.handoffTo);
+          activeManager.assign(msg.agentId, msg.task, msg.handoffTo);
           // Send back updated task info
-          const info = ownerSess.manager.getTaskInfo(msg.agentId);
+          const info = activeManager.getTaskInfo(msg.agentId);
           if (info) sess.broadcast({ type: "agent_task_info", agentId: msg.agentId, ...info });
           break;
         }
         // ── Agent memory viewer ───────────────────────────────────────────
         case "agent_memory_request": {
-          if (!sess.roomId) break;
-          const room = tenants.getRoom(sess.roomId);
-          if (!room) break;
-          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
-          if (!ownerSess) break;
-          const rawMessages = await ownerSess.manager.getAgentMemory(msg.agentId);
+          const rawMessages = await activeManager.getAgentMemory(msg.agentId);
           // Normalize messages to { role, content } format
           const messages = rawMessages.map((m: any) => {
             const role = m.role ?? "unknown";
@@ -1887,6 +1894,7 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "toast", text: "Failed to join org room." });
             break;
           }
+          const orgAccessLevel = tenants.computeAccessLevel(room, sess.user.id);
           sess.broadcast({
             type: "room_state",
             roomId: targetRoomId,
@@ -1894,10 +1902,26 @@ wss.on("connection", async (ws, req) => {
             players: tenants.getRoomPlayers(targetRoomId),
             privateOfficeId: sess.privateOfficeId ?? undefined,
             projectorChannel: room.projectorChannel,
+            accessLevel: orgAccessLevel,
           });
           sendRoomsList();
           // Send outfits for the org room's wardrobe
           void sendOutfits(ws, sess);
+          // Send the org room's agent snapshot
+          const orgRoomMgr = tenants.getRoomManager(targetRoomId);
+          if (orgRoomMgr) {
+            const snap = orgRoomMgr.snapshot();
+            sess.broadcast({
+              type: "snapshot",
+              agents: snap.agents,
+              logs: snap.logs,
+              player: sess.player,
+              settings: orgRoomMgr.settings,
+              board: snap.board,
+              schedules: orgRoomMgr.snapshotSchedules(),
+              world: orgRoomMgr.worldState(),
+            });
+          }
           // Notify other players in the room
           const players = tenants.getRoomPlayers(targetRoomId);
           const me = players.find((p) => p.userId === sess.user.id);

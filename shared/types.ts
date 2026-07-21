@@ -229,6 +229,18 @@ export interface AgentInfo {
   personality?: PersonalityTraits;
   /** Current mood — influenced by personality and recent events. */
   mood?: AgentMood;
+  /** Per-agent access control — restricts who can chat with this agent. */
+  acl?: AgentACL;
+}
+
+/** Access control list for an individual agent.
+ *  If unset, anyone with "talk" room access can chat.
+ *  If set with empty arrays, no one except managers can chat. */
+export interface AgentACL {
+  /** If set, only these user IDs can chat with this agent. */
+  allowedUserIds?: string[];
+  /** If set, only these org roles can chat (e.g. ["admin"]). */
+  allowedRoles?: ("admin" | "member")[];
 }
 
 /** Configuration for an external MCP server an agent can connect to. */
@@ -286,10 +298,32 @@ export interface FiredAgent {
   mood: FiredAgentMood;
 }
 
-/** Persisted world state — seed + fired agents + visited chunk data. */
+/** An agent on vacation — temporarily away with all data preserved. */
+export interface VacationedAgent {
+  id: string;
+  name: string;
+  title: string;
+  sprite: number;
+  appearance: CharAppearance | null;
+  accent: string;
+  provider: Provider;
+  model: string;
+  systemPrompt: string;
+  role: AgentRole;
+  sessionId: string | null;
+  tasksDone: number;
+  mcpServers?: MCPServerConfig[];
+  personality?: PersonalityTraits;
+  mood?: AgentMood;
+  deskIndex: number;
+  vacationedAt: number;
+}
+
+/** Persisted world state — seed + fired agents + vacationed agents + visited chunk data. */
 export interface WorldState {
   seed: number;
   firedAgents: FiredAgent[];
+  vacationedAgents?: VacationedAgent[];
   /** Tile overrides per chunk: { "cx,cy" -> { tileIndex -> newTile } } */
   chunkOverrides?: Record<string, Record<number, number>>;
 }
@@ -404,11 +438,20 @@ export interface PlayerInfo {
 export type Dir = "up" | "down" | "left" | "right";
 
 /** A player visible in a shared room — used for multiplayer presence. */
+/** Room access level for a player.
+ *  - "no_access": cannot enter the room at all
+ *  - "tour":     can enter and see agents but cannot chat or manage
+ *  - "talk":     can enter, see agents, and chat (subject to per-agent ACLs)
+ *  - "manage":   full control — hire, fire, assign, configure agents */
+export type RoomAccessLevel = "no_access" | "tour" | "talk" | "manage";
+
 export interface PlayerPresence {
   userId: string;
   name: string;
   appearance: CharAppearance | null;
   role: "owner" | "member" | "guest";
+  /** What this player can do in the room. */
+  accessLevel: RoomAccessLevel;
   x: number;
   y: number;
   dir: Dir;
@@ -519,6 +562,8 @@ export type ClientMsg =
   | { type: "stop"; agentId: string }
   | { type: "stop_all" }
   | { type: "fire"; agentId: string }
+  | { type: "vacation"; agentId: string }
+  | { type: "restore"; agentId: string }
   | { type: "clear"; agentId: string }
   | { type: "clear_all" }
   | { type: "create_card"; title: string; description?: string }
@@ -538,7 +583,8 @@ export type ClientMsg =
   | { type: "join_room"; roomId: string }
   | { type: "leave_room"; roomId: string }
   | { type: "switch_room"; roomId: string }
-  | { type: "invite_to_room"; roomId: string; userId: string; role: "member" | "guest" }
+  | { type: "invite_to_room"; roomId: string; userId: string; role: "member" | "guest"; accessLevel?: RoomAccessLevel }
+  | { type: "set_agent_acl"; agentId: string; acl: AgentACL }
   | { type: "respond_invite"; roomId: string; accept: boolean }
   | { type: "create_org"; name: string; slug: string; githubOrg?: string }
   | { type: "list_orgs" }
@@ -612,6 +658,8 @@ export type ServerMsg =
   | { type: "world"; world: WorldState }
   | { type: "fired_agent"; agent: FiredAgent }
   | { type: "fired_agent_removed"; agentId: string }
+  | { type: "vacationed_agent"; agent: VacationedAgent }
+  | { type: "vacationed_agent_removed"; agentId: string }
   | { type: "railway_status"; ok: boolean; message: string }
   | { type: "railway_data"; data: RailwayData | null; error: string | null }
   | { type: "api_key_status"; hasKey: boolean }
@@ -621,11 +669,12 @@ export type ServerMsg =
   | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "refresh_token" }
-  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string }
+  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }
   | { type: "player_left"; roomId: string; userId: string }
   | { type: "player_moved"; roomId: string; userId: string; x: number; y: number; dir: Dir }
-  | { type: "room_invite"; roomId: string; roomName: string; fromUserId: string; fromName: string; role: "member" | "guest" }
+  | { type: "room_invite"; roomId: string; roomName: string; fromUserId: string; fromName: string; role: "member" | "guest"; accessLevel?: RoomAccessLevel }
+  | { type: "agent_acl_updated"; agentId: string; acl: AgentACL }
   | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string }
   | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }

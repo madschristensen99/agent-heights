@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
@@ -9,7 +9,6 @@ import type {
   CardStatus,
   CharAppearance,
   FiredAgent,
-  FiredAgentMood,
   GameSettings,
   LogEntry,
   Provider,
@@ -22,6 +21,8 @@ import type {
   AgentMood,
   PlatformEvent,
   PlatformConnectionState,
+  VacationedAgent,
+  AgentACL,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality, PLATFORMS } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
@@ -248,6 +249,7 @@ export class AgentManager {
   private schedules = new Map<string, AgentSchedule>();
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private firedAgents = new Map<string, FiredAgent>();
+  private vacationedAgents = new Map<string, VacationedAgent>();
   private worldSeed = 0;
   private chunkOverrides: Record<string, Record<number, number>> = {};
   private workspaceRoot: string;
@@ -352,6 +354,12 @@ export class AgentManager {
     }
     if (this.firedAgents.size > 0) {
       console.log(`[agent-heights] restored ${this.firedAgents.size} fired agent(s) in the Labyrinth`);
+    }
+    for (const va of world.vacationedAgents ?? []) {
+      this.vacationedAgents.set(va.id, va);
+    }
+    if (this.vacationedAgents.size > 0) {
+      console.log(`[agent-heights] restored ${this.vacationedAgents.size} vacationed agent(s)`);
     }
     // reload the task board from the save file
     for (const card of saved?.board ?? []) {
@@ -623,7 +631,7 @@ export class AgentManager {
   }
 
   worldState(): WorldState {
-    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], chunkOverrides: this.chunkOverrides };
+    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], vacationedAgents: [...this.vacationedAgents.values()], chunkOverrides: this.chunkOverrides };
   }
 
   private persistWorld(): void {
@@ -931,6 +939,18 @@ export class AgentManager {
     this.log(rt, "status", `Renamed from "${oldName}" to "${cleanName}".`);
   }
 
+  /** Set per-agent access control list. */
+  setAgentACL(agentId: string, acl: AgentACL): void {
+    const rt = this.agents.get(agentId);
+    if (!rt) return;
+    rt.info.acl = acl;
+    this.persist();
+    this.broadcast({ type: "agent", agent: rt.info });
+    this.broadcast({ type: "agent_acl_updated", agentId, acl });
+    void this.save.flushNow();
+    this.log(rt, "status", `Access control updated.`);
+  }
+
   async fire(agentId: string): Promise<void> {
     if (agentId === YUKI_ID) {
       this.broadcast({ type: "toast", text: "You can't fire Yuki — she runs this office." });
@@ -949,9 +969,53 @@ export class AgentManager {
       rt.cardId = null;
     }
 
-    // save the agent as a wandering ghost in the Labyrinth
-    const moods: FiredAgentMood[] = ["melancholy", "hostile", "wandering", "dormant"];
-    const fired: FiredAgent = {
+    const slug = this.slugFor(rt);
+    const agentDir = this.cwdFor(slug, agentId);
+
+    this.removeSchedulesForAgent(agentId);
+
+    // Clear in-memory provider state (conversation history)
+    clearAllMemory(agentId);
+
+    // Soft-delete persisted conversation messages (archived, not hard-deleted)
+    void this.save.clearMessages(agentId);
+    void this.save.clearMessages(`${agentId}:chat`);
+
+    // Delete the agent's workspace directory (code repos, images, files)
+    try {
+      rmSync(agentDir, { recursive: true, force: true });
+    } catch (err) {
+      console.error(`[manager] failed to delete workspace for ${agentId}:`, err);
+    }
+
+    this.agents.delete(agentId);
+    this.session.record("fire", { agentId, agentName: rt.info.name });
+    this.persist();
+    this.broadcast({ type: "agent_removed", agentId });
+    this.broadcast({ type: "toast", text: `${rt.info.name} was fired. Their workspace was cleared, but inference logs are preserved.` });
+    await this.save.flushNow();
+  }
+
+  /** Send an agent on vacation — all data preserved, can be restored anytime. */
+  async vacation(agentId: string): Promise<void> {
+    if (agentId === YUKI_ID) {
+      this.broadcast({ type: "toast", text: "Yuki doesn't take vacations — she runs this office." });
+      return;
+    }
+    if (agentId === HERMES_ID) {
+      this.broadcast({ type: "toast", text: "Hermes doesn't take vacations — he runs the infrastructure." });
+      return;
+    }
+    const rt = this.agents.get(agentId);
+    if (!rt) return;
+    if (rt.info.status === "thinking" || rt.info.status === "working") {
+      this.broadcast({ type: "toast", text: `${rt.info.name} is mid-task — stop them first.` });
+      return;
+    }
+    rt.abort?.abort();
+    if (rt.doneTimer) clearTimeout(rt.doneTimer);
+
+    const vac: VacationedAgent = {
       id: rt.info.id,
       name: rt.info.name,
       title: rt.info.title,
@@ -964,24 +1028,72 @@ export class AgentManager {
       role: rt.info.role,
       sessionId: rt.info.sessionId,
       tasksDone: rt.info.tasksDone,
-      firedAt: Date.now(),
-      lastTask: rt.info.task,
-      // spawn somewhere in the world, not right at the door
-      worldX: 32 + Math.floor(Math.random() * 128),
-      worldY: 32 + Math.floor(Math.random() * 128),
-      mood: moods[Math.floor(Math.random() * moods.length)],
+      mcpServers: rt.info.mcpServers,
+      personality: rt.info.personality,
+      mood: rt.info.mood,
+      deskIndex: rt.info.deskIndex,
+      vacationedAt: Date.now(),
     };
-    this.firedAgents.set(fired.id, fired);
-    this.persistWorld();
+    this.vacationedAgents.set(vac.id, vac);
 
     this.removeSchedulesForAgent(agentId);
     this.agents.delete(agentId);
-    this.session.record("fire", { agentId, agentName: rt.info.name });
+    this.session.record("vacation", { agentId, agentName: rt.info.name });
     this.persist();
+    this.persistWorld();
     this.broadcast({ type: "agent_removed", agentId });
-    this.broadcast({ type: "fired_agent", agent: fired });
-    this.broadcast({ type: "toast", text: `${rt.info.name} cleaned out their desk and wandered into the Labyrinth.` });
+    this.broadcast({ type: "vacationed_agent", agent: vac });
+    this.broadcast({ type: "toast", text: `${rt.info.name} went on vacation. All data preserved — restore them anytime.` });
     await this.save.flushNow();
+  }
+
+  /** Restore a vacationed agent — brings them back with full memory intact. */
+  async restore(agentId: string): Promise<void> {
+    const va = this.vacationedAgents.get(agentId);
+    if (!va) return;
+    this.vacationedAgents.delete(agentId);
+    this.persistWorld();
+
+    const usedDesks = new Set([...this.agents.values()].map((a) => a.info.deskIndex));
+    let deskIndex = va.deskIndex;
+    if (usedDesks.has(deskIndex)) {
+      deskIndex = 0;
+      while (usedDesks.has(deskIndex)) deskIndex++;
+    }
+
+    const info: AgentInfo = {
+      id: va.id,
+      name: va.name,
+      title: va.title,
+      provider: va.provider,
+      model: va.model,
+      status: "idle",
+      task: null,
+      deskIndex,
+      sprite: va.sprite,
+      appearance: va.appearance ?? null,
+      accent: va.accent,
+      systemPrompt: va.systemPrompt,
+      role: va.role,
+      sessionId: va.sessionId,
+      tasksDone: va.tasksDone,
+      mcpServers: va.mcpServers,
+      personality: va.personality,
+      mood: va.mood ?? "content",
+    };
+
+    const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
+    mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
+
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
+    this.agents.set(info.id, rt);
+    this.session.record("restore", { agentId: info.id, agentName: info.name });
+    this.persist();
+    this.broadcast({ type: "agent", agent: info });
+    this.broadcast({ type: "vacationed_agent_removed", agentId: va.id });
+    await this.save.flushNow();
+    this.log(rt, "status", `${info.name} returned from vacation and is back at their desk.`);
+    this.broadcast({ type: "toast", text: `${info.name} is back from vacation!` });
   }
 
   /** Re-hire a fired agent from the Labyrinth — memory intact. */
@@ -1742,8 +1854,12 @@ export class AgentManager {
           rt.cardId = null;
           rt.doneTimer = setTimeout(() => {
             rt.info.task = null;
-            this.setStatus(rt, "idle");
-            this.persist();
+            if (rt.taskQueue.length > 0) {
+              this.drainQueue(rt);
+            } else {
+              this.setStatus(rt, "idle");
+              this.persist();
+            }
           }, DONE_LINGER_MS);
         } else {
           rt.info.tasksDone += 1;

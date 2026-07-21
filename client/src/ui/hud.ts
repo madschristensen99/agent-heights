@@ -264,6 +264,7 @@ export class Hud {
           <button class="btn" id="d-stop">STOP</button>
           <button class="btn" id="d-clear">NEW CHAT</button>
           <button class="btn" id="d-publish">📤 PUBLISH</button>
+          <button class="btn" id="d-vacation">VACATION</button>
           <button class="btn danger" id="d-fire">FIRE</button>
         </div>
       </div>
@@ -499,8 +500,25 @@ export class Hud {
         () => this.net.send({ type: "clear", agentId: agent.id }),
       );
     });
+    document.getElementById("d-vacation")!.addEventListener("click", () => {
+      const agent = this.store.selected();
+      if (!agent) return;
+      inlineConfirm(
+        `Send ${agent.name} on vacation?`,
+        "All data preserved — workspace, memory, and session. Restore them anytime.",
+        "Vacation",
+        () => this.net.send({ type: "vacation", agentId: agent.id }),
+      );
+    });
     document.getElementById("d-fire")!.addEventListener("click", () => {
-      if (this.store.selectedId) this.net.send({ type: "fire", agentId: this.store.selectedId });
+      const agent = this.store.selected();
+      if (!agent) return;
+      inlineConfirm(
+        `Fire ${agent.name}?`,
+        "Their workspace files will be deleted. Inference and prompt logs are preserved. This cannot be undone.",
+        "Fire",
+        () => this.net.send({ type: "fire", agentId: agent.id }),
+      );
     });
   }
 
@@ -1454,6 +1472,10 @@ export class Hud {
   // ------------------------------------------------------------- hire modal
 
   private openHireModal(): void {
+    if (this.store.accessLevel !== "manage") {
+      this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access to hire agents." : "Go to your office to manage agents.");
+      return;
+    }
     const modal = document.getElementById("hire-modal")!;
     const suggested = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
     const modelOptions = () =>
@@ -1639,6 +1661,10 @@ export class Hud {
   }
 
   private hireFromMarketplace(agent: MarketplaceAgent): void {
+    if (this.store.accessLevel !== "manage") {
+      this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access to hire agents." : "Go to your office to manage agents.");
+      return;
+    }
     // Parse the agent config JSON — may contain a custom appearance, model,
     // and systemPrompt for premium/curated marketplace agents.
     let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[] } = {};
@@ -1680,6 +1706,10 @@ export class Hud {
   }
 
   private hireCommunityMCP(name: string, mcpConfig: MCPServerConfig): void {
+    if (this.store.accessLevel !== "manage") {
+      this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access to hire agents." : "Go to your office to manage agents.");
+      return;
+    }
     const delivery = {
       name: name.slice(0, 24) || "Agent",
       systemPrompt: `You are an AI agent powered by a community MCP server from PulseMCP.\nYour MCP server: ${mcpConfig.name ?? name}\n${mcpConfig.url ? `Remote URL: ${mcpConfig.url}` : mcpConfig.command ? `Command: ${mcpConfig.command} ${(mcpConfig.args ?? []).join(" ")}` : ""}\nUse your MCP tools to help the boss with tasks related to your capabilities.`,
@@ -1804,6 +1834,13 @@ export class Hud {
       overlay.style.display = this.store.serverRestarting ? "flex" : "none";
     }
 
+    // Access-level-based UI
+    const hireBtn = document.getElementById("hire-btn") as HTMLElement | null;
+    if (hireBtn) {
+      hireBtn.style.display = this.store.accessLevel === "manage" ? "" : "none";
+    }
+    this.renderTourBanner();
+
     this.renderRoster();
     this.renderDetail();
     this.renderFeed();
@@ -1814,6 +1851,21 @@ export class Hud {
     this.renderWardrobe();
   }
 
+  private renderTourBanner(): void {
+    let banner = document.getElementById("tour-banner") as HTMLElement | null;
+    if (this.store.accessLevel === "tour") {
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "tour-banner";
+        banner.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:500;padding:0.8rem 1.2rem;border-radius:10px;background:rgba(20,20,30,0.92);border:1px solid rgba(88,200,102,0.4);color:#8fc9f0;font-size:0.9rem;text-align:center;pointer-events:none;backdrop-filter:blur(4px);";
+        banner.innerHTML = "🎬 <strong>Tour Mode</strong> — You can look around but not interact.<br>Ask an admin for talk access to chat with agents.";
+        document.body.appendChild(banner);
+      }
+    } else if (banner) {
+      banner.remove();
+    }
+  }
+
   private renderRoster(): void {
     // rebuilding the list (and re-binding clicks) is wasteful on every log line —
     // skip unless something the roster actually shows has changed
@@ -1821,6 +1873,9 @@ export class Hud {
       `${this.rosterCollapsed}|${this.store.selectedId}|` +
       [...this.store.agents.values()]
         .map((a) => a.id + a.name + a.status + a.accent + a.role)
+        .join(",") + "|" +
+      [...this.store.vacationedAgents.values()]
+        .map((a) => a.id + a.name + a.accent)
         .join(",");
     if (sig === this.lastRosterSig) return;
     this.lastRosterSig = sig;
@@ -1842,18 +1897,45 @@ export class Hud {
         </div>`,
       )
       .join("");
+    const vacRows = [...this.store.vacationedAgents.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(
+        (a) => `
+        <div class="agent-row vac-row" data-vac-id="${a.id}">
+          <span class="dot idle"></span>
+          <span class="name" style="color:${a.accent};opacity:0.6">🏖️ ${esc(a.name)}</span>
+          <span class="status" style="cursor:pointer;color:#5a9a5a">restore</span>
+        </div>`,
+      )
+      .join("");
+    const vacSection = vacRows
+      ? `<div style="margin-top:0.4rem;padding-top:0.4rem;border-top:1px solid #333;font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.05em;">On Vacation</div>${vacRows}`
+      : "";
     const title = `<div class="panel-title">STAFF (${this.store.agents.size})
       <button class="icon-btn" id="roster-toggle" title="${this.rosterCollapsed ? "Open staff" : "Collapse"}">
         ${this.rosterCollapsed ? ICON.open : ICON.collapse}</button></div>`;
     roster.innerHTML = this.rosterCollapsed
       ? title
-      : title + (rows || `<div class="empty">nobody here yet…</div>`);
+      : title + (rows || `<div class="empty">nobody here yet…</div>`) + vacSection;
     document.getElementById("roster-toggle")!.addEventListener("click", () => {
       this.rosterCollapsed = !this.rosterCollapsed;
       this.renderRoster();
     });
-    roster.querySelectorAll<HTMLElement>(".agent-row").forEach((el) =>
+    roster.querySelectorAll<HTMLElement>(".agent-row:not(.vac-row)").forEach((el) =>
       el.addEventListener("click", () => this.store.select(el.dataset.id!)),
+    );
+    roster.querySelectorAll<HTMLElement>(".vac-row").forEach((el) =>
+      el.addEventListener("click", () => {
+        const vacId = el.dataset.vacId!;
+        const va = this.store.vacationedAgents.get(vacId);
+        if (!va) return;
+        inlineConfirm(
+          `Restore ${va.name}?`,
+          "They'll return to their desk with all memory and session intact.",
+          "Restore",
+          () => this.net.send({ type: "restore", agentId: vacId }),
+        );
+      }),
     );
   }
 
@@ -1909,9 +1991,11 @@ export class Hud {
       ${agent.role === "manager" ? "· 👔 MANAGER " : ""}· ${agent.provider} / ${esc(agent.model)}
       · ${agent.id === YUKI_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
 
-    // Yuki and Hermes can't be fired
+    // Yuki and Hermes can't be fired or vacationed
     const fireBtn = document.getElementById("d-fire") as HTMLButtonElement | null;
     if (fireBtn) fireBtn.hidden = agent.id === YUKI_ID || agent.id === HERMES_ID;
+    const vacBtn = document.getElementById("d-vacation") as HTMLButtonElement | null;
+    if (vacBtn) vacBtn.hidden = agent.id === YUKI_ID || agent.id === HERMES_ID;
 
     const handoffSel = document.getElementById("d-handoff") as HTMLSelectElement;
     const others = [...this.store.agents.values()].filter((a) => a.id !== agent.id);
@@ -2042,15 +2126,16 @@ export class Hud {
     this.lastLogCount = logs.length;
     this.lastLogTail = logs.length ? logs[logs.length - 1] : null;
 
-    // Disable chat input when agent is busy — prevents rate-limit toast spam
+    // Disable chat input when agent is busy or user lacks talk access
     const chatInput = document.getElementById("d-chat") as HTMLInputElement | null;
     const sayBtn = document.getElementById("d-say") as HTMLButtonElement | null;
     const isBusy = agent.status === "thinking" || agent.status === "working";
+    const canTalk = this.store.accessLevel === "talk" || this.store.accessLevel === "manage";
     if (chatInput) {
-      chatInput.disabled = isBusy;
-      chatInput.placeholder = isBusy ? `${agent.name} is busy…` : "Say something… (chat, not a task)";
+      chatInput.disabled = isBusy || !canTalk;
+      chatInput.placeholder = !canTalk ? "Tour mode — no chat access" : isBusy ? `${agent.name} is busy…` : "Say something… (chat, not a task)";
     }
-    if (sayBtn) sayBtn.disabled = isBusy;
+    if (sayBtn) sayBtn.disabled = isBusy || !canTalk;
 
     if (!this._scheduleEditingId && !this._scheduleCreateOpen) {
       this.renderSchedules(agent.id);

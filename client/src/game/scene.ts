@@ -1804,38 +1804,233 @@ export class OfficeScene extends Phaser.Scene {
     return true;
   }
 
-  /** Show a modal prompting the user to connect a platform via Hermes Agent. */
+  /** Platform-specific setup steps for the connect modal. */
+  private static readonly PLATFORM_SETUP_STEPS: Record<string, { title: string; body: string; cmd?: string }[]> = {
+    Slack: [
+      {
+        title: "Slack — Create a Slack App",
+        body: `1. Go to https://api.slack.com/apps\n2. Click "Create New App" → "From scratch"\n3. Name it (e.g. "Agent Heights Bot")\n4. Pick your workspace → Create App`,
+      },
+      {
+        title: "Slack — Add Bot Scopes",
+        body: `1. Left sidebar → "OAuth & Permissions"\n2. Under "Bot Token Scopes" add:\n   - chat:write\n   - channels:history\n   - channels:read\n   - groups:history\n   - groups:read\n   - im:history\n   - im:write\n   - mpim:history`,
+      },
+      {
+        title: "Slack — Install & Copy Token",
+        body: `1. Click "Install to Workspace" at the top\n2. Authorize the app\n3. Copy the "Bot User OAuth Token"\n   (starts with xoxb-)\n4. Note your "Signing Secret" from\n   Basic Information → App Credentials`,
+      },
+      {
+        title: "Slack — Configure in Hermes",
+        body: `Run the Hermes gateway setup wizard and\nselect Slack. Paste your bot token and\nsigning secret when prompted.`,
+        cmd: "hermes gateway setup",
+      },
+      {
+        title: "Slack — Invite Bot to Channels",
+        body: `In Slack, invite your bot to any channel\nwhere agents should receive messages:\n\n  /invite @Agent Heights Bot\n\nOnce done, interact with the Slack mailbox\nagain to check messages.`,
+      },
+    ],
+    Discord: [
+      {
+        title: "Discord — Create Application",
+        body: `1. Go to https://discord.com/developers/applications\n2. Click "New Application"\n3. Name it (e.g. "Agent Heights") → Create`,
+      },
+      {
+        title: "Discord — Add a Bot",
+        body: `1. Left sidebar → "Bot"\n2. Click "Add Bot" → Yes, do it!\n3. Under "Privileged Gateway Intents" enable:\n   - Message Content Intent\n   - Server Members Intent\n4. Click "Save Changes"`,
+      },
+      {
+        title: "Discord — Copy Bot Token",
+        body: `1. Still on the Bot page, click\n   "Reset Token" (or "Copy" if visible)\n2. Copy the token — store it safely,\n   it won't be shown again`,
+      },
+      {
+        title: "Discord — Invite Bot to Server",
+        body: `1. Left sidebar → "OAuth2" → "URL Generator"\n2. Under Scopes check: bot\n3. Under Bot Permissions check:\n   - Send Messages\n   - Read Message History\n4. Open the generated URL in your browser\n5. Select your server → Authorize`,
+      },
+      {
+        title: "Discord — Configure in Hermes",
+        body: `Run the Hermes gateway setup wizard and\nselect Discord. Paste your bot token\nwhen prompted.`,
+        cmd: "hermes gateway setup",
+      },
+    ],
+    Telegram: [
+      {
+        title: "Telegram — Create a Bot",
+        body: `1. Open Telegram and message @BotFather\n2. Send: /newbot\n3. Give it a name (e.g. "Agent Heights")\n4. Give it a username ending in "bot"\n   (e.g. "agent_heights_bot")`,
+      },
+      {
+        title: "Telegram — Copy Bot Token",
+        body: `BotFather will respond with an HTTP API\ntoken that looks like:\n\n  123456789:ABCdefGHIjklMNOpqrSTUvwxYZ\n\nCopy this token — you'll need it for Hermes.`,
+      },
+      {
+        title: "Telegram — Configure in Hermes",
+        body: `Run the Hermes gateway setup wizard and\nselect Telegram. Paste your bot token\nwhen prompted.`,
+        cmd: "hermes gateway setup",
+      },
+    ],
+    WhatsApp: [
+      {
+        title: "WhatsApp — Set Up Twilio",
+        body: `WhatsApp Business API requires a provider.\nTwilio is the easiest:\n\n1. Sign up at https://www.twilio.com\n2. Navigate to Messaging → WhatsApp\n3. Activate the WhatsApp sandbox (free)\n   or apply for production access`,
+      },
+      {
+        title: "WhatsApp — Copy Credentials",
+        body: `From the Twilio console, copy:\n   - Account SID (starts with AC...)\n   - Auth Token\n   - Your WhatsApp number\n     (sandbox: +14155238886)`,
+      },
+      {
+        title: "WhatsApp — Configure in Hermes",
+        body: `Run the Hermes gateway setup wizard and\nselect WhatsApp. Enter your Twilio\nAccount SID, Auth Token, and WhatsApp\nnumber when prompted.`,
+        cmd: "hermes gateway setup",
+      },
+    ],
+    Signal: [
+      {
+        title: "Signal — Register a Number",
+        body: `Signal requires a dedicated phone number\nregistered via signal-cli.\n\n1. Install signal-cli on your server:\n     sudo apt install signal-cli\n2. Register a number:\n     signal-cli -u +15551234567 register\n3. Verify with the SMS code:\n     signal-cli -u +15551234567 verify 123-456`,
+        cmd: "signal-cli -u +15551234567 register",
+      },
+      {
+        title: "Signal — Configure in Hermes",
+        body: `Run the Hermes gateway setup wizard and\nselect Signal. Enter the phone number\nyou registered with signal-cli.`,
+        cmd: "hermes gateway setup",
+      },
+    ],
+    Email: [
+      {
+        title: "Email — Create an App Password",
+        body: `Hermes connects via IMAP/SMTP.\n\nFor Gmail:\n1. Enable 2-Step Verification\n2. Go to https://myaccount.google.com/apppasswords\n3. Generate an app password for "Mail"\n4. Copy the 16-character password\n\nFor other providers, use your IMAP/SMTP\ncredentials directly.`,
+      },
+      {
+        title: "Email — Note IMAP/SMTP Settings",
+        body: `You'll need:\n   - IMAP server (e.g. imap.gmail.com)\n   - IMAP port (usually 993, SSL)\n   - SMTP server (e.g. smtp.gmail.com)\n   - SMTP port (usually 587, TLS)\n   - Email address\n   - App password`,
+      },
+      {
+        title: "Email — Configure in Hermes",
+        body: `Run the Hermes gateway setup wizard and\nselect Email. Enter your IMAP/SMTP\nsettings, email, and password when prompted.`,
+        cmd: "hermes gateway setup",
+      },
+    ],
+  };
+
+  /** Show a multi-step modal walking the user through platform-specific setup. */
   private showPlatformConnectModal(platform: string): void {
     const state = this.store.platformStates.find((s) => s.platform === platform);
     const status = state?.status ?? "Not configured";
     const gatewayRunning = state?.gatewayRunning ?? false;
 
-    // Create a simple modal overlay
+    const steps = OfficeScene.PLATFORM_SETUP_STEPS[platform] ?? [
+      {
+        title: `Connect ${platform}`,
+        body: `${platform} is not connected yet.\n\nGateway: ${gatewayRunning ? "Running" : "Not running"}\nStatus: ${status}\n\nRun the Hermes gateway setup wizard\nto configure ${platform}.`,
+        cmd: "hermes gateway setup",
+      },
+    ];
+
     const cam = this.cameras.main;
-    const bg = this.add.rectangle(cam.centerX, cam.centerY, cam.width, cam.height, 0x000000, 0.7)
+    const W = 460, H = 360;
+    const cx = cam.centerX, cy = cam.centerY;
+
+    // Modal container elements
+    const elements: Phaser.GameObjects.GameObject[] = [];
+
+    const bg = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.7)
       .setScrollFactor(0).setDepth(10000);
-
-    const panel = this.add.rectangle(cam.centerX, cam.centerY, 420, 260, 0x1a1a2e, 0.95)
+    const panel = this.add.rectangle(cx, cy, W, H, 0x1a1a2e, 0.95)
       .setStrokeStyle(2, 0x6c5ce7).setScrollFactor(0).setDepth(10001);
+    elements.push(bg, panel);
 
-    const title = this.add.text(cam.centerX, cam.centerY - 90, `Connect ${platform}`, {
-      fontSize: "20px", color: "#ffffff", fontStyle: "bold",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
-
-    const desc = this.add.text(cam.centerX, cam.centerY - 40,
-      `${platform} is not connected yet.\n\nHermes Agent gateway: ${gatewayRunning ? "Running" : "Not running"}\nStatus: ${status}\n\nRun this on your server:\nhermes gateway setup`,
-      { fontSize: "13px", color: "#a0a0b0", align: "center", wordWrap: { width: 380 } }
+    // Status bar at top
+    const statusText = this.add.text(cx, cy - H / 2 + 16,
+      `Gateway: ${gatewayRunning ? "Running" : "Not running"}  |  ${platform}: ${status}`,
+      { fontSize: "11px", color: gatewayRunning ? "#55efc4" : "#ff7675", align: "center" }
     ).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
+    elements.push(statusText);
 
-    const closeBtn = this.add.text(cam.centerX, cam.centerY + 80, "[ Close ]", {
-      fontSize: "16px", color: "#6c5ce7", fontStyle: "bold",
+    // Dynamic content area (title + body + command box)
+    const titleObj = this.add.text(cx, cy - H / 2 + 50, "", {
+      fontSize: "16px", color: "#ffffff", fontStyle: "bold", align: "center",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setWordWrapWidth(W - 40);
+    elements.push(titleObj);
+
+    const bodyObj = this.add.text(cx, cy - 20, "", {
+      fontSize: "12px", color: "#a0a0b0", align: "left", wordWrap: { width: W - 60 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
+    elements.push(bodyObj);
+
+    // Command box (monospace-style highlighted box)
+    const cmdBox = this.add.rectangle(cx, cy + 70, W - 80, 28, 0x0d0d1a, 0.9)
+      .setStrokeStyle(1, 0x6c5ce7).setScrollFactor(0).setDepth(10002);
+    elements.push(cmdBox);
+
+    const cmdText = this.add.text(cx, cy + 70, "", {
+      fontSize: "12px", color: "#55efc4", fontFamily: "monospace", align: "center",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10003);
+    elements.push(cmdText);
+
+    // Step indicator dots
+    const dots: Phaser.GameObjects.Text[] = [];
+    for (let i = 0; i < steps.length; i++) {
+      const dot = this.add.text(cx - 36 + i * 24, cy + H / 2 - 50, "○", {
+        fontSize: "14px", color: "#555568",
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
+      dots.push(dot);
+      elements.push(dot);
+    }
+
+    // Navigation buttons
+    const prevBtn = this.add.text(cx - 80, cy + H / 2 - 22, "[ < Prev ]", {
+      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
+    elements.push(prevBtn);
 
-    const closeModal = () => {
-      bg.destroy(); panel.destroy(); title.destroy(); desc.destroy(); closeBtn.destroy();
+    const nextBtn = this.add.text(cx + 80, cy + H / 2 - 22, "[ Next > ]", {
+      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
+    elements.push(nextBtn);
+
+    const closeBtn = this.add.text(cx, cy + H / 2 - 22, "[ Close ]", {
+      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
+    elements.push(closeBtn);
+
+    let currentStep = 0;
+
+    const renderStep = () => {
+      const step = steps[currentStep];
+      titleObj.setText(step.title);
+      bodyObj.setText(step.body);
+      if (step.cmd) {
+        cmdBox.setVisible(true);
+        cmdText.setVisible(true);
+        cmdText.setText(`$ ${step.cmd}`);
+      } else {
+        cmdBox.setVisible(false);
+        cmdText.setVisible(false);
+      }
+
+      // Update dots
+      for (let i = 0; i < dots.length; i++) {
+        dots[i].setText(i === currentStep ? "●" : i < currentStep ? "✓" : "○");
+        dots[i].setColor(i < currentStep ? "#55efc4" : i === currentStep ? "#6c5ce7" : "#555568");
+      }
+
+      // Show/hide nav buttons
+      prevBtn.setVisible(currentStep > 0);
+      nextBtn.setVisible(currentStep < steps.length - 1);
+      closeBtn.setVisible(currentStep === steps.length - 1);
     };
+
+    prevBtn.on("pointerdown", () => {
+      if (currentStep > 0) { currentStep--; renderStep(); }
+    });
+    nextBtn.on("pointerdown", () => {
+      if (currentStep < steps.length - 1) { currentStep++; renderStep(); }
+    });
+
+    const closeModal = () => elements.forEach(e => e.destroy());
     closeBtn.on("pointerdown", closeModal);
     bg.setInteractive().on("pointerdown", closeModal);
+
+    renderStep();
   }
 
   /** Try interacting with any new office object. Returns true if an interaction fired. */

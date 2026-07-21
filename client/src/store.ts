@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -31,6 +31,7 @@ export interface PendingInvite {
   fromUserId: string;
   fromName: string;
   role: "member" | "guest";
+  accessLevel?: RoomAccessLevel;
 }
 
 /** Client-side mirror of server state; HUD and the Phaser scene subscribe. */
@@ -42,6 +43,7 @@ export class Store {
   board = new Map<string, TaskCard>();
   schedules = new Map<string, AgentSchedule>();
   firedAgents = new Map<string, FiredAgent>();
+  vacationedAgents = new Map<string, VacationedAgent>();
   worldSeed = 0;
   chunkOverrides: Record<string, Record<number, number>> = {};
   /** Every agent's messages merged chronologically, for the office feed. */
@@ -77,6 +79,8 @@ export class Store {
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
   projectorChannel: string = "off";
+  /** Access level for the current room: no_access, tour, talk, or manage. */
+  accessLevel: RoomAccessLevel = "no_access";
   pendingInvite: PendingInvite | null = null;
   privateOfficeId: string | null = null;
   roomsList: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] = [];
@@ -148,6 +152,7 @@ export class Store {
     this.board.clear();
     this.schedules.clear();
     this.firedAgents.clear();
+    this.vacationedAgents.clear();
     this.feed = [];
     this.feedVersion++;
     this.player = null;
@@ -570,6 +575,7 @@ export class Store {
         this.worldSeed = msg.world.seed;
         this.chunkOverrides = msg.world.chunkOverrides ?? {};
         this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
+        this.vacationedAgents = new Map((msg.world.vacationedAgents ?? []).map((va) => [va.id, va]));
         break;
       case "fired_agent":
         this.firedAgents.set(msg.agent.id, msg.agent);
@@ -587,6 +593,20 @@ export class Store {
         this.firedAgents.delete(msg.agentId);
         achievements.unlock("first_recruit");
         if (achievements.incStat("recruited") >= 5) achievements.unlock("recruit_five");
+        break;
+      case "vacationed_agent":
+        this.vacationedAgents.set(msg.agent.id, msg.agent);
+        this.feed.push({
+          agentId: msg.agent.id,
+          name: msg.agent.name,
+          accent: msg.agent.accent,
+          entry: { ts: Date.now(), kind: "status", text: "went on vacation. Restore them anytime from the roster." },
+          seq: this.feedSeq++,
+        });
+        if (this.feed.length > FEED_MAX) this.feed.splice(0, this.feed.length - FEED_MAX);
+        break;
+      case "vacationed_agent_removed":
+        this.vacationedAgents.delete(msg.agentId);
         break;
       case "huddle":
         for (const fn of this.huddleListeners) fn(msg.agentIds);
@@ -737,6 +757,7 @@ export class Store {
         this.roomName = msg.name;
         if (msg.privateOfficeId) this.privateOfficeId = msg.privateOfficeId;
         this.projectorChannel = msg.projectorChannel ?? "off";
+        this.accessLevel = msg.accessLevel ?? "no_access";
         this.roomPlayers.clear();
         for (const p of msg.players) {
           this.roomPlayers.set(p.userId, p);
@@ -769,6 +790,7 @@ export class Store {
           fromUserId: msg.fromUserId,
           fromName: msg.fromName,
           role: msg.role,
+          accessLevel: msg.accessLevel,
         };
         this.toast(`${msg.fromName} invited you to ${msg.roomName}`);
         break;

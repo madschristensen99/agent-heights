@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType } from "../shared/types.js";
+import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel } from "../shared/types.js";
 import { AGENT_HEIGHTS_HQ_SLUG, AGENT_HEIGHTS_HQ_ADMINS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
@@ -44,6 +44,8 @@ interface RoomPlayer {
   name: string;
   appearance: CharAppearance | null;
   role: "owner" | "member" | "guest";
+  /** What this player can do in the room. */
+  accessLevel: RoomAccessLevel;
   x: number;
   y: number;
   dir: Dir;
@@ -63,6 +65,8 @@ interface Room {
   orgId?: string;
   /** Current projector channel: "off", "brainrot", etc. */
   projectorChannel: string;
+  /** Persisted invite list for private rooms: userId → access level. */
+  invitedUsers: Map<string, RoomAccessLevel>;
 }
 
 /** In-memory organization member (augmented with email for display). */
@@ -124,6 +128,7 @@ export class TenantManager {
       roomType: "organization",
       orgId: hqOrgId,
       projectorChannel: "off",
+      invitedUsers: new Map(),
     });
   }
 
@@ -171,6 +176,7 @@ export class TenantManager {
       roomType,
       orgId,
       projectorChannel: "off",
+      invitedUsers: new Map(),
     };
     this.rooms.set(roomId, room);
     return roomId;
@@ -182,12 +188,14 @@ export class TenantManager {
     if (!room) return null;
 
     const role = room.ownerId === user.id ? "owner" : "member";
+    const accessLevel = this.computeAccessLevel(room, user.id);
     const savedPos = this.lastPositions.get(user.id);
     const roomPlayer: RoomPlayer = {
       userId: user.id,
       name: player?.name ?? "Boss",
       appearance: player?.appearance ?? null,
       role,
+      accessLevel,
       x: savedPos?.x ?? 400,
       y: savedPos?.y ?? 300,
       dir: savedPos?.dir ?? "down",
@@ -246,6 +254,7 @@ export class TenantManager {
       name: p.name,
       appearance: p.appearance,
       role: p.role,
+      accessLevel: p.accessLevel,
       x: p.x,
       y: p.y,
       dir: p.dir,
@@ -302,6 +311,125 @@ export class TenantManager {
     const room = this.rooms.get(sess.roomId);
     if (!room) return null;
     return this.sessions.get(room.ownerId) ?? null;
+  }
+
+  /** Compute the access level for a user in a room based on ownership, org
+   *  membership, and invite list. Does NOT check canJoinRoom — assumes the
+   *  user is allowed in the room. */
+  computeAccessLevel(room: Room, userId: string): RoomAccessLevel {
+    // Room owner → manage
+    if (room.ownerId === userId) return "manage";
+
+    // Private room: check invite list
+    if (room.roomType === "private") {
+      const invited = room.invitedUsers.get(userId);
+      if (invited) return invited;
+      // Not invited but somehow in the room (e.g. via invite acceptance) → talk
+      return "talk";
+    }
+
+    // Organization room: check org membership
+    if (room.roomType === "organization" && room.orgId) {
+      const org = this.orgs.get(room.orgId);
+      if (org) {
+        const member = org.members.get(userId);
+        if (member) {
+          // Org admins get manage, members get talk
+          return member.role === "admin" ? "manage" : "talk";
+        }
+      }
+      // Non-member in an org room (tour access) — they can see but not interact
+      return "tour";
+    }
+
+    // Public room → talk
+    return "talk";
+  }
+
+  /** Get the access level for a user in their current room. Returns
+   *  "no_access" if the user is not in a room. */
+  getRoomAccessLevel(userId: string): RoomAccessLevel {
+    const sess = this.sessions.get(userId);
+    if (!sess?.roomId) return "no_access";
+    const room = this.rooms.get(sess.roomId);
+    if (!room) return "no_access";
+    return this.computeAccessLevel(room, userId);
+  }
+
+  /** Invite a user to a private room with a given access level. */
+  inviteUser(roomId: string, userId: string, accessLevel: RoomAccessLevel): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    room.invitedUsers.set(userId, accessLevel);
+    return true;
+  }
+
+  /** Get the invite level for a user in a private room. */
+  getUserInviteLevel(roomId: string, userId: string): RoomAccessLevel | undefined {
+    const room = this.rooms.get(roomId);
+    if (!room) return undefined;
+    return room.invitedUsers.get(userId);
+  }
+
+  /** Get the AgentManager for a room. For private rooms, it's the owner's
+   *  personal manager. For org rooms, it's a shared manager keyed by orgId.
+   *  Returns null if the room doesn't exist or has no manager. */
+  getRoomManager(roomId: string): AgentManager | null {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+
+    // Private room → owner's personal manager
+    if (room.roomType === "private") {
+      const ownerSess = this.sessions.get(room.ownerId);
+      return ownerSess?.manager ?? null;
+    }
+
+    // Organization room → shared org manager
+    if (room.roomType === "organization" && room.orgId) {
+      return this.getOrgManager(room.orgId);
+    }
+
+    return null;
+  }
+
+  // ── Shared org agent managers ───────────────────────────────────────
+  /** Shared AgentManagers for org rooms, keyed by orgId. */
+  private orgManagers = new Map<string, AgentManager>();
+
+  /** Get or create the shared AgentManager for an organization. */
+  getOrgManager(orgId: string): AgentManager | null {
+    const org = this.orgs.get(orgId);
+    if (!org) return null;
+
+    let mgr = this.orgManagers.get(orgId);
+    if (!mgr) {
+      const orgDir = join(this.rootDir, "ag", "orgs", orgId);
+      mkdirSync(orgDir, { recursive: true });
+      const session = new SessionLogger(orgDir);
+      // Org managers use file-based persistence for simplicity
+      const save = new SaveFile(orgDir);
+      const saved = save.load();
+      const broadcast = (msg: ServerMsg) => {
+        // Broadcast to all members currently in any org room for this org
+        for (const room of this.rooms.values()) {
+          if (room.orgId !== orgId) continue;
+          for (const [pid] of room.players) {
+            const peerSess = this.sessions.get(pid);
+            if (peerSess) {
+              for (const ws of peerSess.clients) {
+                if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+              }
+            }
+          }
+        }
+      };
+      mgr = new AgentManager(orgDir, broadcast, session, save, saved, null, `org:${orgId}`);
+      mgr.setMcpKeys({});
+      mgr.startThinkLoop();
+      this.orgManagers.set(orgId, mgr);
+      console.log(`[agent-heights] created shared AgentManager for org ${org.name}`);
+    }
+    return mgr;
   }
 
   /** Forward a message to all other players in the same room (not the sender). */
@@ -391,7 +519,9 @@ export class TenantManager {
     // ── Broadcast: Redis pub/sub (with in-memory fallback) ──────────────
     // Also forwards agent-related messages to visitors in the owner's room.
     const FORWARD_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "toast", "emote", "agent_chat"]);
-    // Agent-related types that should only be delivered when the user is in a private office
+    // Agent-related types from the user's PERSONAL manager — skip when user is
+    // not in their own office (HQ2, org rooms, or visiting another office).
+    // Org room agents are broadcast by the shared org manager, not here.
     const AGENT_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "chat_cleared", "assembly", "emote", "agent_chat"]);
 
     const deliverLocal = (data: string) => {
@@ -403,8 +533,9 @@ export class TenantManager {
     if (isRedisConfigured) {
       sess.broadcast = (msg: ServerMsg): void => {
         const data = JSON.stringify(msg);
-        // Skip agent updates when user is in HQ2 — agents keep working but client doesn't need to see them
-        if (AGENT_TYPES.has(msg.type) && sess.roomId === HQ2_ROOM_ID) return;
+        // Skip personal agent updates when user is not in their own office.
+        // Org room agents are broadcast by the org manager directly to clients.
+        if (AGENT_TYPES.has(msg.type) && sess.roomId !== sess.privateOfficeId) return;
         deliverLocal(data);
         if (FORWARD_TYPES.has(msg.type)) {
           this.forwardToRoomPeers(user.id, data);
@@ -796,16 +927,25 @@ export class TenantManager {
     return this.createRoom("system", name, theme, false, orgId);
   }
 
-  /** Check if a user can join a room (org members can join org rooms freely). */
+  /** Check if a user can join a room.
+   *  - HQ2 is open to everyone (tour for non-members, talk for members, manage for admins)
+   *  - Public rooms are open to all
+   *  - Private rooms: owner + invited users
+   *  - Org rooms: org members (talk/manage) + non-members get tour */
   canJoinRoom(roomId: string, userId: string): boolean {
     const room = this.rooms.get(roomId);
     if (!room) return false;
-    // HQ2 is always open to everyone, even though it's the Agent Heights HQ org room
+    // HQ2 is always open to everyone
     if (roomId === HQ2_ROOM_ID) return true;
     if (room.roomType === "public") return true;
-    if (room.roomType === "private") return room.ownerId === userId;
+    // Private rooms: owner or invited users
+    if (room.roomType === "private") {
+      if (room.ownerId === userId) return true;
+      return room.invitedUsers.has(userId);
+    }
+    // Org rooms: members can join, non-members get tour access
     if (room.roomType === "organization" && room.orgId) {
-      return this.isOrgMember(room.orgId, userId);
+      return true; // everyone can tour; access level controls what they can do
     }
     return false;
   }
