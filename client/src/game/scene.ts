@@ -1347,7 +1347,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private minZoom(): number {
-    return this.defaultZoom();
+    return this.defaultZoom() * 0.4;
   }
 
   private maxZoom(): number {
