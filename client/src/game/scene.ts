@@ -296,6 +296,12 @@ export class OfficeScene extends Phaser.Scene {
     // Clean up projector iframe on scene shutdown/restart
     this.events.once("shutdown", () => this.destroyProjectorVideo());
 
+    // Projector video overlay: position during prerender for accurate camera placement
+    this.events.on("prerender", () => {
+      this.updateProjectorVideo();
+      this.updateProjectorVideoOverlays();
+    });
+
     // ── Screen share + webcam: create managers and wire store listeners ──
     if (this._myUserId && this.net) {
       this.screenShare = new ScreenShareManager(this._myUserId, (msg) => this.net!.send(msg));
@@ -3473,8 +3479,10 @@ export class OfficeScene extends Phaser.Scene {
   private worldRectToScreen(wx: number, wy: number, ww: number, wh: number): { x: number; y: number; w: number; h: number } {
     const cam = this.cameras.main;
     const canvas = this.game.canvas.getBoundingClientRect();
-    const sx = canvas.left + (wx - cam.scrollX) * cam.zoom;
-    const sy = canvas.top + (wy - cam.scrollY) * cam.zoom;
+    // Use camera worldView for accurate position (accounts for follow lerp and rounding)
+    const view = cam.worldView;
+    const sx = canvas.left + (wx - view.x) * cam.zoom;
+    const sy = canvas.top + (wy - view.y) * cam.zoom;
     return { x: sx, y: sy, w: ww * cam.zoom, h: wh * cam.zoom };
   }
 
@@ -4445,9 +4453,7 @@ export class OfficeScene extends Phaser.Scene {
     // --- helicopter rotor ---
     this.updateHelicopter(time);
 
-    // --- projector screen video overlay ---
-    this.updateProjectorVideo();
-    this.updateProjectorVideoOverlays();
+    // --- projector screen video overlay (deferred to postupdate for accurate camera position) ---
 
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
