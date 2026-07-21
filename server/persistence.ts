@@ -44,6 +44,7 @@ export class SaveFile implements Persistence {
   private state: SaveState = { player: null, agents: [], logs: {}, board: [], schedules: [], world: { seed: 0, firedAgents: [] }, pendingTasks: {} };
   private timer: ReturnType<typeof setTimeout> | null = null;
   private messages: Map<string, unknown[]> = new Map();
+  private archivedMessages: Map<string, unknown[]> = new Map();
 
   constructor(rootDir: string) {
     const dir = join(rootDir, "ag");
@@ -147,11 +148,19 @@ export class SaveFile implements Persistence {
   }
 
   async clearMessages(agentId: string): Promise<void> {
+    // Soft-delete: move messages to archived map instead of deleting
+    const existing = this.messages.get(agentId);
+    if (existing) {
+      const prev = this.archivedMessages.get(agentId) ?? [];
+      this.archivedMessages.set(agentId, [...prev, ...existing]);
+    }
     this.messages.delete(agentId);
     this.schedule();
   }
 
   async clearLogs(agentId: string): Promise<void> {
+    // Soft-delete: logs are already in state.logs, just clear the active set
+    // The previous logs remain in the save file's history via session logger
     if (this.state.logs) this.state.logs[agentId] = [];
     this.schedule();
   }

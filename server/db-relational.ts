@@ -133,6 +133,7 @@ export class RelationalPersistence {
           .from("sprite_heights_agent_logs")
           .select("agent_id, ts, kind, text")
           .in("agent_id", agentIds)
+          .eq("archived", false)
           .order("ts", { ascending: true })
           .limit(LOG_CAP * agentIds.length);
 
@@ -441,11 +442,12 @@ export class RelationalPersistence {
       const agentLogs = logs[agent.id] ?? [];
       if (agentLogs.length === 0) continue;
 
-      // Get current count for this agent
+      // Get current count for this agent (only non-archived)
       const { count } = await supabaseAdmin
         .from("sprite_heights_agent_logs")
         .select("id", { count: "exact", head: true })
-        .eq("agent_id", agent.id);
+        .eq("agent_id", agent.id)
+        .eq("archived", false);
 
       const existingCount = count ?? 0;
       if (existingCount === undefined) continue;
@@ -458,6 +460,7 @@ export class RelationalPersistence {
           ts: l.ts,
           kind: l.kind,
           text: l.text,
+          archived: false,
         }));
         try {
           await supabaseAdmin.from("sprite_heights_agent_logs").insert(logRows);
@@ -466,13 +469,14 @@ export class RelationalPersistence {
         }
       }
 
-      // Trim to LOG_CAP
+      // Trim to LOG_CAP (only non-archived)
       if (existingCount + newLogs.length > LOG_CAP) {
         try {
           const { data: oldLogs } = await supabaseAdmin
             .from("sprite_heights_agent_logs")
             .select("id")
             .eq("agent_id", agent.id)
+            .eq("archived", false)
             .order("ts", { ascending: true })
             .limit(existingCount + newLogs.length - LOG_CAP);
           if (oldLogs && oldLogs.length > 0) {
@@ -585,12 +589,13 @@ export class RelationalPersistence {
   async saveMessages(agentId: string, messages: unknown[]): Promise<void> {
     if (!isSupabaseConfigured || !this.roomId) return;
     try {
-      // Delete existing messages for this agent and re-insert
-      // This is simpler than diffing and handles compaction correctly
+      // Delete existing non-archived messages for this agent and re-insert
+      // Archived messages are preserved as an audit trail
       await supabaseAdmin
         .from("sprite_heights_conversation_messages")
         .delete()
-        .eq("agent_id", agentId);
+        .eq("agent_id", agentId)
+        .eq("archived", false);
 
       if (messages.length === 0) return;
 
@@ -600,6 +605,7 @@ export class RelationalPersistence {
         seq: i,
         role: msg.role ?? "unknown",
         content: msg.content ?? msg,
+        archived: false,
       }));
 
       await supabaseAdmin
@@ -617,6 +623,7 @@ export class RelationalPersistence {
         .from("sprite_heights_conversation_messages")
         .select("role, content")
         .eq("agent_id", agentId)
+        .eq("archived", false)
         .order("seq", { ascending: true });
 
       if (error || !data) return [];
@@ -634,10 +641,12 @@ export class RelationalPersistence {
   async clearMessages(agentId: string): Promise<void> {
     if (!isSupabaseConfigured || !this.roomId) return;
     try {
+      // Soft-delete: archive messages instead of hard-deleting
       await supabaseAdmin
         .from("sprite_heights_conversation_messages")
-        .delete()
-        .eq("agent_id", agentId);
+        .update({ archived: true })
+        .eq("agent_id", agentId)
+        .eq("archived", false);
     } catch (err) {
       console.error(`[db-rel] clearMessages for ${agentId} failed:`, err);
     }
@@ -647,10 +656,12 @@ export class RelationalPersistence {
     if (!isSupabaseConfigured || !this.roomId) return;
     if (this.state.logs) this.state.logs[agentId] = [];
     try {
+      // Soft-delete: archive logs instead of hard-deleting
       await supabaseAdmin
         .from("sprite_heights_agent_logs")
-        .delete()
-        .eq("agent_id", agentId);
+        .update({ archived: true })
+        .eq("agent_id", agentId)
+        .eq("archived", false);
     } catch (err) {
       console.error(`[db-rel] clearLogs for ${agentId} failed:`, err);
     }

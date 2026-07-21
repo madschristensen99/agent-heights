@@ -67,13 +67,39 @@ const agents = new Map<string, Agent>();
 const messageStore = new Map<string, unknown[]>();
 
 /** Max messages before we summarize older ones to save context window. */
-const MAX_MESSAGES = 50;
+const MAX_MESSAGES = 30;
 /** Messages to keep verbatim after summarization. */
-const KEEP_RECENT = 15;
+const KEEP_RECENT = 10;
+/** Rough token estimate threshold for compaction (chars ÷ 4 ≈ tokens). */
+const MAX_CONTEXT_CHARS = 200_000 * 4; // 200K tokens at ~4 chars/token
+
+/** Rough token estimate for a set of messages (chars ÷ 4). */
+function estimateTokens(messages: any[]): number {
+  let chars = 0;
+  for (const msg of messages) {
+    const content = msg.content;
+    if (typeof content === "string") {
+      chars += content.length;
+    } else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part.type === "text" && part.text) chars += part.text.length;
+        else if (part.type === "tool_use") chars += JSON.stringify(part.input ?? {}).length;
+        else if (part.type === "tool_result") {
+          chars += typeof part.content === "string" ? part.content.length : 200;
+        } else {
+          chars += JSON.stringify(part).length;
+        }
+      }
+    } else {
+      chars += JSON.stringify(content ?? "").length;
+    }
+  }
+  return Math.ceil(chars / 4);
+}
 
 /** Summarize older messages into a compact text block to save context window. */
 function compactMessages(messages: any[]): any[] {
-  if (messages.length <= MAX_MESSAGES) return messages;
+  if (messages.length <= MAX_MESSAGES && estimateTokens(messages) <= MAX_CONTEXT_CHARS) return messages;
   const oldMessages = messages.slice(0, messages.length - KEEP_RECENT);
   const recentMessages = messages.slice(messages.length - KEEP_RECENT);
 

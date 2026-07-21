@@ -1700,11 +1700,16 @@ export class AgentManager {
       }
 
       // a stale or corrupted conversation shouldn't brick the agent forever
-      if (sawError && !gotEvents && hadSession && /session|resume|conversation|thread|tool_call_id|invalid.*request/i.test(firstErrorText)) {
+      const isStaleSessionError = /session|resume|conversation|thread|tool_call_id|invalid.*request/i.test(firstErrorText);
+      const isTokenLimitError = /token.*limit|exceeded.*limit/i.test(firstErrorText);
+      if (sawError && hadSession && ((isStaleSessionError && !gotEvents) || isTokenLimitError)) {
         rt.info.sessionId = null;
         clearAllMemory(rt.info.id);
+        void this.save.clearMessages(rt.info.id);
         this.persist();
-        this.log(rt, "status", "Couldn't resume memory — starting a fresh conversation next task.");
+        this.log(rt, "status", isTokenLimitError
+          ? "Context window exceeded — starting a fresh conversation next task (previous conversation archived)."
+          : "Couldn't resume memory — starting a fresh conversation next task.");
       }
 
       if (!sawError && !abort.signal.aborted) {

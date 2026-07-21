@@ -42,7 +42,8 @@ export async function trimAllLogs(): Promise<void> {
       const { count } = await supabaseAdmin
         .from("sprite_heights_agent_logs")
         .select("id", { count: "exact", head: true })
-        .eq("agent_id", agent.id);
+        .eq("agent_id", agent.id)
+        .eq("archived", false);
 
       if ((count ?? 0) > LOG_CAP) {
         const excess = (count ?? 0) - LOG_CAP;
@@ -50,6 +51,7 @@ export async function trimAllLogs(): Promise<void> {
           .from("sprite_heights_agent_logs")
           .select("id")
           .eq("agent_id", agent.id)
+          .eq("archived", false)
           .order("ts", { ascending: true })
           .limit(excess);
         if (oldLogs && oldLogs.length > 0) {
