@@ -1464,7 +1464,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!isTouchDevice()) return; // Desktop uses WASD + click agents directly
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
-    // Only walk when tapping near an interactable — not empty ground
+    // Check if tapping near an interactable — walk to it and interact
     const interactable = this.findInteractableAt(worldPoint.x, worldPoint.y);
     if (interactable) {
       const dest = this.findAdjacentWalkable(interactable.tile);
@@ -1472,9 +1472,22 @@ export class OfficeScene extends Phaser.Scene {
         this.walkToTile(dest);
         this.pendingInteract = true;
         this.showPathMarker(dest);
+        return;
       }
     }
-    // Tapping empty ground does nothing — use WASD/joystick to move
+
+    // Tap empty ground: walk there (mobile only)
+    this.pendingInteract = false;
+    const targetTile = tileOf(worldPoint.x, worldPoint.y);
+    const outside = this.world.isOutside(worldPoint.x, worldPoint.y);
+    if (outside) {
+      this.playerPath = [];
+      this.playerTargetPx = { x: worldPoint.x, y: worldPoint.y };
+      this.showPathMarkerPx(worldPoint.x, worldPoint.y);
+    } else {
+      this.walkToTile(targetTile);
+      this.showPathMarker(targetTile);
+    }
   }
 
   /** Walk player to a tile using A* pathfinding (office only). */
