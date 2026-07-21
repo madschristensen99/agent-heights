@@ -1473,9 +1473,10 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  /** Handle a tap on the game world: walk to location or walk+interact with nearby object. */
+  /** Handle a tap on the game world: walk to interactable (mobile only). */
   private handleTapToWalk(pointer: Phaser.Input.Pointer): void {
     if (this.inPhoneBooth) return;
+    if (!isTouchDevice()) return; // Desktop uses WASD + click agents directly
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
     // Only walk when tapping near an interactable — not empty ground
@@ -1503,9 +1504,15 @@ export class OfficeScene extends Phaser.Scene {
     this.playerPath = path;
   }
 
-  /** Walk to an agent/NPC and then select+talk to them on arrival. */
+  /** Walk to an agent/NPC and then select+talk to them on arrival (mobile only). */
   private walkToAgent(id: string): void {
-    // Find the NPC position
+    // Desktop: select immediately, no walking
+    if (!isTouchDevice()) {
+      this.selectAgent(id);
+      return;
+    }
+
+    // Mobile: walk to the agent first, then select on arrival
     let npcX = 0, npcY = 0;
     if (id === YUKI_ID && this.yuki) {
       npcX = this.yuki.container.x;
@@ -3483,10 +3490,18 @@ export class OfficeScene extends Phaser.Scene {
     g.fillCircle(px, py, 1.5);
   }
 
+  /** Convert a world-space rect to screen-space pixels using the main camera. */
+  private worldRectToScreen(wx: number, wy: number, ww: number, wh: number): { x: number; y: number; w: number; h: number } {
+    const cam = this.cameras.main;
+    const canvas = this.game.canvas.getBoundingClientRect();
+    const sx = canvas.left + (wx - cam.scrollX) * cam.zoom;
+    const sy = canvas.top + (wy - cam.scrollY) * cam.zoom;
+    return { x: sx, y: sy, w: ww * cam.zoom, h: wh * cam.zoom };
+  }
+
   /** Update the YouTube IFrame overlay to match the projector screen position. */
   private updateProjectorVideo(): void {
     const channel = this.store.projectorChannel;
-    const cam = this.cameras.main;
     const px = this.projectorTile.x * TILE_PX + 32;
     const py = this.projectorTile.y * TILE_PX - 100;
     const sw = 480;
@@ -3565,17 +3580,13 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // Convert world position to screen position using canvas bounding rect
-    const canvas = this.game.canvas.getBoundingClientRect();
-    const screenX = canvas.left + (px - cam.scrollX) * cam.zoom - (sw * cam.zoom) / 2;
-    const screenY = canvas.top + (py - cam.scrollY) * cam.zoom - (sh * cam.zoom) / 2;
-    const screenW = sw * cam.zoom;
-    const screenH = sh * cam.zoom;
+    // Convert world position to screen position
+    const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
 
-    this.projectorIframe.style.left = `${screenX}px`;
-    this.projectorIframe.style.top = `${screenY}px`;
-    this.projectorIframe.style.width = `${screenW}px`;
-    this.projectorIframe.style.height = `${screenH}px`;
+    this.projectorIframe.style.left = `${rect.x}px`;
+    this.projectorIframe.style.top = `${rect.y}px`;
+    this.projectorIframe.style.width = `${rect.w}px`;
+    this.projectorIframe.style.height = `${rect.h}px`;
     this.projectorIframe.style.display = "block";
   }
 
@@ -5850,12 +5861,10 @@ export class OfficeScene extends Phaser.Scene {
    *  When both are active, the projector splits into two halves:
    *  left = screen share, right = webcam. */
   private updateProjectorVideoOverlays(): void {
-    const cam = this.cameras.main;
     const px = this.projectorTile.x * TILE_PX + 32;
     const py = this.projectorTile.y * TILE_PX - 100;
     const sw = 480;
     const sh = 288;
-    const canvas = this.game.canvas.getBoundingClientRect();
 
     const hasWebcam = !!this.webcamVideoEl && this.webcamVideoEl.style.display !== "none";
     const hasScreenShare = !!this.screenShareVideoEl && this.screenShareVideoEl.style.display !== "none";
@@ -5863,37 +5872,32 @@ export class OfficeScene extends Phaser.Scene {
     if (hasWebcam && hasScreenShare) {
       // Split-screen: left half = screen share, right half = webcam
       const halfW = sw / 2;
-      const ssX = canvas.left + (px - cam.scrollX) * cam.zoom - (sw * cam.zoom) / 2;
-      const wcX = ssX + halfW * cam.zoom;
-      const screenY = canvas.top + (py - cam.scrollY) * cam.zoom - (sh * cam.zoom) / 2;
-      const screenW = halfW * cam.zoom;
-      const screenH = sh * cam.zoom;
+      const ssRect = this.worldRectToScreen(px - sw / 2, py - sh / 2, halfW, sh);
+      const wcRect = this.worldRectToScreen(px, py - sh / 2, halfW, sh);
 
-      this.screenShareVideoEl!.style.left = `${ssX}px`;
-      this.screenShareVideoEl!.style.top = `${screenY}px`;
-      this.screenShareVideoEl!.style.width = `${screenW}px`;
-      this.screenShareVideoEl!.style.height = `${screenH}px`;
+      this.screenShareVideoEl!.style.left = `${ssRect.x}px`;
+      this.screenShareVideoEl!.style.top = `${ssRect.y}px`;
+      this.screenShareVideoEl!.style.width = `${ssRect.w}px`;
+      this.screenShareVideoEl!.style.height = `${ssRect.h}px`;
 
-      this.webcamVideoEl!.style.left = `${wcX}px`;
-      this.webcamVideoEl!.style.top = `${screenY}px`;
-      this.webcamVideoEl!.style.width = `${screenW}px`;
-      this.webcamVideoEl!.style.height = `${screenH}px`;
+      this.webcamVideoEl!.style.left = `${wcRect.x}px`;
+      this.webcamVideoEl!.style.top = `${wcRect.y}px`;
+      this.webcamVideoEl!.style.width = `${wcRect.w}px`;
+      this.webcamVideoEl!.style.height = `${wcRect.h}px`;
     } else if (hasWebcam) {
       // Webcam only — full projector
-      const sx = canvas.left + (px - cam.scrollX) * cam.zoom - (sw * cam.zoom) / 2;
-      const sy = canvas.top + (py - cam.scrollY) * cam.zoom - (sh * cam.zoom) / 2;
-      this.webcamVideoEl!.style.left = `${sx}px`;
-      this.webcamVideoEl!.style.top = `${sy}px`;
-      this.webcamVideoEl!.style.width = `${sw * cam.zoom}px`;
-      this.webcamVideoEl!.style.height = `${sh * cam.zoom}px`;
+      const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
+      this.webcamVideoEl!.style.left = `${rect.x}px`;
+      this.webcamVideoEl!.style.top = `${rect.y}px`;
+      this.webcamVideoEl!.style.width = `${rect.w}px`;
+      this.webcamVideoEl!.style.height = `${rect.h}px`;
     } else if (hasScreenShare) {
       // Screen share only — full projector
-      const sx = canvas.left + (px - cam.scrollX) * cam.zoom - (sw * cam.zoom) / 2;
-      const sy = canvas.top + (py - cam.scrollY) * cam.zoom - (sh * cam.zoom) / 2;
-      this.screenShareVideoEl!.style.left = `${sx}px`;
-      this.screenShareVideoEl!.style.top = `${sy}px`;
-      this.screenShareVideoEl!.style.width = `${sw * cam.zoom}px`;
-      this.screenShareVideoEl!.style.height = `${sh * cam.zoom}px`;
+      const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
+      this.screenShareVideoEl!.style.left = `${rect.x}px`;
+      this.screenShareVideoEl!.style.top = `${rect.y}px`;
+      this.screenShareVideoEl!.style.width = `${rect.w}px`;
+      this.screenShareVideoEl!.style.height = `${rect.h}px`;
     }
   }
 
