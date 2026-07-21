@@ -288,14 +288,15 @@ export class Hud {
         </div>
       </div>
       <div class="toasts" id="toasts"></div>
-      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · V voice · click an agent · ESC close</div>
-      <div class="hint touch">Tap an agent · Use joystick to move · Tap action buttons</div>
+      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · V voice · click an agent · ESC close · scroll to zoom</div>
+      <div class="hint touch">Tap to walk · Tap an agent to talk · Pinch to zoom · Drag with 2 fingers to pan</div>
       <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
       <div class="mobile-panel-toggles">
         <button class="mpt-btn" id="mpt-roster" title="Roster">👥</button>
         <button class="mpt-btn" id="mpt-feed" title="Feed">💬</button>
         <button class="mpt-btn" id="mpt-hire" title="Hire">➕</button>
         <button class="mpt-btn" id="mpt-board" title="Board">📋</button>
+        <button class="mpt-btn" id="mpt-recenter" title="Recenter camera">🎯</button>
       </div>
       <div class="touch-controls">
         <div class="joystick-base" id="joystick-base">
@@ -716,6 +717,11 @@ export class Hud {
     mptBoard.addEventListener("click", () => {
       closeMobilePanels();
       this.store.toggleBoard();
+    });
+
+    const mptRecenter = document.getElementById("mpt-recenter")!;
+    mptRecenter.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("recenter-camera"));
     });
 
     // ── Virtual joystick ──

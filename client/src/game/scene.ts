@@ -3,7 +3,7 @@ import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
 import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry } from "../../../shared/types";
-import { Grid, type Tile } from "./path";
+import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
@@ -250,6 +250,25 @@ export class OfficeScene extends Phaser.Scene {
   private lastPosSent = 0;
   private lastSentX = 0;
   private lastSentY = 0;
+
+  // ── Tap-to-walk + tap-to-interact ──
+  private playerPath: Tile[] = [];
+  private playerTargetPx: { x: number; y: number } | null = null;
+  private pendingInteract: boolean = false;
+  private pathMarker: Phaser.GameObjects.Arc | null = null;
+
+  // ── Camera controls (pinch-zoom, pan, recenter) ──
+  private cameraMode: "follow" | "free" = "follow";
+  private userZoom: number | null = null;
+  private pinchPointers: Map<number, Phaser.Input.Pointer> = new Map();
+  private pinchStartDist = 0;
+  private pinchStartZoom = 1;
+  private panPointer: Phaser.Input.Pointer | null = null;
+  private panStartScrollX = 0;
+  private panStartScrollY = 0;
+  private tapStartX = 0;
+  private tapStartY = 0;
+  private tapMoved = false;
 
   constructor() {
     super("office");
@@ -974,7 +993,10 @@ export class OfficeScene extends Phaser.Scene {
           const cam = this.cameras.main;
           // no camera bounds — the world is infinite
           cam.startFollow(this.player, true);
-          cam.setZoom(this.bestZoom());
+          cam.setZoom(this.defaultZoom());
+
+          // --- camera controls: pinch-zoom, wheel-zoom, pan, tap-to-walk ---
+          this.setupCameraControls();
 
           // --- lighting system ---
           // vignette: darkened edges fixed to screen
@@ -997,7 +1019,7 @@ export class OfficeScene extends Phaser.Scene {
             .setScrollFactor(0);
 
           const onResize = () => {
-            cam.setZoom(this.bestZoom());
+            if (this.userZoom === null) cam.setZoom(this.defaultZoom());
             this.drawVignette();
             if (this.dayNightTint) this.dayNightTint.setSize(this.scale.width, this.scale.height);
             if (this.brightnessBoost) this.brightnessBoost.setSize(this.scale.width, this.scale.height);
@@ -1311,16 +1333,290 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  private bestZoom(): number {
-    // zoom up until the office covers the whole viewport — the camera
-    // follows the boss, so overflow just means you walk to see the rest
+  private defaultZoom(): number {
     const z = Math.max(this.scale.width / this.mapPx.w, this.scale.height / this.mapPx.h);
-    // On narrow touch screens, don't over-zoom — cap at a reasonable level
-    // so the pixel art doesn't get too large and the player sees enough context
     if (isTouchDevice() && Math.min(this.scale.width, this.scale.height) < 480) {
       return Math.max(1, Math.min(z, 1.0));
     }
     return Math.max(1, Math.ceil(z));
+  }
+
+  private minZoom(): number {
+    return this.defaultZoom() * 0.4;
+  }
+
+  private maxZoom(): number {
+    return this.defaultZoom() * 3;
+  }
+
+  /** Clamp a zoom value to the allowed range. */
+  private clampZoom(z: number): number {
+    return Math.max(this.minZoom(), Math.min(z, this.maxZoom()));
+  }
+
+  /** Recenter camera on player and reset zoom to default. */
+  recenterCamera(): void {
+    this.cameraMode = "follow";
+    this.userZoom = null;
+    this.cameras.main.startFollow(this.player, true);
+    this.cameras.main.setZoom(this.defaultZoom());
+  }
+
+  /** Set up input listeners for pinch-zoom, wheel-zoom, pan, and tap-to-walk. */
+  private setupCameraControls(): void {
+    // Enable multi-touch (Phaser needs to be told to track extra pointers)
+    this.input.addPointer(2);
+
+    // ── Recenter camera event (from HUD recenter button) ──
+    const onRecenter = () => this.recenterCamera();
+    window.addEventListener("recenter-camera", onRecenter);
+    this.events.once("shutdown", () => window.removeEventListener("recenter-camera", onRecenter));
+
+    // ── Wheel zoom (desktop) ──
+    this.input.on("wheel", (_pointer: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      const cam = this.cameras.main;
+      const factor = dy > 0 ? 0.9 : 1.1;
+      const newZoom = this.clampZoom(cam.zoom * factor);
+      cam.setZoom(newZoom);
+      this.userZoom = newZoom;
+    });
+
+    // ── Pointer down: track for pinch, pan, or tap-to-walk ──
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // Ignore clicks on interactive game objects (agents, monitors) — they have their own handlers
+      if (this.input.manager.hitTest(pointer, [], this.cameras.main).length > 0) return;
+
+      this.pinchPointers.set(pointer.id, pointer);
+      this.tapStartX = pointer.x;
+      this.tapStartY = pointer.y;
+      this.tapMoved = false;
+
+      if (this.pinchPointers.size === 2) {
+        // Start pinch-zoom
+        const pts = [...this.pinchPointers.values()];
+        this.pinchStartDist = Phaser.Math.Distance.Between(pts[0].x, pts[0].y, pts[1].x, pts[1].y);
+        this.pinchStartZoom = this.cameras.main.zoom;
+        this.panPointer = null;
+      } else if (this.pinchPointers.size === 1) {
+        // Potential pan or tap — track as pan candidate
+        this.panPointer = pointer;
+        this.panStartScrollX = this.cameras.main.scrollX;
+        this.panStartScrollY = this.cameras.main.scrollY;
+      }
+    });
+
+    // ── Pointer move: handle pinch-zoom, pan, and tap movement detection ──
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!this.pinchPointers.has(pointer.id)) return;
+
+      // Detect if this is a tap vs drag
+      const moveDist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.tapStartX, this.tapStartY);
+      if (moveDist > 10) this.tapMoved = true;
+
+      if (this.pinchPointers.size === 2) {
+        // Pinch-zoom
+        const pts = [...this.pinchPointers.values()];
+        const dist = Phaser.Math.Distance.Between(pts[0].x, pts[0].y, pts[1].x, pts[1].y);
+        if (this.pinchStartDist > 0) {
+          const ratio = dist / this.pinchStartDist;
+          const newZoom = this.clampZoom(this.pinchStartZoom * ratio);
+          this.cameras.main.setZoom(newZoom);
+          this.userZoom = newZoom;
+        }
+        return;
+      }
+
+      // One-finger pan (only in free mode or if moved significantly)
+      if (this.panPointer === pointer && this.tapMoved && this.cameraMode === "free") {
+        const cam = this.cameras.main;
+        const dx = (pointer.x - this.panPointer.downX) / cam.zoom;
+        const dy = (pointer.y - this.panPointer.downY) / cam.zoom;
+        cam.scrollX = this.panStartScrollX - dx;
+        cam.scrollY = this.panStartScrollY - dy;
+      }
+    });
+
+    // ── Pointer up: handle tap-to-walk or finalize pinch/pan ──
+    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      this.pinchPointers.delete(pointer.id);
+
+      if (this.panPointer === pointer) {
+        // If it was a tap (not a drag) and no pinch happened, do tap-to-walk
+        if (!this.tapMoved && this.pinchPointers.size === 0) {
+          this.handleTapToWalk(pointer);
+        }
+        this.panPointer = null;
+      }
+
+      // If one pointer remains after pinch, keep it as pan candidate
+      if (this.pinchPointers.size === 1) {
+        const remaining = [...this.pinchPointers.values()][0];
+        this.panPointer = remaining;
+        this.panStartScrollX = this.cameras.main.scrollX;
+        this.panStartScrollY = this.cameras.main.scrollY;
+        this.tapMoved = true; // prevent tap-to-walk after pinch
+      }
+    });
+
+    // ── Two-finger pan: switch to free mode when user starts dragging with 2 fingers ──
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.pinchPointers.size === 2 && this.cameraMode === "follow") {
+        // Two-finger gesture implies user wants to look around
+        this.cameraMode = "free";
+        this.cameras.main.stopFollow();
+      }
+    });
+  }
+
+  /** Handle a tap on the game world: walk to location or walk+interact with nearby object. */
+  private handleTapToWalk(pointer: Phaser.Input.Pointer): void {
+    if (this.inPhoneBooth) return;
+    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const targetTile = tileOf(worldPoint.x, worldPoint.y);
+
+    // Check if tapping near an interactable
+    const interactable = this.findInteractableAt(worldPoint.x, worldPoint.y);
+    if (interactable) {
+      // Walk to a tile adjacent to the interactable, then fire E
+      const dest = this.findAdjacentWalkable(interactable.tile);
+      if (dest) {
+        this.walkToTile(dest);
+        this.pendingInteract = true;
+        this.showPathMarker(dest);
+        return;
+      }
+    }
+
+    // Otherwise, just walk to the tapped tile
+    this.pendingInteract = false;
+    const outside = this.world.isOutside(worldPoint.x, worldPoint.y);
+    if (outside) {
+      // Outside: use straight-line movement to pixel position
+      this.playerPath = [];
+      this.playerTargetPx = { x: worldPoint.x, y: worldPoint.y };
+      this.showPathMarkerPx(worldPoint.x, worldPoint.y);
+    } else {
+      // Inside office: use A* pathfinding
+      this.walkToTile(targetTile);
+      this.showPathMarker(targetTile);
+    }
+  }
+
+  /** Walk player to a tile using A* pathfinding (office only). */
+  private walkToTile(dest: Tile): void {
+    this.playerTargetPx = null;
+    const start = tileOf(this.player.x, this.player.y);
+    if (start.x === dest.x && start.y === dest.y) {
+      this.playerPath = [];
+      return;
+    }
+    const path = findPath(this.grid, start, dest);
+    this.playerPath = path;
+  }
+
+  /** Show a visual marker at a tile destination. */
+  private showPathMarker(tile: Tile): void {
+    this.showPathMarkerPx(tile.x * TILE_PX + 32, tile.y * TILE_PX + 32);
+  }
+
+  /** Show a visual marker at a pixel position. */
+  private showPathMarkerPx(px: number, py: number): void {
+    if (this.pathMarker) this.pathMarker.destroy();
+    this.pathMarker = this.add.circle(px, py, 8, 0x4a9cd8, 0.7)
+      .setStrokeStyle(2, 0xffffff, 0.5)
+      .setDepth(9999);
+    this.tweens.add({
+      targets: this.pathMarker,
+      alpha: 0,
+      scale: 2,
+      duration: 600,
+      repeat: -1,
+      onRepeat: () => { if (this.pathMarker) this.pathMarker.setAlpha(0.7).setScale(1); },
+    });
+  }
+
+  /** Clear the path marker. */
+  private clearPathMarker(): void {
+    if (this.pathMarker) {
+      this.pathMarker.destroy();
+      this.pathMarker = null;
+    }
+  }
+
+  /** Find a walkable tile adjacent to the given tile. */
+  private findAdjacentWalkable(tile: Tile): Tile | null {
+    const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const;
+    const outside = this.world.isOutside(tile.x * TILE_PX + 32, tile.y * TILE_PX + 32);
+    for (const [dx, dy] of dirs) {
+      const x = tile.x + dx;
+      const y = tile.y + dy;
+      if (outside) {
+        if (this.world.isTileWalkable(
+          Math.floor((x * TILE_PX - this.world.offset.x) / TILE_PX),
+          Math.floor((y * TILE_PX - this.world.offset.y) / TILE_PX),
+        )) return { x, y };
+      } else {
+        if (this.grid.ok(x, y)) return { x, y };
+      }
+    }
+    return null;
+  }
+
+  /** Type for a tappable interactable. */
+  private findInteractableAt(wx: number, wy: number): { tile: Tile; pxX: number; pxY: number; radius: number } | null {
+    type Hit = { tile: Tile; pxX: number; pxY: number; radius: number };
+    const candidates: Hit[] = [
+      { tile: this.coffeeTile, pxX: this.coffeeTile.x * TILE_PX + 32, pxY: this.coffeeTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.boardTile, pxX: this.boardTile.x * TILE_PX + 32, pxY: this.boardTile.y * TILE_PX + 52, radius: 96 },
+      { tile: this.fridgeTile, pxX: this.fridgeTile.x * TILE_PX + 32, pxY: this.fridgeTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.coolerTile, pxX: this.coolerTile.x * TILE_PX + 32, pxY: this.coolerTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.clockTile, pxX: this.clockTile.x * TILE_PX + 32, pxY: this.clockTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.wardrobeTile, pxX: this.wardrobeTile.x * TILE_PX + 32, pxY: this.wardrobeTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.trophyTile, pxX: this.trophyTile.x * TILE_PX + 32, pxY: this.trophyTile.y * TILE_PX + 40, radius: 96 },
+      { tile: this.hallOfFameTile, pxX: this.hallOfFameTile.x * TILE_PX + 10, pxY: this.hallOfFameTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.redButtonTile, pxX: this.redButtonTile.x * TILE_PX + 32, pxY: this.redButtonTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.projectorControlTile, pxX: this.projectorControlTile.x * TILE_PX + 32, pxY: this.projectorControlTile.y * TILE_PX + 32, radius: 80 },
+      { tile: this.projectorSpeakerTile, pxX: this.projectorSpeakerTile.x * TILE_PX + 32, pxY: this.projectorSpeakerTile.y * TILE_PX + 32, radius: 80 },
+      { tile: this.screenShareTile, pxX: this.screenShareTile.x * TILE_PX + 32, pxY: this.screenShareTile.y * TILE_PX + 32, radius: 80 },
+      { tile: this.phoneBoothTile, pxX: this.phoneBoothTile.x * TILE_PX + 32, pxY: this.phoneBoothTile.y * TILE_PX + 32, radius: 80 },
+      { tile: this.warTableTile, pxX: this.warTableTile.x * TILE_PX + 32, pxY: this.warTableTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.scrapBinTile, pxX: this.scrapBinTile.x * TILE_PX + 32, pxY: this.scrapBinTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.radioTile, pxX: this.radioTile.x * TILE_PX + 32, pxY: this.radioTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.workbenchTile, pxX: this.workbenchTile.x * TILE_PX + 32, pxY: this.workbenchTile.y * TILE_PX + 32, radius: 96 },
+      { tile: this.researchTile, pxX: this.researchTile.x * TILE_PX + 32, pxY: this.researchTile.y * TILE_PX + 32, radius: 96 },
+    ];
+
+    if (this.vendingTile) {
+      candidates.push({ tile: this.vendingTile, pxX: this.vendingTile.x * TILE_PX + 32, pxY: this.vendingTile.y * TILE_PX + 32, radius: 96 });
+    }
+    if (this.sofaTile) {
+      candidates.push({ tile: this.sofaTile, pxX: this.sofaTile.x * TILE_PX + 32, pxY: this.sofaTile.y * TILE_PX + 32, radius: 96 });
+    }
+    for (const ft of this.filingTiles) {
+      candidates.push({ tile: ft, pxX: ft.x * TILE_PX + 32, pxY: ft.y * TILE_PX + 32, radius: 80 });
+    }
+    for (const pt of this.plantTiles) {
+      candidates.push({ tile: pt, pxX: pt.x * TILE_PX + 32, pxY: pt.y * TILE_PX + 32, radius: 80 });
+    }
+    for (const pm of this.platformMailboxes) {
+      candidates.push({ tile: pm.tile, pxX: pm.tile.x * TILE_PX + TILE_PX / 2, pxY: pm.tile.y * TILE_PX + TILE_PX / 2, radius: 80 });
+    }
+    for (const sr of this.serverRackTiles) {
+      candidates.push({ tile: sr, pxX: sr.x * TILE_PX + 32, pxY: sr.y * TILE_PX + 32, radius: 96 });
+    }
+    // Mailbox
+    candidates.push({ tile: { x: 0, y: 0 }, pxX: this.mailboxPx.x, pxY: this.mailboxPx.y, radius: 80 });
+
+    let best: Hit | null = null;
+    let bestDist = Infinity;
+    for (const c of candidates) {
+      const d = Phaser.Math.Distance.Between(wx, wy, c.pxX, c.pxY);
+      if (d < c.radius && d < bestDist) {
+        best = c;
+        bestDist = d;
+      }
+    }
+    return best;
   }
 
   /** Check if the player can walk to a pixel position inside the office. */
@@ -3892,6 +4188,60 @@ export class OfficeScene extends Phaser.Scene {
     if (touchInput.moveX !== 0 || touchInput.moveY !== 0) {
       vx = touchInput.moveX;
       vy = touchInput.moveY;
+      // Joystick input cancels any active tap-to-walk path
+      this.playerPath = [];
+      this.playerTargetPx = null;
+      this.pendingInteract = false;
+      this.clearPathMarker();
+    }
+
+    // Tap-to-walk: follow A* path inside office, or straight-line outside
+    if (this.playerPath.length > 0) {
+      const next = this.playerPath[0];
+      const targetPx = { x: next.x * TILE_PX + TILE_PX / 2, y: next.y * TILE_PX + TILE_PX / 2 };
+      const dx = targetPx.x - this.player.x;
+      const dy = targetPx.y - this.player.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 8) {
+        // Reached this tile — advance to next
+        this.playerPath.shift();
+        if (this.playerPath.length === 0) {
+          // Path complete
+          this.clearPathMarker();
+          if (this.pendingInteract) {
+            this.pendingInteract = false;
+            // Simulate E press
+            this.tryOfficeInteract(time) || this.tryPlatformMailboxInteract();
+          }
+        }
+      } else {
+        vx = dx / dist;
+        vy = dy / dist;
+      }
+    } else if (this.playerTargetPx) {
+      // Outside: straight-line movement to target
+      const dx = this.playerTargetPx.x - this.player.x;
+      const dy = this.playerTargetPx.y - this.player.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 12) {
+        this.playerTargetPx = null;
+        this.clearPathMarker();
+        if (this.pendingInteract) {
+          this.pendingInteract = false;
+          this.tryOfficeInteract(time) || this.tryPlatformMailboxInteract();
+        }
+      } else {
+        vx = dx / dist;
+        vy = dy / dist;
+      }
+    }
+
+    // Keyboard input cancels tap-to-walk
+    if (left || right || up || down) {
+      this.playerPath = [];
+      this.playerTargetPx = null;
+      this.pendingInteract = false;
+      this.clearPathMarker();
     }
 
     if (vx !== 0 && vy !== 0 && (left || right || up || down)) {
