@@ -1240,30 +1240,9 @@ export class OfficeScene extends Phaser.Scene {
     g.strokeRoundedRect(-w / 2, -14, w, h, r);
   }
 
-  /** Draw the vignette overlay — darkened edges with radial gradient. */
+  /** Draw the vignette overlay — disabled (was causing visible black frame). */
   private drawVignette(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-    const g = this.lightingOverlay;
-    g.clear();
-    const cx = w / 2;
-    const cy = h / 2;
-    const maxR = Math.hypot(cx, cy);
-    const steps = 12;
-    for (let i = 0; i < steps; i++) {
-      const t = i / steps;
-      const ringW = Math.max(2, (maxR * 0.25) * (1 - t));
-      const alpha = Math.pow(t, 2) * 0.25;
-      g.fillStyle(0x000000, alpha);
-      // top bar
-      g.fillRect(0, 0, w, Math.ceil(ringW * 0.5));
-      // bottom bar
-      g.fillRect(0, h - Math.ceil(ringW * 0.5), w, Math.ceil(ringW * 0.5));
-      // left bar
-      g.fillRect(0, 0, Math.ceil(ringW * 0.5), h);
-      // right bar
-      g.fillRect(w - Math.ceil(ringW * 0.5), 0, Math.ceil(ringW * 0.5), h);
-    }
+    this.lightingOverlay?.clear();
   }
 
   /** Update lighting: monitor glows, day/night cycle, vignette refresh. */
