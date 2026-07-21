@@ -9,6 +9,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 RUN cd node_modules/@railway/cli && node npm-install/postinstall.js
 
+# Install Chromium for Playwright (agent browser feature)
+RUN npx playwright install chromium
+
 # Copy source and build the client
 COPY . .
 RUN pnpm build
