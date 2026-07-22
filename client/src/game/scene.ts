@@ -5690,9 +5690,9 @@ export class OfficeScene extends Phaser.Scene {
     const panelCount = Math.floor(mapPxH / panelW);
     for (let i = 0; i < panelCount; i++) {
       const py = i * panelW;
-      // Glass panel — blue-tinted gradient effect
+      // Glass panel — warm neutral wall tones (not sky-blue)
       const isLight = i % 2 === 0;
-      g.fillStyle(isLight ? 0x4a7aaa : 0x3a6a9a, 0.4);
+      g.fillStyle(isLight ? 0xb0a898 : 0x9a9088, 0.4);
       g.fillRect(wallX, py, wallW, panelW);
       // Mullion frame
       g.fillStyle(0x6a6a6a, 0.6);
@@ -5700,8 +5700,8 @@ export class OfficeScene extends Phaser.Scene {
       g.fillRect(wallX, py + panelW - 1, wallW, 1);
       // Vertical mullion
       g.fillRect(wallX + wallW / 2 - 1, py, 2, panelW);
-      // Glass reflection — diagonal streak
-      g.fillStyle(0x8acafa, 0.15);
+      // Glass reflection — diagonal streak (warm highlight, not blue)
+      g.fillStyle(0xeae0d0, 0.15);
       g.fillRect(wallX + 4, py + 2, wallW - 8, 3);
       g.fillRect(wallX + 6, py + 6, wallW - 12, 2);
     }
