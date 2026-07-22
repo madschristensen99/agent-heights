@@ -53,6 +53,7 @@ new Hud(store, net);
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
+  dom: { createContainer: true },
   backgroundColor: "#a3bdd0",
   pixelArt: true,
   roundPixels: true,
