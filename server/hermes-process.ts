@@ -17,6 +17,9 @@ const RESTART_DELAY_MS = 3_000;
 const MAX_RESTARTS = 5;
 const HEALTH_CHECK_INTERVAL_MS = 30_000;
 
+// Module-level singleton — only one Hermes process per Node.js process
+let _instance: HermesProcessManager | null = null;
+
 export class HermesProcessManager {
   private child: ChildProcess | null = null;
   private baseUrl: string;
@@ -28,6 +31,7 @@ export class HermesProcessManager {
   private onReady: (() => void) | null = null;
   private ready = false;
   private sessionToken: string;
+  private externalMode = false; // true if Hermes was already running externally
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
@@ -36,6 +40,14 @@ export class HermesProcessManager {
     this.port = match ? parseInt(match[1], 10) : 9119;
     // Use existing env var or generate a fresh token for this process lifetime
     this.sessionToken = process.env.HERMES_DASHBOARD_SESSION_TOKEN ?? randomBytes(32).toString("hex");
+  }
+
+  /** Get the singleton instance (one Hermes process per Node.js process). */
+  static getInstance(baseUrl?: string): HermesProcessManager {
+    if (!_instance) {
+      _instance = new HermesProcessManager(baseUrl);
+    }
+    return _instance;
   }
 
   /** Get the session token for authenticating API requests to the Hermes dashboard. */
@@ -103,12 +115,22 @@ export class HermesProcessManager {
       }
     });
 
-    this.child.on("exit", (code, signal) => {
+    this.child.on("exit", async (code, signal) => {
       console.log(`[hermes-process] Child process exited (code=${code}, signal=${signal})`);
       this.child = null;
       this.ready = false;
 
       if (!this.started) return; // We're shutting down
+
+      // Check if the port is actually serving (another instance may have won the race)
+      if (await this.isReachable()) {
+        console.log("[hermes-process] Port is reachable from another instance — switching to external mode");
+        this.externalMode = true;
+        this.ready = true;
+        this.restartCount = 0;
+        this.startHealthCheck();
+        return;
+      }
 
       if (this.restartCount < MAX_RESTARTS) {
         this.restartCount++;
@@ -156,6 +178,14 @@ export class HermesProcessManager {
     if (this.healthTimer) clearInterval(this.healthTimer);
     this.healthTimer = setInterval(async () => {
       if (!this.started) return;
+      // In external mode, just check reachability
+      if (this.externalMode) {
+        if (!await this.isReachable()) {
+          console.warn("[hermes-process] External Hermes became unreachable");
+          this.ready = false;
+        }
+        return;
+      }
       // If we have a child process and it's not reachable, the process may have hung
       if (this.child && !await this.isReachable()) {
         console.warn("[hermes-process] Health check failed — Hermes not reachable, killing child for restart");
@@ -182,6 +212,7 @@ export class HermesProcessManager {
       this.child.kill("SIGTERM");
       this.child = null;
     }
+    _instance = null;
   }
 
   /** Is the Hermes gateway currently ready? */

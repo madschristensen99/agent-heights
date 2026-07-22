@@ -577,9 +577,12 @@ export class AgentManager {
 
   /** Start the Hermes gateway process and then the polling client. */
   private async startHermesGateway(): Promise<void> {
-    // Start (or detect) the Hermes serve process as a managed child process
-    this.hermesProcess = new HermesProcessManager();
+    // Start (or detect) the Hermes serve process as a managed child process (singleton)
+    this.hermesProcess = HermesProcessManager.getInstance();
     await this.hermesProcess.start();
+
+    // Only create one polling client per Manager instance
+    if (this.hermesClient) return;
 
     // Now start the polling client that talks to the Hermes REST API
     this.hermesClient = new HermesClient(
