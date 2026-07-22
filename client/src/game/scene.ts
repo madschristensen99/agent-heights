@@ -182,6 +182,18 @@ export class OfficeScene extends Phaser.Scene {
   private serverRackTiles: Tile[] = [];
   private serverRackHint!: Phaser.GameObjects.Text;
 
+  // --- office tilemap layer refs (for build mode editing) ---
+  private groundLayer!: Phaser.Tilemaps.TilemapLayer;
+  private wallsLayer!: Phaser.Tilemaps.TilemapLayer;
+  private furnitureLayer!: Phaser.Tilemaps.TilemapLayer;
+  private officeMap!: Phaser.Tilemaps.Tilemap;
+
+  // --- build mode (office tile editing) ---
+  private buildMode = false;
+  private buildLayer: "ground" | "walls" | "furniture" = "furniture";
+  private buildSelectedTile = 1;
+  private buildPaletteEl: HTMLDivElement | null = null;
+
   // --- expedition workshop (break room) ---
   // Each tile is the center of the multi-tile piece for proximity checks.
   private warTableTile: Tile = { x: 26, y: 15 };   // 2×2 at (25,14)
@@ -394,6 +406,8 @@ export class OfficeScene extends Phaser.Scene {
     this.events.once("shutdown", () => {
       this.closeAgentViewModal();
       this.hideProjectorAgentFrame();
+      this.hideBuildPalette();
+      this.buildMode = false;
       for (const overlay of this.monitorMatrixOverlays.values()) overlay.destroy();
       this.monitorMatrixOverlays.clear();
       this.matrixColumns = [];
@@ -545,6 +559,7 @@ export class OfficeScene extends Phaser.Scene {
             this.theme === "agentHeights" ? "agentHeights" : "office",
             `tiles-${this.theme}`,
           )!;
+          this.officeMap = map;
 
           // draw a floor-colored backdrop so empty map tiles aren't white
           const floorColor = this.theme === "agentHeights" ? 0x4a6a8a : 0xd4d0c8;
@@ -563,12 +578,17 @@ export class OfficeScene extends Phaser.Scene {
           }
           bg.strokePath();
 
-          map.createLayer("Ground", tiles)!.setDepth(0);
+          this.groundLayer = map.createLayer("Ground", tiles)!.setDepth(0);
 
           const walls = map.createLayer("Walls", tiles)!.setDepth(1);
           const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
+          this.wallsLayer = walls;
+          this.furnitureLayer = furniture;
           walls.setCollisionByProperty({ solid: true });
           furniture.setCollisionByProperty({ solid: true });
+
+          // Apply persisted office tile overrides
+          this.applyOfficeOverrides();
 
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
           upgradeFurniture(this, furniture);
@@ -1049,6 +1069,10 @@ export class OfficeScene extends Phaser.Scene {
           this.input.keyboard!.on("keydown-ESC", () => {
             this.store.select(null);
             this.store.toggleBoard(false);
+            if (this.buildMode) this.toggleBuildMode();
+          });
+          this.input.keyboard!.on("keydown-B", () => {
+            this.toggleBuildMode();
           });
           // never swallow keystrokes meant for HUD inputs (onboarding, task box, …)
           this.input.keyboard!.disableGlobalCapture();
@@ -1109,6 +1133,10 @@ export class OfficeScene extends Phaser.Scene {
             this.store.onTileUpdated((cx, cy, tileIndex, tile) => {
               if (!this.ready) return;
               this.world.applyRemoteTileUpdate(cx, cy, tileIndex, tile);
+            });
+            this.store.onOfficeTileUpdated((tileIndex, tile, layer) => {
+              if (!this.ready) return;
+              this.applyOfficeTile(tileIndex, tile, layer);
             });
             this.store.onEmote((agentId, emote) => {
               if (!this.ready) return;
@@ -1889,97 +1917,83 @@ export class OfficeScene extends Phaser.Scene {
 
     const instructionSteps = OfficeScene.PLATFORM_SETUP_STEPS[platform] ?? [];
     const credFields = PLATFORM_CREDENTIAL_FIELDS[platform] ?? [];
-    const totalSteps = instructionSteps.length + 1; // +1 for credential input step
+    const totalSteps = instructionSteps.length + 1;
 
-    const cam = this.cameras.main;
-    const W = 520, H = 520;
-    const cx = cam.centerX, cy = cam.centerY;
-    const left = cx - W / 2;
-    const top = cy - H / 2;
+    // ── Build the entire modal as a single DOM element ──
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.55); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+    `;
 
-    const elements: Phaser.GameObjects.GameObject[] = [];
+    const card = document.createElement("div");
+    card.style.cssText = `
+      background: #f5f0e6; border: 3px solid #d4c5a9; border-radius: 16px;
+      width: 520px; max-height: 90vh; display: flex; flex-direction: column;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.3); overflow: hidden;
+    `;
 
-    // ── Backdrop ──
-    const bg = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.6)
-      .setScrollFactor(0).setDepth(10000);
-    const panel = this.add.rectangle(cx, cy, W, H, 0xf5f0e6, 1)
-      .setStrokeStyle(3, 0xd4c5a9).setScrollFactor(0).setDepth(10001);
-    elements.push(bg, panel);
+    // ── Header ──
+    const header = document.createElement("div");
+    header.style.cssText = `
+      background: #e8dcc8; border-bottom: 2px solid #d4c5a9;
+      padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+      flex-shrink: 0;
+    `;
+    header.innerHTML = `
+      <span style="font-size:28px;">✉</span>
+      <span style="font-size:20px;font-weight:bold;color:#3d3528;flex:1;">${platform} Mailbox</span>
+      <span style="font-size:13px;font-weight:bold;color:${gatewayRunning ? "#4a9b4a" : "#b07050"};">
+        ${gatewayRunning ? "● Connected" : "○ Not connected"}
+      </span>
+    `;
+    card.appendChild(header);
 
-    // ── Header — envelope flap effect ──
-    const headerBar = this.add.rectangle(cx, top + 30, W - 6, 56, 0xe8dcc8, 1)
-      .setStrokeStyle(2, 0xd4c5a9).setScrollFactor(0).setDepth(10002);
-    elements.push(headerBar);
+    // ── Content area (scrollable) ──
+    const content = document.createElement("div");
+    content.style.cssText = `
+      padding: 24px 30px; flex: 1; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0;
+    `;
+    card.appendChild(content);
 
-    // Envelope icon + platform name
-    const envelopeIcon = this.add.text(left + 20, top + 30, "✉", {
-      fontSize: "26px", color: "#8b7355",
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10003);
-    elements.push(envelopeIcon);
+    // Step badge
+    const stepBadge = document.createElement("div");
+    stepBadge.style.cssText = `
+      display: inline-block; background: #8b7355; color: #fff;
+      font-size: 12px; font-weight: bold; padding: 4px 12px;
+      border-radius: 12px; margin-bottom: 16px; align-self: flex-start;
+    `;
+    content.appendChild(stepBadge);
 
-    const platformLabel = this.add.text(left + 52, top + 30, `${platform} Mailbox`, {
-      fontSize: "20px", color: "#3d3528", fontStyle: "bold",
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10003);
-    elements.push(platformLabel);
-
-    // Status badge (right side of header)
-    const statusBadge = this.add.text(cx + W / 2 - 20, top + 30,
-      gatewayRunning ? "● Connected" : "○ Not connected", {
-      fontSize: "13px", color: gatewayRunning ? "#4a9b4a" : "#b07050", fontStyle: "bold",
-    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(10003);
-    elements.push(statusBadge);
-
-    // ── Content area ──
-    const contentTop = top + 76;
-    const contentW = W - 60;
-    const contentLeft = left + 30;
-
-    // Step number badge
-    const stepBadge = this.add.text(contentLeft, contentTop, "", {
-      fontSize: "13px", color: "#ffffff", fontStyle: "bold",
-      backgroundColor: "#8b7355",
-      padding: { x: 8, y: 4 },
-    }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
-    elements.push(stepBadge);
-
-    // Title (step title)
-    const titleObj = this.add.text(contentLeft, contentTop + 32, "", {
-      fontSize: "17px", color: "#3d3528", fontStyle: "bold",
-      wordWrap: { width: contentW },
-    }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
-    elements.push(titleObj);
+    // Title
+    const titleEl = document.createElement("div");
+    titleEl.style.cssText = "font-size:17px;font-weight:bold;color:#3d3528;margin-bottom:16px;line-height:1.3;";
+    content.appendChild(titleEl);
 
     // Body (instruction text)
-    const bodyObj = this.add.text(contentLeft, contentTop + 64, "", {
-      fontSize: "14px", color: "#6b5d4a", align: "left",
-      wordWrap: { width: contentW }, lineSpacing: 8,
-    }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
-    elements.push(bodyObj);
+    const bodyEl = document.createElement("div");
+    bodyEl.style.cssText = "font-size:14px;color:#6b5d4a;line-height:1.8;white-space:pre-wrap;margin-bottom:20px;";
+    content.appendChild(bodyEl);
 
-    // Command box (for steps that show a CLI command)
-    const cmdBox = this.add.rectangle(cx, cy + 60, W - 100, 36, 0x3d3528, 0.9)
-      .setStrokeStyle(1, 0x8b7355).setScrollFactor(0).setDepth(10002);
-    elements.push(cmdBox);
-
-    const cmdText = this.add.text(cx, cy + 60, "", {
-      fontSize: "13px", color: "#e8dcc8", fontFamily: "monospace", align: "center",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10003);
-    elements.push(cmdText);
-
-    // ── Credential input form (DOM overlay) ──
-    const formContainer = document.createElement("div");
-    formContainer.style.cssText = `
-      display: none;
-      flex-direction: column;
-      gap: 16px;
-      padding: 12px 30px;
-      width: ${W}px;
-      box-sizing: border-box;
+    // Command box
+    const cmdBox = document.createElement("div");
+    cmdBox.style.cssText = `
+      background: #3d3528; color: #e8dcc8; font-family: monospace;
+      font-size: 13px; padding: 10px 16px; border-radius: 8px;
+      border: 1px solid #8b7355; margin-bottom: 20px; display: none;
     `;
+    content.appendChild(cmdBox);
+
+    // Form container
+    const formContainer = document.createElement("div");
+    formContainer.style.cssText = "display:none;flex-direction:column;gap:18px;";
 
     const formSubtitle = document.createElement("div");
     formSubtitle.textContent = `Write your ${platform} credentials on the envelope:`;
-    formSubtitle.style.cssText = "color:#6b5d4a;font-size:14px;margin-bottom:4px;";
+    formSubtitle.style.cssText = "font-size:14px;color:#6b5d4a;margin-bottom:4px;";
     formContainer.appendChild(formSubtitle);
 
     const inputs: HTMLInputElement[] = [];
@@ -1989,24 +2003,17 @@ export class OfficeScene extends Phaser.Scene {
 
       const label = document.createElement("div");
       label.textContent = field.label;
-      label.style.cssText = "color:#8b7355;font-size:12px;font-weight:600;";
+      label.style.cssText = "font-size:12px;font-weight:600;color:#8b7355;";
 
       const input = document.createElement("input");
       input.type = field.type;
       input.placeholder = field.placeholder;
       input.dataset.key = field.key;
       input.style.cssText = `
-        width: 100%;
-        padding: 10px 14px;
-        background: #fffcf5;
-        border: 2px solid #d4c5a9;
-        border-radius: 8px;
-        color: #3d3528;
-        font-size: 14px;
-        font-family: monospace;
-        box-sizing: border-box;
-        outline: none;
-        transition: border-color 0.2s;
+        width: 100%; padding: 10px 14px; background: #fffcf5;
+        border: 2px solid #d4c5a9; border-radius: 8px;
+        color: #3d3528; font-size: 14px; font-family: monospace;
+        box-sizing: border-box; outline: none; transition: border-color 0.2s;
       `;
       input.addEventListener("focus", () => { input.style.borderColor = "#8b7355"; });
       input.addEventListener("blur", () => { input.style.borderColor = "#d4c5a9"; });
@@ -2017,51 +2024,64 @@ export class OfficeScene extends Phaser.Scene {
       inputs.push(input);
     }
 
-    // Result message area
     const resultMsg = document.createElement("div");
-    resultMsg.style.cssText = "color:#6b5d4a;font-size:13px;min-height:22px;text-align:center;margin-top:4px;";
+    resultMsg.style.cssText = "font-size:13px;min-height:22px;text-align:center;color:#6b5d4a;";
     formContainer.appendChild(resultMsg);
 
-    const domElement = this.add.dom(cx, contentTop + 30, formContainer);
-    domElement.setScrollFactor(0).setDepth(10003);
-    elements.push(domElement);
+    content.appendChild(formContainer);
 
-    // ── Footer: step dots + nav buttons ──
-    const footerY = top + H - 36;
+    // ── Footer ──
+    const footer = document.createElement("div");
+    footer.style.cssText = `
+      padding: 16px 24px; border-top: 2px solid #d4c5a9;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      flex-shrink: 0;
+    `;
 
-    // Step dots (centered, larger)
-    const dots: Phaser.GameObjects.Text[] = [];
-    const dotSpacing = 32;
-    const dotsStartX = cx - (totalSteps - 1) * dotSpacing / 2;
+    // Step dots
+    const dotsContainer = document.createElement("div");
+    dotsContainer.style.cssText = "display:flex;gap:10px;";
+    const dotEls: HTMLSpanElement[] = [];
     for (let i = 0; i < totalSteps; i++) {
-      const dot = this.add.text(dotsStartX + i * dotSpacing, footerY - 24, "○", {
-        fontSize: "16px", color: "#c4b89a",
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
-      dots.push(dot);
-      elements.push(dot);
+      const dot = document.createElement("span");
+      dot.textContent = "○";
+      dot.style.cssText = "font-size:16px;color:#c4b89a;";
+      dotsContainer.appendChild(dot);
+      dotEls.push(dot);
     }
+    footer.appendChild(dotsContainer);
 
-    // Nav buttons (bottom row)
-    const prevBtn = this.add.text(cx - 110, footerY, "‹ Back", {
-      fontSize: "15px", color: "#8b7355", fontStyle: "bold",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
-    elements.push(prevBtn);
+    // Buttons row
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:20px;align-items:center;";
 
-    const nextBtn = this.add.text(cx, footerY, "Next ›", {
-      fontSize: "15px", color: "#8b7355", fontStyle: "bold",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
-    elements.push(nextBtn);
+    const makeBtn = (label: string, color: string) => {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      btn.style.cssText = `
+        background: none; border: none; font-size: 15px; font-weight: bold;
+        color: ${color}; cursor: pointer; font-family: inherit;
+        padding: 4px 8px;
+      `;
+      return btn;
+    };
 
-    const submitBtn = this.add.text(cx, footerY, "Send ✉", {
-      fontSize: "15px", color: "#4a9b4a", fontStyle: "bold",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
-    elements.push(submitBtn);
+    const prevBtn = makeBtn("‹ Back", "#8b7355");
+    const nextBtn = makeBtn("Next ›", "#8b7355");
+    const submitBtn = makeBtn("Send ✉", "#4a9b4a");
+    const closeBtn = makeBtn("Close", "#b07050");
 
-    const closeBtn = this.add.text(cx + 110, footerY, "Close", {
-      fontSize: "15px", color: "#b07050",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
-    elements.push(closeBtn);
+    btnRow.appendChild(prevBtn);
+    btnRow.appendChild(nextBtn);
+    btnRow.appendChild(submitBtn);
+    btnRow.appendChild(closeBtn);
+    footer.appendChild(btnRow);
 
+    card.appendChild(footer);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    // ── Step rendering logic ──
     let currentStep = 0;
     let submitting = false;
 
@@ -2069,49 +2089,41 @@ export class OfficeScene extends Phaser.Scene {
       const isCredStep = currentStep === instructionSteps.length;
       const stepNum = currentStep + 1;
 
-      stepBadge.setText(`Step ${stepNum} of ${totalSteps}`);
+      stepBadge.textContent = `Step ${stepNum} of ${totalSteps}`;
 
       if (isCredStep) {
-        titleObj.setText("Enter Credentials");
-        bodyObj.setText("");
-        cmdBox.setVisible(false);
-        cmdText.setVisible(false);
+        titleEl.textContent = "Enter Credentials";
+        bodyEl.textContent = "";
+        cmdBox.style.display = "none";
         formContainer.style.display = "flex";
         resultMsg.textContent = "";
       } else {
         const step = instructionSteps[currentStep];
-        titleObj.setText(step.title);
-        bodyObj.setText(step.body);
+        titleEl.textContent = step.title;
+        bodyEl.textContent = step.body;
         formContainer.style.display = "none";
         if (step.cmd) {
-          cmdBox.setVisible(true);
-          cmdText.setVisible(true);
-          cmdText.setText(`$ ${step.cmd}`);
+          cmdBox.style.display = "block";
+          cmdBox.textContent = `$ ${step.cmd}`;
         } else {
-          cmdBox.setVisible(false);
-          cmdText.setVisible(false);
+          cmdBox.style.display = "none";
         }
       }
 
       // Update dots
-      for (let i = 0; i < dots.length; i++) {
-        dots[i].setText(i === currentStep ? "●" : i < currentStep ? "✓" : "○");
-        dots[i].setColor(i < currentStep ? "#4a9b4a" : i === currentStep ? "#8b7355" : "#c4b89a");
+      for (let i = 0; i < dotEls.length; i++) {
+        dotEls[i].textContent = i === currentStep ? "●" : i < currentStep ? "✓" : "○";
+        dotEls[i].style.color = i < currentStep ? "#4a9b4a" : i === currentStep ? "#8b7355" : "#c4b89a";
       }
 
-      // Show/hide nav buttons
-      prevBtn.setVisible(currentStep > 0);
-      nextBtn.setVisible(!isCredStep && currentStep < totalSteps - 1);
-      submitBtn.setVisible(isCredStep && !submitting);
-      closeBtn.setVisible(true);
+      // Show/hide buttons
+      prevBtn.style.display = currentStep > 0 ? "" : "none";
+      nextBtn.style.display = (!isCredStep && currentStep < totalSteps - 1) ? "" : "none";
+      submitBtn.style.display = (isCredStep && !submitting) ? "" : "none";
     };
 
-    prevBtn.on("pointerdown", () => {
-      if (currentStep > 0) { currentStep--; renderStep(); }
-    });
-    nextBtn.on("pointerdown", () => {
-      if (currentStep < totalSteps - 1) { currentStep++; renderStep(); }
-    });
+    prevBtn.onclick = () => { if (currentStep > 0) { currentStep--; renderStep(); } };
+    nextBtn.onclick = () => { if (currentStep < totalSteps - 1) { currentStep++; renderStep(); } };
 
     // Listen for config result
     const onConfigResult = (respPlatform: string, success: boolean, error?: string) => {
@@ -2120,20 +2132,19 @@ export class OfficeScene extends Phaser.Scene {
       if (success) {
         resultMsg.style.color = "#4a9b4a";
         resultMsg.textContent = "✓ Envelope sealed! Your mailbox is now connected.";
-        submitBtn.setVisible(true);
-        submitBtn.setText("Done ✓");
-        submitBtn.off("pointerdown");
-        submitBtn.on("pointerdown", closeModal);
+        submitBtn.style.display = "";
+        submitBtn.textContent = "Done ✓";
+        submitBtn.onclick = closeModal;
       } else {
         resultMsg.style.color = "#b07050";
         resultMsg.textContent = `✗ ${error ?? "Could not deliver. Try again."}`;
-        submitBtn.setVisible(true);
-        submitBtn.setText("Send ✉");
+        submitBtn.style.display = "";
+        submitBtn.textContent = "Send ✉";
       }
     };
     this.store.onPlatformConfigResult(onConfigResult);
 
-    submitBtn.on("pointerdown", () => {
+    submitBtn.onclick = () => {
       if (submitting) return;
       const credentials: Record<string, string> = {};
       let missing = false;
@@ -2154,18 +2165,18 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       submitting = true;
-      submitBtn.setVisible(false);
+      submitBtn.style.display = "none";
       resultMsg.style.color = "#6b5d4a";
       resultMsg.textContent = "Delivering...";
       net.send({ type: "configure_platform", platform, credentials });
-    });
+    };
 
     const closeModal = () => {
       this.store.offPlatformConfigResult(onConfigResult);
-      elements.forEach(e => e.destroy());
+      overlay.remove();
     };
-    closeBtn.on("pointerdown", closeModal);
-    bg.setInteractive().on("pointerdown", closeModal);
+    closeBtn.onclick = closeModal;
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeModal(); });
 
     renderStep();
   }
@@ -4297,7 +4308,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Create walk/idle/work animations for a custom character texture key. */
   private ensureCharAnimations(key: string): void {
     if (this.anims.exists(`${key}-work`)) return;
-    const dirs: Dir[] = ["down", "left", "right", "up"];
+    const dirs: Dir[] = ["down", "left", "right", "up", "down-right", "down-left", "up-right", "up-left"];
     const FRAMES_PER_ROW = 8;
     dirs.forEach((dir, row) => {
       const base = row * FRAMES_PER_ROW;
@@ -4360,7 +4371,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     const sheets = ["boss", "char-yuki", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
-    const dirs: Dir[] = ["down", "left", "right", "up"];
+    const dirs: Dir[] = ["down", "left", "right", "up", "down-right", "down-left", "up-right", "up-left"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
       dirs.forEach((dir, row) => {
@@ -6335,6 +6346,175 @@ export class OfficeScene extends Phaser.Scene {
       if (!workingDesks.has(deskIdx)) {
         overlay.setVisible(false);
       }
+    }
+  }
+
+  // ── Office tile editing (build mode) ───────────────────────────────
+
+  /** Apply all persisted office tile overrides from the store. */
+  private applyOfficeOverrides(): void {
+    const overrides = this.store.officeOverrides;
+    if (!overrides || Object.keys(overrides).length === 0) return;
+    const mapW = this.officeMap.width;
+    for (const [key, tile] of Object.entries(overrides)) {
+      const tileIndex = parseInt(key, 10);
+      const x = tileIndex % mapW;
+      const y = Math.floor(tileIndex / mapW);
+      if (tile === -1) {
+        this.furnitureLayer.removeTileAt(x, y, false);
+      } else {
+        this.furnitureLayer.putTileAt(tile, x, y);
+      }
+    }
+  }
+
+  /** Apply a single office tile override (from remote player or local edit). */
+  private applyOfficeTile(tileIndex: number, tile: number, layer: "ground" | "walls" | "furniture"): void {
+    const mapW = this.officeMap.width;
+    const x = tileIndex % mapW;
+    const y = Math.floor(tileIndex / mapW);
+    const targetLayer = layer === "ground" ? this.groundLayer : layer === "walls" ? this.wallsLayer : this.furnitureLayer;
+    if (tile === -1) {
+      targetLayer.removeTileAt(x, y, false);
+    } else {
+      targetLayer.putTileAt(tile, x, y);
+    }
+  }
+
+  /** Toggle build mode on/off. */
+  private toggleBuildMode(): void {
+    this.buildMode = !this.buildMode;
+    if (this.buildMode) {
+      this.showBuildPalette();
+      this.input.on("pointerdown", this.handleBuildClick, this);
+      this.store.toast("Build mode ON — click tiles to place. Press B or ESC to exit.");
+    } else {
+      this.hideBuildPalette();
+      this.input.off("pointerdown", this.handleBuildClick, this);
+      this.store.toast("Build mode OFF");
+    }
+  }
+
+  /** Handle clicking on the tilemap while in build mode. */
+  private handleBuildClick(pointer: Phaser.Input.Pointer): void {
+    if (!this.buildMode) return;
+    // Don't place if clicking on UI
+    if (pointer.event.target && pointer.event.target !== this.game.canvas) return;
+
+    const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+    const tx = Math.floor(worldPoint.x / TILE_PX);
+    const ty = Math.floor(worldPoint.y / TILE_PX);
+
+    if (tx < 0 || ty < 0 || tx >= this.officeMap.width || ty >= this.officeMap.height) return;
+
+    const tileIndex = ty * this.officeMap.width + tx;
+    const tile = this.buildSelectedTile;
+
+    // Apply locally
+    this.applyOfficeTile(tileIndex, tile, this.buildLayer);
+
+    // Track in store
+    this.store.officeOverrides[tileIndex] = tile;
+
+    // Send to server
+    if (this.net) {
+      this.net.send({ type: "office_tile_update", tileIndex, tile, layer: this.buildLayer });
+    }
+  }
+
+  /** Show the build mode palette UI. */
+  private showBuildPalette(): void {
+    if (this.buildPaletteEl) return;
+
+    const el = document.createElement("div");
+    el.id = "build-palette";
+    el.style.cssText = `
+      position: fixed; top: 60px; right: 16px; z-index: 10000;
+      background: rgba(20, 22, 30, 0.95); border: 1px solid #3a4a5a;
+      border-radius: 10px; padding: 12px; max-width: 280px;
+      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+      color: #e0e0e0; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      max-height: 80vh; overflow-y: auto;
+    `;
+
+    // Layer selector
+    const layerRow = document.createElement("div");
+    layerRow.style.cssText = "display: flex; gap: 6px; margin-bottom: 10px;";
+    const layers: ("ground" | "walls" | "furniture")[] = ["ground", "walls", "furniture"];
+    for (const l of layers) {
+      const btn = document.createElement("button");
+      btn.textContent = l.charAt(0).toUpperCase() + l.slice(1);
+      btn.style.cssText = `
+        flex: 1; padding: 6px 8px; border: 1px solid #3a4a5a;
+        border-radius: 6px; background: ${l === this.buildLayer ? "#2a5a8a" : "#1a2a3a"};
+        color: #e0e0e0; cursor: pointer; font-size: 12px; font-family: inherit;
+      `;
+      btn.onclick = () => {
+        this.buildLayer = l;
+        for (const sib of layerRow.children) {
+          (sib as HTMLButtonElement).style.background = "#1a2a3a";
+        }
+        btn.style.background = "#2a5a8a";
+      };
+      layerRow.appendChild(btn);
+    }
+    el.appendChild(layerRow);
+
+    // Tile palette — tiles 1..94 (firstgid=1, so tile 0 = empty), 8 columns
+    const grid = document.createElement("div");
+    grid.style.cssText = "display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px;";
+    const tilesetKey = `tiles-${this.theme}`;
+    const cols = 8;
+    const tileCount = 94;
+    for (let i = 1; i <= tileCount; i++) {
+      const tileBtn = document.createElement("div");
+      const spriteIdx = i - 1; // 0-indexed for sprite sheet position
+      tileBtn.style.cssText = `
+        width: 28px; height: 28px; border: 2px solid ${i === this.buildSelectedTile ? "#4cb866" : "transparent"};
+        border-radius: 4px; cursor: pointer; image-rendering: pixelated;
+        background-image: url(${this.game.textures.getBase64(tilesetKey)});
+        background-position: -${(spriteIdx % cols) * 28}px -${Math.floor(spriteIdx / cols) * 28}px;
+        background-size: ${cols * 28}px ${Math.ceil(tileCount / cols) * 28}px;
+      `;
+      tileBtn.onclick = () => {
+        this.buildSelectedTile = i;
+        for (const sib of grid.children) {
+          (sib as HTMLDivElement).style.border = "2px solid transparent";
+        }
+        tileBtn.style.border = "2px solid #4cb866";
+      };
+      grid.appendChild(tileBtn);
+    }
+    el.appendChild(grid);
+
+    // Eraser button
+    const eraserRow = document.createElement("div");
+    eraserRow.style.cssText = "margin-top: 8px;";
+    const eraserBtn = document.createElement("button");
+    eraserBtn.textContent = "🧹 Erase";
+    eraserBtn.style.cssText = `
+      width: 100%; padding: 6px; border: 1px solid #3a4a5a;
+      border-radius: 6px; background: #3a1a1a; color: #e0e0e0;
+      cursor: pointer; font-size: 12px; font-family: inherit;
+    `;
+    eraserBtn.onclick = () => {
+      this.buildSelectedTile = -1;
+      for (const sib of grid.children) {
+        (sib as HTMLDivElement).style.border = "2px solid transparent";
+      }
+    };
+    eraserRow.appendChild(eraserBtn);
+    el.appendChild(eraserRow);
+
+    document.body.appendChild(el);
+    this.buildPaletteEl = el;
+  }
+
+  /** Hide the build mode palette UI. */
+  private hideBuildPalette(): void {
+    if (this.buildPaletteEl) {
+      this.buildPaletteEl.remove();
+      this.buildPaletteEl = null;
     }
   }
 }

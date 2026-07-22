@@ -5,6 +5,7 @@ import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
   randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
+  SUBSCRIPTION_TIER_LIST, type SubscriptionTier,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
@@ -275,6 +276,7 @@ export class Hud {
       <div class="modal-backdrop" id="achievements-modal" hidden></div>
       <div class="modal-backdrop" id="hall-of-fame-modal" hidden></div>
       <div class="modal-backdrop" id="railway-modal" hidden></div>
+      <div class="modal-backdrop" id="github-modal" hidden></div>
       <div class="modal-backdrop" id="wardrobe-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
@@ -628,6 +630,7 @@ export class Hud {
       const ach = document.getElementById("achievements-modal")!;
       const hof = document.getElementById("hall-of-fame-modal")!;
       const railway = document.getElementById("railway-modal")!;
+      const github = document.getElementById("github-modal")!;
       const wardrobe = document.getElementById("wardrobe-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
@@ -635,6 +638,7 @@ export class Hud {
         ach.hidden = true;
         hof.hidden = true;
         railway.hidden = true;
+        github.hidden = true;
         wardrobe.hidden = true;
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
@@ -1289,11 +1293,16 @@ export class Hud {
         <div class="tabpanel" data-panel="billing" hidden>
           <div class="sec">SUBSCRIPTION</div>
           <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "#53b86b" : "#e05d5d"};">
-            ${this.store.subscriptionActive ? "✓ Active — you can hire agents." : "⚠ No active subscription — $20/month to hire agents."}
+            ${this.store.subscriptionActive
+              ? `✓ ${this.store.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === this.store.subscriptionTier)?.name : "Active"} — ${this.store.agentLimit === Infinity ? "unlimited" : this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"} available.`
+              : "⚠ No active subscription — plans start at $0.99/month."}
           </div>
           ${this.store.subscriptionActive
             ? `<button class="btn" id="s-manage-sub">MANAGE SUBSCRIPTION</button>`
-            : `<button class="btn primary" id="s-subscribe">SUBSCRIBE — $20/MONTH</button>`}
+            : `<div style="display:flex;flex-direction:column;gap:0.4rem;">${SUBSCRIPTION_TIER_LIST.map(t => {
+              const agentLabel = t.agentLimit === Infinity ? "unlimited agents" : `${t.agentLimit} agent${t.agentLimit === 1 ? "" : "s"}`;
+              return `<button class="btn primary s-subscribe-tier" data-tier="${t.id}" style="text-align:left;padding:0.6rem 0.8rem;font-size:0.85rem;">${t.name} — ${t.label} (${agentLabel})</button>`;
+            }).join("")}</div>`}
           <div class="sec" style="margin-top:1rem;">ENTRANCE FEE</div>
           <div style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.entrancePaid ? "#53b86b" : this.store.freeTrialExpiresAt && this.store.freeTrialExpiresAt > Date.now() ? "#e8c44a" : "#e05d5d"};">
             ${this.store.entrancePaid
@@ -1389,8 +1398,14 @@ export class Hud {
     });
     const subscribeBtn = document.getElementById("s-subscribe");
     if (subscribeBtn) {
-      subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout());
+      subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout("unlimited"));
     }
+    document.querySelectorAll<HTMLButtonElement>(".s-subscribe-tier").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tier = btn.dataset.tier as SubscriptionTier;
+        if (tier) void startSubscriptionCheckout(tier);
+      });
+    });
     const manageSubBtn = document.getElementById("s-manage-sub");
     if (manageSubBtn) {
       manageSubBtn.addEventListener("click", () => void openCustomerPortal());
@@ -1489,7 +1504,7 @@ export class Hud {
     modal.hidden = false;
     const subNotice = this.store.subscriptionActive ? "" : `
       <div style="margin-bottom:0.8rem;padding:0.6rem 0.8rem;border-radius:8px;background:rgba(229,93,93,0.15);border:1px solid rgba(229,93,93,0.3);color:#e05d5d;font-size:0.82rem;line-height:1.3;">
-        <strong>Subscription required.</strong> You need a $20/month subscription to hire agents.
+        <strong>Subscription required.</strong> You need a subscription to hire agents. Plans start at $0.99/month.
         <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:#58c866;color:#0d0d0d;font-size:0.8rem;font-weight:700;cursor:pointer;">Subscribe now →</button>
       </div>`;
 
@@ -1557,9 +1572,9 @@ export class Hud {
     const modelSel = document.getElementById("h-model") as HTMLSelectElement;
     modelSel.selectedIndex = 0;
     document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
-    const subscribeBtn = document.getElementById("h-subscribe");
-    if (subscribeBtn) {
-      subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout());
+    const subscribeBtn2 = document.getElementById("h-subscribe");
+    if (subscribeBtn2) {
+      subscribeBtn2.addEventListener("click", () => void startSubscriptionCheckout("starter"));
     }
 
     // Wire up trait slider value displays
@@ -1848,6 +1863,7 @@ export class Hud {
     this.renderAchievements();
     this.renderHallOfFame();
     this.renderRailwayPanel();
+    this.renderGitHubPanel();
     this.renderWardrobe();
   }
 
@@ -2677,6 +2693,112 @@ export class Hud {
     document.getElementById("railway-close")!.addEventListener("click", () => {
       this.store.toggleRailwayPanel(false);
     });
+  }
+
+  private bindGitHubPanel(): void {
+    const modal = document.getElementById("github-modal")!;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) this.store.githubPanelOpen = false;
+    });
+  }
+
+  private renderGitHubPanel(): void {
+    const modal = document.getElementById("github-modal")!;
+    if (!this.store.githubPanelOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+
+    let html = `<div class="railway-modal-content">`;
+    html += `<div class="railway-modal-header">`;
+    html += `<span class="railway-modal-title">🐙 GITHUB WORLDS</span>`;
+    html += `<button class="x" id="github-close">✕</button>`;
+    html += `</div>`;
+
+    const status = this.store.githubStatus;
+    if (!status) {
+      html += `<div class="railway-loading">Querying GitHub…</div>`;
+    } else if (!status.connected) {
+      html += `<div class="railway-error">`;
+      html += `<div class="railway-error-icon">⚠️</div>`;
+      html += `<div class="railway-error-text">${esc(status.error ?? "Not connected")}</div>`;
+      html += `<div class="railway-error-hint">Add a GitHub Personal Access Token via Settings → MCP Keys (GitHub server).</div>`;
+      html += `</div>`;
+    } else {
+      html += `<div style="padding:8px 12px;color:#8fc9f0;font-size:13px;">Connected as <b>${esc(status.login ?? "unknown")}</b></div>`;
+
+      const data = this.store.githubData;
+      if (data?.error) {
+        html += `<div class="railway-error"><div class="railway-error-text">${esc(data.error)}</div></div>`;
+      }
+
+      // Create new world fork
+      html += `<div style="padding:8px 12px;border-bottom:1px solid #2a3a4a;">`;
+      html += `<div style="font-size:12px;color:#aaa;margin-bottom:6px;">Create new world fork:</div>`;
+      html += `<div style="display:flex;gap:6px;">`;
+      html += `<input id="github-branch-name" placeholder="world-name" maxlength="40" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #3a4a5a;background:#1a2a3a;color:#e0e0e0;font-size:13px;" />`;
+      html += `<button id="github-fork-btn" style="padding:6px 12px;border-radius:6px;border:1px solid #3a6a5a;background:#2a5a4a;color:#e0e0e0;cursor:pointer;font-size:13px;">Fork & Create Branch</button>`;
+      html += `</div>`;
+      html += `</div>`;
+
+      // List existing branches
+      if (data && data.branches.length > 0) {
+        html += `<div class="railway-projects">`;
+        html += `<div style="padding:8px 12px;font-size:12px;color:#aaa;">World branches (${data.branches.length}):</div>`;
+        for (const branch of data.branches) {
+          html += `<div class="railway-project">`;
+          html += `<div class="railway-project-header">`;
+          html += `<span class="railway-project-name">${esc(branch.name)}</span>`;
+          if (data.fork) {
+            html += `<a class="railway-service-url" href="https://github.com/${esc(data.fork.fullName)}/tree/${esc(branch.name)}" target="_blank" style="font-size:11px;">view →</a>`;
+          }
+          html += `</div>`;
+          if (branch.name !== "main" && branch.name !== "master") {
+            html += `<button class="btn danger" id="github-del-${esc(branch.name)}" style="font-size:11px;padding:3px 8px;margin:4px 0;">Delete</button>`;
+          }
+          html += `</div>`;
+        }
+        html += `</div>`;
+      } else if (data && !data.fork) {
+        html += `<div class="railway-empty">No fork yet. Create one above to get started.</div>`;
+      } else if (data && data.branches.length === 0) {
+        html += `<div class="railway-empty">No branches found.</div>`;
+      }
+    }
+
+    html += `</div>`;
+    modal.innerHTML = html;
+    modal.hidden = false;
+
+    document.getElementById("github-close")!.addEventListener("click", () => {
+      this.store.githubPanelOpen = false;
+    });
+
+    const forkBtn = document.getElementById("github-fork-btn");
+    if (forkBtn) {
+      forkBtn.addEventListener("click", () => {
+        const input = document.getElementById("github-branch-name") as HTMLInputElement | null;
+        const name = input?.value.trim();
+        if (!name) return;
+        this.store.sendFn?.({ type: "github_fork", branchName: name });
+        input!.value = "";
+      });
+    }
+
+    // Wire delete buttons
+    if (this.store.githubData) {
+      for (const branch of this.store.githubData.branches) {
+        if (branch.name === "main" || branch.name === "master") continue;
+        const delBtn = document.getElementById(`github-del-${branch.name}`);
+        if (delBtn) {
+          delBtn.addEventListener("click", () => {
+            if (!confirm(`Delete branch "${branch.name}"?`)) return;
+            this.store.sendFn?.({ type: "github_delete_branch", branchName: branch.name });
+          });
+        }
+      }
+    }
   }
 
   private renderWardrobe(): void {

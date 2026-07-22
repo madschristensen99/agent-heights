@@ -1,4 +1,4 @@
-/** Minimal 4-directional A* over a boolean walkability grid. */
+/** 8-directional A* over a boolean walkability grid. */
 
 export interface Tile {
   x: number;
@@ -26,8 +26,15 @@ export function findPath(grid: Grid, start: Tile, goal: Tile): Tile[] {
   const cameFrom = new Map<number, number>();
   const gScore = new Map<number, number>([[key(start.x, start.y), 0]]);
   const fScore = new Map<number, number>([
-    [key(start.x, start.y), Math.abs(goal.x - start.x) + Math.abs(goal.y - start.y)],
+    [key(start.x, start.y), octile(goal.x - start.x, goal.y - start.y)],
   ]);
+
+  const SQRT2 = Math.SQRT2;
+  // 8 neighbours: 4 cardinal + 4 diagonal
+  const neighbours: Array<[number, number, number]> = [
+    [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+    [1, 1, SQRT2], [1, -1, SQRT2], [-1, 1, SQRT2], [-1, -1, SQRT2],
+  ];
   const inOpen = new Set<number>([key(start.x, start.y)]);
 
   while (open.length > 0) {
@@ -53,16 +60,21 @@ export function findPath(grid: Grid, start: Tile, goal: Tile): Tile[] {
       return path;
     }
 
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+    for (const [dx, dy, cost] of neighbours) {
       const nx = current.x + dx;
       const ny = current.y + dy;
       if (!grid.ok(nx, ny)) continue;
+      // Prevent corner-cutting: don't allow diagonal move if both
+      // orthogonal neighbours are blocked (would squeeze through a wall corner)
+      if (dx !== 0 && dy !== 0) {
+        if (!grid.ok(current.x + dx, current.y) && !grid.ok(current.x, current.y + dy)) continue;
+      }
       const nk = key(nx, ny);
-      const tentative = (gScore.get(ck) ?? Infinity) + 1;
+      const tentative = (gScore.get(ck) ?? Infinity) + cost;
       if (tentative < (gScore.get(nk) ?? Infinity)) {
         cameFrom.set(nk, ck);
         gScore.set(nk, tentative);
-        fScore.set(nk, tentative + Math.abs(goal.x - nx) + Math.abs(goal.y - ny));
+        fScore.set(nk, tentative + octile(goal.x - nx, goal.y - ny));
         if (!inOpen.has(nk)) {
           open.push({ x: nx, y: ny });
           inOpen.add(nk);
@@ -71,4 +83,11 @@ export function findPath(grid: Grid, start: Tile, goal: Tile): Tile[] {
     }
   }
   return [];
+}
+
+/** Octile distance heuristic for 8-directional movement. */
+function octile(dx: number, dy: number): number {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  return Math.max(ax, ay) + (Math.SQRT2 - 1) * Math.min(ax, ay);
 }

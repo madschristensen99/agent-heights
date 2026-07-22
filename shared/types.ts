@@ -437,7 +437,7 @@ export interface PlayerInfo {
 }
 
 /** Direction a player/agent is facing. */
-export type Dir = "up" | "down" | "left" | "right";
+export type Dir = "up" | "down" | "left" | "right" | "up-left" | "up-right" | "down-left" | "down-right";
 
 /** A player visible in a shared room — used for multiplayer presence. */
 /** Room access level for a player.
@@ -598,6 +598,10 @@ export type ClientMsg =
   | { type: "npc_update"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_update"; cx: number; cy: number; tileIndex: number; tile: number }
   | { type: "office_tile_update"; tileIndex: number; tile: number; layer: "ground" | "walls" | "furniture" }
+  | { type: "github_query" }
+  | { type: "github_fork"; branchName: string }
+  | { type: "github_list_branches" }
+  | { type: "github_delete_branch"; branchName: string }
   | { type: "voice_start" }
   | { type: "voice_offer"; targetUserId: string; sdp: string }
   | { type: "voice_answer"; targetUserId: string; sdp: string }
@@ -685,6 +689,10 @@ export type ServerMsg =
   | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }
   | { type: "office_tile_updated"; tileIndex: number; tile: number; layer: "ground" | "walls" | "furniture" }
+  | { type: "github_status"; connected: boolean; login: string | null; error: string | null }
+  | { type: "github_data"; branches: { name: string; sha: string }[]; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string } | null; error: string | null }
+  | { type: "github_fork_created"; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string }; branchName: string }
+  | { type: "github_error"; error: string }
   | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
   | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] }
   | { type: "orgs_list"; orgs: (Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" })[] }

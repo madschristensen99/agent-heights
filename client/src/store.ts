@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -67,15 +67,20 @@ export class Store {
   railwayData: RailwayData | null = null;
   railwayError: string | null = null;
   railwayStatus: { ok: boolean; message: string } | null = null;
+  githubStatus: { connected: boolean; login: string | null; error: string | null } | null = null;
+  githubData: { branches: { name: string; sha: string }[]; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string } | null; error: string | null } | null = null;
+  githubPanelOpen = false;
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
   entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
+  subscriptionTier: SubscriptionTier | null = null;
+  agentLimit = 0;
   currentPeriodEnd: number | null = null;
   freeTrialExpiresAt: number | null = null;
-  paymentRequired: { reason: "entrance" | "subscription"; message: string } | null = null;
+  paymentRequired: { reason: "entrance" | "subscription" | "agent_limit"; message: string; tier?: SubscriptionTier | null; agentLimit?: number } | null = null;
   roomId: string | null = null;
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
@@ -173,12 +178,17 @@ export class Store {
     this.entrancePaid = true;
     this.subscriptionActive = true;
     this.subscriptionStatus = "none";
+    this.subscriptionTier = null;
+    this.agentLimit = 0;
     this.currentPeriodEnd = null;
     this.freeTrialExpiresAt = null;
     this.paymentRequired = null;
     this.railwayData = null;
     this.railwayError = null;
     this.railwayStatus = null;
+    this.githubStatus = null;
+    this.githubData = null;
+    this.githubPanelOpen = false;
     this.worldSeed = 0;
     this.chunkOverrides = {};
     this.officeOverrides = {};
@@ -651,6 +661,22 @@ export class Store {
         this.railwayError = msg.error;
         this.railwayPanelOpen = true;
         break;
+      case "github_status":
+        this.githubStatus = { connected: msg.connected, login: msg.login, error: msg.error };
+        if (msg.error) this.toast(msg.error);
+        break;
+      case "github_data":
+        this.githubData = { branches: msg.branches, fork: msg.fork, error: msg.error };
+        this.githubPanelOpen = true;
+        break;
+      case "github_fork_created":
+        this.toast(`World fork created: ${msg.branchName}`);
+        // Refresh branch list
+        this.sendFn?.({ type: "github_list_branches" });
+        break;
+      case "github_error":
+        this.toast(`GitHub: ${msg.error}`);
+        break;
       case "api_key_status":
         this.hasApiKey = msg.hasKey;
         break;
@@ -763,11 +789,13 @@ export class Store {
         this.entrancePaid = msg.entrancePaid;
         this.subscriptionActive = msg.subscriptionActive;
         this.subscriptionStatus = msg.subscriptionStatus;
+        this.subscriptionTier = msg.subscriptionTier;
+        this.agentLimit = msg.agentLimit;
         this.currentPeriodEnd = msg.currentPeriodEnd;
         this.freeTrialExpiresAt = msg.freeTrialExpiresAt;
         break;
       case "payment_required":
-        this.paymentRequired = { reason: msg.reason, message: msg.message };
+        this.paymentRequired = { reason: msg.reason, message: msg.message, tier: msg.tier, agentLimit: msg.agentLimit };
         this.toast(msg.message);
         break;
       case "room_state":

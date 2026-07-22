@@ -265,7 +265,7 @@ export class BootScene extends Phaser.Scene {
 
     // --- character sheet animations ---
     const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss", "char-yuki"];
-    const dirs: Dir[] = ["down", "left", "right", "up"];
+    const dirs: Dir[] = ["down", "left", "right", "up", "down-right", "down-left", "up-right", "up-left"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
       dirs.forEach((dir, row) => {

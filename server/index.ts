@@ -12,6 +12,7 @@ import { searchPulseMCPStructured } from "./pulsemcp.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
+import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken } from "./github.js";
 import { rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
@@ -858,6 +859,111 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "railway_data", data: null, error: err instanceof Error ? err.message : String(err) });
           });
           break;
+        case "github_query": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) {
+            sess.broadcast({ type: "github_status", connected: false, login: null, error: "No GitHub token found. Add a GitHub MCP key in Settings." });
+            break;
+          }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) {
+              sess.broadcast({ type: "github_status", connected: false, login: null, error: "Invalid GitHub token." });
+              break;
+            }
+            sess.broadcast({ type: "github_status", connected: true, login: user.login, error: null });
+            // Also try to list branches from the user's fork
+            try {
+              const branches = await listBranches(token, user.login, "agent-hq");
+              sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-hq", fullName: `${user.login}/agent-hq`, cloneUrl: `https://github.com/${user.login}/agent-hq.git`, branch: branches[0]?.name ?? "main" }, error: null });
+            } catch {
+              // Fork might not exist yet — that's OK
+              sess.broadcast({ type: "github_data", branches: [], fork: null, error: null });
+            }
+          } catch (err) {
+            sess.broadcast({ type: "github_status", connected: false, login: null, error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "github_fork": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) {
+            sess.broadcast({ type: "github_error", error: "No GitHub token found. Add a GitHub MCP key in Settings." });
+            break;
+          }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) {
+              sess.broadcast({ type: "github_error", error: "Invalid GitHub token." });
+              break;
+            }
+            // Fork the repo if it doesn't exist yet
+            let forkOwner = user.login;
+            let forkName = "agent-hq";
+            try {
+              await listBranches(token, forkOwner, forkName);
+            } catch {
+              // Fork doesn't exist — create it
+              const fork = await forkSourceRepo(token);
+              forkOwner = fork.owner;
+              forkName = fork.name;
+            }
+            // Create the new branch
+            const branch = await createBranch(token, forkOwner, forkName, msg.branchName);
+            sess.broadcast({
+              type: "github_fork_created",
+              fork: { owner: forkOwner, name: forkName, fullName: `${forkOwner}/${forkName}`, cloneUrl: `https://github.com/${forkOwner}/${forkName}.git`, branch: branch.name },
+              branchName: msg.branchName,
+            });
+          } catch (err) {
+            sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "github_list_branches": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) {
+            sess.broadcast({ type: "github_error", error: "No GitHub token found." });
+            break;
+          }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) {
+              sess.broadcast({ type: "github_error", error: "Invalid GitHub token." });
+              break;
+            }
+            const branches = await listBranches(token, user.login, "agent-hq");
+            sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-hq", fullName: `${user.login}/agent-hq`, cloneUrl: `https://github.com/${user.login}/agent-hq.git`, branch: branches[0]?.name ?? "main" }, error: null });
+          } catch (err) {
+            sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "github_delete_branch": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) {
+            sess.broadcast({ type: "github_error", error: "No GitHub token found." });
+            break;
+          }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) {
+              sess.broadcast({ type: "github_error", error: "Invalid GitHub token." });
+              break;
+            }
+            await deleteBranch(token, user.login, "agent-hq", msg.branchName);
+            // Refresh branch list
+            const branches = await listBranches(token, user.login, "agent-hq");
+            sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-hq", fullName: `${user.login}/agent-hq`, cloneUrl: `https://github.com/${user.login}/agent-hq.git`, branch: branches[0]?.name ?? "main" }, error: null });
+          } catch (err) {
+            sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
         case "set_api_key": {
           const trimmed = msg.apiKey.trim();
           if (trimmed) {

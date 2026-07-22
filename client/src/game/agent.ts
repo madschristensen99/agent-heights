@@ -19,7 +19,22 @@ export const STATUS_COLORS: Record<AgentInfo["status"], number> = {
   error: 0xe05858,
 };
 
-export type Dir = "down" | "left" | "right" | "up";
+export type Dir = "down" | "left" | "right" | "up" | "down-left" | "down-right" | "up-left" | "up-right";
+
+/** Convert a movement vector into one of 8 directions. */
+export function vecToDir(vx: number, vy: number): Dir {
+  const ax = Math.abs(vx);
+  const ay = Math.abs(vy);
+  if (ax < 0.01 && ay < 0.01) return "down";
+  // Use a threshold so near-axis vectors still snap to cardinals
+  const diag = 0.4142; // tan(22.5°) — boundary between cardinal and diagonal
+  if (ax > ay * diag && ay > ax * diag) {
+    // diagonal
+    return vx > 0 ? (vy > 0 ? "down-right" : "up-right") : vy > 0 ? "down-left" : "up-left";
+  }
+  // cardinal
+  return ax > ay ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
+}
 
 export function feetOf(tile: Tile): { x: number; y: number } {
   return { x: tile.x * TILE_PX + 32, y: tile.y * TILE_PX + 52 };

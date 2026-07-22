@@ -38,17 +38,24 @@ net.onRefreshToken = async () => {
 const authOverlay = createAuthOverlay();
 const paymentOverlay = createPaymentOverlay();
 
+// If true, suppress auto-showing the payment overlay because we just returned
+// from a successful Stripe checkout and the webhook may not have processed yet.
+let suppressPaymentOverlay = false;
+
 // Auto-show/hide payment overlay based on entrance fee + free trial status
 onPaymentChange((state) => {
+  if (state && state.entrancePaid) {
+    suppressPaymentOverlay = false;
+    paymentOverlay.hide();
+    return;
+  }
   if (state && !state.entrancePaid) {
     const trialActive = state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
-    if (!trialActive) {
+    if (!trialActive && !suppressPaymentOverlay) {
       paymentOverlay.show();
     } else {
       paymentOverlay.hide();
     }
-  } else if (state && state.entrancePaid) {
-    paymentOverlay.hide();
   }
 });
 
@@ -135,13 +142,19 @@ if (!isSpectator) {
   void initAuth();
 
   // If we returned from a successful Stripe checkout, poll payment status
+  // while suppressing the payment overlay (webhook may not have processed yet)
   if (_paymentResult && _paymentResult.endsWith("success")) {
+    suppressPaymentOverlay = true;
     let attempts = 0;
     const poll = async () => {
       attempts++;
       await refreshPaymentStatus();
+      // If payment is now confirmed, onPaymentChange will clear the suppress flag
       if (attempts < 10) {
         setTimeout(() => void poll(), 2000);
+      } else {
+        // Polling exhausted — stop suppressing so overlay can show if still unpaid
+        suppressPaymentOverlay = false;
       }
     };
     setTimeout(() => void poll(), 1500);
