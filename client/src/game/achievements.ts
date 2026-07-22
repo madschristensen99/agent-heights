@@ -46,6 +46,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "deep_diver", name: "Go Deep", desc: "Travel 10 chunks from the office.", tier: "Explorer", icon: "🧭" },
   { id: "marathoner", name: "Long Walk Home", desc: "Travel 18+ chunks from the office.", tier: "Explorer", icon: "🥾" },
   { id: "night_walker", name: "Children of the Night", desc: "Reach full darkness.", tier: "Explorer", icon: "🌑" },
+  { id: "palm_grove", name: "Paradise Found", desc: "Discover a palm tree near the office.", tier: "Explorer", icon: "🌴" },
+  { id: "mystic_grove", name: "The Trees Have Eyes", desc: "Discover a mystic tree in the outer world.", tier: "Explorer", icon: "👁️" },
+  { id: "big_rock_hunter", name: "Geology Enthusiast", desc: "Find a massive boulder in the wilderness.", tier: "Explorer", icon: "🪨" },
 
   // ── Adventurer ──
   { id: "club_pickup", name: "Tee Time", desc: "Pick up a golf club.", tier: "Adventurer", icon: "⛳" },
@@ -74,7 +77,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "ash_wyrm_kill", name: "Wyrmslayer", desc: "Defeat the Ash Wyrm.", tier: "Warrior", icon: "🔥" },
   { id: "void_leviathan_kill", name: "Abyssal Conqueror", desc: "Defeat the Void Leviathan.", tier: "Warrior", icon: "🐙" },
   { id: "infernal_sovereign_kill", name: "Sovereign No More", desc: "Defeat the Infernal Sovereign.", tier: "Warrior", icon: "👑" },
-  { id: "behemoth_slayer", name: "Titanfall", desc: "Defeat a Behemoth.", tier: "Warrior", icon: "👹" },
   { id: "knocked_out", name: "Knocked Out", desc: "Get knocked out and dragged back to office.", tier: "Warrior", icon: "💀" },
   { id: "void_death", name: "Consumed by the Void", desc: "Die by stepping on a void tile.", tier: "Warrior", icon: "⬛" },
 

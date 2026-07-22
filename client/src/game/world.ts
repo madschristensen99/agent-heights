@@ -808,6 +808,11 @@ export class WorldLayer {
   private tennisWallCacheKey = "";
   private tennisWallCache: { wallX: number; wallY: number; foundWall: boolean } | null = null;
 
+  // --- axe / leprechaun / big tree state ---
+  private hasAxe = false;
+  private axeHint!: Phaser.GameObjects.Text;
+  private bigTreesChopped = 0;
+
   // --- flower picking state ---
   private flowers = 0;
   private flowerHint!: Phaser.GameObjects.Text;
@@ -914,6 +919,23 @@ export class WorldLayer {
 
     // flower picking hint
     this.flowerHint = scene.add
+      .text(0, 0, "", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "14px",
+        color: "#ffffff",
+        stroke: "#1a1a22",
+        strokeThickness: 3,
+        backgroundColor: "#1a1a22",
+        padding: { x: 8, y: 6 },
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.8)
+      .setDepth(400)
+      .setVisible(false);
+
+    // axe / leprechaun / big tree interaction hint
+    this.axeHint = scene.add
       .text(0, 0, "", {
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "14px",
@@ -2448,6 +2470,103 @@ export class WorldLayer {
       }
     } else {
       this.flowerHint.setVisible(false);
+    }
+
+    // --- axe pickup, leprechaun trade, big tree chopping ---
+    if (outside) {
+      const { tx: ptx2, ty: pty2 } = this.pixelToTile(playerX, playerY);
+      let nearestAxe: { tx: number; ty: number; d: number } | null = null;
+      let nearestLep: { tx: number; ty: number; d: number } | null = null;
+      let nearestBigTree: { tx: number; ty: number; d: number } | null = null;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const itx = ptx2 + dx;
+          const ity = pty2 + dy;
+          const t = this.getTileAtLoaded(itx, ity);
+          if (t < 0) continue;
+          const ix = itx * TILE_PX + TILE_PX / 2 + this.offset.x;
+          const iy = ity * TILE_PX + TILE_PX / 2 + this.offset.y;
+          const d = Math.hypot(playerX - ix, playerY - iy);
+          if (t === TILE.AXE && (!nearestAxe || d < nearestAxe.d)) nearestAxe = { tx: itx, ty: ity, d };
+          if (t === TILE.LEPRECHAUN && (!nearestLep || d < nearestLep.d)) nearestLep = { tx: itx, ty: ity, d };
+          if (t === TILE.BIG_TREE && (!nearestBigTree || d < nearestBigTree.d)) nearestBigTree = { tx: itx, ty: ity, d };
+          if (t === TILE.PALM_TREE) achievements.unlock("palm_grove");
+          if (t === TILE.MYSTIC_TREE) achievements.unlock("mystic_grove");
+          if (t === TILE.BIG_ROCK) achievements.unlock("big_rock_hunter");
+        }
+      }
+
+      if (nearestAxe && nearestAxe.d < 100 && !this.hasAxe) {
+        this.axeHint
+          .setText(isTouchDevice() ? "TAP Pick up axe" : "E: Pick up axe")
+          .setPosition(nearestAxe.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestAxe.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.hasAxe = true;
+          this.setTileAt(nearestAxe.tx, nearestAxe.ty, TILE.GRASS);
+          this.store.toast("Picked up axe! 🪓");
+          this.vfx.sparkBurst(
+            nearestAxe.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestAxe.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0xcc8844, 10, 60,
+          );
+          this.audio.uiClick();
+        }
+      } else if (nearestLep && nearestLep.d < 100 && this.hasGolfClub && !this.hasAxe) {
+        this.axeHint
+          .setText(isTouchDevice() ? "TAP Trade club for axe" : "E: Trade club for axe")
+          .setPosition(nearestLep.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestLep.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.hasGolfClub = false;
+          this.hasAxe = true;
+          this.setTileAt(nearestLep.tx, nearestLep.ty, TILE.GRASS);
+          this.store.toast("Traded golf club for axe! The leprechaun vanishes. 🍀🪓");
+          this.vfx.sparkBurst(
+            nearestLep.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestLep.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0x44ff44, 16, 80,
+          );
+          this.vfx.celebrate(
+            nearestLep.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestLep.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+          );
+          this.audio.recruit();
+          achievements.unlock("leprechaun_trade");
+        }
+      } else if (nearestBigTree && nearestBigTree.d < 100 && this.hasAxe) {
+        this.axeHint
+          .setText(isTouchDevice() ? "TAP Chop big tree" : "E: Chop big tree")
+          .setPosition(nearestBigTree.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestBigTree.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.setTileAt(nearestBigTree.tx, nearestBigTree.ty, TILE.GRASS);
+          this.bigTreesChopped++;
+          this.store.toast(`Chopped down a big tree! 🌳 (${this.bigTreesChopped})`);
+          this.vfx.sparkBurst(
+            nearestBigTree.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestBigTree.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0x4a8a3a, 20, 100,
+          );
+          this.vfx.shake("medium");
+          this.audio.hit();
+          achievements.unlock("first_chop");
+          if (this.bigTreesChopped >= 20) achievements.unlock("lumberjack");
+          // 40% chance of loot
+          if (Math.random() < 0.4) {
+            achievements.unlock("tree_loot");
+            this.store.toast("You found something in the tree! 🎁");
+            this.vfx.celebrate(
+              nearestBigTree.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+              nearestBigTree.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            );
+          }
+        }
+      } else {
+        this.axeHint.setVisible(false);
+      }
+    } else {
+      this.axeHint.setVisible(false);
     }
 
     // find nearest ghost for dialogue

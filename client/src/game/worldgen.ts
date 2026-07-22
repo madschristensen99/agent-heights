@@ -159,9 +159,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
 
       // Obstacle density — noise at scale 8 creates groves and clearings
       const obstacleNoise = valueNoise(worldSeed, wx, wy, 8);
-      const obstacleChance = Math.min(0.99, 0.15 + hostility * 0.14);
+      const obstacleChance = Math.min(0.99, 0.20 + hostility * 0.18);
       // Blend obstacle probability between current and next biome in transition zones
-      const obstacleChanceNext = Math.min(0.99, 0.15 + (hostilityFloor + 1) * 0.14);
+      const obstacleChanceNext = Math.min(0.99, 0.20 + (hostilityFloor + 1) * 0.18);
       const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
       // Hostile tile density — separate noise fields for lava and void so they
