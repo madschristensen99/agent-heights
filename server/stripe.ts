@@ -451,7 +451,11 @@ export async function handleStripeRequest(
   if (url === "/api/stripe/checkout-entrance" && req.method === "POST") {
     const result = await createEntranceCheckoutSession(user.id, user.email ?? "");
     if ("error" in result) {
-      json(res, 400, result);
+      if (result.error === "Entrance fee already paid") {
+        json(res, 200, { alreadyPaid: true });
+      } else {
+        json(res, 400, result);
+      }
     } else {
       json(res, 200, result);
     }

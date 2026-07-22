@@ -414,6 +414,7 @@ export class OfficeScene extends Phaser.Scene {
       this.hideProjectorAgentFrame();
       this.hideBuildPalette();
       this.buildMode = false;
+      this.closePortal();
       for (const overlay of this.monitorMatrixOverlays.values()) overlay.destroy();
       this.monitorMatrixOverlays.clear();
       this.matrixColumns = [];
@@ -1202,6 +1203,11 @@ export class OfficeScene extends Phaser.Scene {
 
           this.syncAgents();
           this.world.syncGhosts();
+
+          // If inside a deployed world, spawn return portal at spawn point
+          if (this.store.currentWorld) {
+            this.spawnReturnPortal();
+          }
 
           // Diagnostic: verify NPC state after init
           console.log(`[scene] INIT COMPLETE: yuki=${!!this.yuki} hermes=${!!this.hermes} yukiSeat=${JSON.stringify(this.yukiSeat)} hermesSeat=${JSON.stringify(this.hermesSeat)} npcs=${this.npcs.size} store.agents=${this.store.agents.size} ready=${this.ready}`);

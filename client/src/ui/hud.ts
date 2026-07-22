@@ -2801,7 +2801,7 @@ export class Hud {
               html += `<span style="font-size:11px;color:${statusColor};">● ${esc(existingDeploy.status)}</span>`;
               if (existingDeploy.railwayServiceUrl) {
                 html += `<a href="${esc(existingDeploy.railwayServiceUrl)}" target="_blank" style="font-size:11px;color:#5a9ad6;">open ↗</a>`;
-                html += `<button class="btn" id="github-enter-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;margin-left:auto;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;">🌀 Enter World</button>`;
+                html += `<button class="btn" id="github-enter-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;margin-left:auto;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;">🌀 Open Portal</button>`;
               }
               html += `<button class="btn" id="github-stop-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;${existingDeploy.railwayServiceUrl ? "" : "margin-left:auto;"}">Stop</button>`;
               html += `<button class="btn danger" id="github-deldep-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;">Delete</button>`;
@@ -2882,8 +2882,8 @@ export class Hud {
             const dep = this.store.deployments.find(d => d.branchName === branch.name);
             if (!dep?.railwayServiceUrl) return;
             const scene = this.store.sceneRef as any;
-            if (scene?.enterWorldPortal) {
-              scene.enterWorldPortal(branch.name, dep.railwayServiceUrl);
+            if (scene?.openPortal) {
+              scene.openPortal(branch.name, dep.railwayServiceUrl);
             }
           });
         }
