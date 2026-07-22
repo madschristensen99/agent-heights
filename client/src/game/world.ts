@@ -1419,6 +1419,7 @@ export class WorldLayer {
       [TILE.GOLF_CLUB]: "golf-club",
       [TILE.GOLF_BALL]: "golf-ball",
       [TILE.BIG_TREE]: "big-tree",
+      [TILE.BIG_ROCK]: "big-rock",
       [TILE.AXE]: "axe",
       [TILE.LEPRECHAUN]: "leprechaun",
       [TILE.TEE_BOX]: "tee-box",

@@ -164,6 +164,14 @@ export class HermesClient {
 
   /** Configure a platform's credentials via the Hermes gateway API. */
   async configurePlatform(platform: string, credentials: Record<string, string>): Promise<{ success: boolean; error?: string }> {
+    // Check reachability first so we can give a clear error instead of "fetch failed"
+    const reachable = await this.isReachable();
+    if (!reachable) {
+      return {
+        success: false,
+        error: `Hermes Agent gateway is not running at ${this.baseUrl}. It should auto-start with the server — check server logs for [hermes-process] errors.`,
+      };
+    }
     try {
       const res = await fetch(`${this.baseUrl}/api/gateway/configure`, {
         method: "POST",
@@ -175,7 +183,14 @@ export class HermesClient {
       const data = await res.json().catch(() => ({}));
       return { success: false, error: data.error ?? data.message ?? `HTTP ${res.status}` };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : "Failed to reach Hermes gateway" };
+      const msg = err instanceof Error ? err.message : "Failed to reach Hermes gateway";
+      if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED") || msg.includes("connect")) {
+        return {
+          success: false,
+          error: `Hermes Agent gateway is not running at ${this.baseUrl}. It should auto-start with the server — check server logs for [hermes-process] errors.`,
+        };
+      }
+      return { success: false, error: msg };
     }
   }
 

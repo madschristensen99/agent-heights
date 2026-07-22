@@ -2728,6 +2728,75 @@ function drawBigTree(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.stroke();
 }
 
+/** Draw a big rock — larger and more detailed than the regular rock tile. */
+function drawBigRock(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.36;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + r * 0.7, r * 1.1, r * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // main boulder — dark base
+  ctx.fillStyle = rgba(0x6a6a6a, 1);
+  ctx.beginPath();
+  ctx.moveTo(cx - r, cy + r * 0.3);
+  ctx.lineTo(cx - r * 0.7, cy - r * 0.5);
+  ctx.lineTo(cx - r * 0.2, cy - r * 0.8);
+  ctx.lineTo(cx + r * 0.4, cy - r * 0.7);
+  ctx.lineTo(cx + r * 0.9, cy - r * 0.2);
+  ctx.lineTo(cx + r, cy + r * 0.3);
+  ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
+  ctx.lineTo(cx - r * 0.5, cy + r * 0.6);
+  ctx.closePath();
+  ctx.fill();
+
+  // mid-tone facet
+  ctx.fillStyle = rgba(0x8a8a8a, 1);
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.7, cy - r * 0.5);
+  ctx.lineTo(cx - r * 0.2, cy - r * 0.8);
+  ctx.lineTo(cx + r * 0.1, cy - r * 0.3);
+  ctx.lineTo(cx - r * 0.3, cy - r * 0.1);
+  ctx.closePath();
+  ctx.fill();
+
+  // highlight facet
+  ctx.fillStyle = rgba(0xaaaaaa, 1);
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.2, cy - r * 0.8);
+  ctx.lineTo(cx + r * 0.4, cy - r * 0.7);
+  ctx.lineTo(cx + r * 0.2, cy - r * 0.4);
+  ctx.lineTo(cx + r * 0.1, cy - r * 0.3);
+  ctx.closePath();
+  ctx.fill();
+
+  // cracks
+  ctx.strokeStyle = rgba(0x4a4a4a, 0.6);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.3, cy - r * 0.1);
+  ctx.lineTo(cx + r * 0.1, cy + r * 0.2);
+  ctx.lineTo(cx + r * 0.3, cy + r * 0.5);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + r * 0.1, cy - r * 0.3);
+  ctx.lineTo(cx + r * 0.3, cy - r * 0.1);
+  ctx.stroke();
+
+  // moss patches
+  ctx.fillStyle = rgba(0x4a6a2a, 0.5);
+  ctx.beginPath();
+  ctx.ellipse(cx - r * 0.4, cy + r * 0.4, r * 0.25, r * 0.12, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + r * 0.5, cy + r * 0.3, r * 0.18, r * 0.1, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 /** Draw a golf club lying diagonally on the ground. */
 function drawGolfClub(ctx: CanvasRenderingContext2D, size: number): void {
   const cx = size / 2;
@@ -3436,7 +3505,7 @@ const ALL_PROC_KEYS = [
   "stone-proj", "spark", "dust", "shockwave", "recruit-beam",
   "soft-glow", "fire-glow", "void-glow", "crystal-glow",
   "golf-club", "golf-ball", "axe", "net",
-  "big-tree", "tee-box", "leprechaun", "fountain",
+  "big-tree", "big-rock", "tee-box", "leprechaun", "fountain",
   "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
   "emote-icons",
 ];
@@ -3633,6 +3702,11 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
       if (!tex.exists("big-tree")) {
         const ct = createCanvasTexture(tex, "big-tree", 64, 64);
         drawBigTree(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("big-rock")) {
+        const ct = createCanvasTexture(tex, "big-rock", 64, 64);
+        drawBigRock(ct.getContext(), 64);
         ct.refresh();
       }
       if (!tex.exists("tee-box")) {

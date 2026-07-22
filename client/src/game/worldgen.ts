@@ -100,7 +100,7 @@ const idx = (x: number, y: number) => y * CHUNK_SIZE + x;
 /** Tiles that should not be overwritten by other feature placement. */
 const PROTECTED_TILES = new Set<number>([
   TILE.GOLF_CLUB, TILE.GOLF_BALL, TILE.GOLF_FLAG, TILE.TEE_BOX,
-  TILE.AXE, TILE.LEPRECHAUN, TILE.BIG_TREE, TILE.FOUNTAIN,
+  TILE.AXE, TILE.LEPRECHAUN, TILE.BIG_TREE, TILE.BIG_ROCK, TILE.FOUNTAIN,
   TILE.TENNIS_COURT, TILE.TENNIS_WALL, TILE.TENNIS_RACKET, TILE.TENNIS_BALL, TILE.TENNIS_NET,
 ]);
 
@@ -158,9 +158,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
 
       // Obstacle density — noise at scale 8 creates groves and clearings
       const obstacleNoise = valueNoise(worldSeed, wx, wy, 8);
-      const obstacleChance = Math.min(0.55, 0.10 + hostility * 0.08);
+      const obstacleChance = Math.min(0.65, 0.12 + hostility * 0.10);
       // Blend obstacle probability between current and next biome in transition zones
-      const obstacleChanceNext = Math.min(0.55, 0.10 + (hostilityFloor + 1) * 0.08);
+      const obstacleChanceNext = Math.min(0.65, 0.12 + (hostilityFloor + 1) * 0.10);
       const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
       // Hostile tile density — separate noise fields for lava and void so they
@@ -168,8 +168,8 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
       // Scale 4 creates small maze-like pockets rather than massive pools.
       const lavaNoise = valueNoise(worldSeed ^ 0x12345, wx, wy, 4);
       const voidNoise = valueNoise(worldSeed ^ 0x67890, wx, wy, 4);
-      const hostileChance = hostilityFloor >= 2 ? Math.min(0.20, (hostilityFloor - 1) * 0.05) : 0;
-      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.20, hostilityFloor * 0.05) : 0;
+      const hostileChance = hostilityFloor >= 2 ? Math.min(0.30, (hostilityFloor - 1) * 0.08) : 0;
+      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.30, hostilityFloor * 0.08) : 0;
       const hostileThreshold = hostileChance * (1 - hostilityFrac) + hostileChanceNext * hostilityFrac;
 
       // Decoration density — noise at scale 6 for smaller flower/bush patches
@@ -210,11 +210,22 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   }
 
   // obstacle clusters — groves of trees, rock piles, ruin fragments in all biomes
-  if (rng() < 0.50) {
+  if (rng() < 0.65) {
     placeObstacleCluster(tiles, biome, rng);
   }
-  if (rng() < 0.30) {
+  if (rng() < 0.45) {
     placeObstacleCluster(tiles, biome, rng);
+  }
+  if (rng() < 0.25) {
+    placeObstacleCluster(tiles, biome, rng);
+  }
+
+  // big rocks — multi-tile boulders in outer biomes
+  if (hostility >= 1 && rng() < 0.35) {
+    placeBigRock(tiles, rng);
+  }
+  if (hostility >= 2 && rng() < 0.25) {
+    placeBigRock(tiles, rng);
   }
 
   // leprechaun agent — small chance to spawn near a big tree in forest/ruins
@@ -261,11 +272,11 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   }
 
   // scattered hostile tiles — interspersed single lava/void tiles for maze-like terrain
-  if (hostility >= 2 && rng() < 0.20) {
-    placeScatteredHostile(tiles, rng, TILE.LAVA, 2 + Math.floor(rng() * 4));
+  if (hostility >= 2 && rng() < 0.35) {
+    placeScatteredHostile(tiles, rng, TILE.LAVA, 3 + Math.floor(rng() * 5));
   }
-  if (hostility >= 3 && rng() < 0.20) {
-    placeScatteredHostile(tiles, rng, TILE.VOID, 2 + Math.floor(rng() * 4));
+  if (hostility >= 3 && rng() < 0.35) {
+    placeScatteredHostile(tiles, rng, TILE.VOID, 3 + Math.floor(rng() * 5));
   }
 
   // occasional large structures in mid-to-far biomes
@@ -300,7 +311,7 @@ function baseGround(biome: Biome): number {
   }
 }
 
-const STONE_TILES = new Set<number>([TILE.ROCK, TILE.RUIN, TILE.CRYSTAL]);
+const STONE_TILES = new Set<number>([TILE.ROCK, TILE.RUIN, TILE.CRYSTAL, TILE.BIG_ROCK]);
 
 /** Thinning pass — convert any stone tile with 3+ cardinal stone neighbors back
  *  to base ground. This breaks clumps into winding 1-2 tile wide lines so no
@@ -336,22 +347,28 @@ function groundVariation(biome: Biome): number {
 }
 
 function pickObstacle(biome: Biome, rng: () => number, hostility: number): number {
-  // Big trees become more common farther from the office
+  // Big trees and big rocks become more common farther from the office
   const bigTreeChance = Math.max(0, (hostility - 1) * 0.15);
+  const bigRockChance = Math.max(0, (hostility - 1) * 0.12);
   switch (biome) {
     case "meadow":
       return rng() < 0.5 ? TILE.TREE : TILE.HEDGE;
     case "forest":
       if (rng() < bigTreeChance) return TILE.BIG_TREE;
-      return rng() < 0.8 ? TILE.TREE : TILE.ROCK;
+      if (rng() < bigRockChance * 0.5) return TILE.BIG_ROCK;
+      return rng() < 0.7 ? TILE.TREE : TILE.ROCK;
     case "ruins":
       if (rng() < bigTreeChance * 0.5) return TILE.BIG_TREE;
-      return rng() < 0.5 ? TILE.RUIN : TILE.ROCK;
+      if (rng() < bigRockChance) return TILE.BIG_ROCK;
+      return rng() < 0.4 ? TILE.RUIN : TILE.ROCK;
     case "wasteland":
-      return rng() < 0.6 ? TILE.ROCK : TILE.RUIN;
+      if (rng() < bigRockChance) return TILE.BIG_ROCK;
+      return rng() < 0.5 ? TILE.ROCK : TILE.RUIN;
     case "void":
+      if (rng() < bigRockChance * 0.5) return TILE.BIG_ROCK;
       return rng() < 0.5 ? TILE.CRYSTAL : TILE.ROCK;
     case "infernal":
+      if (rng() < bigRockChance * 0.5) return TILE.BIG_ROCK;
       return rng() < 0.5 ? TILE.CRYSTAL : TILE.RUIN;
   }
 }
@@ -390,12 +407,12 @@ function pickDecoration(biome: Biome, rng: () => number): number {
 
 function decorationChance(biome: Biome): number {
   switch (biome) {
-    case "meadow": return 0.15;
-    case "forest": return 0.10;
-    case "ruins": return 0.08;
-    case "wasteland": return 0.06;
-    case "void": return 0.04;
-    case "infernal": return 0.04;
+    case "meadow": return 0.20;
+    case "forest": return 0.15;
+    case "ruins": return 0.12;
+    case "wasteland": return 0.10;
+    case "void": return 0.06;
+    case "infernal": return 0.06;
   }
 }
 
@@ -448,6 +465,21 @@ function placeRockFormation(tiles: number[], rng: () => number): void {
       }
     }
   }
+}
+
+/** Place a big rock — 2x2 cluster of ROCK with a BIG_ROCK tile on top. */
+function placeBigRock(tiles: number[], rng: () => number): void {
+  const cx = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
+  const cy = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      const px = cx + dx, py = cy + dy;
+      if (px < CHUNK_SIZE && py < CHUNK_SIZE && canOverwrite(tiles, idx(px, py))) {
+        tiles[idx(px, py)] = TILE.ROCK;
+      }
+    }
+  }
+  if (cx < CHUNK_SIZE && cy < CHUNK_SIZE) tiles[idx(cx, cy)] = TILE.BIG_ROCK;
 }
 
 /** Place an obstacle cluster — a dense grove/pile of biome-appropriate obstacles. */

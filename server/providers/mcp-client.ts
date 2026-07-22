@@ -419,6 +419,24 @@ function clientKey(config: MCPServerConfig): string {
  * Returns Cline AgentTool objects ready to be passed to an agent.
  * Failures are logged and skipped — one broken server doesn't break the agent.
  */
+/** Patterns that indicate a rate-limit error from the API. */
+const RATE_LIMIT_PATTERNS = [
+  /\b429\b/,
+  /rate\s*limit/i,
+  /secondary\s*rate\s*limit/i,
+  /too\s*many\s*requests/i,
+  /X-RateLimit-Remaining[:\s]*0/i,
+  /API rate limit exceeded/i,
+];
+
+/** Cooldown duration after a rate-limit hit (10 minutes). */
+const RATE_LIMIT_COOLDOWN_MS = 10 * 60 * 1000;
+
+/** Check if an error/result string looks like a rate-limit response. */
+function isRateLimitError(text: string): boolean {
+  return RATE_LIMIT_PATTERNS.some((p) => p.test(text));
+}
+
 export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { signal: AbortSignal }): Promise<AgentTool<any, any>[]> {
   const allTools: AgentTool<any, any>[] = [];
   const MIN_CALL_INTERVAL_MS = 500; // throttle to avoid API rate limits
@@ -433,6 +451,8 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
 
     // Per-server rate limiter: ensures at least MIN_CALL_INTERVAL_MS between calls
     let lastCallTime = 0;
+    // Per-server rate-limit cooldown: timestamp when it's safe to call again
+    let rateLimitedUntil = 0;
 
     try {
       const toolDefs = await client.listTools();
@@ -448,6 +468,13 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
           inputSchema: def.inputSchema ?? { type: "object", properties: {} },
           async execute(input: any) {
             try {
+              // If this server is in rate-limit cooldown, wait before calling
+              const cooldownRemaining = rateLimitedUntil - Date.now();
+              if (cooldownRemaining > 0) {
+                const mins = Math.ceil(cooldownRemaining / 60_000);
+                return `[RATE LIMITED] This API is rate-limited. Please wait ${mins} minute(s) before retrying. The cooldown ends at ${new Date(rateLimitedUntil).toISOString()}. Do NOT retry until then.`;
+              }
+
               // Throttle: wait if we're calling too fast
               const now = Date.now();
               const elapsed = now - lastCallTime;
@@ -456,9 +483,25 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
               }
               lastCallTime = Date.now();
               const result = await client!.callTool(def.name, input ?? {}, abortRef?.signal);
+
+              // Check if the result text indicates a rate-limit error
+              if (typeof result === "string" && isRateLimitError(result)) {
+                rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+                console.warn(`[mcp:${label}] rate limit detected on tool ${def.name}, cooling down for ${RATE_LIMIT_COOLDOWN_MS / 60_000} minutes`);
+                return `[RATE LIMITED] ${result}\n\n⚠️ This API is now rate-limited. A 10-minute cooldown has been activated. Do NOT retry any API calls until the cooldown expires. Wait at least 10 minutes before making another request.`;
+              }
+
               return result || `(tool ${def.name} returned no output)`;
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
+
+              // Detect rate-limit errors and activate cooldown
+              if (isRateLimitError(msg)) {
+                rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+                console.warn(`[mcp:${label}] rate limit detected on tool ${def.name} (error), cooling down for ${RATE_LIMIT_COOLDOWN_MS / 60_000} minutes`);
+                return `[RATE LIMITED] MCP tool ${def.name} failed: ${msg}\n\n⚠️ This API is now rate-limited. A 10-minute cooldown has been activated. Do NOT retry any API calls until the cooldown expires. Wait at least 10 minutes before making another request.`;
+              }
+
               return `[ERROR] MCP tool ${def.name} failed: ${msg}`;
             }
           },

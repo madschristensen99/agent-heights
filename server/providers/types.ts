@@ -43,6 +43,8 @@ export interface RunContext {
   hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]) => Promise<string>;
   /** Called when an agent posts a message to a colleague's inbox. Lets the manager assign a review task to an idle recipient. */
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
+  /** Called when an MCP tool encounters a rate-limit or API funding error. Lets the manager notify Yuki, Hermes, and the user. */
+  onApiError?: (type: "rate_limit" | "funding", details: { serverLabel: string; toolName: string; message: string }) => void;
 }
 
 export type ProviderRunner = (

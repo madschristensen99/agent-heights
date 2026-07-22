@@ -49,18 +49,19 @@ const MAILBOX_TILES: Tile[] = [
 /** Dark navy color for unassigned mailboxes. */
 const UNASSIGNED_COLOR = 0x1a2a4a;
 
-/** Mapping of platform names to Simple Icons slugs for logo display.
+/** Mapping of platform names to icon URLs for logo display.
  *  Platforms not listed here will fall back to a colored dot.
- *  Slugs verified against https://github.com/simple-icons/simple-icons/slugs.md */
+ *  Most icons use cdn.simpleicons.org; platforms removed from Simple Icons
+ *  (Slack, Twilio, Microsoft Teams) use jsDelivr with pinned older versions. */
 const PLATFORM_ICON_SLUGS: Record<string, string> = {
-  Slack: "slack",
+  Slack: "https://cdn.jsdelivr.net/npm/simple-icons@15/icons/slack.svg",
   Discord: "discord",
   Telegram: "telegram",
   WhatsApp: "whatsapp",
   Signal: "signal",
   Email: "gmail",
-  SMS: "twilio",
-  "Microsoft Teams": "microsoftteams",
+  SMS: "https://cdn.jsdelivr.net/npm/simple-icons@15/icons/twilio.svg",
+  "Microsoft Teams": "https://cdn.jsdelivr.net/npm/simple-icons@12/icons/microsoftteams.svg",
   "Google Chat": "googlechat",
   Matrix: "matrix",
   Mattermost: "mattermost",
@@ -69,17 +70,17 @@ const PLATFORM_ICON_SLUGS: Record<string, string> = {
   ntfy: "ntfy",
   SimpleX: "simplex",
   "Home Assistant": "homeassistant",
-  "Teams Meetings": "microsoftteams",
-  "MS Graph Webhook": "microsoftteams",
+  "Teams Meetings": "https://cdn.jsdelivr.net/npm/simple-icons@12/icons/microsoftteams.svg",
+  "MS Graph Webhook": "https://cdn.jsdelivr.net/npm/simple-icons@12/icons/microsoftteams.svg",
   QQ: "qq",
 };
 
 /** Get a logo img element for a platform, or null if no icon is available. */
 function platformLogoImg(platform: string, size: number): HTMLImageElement | null {
-  const slug = PLATFORM_ICON_SLUGS[platform];
-  if (!slug) return null;
+  const iconRef = PLATFORM_ICON_SLUGS[platform];
+  if (!iconRef) return null;
   const img = document.createElement("img");
-  img.src = `https://cdn.simpleicons.org/${slug}`;
+  img.src = iconRef.startsWith("http") ? iconRef : `https://cdn.simpleicons.org/${iconRef}`;
   img.alt = platform;
   img.style.cssText = `width:${size}px;height:${size}px;flex-shrink:0;object-fit:contain;`;
   img.onerror = () => { img.style.display = "none"; };

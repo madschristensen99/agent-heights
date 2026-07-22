@@ -30,6 +30,7 @@ import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
 import { runTextTools, clearTextToolMemory, getAgentConversations } from "./providers/text-tools.js";
 import { HermesClient } from "./hermes-client.js";
+import { HermesProcessManager } from "./hermes-process.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
@@ -267,6 +268,7 @@ export class AgentManager {
   private platformLastMessage = new Map<string, string>();
   private platformStates: PlatformConnectionState[] = [];
   private hermesClient: HermesClient | null = null;
+  private hermesProcess: HermesProcessManager | null = null;
   /** Undelivered mail waiting for an idle agent. */
   private mailQueue: { platform: string; sender: string; text: string; ts: number; retries: number }[] = [];
   private shuttingDown = false;
@@ -407,7 +409,7 @@ export class AgentManager {
     this.ensureYuki();
     this.ensureHermes();
     this.seedTestMail();
-    this.startHermesClient();
+    void this.startHermesGateway();
 
     // Start the scheduler tick
     this.schedulerTimer = setInterval(() => this.tickSchedules(), SCHEDULER_TICK_MS);
@@ -573,8 +575,13 @@ export class AgentManager {
     }
   }
 
-  /** Start the Hermes Agent gateway client — polls hermes serve for platform status + messages. */
-  private startHermesClient(): void {
+  /** Start the Hermes gateway process and then the polling client. */
+  private async startHermesGateway(): Promise<void> {
+    // Start (or detect) the Hermes serve process as a managed child process
+    this.hermesProcess = new HermesProcessManager();
+    await this.hermesProcess.start();
+
+    // Now start the polling client that talks to the Hermes REST API
     this.hermesClient = new HermesClient();
     this.hermesClient.setMailboxPlatforms(this.settings.mailboxPlatforms);
     this.hermesClient.start(
@@ -605,7 +612,7 @@ export class AgentManager {
   /** Configure a platform's credentials via the Hermes gateway API. */
   async configurePlatform(platform: string, credentials: Record<string, string>): Promise<{ success: boolean; error?: string }> {
     if (!this.hermesClient) {
-      return { success: false, error: "Hermes Agent gateway is not running. Start it with: hermes serve" };
+      return { success: false, error: "Hermes Agent gateway is not running. It should auto-start with the server — check server logs for [hermes-process] errors." };
     }
     const result = await this.hermesClient.configurePlatform(platform, credentials);
     // After configuring, immediately poll for fresh status
@@ -1454,6 +1461,16 @@ export class AgentManager {
     if (this.schedulerTimer) {
       clearInterval(this.schedulerTimer);
       this.schedulerTimer = null;
+    }
+
+    // Stop the Hermes gateway child process
+    if (this.hermesClient) {
+      this.hermesClient.stop();
+      this.hermesClient = null;
+    }
+    if (this.hermesProcess) {
+      this.hermesProcess.stop();
+      this.hermesProcess = null;
     }
 
     for (const rt of this.agents.values()) {
