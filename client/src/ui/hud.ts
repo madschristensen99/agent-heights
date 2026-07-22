@@ -2743,11 +2743,13 @@ export class Hud {
       html += `</div>`;
       html += `</div>`;
 
-      // List existing branches
+      // List existing branches with deploy controls
       if (data && data.branches.length > 0) {
         html += `<div class="railway-projects">`;
         html += `<div style="padding:8px 12px;font-size:12px;color:#aaa;">World branches (${data.branches.length}):</div>`;
         for (const branch of data.branches) {
+          const isDeploying = this.store.deployingBranch === branch.name;
+          const existingDeploy = this.store.deployments.find(d => d.branchName === branch.name);
           html += `<div class="railway-project">`;
           html += `<div class="railway-project-header">`;
           html += `<span class="railway-project-name">${esc(branch.name)}</span>`;
@@ -2755,8 +2757,24 @@ export class Hud {
             html += `<a class="railway-service-url" href="https://github.com/${esc(data.fork.fullName)}/tree/${esc(branch.name)}" target="_blank" style="font-size:11px;">view →</a>`;
           }
           html += `</div>`;
+          // Deploy button
           if (branch.name !== "main" && branch.name !== "master") {
-            html += `<button class="btn danger" id="github-del-${esc(branch.name)}" style="font-size:11px;padding:3px 8px;margin:4px 0;">Delete</button>`;
+            if (isDeploying) {
+              html += `<span style="font-size:11px;color:#e8a040;padding:3px 8px;">⏳ deploying...</span>`;
+            } else if (existingDeploy) {
+              const statusColor = existingDeploy.status.toLowerCase().includes("deploy") || existingDeploy.status.toLowerCase().includes("active") || existingDeploy.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
+              html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">`;
+              html += `<span style="font-size:11px;color:${statusColor};">● ${esc(existingDeploy.status)}</span>`;
+              if (existingDeploy.railwayServiceUrl) {
+                html += `<a href="${esc(existingDeploy.railwayServiceUrl)}" target="_blank" style="font-size:11px;color:#5a9ad6;">open ↗</a>`;
+              }
+              html += `<button class="btn" id="github-stop-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;margin-left:auto;">Stop</button>`;
+              html += `<button class="btn danger" id="github-deldep-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;">Delete</button>`;
+              html += `</div>`;
+            } else {
+              html += `<button class="btn" id="github-deploy-${esc(branch.name)}" style="font-size:11px;padding:3px 8px;margin:4px 0;">🚀 Deploy to Railway</button>`;
+            }
+            html += `<button class="btn danger" id="github-del-${esc(branch.name)}" style="font-size:11px;padding:3px 8px;margin:4px 4px;">Delete Branch</button>`;
           }
           html += `</div>`;
         }
@@ -2765,6 +2783,23 @@ export class Hud {
         html += `<div class="railway-empty">No fork yet. Create one above to get started.</div>`;
       } else if (data && data.branches.length === 0) {
         html += `<div class="railway-empty">No branches found.</div>`;
+      }
+
+      // Deployments section
+      if (this.store.deployments.length > 0) {
+        html += `<div style="padding:8px 12px;border-top:1px solid #2a3a4a;">`;
+        html += `<div style="font-size:12px;color:#aaa;margin-bottom:6px;">Active deployments (${this.store.deployments.length}):</div>`;
+        for (const dep of this.store.deployments) {
+          const statusColor = dep.status.toLowerCase().includes("deploy") || dep.status.toLowerCase().includes("active") || dep.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #1a2a3a;">`;
+          html += `<span style="font-size:12px;color:#e0e0e0;">${esc(dep.branchName)}</span>`;
+          html += `<span style="font-size:11px;color:${statusColor};">● ${esc(dep.status)}</span>`;
+          if (dep.railwayServiceUrl) {
+            html += `<a href="${esc(dep.railwayServiceUrl)}" target="_blank" style="font-size:11px;color:#5a9ad6;">${esc(dep.railwayServiceUrl)}</a>`;
+          }
+          html += `</div>`;
+        }
+        html += `</div>`;
       }
     }
 
@@ -2787,10 +2822,34 @@ export class Hud {
       });
     }
 
-    // Wire delete buttons
+    // Wire deploy, stop, delete-deployment, and delete-branch buttons
     if (this.store.githubData) {
+      const forkFullName = this.store.githubData.fork?.fullName ?? "";
       for (const branch of this.store.githubData.branches) {
         if (branch.name === "main" || branch.name === "master") continue;
+
+        const deployBtn = document.getElementById(`github-deploy-${branch.name}`);
+        if (deployBtn) {
+          deployBtn.addEventListener("click", () => {
+            this.store.sendFn?.({ type: "railway_deploy", branchName: branch.name, repoFullName: forkFullName });
+          });
+        }
+
+        const stopBtn = document.getElementById(`github-stop-${branch.name}`);
+        if (stopBtn) {
+          stopBtn.addEventListener("click", () => {
+            this.store.sendFn?.({ type: "railway_stop_deployment", branchName: branch.name });
+          });
+        }
+
+        const delDepBtn = document.getElementById(`github-deldep-${branch.name}`);
+        if (delDepBtn) {
+          delDepBtn.addEventListener("click", () => {
+            if (!confirm(`Delete Railway deployment for "${branch.name}"?`)) return;
+            this.store.sendFn?.({ type: "railway_delete_deployment", branchName: branch.name });
+          });
+        }
+
         const delBtn = document.getElementById(`github-del-${branch.name}`);
         if (delBtn) {
           delBtn.addEventListener("click", () => {

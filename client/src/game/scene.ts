@@ -4730,6 +4730,7 @@ export class OfficeScene extends Phaser.Scene {
         const net = this.game.registry.get("net") as Net;
         net.send({ type: "railway_query" });
         net.send({ type: "github_query" });
+        net.send({ type: "railway_list_deployments" });
         this.store.toast("Querying Railway + GitHub...");
       } else
       // try new office interactables first

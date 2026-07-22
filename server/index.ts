@@ -11,7 +11,7 @@ import { handleMcpCatalogRequest } from "./mcp-store.js";
 import { searchPulseMCPStructured } from "./pulsemcp.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
-import { stopRailwayMCP, checkRailwayStatus, queryRailway } from "./providers/railway-mcp.js";
+import { stopRailwayMCP, checkRailwayStatus, queryRailway, deployWorldToRailway, listWorldDeployments, stopWorldDeployment } from "./providers/railway-mcp.js";
 import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken } from "./github.js";
 import { rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
@@ -961,6 +961,42 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-hq", fullName: `${user.login}/agent-hq`, cloneUrl: `https://github.com/${user.login}/agent-hq.git`, branch: branches[0]?.name ?? "main" }, error: null });
           } catch (err) {
             sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "railway_deploy": {
+          sess.broadcast({ type: "railway_deploy_started", branchName: msg.branchName, message: `Deploying ${msg.branchName} to Railway...` });
+          const result = await deployWorldToRailway(msg.branchName, msg.repoFullName);
+          if (result.error || !result.deployment) {
+            sess.broadcast({ type: "railway_deploy_result", deployment: { branchName: msg.branchName, repoFullName: msg.repoFullName, railwayProjectId: "", railwayServiceId: "", railwayServiceUrl: null, status: "failed", createdAt: Date.now() }, error: result.error ?? "Unknown error" });
+          } else {
+            sess.broadcast({ type: "railway_deploy_result", deployment: result.deployment, error: null });
+          }
+          break;
+        }
+        case "railway_list_deployments": {
+          const result = await listWorldDeployments();
+          sess.broadcast({ type: "railway_deployments", deployments: result.deployments, error: result.error });
+          break;
+        }
+        case "railway_stop_deployment": {
+          const result = await stopWorldDeployment(msg.branchName, false);
+          if (result.error) {
+            sess.broadcast({ type: "railway_deployments", deployments: [], error: result.error });
+          } else {
+            // Refresh list after stopping
+            const listResult = await listWorldDeployments();
+            sess.broadcast({ type: "railway_deployments", deployments: listResult.deployments, error: null });
+          }
+          break;
+        }
+        case "railway_delete_deployment": {
+          const result = await stopWorldDeployment(msg.branchName, true);
+          if (result.error) {
+            sess.broadcast({ type: "railway_deployments", deployments: [], error: result.error });
+          } else {
+            const listResult = await listWorldDeployments();
+            sess.broadcast({ type: "railway_deployments", deployments: listResult.deployments, error: null });
           }
           break;
         }

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentTool } from "@cline/sdk";
-import type { RailwayData, RailwayProject } from "../../shared/types.js";
+import type { RailwayData, RailwayProject, WorldDeployment } from "../../shared/types.js";
 
 /** Resolve the railway CLI binary — checks local node_modules/.bin first, then PATH. */
 function resolveRailwayBin(): string {
@@ -336,6 +336,176 @@ function parseProjects(raw: string): RailwayProject[] {
   }
   if (current) projects.push(current);
   return projects;
+}
+
+/**
+ * Deploy a GitHub branch to Railway as a new world instance.
+ * Creates a Railway project, links the repo, and deploys the branch.
+ */
+export async function deployWorldToRailway(
+  branchName: string,
+  repoFullName: string,
+): Promise<{ deployment: WorldDeployment | null; error: string | null }> {
+  try {
+    const client = getRailwayMCP();
+    await client.start();
+    const tools = await client.listTools();
+
+    // Find create-project tool
+    const createProjectTool = tools.find(t =>
+      t.name.toLowerCase().includes("create") && t.name.toLowerCase().includes("project")
+    );
+    if (!createProjectTool) {
+      return { deployment: null, error: "No create-project tool found in Railway MCP." };
+    }
+
+    // Create a new Railway project for this world
+    const projectName = `world-${branchName.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`;
+    const createResult = await client.callTool(createProjectTool.name, { name: projectName });
+    const projectId = extractId(createResult) || projectName;
+
+    // Find a deploy or link-repo tool
+    const deployTool = tools.find(t =>
+      t.name.toLowerCase().includes("deploy") ||
+      (t.name.toLowerCase().includes("link") && t.name.toLowerCase().includes("repo"))
+    );
+
+    if (deployTool) {
+      const repoUrl = `https://github.com/${repoFullName}.git`;
+      await client.callTool(deployTool.name, {
+        projectId,
+        repoUrl,
+        branch: branchName,
+      });
+    }
+
+    // Try to get the service URL
+    let serviceUrl: string | null = null;
+    const statusTool = tools.find(t =>
+      t.name.toLowerCase().includes("status") ||
+      t.name.toLowerCase().includes("get") && t.name.toLowerCase().includes("service")
+    );
+    if (statusTool) {
+      try {
+        const statusResult = await client.callTool(statusTool.name, { projectId });
+        serviceUrl = extractUrl(statusResult);
+      } catch { /* URL may not be available yet during initial deploy */ }
+    }
+
+    const deployment: WorldDeployment = {
+      branchName,
+      repoFullName,
+      railwayProjectId: projectId,
+      railwayServiceId: "",
+      railwayServiceUrl: serviceUrl,
+      status: "deploying",
+      createdAt: Date.now(),
+    };
+
+    return { deployment, error: null };
+  } catch (err) {
+    return {
+      deployment: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * List Railway projects and map them to world deployments.
+ * Matches project names starting with "world-".
+ */
+export async function listWorldDeployments(): Promise<{ deployments: WorldDeployment[]; error: string | null }> {
+  try {
+    const { data, error } = await queryRailway();
+    if (error || !data) return { deployments: [], error };
+
+    const deployments: WorldDeployment[] = [];
+    for (const proj of data.projects) {
+      if (!proj.name.startsWith("world-")) continue;
+      const branchName = proj.name.replace(/^world-/, "").replace(/-/g, "/").replace(/^\/+/, "");
+      const svc = proj.services[0];
+      deployments.push({
+        branchName,
+        repoFullName: "",
+        railwayProjectId: proj.id,
+        railwayServiceId: svc?.id ?? "",
+        railwayServiceUrl: svc?.url ?? null,
+        status: svc?.status ?? "unknown",
+        createdAt: 0,
+      });
+    }
+    return { deployments, error: null };
+  } catch (err) {
+    return {
+      deployments: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Stop/delete a Railway deployment for a world.
+ */
+export async function stopWorldDeployment(
+  branchName: string,
+  deleteProject = false,
+): Promise<{ error: string | null }> {
+  try {
+    const client = getRailwayMCP();
+    await client.start();
+    const tools = await client.listTools();
+
+    const projectName = `world-${branchName.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`;
+
+    if (deleteProject) {
+      const deleteTool = tools.find(t =>
+        t.name.toLowerCase().includes("delete") && t.name.toLowerCase().includes("project")
+      );
+      if (deleteTool) {
+        await client.callTool(deleteTool.name, { name: projectName });
+      } else {
+        return { error: "No delete-project tool found in Railway MCP." };
+      }
+    } else {
+      const stopTool = tools.find(t =>
+        t.name.toLowerCase().includes("stop") || t.name.toLowerCase().includes("pause")
+      );
+      if (stopTool) {
+        await client.callTool(stopTool.name, { name: projectName });
+      } else {
+        return { error: "No stop/pause tool found in Railway MCP." };
+      }
+    }
+
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Best-effort extract an ID from Railway MCP tool output. */
+function extractId(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw);
+    return String(parsed.id ?? parsed.projectId ?? parsed.project?.id ?? "");
+  } catch {
+    // Try to find a UUID-like pattern
+    const match = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    return match ? match[0] : "";
+  }
+}
+
+/** Best-effort extract a URL from Railway MCP tool output. */
+function extractUrl(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.url) return String(parsed.url);
+    if (parsed.service?.url) return String(parsed.service.url);
+    if (parsed.deployments?.[0]?.url) return String(parsed.deployments[0].url);
+  } catch { /* not JSON */ }
+  const match = raw.match(/https?:\/\/[^\s"'<>]+/);
+  return match ? match[0] : null;
 }
 
 /**

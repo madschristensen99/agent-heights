@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -70,6 +70,8 @@ export class Store {
   githubStatus: { connected: boolean; login: string | null; error: string | null } | null = null;
   githubData: { branches: { name: string; sha: string }[]; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string } | null; error: string | null } | null = null;
   githubPanelOpen = false;
+  deployments: WorldDeployment[] = [];
+  deployingBranch: string | null = null;
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
@@ -189,6 +191,8 @@ export class Store {
     this.githubStatus = null;
     this.githubData = null;
     this.githubPanelOpen = false;
+    this.deployments = [];
+    this.deployingBranch = null;
     this.worldSeed = 0;
     this.chunkOverrides = {};
     this.officeOverrides = {};
@@ -676,6 +680,27 @@ export class Store {
         break;
       case "github_error":
         this.toast(`GitHub: ${msg.error}`);
+        break;
+      case "railway_deployments":
+        this.deployments = msg.deployments;
+        if (msg.error) this.toast(`Railway: ${msg.error}`);
+        break;
+      case "railway_deploy_started":
+        this.deployingBranch = msg.branchName;
+        this.toast(msg.message);
+        break;
+      case "railway_deploy_result":
+        this.deployingBranch = null;
+        if (msg.error) {
+          this.toast(`Deploy failed: ${msg.error}`);
+        } else {
+          this.toast(`World deployed: ${msg.deployment.branchName}`);
+          if (msg.deployment.railwayServiceUrl) {
+            this.toast(`Live at: ${msg.deployment.railwayServiceUrl}`);
+          }
+          // Refresh deployments list
+          this.sendFn?.({ type: "railway_list_deployments" });
+        }
         break;
       case "api_key_status":
         this.hasApiKey = msg.hasKey;
