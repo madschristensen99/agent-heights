@@ -245,7 +245,7 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
 
   // tennis courts — placed 50-75 tiles from the office (chunk dist ~1.5-2.5)
   const tennisDist = Math.hypot(cx, cy);
-  if ((biome === "meadow" || biome === "forest") && tennisDist >= 1.5 && tennisDist <= 2.5 && rng() < 0.55) {
+  if ((biome === "meadow" || biome === "forest") && tennisDist >= 1.5 && tennisDist <= 2.5 && rng() < 0.15) {
     placeTennisCourt(tiles, rng);
   }
 

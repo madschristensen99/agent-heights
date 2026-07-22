@@ -2529,21 +2529,23 @@ async function shutdown(): Promise<void> {
     sess.manager.prepareForShutdown();
   }
 
-  // 3. Stop background services
-  stopRailwayMCP();
-  stopRedis();
-  clearInterval(logMaintenanceInterval);
-  clearInterval(browserCleanupInterval);
-  screenshots.destroy();
-  await destroyAllBrowsers();
-
-  // 4. Flush all saves to disk/DB (pending tasks are included)
+  // 3. Flush all saves to disk/DB (pending tasks are included) — do this
+  //    BEFORE browser cleanup so critical task data is persisted even if
+  //    destroyAllBrowsers() is slow and Railway's grace period expires.
   const flushes: Promise<void>[] = [];
   for (const sess of tenants.values()) {
     const f = sess.save.flushNow();
     if (f && typeof (f as any).then === "function") flushes.push((f as Promise<void>).catch(() => {}));
   }
   await Promise.all(flushes);
+
+  // 4. Stop background services and clean up browsers
+  stopRailwayMCP();
+  stopRedis();
+  clearInterval(logMaintenanceInterval);
+  clearInterval(browserCleanupInterval);
+  screenshots.destroy();
+  await destroyAllBrowsers();
 
   console.log("[agent-heights] graceful shutdown complete — exiting");
   process.exit(0);
