@@ -82,38 +82,58 @@ export class HermesProcessManager {
     await this.waitForReady();
   }
 
-  /** Ensure Hermes has a config.yaml with model provider set to Kimi if we have a key. */
+  /** Ensure Hermes has config.yaml and .env with the Kimi API key. */
   private ensureHermesConfig(): void {
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       if (!existsSync(hermesHome)) mkdirSync(hermesHome, { recursive: true });
       const configPath = join(hermesHome, "config.yaml");
+      const envPath = join(hermesHome, ".env");
 
-      // If config.yaml already exists with a model provider, don't overwrite
+      const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
+      console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, kimiKey=${kimiKey ? "set (" + kimiKey.slice(0, 8) + "...)" : "NOT SET"}`);
+
+      // Write config.yaml if not already configured
       if (existsSync(configPath)) {
         const existing = readFileSync(configPath, "utf-8");
         if (existing.includes("provider:") || existing.includes("model:")) {
           console.log(`[hermes-process] config.yaml already exists with model config — not overwriting`);
-          return; // User has already configured a model
+        } else if (kimiKey) {
+          this.writeConfig(configPath);
         }
+      } else if (kimiKey) {
+        this.writeConfig(configPath);
       }
 
-      // Write a minimal config that uses Kimi as the LLM provider
-      const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
-      console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, kimiKey=${kimiKey ? "set (" + kimiKey.slice(0, 8) + "...)" : "NOT SET"}`);
+      // Write/merge .env with KIMI_API_KEY so the gateway subprocess can find it
       if (kimiKey) {
-        const config = [
-          "model:",
-          "  provider: moonshot",
-          "  default: kimi-k2.7-code-highspeed",
-          "",
-        ].join("\n");
-        writeFileSync(configPath, config, "utf-8");
-        console.log("[hermes-process] Wrote default config.yaml with Kimi provider");
+        let envContent = "";
+        if (existsSync(envPath)) {
+          envContent = readFileSync(envPath, "utf-8");
+        }
+        // Check if KIMI_API_KEY is already in .env
+        if (!envContent.includes("KIMI_API_KEY=")) {
+          const newContent = envContent + (envContent && !envContent.endsWith("\n") ? "\n" : "") + `KIMI_API_KEY=${kimiKey}\n`;
+          writeFileSync(envPath, newContent, "utf-8");
+          console.log("[hermes-process] Wrote KIMI_API_KEY to ~/.hermes/.env");
+        } else {
+          console.log("[hermes-process] KIMI_API_KEY already in ~/.hermes/.env — not overwriting");
+        }
       }
     } catch (err) {
-      console.warn(`[hermes-process] Failed to write config.yaml: ${err}`);
+      console.warn(`[hermes-process] Failed to write Hermes config: ${err}`);
     }
+  }
+
+  private writeConfig(configPath: string): void {
+    const config = [
+      "model:",
+      "  provider: moonshot",
+      "  default: kimi-k2.7-code-highspeed",
+      "",
+    ].join("\n");
+    writeFileSync(configPath, config, "utf-8");
+    console.log("[hermes-process] Wrote default config.yaml with moonshot/kimi-k2.7-code-highspeed");
   }
 
   /** Check if the Hermes gateway is reachable. */

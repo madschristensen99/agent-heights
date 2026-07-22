@@ -148,15 +148,13 @@ export class LightingSystem {
     }
 
     // Dynamically adjust bloom pipeline — at night, lower threshold and boost strength
-    // so light sources radiate and glow intensely against the darkness
-    const renderer = this.scene.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-    if (renderer) {
-      const bloomPipe = renderer.pipelines.get("BloomFX") as unknown as { setStrength: (n: number) => void; setThreshold: (n: number) => void } | null;
-      if (bloomPipe) {
-        const nightBloom = nightFactor * delayedDarkness;
-        bloomPipe.setStrength(0.6 + nightBloom * 0.8);
-        bloomPipe.setThreshold(0.65 - nightBloom * 0.35);
-      }
+    // so light sources radiate and glow intensely against the darkness.
+    // Inside the office, bloom stays at default (subtle) settings.
+    const bloomPipe = cam.getPostPipeline("BloomFX") as unknown as { setStrength: (n: number) => void; setThreshold: (n: number) => void } | undefined;
+    if (bloomPipe && typeof bloomPipe.setStrength === "function") {
+      const nightBloom = nightFactor * delayedDarkness;
+      bloomPipe.setStrength(0.4 + nightBloom * 0.8);
+      bloomPipe.setThreshold(0.75 - nightBloom * 0.40);
     }
 
     // Pulse all lights — boost intensity at night so they radiate against the dark

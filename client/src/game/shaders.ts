@@ -57,8 +57,8 @@ void main() {
 
 export class BloomPipeline extends Phaser.Renderer.WebGL.Pipelines
   .PostFXPipeline {
-  private bloomStrength = 0.6;
-  private bloomThreshold = 0.65;
+  private bloomStrength = 0.4;
+  private bloomThreshold = 0.75;
 
   constructor(game: Phaser.Game) {
     super({
