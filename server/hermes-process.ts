@@ -93,12 +93,14 @@ export class HermesProcessManager {
       if (existsSync(configPath)) {
         const existing = readFileSync(configPath, "utf-8");
         if (existing.includes("provider:") || existing.includes("model:")) {
+          console.log(`[hermes-process] config.yaml already exists with model config — not overwriting`);
           return; // User has already configured a model
         }
       }
 
       // Write a minimal config that uses Kimi as the LLM provider
       const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
+      console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, kimiKey=${kimiKey ? "set (" + kimiKey.slice(0, 8) + "...)" : "NOT SET"}`);
       if (kimiKey) {
         const config = [
           "model:",
@@ -140,6 +142,7 @@ export class HermesProcessManager {
         KIMI_API_KEY: process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "",
       },
     });
+    console.log(`[hermes-process] Env: KIMI_API_KEY=${process.env.KIMI_BACKUP_KEY ? "set" : "NOT SET"}, HERMES_HOME=${process.env.HERMES_HOME ?? join(homedir(), ".hermes")}`);
 
     this.child.stdout?.on("data", (data: Buffer) => {
       const lines = data.toString().trim().split("\n");

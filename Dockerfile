@@ -25,9 +25,11 @@ COPY . .
 RUN pnpm build
 
 # Create data directories for agent workspaces / logs / saves
-# Persist Hermes config (credentials, .env) inside the ag volume so they survive redeploy
+# Persist Hermes config (credentials, .env, config.yaml) inside the ag volume so they survive redeploy
+# rm -rf first because pip install may have created /root/.hermes as a real directory
 RUN mkdir -p /app/ag /app/workspace /app/ag/hermes && \
-    ln -sf /app/ag/hermes /root/.hermes
+    rm -rf /root/.hermes && \
+    ln -s /app/ag/hermes /root/.hermes
 
 # Hermes gateway port
 EXPOSE 3001 9119
