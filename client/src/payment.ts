@@ -54,6 +54,9 @@ export async function startEntranceCheckout(): Promise<void> {
   const result = await stripeApi("/api/stripe/checkout-entrance");
   if (typeof result.url === "string") {
     window.location.href = result.url;
+  } else if (result.error === "Entrance fee already paid") {
+    // Already paid — refresh status to update UI
+    await refreshPaymentStatus();
   } else {
     alert((result.error as string) ?? "Failed to start checkout");
   }

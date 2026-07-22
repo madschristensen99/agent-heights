@@ -80,6 +80,7 @@ export class Store {
   codeEditorDirty = false;
   currentWorld: { branchName: string; host: string; url: string } | null = null;
   worldTransitioning = false;
+  portalTarget: { branchName: string; url: string } | null = null;
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
@@ -209,6 +210,7 @@ export class Store {
     this.codeEditorDirty = false;
     this.currentWorld = null;
     this.worldTransitioning = false;
+    this.portalTarget = null;
     this.worldSeed = 0;
     this.chunkOverrides = {};
     this.officeOverrides = {};

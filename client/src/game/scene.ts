@@ -182,6 +182,12 @@ export class OfficeScene extends Phaser.Scene {
   private serverRackTiles: Tile[] = [];
   private serverRackHint!: Phaser.GameObjects.Text;
 
+  // --- world portal (near server racks) ---
+  private portalContainer: Phaser.GameObjects.Container | null = null;
+  private portalCollider: Phaser.Physics.Arcade.Collider | null = null;
+  private portalZone: Phaser.GameObjects.Arc | null = null;
+  private portalHint!: Phaser.GameObjects.Text;
+
   // --- office tilemap layer refs (for build mode editing) ---
   private groundLayer!: Phaser.Tilemaps.TilemapLayer;
   private wallsLayer!: Phaser.Tilemaps.TilemapLayer;
@@ -1433,6 +1439,199 @@ export class OfficeScene extends Phaser.Scene {
 
       this.cameras.main.fadeIn(600, 10, 10, 30);
       this.store.toast("Returning to Agent HQ");
+    });
+  }
+
+  /** Open a glowing portal near the server racks that leads to a deployed world. */
+  openPortal(branchName: string, worldUrl: string): void {
+    // Close existing portal if any
+    this.closePortal();
+
+    // Find a position near the server racks
+    if (this.serverRackTiles.length === 0) return;
+    const rack = this.serverRackTiles[0];
+    const px = rack.x * TILE_PX + TILE_PX / 2;
+    const py = (rack.y - 2) * TILE_PX + TILE_PX / 2; // 2 tiles above the rack
+
+    this.store.portalTarget = { branchName, url: worldUrl };
+    this.store.toggleGitHubPanel(false);
+
+    // Create portal visual: layered glowing circles
+    const container = this.add.container(px, py);
+    container.setDepth(9000);
+
+    // Outer glow ring
+    const outerRing = this.add.circle(0, 0, 36, 0x4a6a8a, 0.15)
+      .setStrokeStyle(3, 0x6a9ad6, 0.6);
+    // Inner swirling vortex
+    const innerRing = this.add.circle(0, 0, 24, 0x2a4a6a, 0.3)
+      .setStrokeStyle(2, 0x8fc9f0, 0.8);
+    // Core
+    const core = this.add.circle(0, 0, 14, 0x1a2a4a, 0.5)
+      .setStrokeStyle(1, 0xc0e0ff, 0.9);
+
+    container.add([outerRing, innerRing, core]);
+
+    // Animate: pulsing + rotation effect
+    this.tweens.add({
+      targets: outerRing,
+      scale: { from: 1, to: 1.3 },
+      alpha: { from: 0.15, to: 0.05 },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+    this.tweens.add({
+      targets: innerRing,
+      scale: { from: 1, to: 0.8 },
+      alpha: { from: 0.3, to: 0.6 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+    this.tweens.add({
+      targets: core,
+      scale: { from: 1, to: 1.15 },
+      alpha: { from: 0.5, to: 0.8 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+
+    this.portalContainer = container;
+
+    // Hint text above portal
+    this.portalHint = this.add.text(px, py - 56, `🌀 Walk in to enter\n${branchName}`, {
+      fontSize: "12px",
+      color: "#c0e0ff",
+      align: "center",
+      stroke: "#000",
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(9001);
+
+    // Pulsing hint
+    this.tweens.add({
+      targets: this.portalHint,
+      alpha: { from: 0.7, to: 1 },
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+
+    // Physics zone for overlap detection
+    this.portalZone = this.add.circle(px, py, 28, 0x000000, 0);
+    this.physics.add.existing(this.portalZone, true);
+    (this.portalZone.body as Phaser.Physics.Arcade.Body).setCircle(28, 0, 0);
+
+    this.portalCollider = this.physics.add.overlap(this.player, this.portalZone, () => {
+      this.closePortal();
+      this.enterWorldPortal(branchName, worldUrl);
+    });
+
+    this.store.toast(`Portal opened — walk in to enter ${branchName}`);
+  }
+
+  /** Close and destroy the active portal. */
+  closePortal(): void {
+    if (this.portalCollider) {
+      this.portalCollider.destroy();
+      this.portalCollider = null;
+    }
+    if (this.portalZone) {
+      this.portalZone.destroy();
+      this.portalZone = null;
+    }
+    if (this.portalContainer) {
+      this.portalContainer.destroy();
+      this.portalContainer = null;
+    }
+    if (this.portalHint) {
+      this.portalHint.destroy();
+      this.portalHint = null as any;
+    }
+    this.store.portalTarget = null;
+  }
+
+  /** Spawn a return portal at the player spawn point (used inside deployed worlds). */
+  private spawnReturnPortal(): void {
+    if (!this.store.currentWorld) return;
+
+    const spawn = feetOf(this.spawnTile);
+    const px = spawn.x;
+    const py = spawn.y;
+
+    // Create return portal visual (green-tinted to distinguish from entry portal)
+    const container = this.add.container(px, py - 20);
+    container.setDepth(9000);
+
+    const outerRing = this.add.circle(0, 0, 36, 0x2a6a4a, 0.15)
+      .setStrokeStyle(3, 0x5ad6a0, 0.6);
+    const innerRing = this.add.circle(0, 0, 24, 0x1a4a2a, 0.3)
+      .setStrokeStyle(2, 0x8ff0c0, 0.8);
+    const core = this.add.circle(0, 0, 14, 0x0a2a1a, 0.5)
+      .setStrokeStyle(1, 0xc0ffd0, 0.9);
+
+    container.add([outerRing, innerRing, core]);
+
+    this.tweens.add({
+      targets: outerRing,
+      scale: { from: 1, to: 1.3 },
+      alpha: { from: 0.15, to: 0.05 },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+    this.tweens.add({
+      targets: innerRing,
+      scale: { from: 1, to: 0.8 },
+      alpha: { from: 0.3, to: 0.6 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+    this.tweens.add({
+      targets: core,
+      scale: { from: 1, to: 1.15 },
+      alpha: { from: 0.5, to: 0.8 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+
+    this.portalContainer = container;
+
+    // Hint text
+    this.portalHint = this.add.text(px, py - 60, "🌀 Return to HQ", {
+      fontSize: "12px",
+      color: "#c0ffd0",
+      align: "center",
+      stroke: "#000",
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(9001);
+
+    this.tweens.add({
+      targets: this.portalHint,
+      alpha: { from: 0.7, to: 1 },
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
+
+    // Physics overlap
+    this.portalZone = this.add.circle(px, py - 20, 28, 0x000000, 0);
+    this.physics.add.existing(this.portalZone, true);
+    (this.portalZone.body as Phaser.Physics.Arcade.Body).setCircle(28, 0, 0);
+
+    this.portalCollider = this.physics.add.overlap(this.player, this.portalZone, () => {
+      this.exitWorld();
     });
   }
 
