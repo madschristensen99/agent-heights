@@ -1269,8 +1269,6 @@ export class OfficeScene extends Phaser.Scene {
             this.spawnReturnPortal();
           }
 
-          // Diagnostic: verify NPC state after init
-
           // Fade in from black so the transition from BootScene is seamless.
           this.cameras.main.fadeIn(400, 0, 0, 0);
 
