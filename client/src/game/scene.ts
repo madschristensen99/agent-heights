@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
+import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, vecToDir, type Dir } from "./agent";
 import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, PLATFORM_CREDENTIAL_FIELDS } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
@@ -4682,8 +4682,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     if (vx !== 0 || vy !== 0) {
-      this.playerDir =
-        Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
+      this.playerDir = vecToDir(vx, vy);
       this.player.play(`${this.playerTexKey}-walk-${this.playerDir}`, true);
     } else {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
@@ -4725,11 +4724,12 @@ export class OfficeScene extends Phaser.Scene {
       if (this.tryPlatformMailboxInteract()) {
         // handled
       } else
-      // server rack — query Railway data
+      // server rack — query Railway + GitHub data
       if (this.nearestTile(this.serverRackTiles, 150)) {
         const net = this.game.registry.get("net") as Net;
         net.send({ type: "railway_query" });
-        this.store.toast("Querying Railway...");
+        net.send({ type: "github_query" });
+        this.store.toast("Querying Railway + GitHub...");
       } else
       // try new office interactables first
       if (this.tryOfficeInteract(time)) {

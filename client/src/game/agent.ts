@@ -321,8 +321,7 @@ export class AgentNPC {
       if (this.huddleFace) {
         const dx = this.huddleFace.x - this.tile().x;
         const dy = this.huddleFace.y - this.tile().y;
-        this.dir =
-          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        this.dir = vecToDir(dx, dy);
       }
       this.play(`${c}-idle-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
@@ -380,8 +379,7 @@ export class AgentNPC {
         const pdx = playerX - this.container.x;
         const pdy = playerY - this.container.y;
         if (Math.hypot(pdx, pdy) < 192) {
-          this.dir =
-            Math.abs(pdx) > Math.abs(pdy) ? (pdx > 0 ? "right" : "left") : pdy > 0 ? "down" : "up";
+          this.dir = vecToDir(pdx, pdy);
         } else {
           this.dir = "down";
         }

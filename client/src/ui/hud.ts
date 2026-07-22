@@ -396,6 +396,7 @@ export class Hud {
     this.bindBoard();
     this.bindHallOfFame();
     this.bindRailwayPanel();
+    this.bindGitHubPanel();
     this.bindShortcuts();
     this.bindMobileControls();
     // agents stream many messages per second — coalesce to one render per frame
