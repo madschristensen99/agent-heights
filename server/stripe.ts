@@ -59,11 +59,24 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
     return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "unlimited", agentLimit: Infinity, currentPeriodEnd: null, freeTrialExpiresAt: null };
   }
   try {
-    const { data, error } = await supabaseAdmin
+    // Try full query with subscription_tier (may fail if migration not applied)
+    let { data, error } = await supabaseAdmin
       .from("user_payments")
       .select("entrance_paid, subscription_status, current_period_end, subscription_tier, stripe_customer_id")
       .eq("user_id", userId)
       .maybeSingle();
+
+    // Fallback: if the query fails (e.g. subscription_tier column missing), retry without it
+    if (error) {
+      console.warn("[stripe] full payment query failed, retrying without subscription_tier:", error.message);
+      const fallback = await supabaseAdmin
+        .from("user_payments")
+        .select("entrance_paid, subscription_status, current_period_end, stripe_customer_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      data = fallback.data as any;
+      error = fallback.error;
+    }
 
     if (error || !data) {
       const trial = getFreeTrialStatus(userId);

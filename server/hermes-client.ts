@@ -27,7 +27,7 @@ export class HermesClient {
   private lastSessionIds: Set<string> = new Set();
   private onPlatformUpdate: ((states: PlatformConnectionState[]) => void) | null = null;
   private onPlatformEvent: ((event: PlatformEvent) => void) | null = null;
-  private mailboxPlatforms: (string | null)[] = ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"];
+  private mailboxPlatforms: (string | null)[] = [null, null, null, null, null, null];
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;

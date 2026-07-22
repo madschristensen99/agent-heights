@@ -97,7 +97,7 @@ export class RelationalPersistence {
               theme: settingsRow.game_theme as OfficeTheme,
             },
             railway: { enabled: settingsRow.railway_enabled },
-            mailboxPlatforms: settingsRow.mailbox_platforms ?? ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"],
+            mailboxPlatforms: settingsRow.mailbox_platforms ?? [null, null, null, null, null, null],
           }
         : undefined;
 

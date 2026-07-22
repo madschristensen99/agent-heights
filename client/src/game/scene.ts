@@ -2061,7 +2061,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Build platform mailbox objects from settings + catalog. */
   private buildPlatformMailboxes(): PlatformMailbox[] {
-    const slots = this.store.settings.mailboxPlatforms ?? ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"];
+    const slots = this.store.settings.mailboxPlatforms ?? [null, null, null, null, null, null];
     return MAILBOX_TILES.map((tile, i) => {
       const platform = slots[i] ?? null;
       const entry = platform ? getPlatformEntry(platform) : undefined;
@@ -2093,7 +2093,6 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     if (!nearest) return false;
-    const net = this.game.registry.get("net") as import("../net").Net;
 
     // Unassigned mailbox — show platform picker
     if (!nearest.platform) {
@@ -2102,35 +2101,118 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     const platform = nearest.platform;
+    const slotIndex = nearest.slotIndex;
+    const connected = this.store.isPlatformConnected(platform);
 
-    // Check if this platform is connected via Hermes Agent gateway
-    if (!this.store.isPlatformConnected(platform)) {
-      // Platform not connected — prompt the user to connect
-      this.showPlatformConnectModal(platform);
-      // Also ask server for fresh connection states
-      net.send({ type: "connect_platform", platform });
-      return true;
+    // Show a small action menu for the assigned mailbox
+    this.showMailboxActionModal(platform, slotIndex, connected);
+    return true;
+  }
+
+  /** Show a small action menu for an assigned mailbox: check, configure, change, or unassign. */
+  private showMailboxActionModal(platform: string, slotIndex: number, connected: boolean): void {
+    const net = this.game.registry.get("net") as import("../net").Net;
+
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.55); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+    `;
+
+    const card = document.createElement("div");
+    card.style.cssText = `
+      background: #f5f0e6; border: 3px solid #d4c5a9; border-radius: 16px;
+      width: 360px; box-shadow: 0 12px 48px rgba(0,0,0,0.3); overflow: hidden;
+    `;
+
+    const header = document.createElement("div");
+    header.style.cssText = `
+      background: #e8dcc8; border-bottom: 2px solid #d4c5a9;
+      padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+    `;
+    const entry = getPlatformEntry(platform);
+    const colorHex = entry ? "#" + entry.color.toString(16).padStart(6, "0") : "#888";
+    header.innerHTML = `
+      <span style="width:20px;height:20px;border-radius:5px;background:${colorHex};border:2px solid rgba(0,0,0,0.15);flex-shrink:0;"></span>
+      <span style="font-size:18px;font-weight:bold;color:#3d3528;flex:1;">${platform} Mailbox</span>
+      <span style="font-size:13px;font-weight:bold;color:${connected ? "#4a9b4a" : "#b07050"};">
+        ${connected ? "● Connected" : "○ Not connected"}
+      </span>
+    `;
+    card.appendChild(header);
+
+    const body = document.createElement("div");
+    body.style.cssText = "padding: 16px 20px; display: flex; flex-direction: column; gap: 10px;";
+
+    const makeBtn = (label: string, color: string, onclick: () => void) => {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      btn.style.cssText = `
+        padding: 12px 16px; border: 2px solid ${color}; border-radius: 10px;
+        background: none; color: ${color}; font-size: 15px; font-weight: bold;
+        cursor: pointer; font-family: inherit; text-align: left;
+        transition: background 0.2s;
+      `;
+      btn.addEventListener("mouseenter", () => { btn.style.background = `${color}15`; });
+      btn.addEventListener("mouseleave", () => { btn.style.background = "none"; });
+      btn.onclick = onclick;
+      return btn;
+    };
+
+    if (connected) {
+      body.appendChild(makeBtn("📬 Check Messages", "#4a9b4a", () => {
+        overlay.remove();
+        net.send({ type: "check_mailbox", platform });
+        let responded = false;
+        const timeout = this.time.delayedCall(2000, () => {
+          if (!responded) {
+            responded = true;
+            this.store.toast(`[${platform}] No response from server. Make sure you're in your office.`);
+          }
+        });
+        const onMessages = (respPlatform: string, _events: any[]) => {
+          if (responded || respPlatform !== platform) return;
+          responded = true;
+          timeout.remove();
+          this.store.offMailboxMessages(onMessages);
+        };
+        this.store.onMailboxMessages(onMessages);
+      }));
+    } else {
+      body.appendChild(makeBtn("⚙ Set Up / Configure", "#8b7355", () => {
+        overlay.remove();
+        this.showPlatformConnectModal(platform);
+        net.send({ type: "connect_platform", platform });
+      }));
     }
 
-    // Platform is connected — check mailbox as normal
-    let responded = false;
-    const timeout = this.time.delayedCall(2000, () => {
-      if (!responded) {
-        responded = true;
-        this.store.toast(`[${platform}] No response from server. Make sure you're in your office.`);
-      }
-    });
+    body.appendChild(makeBtn("🔄 Change Platform", "#6c5ce7", () => {
+      overlay.remove();
+      this.showPlatformPickerModal(slotIndex);
+    }));
 
-    const onMessages = (respPlatform: string, events: any[]) => {
-      if (responded || respPlatform !== platform) return;
-      responded = true;
-      timeout.remove();
-      this.store.offMailboxMessages(onMessages);
-    };
-    this.store.onMailboxMessages(onMessages);
+    body.appendChild(makeBtn("✕ Unassign Mailbox", "#b07050", () => {
+      net.send({ type: "set_mailbox_platform", slot: slotIndex, platform: null });
+      overlay.remove();
+    }));
 
-    net.send({ type: "check_mailbox", platform });
-    return true;
+    card.appendChild(body);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "Close";
+    closeBtn.style.cssText = `
+      margin: 0 20px 16px; padding: 8px; background: none; border: 2px solid #8b7355;
+      border-radius: 8px; color: #8b7355; font-size: 13px; font-weight: bold;
+      cursor: pointer; font-family: inherit;
+    `;
+    closeBtn.onclick = () => overlay.remove();
+    card.appendChild(closeBtn);
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
   }
 
   /** Platform-specific setup steps for the connect modal. */

@@ -522,7 +522,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   cline: { maxIterations: 60, autoApproveCommands: true },
   game: { idleWander: true, theme: "classic" },
   railway: { enabled: true },
-  mailboxPlatforms: ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"],
+  mailboxPlatforms: [null, null, null, null, null, null],
 };
 
 export interface RailwayProject {
@@ -840,8 +840,8 @@ export const YUKI_ID = "yuki";
 /** Fixed agent id for Hermes, the devops core engineer NPC in the mail room. */
 export const HERMES_ID = "hermes";
 
-/** Default platforms for the 6 mailbox slots (backward compatibility). */
-export const DEFAULT_MAILBOX_PLATFORMS = ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"] as const;
+/** Default platforms for the 6 mailbox slots — all unassigned by default. */
+export const DEFAULT_MAILBOX_PLATFORMS: (string | null)[] = [null, null, null, null, null, null];
 
 /** Credential field definition for platform setup. */
 export interface PlatformCredentialField {

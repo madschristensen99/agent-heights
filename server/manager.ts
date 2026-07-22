@@ -458,7 +458,7 @@ export class AgentManager {
       },
       mailboxPlatforms: Array.isArray(s?.mailboxPlatforms) && s.mailboxPlatforms.length === 6
         ? s.mailboxPlatforms
-        : ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"],
+        : [null, null, null, null, null, null],
     };
     // Sync the hermes client with the new mailbox platforms
     if (this.hermesClient) {
