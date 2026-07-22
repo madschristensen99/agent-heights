@@ -2208,6 +2208,236 @@ export class OfficeScene extends Phaser.Scene {
         body: `You'll need:\n   - IMAP server (e.g. imap.gmail.com)\n   - IMAP port (usually 993, SSL)\n   - SMTP server (e.g. smtp.gmail.com)\n   - SMTP port (usually 587, TLS)\n   - Email address\n   - App password`,
       },
     ],
+    SMS: [
+      {
+        title: "SMS — Set Up Twilio",
+        body: `SMS messaging uses Twilio as the\nprovider.\n\n1. Sign up at https://www.twilio.com\n2. Navigate to Phone Numbers\n3. Buy or claim a phone number\n   (trial numbers work for testing)`,
+      },
+      {
+        title: "SMS — Copy Credentials",
+        body: `From the Twilio console, copy:\n   - Account SID (starts with AC...)\n   - Auth Token\n   - Your Twilio phone number\n     (e.g. +15551234567)\n\nMake sure the number has SMS\ncapabilities enabled.`,
+      },
+    ],
+    "Microsoft Teams": [
+      {
+        title: "Teams — Register an App",
+        body: `1. Go to https://entra.microsoft.com\n   (Microsoft Entra ID, formerly Azure AD)\n2. App registrations → New registration\n3. Name it (e.g. "Agent Heights Bot")\n4. Supported account types:\n   "Single tenant" is fine for most\n5. Click Register`,
+      },
+      {
+        title: "Teams — Create a Bot",
+        body: `1. Go to https://dev.teams.microsoft.com/bots\n2. Click "New Bot"\n3. Name it and select your tenant\n4. Copy the Bot ID (App ID)\n5. Generate a client secret and copy it\n   (this is your Bot Password)`,
+      },
+      {
+        title: "Teams — Copy Credentials",
+        body: `You'll need three values:\n   - App (Bot) ID — from the bot portal\n   - Tenant ID — from Entra ID overview\n   - Bot Password — the client secret\n   you generated\n\nKeep these safe — you'll enter them\nin the next step.`,
+      },
+    ],
+    "Google Chat": [
+      {
+        title: "Google Chat — Create a Project",
+        body: `1. Go to https://console.cloud.google.com\n2. Create a new project\n   (e.g. "agent-heights-chat")\n3. Enable the Google Chat API\n   from the API Library`,
+      },
+      {
+        title: "Google Chat — Create a Service Account",
+        body: `1. IAM & Admin → Service Accounts\n2. Create a service account\n3. Grant it the Chat API scope\n4. Create a JSON key and download it\n\nThe JSON file contains your\nproject_id and service account\ncredentials.`,
+      },
+      {
+        title: "Google Chat — Configure the App",
+        body: `1. Go to the Chat API configuration page\n2. Set up your bot app:\n   - Name: "Agent Heights"\n   - Avatar URL (optional)\n   - Functionality: Bot\n3. Add the service account email\n   as an authorized user\n4. Copy the Project ID and the\n   full service account JSON`,
+      },
+    ],
+    Matrix: [
+      {
+        title: "Matrix — Choose a Homeserver",
+        body: `Matrix is a federated protocol — you\nneed a homeserver account.\n\nOptions:\n   - matrix.org (free, public)\n   - self-host (e.g. Synapse, Dendrite)\n   -EMS (Element Matrix Services)\n\nCreate an account for your bot.`,
+      },
+      {
+        title: "Matrix — Get an Access Token",
+        body: `1. Log in to your homeserver as the bot\n   account (via Element or curl)\n2. Get the access token from\n   Settings → Help & About → Access Token\n   (in Element desktop)\n\nOr via API:\n   curl -XPOST https://matrix.org/_matrix/client/v3/login\n     -d '{"type":"m.login.password",\n          "identifier":{"type":"m.id.user",\n          "user":"botname"},\n          "password":"..."}'`,
+      },
+      {
+        title: "Matrix — Copy Credentials",
+        body: `You'll need:\n   - Homeserver URL\n     (e.g. https://matrix.org)\n   - Access Token (starts with syt_...)\n   - User ID (e.g. @bot:matrix.org)\n\nMake sure the bot is invited to\nany rooms where agents should\nreceive messages.`,
+      },
+    ],
+    Mattermost: [
+      {
+        title: "Mattermost — Set Up Your Server",
+        body: `Mattermost is self-hosted chat.\n\n1. Install Mattermost or use an\n   existing server\n2. Create a bot account:\n   System Console → Bot Accounts\n   (enable if needed)\n3. Integrations → Bot Accounts\n   → Create Bot`,
+      },
+      {
+        title: "Mattermost — Copy Credentials",
+        body: `You'll need:\n   - Server URL (e.g. https://chat.example.com)\n   - Bot Token (from the bot account)\n   - Team Name (e.g. "engineering")\n\nInvite the bot to channels where\nagents should receive messages.`,
+      },
+    ],
+    LINE: [
+      {
+        title: "LINE — Create a Provider",
+        body: `1. Go to https://developers.line.biz\n2. Log in with a LINE account\n3. Create a Provider\n4. Create a Messaging API channel\n5. Name it (e.g. "Agent Heights")`,
+      },
+      {
+        title: "LINE — Copy Credentials",
+        body: `From the channel settings page:\n   - Channel Access Token\n     (issue via "Issue" button)\n   - Channel Secret\n   (found under "Channel secret")\n\nConfigure your webhook URL to point\nto your Hermes gateway.`,
+      },
+    ],
+    IRC: [
+      {
+        title: "IRC — Choose a Network",
+        body: `IRC is a classic chat protocol.\n\n1. Pick an IRC network\n   (e.g. irc.libera.chat, irc.oftc.net)\n2. Register a nickname for your bot\n   via NickServ\n3. Note the server address and port\n   (usually 6697 for TLS)`,
+      },
+      {
+        title: "IRC — Identify Channels",
+        body: `List the channels the bot should join\nand monitor, e.g.:\n   #general, #support, #dev\n\nMake sure the bot nickname is\nregistered and identified with\nNickServ so it can join restricted\nchannels.`,
+      },
+    ],
+    BlueBubbles: [
+      {
+        title: "BlueBubbles — Install the Server",
+        body: `BlueBubbles lets you send/receive\niMessage programmatically.\n\n1. You need a Mac that's always on\n2. Download BlueBubbles Server\n   from https://bluebubbles.app\n3. Install and launch the server\n4. Follow the setup wizard to connect\n   your iMessage account`,
+      },
+      {
+        title: "BlueBubbles — Copy Credentials",
+        body: `From the BlueBubbles Server UI:\n   - Server URL (e.g. http://192.168.1.100:1234)\n   - Password (set during setup)\n\nMake sure the server is accessible\nfrom your Hermes gateway host.`,
+      },
+    ],
+    ntfy: [
+      {
+        title: "ntfy — Choose a Server",
+        body: `ntfy is a simple push notification\nservice.\n\n1. Use the public server at\n   https://ntfy.sh (free)\n   or self-host your own\n2. Pick a topic name for your agents\n   (e.g. "agent-heights-msgs")\n3. Subscribe to the topic in the\n   ntfy app on your phone`,
+      },
+      {
+        title: "ntfy — Copy Credentials",
+        body: `You'll need:\n   - Server URL (e.g. https://ntfy.sh)\n   - Topic name\n\nNo authentication needed for the\npublic server. For self-hosted,\nadd an access token if configured.`,
+      },
+    ],
+    SimpleX: [
+      {
+        title: "SimpleX — Set Up via Hermes",
+        body: `SimpleX Chat is a privacy-focused\nmessaging platform with no user IDs.\n\nConfiguration is handled by Hermes\nAgent directly — no credential entry\nneeded in this modal.\n\nRun on your server:\n  hermes gateway setup simplex\n\nFollow the prompts to create an\nSMP address and share it with\ncontacts who should message your\nagents.`,
+      },
+    ],
+    "Open WebUI": [
+      {
+        title: "Open WebUI — Set Up Your Instance",
+        body: `Open WebUI is a self-hosted AI\nfrontend compatible with OpenAI APIs.\n\n1. Install Open WebUI\n   (https://github.com/open-webui/open-webui)\n2. Create an admin account\n3. Generate an API key from\n   Settings → API Keys`,
+      },
+      {
+        title: "Open WebUI — Copy Credentials",
+        body: `You'll need:\n   - Server URL (e.g. http://localhost:3000)\n   - API Key\n\nMake sure your Hermes gateway can\nreach the Open WebUI instance.`,
+      },
+    ],
+    Webhooks: [
+      {
+        title: "Webhooks — Configure Your Endpoint",
+        body: `The webhook adapter sends and\nreceives messages via HTTP POST.\n\n1. Set up an endpoint URL that can\n   receive POST requests with JSON\n   body containing message data\n2. Optionally set a shared secret\n   for HMAC signature verification\n3. Make sure the URL is reachable\n   from your Hermes gateway`,
+      },
+    ],
+    DingTalk: [
+      {
+        title: "DingTalk — Create an App",
+        body: `DingTalk is Alibaba's workplace\nmessaging platform.\n\n1. Go to https://open-dev.dingtalk.com\n2. Create an enterprise app\n3. Enable robot (bot) capability\n4. Configure message receiving mode\n   (HTTP or Stream)`,
+      },
+      {
+        title: "DingTalk — Copy Credentials",
+        body: `From the app management page:\n   - App Key\n   - App Secret\n\nConfigure the message callback URL\nto point to your Hermes gateway.`,
+      },
+    ],
+    "Feishu/Lark": [
+      {
+        title: "Feishu/Lark — Create an App",
+        body: `Feishu (China) / Lark (international)\nis ByteDance's workplace platform.\n\n1. Go to https://open.feishu.cn\n   (or https://open.larksuite.com)\n2. Create an enterprise app\n3. Enable the bot capability\n4. Add message receiving permissions`,
+      },
+      {
+        title: "Feishu/Lark — Copy Credentials",
+        body: `From the app credentials page:\n   - App ID (starts with cli_...)\n   - App Secret\n\nConfigure the event subscription URL\nto point to your Hermes gateway.`,
+      },
+    ],
+    WeCom: [
+      {
+        title: "WeCom — Create an App",
+        body: `WeCom (WeChat Work) is Tencent's\nenterprise messaging platform.\n\n1. Go to https://work.weixin.qq.com\n2. Navigate to App Management\n3. Create a custom app\n4. Enable the bot/receiving message\n   capability`,
+      },
+      {
+        title: "WeCom — Copy Credentials",
+        body: `You'll need:\n   - Corp ID (from admin console)\n   - Agent ID (from the app)\n   - Secret (from the app)\n\nConfigure the callback URL to point\nto your Hermes gateway.`,
+      },
+    ],
+    "WeCom Callback": [
+      {
+        title: "WeCom Callback — Set Up",
+        body: `WeCom callback mode receives\nmessages via webhook.\n\n1. In WeCom admin console, go to\n   your app → Receive Messages\n2. Set the callback URL to your\n   Hermes gateway endpoint\n3. Set a Token and Encoding AES Key\n   (generate or let WeCom provide)`,
+      },
+      {
+        title: "WeCom Callback — Copy Credentials",
+        body: `You'll need:\n   - Token\n   - Encoding AES Key\n   - Corp ID\n\nThese are used to verify and\ndecrypt incoming webhook payloads.`,
+      },
+    ],
+    Weixin: [
+      {
+        title: "Weixin — Set Up iLink Bot",
+        body: `WeChat (personal) can be bridged\nvia the iLink Bot API.\n\n1. Contact iLink to get a bot token\n   (https://www.ilink.com)\n2. The bot will manage a WeChat\n   account on your behalf\n3. Configure message forwarding to\n   your Hermes gateway`,
+      },
+    ],
+    QQ: [
+      {
+        title: "QQ — Create a Bot",
+        body: `QQ Bot uses Tencent's official\nBot API v2.\n\n1. Go to https://q.qq.com\n2. Register as a developer\n3. Create a bot application\n4. Configure the message receiving\n   endpoint`,
+      },
+      {
+        title: "QQ — Copy Credentials",
+        body: `From the bot management page:\n   - App ID\n   - Token\n\nConfigure the webhook URL to point\nto your Hermes gateway.`,
+      },
+    ],
+    Yuanbao: [
+      {
+        title: "Yuanbao — Set Up via Hermes",
+        body: `Yuanbao is Tencent's AI chat\nplatform with DM and group chat.\n\nConfiguration is handled by Hermes\nAgent directly — no credential entry\nneeded in this modal.\n\nRun on your server:\n  hermes gateway setup yuanbao\n\nFollow the prompts to authenticate\nand configure your Yuanbao account.`,
+      },
+    ],
+    "Home Assistant": [
+      {
+        title: "Home Assistant — Enable Conversation",
+        body: `Home Assistant has a built-in\nconversation integration.\n\n1. Go to https://www.home-assistant.io\n   to install if needed\n2. In HA, go to Settings →\n   Devices & Services → Add\n   Integration → Conversation\n3. Enable the conversation API`,
+      },
+      {
+        title: "Home Assistant — Create a Token",
+        body: `1. In HA, go to your profile\n   (bottom left)\n2. Scroll to "Long-Lived Access Tokens"\n3. Create a token named "Hermes"\n4. Copy the token\n\nYou'll also need your HA URL\n(e.g. http://homeassistant.local:8123)`,
+      },
+    ],
+    "Teams Meetings": [
+      {
+        title: "Teams Meetings — Register an App",
+        body: `Teams Meetings bot requires a\nMicrosoft Bot Framework app.\n\n1. Go to https://entra.microsoft.com\n2. App registrations → New registration\n3. Name it (e.g. "Agent Heights Meetings")\n4. Single tenant is fine for most\n5. Click Register`,
+      },
+      {
+        title: "Teams Meetings — Configure Bot",
+        body: `1. Go to https://dev.teams.microsoft.com/bots\n2. Create a new bot\n3. Enable "Calling" and "Meeting"\n   capabilities\n4. Copy the Bot ID (App ID)\n5. Generate a client secret`,
+      },
+      {
+        title: "Teams Meetings — Copy Credentials",
+        body: `You'll need:\n   - App (Bot) ID\n   - Tenant ID\n   - Bot Password (client secret)\n\nThe bot will join scheduled\nmeetings and can transcribe/\nrespond to meeting chat.`,
+      },
+    ],
+    "MS Graph Webhook": [
+      {
+        title: "MS Graph — Register an App",
+        body: `Microsoft Graph webhooks receive\nchange notifications for Teams and\nOutlook messages.\n\n1. Go to https://entra.microsoft.com\n2. App registrations → New registration\n3. Add API permissions:\n   - ChannelMessage.Read.All\n   - Mail.Read\n4. Grant admin consent`,
+      },
+      {
+        title: "MS Graph — Create Subscription",
+        body: `1. Create a client secret for your app\n2. Use the Graph API to create a\n   subscription:\n   POST /subscriptions\n   with your notification URL\n3. The notification URL must point\nto your Hermes gateway endpoint`,
+      },
+      {
+        title: "MS Graph — Copy Credentials",
+        body: `You'll need:\n   - Client (App) ID\n   - Client Secret\n   - Tenant ID\n\nThese are used to obtain access\ntokens for calling the Graph API\nand managing subscriptions.`,
+      },
+    ],
+    Raft: [
+      {
+        title: "Raft — Set Up via Hermes",
+        body: `Raft is a messaging platform\nintegrated through Hermes Agent.\n\nConfiguration is handled by Hermes\nAgent directly — no credential entry\nneeded in this modal.\n\nRun on your server:\n  hermes gateway setup raft\n\nFollow the prompts to configure\nyour Raft connection.`,
+      },
+    ],
   };
 
   /** Show a multi-step modal walking the user through platform setup with credential input. */

@@ -336,6 +336,9 @@ export class Hud {
       this.net.send({ type: "list_orgs" });
       this.openRoomsPanel();
     });
+    document.getElementById("worlds-btn")!.addEventListener("click", () => {
+      this.store.toggleWorldsPanel();
+    });
 
     // ── Voice chat toggle ──────────────────────────────────────────────
     const voiceBtn = document.getElementById("voice-btn")! as HTMLButtonElement;
@@ -405,6 +408,7 @@ export class Hud {
     this.bindRailwayPanel();
     this.bindGitHubPanel();
     this.bindCodeEditorPanel();
+    this.bindWorldsPanel();
     this.bindShortcuts();
     this.bindMobileControls();
     // agents stream many messages per second — coalesce to one render per frame
@@ -641,6 +645,7 @@ export class Hud {
       const railway = document.getElementById("railway-modal")!;
       const github = document.getElementById("github-modal")!;
       const codeEditor = document.getElementById("code-editor-modal")!;
+      const worlds = document.getElementById("worlds-modal")!;
       const wardrobe = document.getElementById("wardrobe-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
@@ -650,10 +655,12 @@ export class Hud {
         railway.hidden = true;
         github.hidden = true;
         codeEditor.hidden = true;
+        worlds.hidden = true;
         wardrobe.hidden = true;
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
         this.store.toggleWardrobe(false);
+        this.store.toggleWorldsPanel(false);
         return;
       }
       // never steal keystrokes from a form field or while a modal is up
@@ -1878,6 +1885,7 @@ export class Hud {
     this.renderRailwayPanel();
     this.renderGitHubPanel();
     this.renderCodeEditor();
+    this.renderWorldsPanel();
     this.renderWardrobe();
   }
 
@@ -3189,6 +3197,79 @@ export class Hud {
       env: "ini",
     };
     return map[ext] ?? "plaintext";
+  }
+
+  private bindWorldsPanel(): void {
+    const modal = document.getElementById("worlds-modal")!;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) this.store.toggleWorldsPanel(false);
+    });
+  }
+
+  private renderWorldsPanel(): void {
+    const modal = document.getElementById("worlds-modal")!;
+    if (!this.store.worldsPanelOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+
+    const deployments = this.store.deployments;
+
+    let html = `<div class="railway-modal-content">`;
+    html += `<div class="railway-modal-header">`;
+    html += `<span class="railway-modal-title">🌀 WORLDS</span>`;
+    html += `<button class="x" id="worlds-close">✕</button>`;
+    html += `</div>`;
+
+    if (deployments.length === 0) {
+      html += `<div style="padding:20px;text-align:center;color:#888;font-size:14px;">No worlds deployed yet.<br><span style="font-size:12px;">Fork a world and deploy it from the server racks.</span></div>`;
+    } else {
+      for (const dep of deployments) {
+        const statusColor = dep.status.toLowerCase().includes("deploy") || dep.status.toLowerCase().includes("active") || dep.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
+        const isCurrent = this.store.currentWorld?.branchName === dep.branchName;
+        html += `<div class="railway-project">`;
+        html += `<div class="railway-project-header">`;
+        html += `<span class="railway-project-name">${esc(dep.branchName)}${isCurrent ? " <span style=\"color:#5ad6a0;font-size:11px;\">● you are here</span>" : ""}</span>`;
+        if (dep.railwayServiceUrl) {
+          html += `<a class="railway-service-url" href="${esc(dep.railwayServiceUrl)}" target="_blank">open ↗</a>`;
+        }
+        html += `</div>`;
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">`;
+        html += `<span style="font-size:11px;color:${statusColor};">● ${esc(dep.status)}</span>`;
+        if (dep.railwayServiceUrl && !isCurrent) {
+          html += `<button class="btn" id="worlds-enter-${esc(dep.branchName)}" style="font-size:11px;padding:3px 10px;margin-left:auto;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;">🌀 Open Portal</button>`;
+        } else if (isCurrent) {
+          html += `<span style="margin-left:auto;font-size:11px;color:#5ad6a0;">Walk into the green portal to return</span>`;
+        }
+        html += `</div>`;
+        html += `</div>`;
+      }
+    }
+
+    html += `</div>`;
+    modal.innerHTML = html;
+    modal.hidden = false;
+
+    // Wire close
+    document.getElementById("worlds-close")!.addEventListener("click", () => {
+      this.store.toggleWorldsPanel(false);
+    });
+
+    // Wire Open Portal buttons
+    for (const dep of deployments) {
+      if (!dep.railwayServiceUrl) continue;
+      if (this.store.currentWorld?.branchName === dep.branchName) continue;
+      const btn = document.getElementById(`worlds-enter-${dep.branchName}`);
+      if (btn) {
+        btn.addEventListener("click", () => {
+          const scene = this.store.sceneRef as any;
+          if (scene?.openPortal) {
+            scene.openPortal(dep.branchName, dep.railwayServiceUrl!);
+          }
+        });
+      }
+    }
   }
 
   private renderWardrobe(): void {
