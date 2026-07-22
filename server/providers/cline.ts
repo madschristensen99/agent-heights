@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
-import { loadMCPTools } from "./mcp-client.js";
+import { loadMCPTools, type OnApiErrorFn } from "./mcp-client.js";
 import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
 import { browserNavigate, browserScreenshot, browserExtractText, browserClick, browserFill } from "./browser.js";
 
@@ -144,6 +144,7 @@ export async function makeTools(cwd: string, opts?: {
   mcpServers?: import("../../shared/types.js").MCPServerConfig[];
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
   abortRef?: { signal: AbortSignal };
+  onApiError?: OnApiErrorFn;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -576,7 +577,7 @@ export async function makeTools(cwd: string, opts?: {
 
   // Load tools from any MCP servers declared in the agent config (e.g. Robinhood Trading MCP)
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
-    const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef);
+    const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
     if (mcpTools.length > 0) {
       return [...baseWithWorld, ...mcpTools];
     }
@@ -696,6 +697,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         mcpServers: ctx.mcpServers,
         onPostMessage: ctx.onPostMessage,
         abortRef,
+        onApiError: ctx.onApiError,
       });
       const maxIter = isChat ? (yukiHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);

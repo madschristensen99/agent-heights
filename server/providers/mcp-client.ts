@@ -429,6 +429,22 @@ const RATE_LIMIT_PATTERNS = [
   /API rate limit exceeded/i,
 ];
 
+/** Patterns that indicate an API funding / billing / credits issue. */
+const FUNDING_PATTERNS = [
+  /\b402\b/,
+  /payment\s*required/i,
+  /insufficient\s*(credit|fund|balance)/i,
+  /credit\s*balance.*(low|zero|insufficient|exhausted)/i,
+  /quota\s*(exceeded|exhausted|depleted)/i,
+  /billing\s*(issue|required|problem|failed)/i,
+  /add\s*(payment|funding|billing)/i,
+  /plan\s*(limit|upgrade|required)/i,
+  /api\s*key.*(fund|credit|billing|payment)/i,
+  /subscription.*(expired|inactive|required)/i,
+  /out\s*of\s*credits/i,
+  /no\s*credits/i,
+];
+
 /** Cooldown duration after a rate-limit hit (10 minutes). */
 const RATE_LIMIT_COOLDOWN_MS = 10 * 60 * 1000;
 
@@ -437,7 +453,15 @@ function isRateLimitError(text: string): boolean {
   return RATE_LIMIT_PATTERNS.some((p) => p.test(text));
 }
 
-export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { signal: AbortSignal }): Promise<AgentTool<any, any>[]> {
+/** Check if an error/result string looks like an API funding/billing issue. */
+function isFundingError(text: string): boolean {
+  return FUNDING_PATTERNS.some((p) => p.test(text));
+}
+
+/** Callback type for notifying the manager of API errors. */
+export type OnApiErrorFn = (type: "rate_limit" | "funding", details: { serverLabel: string; toolName: string; message: string }) => void;
+
+export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { signal: AbortSignal }, onApiError?: OnApiErrorFn): Promise<AgentTool<any, any>[]> {
   const allTools: AgentTool<any, any>[] = [];
   const MIN_CALL_INTERVAL_MS = 500; // throttle to avoid API rate limits
 
@@ -488,7 +512,15 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
               if (typeof result === "string" && isRateLimitError(result)) {
                 rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
                 console.warn(`[mcp:${label}] rate limit detected on tool ${def.name}, cooling down for ${RATE_LIMIT_COOLDOWN_MS / 60_000} minutes`);
+                onApiError?.("rate_limit", { serverLabel: label, toolName: def.name, message: result.slice(0, 500) });
                 return `[RATE LIMITED] ${result}\n\n⚠️ This API is now rate-limited. A 10-minute cooldown has been activated. Do NOT retry any API calls until the cooldown expires. Wait at least 10 minutes before making another request.`;
+              }
+
+              // Check if the result text indicates a funding/billing issue
+              if (typeof result === "string" && isFundingError(result)) {
+                console.warn(`[mcp:${label}] funding issue detected on tool ${def.name}`);
+                onApiError?.("funding", { serverLabel: label, toolName: def.name, message: result.slice(0, 500) });
+                return `[FUNDING ISSUE] ${result}\n\n⚠️ This API has a billing or funding problem. The office manager (Yuki) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
               }
 
               return result || `(tool ${def.name} returned no output)`;
@@ -499,7 +531,15 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
               if (isRateLimitError(msg)) {
                 rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
                 console.warn(`[mcp:${label}] rate limit detected on tool ${def.name} (error), cooling down for ${RATE_LIMIT_COOLDOWN_MS / 60_000} minutes`);
+                onApiError?.("rate_limit", { serverLabel: label, toolName: def.name, message: msg.slice(0, 500) });
                 return `[RATE LIMITED] MCP tool ${def.name} failed: ${msg}\n\n⚠️ This API is now rate-limited. A 10-minute cooldown has been activated. Do NOT retry any API calls until the cooldown expires. Wait at least 10 minutes before making another request.`;
+              }
+
+              // Detect funding/billing errors
+              if (isFundingError(msg)) {
+                console.warn(`[mcp:${label}] funding issue detected on tool ${def.name} (error)`);
+                onApiError?.("funding", { serverLabel: label, toolName: def.name, message: msg.slice(0, 500) });
+                return `[FUNDING ISSUE] MCP tool ${def.name} failed: ${msg}\n\n⚠️ This API has a billing or funding problem. The office manager (Yuki) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
               }
 
               return `[ERROR] MCP tool ${def.name} failed: ${msg}`;

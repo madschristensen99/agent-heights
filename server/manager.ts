@@ -1859,6 +1859,7 @@ export class AgentManager {
           const reviewTask = `${senderName} sent you a message. Review it and respond if needed:\n\n"${message}"`;
           this.assign(target.info.id, reviewTask);
         },
+        onApiError: (type, details) => this.notifyApiError(rt, type, details),
       });
 
       // Track tool calls to detect redundant loops
@@ -2726,6 +2727,57 @@ export class AgentManager {
     }
 
     this.broadcastMailboxUpdate(platform);
+  }
+
+  /** Notify Yuki, Hermes, and the user when an agent's MCP tool hits a rate-limit or funding error. */
+  private notifyApiError(
+    rt: AgentRuntime,
+    type: "rate_limit" | "funding",
+    details: { serverLabel: string; toolName: string; message: string },
+  ): void {
+    const agentName = rt.info.name;
+    const summary = type === "rate_limit"
+      ? `${agentName} hit a rate limit on ${details.serverLabel}/${details.toolName}. A 10-minute cooldown is active.`
+      : `${agentName} hit a funding/billing issue on ${details.serverLabel}/${details.toolName}: ${details.message.slice(0, 200)}`;
+
+    // Always broadcast a toast so the user sees it immediately
+    this.broadcast({ type: "toast", text: summary });
+    this.log(rt, "status", `⚠️ ${summary}`);
+
+    if (type === "rate_limit") return;
+
+    // ── Funding issue: escalate to Yuki and Hermes ──────────────────
+    const alertMsg = `${agentName} encountered an API funding/billing error while using ${details.toolName} on ${details.serverLabel}.\n\nError: ${details.message.slice(0, 300)}\n\nThe user may need to add funds, update billing, or upgrade their plan for this API. Please help resolve this.`;
+
+    for (const agentId of [YUKI_ID, HERMES_ID]) {
+      const target = this.agents.get(agentId);
+      if (!target) continue;
+      const slug = this.slugFor(target);
+      const inboxPath = join(this.cwdFor(slug, target.info.id), "inbox.jsonl");
+      const entry = JSON.stringify({ ts: Date.now(), from: "System", message: alertMsg }) + "\n";
+      import("node:fs/promises").then(({ appendFile, mkdir }) => {
+        mkdir(dirname(inboxPath), { recursive: true }).then(() =>
+          appendFile(inboxPath, entry, "utf-8").catch(() => {}),
+        );
+      }).catch(() => {});
+      this.log(target, "status", `📬 Notified about ${agentName}'s API funding issue.`);
+    }
+
+    // ── Notify the user via configured mailbox platforms ────────────
+    const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
+    if (platforms.length === 0) return;
+
+    const userMsg = `⚠️ API Funding Alert: ${agentName} hit a billing issue with ${details.serverLabel}/${details.toolName}. ${details.message.slice(0, 200)}. You may need to add funds or update your billing for this API.`;
+
+    for (const platform of platforms) {
+      // Emit as an outbound platform event so it shows in the mailbox UI
+      this.emitPlatformEvent(platform, "outbound", "System", userMsg);
+
+      // Best-effort send via Hermes gateway
+      if (this.hermesClient) {
+        this.hermesClient.sendMessage(platform, this.bossName, userMsg).catch(() => {});
+      }
+    }
   }
 
   /** Get recent events for a platform (newest first). */
