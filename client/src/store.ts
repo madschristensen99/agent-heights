@@ -544,6 +544,7 @@ export class Store {
         break;
       case "settings":
         this.settings = msg.settings;
+        this.emit();
         break;
       case "agent": {
         const prev = this.agents.get(msg.agent.id);

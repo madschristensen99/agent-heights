@@ -15,6 +15,7 @@ import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
 import { startSubscriptionCheckout, openCustomerPortal } from "../payment";
+import * as monaco from "monaco-editor";
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -211,6 +212,9 @@ export class Hud {
   private renderQueued = false;
   private perfVisible = false;
   private voiceBtn: HTMLButtonElement | null = null;
+  private monacoEditor: monaco.editor.IStandaloneCodeEditor | null = null;
+  private monacoFilePath: string | null = null;
+  private codeEditorSig = "";
 
   constructor(
     private store: Store,
@@ -1431,6 +1435,7 @@ export class Hud {
           railway: {
             enabled: (document.getElementById("s-railway") as HTMLInputElement)?.checked ?? false,
           },
+          mailboxPlatforms: this.store.settings.mailboxPlatforms,
         },
       });
       modal.hidden = true;
@@ -2933,12 +2938,29 @@ export class Hud {
     if (!this.store.codeEditorOpen) {
       modal.hidden = true;
       modal.innerHTML = "";
+      this.codeEditorSig = "";
+      if (this.monacoEditor) {
+        this.monacoEditor.dispose();
+        this.monacoEditor = null;
+        this.monacoFilePath = null;
+      }
       return;
     }
 
     const branch = this.store.codeEditorBranch ?? "";
     const dir = this.store.codeEditorDir;
     const file = this.store.codeEditorFile;
+
+    // Signature tracks structural state — if it hasn't changed, skip the full
+    // HTML rebuild (which would destroy the Monaco editor DOM). Only update
+    // Monaco's model if the file path changed.
+    const sig = `${branch}|${this.store.codeEditorPath}|${file ? file.path : ""}|${dir.map(e => e.path).join(",")}|${this.store.currentWorld ? "world" : ""}`;
+    if (sig === this.codeEditorSig) {
+      // Just ensure Monaco layout is correct
+      if (this.monacoEditor) this.monacoEditor.layout();
+      return;
+    }
+    this.codeEditorSig = sig;
 
     let html = `<div style="width:90vw;max-width:1100px;height:85vh;background:#1a1a2e;border:1px solid #3a4a5a;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">`;
 
@@ -2979,7 +3001,7 @@ export class Hud {
     // Editor area
     html += `<div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">`;
     if (file) {
-      html += `<textarea id="ce-textarea" spellcheck="false" style="flex:1;background:#0d1117;color:#c9d1d9;border:none;padding:12px;font-family:'Fira Code',monospace,monospace;font-size:13px;line-height:1.5;resize:none;outline:none;tab-size:2;white-space:pre;overflow:auto;">${esc(file.content)}</textarea>`;
+      html += `<div id="ce-monaco" style="flex:1;overflow:hidden;"></div>`;
       // Commit message + save bar
       html += `<div style="padding:6px 8px;border-top:1px solid #2a3a4a;display:flex;gap:6px;align-items:center;background:#161b22;">`;
       html += `<input id="ce-commit-msg" placeholder="Commit message..." maxlength="100" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid #3a4a5a;background:#0d1117;color:#c9d1d9;font-size:12px;" value="Update ${esc(file.path.split("/").pop() ?? file.path)}" />`;
@@ -3033,10 +3055,8 @@ export class Hud {
     const saveBtn = document.getElementById("ce-save");
     if (saveBtn && file) {
       saveBtn.addEventListener("click", () => {
-        const textarea = document.getElementById("ce-textarea") as HTMLTextAreaElement | null;
         const commitInput = document.getElementById("ce-commit-msg") as HTMLInputElement | null;
-        if (!textarea) return;
-        const content = textarea.value;
+        const content = this.monacoEditor?.getValue() ?? file.content;
         const commitMsg = commitInput?.value.trim() || `Update ${file.path}`;
         this.store.sendFn?.({
           type: "github_write_file",
@@ -3094,24 +3114,79 @@ export class Hud {
       });
     }
 
-    // Tab key in textarea inserts spaces instead of changing focus
-    const textarea = document.getElementById("ce-textarea") as HTMLTextAreaElement | null;
-    if (textarea) {
-      textarea.addEventListener("keydown", (e) => {
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const start = textarea.selectionStart;
-          const end = textarea.selectionEnd;
-          textarea.value = textarea.value.substring(0, start) + "  " + textarea.value.substring(end);
-          textarea.selectionStart = textarea.selectionEnd = start + 2;
-        }
+    // Create or update Monaco editor
+    const monacoContainer = document.getElementById("ce-monaco");
+    if (monacoContainer && file) {
+      if (this.monacoEditor && this.monacoFilePath === file.path) {
+        // Same file — just resize in case layout changed
+        this.monacoEditor.layout();
+      } else if (this.monacoEditor && this.monacoFilePath !== file.path) {
+        // Different file — swap the model
+        this.monacoFilePath = file.path;
+        const lang = this.detectLanguage(file.path);
+        const oldModel = this.monacoEditor.getModel();
+        const newModel = monaco.editor.createModel(file.content, lang);
+        this.monacoEditor.setModel(newModel);
+        oldModel?.dispose();
+      } else {
+        // First time — create the editor
+        this.monacoFilePath = file.path;
+        const lang = this.detectLanguage(file.path);
+        this.monacoEditor = monaco.editor.create(monacoContainer, {
+          value: file.content,
+          language: lang,
+          theme: "vs-dark",
+          automaticLayout: true,
+          fontSize: 13,
+          fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+          fontLigatures: true,
+          minimap: { enabled: true },
+          scrollBeyondLastLine: false,
+          tabSize: 2,
+          insertSpaces: true,
+          lineNumbers: "on",
+          folding: true,
+          wordWrap: "off",
+          renderWhitespace: "selection",
+          scrollbar: {
+            verticalScrollbarSize: 10,
+            horizontalScrollbarSize: 10,
+          },
+        });
         // Ctrl/Cmd+S to save
-        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-          e.preventDefault();
+        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
           saveBtn?.click();
-        }
-      });
+        });
+      }
+    } else if (!file && this.monacoEditor) {
+      // No file selected — dispose editor
+      this.monacoEditor.dispose();
+      this.monacoEditor = null;
+      this.monacoFilePath = null;
     }
+  }
+
+  /** Detect Monaco language ID from file extension. */
+  private detectLanguage(path: string): string {
+    const ext = path.split(".").pop()?.toLowerCase() ?? "";
+    const map: Record<string, string> = {
+      ts: "typescript", tsx: "typescript",
+      js: "javascript", jsx: "javascript", mjs: "javascript",
+      json: "json",
+      css: "css", scss: "scss",
+      html: "html",
+      md: "markdown",
+      sql: "sql",
+      yaml: "yaml", yml: "yaml",
+      xml: "xml",
+      sh: "shell", bash: "shell",
+      py: "python",
+      go: "go",
+      rs: "rust",
+      toml: "ini",
+      env: "ini",
+    };
+    return map[ext] ?? "plaintext";
   }
 
   private renderWardrobe(): void {

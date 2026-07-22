@@ -51,13 +51,20 @@ async function stripeApi(path: string, method = "POST", body?: Record<string, un
 }
 
 export async function startEntranceCheckout(): Promise<void> {
+  console.log("[payment] startEntranceCheckout called");
   const result = await stripeApi("/api/stripe/checkout-entrance");
+  console.log("[payment] checkout-entrance response:", result);
   if (typeof result.url === "string") {
     window.location.href = result.url;
   } else if (result.alreadyPaid || result.error === "Entrance fee already paid") {
-    // Already paid — refresh status to update UI
+    console.log("[payment] entrance already paid, refreshing status");
+    // Force-update state to entrancePaid=true so the overlay hides immediately
+    if (currentState) {
+      updatePaymentState({ ...currentState, entrancePaid: true });
+    }
     await refreshPaymentStatus();
   } else {
+    console.error("[payment] entrance checkout failed:", result.error);
     alert((result.error as string) ?? "Failed to start checkout");
   }
 }
@@ -83,6 +90,7 @@ export async function openCustomerPortal(): Promise<void> {
 export async function refreshPaymentStatus(): Promise<void> {
   if (!isAuthEnabled) return;
   const result = await stripeApi("/api/stripe/status", "GET");
+  console.log("[payment] status response:", result);
   if (result && !result.error) {
     updatePaymentState({
       entrancePaid: result.entrancePaid as boolean,

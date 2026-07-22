@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
-import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, PLATFORM_CREDENTIAL_FIELDS } from "../../../shared/types";
+import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -24,7 +24,7 @@ function hintLabel(text: string): string {
 }
 
 interface PlatformMailbox {
-  platform: string;
+  platform: string | null;
   color: number;
   colorLight: number;
   colorDark: number;
@@ -32,16 +32,21 @@ interface PlatformMailbox {
   flagUp: boolean;
   pendingCount: number;
   lastMessage: string;
+  slotIndex: number;
 }
 
-const PLATFORM_CONFIG = [
-  { platform: "Slack",    color: 0x611f69, tile: { x: 2, y: 13 } },
-  { platform: "Discord",  color: 0x5865f2, tile: { x: 3, y: 13 } },
-  { platform: "Telegram", color: 0x0088cc, tile: { x: 5, y: 13 } },
-  { platform: "WhatsApp", color: 0x25d366, tile: { x: 6, y: 13 } },
-  { platform: "Signal",   color: 0x3a76f0, tile: { x: 8, y: 13 } },
-  { platform: "Email",    color: 0xea4335, tile: { x: 9, y: 13 } },
+/** Tile positions for the 6 mailbox slots along the north wall of the mail room. */
+const MAILBOX_TILES: Tile[] = [
+  { x: 2, y: 13 },
+  { x: 3, y: 13 },
+  { x: 5, y: 13 },
+  { x: 6, y: 13 },
+  { x: 8, y: 13 },
+  { x: 9, y: 13 },
 ];
+
+/** Dark navy color for unassigned mailboxes. */
+const UNASSIGNED_COLOR = 0x1a2a4a;
 
 export class OfficeScene extends Phaser.Scene {
   private store!: Store;
@@ -855,23 +860,14 @@ export class OfficeScene extends Phaser.Scene {
           // Set interactable tile positions based on theme
           this.setupInteractables();
 
-          // Initialize platform mailboxes in the mail room
-          const mailRoomY = 13;
-          this.platformMailboxes = PLATFORM_CONFIG.map((cfg) => ({
-            platform: cfg.platform,
-            color: cfg.color,
-            colorLight: Phaser.Display.Color.IntegerToColor(cfg.color).lighten(20).color,
-            colorDark: Phaser.Display.Color.IntegerToColor(cfg.color).darken(20).color,
-            tile: { x: cfg.tile.x, y: mailRoomY },
-            flagUp: false,
-            pendingCount: 0,
-            lastMessage: "",
-          }));
+          // Initialize platform mailboxes in the mail room from settings
+          this.platformMailboxes = this.buildPlatformMailboxes();
           this.platformMailboxGfx = this.add.graphics().setDepth(6);
           this.drawPlatformMailboxes();
 
           // Sync mailbox state from the store (populated by server on connect)
           for (const mb of this.platformMailboxes) {
+            if (!mb.platform) continue;
             const state = this.store.platformMailboxes.get(mb.platform);
             if (state) {
               mb.flagUp = state.flagUp;
@@ -1118,6 +1114,22 @@ export class OfficeScene extends Phaser.Scene {
               const regenerated = this.refreshBossTexture();
               if ((regenerated || prevKey !== this.playerTexKey) && this.player) {
                 this.player.setTexture(this.playerTexKey, 0).setScale(1);
+              }
+              // Rebuild mailboxes if platform assignments changed
+              const prevPlatforms = this.platformMailboxes.map((m) => m.platform).join(",");
+              const newPlatforms = (this.store.settings.mailboxPlatforms ?? []).join(",");
+              if (prevPlatforms !== newPlatforms) {
+                this.platformMailboxes = this.buildPlatformMailboxes();
+                for (const mb of this.platformMailboxes) {
+                  if (!mb.platform) continue;
+                  const state = this.store.platformMailboxes.get(mb.platform);
+                  if (state) {
+                    mb.flagUp = state.flagUp;
+                    mb.pendingCount = state.pendingCount;
+                    mb.lastMessage = state.lastMessage;
+                  }
+                }
+                this.drawPlatformMailboxes();
               }
               this.syncAgents();
               this.world.syncGhosts();
@@ -2047,6 +2059,27 @@ export class OfficeScene extends Phaser.Scene {
     return best;
   }
 
+  /** Build platform mailbox objects from settings + catalog. */
+  private buildPlatformMailboxes(): PlatformMailbox[] {
+    const slots = this.store.settings.mailboxPlatforms ?? ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"];
+    return MAILBOX_TILES.map((tile, i) => {
+      const platform = slots[i] ?? null;
+      const entry = platform ? getPlatformEntry(platform) : undefined;
+      const color = entry?.color ?? UNASSIGNED_COLOR;
+      return {
+        platform,
+        color,
+        colorLight: Phaser.Display.Color.IntegerToColor(color).lighten(20).color,
+        colorDark: Phaser.Display.Color.IntegerToColor(color).darken(20).color,
+        tile: { x: tile.x, y: tile.y },
+        flagUp: false,
+        pendingCount: 0,
+        lastMessage: "",
+        slotIndex: i,
+      };
+    });
+  }
+
   /** Try interacting with a platform mailbox. Returns true if an interaction fired. */
   private tryPlatformMailboxInteract(): boolean {
     let nearest: PlatformMailbox | null = null;
@@ -2060,8 +2093,15 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     if (!nearest) return false;
-    const platform = nearest.platform;
     const net = this.game.registry.get("net") as import("../net").Net;
+
+    // Unassigned mailbox — show platform picker
+    if (!nearest.platform) {
+      this.showPlatformPickerModal(nearest.slotIndex);
+      return true;
+    }
+
+    const platform = nearest.platform;
 
     // Check if this platform is connected via Hermes Agent gateway
     if (!this.store.isPlatformConnected(platform)) {
@@ -2440,6 +2480,137 @@ export class OfficeScene extends Phaser.Scene {
     overlay.addEventListener("click", (e) => { if (e.target === overlay) closeModal(); });
 
     renderStep();
+  }
+
+  /** Show a scrollable platform picker modal for assigning a platform to a mailbox slot. */
+  private showPlatformPickerModal(slot: number): void {
+    const net = this.game.registry.get("net") as import("../net").Net;
+    const assigned = new Set(this.store.settings.mailboxPlatforms?.filter((p): p is string => p !== null) ?? []);
+
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.55); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+    `;
+
+    const card = document.createElement("div");
+    card.style.cssText = `
+      background: #f5f0e6; border: 3px solid #d4c5a9; border-radius: 16px;
+      width: 480px; max-height: 80vh; display: flex; flex-direction: column;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.3); overflow: hidden;
+    `;
+
+    const header = document.createElement("div");
+    header.style.cssText = `
+      background: #e8dcc8; border-bottom: 2px solid #d4c5a9;
+      padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+      flex-shrink: 0;
+    `;
+    header.innerHTML = `
+      <span style="font-size:28px;">✉</span>
+      <span style="font-size:20px;font-weight:bold;color:#3d3528;flex:1;">Mailbox ${slot + 1} — Choose Platform</span>
+    `;
+    card.appendChild(header);
+
+    const list = document.createElement("div");
+    list.style.cssText = `
+      padding: 12px 16px; flex: 1; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 6px;
+    `;
+    card.appendChild(list);
+
+    const tierLabels: Record<number, string> = { 1: "Popular", 2: "Available", 3: "Regional / Niche" };
+    let lastTier = 0;
+
+    for (const entry of PLATFORM_CATALOG) {
+      if (entry.tier !== lastTier) {
+        lastTier = entry.tier;
+        const tierHeader = document.createElement("div");
+        tierHeader.textContent = tierLabels[entry.tier] ?? "Other";
+        tierHeader.style.cssText = `
+          font-size: 12px; font-weight: bold; color: #8b7355;
+          text-transform: uppercase; letter-spacing: 1px;
+          margin: 12px 0 4px 0; padding-bottom: 4px;
+          border-bottom: 1px solid #d4c5a9;
+        `;
+        if (entry.tier === 1) tierHeader.style.marginTop = "0";
+        list.appendChild(tierHeader);
+      }
+
+      const isAssigned = assigned.has(entry.name);
+      const item = document.createElement("div");
+      item.style.cssText = `
+        display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+        background: ${isAssigned ? "#e0d8c8" : "#fffcf5"};
+        border: 2px solid #d4c5a9; border-radius: 10px;
+        cursor: ${isAssigned ? "not-allowed" : "pointer"};
+        transition: border-color 0.2s, background 0.2s;
+        opacity: ${isAssigned ? "0.5" : "1"};
+      `;
+      if (!isAssigned) {
+        item.addEventListener("mouseenter", () => { item.style.borderColor = "#8b7355"; });
+        item.addEventListener("mouseleave", () => { item.style.borderColor = "#d4c5a9"; });
+      }
+
+      const colorDot = document.createElement("div");
+      colorDot.style.cssText = `
+        width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+        background: #${entry.color.toString(16).padStart(6, "0")};
+        border: 2px solid rgba(0,0,0,0.15);
+      `;
+      item.appendChild(colorDot);
+
+      const textCol = document.createElement("div");
+      textCol.style.cssText = "flex:1;display:flex;flex-direction:column;";
+      const nameEl = document.createElement("div");
+      nameEl.textContent = entry.name + (isAssigned ? " (in use)" : "");
+      nameEl.style.cssText = "font-size:15px;font-weight:bold;color:#3d3528;";
+      const descEl = document.createElement("div");
+      descEl.textContent = entry.description;
+      descEl.style.cssText = "font-size:12px;color:#8b7355;";
+      textCol.appendChild(nameEl);
+      textCol.appendChild(descEl);
+      item.appendChild(textCol);
+
+      if (!isAssigned) {
+        item.onclick = () => {
+          net.send({ type: "set_mailbox_platform", slot, platform: entry.name });
+          overlay.remove();
+        };
+      }
+
+      list.appendChild(item);
+    }
+
+    // Unassign option
+    const unassignBtn = document.createElement("button");
+    unassignBtn.textContent = "Unassign this mailbox";
+    unassignBtn.style.cssText = `
+      margin: 12px 16px; padding: 10px; background: none; border: 2px solid #b07050;
+      border-radius: 8px; color: #b07050; font-size: 14px; font-weight: bold;
+      cursor: pointer; font-family: inherit; flex-shrink: 0;
+    `;
+    unassignBtn.onclick = () => {
+      net.send({ type: "set_mailbox_platform", slot, platform: null });
+      overlay.remove();
+    };
+    card.appendChild(unassignBtn);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "Close";
+    closeBtn.style.cssText = `
+      margin: 0 16px 16px; padding: 10px; background: none; border: 2px solid #8b7355;
+      border-radius: 8px; color: #8b7355; font-size: 14px; font-weight: bold;
+      cursor: pointer; font-family: inherit; flex-shrink: 0;
+    `;
+    closeBtn.onclick = () => overlay.remove();
+    card.appendChild(closeBtn);
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
   }
 
   /** Try interacting with any new office object. Returns true if an interaction fired. */
@@ -2942,7 +3113,11 @@ export class OfficeScene extends Phaser.Scene {
       }
       if (nearestPm) {
         const pmPx = { x: nearestPm.tile.x * TILE_PX + TILE_PX / 2, y: nearestPm.tile.y * TILE_PX + TILE_PX / 2 };
-        const label = nearestPm.flagUp ? `E: CHECK ${nearestPm.platform.toUpperCase()}` : "E: EMPTY";
+        const label = !nearestPm.platform
+          ? "E: SET UP"
+          : nearestPm.flagUp
+            ? `E: CHECK ${nearestPm.platform.toUpperCase()}`
+            : "E: EMPTY";
         add(this.platformMailboxHint, pmPx.x, pmPx.y, 100, label, pmPx.x, pmPx.y + 64);
       }
     }
@@ -3123,16 +3298,25 @@ export class OfficeScene extends Phaser.Scene {
       g.fillStyle(0x0a0a14, 1);
       g.fillRoundedRect(px - 9, py - 4, 18, 4, 2);
       // platform label plate
-      g.fillStyle(0xe8e4d0, 1);
-      g.fillRoundedRect(px - 10, py + 2, 20, 7, 1);
-      g.fillStyle(0x33373d, 1);
-      const label = mb.platform.slice(0, 4);
-      for (let i = 0; i < label.length; i++) {
-        g.fillRect(px - 8 + i * 4, py + 4, 3, 1);
-        g.fillRect(px - 8 + i * 4, py + 6, 2, 1);
+      if (mb.platform) {
+        g.fillStyle(0xe8e4d0, 1);
+        g.fillRoundedRect(px - 10, py + 2, 20, 7, 1);
+        g.fillStyle(0x33373d, 1);
+        const label = mb.platform.slice(0, 4);
+        for (let i = 0; i < label.length; i++) {
+          g.fillRect(px - 8 + i * 4, py + 4, 3, 1);
+          g.fillRect(px - 8 + i * 4, py + 6, 2, 1);
+        }
+      } else {
+        // Unassigned — show a small "+" icon on the label plate
+        g.fillStyle(0x2a3a5a, 1);
+        g.fillRoundedRect(px - 10, py + 2, 20, 7, 1);
+        g.fillStyle(0x4a5a7a, 1);
+        g.fillRect(px - 1, py + 4, 3, 1);
+        g.fillRect(px, py + 3, 1, 3);
       }
-      // red flag — up when mail pending, down when empty
-      if (mb.flagUp) {
+      // red flag — up when mail pending, down when empty (only for assigned mailboxes)
+      if (mb.platform && mb.flagUp) {
         g.fillStyle(0xc83030, 1);
         g.fillRect(px + 12, py - 12, 2, 12);
         g.fillRect(px + 12, py - 12, 8, 3);
@@ -3147,7 +3331,7 @@ export class OfficeScene extends Phaser.Scene {
           g.fillRect(px + 14, py - 15, 4, 1);
           g.fillRect(px + 15, py - 16, 2, 3);
         }
-      } else {
+      } else if (mb.platform) {
         g.fillStyle(0xc83030, 1);
         g.fillRect(px + 12, py - 2, 2, 10);
         g.fillRect(px + 12, py + 6, 8, 3);
@@ -3157,7 +3341,7 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       // Disconnected indicator — show a small red dot if platform not connected via Hermes
-      if (!this.store.isPlatformConnected(mb.platform)) {
+      if (mb.platform && !this.store.isPlatformConnected(mb.platform)) {
         g.fillStyle(0xff4444, 0.9);
         g.fillCircle(px - 14, py - 10, 3);
         g.fillStyle(0xffffff, 0.8);

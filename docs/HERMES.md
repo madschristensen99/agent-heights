@@ -38,8 +38,9 @@ they're connected to your real workplace infrastructure.
 Hermes Agent (by Nous Research) is the runtime that makes this possible. It's
 a self-improving AI agent with:
 
-- A **messaging gateway** — bridges to Slack, Discord, Telegram, WhatsApp,
-  Signal, Email from a single process
+- A **messaging gateway** — bridges to 27+ platforms including Slack,
+  Discord, Telegram, WhatsApp, Signal, Email, SMS, Microsoft Teams, Google
+  Chat, Matrix, Mattermost, LINE, IRC, BlueBubbles (iMessage), and more
 - An **MCP ecosystem** — curated catalog of one-click MCP servers for GitHub,
   Linear, n8n, filesystem, browser automation, and more
 - A **skills system** — agents create, update, and delete their own
@@ -313,11 +314,19 @@ agent.
 
 A new enclosed section in the office (bottom-left, x=1–10, y=13–17) with:
 
-- **Six platform mailboxes** along the north wall — one per platform Hermes
-  integrates with: Slack, Discord, Telegram, WhatsApp, Signal, Email. Each
-  mailbox is color-coded to its platform and has a red flag that goes **up**
-  when mail arrives. You can see at a glance which platforms have pending
-  messages.
+- **Six platform mailboxes** along the north wall — each can be assigned to
+  any of the 27+ platforms Hermes supports. By default they're set to Slack,
+  Discord, Telegram, WhatsApp, Signal, and Email. Each mailbox is color-coded
+  to its platform and has a red flag that goes **up** when mail arrives. You
+  can see at a glance which platforms have pending messages.
+  - **Unassigned mailboxes** appear in dark navy. Press **E** to open a
+    platform picker (grouped by tier: Popular, Available, Regional/Niche)
+    and assign any supported platform to that slot.
+  - **Assigned but unconfigured** mailboxes show the platform's brand color
+    with a red disconnect indicator. Press **E** to open the credential
+    setup modal.
+  - **Assigned and connected** mailboxes show full color with the flag
+    animation on new messages. Press **E** to check recent messages.
 - **A desk for the Hermes agent** — the mail clerk sits here, sorting and
   routing messages. Like Yuki, this is a permanent NPC with its own sprite
   and personality.
@@ -329,16 +338,35 @@ A new enclosed section in the office (bottom-left, x=1–10, y=13–17) with:
 ### Platform mailboxes
 
 Each mailbox is drawn as a Phaser graphics object (not a tilemap tile) so it
-can be animated and color-coded:
+can be animated and color-coded. The 6 mailbox slots have fixed tile
+positions, but any platform from the `PLATFORM_CATALOG` (27+ entries) can be
+assigned to any slot via the in-world platform picker (press **E** on an
+unassigned mailbox).
 
-| Platform | Color | Mailbox position |
-|---|---|---|
-| Slack | `#611f69` (purple) | tile (2, 13) |
-| Discord | `#5865F2` (blurple) | tile (3, 13) |
-| Telegram | `#0088cc` (blue) | tile (5, 13) |
-| WhatsApp | `#25D366` (green) | tile (6, 13) |
-| Signal | `#3a76f0` (blue) | tile (8, 13) |
-| Email | `#ea4335` (red) | tile (9, 13) |
+**Default assignments (backward compatible):**
+
+| Slot | Platform | Color | Tile |
+|---|---|---|---|
+| 1 | Slack | `#611f69` (purple) | (2, 13) |
+| 2 | Discord | `#5865F2` (blurple) | (3, 13) |
+| 3 | Telegram | `#0088cc` (blue) | (5, 13) |
+| 4 | WhatsApp | `#25D366` (green) | (6, 13) |
+| 5 | Signal | `#3a76f0` (blue) | (8, 13) |
+| 6 | Email | `#ea4335` (red) | (9, 13) |
+
+**Full platform catalog** is defined in `shared/types.ts` as
+`PLATFORM_CATALOG`, with tiers for prioritization:
+
+- **Tier 1 (Popular):** Slack, Discord, Telegram, WhatsApp, Signal, Email,
+  SMS, Microsoft Teams, Google Chat, Matrix
+- **Tier 2 (Available):** Mattermost, LINE, IRC, BlueBubbles, ntfy,
+  SimpleX, Open WebUI, Webhooks
+- **Tier 3 (Regional/Niche):** DingTalk, Feishu/Lark, WeCom, WeCom Callback,
+  Weixin, QQ, Yuanbao, Home Assistant, Teams Meetings, MS Graph Webhook, Raft
+
+Mailbox assignments are stored in `GameSettings.mailboxPlatforms` (an array
+of 6 `(string | null)` values) and persisted to the
+`sprite_heights_game_settings` table via the `mailbox_platforms` column.
 
 When a platform event arrives (someone messaged the agent on Slack):
 
