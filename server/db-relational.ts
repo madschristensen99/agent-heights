@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, PendingTask, TaskCard, WorldState, AgentStatus, AgentRole, OfficeTheme } from "../shared/types.js";
+import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, PendingTask, TaskCard, WorldState, AgentStatus, AgentRole, OfficeTheme, PlatformEvent } from "../shared/types.js";
 import type { SaveState } from "./persistence.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
@@ -202,7 +202,23 @@ export class RelationalPersistence {
         }
       }
 
-      this.state = { player, agents, logs, settings, board, schedules, world, pendingTasks: pendingTasksMap };
+      // Load mail events (newest 50 per platform)
+      const { data: mailRows } = await supabaseAdmin
+        .from("sprite_heights_mail_events")
+        .select("platform, direction, sender, text, timestamp, status")
+        .eq("user_id", this.userId)
+        .order("timestamp", { ascending: false })
+        .limit(500);
+
+      const mailEvents: PlatformEvent[] = (mailRows ?? []).map((r: any) => ({
+        platform: r.platform,
+        direction: r.direction,
+        sender: r.sender,
+        text: r.text,
+        timestamp: r.timestamp,
+      }));
+
+      this.state = { player, agents, logs, settings, board, schedules, world, pendingTasks: pendingTasksMap, mailEvents };
       return this.state;
     } catch (err) {
       console.error("[db-rel] load failed:", err);
@@ -653,6 +669,39 @@ export class RelationalPersistence {
         .eq("archived", false);
     } catch (err) {
       console.error(`[db-rel] clearMessages for ${agentId} failed:`, err);
+    }
+  }
+
+  async insertMailEvent(ev: PlatformEvent): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabaseAdmin
+        .from("sprite_heights_mail_events")
+        .insert({
+          user_id: this.userId,
+          platform: ev.platform,
+          direction: ev.direction,
+          sender: ev.sender,
+          text: ev.text,
+          timestamp: ev.timestamp,
+          status: 'new',
+        });
+    } catch (err) {
+      console.error("[db-rel] insertMailEvent failed:", err);
+    }
+  }
+
+  async markMailHandled(platform: string): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabaseAdmin
+        .from("sprite_heights_mail_events")
+        .update({ status: 'handled' })
+        .eq("user_id", this.userId)
+        .eq("platform", platform)
+        .eq("status", 'new');
+    } catch (err) {
+      console.error("[db-rel] markMailHandled failed:", err);
     }
   }
 

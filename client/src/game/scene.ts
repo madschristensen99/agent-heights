@@ -49,7 +49,8 @@ const MAILBOX_TILES: Tile[] = [
 const UNASSIGNED_COLOR = 0x1a2a4a;
 
 /** Mapping of platform names to Simple Icons slugs for logo display.
- *  Platforms not listed here will fall back to a colored dot. */
+ *  Platforms not listed here will fall back to a colored dot.
+ *  Slugs verified against https://github.com/simple-icons/simple-icons/slugs.md */
 const PLATFORM_ICON_SLUGS: Record<string, string> = {
   Slack: "slack",
   Discord: "discord",
@@ -63,23 +64,13 @@ const PLATFORM_ICON_SLUGS: Record<string, string> = {
   Matrix: "matrix",
   Mattermost: "mattermost",
   LINE: "line",
-  IRC: "irc",
   BlueBubbles: "imessage",
   ntfy: "ntfy",
-  "Open WebUI": "openwebui",
-  Webhooks: "webhooks",
-  DingTalk: "dingtalk",
-  "Feishu/Lark": "larksuite",
-  WeCom: "wecom",
-  "WeCom Callback": "wecom",
-  Weixin: "wechat",
-  QQ: "tencentqq",
-  Yuanbao: "tencentqq",
+  SimpleX: "simplex",
   "Home Assistant": "homeassistant",
   "Teams Meetings": "microsoftteams",
-  "MS Graph Webhook": "microsoft",
-  Raft: "raft",
-  SimpleX: "simplex",
+  "MS Graph Webhook": "microsoftteams",
+  QQ: "qq",
 };
 
 /** Get a logo img element for a platform, or null if no icon is available. */

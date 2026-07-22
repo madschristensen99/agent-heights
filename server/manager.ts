@@ -529,9 +529,28 @@ export class AgentManager {
     this.broadcast({ type: "agent", agent: info });
   }
 
-  /** Seed test platform events so mailboxes have content on a fresh server. */
+  /** Load persisted mail events from the save state, or seed test data on a fresh server. */
   private seedTestMail(): void {
     if (this.platformEvents.size > 0) return;
+
+    // If we have persisted mail events from the DB, load them
+    const savedEvents = (this.save as any).state?.mailEvents as PlatformEvent[] | undefined;
+    if (savedEvents && savedEvents.length > 0) {
+      for (const ev of savedEvents) {
+        const list = this.platformEvents.get(ev.platform) ?? [];
+        list.push(ev);
+        if (list.length > AgentManager.PLATFORM_EVENT_MAX) list.splice(0, list.length - AgentManager.PLATFORM_EVENT_MAX);
+        this.platformEvents.set(ev.platform, list);
+        if (ev.direction === "inbound") {
+          this.platformFlags.set(ev.platform, true);
+          this.platformPending.set(ev.platform, (this.platformPending.get(ev.platform) ?? 0) + 1);
+          this.platformLastMessage.set(ev.platform, `${ev.sender}: ${ev.text.slice(0, 200)}`);
+        }
+      }
+      return;
+    }
+
+    // No persisted events — seed test data for a fresh server
     const testEvents: [string, "inbound" | "outbound", string, string][] = [
       ["Slack", "inbound", "sarah@design", "Can someone review the new landing page?"],
       ["Slack", "inbound", "mike@eng", "Deploy is stuck — need devops help"],
@@ -2649,6 +2668,8 @@ export class AgentManager {
     list.push(ev);
     if (list.length > AgentManager.PLATFORM_EVENT_MAX) list.splice(0, list.length - AgentManager.PLATFORM_EVENT_MAX);
     this.platformEvents.set(platform, list);
+    // Persist to database
+    void this.save.insertMailEvent(ev);
 
     // Raise flag for inbound messages
     if (direction === "inbound") {
@@ -2673,6 +2694,7 @@ export class AgentManager {
     this.platformFlags.set(platform, false);
     this.platformPending.set(platform, 0);
     this.broadcastMailboxUpdate(platform);
+    void this.save.markMailHandled(platform);
     return this.getPlatformMessages(platform);
   }
 
