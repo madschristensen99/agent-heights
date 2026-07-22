@@ -163,14 +163,17 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
       const obstacleChanceNext = Math.min(0.45, 0.08 + (hostilityFloor + 1) * 0.06);
       const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
-      // Hostile tile density — noise at scale 12 for larger hazard regions
-      const hostileNoise = valueNoise(worldSeed ^ 0x12345, wx, wy, 12);
-      const hostileChance = hostilityFloor >= 2 ? Math.min(0.30, (hostilityFloor - 1) * 0.06) : 0;
-      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.30, hostilityFloor * 0.06) : 0;
+      // Hostile tile density — separate noise fields for lava and void so they
+      // form interspersed scattered patches instead of clumping together.
+      // Scale 4 creates small maze-like pockets rather than massive pools.
+      const lavaNoise = valueNoise(worldSeed ^ 0x12345, wx, wy, 4);
+      const voidNoise = valueNoise(worldSeed ^ 0x67890, wx, wy, 4);
+      const hostileChance = hostilityFloor >= 2 ? Math.min(0.20, (hostilityFloor - 1) * 0.05) : 0;
+      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.20, hostilityFloor * 0.05) : 0;
       const hostileThreshold = hostileChance * (1 - hostilityFrac) + hostileChanceNext * hostilityFrac;
 
       // Decoration density — noise at scale 6 for smaller flower/bush patches
-      const decorNoise = valueNoise(worldSeed ^ 0x67890, wx, wy, 6);
+      const decorNoise = valueNoise(worldSeed ^ 0xDEADBEEF, wx, wy, 6);
       const decorChance = decorationChance(biome);
       const decorChanceNext = decorationChance(nextBiome);
       const decorThreshold = decorChance * (1 - hostilityFrac) + decorChanceNext * hostilityFrac;
@@ -180,10 +183,10 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
         tiles[i] = hostilityFrac > 0.5 && rng() < hostilityFrac
           ? pickObstacle(nextBiome, rng, Math.floor(hostility) + 1)
           : pickObstacle(biome, rng, hostilityFloor);
-      } else if (hostileNoise < hostileThreshold) {
-        tiles[i] = hostilityFrac > 0.5 && rng() < hostilityFrac
-          ? pickHostile(nextBiome, rng)
-          : pickHostile(biome, rng);
+      } else if (lavaNoise < hostileThreshold) {
+        tiles[i] = pickHostile(biome, rng, "lava");
+      } else if (voidNoise < hostileThreshold) {
+        tiles[i] = pickHostile(biome, rng, "void");
       } else if (decorNoise < decorThreshold) {
         tiles[i] = pickDecoration(biome, rng);
       }
@@ -257,9 +260,12 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
     placeAcidCluster(tiles, rng);
   }
 
-  // lava patches — random in infernal/wasteland/ruins
-  if (hostility >= 2 && rng() < 0.12) {
-    placeLavaPatch(tiles, rng);
+  // scattered hostile tiles — interspersed single lava/void tiles for maze-like terrain
+  if (hostility >= 2 && rng() < 0.20) {
+    placeScatteredHostile(tiles, rng, TILE.LAVA, 2 + Math.floor(rng() * 4));
+  }
+  if (hostility >= 3 && rng() < 0.20) {
+    placeScatteredHostile(tiles, rng, TILE.VOID, 2 + Math.floor(rng() * 4));
   }
 
   // occasional large structures in mid-to-far biomes
@@ -321,16 +327,16 @@ function pickObstacle(biome: Biome, rng: () => number, hostility: number): numbe
   }
 }
 
-function pickHostile(biome: Biome, rng: () => number): number {
+function pickHostile(biome: Biome, rng: () => number, type: "lava" | "void"): number {
   switch (biome) {
     case "void":
-      return rng() < 0.7 ? TILE.VOID : TILE.LAVA;
+      return type === "void" ? TILE.VOID : TILE.LAVA;
     case "infernal":
-      return rng() < 0.7 ? TILE.LAVA : TILE.VOID;
+      return type === "lava" ? TILE.LAVA : TILE.VOID;
     case "wasteland":
-      return rng() < 0.4 ? TILE.VOID : TILE.LAVA;
+      return type === "void" ? TILE.VOID : TILE.LAVA;
     case "ruins":
-      return rng() < 0.5 ? TILE.LAVA : TILE.RUIN;
+      return type === "lava" ? TILE.LAVA : TILE.RUIN;
     default:
       return TILE.ROCK;
   }
@@ -484,18 +490,13 @@ function placeAcidCluster(tiles: number[], rng: () => number): void {
   }
 }
 
-/** Place a random lava patch. */
-function placeLavaPatch(tiles: number[], rng: () => number): void {
-  const cx = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
-  const cy = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
-  const count = 1 + Math.floor(rng() * 4);
+/** Place scattered hostile tiles — single-tile placements spread across the chunk
+ *  for an interspersed, maze-like pattern instead of clumped pools. */
+function placeScatteredHostile(tiles: number[], rng: () => number, tileType: number, count: number): void {
   for (let i = 0; i < count; i++) {
-    const lx = cx + Math.floor((rng() - 0.5) * 6);
-    const ly = cy + Math.floor((rng() - 0.5) * 6);
-    if (lx >= 0 && lx < CHUNK_SIZE && ly >= 0 && ly < CHUNK_SIZE) {
-      const li = idx(lx, ly);
-      if (canOverwrite(tiles, li)) tiles[li] = TILE.LAVA;
-    }
+    const lx = Math.floor(rng() * CHUNK_SIZE);
+    const ly = Math.floor(rng() * CHUNK_SIZE);
+    if (canOverwrite(tiles, idx(lx, ly))) tiles[idx(lx, ly)] = tileType;
   }
 }
 
