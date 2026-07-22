@@ -518,9 +518,9 @@ export class OfficeScene extends Phaser.Scene {
     }
     // apply pipelines to camera (order: Bloom -> ColorGrade -> DOF)
     if (renderer) {
-      this.cameras.main.setPostPipeline("BloomFX");
-      this.cameras.main.setPostPipeline("ColorGrade");
-      this.cameras.main.setPostPipeline("DOF");
+      this.cameras.main.addPostPipeline("BloomFX", new BloomPipeline(this.game));
+      this.cameras.main.addPostPipeline("ColorGrade", new ColorGradePipeline(this.game));
+      this.cameras.main.addPostPipeline("DOF", new DOFPipeline(this.game));
     }
 
     // Initialize audio on first user interaction

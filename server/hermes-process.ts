@@ -98,6 +98,8 @@ export class HermesProcessManager {
       env: {
         ...process.env,
         HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
+        // Pass our Kimi key to Hermes under the env var name it expects
+        KIMI_API_KEY: process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "",
       },
     });
 

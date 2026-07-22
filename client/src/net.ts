@@ -59,7 +59,8 @@ export class Net {
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data) as ServerMsg;
-        if (msg.type !== "mcp_keys_status" && msg.type !== "mcp_key_status") {
+        const silentTypes = new Set(["mcp_keys_status", "mcp_key_status", "platform_connection", "payment_status", "room_state", "rooms_list"]);
+        if (!silentTypes.has(msg.type)) {
           console.log(`[net] received: type=${msg.type}`);
         }
         if (msg.type === "refresh_token") {
