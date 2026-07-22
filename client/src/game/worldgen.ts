@@ -309,6 +309,23 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
     carvePath(tiles, CHUNK_SIZE / 2, CHUNK_SIZE / 2, dir, len);
   }
 
+  // Entrance clearing — keep the area around the office door free of obstacles.
+  // The door is at world tile (14, 0). Clear a radius around it so the player
+  // has open space when stepping outside.
+  const doorWX = 14;
+  const doorWY = 0;
+  const clearRadius = 8;
+  for (let y = 0; y < CHUNK_SIZE; y++) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const wx = cx * CHUNK_SIZE + x;
+      const wy = cy * CHUNK_SIZE + y;
+      const d = Math.hypot(wx - doorWX, wy - doorWY);
+      if (d <= clearRadius && !PROTECTED_TILES.has(tiles[idx(x, y)])) {
+        tiles[idx(x, y)] = baseTile;
+      }
+    }
+  }
+
   // Thinning pass — break up clumps of stone tiles (ROCK, RUIN, CRYSTAL)
   // into winding maze-like lines. Any stone tile with 3+ cardinal stone
   // neighbors is converted back to base ground so no tile touches more
