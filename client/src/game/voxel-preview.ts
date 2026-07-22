@@ -37,7 +37,7 @@ export class VoxelPreview {
   private mount: HTMLElement;
   private azimuth = 0.6;
   private elevation = 0.35;
-  private distance = 32;
+  private distance = 26;
   private autoRotate = true;
   private isDragging = false;
   private lastX = 0;
@@ -52,7 +52,7 @@ export class VoxelPreview {
     this.mount = mount;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color("#1a1a2e");
+    this.scene.background = new THREE.Color("#2a2a3e");
 
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 200);
     this.updateCamera();
@@ -66,10 +66,10 @@ export class VoxelPreview {
     this.renderer.domElement.style.height = "100%";
     this.renderer.domElement.style.cursor = "grab";
 
-    // Lighting
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    // Lighting — bright and warm so characters look cheerful
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 
-    this.keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    this.keyLight = new THREE.DirectionalLight(0xfff4e0, 0.7);
     this.keyLight.position.set(15, 25, 10);
     this.keyLight.castShadow = true;
     this.keyLight.shadow.mapSize.width = 512;
@@ -83,11 +83,11 @@ export class VoxelPreview {
     this.keyLight.shadow.bias = -0.001;
     this.scene.add(this.keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0x8090ff, 0.25);
-    fillLight.position.set(-10, 15, -5);
+    const fillLight = new THREE.DirectionalLight(0xffe8c0, 0.35);
+    fillLight.position.set(-10, 15, 5);
     this.scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xff80a0, 0.15);
+    const rimLight = new THREE.DirectionalLight(0xffa0c0, 0.2);
     rimLight.position.set(0, 10, -20);
     this.scene.add(rimLight);
 
@@ -146,10 +146,10 @@ export class VoxelPreview {
 
   private updateCamera() {
     const x = this.distance * Math.cos(this.elevation) * Math.sin(this.azimuth);
-    const y = this.distance * Math.sin(this.elevation) + 8;
+    const y = this.distance * Math.sin(this.elevation) + 10;
     const z = this.distance * Math.cos(this.elevation) * Math.cos(this.azimuth);
     this.camera.position.set(x, y, z);
-    this.camera.lookAt(0, 8, 0);
+    this.camera.lookAt(0, 10, 0);
   }
 
   private resize() {
@@ -185,6 +185,7 @@ export class VoxelPreview {
       const geo = new THREE.BoxGeometry(block.w, block.h, block.d);
       const mat = new THREE.MeshLambertMaterial({
         color: new THREE.Color(block.color),
+        emissive: new THREE.Color(block.color).multiplyScalar(0.15),
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(

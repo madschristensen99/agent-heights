@@ -111,21 +111,21 @@ export function buildVoxelModel(pal: CharPalette): VoxelModel {
   blocks.push({ x: -HEAD_W / 2, y: HEAD_Y + 5, z: -HEAD_D / 2, w: 2, h: 2, d: 1, color: skinLi, group: "face" });
   blocks.push({ x: HEAD_W / 2 - 2, y: HEAD_Y + 1, z: -HEAD_D / 2, w: 2, h: 2, d: 1, color: skinDk, group: "face" });
 
-  // Eyes — two small blocks on the front face
+  // Eyes — bigger blocks on the front face for visibility at small sizes
   const eyeY = HEAD_Y + 4;
-  const eyeZ = -HEAD_D / 2 - 0.1;
-  blocks.push({ x: -2.5, y: eyeY, z: eyeZ, w: 1, h: 2, d: 0.2, color: eyeColor, group: "face" });
-  blocks.push({ x: 1.5, y: eyeY, z: eyeZ, w: 1, h: 2, d: 0.2, color: eyeColor, group: "face" });
+  const eyeZ = -HEAD_D / 2 - 0.2;
+  blocks.push({ x: -3, y: eyeY, z: eyeZ, w: 1.5, h: 2.5, d: 0.3, color: eyeColor, group: "face" });
+  blocks.push({ x: 1.5, y: eyeY, z: eyeZ, w: 1.5, h: 2.5, d: 0.3, color: eyeColor, group: "face" });
   // Eye sparkles (tiny white dots)
-  blocks.push({ x: -2.5, y: eyeY + 1, z: eyeZ - 0.05, w: 0.4, h: 0.4, d: 0.1, color: "#ffffff", group: "face" });
-  blocks.push({ x: 1.5, y: eyeY + 1, z: eyeZ - 0.05, w: 0.4, h: 0.4, d: 0.1, color: "#ffffff", group: "face" });
+  blocks.push({ x: -2.5, y: eyeY + 1.2, z: eyeZ - 0.1, w: 0.6, h: 0.6, d: 0.15, color: "#ffffff", group: "face" });
+  blocks.push({ x: 2, y: eyeY + 1.2, z: eyeZ - 0.1, w: 0.6, h: 0.6, d: 0.15, color: "#ffffff", group: "face" });
 
-  // Blush — semi-transparent effect via lighter color
-  blocks.push({ x: -HEAD_W / 2, y: HEAD_Y + 3, z: eyeZ, w: 1.5, h: 1.5, d: 0.1, color: blush, group: "face" });
-  blocks.push({ x: HEAD_W / 2 - 1.5, y: HEAD_Y + 3, z: eyeZ, w: 1.5, h: 1.5, d: 0.1, color: blush, group: "face" });
+  // Blush — more visible
+  blocks.push({ x: -HEAD_W / 2, y: HEAD_Y + 2.5, z: eyeZ, w: 2, h: 1.5, d: 0.15, color: blush, group: "face" });
+  blocks.push({ x: HEAD_W / 2 - 2, y: HEAD_Y + 2.5, z: eyeZ, w: 2, h: 1.5, d: 0.15, color: blush, group: "face" });
 
-  // Mouth — tiny dark block
-  blocks.push({ x: -0.5, y: HEAD_Y + 1, z: eyeZ, w: 1, h: 0.5, d: 0.1, color: skinDk, group: "face" });
+  // Mouth — slightly bigger
+  blocks.push({ x: -1, y: HEAD_Y + 1, z: eyeZ, w: 2, h: 0.8, d: 0.15, color: skinDk, group: "face" });
 
   // ── Hair ──────────────────────────────────────────────────────────────
   buildHair(blocks, pal, hairLi, hairDk);

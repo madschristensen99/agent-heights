@@ -97,8 +97,9 @@ let sharedCamera: THREE.PerspectiveCamera | null = null;
 function getSharedRenderer(): THREE.WebGLRenderer {
   if (!sharedRenderer) {
     const canvas = document.createElement("canvas");
-    canvas.width = CW;
-    canvas.height = CH;
+    // Render at 2x then downscale for sharper edges
+    canvas.width = CW * 2;
+    canvas.height = CH * 2;
     sharedRenderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -106,8 +107,9 @@ function getSharedRenderer(): THREE.WebGLRenderer {
       preserveDrawingBuffer: true,
     });
     sharedRenderer.setPixelRatio(1);
-    sharedRenderer.setSize(CW, CH);
+    sharedRenderer.setSize(CW * 2, CH * 2);
     sharedRenderer.shadowMap.enabled = false;
+    sharedRenderer.setClearColor(0x000000, 0);
   }
   return sharedRenderer;
 }
@@ -115,14 +117,17 @@ function getSharedRenderer(): THREE.WebGLRenderer {
 function getSharedScene(): THREE.Scene {
   if (!sharedScene) {
     const scene = new THREE.Scene();
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    // Bright warm ambient so characters are clearly visible
+    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
-    const key = new THREE.DirectionalLight(0xffffff, 0.8);
-    key.position.set(10, 20, 10);
+    // Key light from front-top-right
+    const key = new THREE.DirectionalLight(0xfff4e0, 0.6);
+    key.position.set(8, 15, 8);
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0x8090ff, 0.2);
-    fill.position.set(-10, 10, -5);
+    // Warm fill from the left
+    const fill = new THREE.DirectionalLight(0xffe8c0, 0.3);
+    fill.position.set(-8, 8, 4);
     scene.add(fill);
 
     sharedScene = scene;
@@ -132,7 +137,8 @@ function getSharedScene(): THREE.Scene {
 
 function getSharedCamera(): THREE.PerspectiveCamera {
   if (!sharedCamera) {
-    sharedCamera = new THREE.PerspectiveCamera(30, CW / CH, 0.1, 100);
+    // Wider FOV, aspect matches 2x render resolution
+    sharedCamera = new THREE.PerspectiveCamera(35, (CW * 2) / (CH * 2), 0.1, 100);
   }
   return sharedCamera;
 }
@@ -200,6 +206,7 @@ function buildJointGroups(model: VoxelModel): {
     const geo = new THREE.BoxGeometry(block.w, block.h, block.d);
     const mat = new THREE.MeshLambertMaterial({
       color: new THREE.Color(block.color),
+      emissive: new THREE.Color(block.color).multiplyScalar(0.15),
     });
     const mesh = new THREE.Mesh(geo, mat);
 
@@ -280,9 +287,9 @@ function renderFrame(
 
   // Position camera based on direction
   const azimuth = DIR_AZIMUTH[dir];
-  const elevation = 0.15; // slight downward look
-  const distance = 28;
-  const targetY = 9; // look at mid-torso
+  const elevation = 0.08; // nearly straight-on so face is clearly visible
+  const distance = 22;
+  const targetY = 10; // look at upper torso / lower head area
 
   camera.position.set(
     distance * Math.cos(elevation) * Math.sin(azimuth),
@@ -293,7 +300,15 @@ function renderFrame(
   camera.updateProjectionMatrix();
 
   renderer.render(scene, camera);
-  return renderer.domElement;
+
+  // Downscale 2x render to CW×CH for crisp edges
+  const out = document.createElement("canvas");
+  out.width = CW;
+  out.height = CH;
+  const ctx = out.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(renderer.domElement, 0, 0, CW, CH);
+  return out;
 }
 
 /**

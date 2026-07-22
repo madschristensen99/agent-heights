@@ -5440,38 +5440,6 @@ export class OfficeScene extends Phaser.Scene {
     g.fillStyle(0x8a4a2a, 0.5);
     g.fillRect(0, bandY + bandH - 2, mapPxW, 2);
 
-    // --- Arched entryway over door (x=14-15, door gap) ---
-    const doorCenterX = 15 * TILE_PX;
-    const archRadius = TILE_PX + 8;
-    const archBaseY = wallY;
-    // Arch keystone
-    g.fillStyle(0x8a7a6a, 1);
-    g.fillRect(doorCenterX - 6, archBaseY - archRadius - 8, 12, 8);
-    g.fillStyle(0xaa9a8a, 1);
-    g.fillRect(doorCenterX - 6, archBaseY - archRadius - 8, 12, 2);
-    // Arch voussoirs — wedge-shaped stones
-    const voussoirCount = 7;
-    for (let i = 0; i < voussoirCount; i++) {
-      const angle = Math.PI + (i / (voussoirCount - 1)) * Math.PI;
-      const nextAngle = Math.PI + ((i + 1) / (voussoirCount - 1)) * Math.PI;
-      const r1 = archRadius - 4;
-      const r2 = archRadius + 6;
-      const shade = i % 2 === 0 ? 0x9a8a7a : 0x8a7a6a;
-      g.fillStyle(shade, 1);
-      g.beginPath();
-      g.moveTo(doorCenterX + Math.cos(angle) * r1, archBaseY + Math.sin(angle) * r1);
-      g.lineTo(doorCenterX + Math.cos(angle) * r2, archBaseY + Math.sin(angle) * r2);
-      g.lineTo(doorCenterX + Math.cos(nextAngle) * r2, archBaseY + Math.sin(nextAngle) * r2);
-      g.lineTo(doorCenterX + Math.cos(nextAngle) * r1, archBaseY + Math.sin(nextAngle) * r1);
-      g.closePath();
-      g.fillPath();
-    }
-    // Arch inner shadow
-    g.fillStyle(0x000000, 0.2);
-    g.beginPath();
-    g.arc(doorCenterX, archBaseY, archRadius - 4, Math.PI, 0);
-    g.fillPath();
-
     // --- Wrought-iron balcony railings at 3 positions ---
     const balconyPositions = [4, 11, 22];
     for (const bx of balconyPositions) {
