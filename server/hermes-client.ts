@@ -189,16 +189,24 @@ export class HermesClient {
     }
   }
 
-  /** Send a message to a platform via Hermes. */
+  /** Send a message to a platform via `hermes send` CLI (no REST endpoint exists for this). */
   async sendMessage(platform: string, target: string, text: string): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/gateway/send`, {
-        method: "POST",
-        headers: this.authHeaders(),
-        body: JSON.stringify({ platform, target, text }),
-        signal: AbortSignal.timeout(10000),
+      const { execFile } = await import("node:child_process");
+      const targetStr = target ? `${platform}:${target}` : platform;
+      return await new Promise((resolve) => {
+        execFile("hermes", ["send", targetStr, text], {
+          timeout: 15000,
+          env: { ...process.env },
+        }, (err) => {
+          if (err) {
+            console.warn(`[hermes-client] hermes send failed: ${err.message}`);
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        });
       });
-      return res.ok;
     } catch {
       return false;
     }
