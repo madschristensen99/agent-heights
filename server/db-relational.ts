@@ -379,11 +379,18 @@ export class RelationalPersistence {
       const taskCount = Object.keys(this.state.pendingTasks ?? {}).length;
       console.log(`[db-rel] flush: writing pending_tasks for user ${this.userId} (${taskCount} agent(s))...`);
       try {
-        await supabaseAdmin
+        const result = await supabaseAdmin
           .from("sprite_heights_world_state")
-          .update({ pending_tasks: this.state.pendingTasks ?? {} })
-          .eq("room_id", this.roomId);
-        console.log(`[db-rel] flush: pending_tasks written successfully for user ${this.userId}`);
+          .upsert({
+            room_id: this.roomId,
+            owner_id: this.userId,
+            pending_tasks: this.state.pendingTasks ?? {},
+          }, { onConflict: "room_id" });
+        if (result.error) {
+          console.error(`[db-rel] setPendingTasks upsert error for user ${this.userId}:`, result.error);
+        } else {
+          console.log(`[db-rel] flush: pending_tasks written successfully for user ${this.userId}`);
+        }
       } catch (err) {
         console.error("[db-rel] setPendingTasks failed:", err);
       }

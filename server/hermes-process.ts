@@ -93,15 +93,8 @@ export class HermesProcessManager {
       const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
       console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, kimiKey=${kimiKey ? "set (" + kimiKey.slice(0, 8) + "...)" : "NOT SET"}`);
 
-      // Write config.yaml if not already configured
-      if (existsSync(configPath)) {
-        const existing = readFileSync(configPath, "utf-8");
-        if (existing.includes("provider:") || existing.includes("model:")) {
-          console.log(`[hermes-process] config.yaml already exists with model config — not overwriting`);
-        } else if (kimiKey) {
-          this.writeConfig(configPath);
-        }
-      } else if (kimiKey) {
+      // Always write config.yaml to ensure correct provider (volume may have stale config from previous deploy)
+      if (kimiKey) {
         this.writeConfig(configPath);
       }
 

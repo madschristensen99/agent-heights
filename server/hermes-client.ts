@@ -311,6 +311,7 @@ export class HermesClient {
     }
     const platformId = hermesPlatformId(platform);
     const envVars = credentialsToEnvVars(platform, credentials);
+    console.log(`[hermes-client] configurePlatform: platform=${platform}, platformId=${platformId}, envKeys=${Object.keys(envVars).join(",")}`);
     try {
       // PUT /api/messaging/platforms/{id} — writes credentials to .env and enabled flag to config.yaml
       const res = await fetch(`${this.baseUrl}/api/messaging/platforms/${encodeURIComponent(platformId)}`, {
@@ -321,8 +322,10 @@ export class HermesClient {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        console.warn(`[hermes-client] PUT /api/messaging/platforms/${platformId} returned HTTP ${res.status}: ${JSON.stringify(data)}`);
         return { success: false, error: data.error ?? data.detail ?? data.message ?? `HTTP ${res.status}` };
       }
+      console.log(`[hermes-client] PUT /api/messaging/platforms/${platformId} OK — credentials saved`);
 
       // Start (or restart) the gateway so it picks up the new credentials
       // Use start first (works if gateway was stopped), then fall back to restart
@@ -341,6 +344,8 @@ export class HermesClient {
       }
       if (!gatewayRes.ok) {
         console.warn(`[hermes-client] Platform configured but gateway start/restart returned HTTP ${gatewayRes.status}`);
+      } else {
+        console.log(`[hermes-client] Gateway start/restart OK after platform config`);
       }
 
       return { success: true };
