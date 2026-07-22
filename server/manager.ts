@@ -613,7 +613,7 @@ export class AgentManager {
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
     const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY;
     if (kimiKey) {
-      this.hermesClient.configureModel("moonshot", "kimi-k2.5").catch((err) => {
+      this.hermesClient.configureModel("moonshot", "kimi-k2.7-code-highspeed").catch((err) => {
         console.warn(`[hermes] Model config failed: ${err}`);
       });
     } else {

@@ -105,7 +105,7 @@ export class HermesProcessManager {
         const config = [
           "model:",
           "  provider: moonshot",
-          "  default: kimi-k2.5",
+          "  default: kimi-k2.7-code-highspeed",
           "",
         ].join("\n");
         writeFileSync(configPath, config, "utf-8");
