@@ -1884,7 +1884,6 @@ export class OfficeScene extends Phaser.Scene {
   /** Show a multi-step modal walking the user through platform setup with credential input. */
   private showPlatformConnectModal(platform: string): void {
     const state = this.store.platformStates.find((s) => s.platform === platform);
-    const status = state?.status ?? "Not configured";
     const gatewayRunning = state?.gatewayRunning ?? false;
     const net = this.game.registry.get("net") as import("../net").Net;
 
@@ -1893,110 +1892,157 @@ export class OfficeScene extends Phaser.Scene {
     const totalSteps = instructionSteps.length + 1; // +1 for credential input step
 
     const cam = this.cameras.main;
-    const W = 460, H = 420;
+    const W = 480, H = 440;
     const cx = cam.centerX, cy = cam.centerY;
+    const left = cx - W / 2;
+    const top = cy - H / 2;
 
     const elements: Phaser.GameObjects.GameObject[] = [];
 
-    const bg = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.7)
+    // ── Backdrop ──
+    const bg = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.75)
       .setScrollFactor(0).setDepth(10000);
-    const panel = this.add.rectangle(cx, cy, W, H, 0x1a1a2e, 0.95)
+    const panel = this.add.rectangle(cx, cy, W, H, 0x16162a, 0.98)
       .setStrokeStyle(2, 0x6c5ce7).setScrollFactor(0).setDepth(10001);
     elements.push(bg, panel);
 
-    // Status bar at top
-    const statusText = this.add.text(cx, cy - H / 2 + 16,
-      `Gateway: ${gatewayRunning ? "Running" : "Not running"}  |  ${platform}: ${status}`,
-      { fontSize: "11px", color: gatewayRunning ? "#55efc4" : "#ff7675", align: "center" }
-    ).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
-    elements.push(statusText);
+    // ── Header bar ──
+    const headerBar = this.add.rectangle(cx, top + 22, W - 4, 36, 0x1e1e3a, 0.9)
+      .setStrokeStyle(1, 0x6c5ce7).setScrollFactor(0).setDepth(10002);
+    elements.push(headerBar);
 
-    // Dynamic content area (title + body for instruction steps)
-    const titleObj = this.add.text(cx, cy - H / 2 + 50, "", {
-      fontSize: "16px", color: "#ffffff", fontStyle: "bold", align: "center",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setWordWrapWidth(W - 40);
+    const platformLabel = this.add.text(left + 16, top + 22, platform, {
+      fontSize: "15px", color: "#ffffff", fontStyle: "bold",
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10003);
+    elements.push(platformLabel);
+
+    const statusBadge = this.add.text(cx + W / 2 - 16, top + 22,
+      gatewayRunning ? "● Online" : "● Offline", {
+      fontSize: "11px", color: gatewayRunning ? "#55efc4" : "#ff7675", fontStyle: "bold",
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(10003);
+    elements.push(statusBadge);
+
+    // ── Content area ──
+    const contentTop = top + 56;
+    const contentW = W - 48;
+
+    // Title (step title)
+    const titleObj = this.add.text(left + 24, contentTop, "", {
+      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
+      wordWrap: { width: contentW },
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
     elements.push(titleObj);
 
-    const bodyObj = this.add.text(cx, cy - 20, "", {
-      fontSize: "12px", color: "#a0a0b0", align: "left", wordWrap: { width: W - 60 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
+    // Body (instruction text)
+    const bodyObj = this.add.text(left + 24, contentTop + 28, "", {
+      fontSize: "12px", color: "#b0b0c8", align: "left",
+      wordWrap: { width: contentW }, lineSpacing: 4,
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
     elements.push(bodyObj);
 
     // Command box (for steps that show a CLI command)
-    const cmdBox = this.add.rectangle(cx, cy + 70, W - 80, 28, 0x0d0d1a, 0.9)
-      .setStrokeStyle(1, 0x6c5ce7).setScrollFactor(0).setDepth(10002);
+    const cmdBox = this.add.rectangle(cx, cy + 50, W - 80, 30, 0x0a0a18, 0.95)
+      .setStrokeStyle(1, 0x4a4a6e).setScrollFactor(0).setDepth(10002);
     elements.push(cmdBox);
 
-    const cmdText = this.add.text(cx, cy + 70, "", {
+    const cmdText = this.add.text(cx, cy + 50, "", {
       fontSize: "12px", color: "#55efc4", fontFamily: "monospace", align: "center",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10003);
     elements.push(cmdText);
 
-    // Credential input form (DOM overlay) — created once, shown/hidden
+    // ── Credential input form (DOM overlay) ──
     const formContainer = document.createElement("div");
-    formContainer.style.cssText = "display:none;flex-direction:column;gap:8px;padding:0 20px;";
+    formContainer.style.cssText = `
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      padding: 8px 24px;
+      width: ${W}px;
+      box-sizing: border-box;
+    `;
 
-    const formTitle = document.createElement("div");
-    formTitle.textContent = `Enter your ${platform} credentials:`;
-    formTitle.style.cssText = "color:#ffffff;font-size:13px;font-weight:bold;margin-bottom:4px;";
-    formContainer.appendChild(formTitle);
+    const formSubtitle = document.createElement("div");
+    formSubtitle.textContent = `Paste your ${platform} credentials below:`;
+    formSubtitle.style.cssText = "color:#b0b0c8;font-size:12px;margin-bottom:2px;";
+    formContainer.appendChild(formSubtitle);
 
     const inputs: HTMLInputElement[] = [];
     for (const field of credFields) {
-      const label = document.createElement("label");
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText = "display:flex;flex-direction:column;gap:3px;";
+
+      const label = document.createElement("div");
       label.textContent = field.label;
-      label.style.cssText = "color:#a0a0b0;font-size:11px;display:block;margin-bottom:2px;";
+      label.style.cssText = "color:#8a8aa8;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;";
 
       const input = document.createElement("input");
       input.type = field.type;
       input.placeholder = field.placeholder;
       input.dataset.key = field.key;
-      input.style.cssText = `width:100%;padding:6px 10px;background:#0d0d1a;border:1px solid #6c5ce7;border-radius:4px;color:#ffffff;font-size:13px;font-family:monospace;box-sizing:border-box;outline:none;`;
+      input.style.cssText = `
+        width: 100%;
+        padding: 8px 12px;
+        background: #0a0a18;
+        border: 1px solid #3a3a5e;
+        border-radius: 6px;
+        color: #ffffff;
+        font-size: 13px;
+        font-family: monospace;
+        box-sizing: border-box;
+        outline: none;
+        transition: border-color 0.2s;
+      `;
+      input.addEventListener("focus", () => { input.style.borderColor = "#6c5ce7"; });
+      input.addEventListener("blur", () => { input.style.borderColor = "#3a3a5e"; });
 
-      const wrapper = document.createElement("div");
       wrapper.appendChild(label);
       wrapper.appendChild(input);
       formContainer.appendChild(wrapper);
       inputs.push(input);
     }
 
-    // Result message area (success/error after submit)
+    // Result message area
     const resultMsg = document.createElement("div");
-    resultMsg.style.cssText = "color:#a0a0b0;font-size:11px;min-height:16px;text-align:center;";
+    resultMsg.style.cssText = "color:#a0a0b0;font-size:11px;min-height:18px;text-align:center;margin-top:4px;";
     formContainer.appendChild(resultMsg);
 
-    const domElement = this.add.dom(cx, cy + 10, formContainer);
+    const domElement = this.add.dom(cx, contentTop + 20, formContainer);
     domElement.setScrollFactor(0).setDepth(10003);
     elements.push(domElement);
 
-    // Step indicator dots
+    // ── Footer: step dots + nav buttons ──
+    const footerY = top + H - 28;
+
+    // Step dots (centered)
     const dots: Phaser.GameObjects.Text[] = [];
+    const dotSpacing = 28;
+    const dotsStartX = cx - (totalSteps - 1) * dotSpacing / 2;
     for (let i = 0; i < totalSteps; i++) {
-      const dot = this.add.text(cx - (totalSteps - 1) * 12 + i * 24, cy + H / 2 - 50, "○", {
-        fontSize: "14px", color: "#555568",
+      const dot = this.add.text(dotsStartX + i * dotSpacing, footerY - 20, "○", {
+        fontSize: "13px", color: "#4a4a6e",
       }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
       dots.push(dot);
       elements.push(dot);
     }
 
-    // Navigation buttons
-    const prevBtn = this.add.text(cx - 100, cy + H / 2 - 22, "[ < Prev ]", {
-      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
+    // Nav buttons (bottom row, evenly spaced)
+    const prevBtn = this.add.text(cx - 90, footerY, "‹  Back", {
+      fontSize: "13px", color: "#6c5ce7", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(prevBtn);
 
-    const nextBtn = this.add.text(cx, cy + H / 2 - 22, "[ Next > ]", {
-      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
+    const nextBtn = this.add.text(cx, footerY, "Next  ›", {
+      fontSize: "13px", color: "#6c5ce7", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(nextBtn);
 
-    const submitBtn = this.add.text(cx + 100, cy + H / 2 - 22, "[ Submit ]", {
-      fontSize: "14px", color: "#55efc4", fontStyle: "bold",
+    const submitBtn = this.add.text(cx, footerY, "Submit", {
+      fontSize: "13px", color: "#55efc4", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(submitBtn);
 
-    const closeBtn = this.add.text(cx, cy + H / 2 - 22, "[ Close ]", {
-      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
+    const closeBtn = this.add.text(cx + 90, footerY, "✕", {
+      fontSize: "15px", color: "#6c5ce7",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(closeBtn);
 
@@ -2007,15 +2053,13 @@ export class OfficeScene extends Phaser.Scene {
       const isCredStep = currentStep === instructionSteps.length;
 
       if (isCredStep) {
-        // Credential input step
-        titleObj.setText(`Connect ${platform}`);
+        titleObj.setText("Enter Credentials");
         bodyObj.setText("");
         cmdBox.setVisible(false);
         cmdText.setVisible(false);
         formContainer.style.display = "flex";
         resultMsg.textContent = "";
       } else {
-        // Instruction step
         const step = instructionSteps[currentStep];
         titleObj.setText(step.title);
         bodyObj.setText(step.body);
@@ -2033,14 +2077,14 @@ export class OfficeScene extends Phaser.Scene {
       // Update dots
       for (let i = 0; i < dots.length; i++) {
         dots[i].setText(i === currentStep ? "●" : i < currentStep ? "✓" : "○");
-        dots[i].setColor(i < currentStep ? "#55efc4" : i === currentStep ? "#6c5ce7" : "#555568");
+        dots[i].setColor(i < currentStep ? "#55efc4" : i === currentStep ? "#6c5ce7" : "#4a4a6e");
       }
 
       // Show/hide nav buttons
       prevBtn.setVisible(currentStep > 0);
       nextBtn.setVisible(!isCredStep && currentStep < totalSteps - 1);
       submitBtn.setVisible(isCredStep && !submitting);
-      closeBtn.setVisible(isCredStep || currentStep === totalSteps - 1);
+      closeBtn.setVisible(true);
     };
 
     prevBtn.on("pointerdown", () => {
@@ -2056,23 +2100,22 @@ export class OfficeScene extends Phaser.Scene {
       submitting = false;
       if (success) {
         resultMsg.style.color = "#55efc4";
-        resultMsg.textContent = "✓ Connected successfully! Close and interact with the mailbox again.";
+        resultMsg.textContent = "✓ Connected! Close and interact with the mailbox again.";
         submitBtn.setVisible(true);
-        submitBtn.setText("[ Done ]");
+        submitBtn.setText("Done ✓");
         submitBtn.off("pointerdown");
         submitBtn.on("pointerdown", closeModal);
       } else {
         resultMsg.style.color = "#ff7675";
         resultMsg.textContent = `✗ ${error ?? "Failed to configure"}`;
         submitBtn.setVisible(true);
-        submitBtn.setText("[ Submit ]");
+        submitBtn.setText("Submit");
       }
     };
     this.store.onPlatformConfigResult(onConfigResult);
 
     submitBtn.on("pointerdown", () => {
       if (submitting) return;
-      // Validate required fields
       const credentials: Record<string, string> = {};
       let missing = false;
       for (const input of inputs) {
@@ -2081,20 +2124,20 @@ export class OfficeScene extends Phaser.Scene {
           missing = true;
           input.style.borderColor = "#ff7675";
         } else {
-          input.style.borderColor = "#6c5ce7";
+          input.style.borderColor = "#3a3a5e";
           credentials[input.dataset.key!] = val;
         }
       }
       if (missing) {
         resultMsg.style.color = "#ff7675";
-        resultMsg.textContent = "Please fill in all required fields.";
+        resultMsg.textContent = "Please fill in all fields.";
         return;
       }
 
       submitting = true;
       submitBtn.setVisible(false);
       resultMsg.style.color = "#a0a0b0";
-      resultMsg.textContent = "Submitting...";
+      resultMsg.textContent = "Connecting...";
       net.send({ type: "configure_platform", platform, credentials });
     });
 
