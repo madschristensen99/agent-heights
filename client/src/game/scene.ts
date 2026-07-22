@@ -5690,9 +5690,9 @@ export class OfficeScene extends Phaser.Scene {
     const panelCount = Math.floor(mapPxH / panelW);
     for (let i = 0; i < panelCount; i++) {
       const py = i * panelW;
-      // Glass panel — warm neutral wall tones (not sky-blue)
+      // Glass panel — dark stone tones matching the other 3 walls' intensity
       const isLight = i % 2 === 0;
-      g.fillStyle(isLight ? 0xb0a898 : 0x9a9088, 0.4);
+      g.fillStyle(isLight ? 0x6a6058 : 0x4a4038, 0.85);
       g.fillRect(wallX, py, wallW, panelW);
       // Mullion frame
       g.fillStyle(0x6a6a6a, 0.6);
