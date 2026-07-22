@@ -398,8 +398,7 @@ export async function handleOAuthCallback(
     });
 
     if (!tokenRes.ok) {
-      const errorText = await tokenRes.text();
-      console.error("[mcp-oauth] Token exchange failed:", tokenRes.status, errorText);
+      console.error("[mcp-oauth] Token exchange failed:", tokenRes.status);
       return { success: false, error: `Token exchange failed: ${tokenRes.status}`, serverUrl: flow.serverUrl, userId: flow.userId };
     }
 

@@ -174,6 +174,7 @@ export class OfficeScene extends Phaser.Scene {
   private platformMailboxGfx!: Phaser.GameObjects.Graphics;
   private platformMailboxHint!: Phaser.GameObjects.Text;
   private platformMailboxes: PlatformMailbox[] = [];
+  private mailDigestRequested = false;
 
   private fridgeHint!: Phaser.GameObjects.Text;
   private coolerHint!: Phaser.GameObjects.Text;
@@ -964,6 +965,20 @@ export class OfficeScene extends Phaser.Scene {
               this.world.vfx.sparkBurst(mbPx.x, mbPx.y, mb.color, 8, 50);
               this.world.audio.uiClick();
             }
+          });
+
+          // Subscribe to mail digest responses
+          this.store.onMailDigest((digest) => {
+            if (digest.totalUnread === 0 && digest.queued === 0) {
+              this.store.toast("📬 No new mail across any platform.");
+              return;
+            }
+            const parts: string[] = [];
+            for (const p of digest.byPlatform) {
+              if (p.unread > 0) parts.push(`${p.platform}: ${p.unread}`);
+            }
+            const queuedStr = digest.queued > 0 ? ` + ${digest.queued} queued` : "";
+            this.store.toast(`📬 ${digest.totalUnread} unread (${parts.join(", ")})${queuedStr}`);
           });
         },
       },
@@ -3585,13 +3600,23 @@ export class OfficeScene extends Phaser.Scene {
     {
       let nearestPm: PlatformMailbox | null = null;
       let nearestPmDist = Infinity;
+      let anyPmNearby = false;
       for (const pm of this.platformMailboxes) {
         const pmPx = { x: pm.tile.x * TILE_PX + TILE_PX / 2, y: pm.tile.y * TILE_PX + TILE_PX / 2 };
         const pmDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, pmPx.x, pmPx.y);
+        if (pmDist < 200) anyPmNearby = true;
         if (pmDist < 100 && pmDist < nearestPmDist) {
           nearestPm = pm;
           nearestPmDist = pmDist;
         }
+      }
+      // Auto-request mail digest once when entering the mail room area
+      if (anyPmNearby && !this.mailDigestRequested) {
+        this.mailDigestRequested = true;
+        const net = this.game.registry.get("net") as import("../net").Net;
+        net.send({ type: "request_mail_digest" });
+      } else if (!anyPmNearby && this.mailDigestRequested) {
+        this.mailDigestRequested = false;
       }
       if (nearestPm) {
         const pmPx = { x: nearestPm.tile.x * TILE_PX + TILE_PX / 2, y: nearestPm.tile.y * TILE_PX + TILE_PX / 2 };

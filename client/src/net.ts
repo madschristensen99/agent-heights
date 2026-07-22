@@ -39,9 +39,7 @@ export class Net {
     const host = this.customHost ?? fallback;
     const url = this._spectator
       ? `${proto}://${host}/?spectator=1`
-      : this.token
-        ? `${proto}://${host}/?token=${encodeURIComponent(this.token)}`
-        : `${proto}://${host}`;
+      : `${proto}://${host}`;
     console.log(`[net] connecting to ${url} (host=${host}, customHost=${this.customHost})`);
     const ws = new WebSocket(url);
     this.ws = ws;
@@ -49,6 +47,10 @@ export class Net {
     ws.onopen = () => {
       console.log(`[net] WebSocket OPEN — flushing ${this.queue.length} queued messages`);
       this.retryMs = 500;
+      // Send auth message as the very first thing after open
+      if (this.token && !this._spectator) {
+        ws.send(JSON.stringify({ type: "auth", token: this.token }));
+      }
       this.onStatus(true);
       for (const msg of this.queue.splice(0)) {
         ws.send(JSON.stringify(msg));

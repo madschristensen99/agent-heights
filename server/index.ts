@@ -294,7 +294,7 @@ const server = createServer((req, res) => {
             // Refresh manager keys
             const mcpKeys = await getUserMcpKeys(sess.user.id);
             sess.manager.setMcpKeys(mcpKeys);
-            console.log(`[oauth-callback] Updated MCP keys for user ${result.userId}, keys: ${Object.keys(mcpKeys).join(", ")}`);
+            console.log(`[oauth-callback] Updated MCP keys for user ${result.userId} (${Object.keys(mcpKeys).length} keys)`);
           }
           sess.broadcast({
             type: "mcp_oauth_complete",
@@ -395,6 +395,35 @@ function isWsOriginAllowed(origin: string | undefined, req: IncomingMessage): bo
   return false;
 }
 
+/** Wait for an auth message from the client with a timeout. Returns the token or null. */
+function waitForAuthMessage(ws: WebSocket, timeoutMs: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        ws.removeAllListeners("message");
+        resolve(null);
+      }
+    }, timeoutMs);
+
+    ws.on("message", (raw: Buffer) => {
+      if (settled) return;
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === "auth" && typeof msg.token === "string") {
+          settled = true;
+          clearTimeout(timer);
+          ws.removeAllListeners("message");
+          resolve(msg.token as string);
+        }
+      } catch {
+        // ignore non-JSON or malformed messages while waiting for auth
+      }
+    });
+  });
+}
+
 wss.on("connection", async (ws, req) => {
   // Validate WebSocket origin to prevent cross-site WebSocket hijacking
   const origin = req.headers["origin"] as string | undefined;
@@ -474,17 +503,33 @@ wss.on("connection", async (ws, req) => {
   let user: AuthUser;
 
   if (isSupabaseConfigured) {
-    const token = url.searchParams.get("token");
-    if (!token) {
-      ws.close(4001, "No token provided");
-      return;
+    // Backward-compatible fallback: token in URL query param
+    // (preferred path is auth message, but old clients still use this)
+    const urlToken = url.searchParams.get("token");
+    if (urlToken) {
+      const verified = await verifyToken(urlToken);
+      if (!verified) {
+        ws.close(4003, "Invalid or expired token");
+        return;
+      }
+      user = verified;
+    } else {
+      // New pattern: send auth_required, wait for auth message
+      ws.send(JSON.stringify({ type: "auth_required" } satisfies ServerMsg));
+
+      // Wait for auth message with a 10s timeout
+      const authResult = await waitForAuthMessage(ws, 10_000);
+      if (!authResult) {
+        ws.close(4001, "No token provided within timeout");
+        return;
+      }
+      const verified = await verifyToken(authResult);
+      if (!verified) {
+        ws.close(4003, "Invalid or expired token");
+        return;
+      }
+      user = verified;
     }
-    const verified = await verifyToken(token);
-    if (!verified) {
-      ws.close(4003, "Invalid or expired token");
-      return;
-    }
-    user = verified;
   } else {
     user = { id: "dev", email: null };
   }
@@ -2129,6 +2174,16 @@ wss.on("connection", async (ws, req) => {
           if (!ownerSess) break;
           const success = await ownerSess.manager.replyToMailbox(msg.platform, msg.target, msg.text);
           sess.broadcast({ type: "toast", text: success ? `Reply sent via ${msg.platform}.` : `Failed to send reply via ${msg.platform}.` });
+          break;
+        }
+        case "request_mail_digest": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          const digest = ownerSess.manager.getMailDigest();
+          sess.broadcast({ type: "mail_digest", ...digest });
           break;
         }
         case "connect_platform": {

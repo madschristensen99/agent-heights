@@ -569,6 +569,7 @@ export interface SavedOutfit {
 }
 
 export type ClientMsg =
+  | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
   | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits }
@@ -659,6 +660,7 @@ export type ClientMsg =
   | { type: "configure_platform"; platform: string; credentials: Record<string, string> }
   | { type: "set_mailbox_platform"; slot: number; platform: string | null }
   | { type: "reply_mailbox"; platform: string; target: string; text: string }
+  | { type: "request_mail_digest" }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
@@ -669,6 +671,7 @@ export type ClientMsg =
   | { type: "spectator_chat"; fromName: string; text: string };
 
 export type ServerMsg =
+  | { type: "auth_required" }
   | {
       type: "snapshot";
       agents: AgentInfo[];
@@ -763,6 +766,7 @@ export type ServerMsg =
   | { type: "agent_memory"; agentId: string; messages: { role: string; content: string }[] }
   | { type: "mailbox_update"; platform: string; flagUp: boolean; pendingCount: number; lastMessage: string }
   | { type: "mailbox_messages"; platform: string; events: PlatformEvent[] }
+  | { type: "mail_digest"; totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }
   | { type: "platform_connection"; states: PlatformConnectionState[] }
   | { type: "platform_config_result"; platform: string; success: boolean; error?: string }
   | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }

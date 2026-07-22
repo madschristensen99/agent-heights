@@ -156,6 +156,7 @@ export class Store {
   private agentMemoryListeners = new Set<(agentId: string, messages: { role: string; content: string }[]) => void>();
   private mailboxUpdateListeners = new Set<(platform: string, flagUp: boolean, pendingCount: number, lastMessage: string) => void>();
   private mailboxMessagesListeners = new Set<(platform: string, events: PlatformEvent[]) => void>();
+  private mailDigestListeners = new Set<(digest: { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }) => void>();
   private platformConnectionListeners = new Set<(states: PlatformConnectionState[]) => void>();
   private platformConfigResultListeners = new Set<(platform: string, success: boolean, error?: string) => void>();
 
@@ -406,6 +407,14 @@ export class Store {
 
   offMailboxMessages(fn: (platform: string, events: PlatformEvent[]) => void): void {
     this.mailboxMessagesListeners.delete(fn);
+  }
+
+  onMailDigest(fn: (digest: { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }) => void): void {
+    this.mailDigestListeners.add(fn);
+  }
+
+  offMailDigest(fn: (digest: { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }) => void): void {
+    this.mailDigestListeners.delete(fn);
   }
 
   onPlatformConnection(fn: (states: PlatformConnectionState[]) => void): void {
@@ -1125,6 +1134,10 @@ export class Store {
       }
       case "mailbox_messages": {
         for (const fn of this.mailboxMessagesListeners) fn(msg.platform, msg.events);
+        return;
+      }
+      case "mail_digest": {
+        for (const fn of this.mailDigestListeners) fn({ totalUnread: msg.totalUnread, byPlatform: msg.byPlatform, queued: msg.queued });
         return;
       }
       case "platform_connection": {

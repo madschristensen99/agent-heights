@@ -1497,6 +1497,9 @@ export class AgentManager {
       rt.nextThinkAt = now + AgentManager.THINK_INTERVAL_MS + Math.floor(Math.random() * 15_000);
       rt.thinkCooldownUntil = now + AgentManager.THINK_COOLDOWN_MS;
     }
+
+    // Check for stale mail in the queue and escalate
+    this.checkStaleMail();
   }
 
   /** An idle agent decides what to do autonomously. */
@@ -2896,6 +2899,53 @@ export class AgentManager {
     this.deliverMail(item.platform, item.sender, item.text, pick.rt, pick.reason);
     // Recursively drain if there are more items and idle agents
     if (this.mailQueue.length > 0) this.drainMailQueue();
+  }
+
+  /** Check for stale mail in the queue and escalate to Yuki/player if too old. */
+  private checkStaleMail(): void {
+    if (this.mailQueue.length === 0) return;
+    const now = Date.now();
+    const MAX_QUEUE_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
+    for (let i = this.mailQueue.length - 1; i >= 0; i--) {
+      const item = this.mailQueue[i];
+      const age = now - item.ts;
+      item.retries++;
+
+      // Try to redeliver
+      const pick = this.pickAgentForMail(item.text);
+      if (pick) {
+        this.mailQueue.splice(i, 1);
+        this.deliverMail(item.platform, item.sender, item.text, pick.rt, `${pick.reason} (retried)`);
+        continue;
+      }
+
+      // Escalate if mail has been sitting too long
+      if (age > MAX_QUEUE_AGE_MS) {
+        this.mailQueue.splice(i, 1);
+        this.broadcast({
+          type: "toast",
+          text: `⚠️ Mail from ${item.platform} undeliverable for ${Math.round(age / 60000)}min — escalated to Yuki.`,
+        });
+        // Log to Yuki's inbox so she's aware
+        const yukiRt = this.agents.get(YUKI_ID);
+        if (yukiRt) {
+          this.log(yukiRt, "status", `⚠️ Escalated mail from ${item.sender} via ${item.platform}: "${item.text.slice(0, 100)}" — no agents available for ${Math.round(age / 60000)} minutes.`);
+        }
+      }
+    }
+  }
+
+  /** Get a mail digest for Yuki/player — summary of all platforms. */
+  getMailDigest(): { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number } {
+    const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
+    const byPlatform = platforms.map((p) => ({
+      platform: p,
+      unread: this.platformPending.get(p) ?? 0,
+      lastMessage: this.platformLastMessage.get(p) ?? "",
+    }));
+    const totalUnread = byPlatform.reduce((sum, p) => sum + p.unread, 0);
+    return { totalUnread, byPlatform, queued: this.mailQueue.length };
   }
 
   /** Log a toast when mail is queued due to no idle agents. */
