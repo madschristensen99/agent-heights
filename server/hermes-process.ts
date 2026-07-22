@@ -11,6 +11,9 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 const HERMES_BASE_URL = process.env.HERMES_BASE_URL ?? "http://127.0.0.1:9119";
 const RESTART_DELAY_MS = 3_000;
@@ -60,6 +63,9 @@ export class HermesProcessManager {
     if (this.started) return;
     this.started = true;
 
+    // Ensure Hermes has a config.yaml with a model provider configured
+    this.ensureHermesConfig();
+
     // If Hermes is already running externally, don't spawn a child process
     const alreadyRunning = await this.isReachable();
     if (alreadyRunning) {
@@ -74,6 +80,38 @@ export class HermesProcessManager {
 
     // Wait for it to become reachable
     await this.waitForReady();
+  }
+
+  /** Ensure Hermes has a config.yaml with model provider set to Kimi if we have a key. */
+  private ensureHermesConfig(): void {
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      if (!existsSync(hermesHome)) mkdirSync(hermesHome, { recursive: true });
+      const configPath = join(hermesHome, "config.yaml");
+
+      // If config.yaml already exists with a model provider, don't overwrite
+      if (existsSync(configPath)) {
+        const existing = readFileSync(configPath, "utf-8");
+        if (existing.includes("provider:") || existing.includes("model:")) {
+          return; // User has already configured a model
+        }
+      }
+
+      // Write a minimal config that uses Kimi as the LLM provider
+      const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
+      if (kimiKey) {
+        const config = [
+          "model:",
+          "  provider: kimi-coding",
+          "  default: kimi-k2",
+          "",
+        ].join("\n");
+        writeFileSync(configPath, config, "utf-8");
+        console.log("[hermes-process] Wrote default config.yaml with Kimi provider");
+      }
+    } catch (err) {
+      console.warn(`[hermes-process] Failed to write config.yaml: ${err}`);
+    }
   }
 
   /** Check if the Hermes gateway is reachable. */

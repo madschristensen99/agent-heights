@@ -125,7 +125,6 @@ export class AgentNPC {
     this.idleSpot = this.findDeskAdjacentTile(seat);
     const idlePath = this.idleSpot ? findPath(grid, spawn, this.idleSpot) : [];
     this.path = idlePath.length > 0 ? idlePath : findPath(grid, spawn, seat);
-    console.log(`[AgentNPC] created: name=${info.name} id=${info.id} spawn=${JSON.stringify(spawn)} seat=${JSON.stringify(seat)} idleSpot=${JSON.stringify(this.idleSpot)} pathLen=${this.path.length} pos=(${this.container.x},${this.container.y})`);
   }
 
   private positionDot(): void {

@@ -107,56 +107,38 @@ export class BootScene extends Phaser.Scene {
     const processNextStep = () => {
       if (stepIndex >= allSteps.length) {
         updateBar(1, "Ready!");
-        console.log("[boot] all loading steps complete, checking auth + initial data");
         const store = this.game.registry.get("store") as Store | undefined;
-        console.log("[boot] store exists:", !!store, "initialDataReady:", store?.initialDataReady);
         const startOffice = () => {
-          console.log("[boot] startOffice called, office active:", this.scene.isActive("office"));
           if (this.scene.isActive("office")) return;
-          console.log("[boot] starting office scene");
           this.scene.start("office");
         };
 
         if (isAuthEnabled) {
           let officeStarted = false;
           const startOfficeOnce = () => {
-            console.log("[boot] startOfficeOnce called, already started:", officeStarted);
             if (officeStarted) return;
             officeStarted = true;
             startOffice();
           };
           const tryStart = (state: AuthState) => {
-            console.log("[boot] tryStart called: loading=", state.loading, "hasSession=", !!state.session);
             if (state.loading) return;
             if (state.session) {
-              console.log("[boot] session found, initialDataReady:", store?.initialDataReady);
               if (!store || store.initialDataReady) {
                 startOfficeOnce();
               } else {
                 updateBar(1, "Connecting to server…");
                 this.time.delayedCall(10000, () => startOfficeOnce());
-                store.onInitialData(() => {
-                  console.log("[boot] onInitialData callback fired");
-                  startOfficeOnce();
-                });
+                store.onInitialData(() => startOfficeOnce());
               }
             } else {
-              console.log("[boot] no session, waiting for auth...");
               this.time.delayedCall(15000, () => {
-                if (!officeStarted) {
-                  console.log("[boot] fallback: starting office after 15s timeout (no session)");
-                  startOfficeOnce();
-                }
+                if (!officeStarted) startOfficeOnce();
               });
             }
           };
           onAuthChange(tryStart);
-          this.time.delayedCall(15000, () => {
-            console.log("[boot] 15s safety net fired, officeStarted:", officeStarted);
-            startOfficeOnce();
-          });
+          this.time.delayedCall(15000, () => startOfficeOnce());
         } else {
-          console.log("[boot] auth not enabled, starting office directly");
           if (!store || store.initialDataReady) {
             startOffice();
           } else {

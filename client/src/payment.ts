@@ -51,13 +51,10 @@ async function stripeApi(path: string, method = "POST", body?: Record<string, un
 }
 
 export async function startEntranceCheckout(): Promise<void> {
-  console.log("[payment] startEntranceCheckout called");
   const result = await stripeApi("/api/stripe/checkout-entrance");
-  console.log("[payment] checkout-entrance response:", result);
   if (typeof result.url === "string") {
     window.location.href = result.url;
   } else if (result.alreadyPaid || result.error === "Entrance fee already paid") {
-    console.log("[payment] entrance already paid, refreshing status");
     // Force-update state to entrancePaid=true so the overlay hides immediately
     if (currentState) {
       updatePaymentState({ ...currentState, entrancePaid: true });
@@ -90,7 +87,6 @@ export async function openCustomerPortal(): Promise<void> {
 export async function refreshPaymentStatus(): Promise<void> {
   if (!isAuthEnabled) return;
   const result = await stripeApi("/api/stripe/status", "GET");
-  console.log("[payment] status response:", result);
   if (result && !result.error) {
     updatePaymentState({
       entrancePaid: result.entrancePaid as boolean,

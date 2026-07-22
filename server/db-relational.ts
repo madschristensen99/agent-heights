@@ -202,6 +202,7 @@ export class RelationalPersistence {
           }
         }
       }
+      console.log(`[db-rel] load: pending_tasks from DB for user ${this.userId}:`, JSON.stringify(Object.fromEntries(Object.entries(pendingTasksMap).map(([id, ts]) => [id, ts.length]))), `(raw: ${JSON.stringify((worldRow as any)?.pending_tasks)?.slice(0, 200)})`);
 
       // Load mail events (newest 50 per platform)
       const { data: mailRows } = await supabaseAdmin
@@ -375,11 +376,14 @@ export class RelationalPersistence {
 
     if (this.pendingPendingTasks) {
       this.pendingPendingTasks = false;
+      const taskCount = Object.keys(this.state.pendingTasks ?? {}).length;
+      console.log(`[db-rel] flush: writing pending_tasks for user ${this.userId} (${taskCount} agent(s))...`);
       try {
         await supabaseAdmin
           .from("sprite_heights_world_state")
           .update({ pending_tasks: this.state.pendingTasks ?? {} })
           .eq("room_id", this.roomId);
+        console.log(`[db-rel] flush: pending_tasks written successfully for user ${this.userId}`);
       } catch (err) {
         console.error("[db-rel] setPendingTasks failed:", err);
       }

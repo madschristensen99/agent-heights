@@ -416,6 +416,7 @@ export class AgentManager {
 
     // Resume pending tasks for agents that were interrupted by a server restart
     let resumedAny = false;
+    console.log(`[manager] constructor: savedPendingTasks for user ${this.userId}:`, JSON.stringify(Object.fromEntries(Object.entries(savedPendingTasks).map(([id, ts]) => [id, ts.length]))));
     for (const [agentId, tasks] of Object.entries(savedPendingTasks)) {
       if (tasks.length === 0) continue;
       const rt = this.agents.get(agentId);
@@ -665,6 +666,7 @@ export class AgentManager {
     // 400ms debounce. This ensures pending tasks survive an abrupt SIGKILL or
     // crash that happens between persist() and the debounced flush.
     if (Object.keys(pendingTasks).length > 0) {
+      console.log(`[manager] persistPendingTasks: saving ${Object.keys(pendingTasks).length} agent(s) with pending tasks:`, JSON.stringify(Object.fromEntries(Object.entries(pendingTasks).map(([id, ts]) => [id, ts.map(t => t.task.slice(0, 50))]))));
       const f = this.save.flushNow();
       if (f && typeof (f as any).then === "function") {
         void (f as Promise<void>).catch(() => {});
@@ -1509,7 +1511,11 @@ export class AgentManager {
     // before the caller proceeds with shutdown.
     const f = this.save.flushNow();
     if (f && typeof (f as any).then === "function") {
-      await (f as Promise<void>).catch(() => {});
+      console.log(`[manager] prepareForShutdown: awaiting flush for user ${this.userId}...`);
+      await (f as Promise<void>).catch((err) => console.error(`[manager] prepareForShutdown: flush failed for user ${this.userId}:`, err));
+      console.log(`[manager] prepareForShutdown: flush complete for user ${this.userId}`);
+    } else {
+      console.log(`[manager] prepareForShutdown: no flush needed for user ${this.userId} (SaveFile returns void)`);
     }
   }
 
