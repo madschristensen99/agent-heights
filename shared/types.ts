@@ -326,6 +326,8 @@ export interface WorldState {
   vacationedAgents?: VacationedAgent[];
   /** Tile overrides per chunk: { "cx,cy" -> { tileIndex -> newTile } } */
   chunkOverrides?: Record<string, Record<number, number>>;
+  /** Office tile overrides: { tileIndex -> newTile } for the 30×20 office map */
+  officeOverrides?: Record<number, number>;
 }
 
 /** Chunk side length in tiles. */
@@ -595,6 +597,7 @@ export type ClientMsg =
   | { type: "player_move"; x: number; y: number; dir: Dir }
   | { type: "npc_update"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_update"; cx: number; cy: number; tileIndex: number; tile: number }
+  | { type: "office_tile_update"; tileIndex: number; tile: number; layer: "ground" | "walls" | "furniture" }
   | { type: "voice_start" }
   | { type: "voice_offer"; targetUserId: string; sdp: string }
   | { type: "voice_answer"; targetUserId: string; sdp: string }
@@ -632,7 +635,9 @@ export type ClientMsg =
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
   | { type: "update_schedule"; scheduleId: string; enabled?: boolean; name?: string; task?: string; cronExpression?: string }
   | { type: "delete_schedule"; scheduleId: string }
-  | { type: "rename"; agentId: string; name: string };
+  | { type: "rename"; agentId: string; name: string }
+  | { type: "spectator_join" }
+  | { type: "spectator_chat"; fromName: string; text: string };
 
 export type ServerMsg =
   | {
@@ -679,14 +684,15 @@ export type ServerMsg =
   | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string }
   | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }
+  | { type: "office_tile_updated"; tileIndex: number; tile: number; layer: "ground" | "walls" | "furniture" }
   | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
   | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] }
   | { type: "orgs_list"; orgs: (Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" })[] }
   | { type: "org_members"; orgId: string; members: OrgMember[] }
   | { type: "org_created"; org: Organization }
   | { type: "org_error"; message: string }
-  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null }
-  | { type: "payment_required"; reason: "entrance" | "subscription"; message: string }
+  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null }
+  | { type: "payment_required"; reason: "entrance" | "subscription" | "agent_limit"; message: string; tier?: SubscriptionTier | null; agentLimit?: number }
   | { type: "emote"; agentId: string; emote: string }
   | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string }
   | { type: "voice_peer"; userId: string; name: string }
@@ -724,7 +730,8 @@ export type ServerMsg =
   | { type: "schedule"; schedule: AgentSchedule }
   | { type: "schedule_removed"; scheduleId: string }
   | { type: "helicopter_delivery"; name: string; model: string; provider: string; systemPrompt: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[] }
-  | { type: "server_restarting"; estimatedSeconds: number };
+  | { type: "server_restarting"; estimatedSeconds: number }
+  | { type: "spectator_chat_relay"; fromName: string; text: string };
 
 export const SWARMS_MODELS = [
   { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },
@@ -737,6 +744,54 @@ export const SWARMS_MODELS = [
   { id: "o3-mini", label: "o3-mini (reasoning)" },
   { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (fast)" },
 ] as const;
+
+// --------------------------------------------------- subscription tiers ---
+
+export type SubscriptionTier = "starter" | "pro" | "unlimited";
+
+export interface TierInfo {
+  id: SubscriptionTier;
+  price: number;       // cents per month
+  label: string;       // display label
+  name: string;        // display name
+  agentLimit: number;  // max agents (Infinity for unlimited)
+  description: string;
+}
+
+export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
+  starter: {
+    id: "starter",
+    price: 99,
+    label: "$0.99/mo",
+    name: "Starter",
+    agentLimit: 1,
+    description: "Hire and manage 1 AI agent in your office.",
+  },
+  pro: {
+    id: "pro",
+    price: 499,
+    label: "$4.99/mo",
+    name: "Pro",
+    agentLimit: 5,
+    description: "Hire and manage up to 5 AI agents in your office.",
+  },
+  unlimited: {
+    id: "unlimited",
+    price: 2000,
+    label: "$20/mo",
+    name: "Unlimited",
+    agentLimit: Infinity,
+    description: "Hire and manage unlimited AI agents in your office.",
+  },
+};
+
+export const SUBSCRIPTION_TIER_LIST = Object.values(SUBSCRIPTION_TIERS);
+
+/** Determine the tier from a stored string, defaulting to "none". */
+export function parseTier(s: string | null | undefined): SubscriptionTier | null {
+  if (s === "starter" || s === "pro" || s === "unlimited") return s;
+  return null;
+}
 
 export const SERVER_PORT = (typeof process !== "undefined" && Number(process.env?.PORT)) || 3001;
 

@@ -246,12 +246,16 @@ interface AgentRuntime {
 export class AgentManager {
   private agents = new Map<string, AgentRuntime>();
   private board = new Map<string, TaskCard>();
+
+  /** Number of active agents in this office. */
+  get agentCount(): number { return this.agents.size; }
   private schedules = new Map<string, AgentSchedule>();
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private firedAgents = new Map<string, FiredAgent>();
   private vacationedAgents = new Map<string, VacationedAgent>();
   private worldSeed = 0;
   private chunkOverrides: Record<string, Record<number, number>> = {};
+  private officeOverrides: Record<number, number> = {};
   private workspaceRoot: string;
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   bossName = "the boss";
@@ -646,7 +650,7 @@ export class AgentManager {
   }
 
   worldState(): WorldState {
-    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], vacationedAgents: [...this.vacationedAgents.values()], chunkOverrides: this.chunkOverrides };
+    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], vacationedAgents: [...this.vacationedAgents.values()], chunkOverrides: this.chunkOverrides, officeOverrides: this.officeOverrides };
   }
 
   private persistWorld(): void {
@@ -664,6 +668,17 @@ export class AgentManager {
   /** Get chunk overrides for a specific chunk (or undefined if none). */
   getChunkOverrides(cx: number, cy: number): Record<number, number> | undefined {
     return this.chunkOverrides[`${cx},${cy}`];
+  }
+
+  /** Apply an office tile override from a client and persist it. */
+  applyOfficeOverride(tileIndex: number, tile: number): void {
+    this.officeOverrides[tileIndex] = tile;
+    this.persistWorld();
+  }
+
+  /** Get all office tile overrides. */
+  getOfficeOverrides(): Record<number, number> {
+    return this.officeOverrides;
   }
 
   async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits): Promise<void> {

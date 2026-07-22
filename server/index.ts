@@ -363,10 +363,76 @@ const server = createServer((req, res) => {
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", async (ws, req) => {
+  const url = new URL(req.url ?? "", "http://localhost");
+
+  // ── Spectator connection (read-only, no auth) ───────────────────────
+  if (url.searchParams.get("spectator") === "1") {
+    const livestreamUserId = process.env.LIVESTREAM_USER_ID ?? "dev";
+
+    // Ensure the observed session exists
+    let sess: UserSession;
+    try {
+      sess = await tenants.getOrCreate({ id: livestreamUserId, email: null });
+    } catch (err) {
+      console.error("[spectator] failed to get livestream session:", err);
+      ws.close(1011, "Livestream office not available");
+      return;
+    }
+
+    // Register as spectator
+    sess.spectators.add(ws);
+    console.log(`[spectator] connected — observing office of ${livestreamUserId} (${sess.spectators.size} spectators total)`);
+
+    // Send snapshot of the observed office
+    const snap = sess.manager.snapshot();
+    ws.send(JSON.stringify({
+      type: "snapshot",
+      agents: snap.agents,
+      logs: snap.logs,
+      player: null,
+      settings: sess.manager.settings,
+      board: snap.board,
+      schedules: sess.manager.snapshotSchedules(),
+      world: sess.manager.worldState(),
+    } satisfies ServerMsg));
+
+    // Send mailbox states
+    for (const mb of sess.manager.getMailboxSnapshots()) {
+      ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
+    }
+
+    ws.on("message", async (raw) => {
+      let msg: ClientMsg;
+      try {
+        msg = JSON.parse(raw.toString());
+      } catch {
+        return;
+      }
+
+      // Only spectator_chat is accepted — forward to Yuki
+      if (msg.type === "spectator_chat") {
+        const text = `[${msg.fromName}]: ${msg.text}`.slice(0, 500);
+        console.log(`[spectator] chat from ${msg.fromName}: ${msg.text}`);
+        sess.manager.chat("yuki", text);
+        return;
+      }
+
+      // Ignore all other message types from spectators
+      console.warn(`[spectator] rejected message type: ${msg.type}`);
+    });
+
+    ws.on("close", () => {
+      sess.spectators.delete(ws);
+      console.log(`[spectator] disconnected (${sess.spectators.size} spectators remaining)`);
+    });
+
+    return;
+  }
+
+  // ── Normal authenticated connection ─────────────────────────────────
   let user: AuthUser;
 
   if (isSupabaseConfigured) {
-    const url = new URL(req.url ?? "", "http://localhost");
     const token = url.searchParams.get("token");
     if (!token) {
       ws.close(4001, "No token provided");
@@ -454,6 +520,8 @@ wss.on("connection", async (ws, req) => {
         entrancePaid: payStatus.entrancePaid,
         subscriptionActive: payStatus.subscriptionActive,
         subscriptionStatus: payStatus.subscriptionStatus,
+        subscriptionTier: payStatus.subscriptionTier,
+        agentLimit: payStatus.agentLimit,
         currentPeriodEnd: payStatus.currentPeriodEnd,
         freeTrialExpiresAt,
       } satisfies ServerMsg));
@@ -535,7 +603,6 @@ wss.on("connection", async (ws, req) => {
   }
 
   if (isSupabaseConfigured) {
-    const url = new URL(req.url ?? "", "http://localhost");
     const initialToken = url.searchParams.get("token");
     if (initialToken) scheduleTokenRefresh(initialToken);
   }
@@ -592,11 +659,18 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      // Stripe gating: hiring agents requires an active $20/mo subscription
+      // Stripe gating: hiring agents requires an active subscription with agent slots available
       if (msg.type === "hire" && isSupabaseConfigured && isStripeConfigured) {
         const payStatus = await getUserPaymentStatus(sess.user.id);
         if (!payStatus.subscriptionActive) {
-          sess.broadcast({ type: "payment_required", reason: "subscription", message: "You need an active $20/month subscription to hire agents." });
+          sess.broadcast({ type: "payment_required", reason: "subscription", message: "You need an active subscription to hire agents. Plans start at $0.99/month." });
+          return;
+        }
+        const currentAgentCount = activeManager ? activeManager.agents.size : manager.agents.size;
+        if (currentAgentCount >= payStatus.agentLimit) {
+          const tierLabel = payStatus.subscriptionTier ? SUBSCRIPTION_TIERS[payStatus.subscriptionTier].name : "your plan";
+          const limitLabel = payStatus.agentLimit === Infinity ? "unlimited" : String(payStatus.agentLimit);
+          sess.broadcast({ type: "payment_required", reason: "agent_limit", message: `Your ${tierLabel} plan allows ${limitLabel} agent${payStatus.agentLimit === 1 ? "" : "s"}. Upgrade to hire more.`, tier: payStatus.subscriptionTier, agentLimit: payStatus.agentLimit });
           return;
         }
       }

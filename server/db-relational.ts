@@ -183,12 +183,12 @@ export class RelationalPersistence {
       // Load world state
       const { data: worldRow } = await supabaseAdmin
         .from("sprite_heights_world_state")
-        .select("seed, fired_agents, chunk_overrides, pending_tasks, vacationed_agents")
+        .select("seed, fired_agents, chunk_overrides, pending_tasks, vacationed_agents, office_overrides")
         .eq("room_id", this.roomId)
         .maybeSingle();
 
       const world: WorldState = worldRow
-        ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], vacationedAgents: (worldRow as any).vacationed_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {} }
+        ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], vacationedAgents: (worldRow as any).vacationed_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {}, officeOverrides: (worldRow as any).office_overrides ?? {} }
         : { seed: room.seed, firedAgents: [] };
 
       // Load pending tasks (stored as JSONB on world_state)
