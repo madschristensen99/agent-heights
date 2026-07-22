@@ -206,6 +206,7 @@ export class Hud {
   private _renaming = false;
   private _scheduleEditingId: string | null = null;
   private scheduleCountdownTimer: ReturnType<typeof setInterval> | null = null;
+  private lastSchedulesSig = "";
   private feedCollapsed = false;
   private feedExpanded = false;
   private rosterCollapsed = false;
@@ -2203,7 +2204,14 @@ export class Hud {
     if (sayBtn) sayBtn.disabled = isBusy || !canTalk;
 
     if (!this._scheduleEditingId && !this._scheduleCreateOpen) {
-      this.renderSchedules(agent.id);
+      const sig = [...this.store.schedules.values()]
+        .filter((s) => s.agentId === agent.id)
+        .map((s) => `${s.id}:${s.enabled}:${s.nextRunAt}:${s.lastRunAt}:${s.runCount}:${s.name}:${s.task}:${s.cronExpression}:${s.handoffTo}`)
+        .join("|");
+      if (sig !== this.lastSchedulesSig) {
+        this.lastSchedulesSig = sig;
+        this.renderSchedules(agent.id);
+      }
     }
   }
 
@@ -2266,7 +2274,7 @@ export class Hud {
           <div class="sched-meta">
             <span class="sched-cron">${esc(cronToLabel(s.cronExpression))}</span>
             · run #${s.runCount} · last: ${fmtRel(s.lastRunAt)}
-            · next: <span data-next-run="${s.nextRunAt}">${fmtNext(s.nextRunAt)}</span>
+            · ${s.enabled ? `next: <span data-next-run="${s.nextRunAt}">${fmtNext(s.nextRunAt)}</span>` : `<span class="sched-paused">paused</span>`}
             ${s.handoffTo ? ` · → ${esc(this.store.agents.get(s.handoffTo)?.name ?? "?")}` : ""}
           </div>
         </div>`;

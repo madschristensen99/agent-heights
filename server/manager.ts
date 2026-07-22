@@ -2579,7 +2579,14 @@ export class AgentManager {
   updateSchedule(scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }): void {
     const sched = this.schedules.get(scheduleId);
     if (!sched) return;
-    if (updates.enabled !== undefined) sched.enabled = updates.enabled;
+    if (updates.enabled !== undefined) {
+      const wasEnabled = sched.enabled;
+      sched.enabled = updates.enabled;
+      if (updates.enabled && !wasEnabled) {
+        const nextRun = nextCronRun(sched.cronExpression);
+        if (nextRun !== null) sched.nextRunAt = nextRun;
+      }
+    }
     if (updates.name !== undefined) sched.name = updates.name.trim().slice(0, 100) || sched.name;
     if (updates.task !== undefined) sched.task = updates.task.trim().slice(0, 4000) || sched.task;
     if (updates.cronExpression !== undefined) {
