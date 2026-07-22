@@ -4644,9 +4644,10 @@ export class OfficeScene extends Phaser.Scene {
       this.clearPathMarker();
     }
 
-    if (vx !== 0 && vy !== 0 && (left || right || up || down)) {
-      vx *= 0.7071;
-      vy *= 0.7071;
+    if (vx !== 0 && vy !== 0) {
+      const mag = Math.hypot(vx, vy);
+      if (mag > 1) { vx /= mag; vy /= mag; }
+      else if (left || right || up || down) { vx *= 0.7071; vy *= 0.7071; }
     }
 
     const tileSpeedMult = outside ? this.world.getTileSpeedAt(this.player.x, this.player.y) : 1;

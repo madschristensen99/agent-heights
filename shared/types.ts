@@ -546,6 +546,17 @@ export interface RailwayData {
   raw?: string;
 }
 
+/** A world deployed to Railway — links a GitHub branch to a Railway service. */
+export interface WorldDeployment {
+  branchName: string;
+  repoFullName: string;
+  railwayProjectId: string;
+  railwayServiceId: string;
+  railwayServiceUrl: string | null;
+  status: string;
+  createdAt: number;
+}
+
 /** A named CharAppearance snapshot saved by the user. */
 export interface SavedOutfit {
   id: string;
@@ -602,6 +613,10 @@ export type ClientMsg =
   | { type: "github_fork"; branchName: string }
   | { type: "github_list_branches" }
   | { type: "github_delete_branch"; branchName: string }
+  | { type: "railway_deploy"; branchName: string; repoFullName: string }
+  | { type: "railway_list_deployments" }
+  | { type: "railway_stop_deployment"; branchName: string }
+  | { type: "railway_delete_deployment"; branchName: string }
   | { type: "voice_start" }
   | { type: "voice_offer"; targetUserId: string; sdp: string }
   | { type: "voice_answer"; targetUserId: string; sdp: string }
@@ -693,6 +708,9 @@ export type ServerMsg =
   | { type: "github_data"; branches: { name: string; sha: string }[]; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string } | null; error: string | null }
   | { type: "github_fork_created"; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string }; branchName: string }
   | { type: "github_error"; error: string }
+  | { type: "railway_deployments"; deployments: WorldDeployment[]; error: string | null }
+  | { type: "railway_deploy_started"; branchName: string; message: string }
+  | { type: "railway_deploy_result"; deployment: WorldDeployment; error: string | null }
   | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
   | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] }
   | { type: "orgs_list"; orgs: (Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" })[] }

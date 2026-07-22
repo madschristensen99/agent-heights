@@ -308,8 +308,7 @@ export class AgentNPC {
       } else {
         this.container.x += (dx / dist) * step;
         this.container.y += (dy / dist) * step;
-        this.dir =
-          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        this.dir = vecToDir(dx, dy);
       }
       this.play(`${c}-walk-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
@@ -622,8 +621,7 @@ export class YukiNPC {
       } else {
         this.container.x += (dx / dist) * step;
         this.container.y += (dy / dist) * step;
-        this.dir =
-          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        this.dir = vecToDir(dx, dy);
       }
       this.play(`${c}-walk-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
@@ -841,8 +839,7 @@ export class HermesNPC {
       } else {
         this.container.x += (dx / dist) * step;
         this.container.y += (dy / dist) * step;
-        this.dir =
-          Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        this.dir = vecToDir(dx, dy);
       }
       this.play(`${c}-walk-${this.dir}`);
       this.container.setDepth(10 + this.container.y);
