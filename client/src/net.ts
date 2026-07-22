@@ -1,5 +1,10 @@
 import type { ClientMsg, ServerMsg } from "../../shared/types";
 
+const SILENT_MSG_TYPES = new Set([
+  "mcp_keys_status", "mcp_key_status", "platform_connection",
+  "payment_status", "room_state", "rooms_list",
+]);
+
 export class Net {
   private ws: WebSocket | null = null;
   private retryMs = 500;
@@ -59,8 +64,7 @@ export class Net {
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data) as ServerMsg;
-        const silentTypes = new Set(["mcp_keys_status", "mcp_key_status", "platform_connection", "payment_status", "room_state", "rooms_list"]);
-        if (!silentTypes.has(msg.type)) {
+        if (!SILENT_MSG_TYPES.has(msg.type)) {
           console.log(`[net] received: type=${msg.type}`);
         }
         if (msg.type === "refresh_token") {

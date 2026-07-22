@@ -508,19 +508,19 @@ export class OfficeScene extends Phaser.Scene {
     // register post-processing pipelines (once)
     const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     if (renderer && !renderer.pipelines.has("BloomFX")) {
-      renderer.pipelines.add("BloomFX", new BloomPipeline(this.game));
+      renderer.pipelines.addPostPipeline("BloomFX", BloomPipeline);
     }
     if (renderer && !renderer.pipelines.has("ColorGrade")) {
-      renderer.pipelines.add("ColorGrade", new ColorGradePipeline(this.game));
+      renderer.pipelines.addPostPipeline("ColorGrade", ColorGradePipeline);
     }
     if (renderer && !renderer.pipelines.has("DOF")) {
-      renderer.pipelines.add("DOF", new DOFPipeline(this.game));
+      renderer.pipelines.addPostPipeline("DOF", DOFPipeline);
     }
     // apply pipelines to camera (order: Bloom -> ColorGrade -> DOF)
     if (renderer) {
-      this.cameras.main.addPostPipeline("BloomFX", new BloomPipeline(this.game));
-      this.cameras.main.addPostPipeline("ColorGrade", new ColorGradePipeline(this.game));
-      this.cameras.main.addPostPipeline("DOF", new DOFPipeline(this.game));
+      this.cameras.main.setPostPipeline("BloomFX");
+      this.cameras.main.setPostPipeline("ColorGrade");
+      this.cameras.main.setPostPipeline("DOF");
     }
 
     // Initialize audio on first user interaction
