@@ -568,6 +568,21 @@ export class AgentManager {
     this.broadcast({ type: "platform_connection", states: this.platformStates });
   }
 
+  /** Configure a platform's credentials via the Hermes gateway API. */
+  async configurePlatform(platform: string, credentials: Record<string, string>): Promise<{ success: boolean; error?: string }> {
+    if (!this.hermesClient) {
+      return { success: false, error: "Hermes Agent gateway is not running. Start it with: hermes serve" };
+    }
+    const result = await this.hermesClient.configurePlatform(platform, credentials);
+    // After configuring, immediately poll for fresh status
+    if (result.success && this.hermesClient) {
+      const states = await this.hermesClient.getPlatformStates();
+      this.platformStates = states;
+      this.broadcast({ type: "platform_connection", states });
+    }
+    return result;
+  }
+
   private persist(): void {
     const snap = this.snapshot();
     this.save.setAgents(snap.agents, snap.logs);

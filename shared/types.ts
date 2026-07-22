@@ -626,6 +626,7 @@ export type ClientMsg =
   | { type: "agent_memory_request"; agentId: string }
   | { type: "check_mailbox"; platform: string }
   | { type: "connect_platform"; platform: string }
+  | { type: "configure_platform"; platform: string; credentials: Record<string, string> }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
@@ -717,6 +718,7 @@ export type ServerMsg =
   | { type: "mailbox_update"; platform: string; flagUp: boolean; pendingCount: number; lastMessage: string }
   | { type: "mailbox_messages"; platform: string; events: PlatformEvent[] }
   | { type: "platform_connection"; states: PlatformConnectionState[] }
+  | { type: "platform_config_result"; platform: string; success: boolean; error?: string }
   | { type: "outfits"; outfits: SavedOutfit[]; editable: boolean }
   | { type: "schedules"; schedules: AgentSchedule[] }
   | { type: "schedule"; schedule: AgentSchedule }
@@ -746,6 +748,45 @@ export const HERMES_ID = "hermes";
 
 /** The 6 platforms that have mailboxes in the mail room. */
 export const PLATFORMS = ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"] as const;
+
+/** Credential field definition for platform setup. */
+export interface PlatformCredentialField {
+  key: string;
+  label: string;
+  placeholder: string;
+  type: "password" | "text";
+  required: boolean;
+}
+
+/** Per-platform credential field schemas. */
+export const PLATFORM_CREDENTIAL_FIELDS: Record<string, PlatformCredentialField[]> = {
+  Slack: [
+    { key: "bot_token", label: "Bot User OAuth Token", placeholder: "xoxb-...", type: "password", required: true },
+    { key: "signing_secret", label: "Signing Secret", placeholder: "abc123...", type: "password", required: true },
+  ],
+  Discord: [
+    { key: "bot_token", label: "Bot Token", placeholder: "MTk2NjI4...", type: "password", required: true },
+  ],
+  Telegram: [
+    { key: "bot_token", label: "Bot Token (from @BotFather)", placeholder: "123456789:ABCdef...", type: "password", required: true },
+  ],
+  WhatsApp: [
+    { key: "account_sid", label: "Twilio Account SID", placeholder: "AC...", type: "text", required: true },
+    { key: "auth_token", label: "Twilio Auth Token", placeholder: "...", type: "password", required: true },
+    { key: "phone_number", label: "WhatsApp Number (sandbox: +14155238886)", placeholder: "+14155238886", type: "text", required: true },
+  ],
+  Signal: [
+    { key: "phone_number", label: "Signal Phone Number", placeholder: "+15551234567", type: "text", required: true },
+  ],
+  Email: [
+    { key: "imap_host", label: "IMAP Server", placeholder: "imap.gmail.com", type: "text", required: true },
+    { key: "imap_port", label: "IMAP Port", placeholder: "993", type: "text", required: true },
+    { key: "smtp_host", label: "SMTP Server", placeholder: "smtp.gmail.com", type: "text", required: true },
+    { key: "smtp_port", label: "SMTP Port", placeholder: "587", type: "text", required: true },
+    { key: "email", label: "Email Address", placeholder: "you@gmail.com", type: "text", required: true },
+    { key: "password", label: "App Password", placeholder: "16-char app password", type: "password", required: true },
+  ],
+};
 
 /** External event from a messaging platform. */
 export interface PlatformEvent {

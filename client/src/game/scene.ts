@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
-import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry } from "../../../shared/types";
+import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, PLATFORM_CREDENTIAL_FIELDS } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -1820,11 +1820,6 @@ export class OfficeScene extends Phaser.Scene {
         body: `1. Click "Install to Workspace" at the top\n2. Authorize the app\n3. Copy the "Bot User OAuth Token"\n   (starts with xoxb-)\n4. Note your "Signing Secret" from\n   Basic Information → App Credentials`,
       },
       {
-        title: "Slack — Configure in Hermes",
-        body: `Run the Hermes gateway setup wizard and\nselect Slack. Paste your bot token and\nsigning secret when prompted.`,
-        cmd: "hermes gateway setup",
-      },
-      {
         title: "Slack — Invite Bot to Channels",
         body: `In Slack, invite your bot to any channel\nwhere agents should receive messages:\n\n  /invite @Agent Heights Bot\n\nOnce done, interact with the Slack mailbox\nagain to check messages.`,
       },
@@ -1846,11 +1841,6 @@ export class OfficeScene extends Phaser.Scene {
         title: "Discord — Invite Bot to Server",
         body: `1. Left sidebar → "OAuth2" → "URL Generator"\n2. Under Scopes check: bot\n3. Under Bot Permissions check:\n   - Send Messages\n   - Read Message History\n4. Open the generated URL in your browser\n5. Select your server → Authorize`,
       },
-      {
-        title: "Discord — Configure in Hermes",
-        body: `Run the Hermes gateway setup wizard and\nselect Discord. Paste your bot token\nwhen prompted.`,
-        cmd: "hermes gateway setup",
-      },
     ],
     Telegram: [
       {
@@ -1859,12 +1849,7 @@ export class OfficeScene extends Phaser.Scene {
       },
       {
         title: "Telegram — Copy Bot Token",
-        body: `BotFather will respond with an HTTP API\ntoken that looks like:\n\n  123456789:ABCdefGHIjklMNOpqrSTUvwxYZ\n\nCopy this token — you'll need it for Hermes.`,
-      },
-      {
-        title: "Telegram — Configure in Hermes",
-        body: `Run the Hermes gateway setup wizard and\nselect Telegram. Paste your bot token\nwhen prompted.`,
-        cmd: "hermes gateway setup",
+        body: `BotFather will respond with an HTTP API\ntoken that looks like:\n\n  123456789:ABCdefGHIjklMNOpqrSTUvwxYZ\n\nCopy this token — you'll need it below.`,
       },
     ],
     WhatsApp: [
@@ -1876,22 +1861,12 @@ export class OfficeScene extends Phaser.Scene {
         title: "WhatsApp — Copy Credentials",
         body: `From the Twilio console, copy:\n   - Account SID (starts with AC...)\n   - Auth Token\n   - Your WhatsApp number\n     (sandbox: +14155238886)`,
       },
-      {
-        title: "WhatsApp — Configure in Hermes",
-        body: `Run the Hermes gateway setup wizard and\nselect WhatsApp. Enter your Twilio\nAccount SID, Auth Token, and WhatsApp\nnumber when prompted.`,
-        cmd: "hermes gateway setup",
-      },
     ],
     Signal: [
       {
         title: "Signal — Register a Number",
         body: `Signal requires a dedicated phone number\nregistered via signal-cli.\n\n1. Install signal-cli on your server:\n     sudo apt install signal-cli\n2. Register a number:\n     signal-cli -u +15551234567 register\n3. Verify with the SMS code:\n     signal-cli -u +15551234567 verify 123-456`,
         cmd: "signal-cli -u +15551234567 register",
-      },
-      {
-        title: "Signal — Configure in Hermes",
-        body: `Run the Hermes gateway setup wizard and\nselect Signal. Enter the phone number\nyou registered with signal-cli.`,
-        cmd: "hermes gateway setup",
       },
     ],
     Email: [
@@ -1903,33 +1878,24 @@ export class OfficeScene extends Phaser.Scene {
         title: "Email — Note IMAP/SMTP Settings",
         body: `You'll need:\n   - IMAP server (e.g. imap.gmail.com)\n   - IMAP port (usually 993, SSL)\n   - SMTP server (e.g. smtp.gmail.com)\n   - SMTP port (usually 587, TLS)\n   - Email address\n   - App password`,
       },
-      {
-        title: "Email — Configure in Hermes",
-        body: `Run the Hermes gateway setup wizard and\nselect Email. Enter your IMAP/SMTP\nsettings, email, and password when prompted.`,
-        cmd: "hermes gateway setup",
-      },
     ],
   };
 
-  /** Show a multi-step modal walking the user through platform-specific setup. */
+  /** Show a multi-step modal walking the user through platform setup with credential input. */
   private showPlatformConnectModal(platform: string): void {
     const state = this.store.platformStates.find((s) => s.platform === platform);
     const status = state?.status ?? "Not configured";
     const gatewayRunning = state?.gatewayRunning ?? false;
+    const net = this.game.registry.get("net") as import("../net").Net;
 
-    const steps = OfficeScene.PLATFORM_SETUP_STEPS[platform] ?? [
-      {
-        title: `Connect ${platform}`,
-        body: `${platform} is not connected yet.\n\nGateway: ${gatewayRunning ? "Running" : "Not running"}\nStatus: ${status}\n\nRun the Hermes gateway setup wizard\nto configure ${platform}.`,
-        cmd: "hermes gateway setup",
-      },
-    ];
+    const instructionSteps = OfficeScene.PLATFORM_SETUP_STEPS[platform] ?? [];
+    const credFields = PLATFORM_CREDENTIAL_FIELDS[platform] ?? [];
+    const totalSteps = instructionSteps.length + 1; // +1 for credential input step
 
     const cam = this.cameras.main;
-    const W = 460, H = 360;
+    const W = 460, H = 420;
     const cx = cam.centerX, cy = cam.centerY;
 
-    // Modal container elements
     const elements: Phaser.GameObjects.GameObject[] = [];
 
     const bg = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.7)
@@ -1945,7 +1911,7 @@ export class OfficeScene extends Phaser.Scene {
     ).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
     elements.push(statusText);
 
-    // Dynamic content area (title + body + command box)
+    // Dynamic content area (title + body for instruction steps)
     const titleObj = this.add.text(cx, cy - H / 2 + 50, "", {
       fontSize: "16px", color: "#ffffff", fontStyle: "bold", align: "center",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setWordWrapWidth(W - 40);
@@ -1956,7 +1922,7 @@ export class OfficeScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
     elements.push(bodyObj);
 
-    // Command box (monospace-style highlighted box)
+    // Command box (for steps that show a CLI command)
     const cmdBox = this.add.rectangle(cx, cy + 70, W - 80, 28, 0x0d0d1a, 0.9)
       .setStrokeStyle(1, 0x6c5ce7).setScrollFactor(0).setDepth(10002);
     elements.push(cmdBox);
@@ -1966,10 +1932,47 @@ export class OfficeScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10003);
     elements.push(cmdText);
 
+    // Credential input form (DOM overlay) — created once, shown/hidden
+    const formContainer = document.createElement("div");
+    formContainer.style.cssText = "display:none;flex-direction:column;gap:8px;padding:0 20px;";
+
+    const formTitle = document.createElement("div");
+    formTitle.textContent = `Enter your ${platform} credentials:`;
+    formTitle.style.cssText = "color:#ffffff;font-size:13px;font-weight:bold;margin-bottom:4px;";
+    formContainer.appendChild(formTitle);
+
+    const inputs: HTMLInputElement[] = [];
+    for (const field of credFields) {
+      const label = document.createElement("label");
+      label.textContent = field.label;
+      label.style.cssText = "color:#a0a0b0;font-size:11px;display:block;margin-bottom:2px;";
+
+      const input = document.createElement("input");
+      input.type = field.type;
+      input.placeholder = field.placeholder;
+      input.dataset.key = field.key;
+      input.style.cssText = `width:100%;padding:6px 10px;background:#0d0d1a;border:1px solid #6c5ce7;border-radius:4px;color:#ffffff;font-size:13px;font-family:monospace;box-sizing:border-box;outline:none;`;
+
+      const wrapper = document.createElement("div");
+      wrapper.appendChild(label);
+      wrapper.appendChild(input);
+      formContainer.appendChild(wrapper);
+      inputs.push(input);
+    }
+
+    // Result message area (success/error after submit)
+    const resultMsg = document.createElement("div");
+    resultMsg.style.cssText = "color:#a0a0b0;font-size:11px;min-height:16px;text-align:center;";
+    formContainer.appendChild(resultMsg);
+
+    const domElement = this.add.dom(cx, cy + 10, formContainer);
+    domElement.setScrollFactor(0).setDepth(10003);
+    elements.push(domElement);
+
     // Step indicator dots
     const dots: Phaser.GameObjects.Text[] = [];
-    for (let i = 0; i < steps.length; i++) {
-      const dot = this.add.text(cx - 36 + i * 24, cy + H / 2 - 50, "○", {
+    for (let i = 0; i < totalSteps; i++) {
+      const dot = this.add.text(cx - (totalSteps - 1) * 12 + i * 24, cy + H / 2 - 50, "○", {
         fontSize: "14px", color: "#555568",
       }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
       dots.push(dot);
@@ -1977,15 +1980,20 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Navigation buttons
-    const prevBtn = this.add.text(cx - 80, cy + H / 2 - 22, "[ < Prev ]", {
+    const prevBtn = this.add.text(cx - 100, cy + H / 2 - 22, "[ < Prev ]", {
       fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(prevBtn);
 
-    const nextBtn = this.add.text(cx + 80, cy + H / 2 - 22, "[ Next > ]", {
+    const nextBtn = this.add.text(cx, cy + H / 2 - 22, "[ Next > ]", {
       fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(nextBtn);
+
+    const submitBtn = this.add.text(cx + 100, cy + H / 2 - 22, "[ Submit ]", {
+      fontSize: "14px", color: "#55efc4", fontStyle: "bold",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
+    elements.push(submitBtn);
 
     const closeBtn = this.add.text(cx, cy + H / 2 - 22, "[ Close ]", {
       fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
@@ -1993,18 +2001,33 @@ export class OfficeScene extends Phaser.Scene {
     elements.push(closeBtn);
 
     let currentStep = 0;
+    let submitting = false;
 
     const renderStep = () => {
-      const step = steps[currentStep];
-      titleObj.setText(step.title);
-      bodyObj.setText(step.body);
-      if (step.cmd) {
-        cmdBox.setVisible(true);
-        cmdText.setVisible(true);
-        cmdText.setText(`$ ${step.cmd}`);
-      } else {
+      const isCredStep = currentStep === instructionSteps.length;
+
+      if (isCredStep) {
+        // Credential input step
+        titleObj.setText(`Connect ${platform}`);
+        bodyObj.setText("");
         cmdBox.setVisible(false);
         cmdText.setVisible(false);
+        formContainer.style.display = "flex";
+        resultMsg.textContent = "";
+      } else {
+        // Instruction step
+        const step = instructionSteps[currentStep];
+        titleObj.setText(step.title);
+        bodyObj.setText(step.body);
+        formContainer.style.display = "none";
+        if (step.cmd) {
+          cmdBox.setVisible(true);
+          cmdText.setVisible(true);
+          cmdText.setText(`$ ${step.cmd}`);
+        } else {
+          cmdBox.setVisible(false);
+          cmdText.setVisible(false);
+        }
       }
 
       // Update dots
@@ -2015,18 +2038,70 @@ export class OfficeScene extends Phaser.Scene {
 
       // Show/hide nav buttons
       prevBtn.setVisible(currentStep > 0);
-      nextBtn.setVisible(currentStep < steps.length - 1);
-      closeBtn.setVisible(currentStep === steps.length - 1);
+      nextBtn.setVisible(!isCredStep && currentStep < totalSteps - 1);
+      submitBtn.setVisible(isCredStep && !submitting);
+      closeBtn.setVisible(isCredStep || currentStep === totalSteps - 1);
     };
 
     prevBtn.on("pointerdown", () => {
       if (currentStep > 0) { currentStep--; renderStep(); }
     });
     nextBtn.on("pointerdown", () => {
-      if (currentStep < steps.length - 1) { currentStep++; renderStep(); }
+      if (currentStep < totalSteps - 1) { currentStep++; renderStep(); }
     });
 
-    const closeModal = () => elements.forEach(e => e.destroy());
+    // Listen for config result
+    const onConfigResult = (respPlatform: string, success: boolean, error?: string) => {
+      if (respPlatform !== platform || !submitting) return;
+      submitting = false;
+      if (success) {
+        resultMsg.style.color = "#55efc4";
+        resultMsg.textContent = "✓ Connected successfully! Close and interact with the mailbox again.";
+        submitBtn.setVisible(true);
+        submitBtn.setText("[ Done ]");
+        submitBtn.off("pointerdown");
+        submitBtn.on("pointerdown", closeModal);
+      } else {
+        resultMsg.style.color = "#ff7675";
+        resultMsg.textContent = `✗ ${error ?? "Failed to configure"}`;
+        submitBtn.setVisible(true);
+        submitBtn.setText("[ Submit ]");
+      }
+    };
+    this.store.onPlatformConfigResult(onConfigResult);
+
+    submitBtn.on("pointerdown", () => {
+      if (submitting) return;
+      // Validate required fields
+      const credentials: Record<string, string> = {};
+      let missing = false;
+      for (const input of inputs) {
+        const val = input.value.trim();
+        if (!val) {
+          missing = true;
+          input.style.borderColor = "#ff7675";
+        } else {
+          input.style.borderColor = "#6c5ce7";
+          credentials[input.dataset.key!] = val;
+        }
+      }
+      if (missing) {
+        resultMsg.style.color = "#ff7675";
+        resultMsg.textContent = "Please fill in all required fields.";
+        return;
+      }
+
+      submitting = true;
+      submitBtn.setVisible(false);
+      resultMsg.style.color = "#a0a0b0";
+      resultMsg.textContent = "Submitting...";
+      net.send({ type: "configure_platform", platform, credentials });
+    });
+
+    const closeModal = () => {
+      this.store.offPlatformConfigResult(onConfigResult);
+      elements.forEach(e => e.destroy());
+    };
     closeBtn.on("pointerdown", closeModal);
     bg.setInteractive().on("pointerdown", closeModal);
 

@@ -155,6 +155,23 @@ export class HermesClient {
     }
   }
 
+  /** Configure a platform's credentials via the Hermes gateway API. */
+  async configurePlatform(platform: string, credentials: Record<string, string>): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/gateway/configure`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: platform.toLowerCase(), credentials }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) return { success: true };
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error ?? data.message ?? `HTTP ${res.status}` };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to reach Hermes gateway" };
+    }
+  }
+
   /** Get platform connection states for all 6 mailbox platforms. */
   async getPlatformStates(): Promise<PlatformConnectionState[]> {
     const status = await this.getStatus();

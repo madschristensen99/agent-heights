@@ -138,6 +138,7 @@ export class Store {
   private mailboxUpdateListeners = new Set<(platform: string, flagUp: boolean, pendingCount: number, lastMessage: string) => void>();
   private mailboxMessagesListeners = new Set<(platform: string, events: PlatformEvent[]) => void>();
   private platformConnectionListeners = new Set<(states: PlatformConnectionState[]) => void>();
+  private platformConfigResultListeners = new Set<(platform: string, success: boolean, error?: string) => void>();
 
   /** Platform connection states from Hermes Agent gateway */
   platformStates: PlatformConnectionState[] = [];
@@ -372,6 +373,14 @@ export class Store {
 
   offPlatformConnection(fn: (states: PlatformConnectionState[]) => void): void {
     this.platformConnectionListeners.delete(fn);
+  }
+
+  onPlatformConfigResult(fn: (platform: string, success: boolean, error?: string) => void): void {
+    this.platformConfigResultListeners.add(fn);
+  }
+
+  offPlatformConfigResult(fn: (platform: string, success: boolean, error?: string) => void): void {
+    this.platformConfigResultListeners.delete(fn);
   }
 
   /** Check if a platform is connected via Hermes Agent gateway */
@@ -971,6 +980,10 @@ export class Store {
       case "platform_connection": {
         this.platformStates = msg.states;
         for (const fn of this.platformConnectionListeners) fn(msg.states);
+        return;
+      }
+      case "platform_config_result": {
+        for (const fn of this.platformConfigResultListeners) fn(msg.platform, msg.success, msg.error);
         return;
       }
     }

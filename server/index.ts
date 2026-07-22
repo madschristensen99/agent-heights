@@ -1784,6 +1784,16 @@ wss.on("connection", async (ws, req) => {
           ownerSess.manager.broadcastPlatformStates();
           break;
         }
+        case "configure_platform": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          const result = await ownerSess.manager.configurePlatform(msg.platform, msg.credentials);
+          sess.broadcast({ type: "platform_config_result", platform: msg.platform, success: result.success, error: result.error });
+          break;
+        }
         case "create_org": {
           const slug = msg.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
           if (!slug) {
