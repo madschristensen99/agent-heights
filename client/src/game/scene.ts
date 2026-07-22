@@ -13,6 +13,7 @@ import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_T
 import { upgradeWorkshop } from "./workshop";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 import { touchInput, isTouchDevice } from "../touch";
+import { getToken } from "../auth";
 import { VoiceManager } from "../voice";
 import { ScreenShareManager } from "../screen-share";
 import { WebcamManager } from "../webcam";
@@ -6800,10 +6801,12 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the Screen tab — live browser screenshot with dashboard fallback. */
   private renderAgentScreenTab(agent: AgentInfo): string {
     const serverOrigin = window.location.origin;
+    const authToken = getToken();
+    const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : "";
     return `
       <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:monospace;color:#c0c0d0;font-size:0.8rem;">
         <div style="flex:1;position:relative;background:#0a0a12;overflow:hidden;">
-          <img id="agent-view-screen-img" src="${serverOrigin}/api/agent-screenshot/${agent.id}?t=${Date.now()}"
+          <img id="agent-view-screen-img" src="${serverOrigin}/api/agent-screenshot/${agent.id}?t=${Date.now()}${tokenParam}"
             style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:auto;"
             onerror="this.style.display='none';document.getElementById('agent-view-screen-placeholder').style.display='flex';"
             onload="this.style.display='block';document.getElementById('agent-view-screen-placeholder').style.display='none';"

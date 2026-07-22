@@ -13,7 +13,7 @@ import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway, deployWorldToRailway, listWorldDeployments, stopWorldDeployment } from "./providers/railway-mcp.js";
 import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken, listRepoDir, readRepoFile, writeRepoFile, createRepoFile, deleteRepoFile } from "./github.js";
-import { rateLimit } from "./ratelimit.js";
+import { rateLimitAsync } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
@@ -322,12 +322,40 @@ const server = createServer((req, res) => {
       res.end("Missing agent id");
       return;
     }
+    // Require authentication (skip in dev mode where auth is disabled)
+    if (isSupabaseConfigured) {
+      const params = new URLSearchParams(req.url?.split("?")[1] ?? "");
+      const token = params.get("token");
+      if (!token) {
+        res.writeHead(401, applySecurityHeaders({ "Content-Type": "text/plain" }));
+        res.end("Unauthorized");
+        return;
+      }
+      void verifyToken(token).then((verified) => {
+        if (!verified) {
+          res.writeHead(403, applySecurityHeaders({ "Content-Type": "text/plain" }));
+          res.end("Invalid or expired token");
+          return;
+        }
+        const frame = browserLastFrame(agentId);
+        if (frame) {
+          res.writeHead(200, applySecurityHeaders({
+            "Content-Type": "image/jpeg",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          }));
+          res.end(Buffer.from(frame, "base64"));
+        } else {
+          res.writeHead(404, applySecurityHeaders({ "Content-Type": "text/plain" }));
+          res.end("No screenshot available");
+        }
+      });
+      return;
+    }
     const frame = browserLastFrame(agentId);
     if (frame) {
       res.writeHead(200, applySecurityHeaders({
         "Content-Type": "image/jpeg",
         "Cache-Control": "no-store, no-cache, must-revalidate",
-        "Access-Control-Allow-Origin": "*",
       }));
       res.end(Buffer.from(frame, "base64"));
     } else {
@@ -718,7 +746,7 @@ wss.on("connection", async (ws, req) => {
         }
       }
 
-      if (!rateLimit(sess.user.id, msg.type)) {
+      if (!(await rateLimitAsync(sess.user.id, msg.type))) {
         console.warn(`[rate-limit] BLOCKED user=${sess.user.id} type=${msg.type}`);
         // Throttle the "too many requests" toast itself — only one per 5s
         const rlKey = `rltoast:${sess.user.id}`;

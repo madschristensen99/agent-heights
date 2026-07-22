@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { setUserMcpKey } from "./apikeys.js";
 import { KNOWN_OAUTH_CONFIGS } from "./oauth-config.js";
+import { client as redisClient, isRedisConfigured } from "./redis.js";
 
 /** Shape of the token blob stored in user_mcp_keys. */
 export interface StoredToken {
@@ -100,14 +101,63 @@ interface PendingOAuth {
   createdAt: number;
 }
 
-/** In-memory store of pending OAuth flows, keyed by state. */
+/** In-memory store of pending OAuth flows, keyed by state (fallback when Redis is not available). */
 const pendingFlows = new Map<string, PendingOAuth>();
+
+/** Redis key prefix for pending OAuth flows. */
+const OAUTH_FLOW_PREFIX = "oauth_flow:";
 
 /** Max age for pending flows (10 minutes). */
 const MAX_AGE_MS = 10 * 60 * 1000;
+const MAX_AGE_SEC = Math.floor(MAX_AGE_MS / 1000);
 
-/** Cleanup expired flows. */
+/** Store a pending OAuth flow in Redis (or in-memory fallback). */
+async function setPendingFlow(state: string, flow: PendingOAuth): Promise<void> {
+  if (isRedisConfigured && redisClient) {
+    try {
+      await redisClient.set(
+        `${OAUTH_FLOW_PREFIX}${state}`,
+        JSON.stringify(flow),
+        "EX", MAX_AGE_SEC,
+      );
+      return;
+    } catch (err) {
+      console.error("[mcp-oauth] Redis set failed, using in-memory:", err);
+    }
+  }
+  pendingFlows.set(state, flow);
+}
+
+/** Get a pending OAuth flow from Redis (or in-memory fallback). */
+async function getPendingFlow(state: string): Promise<PendingOAuth | null> {
+  if (isRedisConfigured && redisClient) {
+    try {
+      const data = await redisClient.get(`${OAUTH_FLOW_PREFIX}${state}`);
+      if (!data) return null;
+      return JSON.parse(data) as PendingOAuth;
+    } catch (err) {
+      console.error("[mcp-oauth] Redis get failed, using in-memory:", err);
+    }
+  }
+  return pendingFlows.get(state) ?? null;
+}
+
+/** Delete a pending OAuth flow from Redis (or in-memory fallback). */
+async function deletePendingFlow(state: string): Promise<void> {
+  if (isRedisConfigured && redisClient) {
+    try {
+      await redisClient.del(`${OAUTH_FLOW_PREFIX}${state}`);
+      return;
+    } catch (err) {
+      console.error("[mcp-oauth] Redis del failed, using in-memory:", err);
+    }
+  }
+  pendingFlows.delete(state);
+}
+
+/** Cleanup expired flows (only needed for in-memory fallback). */
 function cleanupExpired(): void {
+  if (isRedisConfigured && redisClient) return; // Redis handles TTL
   const now = Date.now();
   for (const [state, flow] of pendingFlows) {
     if (now - flow.createdAt > MAX_AGE_MS) {
@@ -312,7 +362,7 @@ export async function startOAuthFlow(
   }
 
   // 6. Store pending flow
-  pendingFlows.set(state, {
+  await setPendingFlow(state, {
     userId,
     serverUrl,
     clientId,
@@ -369,13 +419,13 @@ export async function handleOAuthCallback(
 ): Promise<{ success: boolean; error?: string; serverUrl?: string; userId?: string }> {
   cleanupExpired();
 
-  const flow = pendingFlows.get(state);
+  const flow = await getPendingFlow(state);
   if (!flow) {
     console.error("[mcp-oauth] No pending flow for state:", state, "(may have expired or server restarted)");
     return { success: false, error: "Invalid or expired OAuth state. Please try again." };
   }
 
-  pendingFlows.delete(state);
+  await deletePendingFlow(state);
   console.log(`[mcp-oauth] Handling callback for ${flow.serverUrl}, state=${state}`);
 
   try {
