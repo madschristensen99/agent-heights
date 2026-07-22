@@ -267,6 +267,8 @@ export class AgentManager {
   private platformLastMessage = new Map<string, string>();
   private platformStates: PlatformConnectionState[] = [];
   private hermesClient: HermesClient | null = null;
+  /** Undelivered mail waiting for an idle agent. */
+  private mailQueue: { platform: string; sender: string; text: string; ts: number; retries: number }[] = [];
   private shuttingDown = false;
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
@@ -2650,11 +2652,16 @@ export class AgentManager {
   }
 
   private setStatus(rt: AgentRuntime, status: AgentStatus): void {
+    const wasBusy = rt.info.status === "thinking" || rt.info.status === "working";
     rt.info.status = status;
     this.updateMood(rt);
     this.session.record("status", { agentId: rt.info.id, agentName: rt.info.name, status });
     this.persist();
     this.broadcast({ type: "agent", agent: rt.info });
+    // When an agent becomes idle, try to drain queued mail
+    if (wasBusy && status === "idle") {
+      this.drainMailQueue();
+    }
   }
 
   // ── Platform mailbox system ─────────────────────────────────────────
@@ -2720,23 +2727,99 @@ export class AgentManager {
     }));
   }
 
-  /** Route a platform event to idle agents by posting to their inbox.
-   *  This simulates Hermes sorting mail and delivering it to workers. */
-  routePlatformEvent(platform: string, sender: string, text: string): void {
-    const msg = `[${platform}] From ${sender}: ${text}`;
-    for (const rt of this.agents.values()) {
-      if (rt.info.id === HERMES_ID || rt.info.id === YUKI_ID) continue;
-      if (rt.info.role === "manager") continue;
-      if (rt.info.status !== "idle") continue;
-      const slug = this.slugFor(rt);
-      const inboxPath = join(this.cwdFor(slug, rt.info.id), "inbox.jsonl");
-      const entry = JSON.stringify({ ts: Date.now(), from: "Hermes", message: msg }) + "\n";
-      import("node:fs/promises").then(({ appendFile, mkdir }) => {
-        mkdir(dirname(inboxPath), { recursive: true }).then(() =>
-          appendFile(inboxPath, entry, "utf-8").catch(() => {}),
-        );
-      }).catch(() => {});
+  /** Keyword categories for routing mail to the right agent. */
+  private static readonly ROUTING_KEYWORDS: { keywords: string[]; role: AgentRole; hint: string }[] = [
+    { keywords: ["deploy", "server", "down", "cpu", "memory", "disk", "nginx", "docker", "kubernetes", "k8s", "infra", "devops", "pipeline", "ci/cd", "build"], role: "devops", hint: "infrastructure/deploy issue" },
+    { keywords: ["bug", "error", "crash", "stack trace", "exception", "traceback", "fix", "broken", "fail"], role: "worker", hint: "bug/error report" },
+    { keywords: ["design", "ui", "ux", "layout", "css", "frontend", "page", "button", "modal"], role: "worker", hint: "design/UI request" },
+    { keywords: ["api", "endpoint", "database", "query", "sql", "backend", "server-side"], role: "worker", hint: "backend/API request" },
+    { keywords: ["invoice", "payment", "billing", "charge", "refund", "subscription"], role: "worker", hint: "billing/finance matter" },
+    { keywords: ["meeting", "schedule", "calendar", "appointment", "deadline"], role: "manager", hint: "scheduling request" },
+    { keywords: ["roadmap", "priority", "plan", "strategy", "feature request", "requirement"], role: "manager", hint: "planning/strategy matter" },
+  ];
+
+  /** Pick the best idle agent for an inbound message using keyword matching.
+   *  Returns the agent runtime + a human-readable routing reason, or null. */
+  private pickAgentForMail(text: string): { rt: AgentRuntime; reason: string } | null {
+    const lower = text.toLowerCase();
+    let bestRole: AgentRole | null = null;
+    let bestHint = "";
+
+    for (const rule of AgentManager.ROUTING_KEYWORDS) {
+      if (rule.keywords.some((kw) => lower.includes(kw))) {
+        bestRole = rule.role;
+        bestHint = rule.hint;
+        break;
+      }
     }
+
+    // Find idle agents, excluding Hermes and Yuki
+    const idleAgents = [...this.agents.values()].filter(
+      (rt) => rt.info.id !== HERMES_ID && rt.info.id !== YUKI_ID && rt.info.status === "idle",
+    );
+    if (idleAgents.length === 0) return null;
+
+    // Try to match by role first
+    if (bestRole) {
+      const match = idleAgents.find((rt) => rt.info.role === bestRole);
+      if (match) return { rt: match, reason: `keyword match (${bestHint}) → ${match.info.name}` };
+    }
+
+    // Fallback: pick the idle agent with the fewest completed tasks (round-robin-ish)
+    idleAgents.sort((a, b) => a.info.tasksDone - b.info.tasksDone);
+    const picked = idleAgents[0];
+    return { rt: picked, reason: bestRole ? `no ${bestRole} agent idle, assigned to ${picked.info.name}` : `no keyword match, assigned to ${picked.info.name}` };
+  }
+
+  /** Route a platform event to the best idle agent's inbox.
+   *  If no agents are idle, the message is queued for retry. */
+  routePlatformEvent(platform: string, sender: string, text: string): void {
+    const pick = this.pickAgentForMail(text);
+    if (!pick) {
+      this.mailQueue.push({ platform, sender, text, ts: Date.now(), retries: 0 });
+      this.logMailQueue(platform);
+      return;
+    }
+    this.deliverMail(platform, sender, text, pick.rt, pick.reason);
+  }
+
+  /** Deliver mail to a specific agent's inbox.jsonl with routing context. */
+  private deliverMail(platform: string, sender: string, text: string, rt: AgentRuntime, reason: string): void {
+    const slug = this.slugFor(rt);
+    const inboxPath = join(this.cwdFor(slug, rt.info.id), "inbox.jsonl");
+    const entry = JSON.stringify({
+      ts: Date.now(),
+      from: "Hermes",
+      platform,
+      sender,
+      message: text,
+      routing_reason: reason,
+    }) + "\n";
+    import("node:fs/promises").then(({ appendFile, mkdir }) => {
+      mkdir(dirname(inboxPath), { recursive: true }).then(() =>
+        appendFile(inboxPath, entry, "utf-8").catch(() => {}),
+      );
+    }).catch(() => {});
+    this.log(rt, "status", `📬 Received mail from ${sender} via ${platform} — ${reason}`);
+  }
+
+  /** Drain the mail queue — called when an agent becomes idle. */
+  private drainMailQueue(): void {
+    if (this.mailQueue.length === 0) return;
+    const pick = this.pickAgentForMail(this.mailQueue[0].text);
+    if (!pick) return;
+    const item = this.mailQueue.shift()!;
+    this.deliverMail(item.platform, item.sender, item.text, pick.rt, pick.reason);
+    // Recursively drain if there are more items and idle agents
+    if (this.mailQueue.length > 0) this.drainMailQueue();
+  }
+
+  /** Log a toast when mail is queued due to no idle agents. */
+  private logMailQueue(platform: string): void {
+    this.broadcast({
+      type: "toast",
+      text: `📬 Mail from ${platform} queued — no idle agents available.`,
+    });
   }
 
   private log(rt: AgentRuntime, kind: LogEntry["kind"], text: string): void {
