@@ -36,6 +36,8 @@ export interface UserSession {
   webcamActive: boolean;
   /** Live log subscriptions keyed by agentId — cleaned up on disconnect. */
   agentLogSubscriptions?: Map<string, () => void>;
+  /** Spectator WebSocket connections — read-only, receive all broadcasts. */
+  spectators: Set<WebSocket>;
 }
 
 /** A player's live state within a room. */
@@ -514,6 +516,7 @@ export class TenantManager {
       voiceActive: false,
       screenShareActive: false,
       webcamActive: false,
+      spectators: new Set(),
     };
 
     // ── Broadcast: Redis pub/sub (with in-memory fallback) ──────────────
@@ -526,6 +529,9 @@ export class TenantManager {
 
     const deliverLocal = (data: string) => {
       for (const ws of sess.clients) {
+        if (ws.readyState === ws.OPEN) ws.send(data);
+      }
+      for (const ws of sess.spectators) {
         if (ws.readyState === ws.OPEN) ws.send(data);
       }
     };

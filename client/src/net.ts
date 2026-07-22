@@ -6,6 +6,7 @@ export class Net {
   private queue: ClientMsg[] = [];
   private token: string | null = null;
   private manuallyDisconnected = false;
+  private _spectator = false;
   onMessage: (msg: ServerMsg) => void = () => {};
   onStatus: (connected: boolean) => void = () => {};
   onRefreshToken: () => Promise<string | null> = async () => null;
@@ -13,6 +14,12 @@ export class Net {
   setToken(token: string | null): void {
     this.token = token;
   }
+
+  setSpectator(value: boolean): void {
+    this._spectator = value;
+  }
+
+  get spectator(): boolean { return this._spectator; }
 
   connect(): void {
     this.manuallyDisconnected = false;
@@ -28,9 +35,11 @@ export class Net {
     const fallback = effectiveWsHost || (isLocal && location.port !== "3001"
       ? "localhost:3001"
       : location.host);
-    const url = this.token
-      ? `${proto}://${fallback}/?token=${encodeURIComponent(this.token)}`
-      : `${proto}://${fallback}`;
+    const url = this._spectator
+      ? `${proto}://${fallback}/?spectator=1`
+      : this.token
+        ? `${proto}://${fallback}/?token=${encodeURIComponent(this.token)}`
+        : `${proto}://${fallback}`;
     console.log(`[net] connecting to ${url} (wsHost=${wsHost}, location.host=${location.host}, location.port=${location.port})`);
     const ws = new WebSocket(url);
     this.ws = ws;

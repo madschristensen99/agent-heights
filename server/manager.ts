@@ -350,8 +350,9 @@ export class AgentManager {
     const world = this.save.getWorld();
     this.worldSeed = world.seed || Math.floor(Math.random() * 0xffffffff);
     this.chunkOverrides = world.chunkOverrides ?? {};
+    this.officeOverrides = world.officeOverrides ?? {};
     if (!world.seed) {
-      this.save.setWorld({ seed: this.worldSeed, firedAgents: [], chunkOverrides: {} });
+      this.save.setWorld({ seed: this.worldSeed, firedAgents: [], chunkOverrides: {}, officeOverrides: {} });
     }
     for (const fa of world.firedAgents) {
       this.firedAgents.set(fa.id, fa);

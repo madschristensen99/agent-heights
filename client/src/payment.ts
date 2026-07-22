@@ -1,9 +1,12 @@
 import { getToken, isAuthEnabled } from "./auth";
+import { SUBSCRIPTION_TIER_LIST, type SubscriptionTier } from "../../shared/types";
 
 export interface PaymentState {
   entrancePaid: boolean;
   subscriptionActive: boolean;
   subscriptionStatus: string;
+  subscriptionTier: SubscriptionTier | null;
+  agentLimit: number;
   currentPeriodEnd: number | null;
   freeTrialExpiresAt: number | null;
 }
@@ -28,7 +31,7 @@ export function updatePaymentState(state: PaymentState | null): void {
   notify();
 }
 
-async function stripeApi(path: string, method = "POST"): Promise<Record<string, unknown>> {
+async function stripeApi(path: string, method = "POST", body?: Record<string, unknown>): Promise<Record<string, unknown>> {
   const token = getToken();
   if (!token) return { error: "Not authenticated" };
   try {
@@ -38,6 +41,7 @@ async function stripeApi(path: string, method = "POST"): Promise<Record<string, 
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
+      body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json() as Record<string, unknown>;
     return data;
@@ -55,8 +59,8 @@ export async function startEntranceCheckout(): Promise<void> {
   }
 }
 
-export async function startSubscriptionCheckout(): Promise<void> {
-  const result = await stripeApi("/api/stripe/checkout-subscription");
+export async function startSubscriptionCheckout(tier: SubscriptionTier): Promise<void> {
+  const result = await stripeApi("/api/stripe/checkout-subscription", "POST", { tier });
   if (typeof result.url === "string") {
     window.location.href = result.url;
   } else {
@@ -81,6 +85,8 @@ export async function refreshPaymentStatus(): Promise<void> {
       entrancePaid: result.entrancePaid as boolean,
       subscriptionActive: result.subscriptionActive as boolean,
       subscriptionStatus: result.subscriptionStatus as string,
+      subscriptionTier: (result.subscriptionTier as SubscriptionTier | null) ?? null,
+      agentLimit: (result.agentLimit as number) ?? 0,
       currentPeriodEnd: (result.currentPeriodEnd as number | null) ?? null,
       freeTrialExpiresAt: (result.freeTrialExpiresAt as number | null) ?? null,
     });
@@ -121,17 +127,18 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
       </div>
 
       <div id="payment-subscription-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
-        <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">Agent Hire Subscription — $20/month</h2>
-        <p style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.5rem;line-height:1.4;">Subscribe to hire and manage AI agents in your own private office. Cancel anytime.</p>
-        <button id="pay-subscription-btn"
-          style="padding:0.8rem 1rem;border-radius:8px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.03em;transition:filter 0.15s,transform 0.1s;">
-          Subscribe — $20/month
-        </button>
+        <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">Choose Your Plan</h2>
+        <p style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.8rem;line-height:1.4;">Subscribe to hire and manage AI agents in your own private office. Cancel anytime.</p>
+        <div id="tier-cards" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
       </div>
 
       <div id="payment-active-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
-        <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">Subscription Active</h2>
+        <h2 id="payment-active-title" style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">Subscription Active</h2>
         <p id="payment-period-info" style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.5rem;line-height:1.4;"></p>
+        <div id="payment-upgrade-section" style="display:none;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;">
+          <p style="color:#a0a5b4;font-size:0.8rem;margin:0;">Need more agents? Upgrade your plan:</p>
+          <div id="upgrade-tier-cards" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+        </div>
         <button id="manage-subscription-btn"
           style="padding:0.7rem 1rem;border-radius:8px;border:1px solid #2a2e42;background:#1a1e2e;color:#e0e0e0;font-size:0.9rem;cursor:pointer;transition:border-color 0.15s;">
           Manage Subscription
@@ -154,8 +161,11 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
   const trialCountdown = overlay.querySelector("#trial-countdown") as HTMLParagraphElement;
   const loadingEl = overlay.querySelector("#payment-loading") as HTMLDivElement;
   const periodInfo = overlay.querySelector("#payment-period-info") as HTMLParagraphElement;
+  const activeTitle = overlay.querySelector("#payment-active-title") as HTMLHeadingElement;
+  const upgradeSection = overlay.querySelector("#payment-upgrade-section") as HTMLDivElement;
+  const upgradeTierCards = overlay.querySelector("#upgrade-tier-cards") as HTMLDivElement;
+  const tierCardsContainer = overlay.querySelector("#tier-cards") as HTMLDivElement;
   const entranceBtn = overlay.querySelector("#pay-entrance-btn") as HTMLButtonElement;
-  const subscriptionBtn = overlay.querySelector("#pay-subscription-btn") as HTMLButtonElement;
   const manageBtn = overlay.querySelector("#manage-subscription-btn") as HTMLButtonElement;
   const closeBtn = overlay.querySelector("#payment-close-btn") as HTMLButtonElement;
 
@@ -178,6 +188,20 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     trialCountdown.textContent = `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  function buildTierCard(tier: typeof SUBSCRIPTION_TIER_LIST[number], isUpgrade: boolean): string {
+    const agentLabel = tier.agentLimit === Infinity ? "Unlimited agents" : `${tier.agentLimit} agent${tier.agentLimit === 1 ? "" : "s"}`;
+    return `
+      <div data-tier="${tier.id}" style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;padding:0.8rem 1rem;border-radius:8px;border:1px solid #2a2e42;background:#1a1e2e;cursor:pointer;transition:border-color 0.15s,filter 0.15s;">
+        <div style="text-align:left;">
+          <div style="font-size:0.95rem;font-weight:700;color:#e0e0e0;">${tier.name} <span style="color:#58c866;font-weight:600;">${tier.label}</span></div>
+          <div style="font-size:0.78rem;color:#a0a5b4;margin-top:0.15rem;">${agentLabel} — ${tier.description}</div>
+        </div>
+        <button class="tier-select-btn" data-tier="${tier.id}" style="padding:0.5rem 0.9rem;border-radius:6px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:filter 0.15s,transform 0.1s;">
+          ${isUpgrade ? "Upgrade" : "Subscribe"}
+        </button>
+      </div>`;
   }
 
   function renderState() {
@@ -207,14 +231,31 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
     if (currentState.entrancePaid && !currentState.subscriptionActive) {
       subscriptionSection.style.display = "flex";
       activeSection.style.display = "none";
+      tierCardsContainer.innerHTML = SUBSCRIPTION_TIER_LIST.map(t => buildTierCard(t, false)).join("");
     } else if (currentState.entrancePaid && currentState.subscriptionActive) {
       subscriptionSection.style.display = "none";
       activeSection.style.display = "flex";
-      if (currentState.currentPeriodEnd) {
-        const date = new Date(currentState.currentPeriodEnd * 1000);
+      const st = currentState;
+      const tierName = st.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === st.subscriptionTier)?.name : null;
+      activeTitle.textContent = tierName ? `${tierName} Plan Active` : "Subscription Active";
+      if (st.currentPeriodEnd) {
+        const date = new Date(st.currentPeriodEnd * 1000);
         periodInfo.textContent = `Your subscription renews on ${date.toLocaleDateString()}.`;
       } else {
         periodInfo.textContent = "Your subscription is active.";
+      }
+      // Show upgrade options if not on unlimited
+      if (st.subscriptionTier && st.subscriptionTier !== "unlimited") {
+        const currentPrice = SUBSCRIPTION_TIER_LIST.find(t => t.id === st.subscriptionTier)!.price;
+        const upgrades = SUBSCRIPTION_TIER_LIST.filter(t => t.price > currentPrice);
+        if (upgrades.length > 0) {
+          upgradeSection.style.display = "flex";
+          upgradeTierCards.innerHTML = upgrades.map(t => buildTierCard(t, true)).join("");
+        } else {
+          upgradeSection.style.display = "none";
+        }
+      } else {
+        upgradeSection.style.display = "none";
       }
     } else {
       subscriptionSection.style.display = "none";
@@ -225,17 +266,24 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
   onPaymentChange(renderState);
 
   entranceBtn.addEventListener("click", () => void startEntranceCheckout());
-  subscriptionBtn.addEventListener("click", () => void startSubscriptionCheckout());
   manageBtn.addEventListener("click", () => void openCustomerPortal());
   closeBtn.addEventListener("click", () => { overlay.style.display = "none"; });
 
+  // Delegate tier card button clicks
+  overlay.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const btn = target.closest(".tier-select-btn") as HTMLButtonElement | null;
+    if (btn) {
+      const tier = btn.dataset.tier as SubscriptionTier;
+      if (tier) void startSubscriptionCheckout(tier);
+    }
+  });
+
   // Hover effects
-  for (const btn of [entranceBtn, subscriptionBtn]) {
-    btn.addEventListener("mouseenter", () => { btn.style.filter = "brightness(1.1)"; });
-    btn.addEventListener("mouseleave", () => { btn.style.filter = "none"; });
-    btn.addEventListener("mousedown", () => { btn.style.transform = "scale(0.97)"; });
-    btn.addEventListener("mouseup", () => { btn.style.transform = "scale(1)"; });
-  }
+  entranceBtn.addEventListener("mouseenter", () => { entranceBtn.style.filter = "brightness(1.1)"; });
+  entranceBtn.addEventListener("mouseleave", () => { entranceBtn.style.filter = "none"; });
+  entranceBtn.addEventListener("mousedown", () => { entranceBtn.style.transform = "scale(0.97)"; });
+  entranceBtn.addEventListener("mouseup", () => { entranceBtn.style.transform = "scale(1)"; });
   manageBtn.addEventListener("mouseenter", () => { manageBtn.style.borderColor = "#58c866"; });
   manageBtn.addEventListener("mouseleave", () => { manageBtn.style.borderColor = "#2a2e42"; });
 

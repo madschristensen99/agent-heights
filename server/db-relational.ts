@@ -347,6 +347,7 @@ export class RelationalPersistence {
             fired_agents: this.state.world.firedAgents,
             vacationed_agents: this.state.world.vacationedAgents ?? [],
             chunk_overrides: this.state.world.chunkOverrides ?? {},
+            office_overrides: this.state.world.officeOverrides ?? {},
             pending_tasks: this.state.pendingTasks ?? {},
           });
       } catch (err) {

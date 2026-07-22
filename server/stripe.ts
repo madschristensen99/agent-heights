@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
+import { SUBSCRIPTION_TIERS, parseTier, type SubscriptionTier } from "../shared/types.js";
 
 const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
@@ -11,7 +12,6 @@ export const stripe: Stripe | null = isStripeConfigured
   : null;
 
 const ENTRANCE_FEE = 100;
-const SUBSCRIPTION_PRICE = 2000;
 const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
 
 // ── Free trial: 2 minutes per day for authed users who haven't paid entrance ──
@@ -48,24 +48,26 @@ export interface PaymentStatus {
   entrancePaid: boolean;
   subscriptionStatus: string;
   subscriptionActive: boolean;
+  subscriptionTier: SubscriptionTier | null;
+  agentLimit: number;
   currentPeriodEnd: number | null;
   freeTrialExpiresAt: number | null;
 }
 
 export async function getUserPaymentStatus(userId: string): Promise<PaymentStatus> {
   if (!isSupabaseConfigured || !isStripeConfigured) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, currentPeriodEnd: null, freeTrialExpiresAt: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "unlimited", agentLimit: Infinity, currentPeriodEnd: null, freeTrialExpiresAt: null };
   }
   try {
     const { data, error } = await supabaseAdmin
       .from("user_payments")
-      .select("entrance_paid, subscription_status, current_period_end")
+      .select("entrance_paid, subscription_status, current_period_end, subscription_tier")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (error || !data) {
       const trial = getFreeTrialStatus(userId);
-      return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
+      return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -77,16 +79,21 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
     const entrancePaid = data.entrance_paid ?? false;
     const freeTrialExpiresAt = entrancePaid ? null : getFreeTrialStatus(userId).expiresAt;
 
+    const tier = parseTier(data.subscription_tier as string | null);
+    const agentLimit = tier ? SUBSCRIPTION_TIERS[tier].agentLimit : 0;
+
     return {
       entrancePaid,
       subscriptionStatus: data.subscription_status ?? "none",
       subscriptionActive,
+      subscriptionTier: tier,
+      agentLimit,
       currentPeriodEnd: data.current_period_end ?? null,
       freeTrialExpiresAt,
     };
   } catch {
     const trial = getFreeTrialStatus(userId);
-    return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
+    return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
   }
 }
 
@@ -154,9 +161,13 @@ export async function createEntranceCheckoutSession(
 export async function createSubscriptionCheckoutSession(
   userId: string,
   email: string,
+  tier: SubscriptionTier,
 ): Promise<{ url: string } | { error: string }> {
   if (!stripe) return { error: "Stripe not configured" };
   if (!APP_URL) return { error: "APP_URL not configured" };
+
+  const tierInfo = SUBSCRIPTION_TIERS[tier];
+  if (!tierInfo) return { error: `Invalid tier: ${tier}` };
 
   try {
     const customerId = await getOrCreateStripeCustomer(userId, email);
@@ -169,17 +180,17 @@ export async function createSubscriptionCheckoutSession(
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: SUBSCRIPTION_PRICE,
+            unit_amount: tierInfo.price,
             recurring: { interval: "month" },
             product_data: {
-              name: "Agent Heights — Agent Hire Subscription",
-              description: "$20/month to hire and manage agents in your own room",
+              name: `Agent Heights — ${tierInfo.name} Subscription`,
+              description: tierInfo.description,
             },
           },
         },
       ],
-      metadata: { userId, type: "subscription" },
-      subscription_data: { metadata: { userId } },
+      metadata: { userId, type: "subscription", tier },
+      subscription_data: { metadata: { userId, tier } },
       success_url: `${APP_URL}/?payment=subscription_success`,
       cancel_url: `${APP_URL}/?payment=subscription_cancel`,
     });
@@ -254,16 +265,18 @@ export async function handleStripeWebhook(
 
         if (session.metadata?.type === "subscription" && session.subscription) {
           const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          const tier = parseTier(session.metadata?.tier ?? sub.metadata?.tier);
           await supabaseAdmin
             .from("user_payments")
             .upsert({
               user_id: userId,
               subscription_id: sub.id,
               subscription_status: sub.status,
+              subscription_tier: tier,
               current_period_end: (sub as any).current_period_end ?? null,
               updated_at: new Date().toISOString(),
             }, { onConflict: "user_id" });
-          console.log(`[stripe] subscription started for user ${userId}, status=${sub.status}`);
+          console.log(`[stripe] subscription started for user ${userId}, status=${sub.status}, tier=${tier}`);
         }
         break;
       }
@@ -273,15 +286,17 @@ export async function handleStripeWebhook(
         const userId = sub.metadata?.userId;
         if (!userId) break;
 
+        const tier = parseTier(sub.metadata?.tier);
         await supabaseAdmin
           .from("user_payments")
           .update({
             subscription_status: sub.status,
+            subscription_tier: tier,
             current_period_end: (sub as any).current_period_end ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("user_id", userId);
-        console.log(`[stripe] subscription updated for user ${userId}, status=${sub.status}`);
+        console.log(`[stripe] subscription updated for user ${userId}, status=${sub.status}, tier=${tier}`);
         break;
       }
 
@@ -295,6 +310,7 @@ export async function handleStripeWebhook(
           .update({
             subscription_status: "canceled",
             subscription_id: null,
+            subscription_tier: null,
             current_period_end: null,
             updated_at: new Date().toISOString(),
           })
@@ -396,9 +412,17 @@ export async function handleStripeRequest(
     return true;
   }
 
-  // POST /api/stripe/checkout-subscription — create $20/mo subscription checkout
+  // POST /api/stripe/checkout-subscription — create tiered subscription checkout
   if (url === "/api/stripe/checkout-subscription" && req.method === "POST") {
-    const result = await createSubscriptionCheckoutSession(user.id, user.email ?? "");
+    const body = await readBody(req);
+    let parsed: { tier?: string } = {};
+    try { parsed = JSON.parse(body.toString()); } catch { /* empty body is fine */ }
+    const tier = parseTier(parsed.tier);
+    if (!tier) {
+      json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro | unlimited" });
+      return true;
+    }
+    const result = await createSubscriptionCheckoutSession(user.id, user.email ?? "", tier);
     if ("error" in result) {
       json(res, 400, result);
     } else {

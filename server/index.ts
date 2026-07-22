@@ -21,6 +21,7 @@ import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBro
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
+import { SUBSCRIPTION_TIERS } from "../shared/types.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
@@ -659,6 +660,10 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
+      // Use the room's agent manager (shared for org rooms, owner's for private rooms)
+      const roomMgr = sess.roomId ? tenants.getRoomManager(sess.roomId) : null;
+      const activeManager = roomMgr ?? manager;
+
       // Stripe gating: hiring agents requires an active subscription with agent slots available
       if (msg.type === "hire" && isSupabaseConfigured && isStripeConfigured) {
         const payStatus = await getUserPaymentStatus(sess.user.id);
@@ -666,18 +671,13 @@ wss.on("connection", async (ws, req) => {
           sess.broadcast({ type: "payment_required", reason: "subscription", message: "You need an active subscription to hire agents. Plans start at $0.99/month." });
           return;
         }
-        const currentAgentCount = activeManager ? activeManager.agents.size : manager.agents.size;
-        if (currentAgentCount >= payStatus.agentLimit) {
+        if (activeManager.agentCount >= payStatus.agentLimit) {
           const tierLabel = payStatus.subscriptionTier ? SUBSCRIPTION_TIERS[payStatus.subscriptionTier].name : "your plan";
           const limitLabel = payStatus.agentLimit === Infinity ? "unlimited" : String(payStatus.agentLimit);
           sess.broadcast({ type: "payment_required", reason: "agent_limit", message: `Your ${tierLabel} plan allows ${limitLabel} agent${payStatus.agentLimit === 1 ? "" : "s"}. Upgrade to hire more.`, tier: payStatus.subscriptionTier, agentLimit: payStatus.agentLimit });
           return;
         }
       }
-
-      // Use the room's agent manager (shared for org rooms, owner's for private rooms)
-      const roomMgr = sess.roomId ? tenants.getRoomManager(sess.roomId) : null;
-      const activeManager = roomMgr ?? manager;
 
       switch (msg.type) {
         case "setup": {
@@ -1379,6 +1379,27 @@ wss.on("connection", async (ws, req) => {
                     cy: msg.cy,
                     tileIndex: msg.tileIndex,
                     tile: msg.tile,
+                  });
+                }
+              }
+            }
+          }
+          break;
+        }
+        case "office_tile_update": {
+          activeManager.applyOfficeOverride(msg.tileIndex, msg.tile);
+          if (sess.roomId) {
+            const room = tenants.getRoom(sess.roomId);
+            if (room) {
+              for (const [pid] of room.players) {
+                if (pid === sess.user.id) continue;
+                const otherSess = tenants.get(pid);
+                if (otherSess) {
+                  otherSess.broadcast({
+                    type: "office_tile_updated",
+                    tileIndex: msg.tileIndex,
+                    tile: msg.tile,
+                    layer: msg.layer,
                   });
                 }
               }

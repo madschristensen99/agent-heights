@@ -1892,7 +1892,7 @@ export class OfficeScene extends Phaser.Scene {
     const totalSteps = instructionSteps.length + 1; // +1 for credential input step
 
     const cam = this.cameras.main;
-    const W = 480, H = 440;
+    const W = 520, H = 520;
     const cx = cam.centerX, cy = cam.centerY;
     const left = cx - W / 2;
     const top = cy - H / 2;
@@ -1900,53 +1900,69 @@ export class OfficeScene extends Phaser.Scene {
     const elements: Phaser.GameObjects.GameObject[] = [];
 
     // ── Backdrop ──
-    const bg = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.75)
+    const bg = this.add.rectangle(cx, cy, cam.width, cam.height, 0x000000, 0.6)
       .setScrollFactor(0).setDepth(10000);
-    const panel = this.add.rectangle(cx, cy, W, H, 0x16162a, 0.98)
-      .setStrokeStyle(2, 0x6c5ce7).setScrollFactor(0).setDepth(10001);
+    const panel = this.add.rectangle(cx, cy, W, H, 0xf5f0e6, 1)
+      .setStrokeStyle(3, 0xd4c5a9).setScrollFactor(0).setDepth(10001);
     elements.push(bg, panel);
 
-    // ── Header bar ──
-    const headerBar = this.add.rectangle(cx, top + 22, W - 4, 36, 0x1e1e3a, 0.9)
-      .setStrokeStyle(1, 0x6c5ce7).setScrollFactor(0).setDepth(10002);
+    // ── Header — envelope flap effect ──
+    const headerBar = this.add.rectangle(cx, top + 30, W - 6, 56, 0xe8dcc8, 1)
+      .setStrokeStyle(2, 0xd4c5a9).setScrollFactor(0).setDepth(10002);
     elements.push(headerBar);
 
-    const platformLabel = this.add.text(left + 16, top + 22, platform, {
-      fontSize: "15px", color: "#ffffff", fontStyle: "bold",
+    // Envelope icon + platform name
+    const envelopeIcon = this.add.text(left + 20, top + 30, "✉", {
+      fontSize: "26px", color: "#8b7355",
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10003);
+    elements.push(envelopeIcon);
+
+    const platformLabel = this.add.text(left + 52, top + 30, `${platform} Mailbox`, {
+      fontSize: "20px", color: "#3d3528", fontStyle: "bold",
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10003);
     elements.push(platformLabel);
 
-    const statusBadge = this.add.text(cx + W / 2 - 16, top + 22,
-      gatewayRunning ? "● Online" : "● Offline", {
-      fontSize: "11px", color: gatewayRunning ? "#55efc4" : "#ff7675", fontStyle: "bold",
+    // Status badge (right side of header)
+    const statusBadge = this.add.text(cx + W / 2 - 20, top + 30,
+      gatewayRunning ? "● Connected" : "○ Not connected", {
+      fontSize: "13px", color: gatewayRunning ? "#4a9b4a" : "#b07050", fontStyle: "bold",
     }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(10003);
     elements.push(statusBadge);
 
     // ── Content area ──
-    const contentTop = top + 56;
-    const contentW = W - 48;
+    const contentTop = top + 76;
+    const contentW = W - 60;
+    const contentLeft = left + 30;
+
+    // Step number badge
+    const stepBadge = this.add.text(contentLeft, contentTop, "", {
+      fontSize: "13px", color: "#ffffff", fontStyle: "bold",
+      backgroundColor: "#8b7355",
+      padding: { x: 8, y: 4 },
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
+    elements.push(stepBadge);
 
     // Title (step title)
-    const titleObj = this.add.text(left + 24, contentTop, "", {
-      fontSize: "14px", color: "#6c5ce7", fontStyle: "bold",
+    const titleObj = this.add.text(contentLeft, contentTop + 32, "", {
+      fontSize: "17px", color: "#3d3528", fontStyle: "bold",
       wordWrap: { width: contentW },
     }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
     elements.push(titleObj);
 
     // Body (instruction text)
-    const bodyObj = this.add.text(left + 24, contentTop + 28, "", {
-      fontSize: "12px", color: "#b0b0c8", align: "left",
-      wordWrap: { width: contentW }, lineSpacing: 4,
+    const bodyObj = this.add.text(contentLeft, contentTop + 64, "", {
+      fontSize: "14px", color: "#6b5d4a", align: "left",
+      wordWrap: { width: contentW }, lineSpacing: 8,
     }).setOrigin(0, 0).setScrollFactor(0).setDepth(10002);
     elements.push(bodyObj);
 
     // Command box (for steps that show a CLI command)
-    const cmdBox = this.add.rectangle(cx, cy + 50, W - 80, 30, 0x0a0a18, 0.95)
-      .setStrokeStyle(1, 0x4a4a6e).setScrollFactor(0).setDepth(10002);
+    const cmdBox = this.add.rectangle(cx, cy + 60, W - 100, 36, 0x3d3528, 0.9)
+      .setStrokeStyle(1, 0x8b7355).setScrollFactor(0).setDepth(10002);
     elements.push(cmdBox);
 
-    const cmdText = this.add.text(cx, cy + 50, "", {
-      fontSize: "12px", color: "#55efc4", fontFamily: "monospace", align: "center",
+    const cmdText = this.add.text(cx, cy + 60, "", {
+      fontSize: "13px", color: "#e8dcc8", fontFamily: "monospace", align: "center",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10003);
     elements.push(cmdText);
 
@@ -1955,25 +1971,25 @@ export class OfficeScene extends Phaser.Scene {
     formContainer.style.cssText = `
       display: none;
       flex-direction: column;
-      gap: 10px;
-      padding: 8px 24px;
+      gap: 16px;
+      padding: 12px 30px;
       width: ${W}px;
       box-sizing: border-box;
     `;
 
     const formSubtitle = document.createElement("div");
-    formSubtitle.textContent = `Paste your ${platform} credentials below:`;
-    formSubtitle.style.cssText = "color:#b0b0c8;font-size:12px;margin-bottom:2px;";
+    formSubtitle.textContent = `Write your ${platform} credentials on the envelope:`;
+    formSubtitle.style.cssText = "color:#6b5d4a;font-size:14px;margin-bottom:4px;";
     formContainer.appendChild(formSubtitle);
 
     const inputs: HTMLInputElement[] = [];
     for (const field of credFields) {
       const wrapper = document.createElement("div");
-      wrapper.style.cssText = "display:flex;flex-direction:column;gap:3px;";
+      wrapper.style.cssText = "display:flex;flex-direction:column;gap:6px;";
 
       const label = document.createElement("div");
       label.textContent = field.label;
-      label.style.cssText = "color:#8a8aa8;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;";
+      label.style.cssText = "color:#8b7355;font-size:12px;font-weight:600;";
 
       const input = document.createElement("input");
       input.type = field.type;
@@ -1981,19 +1997,19 @@ export class OfficeScene extends Phaser.Scene {
       input.dataset.key = field.key;
       input.style.cssText = `
         width: 100%;
-        padding: 8px 12px;
-        background: #0a0a18;
-        border: 1px solid #3a3a5e;
-        border-radius: 6px;
-        color: #ffffff;
-        font-size: 13px;
+        padding: 10px 14px;
+        background: #fffcf5;
+        border: 2px solid #d4c5a9;
+        border-radius: 8px;
+        color: #3d3528;
+        font-size: 14px;
         font-family: monospace;
         box-sizing: border-box;
         outline: none;
         transition: border-color 0.2s;
       `;
-      input.addEventListener("focus", () => { input.style.borderColor = "#6c5ce7"; });
-      input.addEventListener("blur", () => { input.style.borderColor = "#3a3a5e"; });
+      input.addEventListener("focus", () => { input.style.borderColor = "#8b7355"; });
+      input.addEventListener("blur", () => { input.style.borderColor = "#d4c5a9"; });
 
       wrapper.appendChild(label);
       wrapper.appendChild(input);
@@ -2003,46 +2019,46 @@ export class OfficeScene extends Phaser.Scene {
 
     // Result message area
     const resultMsg = document.createElement("div");
-    resultMsg.style.cssText = "color:#a0a0b0;font-size:11px;min-height:18px;text-align:center;margin-top:4px;";
+    resultMsg.style.cssText = "color:#6b5d4a;font-size:13px;min-height:22px;text-align:center;margin-top:4px;";
     formContainer.appendChild(resultMsg);
 
-    const domElement = this.add.dom(cx, contentTop + 20, formContainer);
+    const domElement = this.add.dom(cx, contentTop + 30, formContainer);
     domElement.setScrollFactor(0).setDepth(10003);
     elements.push(domElement);
 
     // ── Footer: step dots + nav buttons ──
-    const footerY = top + H - 28;
+    const footerY = top + H - 36;
 
-    // Step dots (centered)
+    // Step dots (centered, larger)
     const dots: Phaser.GameObjects.Text[] = [];
-    const dotSpacing = 28;
+    const dotSpacing = 32;
     const dotsStartX = cx - (totalSteps - 1) * dotSpacing / 2;
     for (let i = 0; i < totalSteps; i++) {
-      const dot = this.add.text(dotsStartX + i * dotSpacing, footerY - 20, "○", {
-        fontSize: "13px", color: "#4a4a6e",
+      const dot = this.add.text(dotsStartX + i * dotSpacing, footerY - 24, "○", {
+        fontSize: "16px", color: "#c4b89a",
       }).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
       dots.push(dot);
       elements.push(dot);
     }
 
-    // Nav buttons (bottom row, evenly spaced)
-    const prevBtn = this.add.text(cx - 90, footerY, "‹  Back", {
-      fontSize: "13px", color: "#6c5ce7", fontStyle: "bold",
+    // Nav buttons (bottom row)
+    const prevBtn = this.add.text(cx - 110, footerY, "‹ Back", {
+      fontSize: "15px", color: "#8b7355", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(prevBtn);
 
-    const nextBtn = this.add.text(cx, footerY, "Next  ›", {
-      fontSize: "13px", color: "#6c5ce7", fontStyle: "bold",
+    const nextBtn = this.add.text(cx, footerY, "Next ›", {
+      fontSize: "15px", color: "#8b7355", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(nextBtn);
 
-    const submitBtn = this.add.text(cx, footerY, "Submit", {
-      fontSize: "13px", color: "#55efc4", fontStyle: "bold",
+    const submitBtn = this.add.text(cx, footerY, "Send ✉", {
+      fontSize: "15px", color: "#4a9b4a", fontStyle: "bold",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(submitBtn);
 
-    const closeBtn = this.add.text(cx + 90, footerY, "✕", {
-      fontSize: "15px", color: "#6c5ce7",
+    const closeBtn = this.add.text(cx + 110, footerY, "Close", {
+      fontSize: "15px", color: "#b07050",
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
     elements.push(closeBtn);
 
@@ -2051,6 +2067,9 @@ export class OfficeScene extends Phaser.Scene {
 
     const renderStep = () => {
       const isCredStep = currentStep === instructionSteps.length;
+      const stepNum = currentStep + 1;
+
+      stepBadge.setText(`Step ${stepNum} of ${totalSteps}`);
 
       if (isCredStep) {
         titleObj.setText("Enter Credentials");
@@ -2077,7 +2096,7 @@ export class OfficeScene extends Phaser.Scene {
       // Update dots
       for (let i = 0; i < dots.length; i++) {
         dots[i].setText(i === currentStep ? "●" : i < currentStep ? "✓" : "○");
-        dots[i].setColor(i < currentStep ? "#55efc4" : i === currentStep ? "#6c5ce7" : "#4a4a6e");
+        dots[i].setColor(i < currentStep ? "#4a9b4a" : i === currentStep ? "#8b7355" : "#c4b89a");
       }
 
       // Show/hide nav buttons
@@ -2099,17 +2118,17 @@ export class OfficeScene extends Phaser.Scene {
       if (respPlatform !== platform || !submitting) return;
       submitting = false;
       if (success) {
-        resultMsg.style.color = "#55efc4";
-        resultMsg.textContent = "✓ Connected! Close and interact with the mailbox again.";
+        resultMsg.style.color = "#4a9b4a";
+        resultMsg.textContent = "✓ Envelope sealed! Your mailbox is now connected.";
         submitBtn.setVisible(true);
         submitBtn.setText("Done ✓");
         submitBtn.off("pointerdown");
         submitBtn.on("pointerdown", closeModal);
       } else {
-        resultMsg.style.color = "#ff7675";
-        resultMsg.textContent = `✗ ${error ?? "Failed to configure"}`;
+        resultMsg.style.color = "#b07050";
+        resultMsg.textContent = `✗ ${error ?? "Could not deliver. Try again."}`;
         submitBtn.setVisible(true);
-        submitBtn.setText("Submit");
+        submitBtn.setText("Send ✉");
       }
     };
     this.store.onPlatformConfigResult(onConfigResult);
@@ -2122,22 +2141,22 @@ export class OfficeScene extends Phaser.Scene {
         const val = input.value.trim();
         if (!val) {
           missing = true;
-          input.style.borderColor = "#ff7675";
+          input.style.borderColor = "#b07050";
         } else {
-          input.style.borderColor = "#3a3a5e";
+          input.style.borderColor = "#d4c5a9";
           credentials[input.dataset.key!] = val;
         }
       }
       if (missing) {
-        resultMsg.style.color = "#ff7675";
-        resultMsg.textContent = "Please fill in all fields.";
+        resultMsg.style.color = "#b07050";
+        resultMsg.textContent = "Please fill in all fields on the envelope.";
         return;
       }
 
       submitting = true;
       submitBtn.setVisible(false);
-      resultMsg.style.color = "#a0a0b0";
-      resultMsg.textContent = "Connecting...";
+      resultMsg.style.color = "#6b5d4a";
+      resultMsg.textContent = "Delivering...";
       net.send({ type: "configure_platform", platform, credentials });
     });
 
