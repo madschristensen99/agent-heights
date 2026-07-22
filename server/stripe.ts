@@ -393,13 +393,7 @@ export async function handleStripeWebhook(
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { verifyToken, type AuthUser } from "./supabase.js";
-import { json } from "./security.js";
-
-async function readBody(req: IncomingMessage): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks);
-}
+import { json, readBodyWithLimit } from "./security.js";
 
 async function authenticate(req: IncomingMessage): Promise<AuthUser | null> {
   const authHeader = req.headers["authorization"];
@@ -421,7 +415,7 @@ export async function handleStripeRequest(
       json(res, 503, { error: "Stripe not configured" });
       return true;
     }
-    const rawBody = await readBody(req);
+    const rawBody = await readBodyWithLimit(req, 256 * 1024);
     const signature = req.headers["stripe-signature"] as string | undefined;
     if (!signature) {
       json(res, 400, { error: "Missing stripe-signature header" });
@@ -473,7 +467,7 @@ export async function handleStripeRequest(
 
   // POST /api/stripe/checkout-subscription — create tiered subscription checkout
   if (url === "/api/stripe/checkout-subscription" && req.method === "POST") {
-    const body = await readBody(req);
+    const body = await readBodyWithLimit(req, 64 * 1024);
     let parsed: { tier?: string } = {};
     try { parsed = JSON.parse(body.toString()); } catch { /* empty body is fine */ }
     const tier = parseTier(parsed.tier);

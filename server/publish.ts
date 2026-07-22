@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { supabaseAdmin, isSupabaseConfigured, verifyToken } from "./supabase.js";
-import { json } from "./security.js";
+import { json, readBodyWithLimit } from "./security.js";
 
 interface PublishBody {
   agentId: string;
@@ -47,11 +47,9 @@ export async function handlePublishRequest(
   // Read body
   let body: string;
   try {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(chunk as Buffer);
-    body = Buffer.concat(chunks).toString();
+    body = (await readBodyWithLimit(req, 1024 * 1024)).toString();
   } catch {
-    json(res, 400, { error: "Failed to read request body" });
+    json(res, 400, { error: "Failed to read request body or body too large" });
     return true;
   }
 

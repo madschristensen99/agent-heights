@@ -1,4 +1,4 @@
-import type { ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
@@ -23,4 +23,17 @@ export function escapeHtml(str: string): string {
 export function json(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, applySecurityHeaders({ "Content-Type": "application/json" }));
   res.end(JSON.stringify(data));
+}
+
+export async function readBodyWithLimit(req: IncomingMessage, maxBytes = 1024 * 1024): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      throw new Error(`Request body exceeds ${maxBytes} bytes`);
+    }
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks);
 }

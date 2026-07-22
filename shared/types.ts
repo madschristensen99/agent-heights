@@ -658,6 +658,7 @@ export type ClientMsg =
   | { type: "connect_platform"; platform: string }
   | { type: "configure_platform"; platform: string; credentials: Record<string, string> }
   | { type: "set_mailbox_platform"; slot: number; platform: string | null }
+  | { type: "reply_mailbox"; platform: string; target: string; text: string }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }

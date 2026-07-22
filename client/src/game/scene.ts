@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
-import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
+import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -957,9 +957,7 @@ export class OfficeScene extends Phaser.Scene {
               this.store.toast(`[${platform}] No messages.`);
               return;
             }
-            const latest = events[0];
-            const dir = latest.direction === "inbound" ? "←" : "→";
-            this.store.toast(`[${platform}] ${dir} ${latest.sender}: ${latest.text.slice(0, 150)}`);
+            this.showMailboxConversationModal(platform, events);
             const mb = this.platformMailboxes.find((m) => m.platform === platform);
             if (mb) {
               const mbPx = { x: mb.tile.x * TILE_PX + TILE_PX / 2, y: mb.tile.y * TILE_PX + TILE_PX / 2 };
@@ -2245,6 +2243,128 @@ export class OfficeScene extends Phaser.Scene {
     closeBtn.textContent = "Close";
     closeBtn.style.cssText = `
       margin: 0 20px 16px; padding: 8px; background: none; border: 2px solid #8b7355;
+      border-radius: 8px; color: #8b7355; font-size: 13px; font-weight: bold;
+      cursor: pointer; font-family: inherit;
+    `;
+    closeBtn.onclick = () => overlay.remove();
+    card.appendChild(closeBtn);
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  }
+
+  /** Show a conversation thread modal for a platform mailbox with reply capability. */
+  private showMailboxConversationModal(platform: string, events: PlatformEvent[]): void {
+    const net = this.game.registry.get("net") as import("../net").Net;
+    const entry = getPlatformEntry(platform);
+    const colorHex = entry ? "#" + entry.color.toString(16).padStart(6, "0") : "#888";
+    const logoSlug = PLATFORM_ICON_SLUGS[platform];
+
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.55); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+    `;
+
+    const card = document.createElement("div");
+    card.style.cssText = `
+      background: #f5f0e6; border: 3px solid #d4c5a9; border-radius: 16px;
+      width: 480px; max-height: 80vh; box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+      overflow: hidden; display: flex; flex-direction: column;
+    `;
+
+    // Header
+    const header = document.createElement("div");
+    header.style.cssText = `
+      background: #e8dcc8; border-bottom: 2px solid #d4c5a9;
+      padding: 14px 20px; display: flex; align-items: center; gap: 10px;
+    `;
+    const logoHtml = logoSlug
+      ? `<img src="https://cdn.simpleicons.org/${logoSlug}" alt="${platform}" style="width:22px;height:22px;flex-shrink:0;object-fit:contain;" onerror="this.style.display='none'">`
+      : `<span style="width:22px;height:22px;border-radius:6px;background:${colorHex};border:2px solid rgba(0,0,0,0.15);flex-shrink:0;"></span>`;
+    header.innerHTML = `${logoHtml}<span style="font-size:17px;font-weight:bold;color:#3d3528;flex:1;">${platform} Inbox</span><span style="font-size:12px;color:#8b7355;">${events.length} message${events.length > 1 ? "s" : ""}</span>`;
+    card.appendChild(header);
+
+    // Message list (scrollable)
+    const list = document.createElement("div");
+    list.style.cssText = "flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;";
+
+    for (const ev of events) {
+      const msg = document.createElement("div");
+      const isInbound = ev.direction === "inbound";
+      msg.style.cssText = `
+        padding: 10px 14px; border-radius: 12px; max-width: 85%;
+        ${isInbound
+          ? "background: #fff; border: 1px solid #e0d8c8; align-self: flex-start;"
+          : "background: #e3f2e3; border: 1px solid #c8e0c8; align-self: flex-end;"}
+      `;
+      const time = new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const dirIcon = isInbound ? "←" : "→";
+      msg.innerHTML = `
+        <div style="font-size:11px;color:#8b7355;margin-bottom:4px;">${dirIcon} <b>${ev.sender}</b> · ${time}</div>
+        <div style="font-size:14px;color:#3d3528;word-wrap:break-word;">${ev.text.slice(0, 500)}</div>
+      `;
+      list.appendChild(msg);
+    }
+    card.appendChild(list);
+
+    // Reply area
+    const replyArea = document.createElement("div");
+    replyArea.style.cssText = "padding: 12px 16px; border-top: 2px solid #d4c5a9; display: flex; gap: 8px;";
+
+    const replyInput = document.createElement("input");
+    replyInput.type = "text";
+    replyInput.placeholder = "Reply to last sender...";
+    replyInput.style.cssText = `
+      flex: 1; padding: 10px 12px; border: 2px solid #d4c5a9; border-radius: 10px;
+      font-size: 14px; font-family: inherit; outline: none; background: #fff;
+    `;
+    replyArea.appendChild(replyInput);
+
+    // Pre-fill target with last inbound sender
+    const lastInbound = events.find((e) => e.direction === "inbound");
+    if (lastInbound) {
+      replyInput.placeholder = `Reply to ${lastInbound.sender}...`;
+    }
+
+    const sendBtn = document.createElement("button");
+    sendBtn.textContent = "Send";
+    sendBtn.style.cssText = `
+      padding: 10px 20px; border: 2px solid #4a9b4a; border-radius: 10px;
+      background: #4a9b4a; color: #fff; font-size: 14px; font-weight: bold;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+    `;
+    sendBtn.addEventListener("mouseenter", () => { sendBtn.style.background = "#3a8b3a"; });
+    sendBtn.addEventListener("mouseleave", () => { sendBtn.style.background = "#4a9b4a"; });
+    sendBtn.onclick = () => {
+      const text = replyInput.value.trim();
+      if (!text) return;
+      const target = lastInbound?.sender ?? "";
+      net.send({ type: "reply_mailbox", platform, target, text });
+      // Add optimistic outbound message to the list
+      const msg = document.createElement("div");
+      msg.style.cssText = "padding: 10px 14px; border-radius: 12px; max-width: 85%; background: #e3f2e3; border: 1px solid #c8e0c8; align-self: flex-end;";
+      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      msg.innerHTML = `
+        <div style="font-size:11px;color:#8b7355;margin-bottom:4px;">→ <b>You</b> · ${time}</div>
+        <div style="font-size:14px;color:#3d3528;word-wrap:break-word;">${text.slice(0, 500)}</div>
+      `;
+      list.appendChild(msg);
+      list.scrollTop = list.scrollHeight;
+      replyInput.value = "";
+    };
+    replyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendBtn.click(); });
+    replyArea.appendChild(sendBtn);
+    card.appendChild(replyArea);
+
+    // Close button
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "Close";
+    closeBtn.style.cssText = `
+      margin: 0 16px 12px; padding: 8px; background: none; border: 2px solid #8b7355;
       border-radius: 8px; color: #8b7355; font-size: 13px; font-weight: bold;
       cursor: pointer; font-family: inherit;
     `;

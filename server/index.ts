@@ -120,16 +120,25 @@ const MIME: Record<string, string> = {
   ".map": "application/json",
 };
 
+const CLIENT_ENV_ALLOWLIST = [
+  "VITE_SUPABASE_URL",
+  "VITE_SUPABASE_ANON_KEY",
+  "VITE_WS_HOST",
+  "VITE_APP_URL",
+  "VITE_TURN_SERVER",
+  "VITE_TURN_USERNAME",
+  "VITE_TURN_CREDENTIAL",
+];
+
 function getEnvScript(): string {
   const envVars: Record<string, string> = {};
-  // Inject VITE_* vars from process.env so the client gets them at runtime
-  // instead of requiring them at Vite build time.
-  for (const key of Object.keys(process.env)) {
-    if (key.startsWith("VITE_")) {
-      envVars[key] = process.env[key]!;
-    }
+  for (const key of CLIENT_ENV_ALLOWLIST) {
+    const val = process.env[key];
+    if (val) envVars[key] = val;
   }
-  return `<script>window.__ENV__=${JSON.stringify(envVars)};</script>`;
+  // Escape </script> to prevent XSS via env values breaking out of the script tag
+  const json = JSON.stringify(envVars).replace(/</g, "\\u003c");
+  return `<script>window.__ENV__=${json};</script>`;
 }
 
 function absoluteUrl(req: IncomingMessage, path: string): string {
@@ -339,15 +348,15 @@ const server = createServer((req, res) => {
     const params = new URLSearchParams(req.url?.split("?")[1] ?? "");
     const search = params.get("search") ?? "";
     if (!search) {
-      res.writeHead(400, { "Content-Type": "application/json" });
+      res.writeHead(400, applySecurityHeaders({ "Content-Type": "application/json" }));
       res.end(JSON.stringify({ error: "Missing search parameter" }));
       return;
     }
     searchPulseMCPStructured(search, 20).then((results) => {
-      res.writeHead(200, { "Content-Type": "application/json" });
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "application/json" }));
       res.end(JSON.stringify({ results, count: results.length }));
     }).catch(() => {
-      res.writeHead(500, { "Content-Type": "application/json" });
+      res.writeHead(500, applySecurityHeaders({ "Content-Type": "application/json" }));
       res.end(JSON.stringify({ error: "Search failed" }));
     });
     return;
@@ -356,7 +365,7 @@ const server = createServer((req, res) => {
   handleMarketplaceRequest(req, res).then((handled) => {
     if (!handled) {
       serveStatic(req, res).catch(() => {
-        res.writeHead(500);
+        res.writeHead(500, applySecurityHeaders());
         res.end("Internal server error");
       });
     }
@@ -365,7 +374,36 @@ const server = createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
+// Allowed origins for WebSocket connections (same-origin + explicit overrides)
+const WS_ALLOWED_ORIGINS = new Set<string>(
+  (process.env.WS_ALLOWED_ORIGINS ?? "").split(",").map(s => s.trim()).filter(Boolean),
+);
+
+function isWsOriginAllowed(origin: string | undefined, req: IncomingMessage): boolean {
+  // No origin header = non-browser client (e.g. curl) — allow in dev only
+  if (!origin) return process.env.NODE_ENV !== "production";
+  // Always allow localhost / 127.0.0.1 for dev
+  try {
+    const parsed = new URL(origin);
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") return true;
+  } catch { /* invalid origin */ }
+  // Check explicit allowlist
+  if (WS_ALLOWED_ORIGINS.has(origin)) return true;
+  // Check same-origin: origin matches the request's host
+  const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "";
+  if (host && origin.replace(/\/$/, "") === `${new URL(origin).protocol}//${host}`) return true;
+  return false;
+}
+
 wss.on("connection", async (ws, req) => {
+  // Validate WebSocket origin to prevent cross-site WebSocket hijacking
+  const origin = req.headers["origin"] as string | undefined;
+  if (!isWsOriginAllowed(origin, req)) {
+    console.warn(`[ws] Rejected connection from origin: ${origin ?? "(none)"}`);
+    ws.close(4003, "Origin not allowed");
+    return;
+  }
+
   const url = new URL(req.url ?? "", "http://localhost");
 
   // ── Spectator connection (read-only, no auth) ───────────────────────
@@ -2081,6 +2119,16 @@ wss.on("connection", async (ws, req) => {
           if (!ownerSess) break;
           const events = ownerSess.manager.checkMailbox(msg.platform);
           sess.broadcast({ type: "mailbox_messages", platform: msg.platform, events });
+          break;
+        }
+        case "reply_mailbox": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          const success = await ownerSess.manager.replyToMailbox(msg.platform, msg.target, msg.text);
+          sess.broadcast({ type: "toast", text: success ? `Reply sent via ${msg.platform}.` : `Failed to send reply via ${msg.platform}.` });
           break;
         }
         case "connect_platform": {

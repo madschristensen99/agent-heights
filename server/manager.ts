@@ -289,13 +289,13 @@ export class AgentManager {
     for (const s of servers) {
       const raw = s.url ? this.mcpKeys[s.url] : undefined;
       if (!raw) {
-        console.log(`[mcp-inject] No key for ${s.url} (available keys: ${Object.keys(this.mcpKeys).join(", ") || "none"})`);
+        console.log(`[mcp-inject] No key for ${s.url}`);
         result.push(s);
         continue;
       }
       const stored = parseStoredToken(raw);
       let token = stored.access_token;
-      console.log(`[mcp-inject] Found token for ${s.url}, token length=${token.length}, expires_at=${stored.expires_at ?? "none"}, has_refresh=${!!stored.refresh_token}`);
+      console.log(`[mcp-inject] Found token for ${s.url}, expires_at=${stored.expires_at ?? "none"}, has_refresh=${!!stored.refresh_token}`);
       // Check if token is expired (or will expire in the next 60s)
       if (stored.expires_at && stored.expires_at < Date.now() + 60_000) {
         console.log(`[mcp] Token for ${s.url} expired, attempting refresh...`);
@@ -2705,6 +2705,16 @@ export class AgentManager {
     return this.getPlatformMessages(platform);
   }
 
+  /** Send a reply through the Hermes gateway and emit an outbound event. */
+  async replyToMailbox(platform: string, target: string, text: string): Promise<boolean> {
+    if (!this.hermesClient) return false;
+    const success = await this.hermesClient.sendMessage(platform, target, text);
+    if (success) {
+      this.emitPlatformEvent(platform, "outbound", this.bossName, text.slice(0, 500));
+    }
+    return success;
+  }
+
   /** Broadcast the current state of a platform's mailbox to all clients. */
   private broadcastMailboxUpdate(platform: string): void {
     this.broadcast({
@@ -2911,7 +2921,8 @@ export class AgentManager {
     this.detectPlatformEvent(rt.info.name, text);
   }
 
-  /** Scan a log line for [Platform] tags and emit platform events. */
+  /** Scan a log line for [Platform] tags and emit platform events.
+   *  For outbound messages, also sends the reply via the Hermes gateway. */
   private detectPlatformEvent(agentName: string, text: string): void {
     const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
     for (const platform of platforms) {
@@ -2923,6 +2934,15 @@ export class AgentManager {
         // Route inbound messages to idle agents' inboxes
         if (direction === "inbound") {
           this.routePlatformEvent(platform, agentName, after.slice(0, 300));
+        }
+        // Send outbound agent replies through the gateway
+        if (direction === "outbound" && this.hermesClient) {
+          // Extract the target and message from patterns like "→ target: message"
+          const replyMatch = after.match(/(?:→|sent to|responded to)\s*(\S+?):\s*(.*)/i);
+          if (replyMatch) {
+            const [, target, replyText] = replyMatch;
+            void this.hermesClient.sendMessage(platform, target, replyText.slice(0, 500));
+          }
         }
       }
     }
