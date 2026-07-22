@@ -506,21 +506,20 @@ export class OfficeScene extends Phaser.Scene {
     };
 
     // register post-processing pipelines (once)
-    const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-    if (renderer && !renderer.pipelines.has("BloomFX")) {
-      renderer.pipelines.addPostPipeline("BloomFX", BloomPipeline);
-    }
-    if (renderer && !renderer.pipelines.has("ColorGrade")) {
-      renderer.pipelines.addPostPipeline("ColorGrade", ColorGradePipeline);
-    }
-    if (renderer && !renderer.pipelines.has("DOF")) {
-      renderer.pipelines.addPostPipeline("DOF", DOFPipeline);
-    }
-    // apply pipelines to camera (order: Bloom -> ColorGrade -> DOF)
-    if (renderer) {
-      this.cameras.main.setPostPipeline("BloomFX");
-      this.cameras.main.setPostPipeline("ColorGrade");
-      this.cameras.main.setPostPipeline("DOF");
+    try {
+      const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+      const pipelines = renderer?.pipelines as any;
+      if (pipelines) {
+        if (!pipelines.has("BloomFX")) pipelines.addPostPipeline("BloomFX", BloomPipeline);
+        if (!pipelines.has("ColorGrade")) pipelines.addPostPipeline("ColorGrade", ColorGradePipeline);
+        if (!pipelines.has("DOF")) pipelines.addPostPipeline("DOF", DOFPipeline);
+        // apply pipelines to camera (order: Bloom -> ColorGrade -> DOF)
+        this.cameras.main.setPostPipeline("BloomFX");
+        this.cameras.main.setPostPipeline("ColorGrade");
+        this.cameras.main.setPostPipeline("DOF");
+      }
+    } catch (err) {
+      console.warn("[scene] Post-pipeline setup failed — continuing without visual effects:", err);
     }
 
     // Initialize audio on first user interaction

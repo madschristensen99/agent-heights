@@ -1598,6 +1598,8 @@ export class WorldLayer {
             chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 70, 0xaa00ff, 0.25, 0.08, 0.004));
           } else if (tile === TILE.FOUNTAIN) {
             chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 50, 0x88ccff, 0.2, 0.03, 0.002));
+          } else if (tile === TILE.MYSTIC_TREE) {
+            chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 45, 0xff6600, 0.2, 0.06, 0.003));
           }
         }
       }
@@ -1989,7 +1991,8 @@ export class WorldLayer {
 
     // --- update lighting ---
     const distFactor = this.distanceFactor(playerX, playerY);
-    this.lighting.update(time, playerX, playerY, distFactor);
+    const nightFactor = this.lighting.getNightFactor(time);
+    this.lighting.update(time, playerX, playerY, distFactor, nightFactor);
 
     // --- update minimap when outside ---
     if (outside) {

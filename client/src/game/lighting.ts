@@ -36,6 +36,7 @@ export class LightingSystem {
   private ambientDarkness!: Phaser.GameObjects.Rectangle;
   private brightnessBoost!: Phaser.GameObjects.Rectangle;
   private lightContainer: Phaser.GameObjects.Container;
+  private playerLight: LightSource | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -110,12 +111,9 @@ export class LightingSystem {
   }
 
   /** Main update — called every frame.
-   *  @param darknessFactor 0 = fully lit (inside office), 1 = full night darkness */
-  update(time: number, playerX: number, playerY: number, darknessFactor: number): void {
-    // Day/night cycle: 120s full cycle
-    const cycle = (time / 120000) % 1;
-    const nightFactor = (Math.sin(cycle * Math.PI * 2 - Math.PI / 2) + 1) / 2; // 0 = day, 1 = night
-
+   *  @param darknessFactor 0 = fully lit (inside office), 1 = full night darkness
+   *  @param nightFactor 0 = day, 1 = full night (from day/night cycle) */
+  update(time: number, playerX: number, playerY: number, darknessFactor: number, nightFactor: number): void {
     // Brightness boost: peaks just outside the office, fades over ~15 tiles
     const brightnessFactor = darknessFactor > 0 ? Math.max(0, 1 - darknessFactor * 7) : 0;
     this.brightnessBoost.setFillStyle(0xffd88a, brightnessFactor * 0.06);
@@ -133,10 +131,35 @@ export class LightingSystem {
     this.dayNightTint.setSize(view.width, view.height).setPosition(view.x, view.y);
     this.ambientDarkness.setSize(view.width, view.height).setPosition(view.x, view.y);
 
-    // Pulse all lights
+    // Player aura light — created on first update, follows player, brighter at night
+    const auraIntensity = 0.15 + nightFactor * 0.35 * delayedDarkness;
+    if (!this.playerLight) {
+      this.playerLight = this.addLight(playerX, playerY, 120, 0xffdd88, auraIntensity, 0.03, 0.002);
+    } else {
+      this.updateLight(this.playerLight, playerX, playerY, auraIntensity);
+      // Resize aura at night for wider visibility
+      const auraRadius = 100 + nightFactor * 80 * delayedDarkness;
+      this.playerLight.sprite.setDisplaySize(auraRadius * 2, auraRadius * 2);
+    }
+
+    // Dynamically adjust bloom pipeline — at night, lower threshold and boost strength
+    // so light sources radiate and glow intensely against the darkness
+    const renderer = this.scene.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    if (renderer) {
+      const bloomPipe = renderer.pipelines.get("BloomFX") as unknown as { setStrength: (n: number) => void; setThreshold: (n: number) => void } | null;
+      if (bloomPipe) {
+        const nightBloom = nightFactor * delayedDarkness;
+        bloomPipe.setStrength(0.6 + nightBloom * 0.8);
+        bloomPipe.setThreshold(0.65 - nightBloom * 0.35);
+      }
+    }
+
+    // Pulse all lights — boost intensity at night so they radiate against the dark
+    const nightBoost = 1 + nightFactor * delayedDarkness * 0.8;
     for (const light of this.lights) {
+      if (light === this.playerLight) continue; // player light already scaled
       const pulseVal = light.pulse > 0 ? Math.sin(time * light.pulseSpeed) * light.pulse : 0;
-      light.sprite.setAlpha(light.intensity + pulseVal);
+      light.sprite.setAlpha(Math.min(1, light.intensity * nightBoost + pulseVal));
     }
   }
 
@@ -176,6 +199,7 @@ export class LightingSystem {
   destroy(): void {
     for (const light of this.lights) light.sprite.destroy();
     this.lights = [];
+    this.playerLight = null;
     this.brightnessBoost.destroy();
     this.dayNightTint.destroy();
     this.ambientDarkness.destroy();
