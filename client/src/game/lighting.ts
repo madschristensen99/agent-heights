@@ -50,18 +50,17 @@ export class LightingSystem {
       .setScrollFactor(0);
 
     // Day/night overlay — shifts color temperature over time
+    // Positioned in world space each frame to cover the full camera view.
     this.dayNightTint = scene.add
       .rectangle(0, 0, scene.scale.width, scene.scale.height, 0x000000, 0)
       .setOrigin(0, 0)
-      .setDepth(890)
-      .setScrollFactor(0);
+      .setDepth(890);
 
     // Ambient darkness — controls overall visibility (stronger at night)
     this.ambientDarkness = scene.add
       .rectangle(0, 0, scene.scale.width, scene.scale.height, 0x000020, 0)
       .setOrigin(0, 0)
-      .setDepth(845)
-      .setScrollFactor(0);
+      .setDepth(845);
 
     scene.scale.on("resize", () => {
       this.brightnessBoost.setSize(scene.scale.width, scene.scale.height);
@@ -124,8 +123,15 @@ export class LightingSystem {
     // Darkness: delayed onset — doesn't start until ~10 tiles out so the
     // brightness boost dominates near the office edge
     const delayedDarkness = Math.max(0, (darknessFactor - 0.1) / 0.9);
-    this.dayNightTint.setFillStyle(0x0a0a30, nightFactor * 0.35 * delayedDarkness);
-    this.ambientDarkness.setFillStyle(0x000020, nightFactor * 0.25 * delayedDarkness);
+    // Make night darker and more ominous — deep blue-purple with higher alpha
+    this.dayNightTint.setFillStyle(0x050518, nightFactor * 0.55 * delayedDarkness);
+    this.ambientDarkness.setFillStyle(0x000010, nightFactor * 0.45 * delayedDarkness);
+
+    // Resize overlays to cover the full camera world view (handles zoom-out)
+    const cam = this.scene.cameras.main;
+    const view = cam.worldView;
+    this.dayNightTint.setSize(view.width, view.height).setPosition(view.x, view.y);
+    this.ambientDarkness.setSize(view.width, view.height).setPosition(view.x, view.y);
 
     // Pulse all lights
     for (const light of this.lights) {

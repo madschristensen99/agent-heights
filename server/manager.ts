@@ -603,6 +603,11 @@ export class AgentManager {
         }
       },
     );
+
+    // Auto-start the messaging gateway so previously saved credentials reconnect
+    this.hermesClient.startGateway().catch((err) => {
+      console.warn(`[hermes] Auto-start gateway failed: ${err}`);
+    });
   }
 
   /** Get current platform connection states. */

@@ -1087,19 +1087,18 @@ export class OfficeScene extends Phaser.Scene {
           this.drawVignette();
 
           // day/night tint: subtle color overlay that shifts over time
+          // Positioned in world space each frame to cover the full camera view.
           this.dayNightTint = this.add
             .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
             .setOrigin(0, 0)
-            .setDepth(890)
-            .setScrollFactor(0);
+            .setDepth(890);
 
           // brightness boost: makes the area just outside the office brighter than inside
           this.brightnessBoost = this.add
             .rectangle(0, 0, this.scale.width, this.scale.height, 0xffffff, 0)
             .setOrigin(0, 0)
             .setDepth(830)
-            .setBlendMode(Phaser.BlendModes.ADD)
-            .setScrollFactor(0);
+            .setBlendMode(Phaser.BlendModes.ADD);
 
           const onResize = () => {
             if (this.userZoom === null) {
@@ -1363,9 +1362,14 @@ export class OfficeScene extends Phaser.Scene {
     // brightness boost: peaks just outside the office, fades over ~15 tiles
     const brightnessFactor = distFactor > 0 ? Math.max(0, 1 - distFactor * 7) : 0;
     this.brightnessBoost.setFillStyle(0xffd88a, brightnessFactor * 0.06);
+    // Resize overlays to cover full camera world view (handles zoom-out)
+    const cam = this.cameras.main;
+    const view = cam.worldView;
+    this.brightnessBoost.setSize(view.width, view.height).setPosition(view.x, view.y);
     // darkness: delayed onset — doesn't start until ~10 tiles out
     const delayedDarkness = Math.max(0, (distFactor - 0.1) / 0.9);
-    this.dayNightTint.setFillStyle(0x0a0a30, nightFactor * 0.3 * delayedDarkness);
+    this.dayNightTint.setFillStyle(0x050518, nightFactor * 0.55 * delayedDarkness);
+    this.dayNightTint.setSize(view.width, view.height).setPosition(view.x, view.y);
 
     // monitor glows: pulse for working agents
     const pulse = 0.15 + Math.sin(time * 0.003) * 0.05;

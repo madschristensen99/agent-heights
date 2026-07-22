@@ -251,15 +251,23 @@ export class HermesClient {
         return { success: false, error: data.error ?? data.detail ?? data.message ?? `HTTP ${res.status}` };
       }
 
-      // Restart the gateway so it picks up the new credentials
-      const restartRes = await fetch(`${this.baseUrl}/api/gateway/restart`, {
+      // Start (or restart) the gateway so it picks up the new credentials
+      // Use start first (works if gateway was stopped), then fall back to restart
+      let gatewayRes = await fetch(`${this.baseUrl}/api/gateway/start`, {
         method: "POST",
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(15000),
       });
-      if (!restartRes.ok) {
-        // Config was saved but gateway didn't restart — still report partial success
-        console.warn(`[hermes-client] Platform configured but gateway restart returned HTTP ${restartRes.status}`);
+      if (!gatewayRes.ok) {
+        // Gateway may already be running — try restart instead
+        gatewayRes = await fetch(`${this.baseUrl}/api/gateway/restart`, {
+          method: "POST",
+          headers: this.authHeaders(),
+          signal: AbortSignal.timeout(15000),
+        });
+      }
+      if (!gatewayRes.ok) {
+        console.warn(`[hermes-client] Platform configured but gateway start/restart returned HTTP ${gatewayRes.status}`);
       }
 
       return { success: true };

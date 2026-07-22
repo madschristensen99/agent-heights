@@ -25,7 +25,9 @@ COPY . .
 RUN pnpm build
 
 # Create data directories for agent workspaces / logs / saves
-RUN mkdir -p /app/ag /app/workspace
+# Persist Hermes config (credentials, .env) inside the ag volume so they survive redeploy
+RUN mkdir -p /app/ag /app/workspace /app/ag/hermes && \
+    ln -sf /app/ag/hermes /root/.hermes
 
 # Hermes gateway port
 EXPOSE 3001 9119
