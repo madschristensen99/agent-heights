@@ -514,12 +514,15 @@ export interface GameSettings {
     /** Whether Railway MCP tools are available to devops agents. */
     enabled: boolean;
   };
+  /** Which platform each of the 6 mailbox slots is assigned to (null = unassigned). */
+  mailboxPlatforms: (string | null)[];
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
   cline: { maxIterations: 60, autoApproveCommands: true },
   game: { idleWander: true, theme: "classic" },
   railway: { enabled: true },
+  mailboxPlatforms: ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"],
 };
 
 export interface RailwayProject {
@@ -654,6 +657,7 @@ export type ClientMsg =
   | { type: "check_mailbox"; platform: string }
   | { type: "connect_platform"; platform: string }
   | { type: "configure_platform"; platform: string; credentials: Record<string, string> }
+  | { type: "set_mailbox_platform"; slot: number; platform: string | null }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
@@ -836,8 +840,8 @@ export const YUKI_ID = "yuki";
 /** Fixed agent id for Hermes, the devops core engineer NPC in the mail room. */
 export const HERMES_ID = "hermes";
 
-/** The 6 platforms that have mailboxes in the mail room. */
-export const PLATFORMS = ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"] as const;
+/** Default platforms for the 6 mailbox slots (backward compatibility). */
+export const DEFAULT_MAILBOX_PLATFORMS = ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"] as const;
 
 /** Credential field definition for platform setup. */
 export interface PlatformCredentialField {
@@ -848,35 +852,270 @@ export interface PlatformCredentialField {
   required: boolean;
 }
 
-/** Per-platform credential field schemas. */
-export const PLATFORM_CREDENTIAL_FIELDS: Record<string, PlatformCredentialField[]> = {
-  Slack: [
-    { key: "bot_token", label: "Bot User OAuth Token", placeholder: "xoxb-...", type: "password", required: true },
-    { key: "signing_secret", label: "Signing Secret", placeholder: "abc123...", type: "password", required: true },
-  ],
-  Discord: [
-    { key: "bot_token", label: "Bot Token", placeholder: "MTk2NjI4...", type: "password", required: true },
-  ],
-  Telegram: [
-    { key: "bot_token", label: "Bot Token (from @BotFather)", placeholder: "123456789:ABCdef...", type: "password", required: true },
-  ],
-  WhatsApp: [
-    { key: "account_sid", label: "Twilio Account SID", placeholder: "AC...", type: "text", required: true },
-    { key: "auth_token", label: "Twilio Auth Token", placeholder: "...", type: "password", required: true },
-    { key: "phone_number", label: "WhatsApp Number (sandbox: +14155238886)", placeholder: "+14155238886", type: "text", required: true },
-  ],
-  Signal: [
-    { key: "phone_number", label: "Signal Phone Number", placeholder: "+15551234567", type: "text", required: true },
-  ],
-  Email: [
-    { key: "imap_host", label: "IMAP Server", placeholder: "imap.gmail.com", type: "text", required: true },
-    { key: "imap_port", label: "IMAP Port", placeholder: "993", type: "text", required: true },
-    { key: "smtp_host", label: "SMTP Server", placeholder: "smtp.gmail.com", type: "text", required: true },
-    { key: "smtp_port", label: "SMTP Port", placeholder: "587", type: "text", required: true },
-    { key: "email", label: "Email Address", placeholder: "you@gmail.com", type: "text", required: true },
-    { key: "password", label: "App Password", placeholder: "16-char app password", type: "password", required: true },
-  ],
-};
+/** A platform in the catalog — metadata + credential schema. */
+export interface PlatformCatalogEntry {
+  name: string;
+  /** Brand color for the mailbox (hex integer). */
+  color: number;
+  /** 1 = shown by default, 2 = available, 3 = regional/niche. */
+  tier: 1 | 2 | 3;
+  /** Short description shown in the platform picker. */
+  description: string;
+  /** Credential fields shown in the setup modal. Empty = configure via `hermes gateway setup`. */
+  credentialFields: PlatformCredentialField[];
+}
+
+/** Full catalog of all Hermes-supported messaging platforms (27+). */
+export const PLATFORM_CATALOG: PlatformCatalogEntry[] = [
+  // ── Tier 1 — common business/messaging platforms ──
+  {
+    name: "Slack", color: 0x611f69, tier: 1,
+    description: "Slack workspace bot — channels, DMs, threads",
+    credentialFields: [
+      { key: "bot_token", label: "Bot User OAuth Token", placeholder: "xoxb-...", type: "password", required: true },
+      { key: "signing_secret", label: "Signing Secret", placeholder: "abc123...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "Discord", color: 0x5865f2, tier: 1,
+    description: "Discord server bot — channels, DMs, reactions",
+    credentialFields: [
+      { key: "bot_token", label: "Bot Token", placeholder: "MTk2NjI4...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "Telegram", color: 0x0088cc, tier: 1,
+    description: "Telegram bot via BotFather — chats, groups, voice",
+    credentialFields: [
+      { key: "bot_token", label: "Bot Token (from @BotFather)", placeholder: "123456789:ABCdef...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "WhatsApp", color: 0x25d366, tier: 1,
+    description: "WhatsApp Business API via Twilio or Cloud API",
+    credentialFields: [
+      { key: "account_sid", label: "Twilio Account SID", placeholder: "AC...", type: "text", required: true },
+      { key: "auth_token", label: "Twilio Auth Token", placeholder: "...", type: "password", required: true },
+      { key: "phone_number", label: "WhatsApp Number (sandbox: +14155238886)", placeholder: "+14155238886", type: "text", required: true },
+    ],
+  },
+  {
+    name: "Signal", color: 0x3a76f0, tier: 1,
+    description: "Signal messenger via signal-cli REST API",
+    credentialFields: [
+      { key: "phone_number", label: "Signal Phone Number", placeholder: "+15551234567", type: "text", required: true },
+    ],
+  },
+  {
+    name: "Email", color: 0xea4335, tier: 1,
+    description: "Email via IMAP/SMTP — any provider (Gmail, Outlook, etc.)",
+    credentialFields: [
+      { key: "imap_host", label: "IMAP Server", placeholder: "imap.gmail.com", type: "text", required: true },
+      { key: "imap_port", label: "IMAP Port", placeholder: "993", type: "text", required: true },
+      { key: "smtp_host", label: "SMTP Server", placeholder: "smtp.gmail.com", type: "text", required: true },
+      { key: "smtp_port", label: "SMTP Port", placeholder: "587", type: "text", required: true },
+      { key: "email", label: "Email Address", placeholder: "you@gmail.com", type: "text", required: true },
+      { key: "password", label: "App Password", placeholder: "16-char app password", type: "password", required: true },
+    ],
+  },
+  {
+    name: "SMS", color: 0x4a9b4a, tier: 1,
+    description: "SMS via Twilio — text messages to phone numbers",
+    credentialFields: [
+      { key: "account_sid", label: "Twilio Account SID", placeholder: "AC...", type: "text", required: true },
+      { key: "auth_token", label: "Twilio Auth Token", placeholder: "...", type: "password", required: true },
+      { key: "phone_number", label: "Twilio Phone Number", placeholder: "+15551234567", type: "text", required: true },
+    ],
+  },
+  {
+    name: "Microsoft Teams", color: 0x6264a7, tier: 1,
+    description: "Microsoft Teams bot — channels, chats, meetings",
+    credentialFields: [
+      { key: "app_id", label: "App (Bot) ID", placeholder: "00000000-0000-...", type: "text", required: true },
+      { key: "tenant_id", label: "Tenant ID", placeholder: "00000000-0000-...", type: "text", required: true },
+      { key: "bot_password", label: "Bot Password / Client Secret", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "Google Chat", color: 0x1a73e8, tier: 1,
+    description: "Google Chat bot — spaces, DMs, threads",
+    credentialFields: [
+      { key: "project_id", label: "Google Cloud Project ID", placeholder: "my-project-123", type: "text", required: true },
+      { key: "service_account", label: "Service Account JSON", placeholder: '{"type":"service_account",...}', type: "password", required: true },
+    ],
+  },
+  {
+    name: "Matrix", color: 0x0dbd8b, tier: 1,
+    description: "Matrix protocol via mautrix — optional E2EE",
+    credentialFields: [
+      { key: "homeserver_url", label: "Homeserver URL", placeholder: "https://matrix.org", type: "text", required: true },
+      { key: "access_token", label: "Access Token", placeholder: "syt_...", type: "password", required: true },
+      { key: "user_id", label: "User ID", placeholder: "@bot:matrix.org", type: "text", required: true },
+    ],
+  },
+  // ── Tier 2 — available but less common ──
+  {
+    name: "Mattermost", color: 0x1f6dff, tier: 2,
+    description: "Mattermost open-source chat — channels, DMs",
+    credentialFields: [
+      { key: "server_url", label: "Mattermost Server URL", placeholder: "https://mattermost.example.com", type: "text", required: true },
+      { key: "bot_token", label: "Bot Token", placeholder: "...", type: "password", required: true },
+      { key: "team_name", label: "Team Name", placeholder: "engineering", type: "text", required: true },
+    ],
+  },
+  {
+    name: "LINE", color: 0x06c755, tier: 2,
+    description: "LINE Messaging API — chats, groups",
+    credentialFields: [
+      { key: "channel_access_token", label: "Channel Access Token", placeholder: "...", type: "password", required: true },
+      { key: "channel_secret", label: "Channel Secret", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "IRC", color: 0x7e7e7e, tier: 2,
+    description: "IRC protocol — channels, DMs, classic chat",
+    credentialFields: [
+      { key: "server", label: "IRC Server", placeholder: "irc.libera.chat", type: "text", required: true },
+      { key: "port", label: "Port", placeholder: "6697", type: "text", required: true },
+      { key: "nickname", label: "Bot Nickname", placeholder: "AgentHeights", type: "text", required: true },
+      { key: "channels", label: "Channels (comma-separated)", placeholder: "#general,#support", type: "text", required: true },
+    ],
+  },
+  {
+    name: "BlueBubbles", color: 0x34c759, tier: 2,
+    description: "iMessage via BlueBubbles macOS server",
+    credentialFields: [
+      { key: "server_url", label: "BlueBubbles Server URL", placeholder: "http://192.168.1.100:1234", type: "text", required: true },
+      { key: "password", label: "BlueBubbles Password", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "ntfy", color: 0x3a76f0, tier: 2,
+    description: "ntfy push notification service",
+    credentialFields: [
+      { key: "server_url", label: "ntfy Server URL", placeholder: "https://ntfy.sh", type: "text", required: true },
+      { key: "topic", label: "Topic", placeholder: "agent-heights", type: "text", required: true },
+    ],
+  },
+  {
+    name: "SimpleX", color: 0x8b5cf6, tier: 2,
+    description: "SimpleX Chat — privacy-focused messaging",
+    credentialFields: [],
+  },
+  {
+    name: "Open WebUI", color: 0x4a9b8b, tier: 2,
+    description: "Open WebUI compatible frontend",
+    credentialFields: [
+      { key: "server_url", label: "Open WebUI URL", placeholder: "http://localhost:3000", type: "text", required: true },
+      { key: "api_key", label: "API Key", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "Webhooks", color: 0xf59e0b, tier: 2,
+    description: "Generic inbound/outbound webhook adapter",
+    credentialFields: [
+      { key: "webhook_url", label: "Webhook URL", placeholder: "https://...", type: "text", required: true },
+      { key: "secret", label: "Webhook Secret (optional)", placeholder: "...", type: "password", required: false },
+    ],
+  },
+  // ── Tier 3 — regional / niche ──
+  {
+    name: "DingTalk", color: 0x1677ff, tier: 3,
+    description: "DingTalk (Alibaba) — Chinese workplace messaging",
+    credentialFields: [
+      { key: "app_key", label: "App Key", placeholder: "...", type: "text", required: true },
+      { key: "app_secret", label: "App Secret", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "Feishu/Lark", color: 0x00d6b9, tier: 3,
+    description: "Feishu/Lark (ByteDance) — workplace messaging",
+    credentialFields: [
+      { key: "app_id", label: "App ID", placeholder: "cli_...", type: "text", required: true },
+      { key: "app_secret", label: "App Secret", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "WeCom", color: 0x07c160, tier: 3,
+    description: "WeCom (WeChat Work) — Tencent workplace",
+    credentialFields: [
+      { key: "corp_id", label: "Corp ID", placeholder: "...", type: "text", required: true },
+      { key: "agent_id", label: "Agent ID", placeholder: "...", type: "text", required: true },
+      { key: "secret", label: "Secret", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "WeCom Callback", color: 0x06a56f, tier: 3,
+    description: "WeCom callback mode — webhook-based",
+    credentialFields: [
+      { key: "token", label: "Token", placeholder: "...", type: "password", required: true },
+      { key: "encoding_aes_key", label: "Encoding AES Key", placeholder: "...", type: "password", required: true },
+      { key: "corp_id", label: "Corp ID", placeholder: "...", type: "text", required: true },
+    ],
+  },
+  {
+    name: "Weixin", color: 0x07c160, tier: 3,
+    description: "WeChat (personal) via iLink Bot API",
+    credentialFields: [
+      { key: "token", label: "iLink Bot Token", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "QQ", color: 0x12b7f5, tier: 3,
+    description: "QQ Bot (Tencent) — official API v2",
+    credentialFields: [
+      { key: "app_id", label: "App ID", placeholder: "...", type: "text", required: true },
+      { key: "token", label: "Token", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "Yuanbao", color: 0x4e6ef2, tier: 3,
+    description: "Yuanbao (Tencent) — DM and group chat",
+    credentialFields: [],
+  },
+  {
+    name: "Home Assistant", color: 0x18bcf2, tier: 3,
+    description: "Home Assistant conversation integration",
+    credentialFields: [
+      { key: "ha_url", label: "Home Assistant URL", placeholder: "http://homeassistant.local:8123", type: "text", required: true },
+      { key: "token", label: "Long-Lived Access Token", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "Teams Meetings", color: 0x5b5fc7, tier: 3,
+    description: "Microsoft Teams Meetings bot",
+    credentialFields: [
+      { key: "app_id", label: "App (Bot) ID", placeholder: "00000000-0000-...", type: "text", required: true },
+      { key: "tenant_id", label: "Tenant ID", placeholder: "00000000-0000-...", type: "text", required: true },
+      { key: "bot_password", label: "Bot Password / Client Secret", placeholder: "...", type: "password", required: true },
+    ],
+  },
+  {
+    name: "MS Graph Webhook", color: 0x5b5fc7, tier: 3,
+    description: "Microsoft Graph change-notification webhook (Teams, Outlook)",
+    credentialFields: [
+      { key: "client_id", label: "Client (App) ID", placeholder: "00000000-0000-...", type: "text", required: true },
+      { key: "client_secret", label: "Client Secret", placeholder: "...", type: "password", required: true },
+      { key: "tenant_id", label: "Tenant ID", placeholder: "00000000-0000-...", type: "text", required: true },
+    ],
+  },
+  {
+    name: "Raft", color: 0x6b7280, tier: 3,
+    description: "Raft messaging platform",
+    credentialFields: [],
+  },
+];
+
+/** Look up a platform catalog entry by name (case-insensitive). */
+export function getPlatformEntry(name: string): PlatformCatalogEntry | undefined {
+  const lower = name.toLowerCase();
+  return PLATFORM_CATALOG.find((p) => p.name.toLowerCase() === lower);
+}
+
+/** Per-platform credential field schemas (derived from the catalog). */
+export const PLATFORM_CREDENTIAL_FIELDS: Record<string, PlatformCredentialField[]> = Object.fromEntries(
+  PLATFORM_CATALOG.map((p) => [p.name, p.credentialFields]),
+);
 
 /** External event from a messaging platform. */
 export interface PlatformEvent {

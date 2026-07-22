@@ -24,6 +24,7 @@ net.onMessage = (msg) => {
       freeTrialExpiresAt: msg.freeTrialExpiresAt,
     });
   } else if (msg.type === "payment_required") {
+    paymentOverlayDismissed = false;
     paymentOverlay.show();
   }
   store.apply(msg);
@@ -36,7 +37,9 @@ net.onRefreshToken = async () => {
 };
 
 const authOverlay = createAuthOverlay();
-const paymentOverlay = createPaymentOverlay();
+// If true, the user manually closed the overlay — don't auto-re-show it.
+let paymentOverlayDismissed = false;
+const paymentOverlay = createPaymentOverlay(() => { paymentOverlayDismissed = true; });
 
 // If true, suppress auto-showing the payment overlay because we just returned
 // from a successful Stripe checkout and the webhook may not have processed yet.
@@ -46,12 +49,13 @@ let suppressPaymentOverlay = false;
 onPaymentChange((state) => {
   if (state && state.entrancePaid) {
     suppressPaymentOverlay = false;
+    paymentOverlayDismissed = false;
     paymentOverlay.hide();
     return;
   }
   if (state && !state.entrancePaid) {
     const trialActive = state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
-    if (!trialActive && !suppressPaymentOverlay) {
+    if (!trialActive && !suppressPaymentOverlay && !paymentOverlayDismissed) {
       paymentOverlay.show();
     } else {
       paymentOverlay.hide();

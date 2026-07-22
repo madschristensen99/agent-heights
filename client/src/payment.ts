@@ -96,7 +96,7 @@ export async function refreshPaymentStatus(): Promise<void> {
   }
 }
 
-export function createPaymentOverlay(): { show: () => void; hide: () => void } {
+export function createPaymentOverlay(onClose?: () => void): { show: () => void; hide: () => void } {
   const overlay = document.createElement("div");
   overlay.id = "payment-overlay";
   overlay.style.cssText = `
@@ -270,7 +270,7 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
 
   entranceBtn.addEventListener("click", () => void startEntranceCheckout());
   manageBtn.addEventListener("click", () => void openCustomerPortal());
-  closeBtn.addEventListener("click", () => { overlay.style.display = "none"; });
+  closeBtn.addEventListener("click", () => { overlay.style.display = "none"; onClose?.(); });
 
   // Delegate tier card button clicks
   overlay.addEventListener("click", (e) => {

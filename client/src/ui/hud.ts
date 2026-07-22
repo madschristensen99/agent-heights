@@ -2951,6 +2951,9 @@ export class Hud {
       html += `<button id="ce-delete" style="padding:4px 10px;border-radius:6px;border:1px solid #6a3a3a;background:#5a2a2a;color:#e0e0e0;cursor:pointer;font-size:12px;">🗑 Delete</button>`;
     }
     html += `<button id="ce-new-file" style="padding:4px 10px;border-radius:6px;border:1px solid #3a4a6a;background:#2a3a5a;color:#e0e0e0;cursor:pointer;font-size:12px;">+ New File</button>`;
+    if (this.store.currentWorld) {
+      html += `<button id="ce-redeploy" style="padding:4px 10px;border-radius:6px;border:1px solid #6a4a2a;background:#5a3a1a;color:#ffd0a0;cursor:pointer;font-size:12px;">🚀 Redeploy World</button>`;
+    }
     html += `<button class="x" id="ce-close" style="margin-left:4px;">✕</button>`;
     html += `</div></div>`;
 
@@ -3075,6 +3078,19 @@ export class Hud {
           content: "",
           commitMessage: `Create ${path}`,
         });
+      });
+    }
+
+    // Wire redeploy (only shown when inside a deployed world)
+    const redeployBtn = document.getElementById("ce-redeploy");
+    if (redeployBtn && this.store.currentWorld) {
+      redeployBtn.addEventListener("click", () => {
+        const world = this.store.currentWorld!;
+        if (!confirm(`Redeploy "${world.branchName}"? This will rebuild the world on Railway with your latest changes.`)) return;
+        this.store.sendFn?.({ type: "railway_deploy", branchName: world.branchName, repoFullName: "" });
+        this.store.toast("Redeploying world... this may take a minute.");
+        // Close editor so user can watch the world reload
+        this.store.toggleCodeEditor(false);
       });
     }
 

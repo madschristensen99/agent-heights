@@ -10,6 +10,7 @@
  */
 
 import type { PlatformConnectionState, PlatformEvent } from "../shared/types.js";
+import { getPlatformEntry } from "../shared/types.js";
 
 const HERMES_BASE_URL = process.env.HERMES_BASE_URL ?? "http://127.0.0.1:9119";
 const POLL_INTERVAL_MS = 10_000; // 10 seconds
@@ -26,9 +27,15 @@ export class HermesClient {
   private lastSessionIds: Set<string> = new Set();
   private onPlatformUpdate: ((states: PlatformConnectionState[]) => void) | null = null;
   private onPlatformEvent: ((event: PlatformEvent) => void) | null = null;
+  private mailboxPlatforms: (string | null)[] = ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"];
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
+  }
+
+  /** Update which platforms to poll for connection status. */
+  setMailboxPlatforms(platforms: (string | null)[]): void {
+    this.mailboxPlatforms = platforms;
   }
 
   /** Start polling the Hermes serve API for status and new messages. */
@@ -172,12 +179,13 @@ export class HermesClient {
     }
   }
 
-  /** Get platform connection states for all 6 mailbox platforms. */
-  async getPlatformStates(): Promise<PlatformConnectionState[]> {
+  /** Get platform connection states for the given mailbox platforms. */
+  async getPlatformStates(mailboxPlatforms: (string | null)[]): Promise<PlatformConnectionState[]> {
+    const platforms = mailboxPlatforms.filter((p): p is string => p !== null);
     const status = await this.getStatus();
     if (!status) {
       // Hermes serve not running — all platforms disconnected
-      return ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"].map((p) => ({
+      return platforms.map((p) => ({
         platform: p,
         connected: false,
         status: "Hermes Agent not running",
@@ -185,7 +193,7 @@ export class HermesClient {
       }));
     }
 
-    return ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"].map((p) => {
+    return platforms.map((p) => {
       const key = p.toLowerCase();
       const platState = status.platforms[key] ?? status.platforms[p] ?? {};
       return {
@@ -198,13 +206,11 @@ export class HermesClient {
   }
 
   private normalizePlatform(raw: string): string {
-    const lower = raw.toLowerCase();
-    for (const p of ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"]) {
-      if (lower === p.toLowerCase()) return p;
-    }
+    const entry = getPlatformEntry(raw);
+    if (entry) return entry.name;
     // Map common variants
+    const lower = raw.toLowerCase();
     if (lower === "wa") return "WhatsApp";
-    if (lower === "sms") return "Signal";
     if (lower === "mail") return "Email";
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   }
@@ -213,7 +219,7 @@ export class HermesClient {
     if (!this.polling) return;
 
     // 1. Poll platform connection states
-    const states = await this.getPlatformStates();
+    const states = await this.getPlatformStates(this.mailboxPlatforms);
     this.onPlatformUpdate?.(states);
 
     // 2. Poll for new messages

@@ -24,7 +24,7 @@ import type {
   VacationedAgent,
   AgentACL,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality, PLATFORMS } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
@@ -456,7 +456,14 @@ export class AgentManager {
       railway: {
         enabled: s?.railway?.enabled === true,
       },
+      mailboxPlatforms: Array.isArray(s?.mailboxPlatforms) && s.mailboxPlatforms.length === 6
+        ? s.mailboxPlatforms
+        : ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"],
     };
+    // Sync the hermes client with the new mailbox platforms
+    if (this.hermesClient) {
+      this.hermesClient.setMailboxPlatforms(this.settings.mailboxPlatforms);
+    }
     if (announce) {
       this.session.record("settings", { settings: this.settings });
       this.save.setSettings(this.settings);
@@ -548,6 +555,7 @@ export class AgentManager {
   /** Start the Hermes Agent gateway client — polls hermes serve for platform status + messages. */
   private startHermesClient(): void {
     this.hermesClient = new HermesClient();
+    this.hermesClient.setMailboxPlatforms(this.settings.mailboxPlatforms);
     this.hermesClient.start(
       (states) => {
         this.platformStates = states;
@@ -581,7 +589,7 @@ export class AgentManager {
     const result = await this.hermesClient.configurePlatform(platform, credentials);
     // After configuring, immediately poll for fresh status
     if (result.success && this.hermesClient) {
-      const states = await this.hermesClient.getPlatformStates();
+      const states = await this.hermesClient.getPlatformStates(this.settings.mailboxPlatforms);
       this.platformStates = states;
       this.broadcast({ type: "platform_connection", states });
     }
@@ -2681,7 +2689,8 @@ export class AgentManager {
 
   /** Get all mailbox states — used for snapshot/initial sync. */
   getMailboxSnapshots(): { platform: string; flagUp: boolean; pendingCount: number; lastMessage: string }[] {
-    return PLATFORMS.map((p) => ({
+    const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
+    return platforms.map((p) => ({
       platform: p,
       flagUp: this.platformFlags.get(p) ?? false,
       pendingCount: this.platformPending.get(p) ?? 0,
@@ -2725,7 +2734,8 @@ export class AgentManager {
 
   /** Scan a log line for [Platform] tags and emit platform events. */
   private detectPlatformEvent(agentName: string, text: string): void {
-    for (const platform of PLATFORMS) {
+    const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
+    for (const platform of platforms) {
       const tag = `[${platform}]`;
       if (text.includes(tag)) {
         const after = text.slice(text.indexOf(tag) + tag.length).trim();

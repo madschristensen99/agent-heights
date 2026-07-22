@@ -82,7 +82,7 @@ export class RelationalPersistence {
       // Load settings
       const { data: settingsRow } = await supabaseAdmin
         .from("sprite_heights_game_settings")
-        .select("cline_max_iterations, cline_auto_approve, game_idle_wander, game_theme, railway_enabled")
+        .select("cline_max_iterations, cline_auto_approve, game_idle_wander, game_theme, railway_enabled, mailbox_platforms")
         .eq("user_id", this.userId)
         .maybeSingle();
 
@@ -97,6 +97,7 @@ export class RelationalPersistence {
               theme: settingsRow.game_theme as OfficeTheme,
             },
             railway: { enabled: settingsRow.railway_enabled },
+            mailboxPlatforms: settingsRow.mailbox_platforms ?? ["Slack", "Discord", "Telegram", "WhatsApp", "Signal", "Email"],
           }
         : undefined;
 
@@ -329,6 +330,7 @@ export class RelationalPersistence {
             game_idle_wander: this.state.settings.game.idleWander,
             game_theme: this.state.settings.game.theme,
             railway_enabled: this.state.settings.railway.enabled,
+            mailbox_platforms: this.state.settings.mailboxPlatforms,
           });
       } catch (err) {
         console.error("[db-rel] setSettings failed:", err);

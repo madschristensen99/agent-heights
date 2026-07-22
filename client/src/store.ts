@@ -727,6 +727,19 @@ export class Store {
           }
           // Refresh deployments list
           this.sendFn?.({ type: "railway_list_deployments" });
+          // If we're inside the world that was redeployed, reload the scene
+          if (this.currentWorld && this.currentWorld.branchName === msg.deployment.branchName && this.sceneRef) {
+            this.toast("World rebuilt — reloading...");
+            const scene = this.sceneRef as any;
+            if (scene?.cameras) {
+              scene.cameras.main.fadeOut(600, 10, 10, 30);
+              scene.cameras.main.once("camerafadeoutcomplete", () => {
+                this.reset();
+                scene.scene.restart();
+                scene.cameras.main.fadeIn(600, 10, 10, 30);
+              });
+            }
+          }
         }
         break;
       case "github_dir":

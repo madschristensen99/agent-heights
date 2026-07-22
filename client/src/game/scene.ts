@@ -4986,13 +4986,24 @@ export class OfficeScene extends Phaser.Scene {
       if (this.tryPlatformMailboxInteract()) {
         // handled
       } else
-      // server rack — query Railway + GitHub data
+      // server rack — query Railway + GitHub data, or open code editor if inside a world
       if (this.nearestTile(this.serverRackTiles, 150)) {
-        const net = this.game.registry.get("net") as Net;
-        net.send({ type: "railway_query" });
-        net.send({ type: "github_query" });
-        net.send({ type: "railway_list_deployments" });
-        this.store.toast("Querying Railway + GitHub...");
+        if (this.store.currentWorld) {
+          // Inside a deployed world — open code editor for this world's branch
+          this.store.toggleCodeEditor(true);
+          this.store.codeEditorBranch = this.store.currentWorld.branchName;
+          this.store.codeEditorFile = null;
+          this.store.codeEditorPath = "";
+          this.store.codeEditorDir = [];
+          this.store.sendFn?.({ type: "github_list_dir", branchName: this.store.currentWorld.branchName, path: "" });
+          this.store.toast("Opening code editor...");
+        } else {
+          const net = this.game.registry.get("net") as Net;
+          net.send({ type: "railway_query" });
+          net.send({ type: "github_query" });
+          net.send({ type: "railway_list_deployments" });
+          this.store.toast("Querying Railway + GitHub...");
+        }
       } else
       // try new office interactables first
       if (this.tryOfficeInteract(time)) {
