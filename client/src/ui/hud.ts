@@ -11,6 +11,7 @@ import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
 import { touchInput, isTouchDevice } from "../touch";
 import { generateCharPreviewDataURL } from "../game/chargen";
+import { VoxelPreview } from "../game/voxel-preview";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
@@ -73,6 +74,7 @@ class CharBuilder {
   private appearance: CharAppearance;
   private prefix: string;
   private onPreview: (ap: CharAppearance) => void;
+  private voxelPreview: VoxelPreview | null = null;
 
   constructor(prefix: string, initial: CharAppearance, onPreview: (ap: CharAppearance) => void) {
     this.prefix = prefix;
@@ -142,7 +144,21 @@ class CharBuilder {
       });
     }
 
+    // Mount 3D voxel preview on the preview element
+    const previewEl = document.getElementById(`${p}-preview`);
+    if (previewEl) {
+      this.voxelPreview = new VoxelPreview(previewEl);
+    }
+
     this.refreshPreview();
+  }
+
+  /** Clean up Three.js resources when the builder is removed from the DOM. */
+  dispose(): void {
+    if (this.voxelPreview) {
+      this.voxelPreview.dispose();
+      this.voxelPreview = null;
+    }
   }
 
   private updateRow(row: HTMLElement, part: BuilderPart): void {
@@ -155,9 +171,13 @@ class CharBuilder {
   }
 
   private refreshPreview(): void {
-    const previewEl = document.getElementById(`${this.prefix}-preview`);
-    if (previewEl) {
-      previewEl.style.backgroundImage = `url('${generateCharPreviewDataURL(this.appearance, 3)}')`;
+    if (this.voxelPreview) {
+      this.voxelPreview.update(this.appearance);
+    } else {
+      const previewEl = document.getElementById(`${this.prefix}-preview`);
+      if (previewEl) {
+        previewEl.style.backgroundImage = `url('${generateCharPreviewDataURL(this.appearance, 3)}')`;
+      }
     }
     this.onPreview(this.appearance);
   }
@@ -212,6 +232,8 @@ export class Hud {
   private renderQueued = false;
   private perfVisible = false;
   private voiceBtn: HTMLButtonElement | null = null;
+  private wardrobeBuilder: CharBuilder | null = null;
+  private activeBuilders: CharBuilder[] = [];
   private monacoEditor: monaco.editor.IStandaloneCodeEditor | null = null;
   private monacoFilePath: string | null = null;
   private codeEditorSig = "";
@@ -648,6 +670,9 @@ export class Hud {
       const worlds = document.getElementById("worlds-modal")!;
       const wardrobe = document.getElementById("wardrobe-modal")!;
       if (e.key === "Escape") {
+        this.activeBuilders.forEach((b) => b.dispose());
+        this.activeBuilders = [];
+        this.wardrobeBuilder = null;
         hire.hidden = true;
         settings.hidden = true;
         ach.hidden = true;
@@ -850,6 +875,7 @@ export class Hud {
     modal.hidden = false;
 
     const builder = new CharBuilder("ob", DEFAULT_APPEARANCE, () => {});
+    this.activeBuilders.push(builder);
 
     modal.innerHTML = `
       <div class="modal onboard">
@@ -888,6 +914,7 @@ export class Hud {
       const player = { name, workspace, appearance: builder.getAppearance() };
       localStorage.setItem(PLAYER_KEY, JSON.stringify(player));
       this.net.send({ type: "setup", player });
+      builder.dispose();
       modal.hidden = true;
     };
     document.getElementById("ob-go")!.addEventListener("click", go);
@@ -1518,6 +1545,7 @@ export class Hud {
         .join("");
 
     const builder = new CharBuilder("h", randomAppearance(), () => {});
+    this.activeBuilders.push(builder);
     const personality = randomPersonality();
 
     modal.hidden = false;
@@ -1590,7 +1618,7 @@ export class Hud {
 
     const modelSel = document.getElementById("h-model") as HTMLSelectElement;
     modelSel.selectedIndex = 0;
-    document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
+    document.getElementById("h-cancel")!.addEventListener("click", () => { builder.dispose(); modal.hidden = true; });
     const subscribeBtn2 = document.getElementById("h-subscribe");
     if (subscribeBtn2) {
       subscribeBtn2.addEventListener("click", () => void startSubscriptionCheckout("starter"));
@@ -1690,6 +1718,7 @@ export class Hud {
         personality: traits,
         mcpServers: builtinMcp,
       });
+      builder.dispose();
       modal.hidden = true;
     });
   }
@@ -3277,11 +3306,15 @@ export class Hud {
     if (!this.store.wardrobeOpen) {
       modal.hidden = true;
       modal.innerHTML = "";
+      this.wardrobeBuilder?.dispose();
+      this.wardrobeBuilder = null;
       return;
     }
 
     const current = this.store.player?.appearance ?? DEFAULT_APPEARANCE;
     const builder = new CharBuilder("wd", current, () => {});
+    this.wardrobeBuilder = builder;
+    this.activeBuilders.push(builder);
 
     const editable = this.store.wardrobeEditable;
 
@@ -3381,6 +3414,7 @@ export class Hud {
     }
 
     document.getElementById("wd-cancel")!.addEventListener("click", () => {
+      builder.dispose();
       this.store.toggleWardrobe(false);
     });
     document.getElementById("wd-save")!.addEventListener("click", () => {
@@ -3391,6 +3425,7 @@ export class Hud {
         localStorage.setItem(PLAYER_KEY, JSON.stringify(updated));
         this.net.send({ type: "update_appearance", appearance: ap });
       }
+      builder.dispose();
       this.store.toggleWardrobe(false);
     });
   }

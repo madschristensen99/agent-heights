@@ -867,12 +867,13 @@ input.invalid {
 }
 
 .builder-preview {
-  width: 96px;
-  height: 144px;
+  width: 160px;
+  height: 200px;
   background-size: contain;
   background-position: center top;
   background-repeat: no-repeat;
-  image-rendering: pixelated;
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .builder-controls {
@@ -1023,8 +1024,8 @@ input.invalid {
 }
 
 .onboard-builder .builder-preview {
-  width: 72px;
-  height: 108px;
+  width: 140px;
+  height: 180px;
 }
 
 /* --------------------------------------------------- wardrobe modal */
@@ -1052,8 +1053,8 @@ input.invalid {
 }
 
 .wardrobe-builder .builder-preview {
-  width: 96px;
-  height: 144px;
+  width: 160px;
+  height: 200px;
 }
 
 /* --- saved outfits panel --- */
@@ -2341,8 +2342,8 @@ kbd {
 
   .hire-appearance .builder-preview,
   .onboard-builder .builder-preview {
-    width: 72px;
-    height: 108px;
+    width: 120px;
+    height: 160px;
   }
 
   .wardrobe-layout {

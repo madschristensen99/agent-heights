@@ -838,6 +838,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawTrophyCase();
           this.drawHallOfFameBoard();
           this.drawExteriorChimney();
+          this.drawCulturalWalls();
           this.drawHelipad();
           this.drawRedButton();
           this.drawWardrobe();
@@ -5256,6 +5257,579 @@ export class OfficeScene extends Phaser.Scene {
 
     // Store the smoke position above the chimney cap
     this.chimneyPositions = [{ x: openX + openW / 2, y: capY - 2 }];
+  }
+
+  // ── Cultural perimeter wall overlays ────────────────────────────────
+
+  /** Master method — draws cultural overlays on all four perimeter walls + corners. */
+  private drawCulturalWalls(): void {
+    this.drawNorthWallAsian();
+    this.drawSouthWallMediterranean();
+    this.drawWestWallVictorian();
+    this.drawEastWallArtDeco();
+    this.drawCornerAccents();
+  }
+
+  /** North wall (y=0) — East Asian inspired: pagoda eaves, lattice, lanterns, bamboo. */
+  private drawNorthWallAsian(): void {
+    const g = this.add.graphics().setDepth(1);
+    const mapPxW = 30 * TILE_PX;
+    const wallY = 0;
+
+    // --- Pagoda eaves: overhanging roofline with upturned corners ---
+    const eaveH = 14;
+    const eaveOverhang = 10;
+    // Main eave band — warm wood tone
+    g.fillStyle(0x6a4a32, 1);
+    g.fillRect(-eaveOverhang, wallY - eaveH, mapPxW + eaveOverhang * 2, eaveH);
+    // Eave top highlight
+    g.fillStyle(0x8a6a42, 1);
+    g.fillRect(-eaveOverhang, wallY - eaveH, mapPxW + eaveOverhang * 2, 3);
+    // Eave bottom shadow
+    g.fillStyle(0x4a3a22, 1);
+    g.fillRect(-eaveOverhang, wallY - 3, mapPxW + eaveOverhang * 2, 3);
+
+    // Upturned corners — left
+    g.fillStyle(0x6a4a32, 1);
+    g.beginPath();
+    g.moveTo(-eaveOverhang, wallY);
+    g.lineTo(-eaveOverhang - 16, wallY - eaveH - 6);
+    g.lineTo(-eaveOverhang - 10, wallY - eaveH - 6);
+    g.lineTo(-eaveOverhang + 4, wallY - 2);
+    g.closePath();
+    g.fillPath();
+    g.fillStyle(0x8a6a42, 1);
+    g.fillRect(-eaveOverhang - 16, wallY - eaveH - 6, 6, 2);
+
+    // Upturned corners — right
+    g.fillStyle(0x6a4a32, 1);
+    g.beginPath();
+    g.moveTo(mapPxW + eaveOverhang, wallY);
+    g.lineTo(mapPxW + eaveOverhang + 16, wallY - eaveH - 6);
+    g.lineTo(mapPxW + eaveOverhang + 10, wallY - eaveH - 6);
+    g.lineTo(mapPxW + eaveOverhang - 4, wallY - 2);
+    g.closePath();
+    g.fillPath();
+    g.fillStyle(0x8a6a42, 1);
+    g.fillRect(mapPxW + eaveOverhang + 10, wallY - eaveH - 6, 6, 2);
+
+    // Eave underside — dark recessed area
+    g.fillStyle(0x2a1a12, 1);
+    g.fillRect(-eaveOverhang, wallY - 4, mapPxW + eaveOverhang * 2, 4);
+
+    // --- Lattice pattern (sukashi-kumiko) across upper wall ---
+    g.lineStyle(1, 0x8a6a42, 0.25);
+    const latTop = wallY + 6;
+    const latBot = wallY + 22;
+    const latSpacing = 12;
+    for (let x = TILE_PX; x < mapPxW - TILE_PX; x += latSpacing) {
+      g.beginPath();
+      g.moveTo(x, latTop);
+      g.lineTo(x, latBot);
+      g.strokePath();
+    }
+    for (let y = latTop; y <= latBot; y += 8) {
+      g.beginPath();
+      g.moveTo(TILE_PX, y);
+      g.lineTo(mapPxW - TILE_PX, y);
+      g.strokePath();
+    }
+    // Diagonal lattice accents
+    g.lineStyle(1, 0x8a6a42, 0.15);
+    for (let x = TILE_PX; x < mapPxW - TILE_PX; x += latSpacing * 2) {
+      g.beginPath();
+      g.moveTo(x, latTop);
+      g.lineTo(x + latSpacing, latBot);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(x + latSpacing, latTop);
+      g.lineTo(x, latBot);
+      g.strokePath();
+    }
+
+    // --- Stone lanterns at intervals ---
+    const lanternPositions = [5, 15, 25];
+    for (const lx of lanternPositions) {
+      const px = lx * TILE_PX + TILE_PX / 2;
+      const py = wallY + TILE_PX - 6;
+
+      // Lantern base — small stone block
+      g.fillStyle(0x5a5a52, 1);
+      g.fillRect(px - 8, py - 4, 16, 4);
+      g.fillStyle(0x6a6a62, 1);
+      g.fillRect(px - 8, py - 4, 16, 1);
+
+      // Lantern body — stone frame
+      g.fillStyle(0x6a6a62, 1);
+      g.fillRect(px - 7, py - 18, 14, 14);
+      g.fillStyle(0x4a4a42, 1);
+      g.fillRect(px - 7, py - 18, 14, 1);
+      g.fillRect(px - 7, py - 5, 14, 1);
+
+      // Glowing window
+      g.fillStyle(0xffaa44, 0.7);
+      g.fillRect(px - 5, py - 16, 10, 10);
+      g.fillStyle(0xffdd88, 0.4);
+      g.fillRect(px - 4, py - 15, 8, 8);
+
+      // Lantern cap — pyramidal stone
+      g.fillStyle(0x5a5a52, 1);
+      g.beginPath();
+      g.moveTo(px - 10, py - 18);
+      g.lineTo(px, py - 24);
+      g.lineTo(px + 10, py - 18);
+      g.closePath();
+      g.fillPath();
+      g.fillStyle(0x6a6a62, 1);
+      g.beginPath();
+      g.moveTo(px - 10, py - 18);
+      g.lineTo(px, py - 24);
+      g.lineTo(px + 3, py - 21);
+      g.lineTo(px - 7, py - 18);
+      g.closePath();
+      g.fillPath();
+    }
+
+    // --- Bamboo accents at 1/4, 1/2, 3/4 ---
+    const bambooPositions = [7, 14, 22];
+    for (const bx of bambooPositions) {
+      const px = bx * TILE_PX + TILE_PX / 2;
+      // Bamboo stalk
+      g.fillStyle(0x4a7a3a, 0.5);
+      g.fillRect(px - 3, wallY + 4, 6, TILE_PX - 8);
+      // Bamboo segments
+      g.fillStyle(0x3a6a2a, 0.6);
+      for (let seg = 0; seg < 4; seg++) {
+        g.fillRect(px - 3, wallY + 8 + seg * 12, 6, 1);
+      }
+      // Highlight
+      g.fillStyle(0x6a9a4a, 0.3);
+      g.fillRect(px - 3, wallY + 4, 1, TILE_PX - 8);
+    }
+  }
+
+  /** South wall (y=19) — Mediterranean: arched entry, terracotta band, balconies, marble. */
+  private drawSouthWallMediterranean(): void {
+    const g = this.add.graphics().setDepth(1);
+    const mapPxW = 30 * TILE_PX;
+    const wallY = 19 * TILE_PX;
+    const wallH = TILE_PX;
+
+    // --- Terracotta band across mid-height ---
+    const bandY = wallY + wallH * 0.35;
+    const bandH = 10;
+    g.fillStyle(0xa65a3a, 0.7);
+    g.fillRect(0, bandY, mapPxW, bandH);
+    g.fillStyle(0xc67a4a, 0.5);
+    g.fillRect(0, bandY, mapPxW, 2);
+    g.fillStyle(0x8a4a2a, 0.5);
+    g.fillRect(0, bandY + bandH - 2, mapPxW, 2);
+
+    // --- Arched entryway over door (x=14-15, door gap) ---
+    const doorCenterX = 15 * TILE_PX;
+    const archRadius = TILE_PX + 8;
+    const archBaseY = wallY;
+    // Arch keystone
+    g.fillStyle(0x8a7a6a, 1);
+    g.fillRect(doorCenterX - 6, archBaseY - archRadius - 8, 12, 8);
+    g.fillStyle(0xaa9a8a, 1);
+    g.fillRect(doorCenterX - 6, archBaseY - archRadius - 8, 12, 2);
+    // Arch voussoirs — wedge-shaped stones
+    const voussoirCount = 7;
+    for (let i = 0; i < voussoirCount; i++) {
+      const angle = Math.PI + (i / (voussoirCount - 1)) * Math.PI;
+      const nextAngle = Math.PI + ((i + 1) / (voussoirCount - 1)) * Math.PI;
+      const r1 = archRadius - 4;
+      const r2 = archRadius + 6;
+      const shade = i % 2 === 0 ? 0x9a8a7a : 0x8a7a6a;
+      g.fillStyle(shade, 1);
+      g.beginPath();
+      g.moveTo(doorCenterX + Math.cos(angle) * r1, archBaseY + Math.sin(angle) * r1);
+      g.lineTo(doorCenterX + Math.cos(angle) * r2, archBaseY + Math.sin(angle) * r2);
+      g.lineTo(doorCenterX + Math.cos(nextAngle) * r2, archBaseY + Math.sin(nextAngle) * r2);
+      g.lineTo(doorCenterX + Math.cos(nextAngle) * r1, archBaseY + Math.sin(nextAngle) * r1);
+      g.closePath();
+      g.fillPath();
+    }
+    // Arch inner shadow
+    g.fillStyle(0x000000, 0.2);
+    g.beginPath();
+    g.arc(doorCenterX, archBaseY, archRadius - 4, Math.PI, 0);
+    g.fillPath();
+
+    // --- Wrought-iron balcony railings at 3 positions ---
+    const balconyPositions = [4, 11, 22];
+    for (const bx of balconyPositions) {
+      const px = bx * TILE_PX;
+      const railY = wallY + wallH * 0.15;
+      const railW = TILE_PX * 1.5;
+      const railH = 16;
+
+      // Railing top rail
+      g.fillStyle(0x3a3a3a, 0.8);
+      g.fillRect(px, railY, railW, 2);
+      // Railing bottom rail
+      g.fillRect(px, railY + railH - 2, railW, 2);
+      // Vertical balusters
+      for (let sx = 0; sx < railW; sx += 6) {
+        g.fillRect(px + sx, railY, 1, railH);
+      }
+      // Scrollwork — decorative S-curves (approximated with line segments)
+      g.lineStyle(1.5, 0x3a3a3a, 0.7);
+      for (let sx = 4; sx < railW - 4; sx += 16) {
+        g.beginPath();
+        g.moveTo(px + sx, railY + 4);
+        for (let t = 0; t <= 1; t += 0.25) {
+          const it = 1 - t;
+          g.lineTo(px + sx + it * it * 0 + 2 * it * t * 8 + t * t * 4, railY + 4 + it * it * 0 + 2 * it * t * -2 + t * t * (railH / 2 - 4));
+        }
+        for (let t = 0; t <= 1; t += 0.25) {
+          const it = 1 - t;
+          g.lineTo(px + sx + 4 + it * it * 0 + 2 * it * t * -4 + t * t * 8, railY + railH / 2 + it * it * 0 + 2 * it * t * (railH / 2 - 4) + t * t * (railH - 4 - railH / 2));
+        }
+        g.strokePath();
+      }
+      // Balcony base — stone corbel
+      g.fillStyle(0x8a7a6a, 0.8);
+      g.fillRect(px + railW / 2 - 8, railY + railH, 16, 6);
+      g.fillStyle(0x6a5a4a, 0.8);
+      g.fillRect(px + railW / 2 - 8, railY + railH + 4, 16, 2);
+    }
+
+    // --- Marble veining overlay on lower wall ---
+    g.lineStyle(1, 0xeae6e0, 0.15);
+    for (let i = 0; i < 8; i++) {
+      const startX = (i / 8) * mapPxW + Math.sin(i * 3.7) * 20;
+      const startY = wallY + wallH * 0.6;
+      g.beginPath();
+      g.moveTo(startX, startY);
+      let x = startX, y = startY;
+      for (let seg = 0; seg < 6; seg++) {
+        x += 12 + Math.sin(i + seg) * 8;
+        y += 3 + Math.cos(i + seg * 2) * 4;
+        g.lineTo(x, y);
+      }
+      g.strokePath();
+    }
+  }
+
+  /** West wall (x=0) — Victorian Industrial: enhanced brick, pipes, sign bracket, downspout. */
+  private drawWestWallVictorian(): void {
+    const g = this.add.graphics().setDepth(1);
+    const wallX = 0;
+    const mapPxH = 20 * TILE_PX;
+
+    // --- Enhanced brickwork overlay ---
+    // Reddish-brown brick color variation
+    const brickColors = [0x6a3a2a, 0x5a2a1a, 0x7a4a3a, 0x6a3a2a, 0x4a2a1a];
+    const brickH = 12;
+    const brickW = 28;
+    for (let row = 0; row < Math.floor(mapPxH / brickH); row++) {
+      const y = row * brickH;
+      const offset = row % 2 === 0 ? 0 : brickW / 2;
+      for (let bx = 0; bx < 3; bx++) {
+        const x = bx * brickW + offset;
+        if (x + brickW > TILE_PX) break;
+        const colorIdx = (row * 3 + bx) % brickColors.length;
+        g.fillStyle(brickColors[colorIdx], 0.35);
+        g.fillRect(wallX + x, y, brickW, brickH);
+      }
+      // Mortar lines — horizontal
+      g.fillStyle(0x2a1a12, 0.4);
+      g.fillRect(wallX, y, TILE_PX, 1);
+    }
+    // Mortar lines — vertical (staggered)
+    for (let row = 0; row < Math.floor(mapPxH / brickH); row++) {
+      const y = row * brickH;
+      const offset = row % 2 === 0 ? 0 : brickW / 2;
+      for (let bx = 0; bx < 3; bx++) {
+        const x = bx * brickW + offset;
+        if (x + brickW > TILE_PX) break;
+        g.fillStyle(0x2a1a12, 0.35);
+        g.fillRect(wallX + x, y, 1, brickH);
+      }
+    }
+
+    // Corbelling at top — 3 courses projecting outward
+    for (let course = 0; course < 3; course++) {
+      const cy = course * 4;
+      const proj = 3 + course * 2;
+      g.fillStyle(0x5a3a2a, 0.7);
+      g.fillRect(wallX - proj, cy, TILE_PX + proj, 4);
+      g.fillStyle(0x6a4a3a, 0.5);
+      g.fillRect(wallX - proj, cy, TILE_PX + proj, 1);
+    }
+
+    // --- Steam-punk pipes running vertically ---
+    const pipePositions = [3, 10];
+    for (const py of pipePositions) {
+      const pipeY = py * TILE_PX;
+      const pipeX = wallX + TILE_PX - 10;
+
+      // Pipe body — vertical
+      g.fillStyle(0x5a5a5a, 0.8);
+      g.fillRect(pipeX, pipeY, 8, TILE_PX * 2);
+      // Pipe highlight
+      g.fillStyle(0x7a7a7a, 0.6);
+      g.fillRect(pipeX, pipeY, 2, TILE_PX * 2);
+      // Pipe shadow
+      g.fillStyle(0x3a3a3a, 0.6);
+      g.fillRect(pipeX + 6, pipeY, 2, TILE_PX * 2);
+
+      // Pipe joints — riveted flanges every tile
+      for (let seg = 0; seg < 2; seg++) {
+        const jy = pipeY + seg * TILE_PX + TILE_PX / 2;
+        g.fillStyle(0x4a4a4a, 0.8);
+        g.fillRect(pipeX - 3, jy - 3, 14, 6);
+        g.fillStyle(0x6a6a6a, 0.6);
+        g.fillRect(pipeX - 3, jy - 3, 14, 1);
+        // Rivets
+        g.fillStyle(0x8a8a8a, 0.7);
+        g.fillCircle(pipeX - 1, jy, 1);
+        g.fillCircle(pipeX + 9, jy, 1);
+      }
+
+      // Valve gauge at midpoint
+      const gy = pipeY + TILE_PX;
+      g.fillStyle(0x3a3a3a, 0.8);
+      g.fillCircle(pipeX + 4, gy, 8);
+      g.fillStyle(0xaa9988, 0.7);
+      g.fillCircle(pipeX + 4, gy, 6);
+      g.fillStyle(0x2a2a2a, 0.8);
+      g.fillCircle(pipeX + 4, gy, 5);
+      // Gauge needle
+      g.lineStyle(1.5, 0xdd4444, 0.8);
+      g.beginPath();
+      g.moveTo(pipeX + 4, gy);
+      g.lineTo(pipeX + 4 + 3, gy - 3);
+      g.strokePath();
+      // Gauge tick marks
+      g.lineStyle(0.8, 0xaaaaaa, 0.5);
+      for (let a = 0; a < 8; a++) {
+        const ang = (a / 8) * Math.PI * 2;
+        g.beginPath();
+        g.moveTo(pipeX + 4 + Math.cos(ang) * 4, gy + Math.sin(ang) * 4);
+        g.lineTo(pipeX + 4 + Math.cos(ang) * 5, gy + Math.sin(ang) * 5);
+        g.strokePath();
+      }
+    }
+
+    // --- Ornate iron sign bracket near middle ---
+    const bracketY = 8 * TILE_PX;
+    const bracketX = wallX + TILE_PX - 2;
+    g.lineStyle(2, 0x2a2a2a, 0.8);
+    // Bracket arm
+    g.beginPath();
+    g.moveTo(bracketX, bracketY);
+    g.lineTo(bracketX + 20, bracketY);
+    g.strokePath();
+    // Decorative curl (approximated with line segments)
+    g.beginPath();
+    g.moveTo(bracketX + 20, bracketY);
+    for (let t = 0; t <= 1; t += 0.2) {
+      const it = 1 - t;
+      g.lineTo(bracketX + 20 + it * it * 0 + 2 * it * t * 8 + t * t * 4, bracketY + it * it * 0 + 2 * it * t * 4 + t * t * 10);
+    }
+    for (let t = 0; t <= 1; t += 0.2) {
+      const it = 1 - t;
+      g.lineTo(bracketX + 24 + it * it * 0 + 2 * it * t * -4 + t * t * -2, bracketY + 10 + it * it * 0 + 2 * it * t * -2 + t * t * -4);
+    }
+    g.strokePath();
+    // Bracket mount
+    g.fillStyle(0x3a3a3a, 0.8);
+    g.fillRect(bracketX - 2, bracketY - 4, 4, 8);
+
+    // --- Decorative rain downspout near bottom ---
+    const spoutY = 16 * TILE_PX;
+    const spoutX = wallX + TILE_PX - 6;
+    g.fillStyle(0x4a4a4a, 0.7);
+    g.fillRect(spoutX, spoutY, 5, 3 * TILE_PX);
+    g.fillStyle(0x6a6a6a, 0.5);
+    g.fillRect(spoutX, spoutY, 1, 3 * TILE_PX);
+    // Spout head — gargoyle-like cone
+    g.fillStyle(0x3a3a3a, 0.8);
+    g.beginPath();
+    g.moveTo(spoutX - 4, spoutY + 3 * TILE_PX);
+    g.lineTo(spoutX + 2, spoutY + 3 * TILE_PX + 14);
+    g.lineTo(spoutX + 9, spoutY + 3 * TILE_PX);
+    g.closePath();
+    g.fillPath();
+    g.fillStyle(0x5a5a5a, 0.5);
+    g.beginPath();
+    g.moveTo(spoutX - 4, spoutY + 3 * TILE_PX);
+    g.lineTo(spoutX + 2, spoutY + 3 * TILE_PX + 14);
+    g.lineTo(spoutX, spoutY + 3 * TILE_PX);
+    g.closePath();
+    g.fillPath();
+  }
+
+  /** East wall (x=29) — Art Deco: glass curtain wall, sunburst, neon, chevrons. */
+  private drawEastWallArtDeco(): void {
+    const g = this.add.graphics().setDepth(1);
+    const wallX = 29 * TILE_PX;
+    const mapPxH = 20 * TILE_PX;
+    const wallW = TILE_PX;
+
+    // --- Glass curtain wall panels ---
+    const panelW = 16;
+    const panelCount = Math.floor(mapPxH / panelW);
+    for (let i = 0; i < panelCount; i++) {
+      const py = i * panelW;
+      // Glass panel — blue-tinted gradient effect
+      const isLight = i % 2 === 0;
+      g.fillStyle(isLight ? 0x4a7aaa : 0x3a6a9a, 0.4);
+      g.fillRect(wallX, py, wallW, panelW);
+      // Mullion frame
+      g.fillStyle(0x6a6a6a, 0.6);
+      g.fillRect(wallX, py, wallW, 1);
+      g.fillRect(wallX, py + panelW - 1, wallW, 1);
+      // Vertical mullion
+      g.fillRect(wallX + wallW / 2 - 1, py, 2, panelW);
+      // Glass reflection — diagonal streak
+      g.fillStyle(0x8acafa, 0.15);
+      g.fillRect(wallX + 4, py + 2, wallW - 8, 3);
+      g.fillRect(wallX + 6, py + 6, wallW - 12, 2);
+    }
+
+    // --- Art Deco sunburst at top center ---
+    const sunCx = wallX + wallW / 2;
+    const sunCy = 2 * TILE_PX;
+    const sunR = 28;
+    g.lineStyle(1.5, 0xddaa44, 0.6);
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2;
+      g.beginPath();
+      g.moveTo(sunCx, sunCy);
+      g.lineTo(sunCx + Math.cos(angle) * sunR, sunCy + Math.sin(angle) * sunR);
+      g.strokePath();
+    }
+    // Sunburst inner circle
+    g.fillStyle(0xddaa44, 0.5);
+    g.fillCircle(sunCx, sunCy, 6);
+    g.fillStyle(0xffcc66, 0.4);
+    g.fillCircle(sunCx, sunCy, 4);
+    // Sunburst outer ring
+    g.lineStyle(1, 0xddaa44, 0.3);
+    g.beginPath();
+    g.arc(sunCx, sunCy, sunR, 0, Math.PI * 2);
+    g.strokePath();
+
+    // --- Neon accent strips ---
+    const neonPositions = [6, 12, 17];
+    const neonColors = [0x00ffff, 0xff00ff, 0x00ffff];
+    for (let i = 0; i < neonPositions.length; i++) {
+      const ny = neonPositions[i] * TILE_PX;
+      const color = neonColors[i];
+      // Glow
+      g.fillStyle(color, 0.08);
+      g.fillRect(wallX + 2, ny, 3, TILE_PX);
+      g.fillStyle(color, 0.15);
+      g.fillRect(wallX + 3, ny, 1, TILE_PX);
+      // Core line
+      g.fillStyle(color, 0.4);
+      g.fillRect(wallX + 3, ny, 1, TILE_PX);
+    }
+
+    // --- Chevron band across midsection ---
+    const chevY = 9 * TILE_PX;
+    const chevH = 20;
+    g.fillStyle(0xddaa44, 0.3);
+    g.fillRect(wallX, chevY, wallW, chevH);
+    // Chevron pattern
+    g.fillStyle(0x2a2a3a, 0.5);
+    const chevStep = 8;
+    for (let cy = 0; cy < chevH; cy += chevStep) {
+      for (let cx = 0; cx < wallW; cx += chevStep) {
+        g.beginPath();
+        g.moveTo(wallX + cx, chevY + cy);
+        g.lineTo(wallX + cx + chevStep / 2, chevY + cy + chevStep / 2);
+        g.lineTo(wallX + cx, chevY + cy + chevStep);
+        g.lineTo(wallX + cx, chevY + cy + chevStep - 2);
+        g.lineTo(wallX + cx + chevStep / 2 - 2, chevY + cy + chevStep / 2);
+        g.lineTo(wallX + cx, chevY + cy + 2);
+        g.closePath();
+        g.fillPath();
+      }
+    }
+    // Chevron band borders
+    g.fillStyle(0xddaa44, 0.5);
+    g.fillRect(wallX, chevY, wallW, 1);
+    g.fillRect(wallX, chevY + chevH - 1, wallW, 1);
+  }
+
+  /** Four building corners — Mesoamerican stepped pyramid blocks with glyph carvings. */
+  private drawCornerAccents(): void {
+    const g = this.add.graphics().setDepth(0.5);
+    const mapPxW = 30 * TILE_PX;
+    const mapPxH = 20 * TILE_PX;
+    const corners = [
+      { x: 0, y: 0 },
+      { x: mapPxW - TILE_PX, y: 0 },
+      { x: 0, y: mapPxH - TILE_PX },
+      { x: mapPxW - TILE_PX, y: mapPxH - TILE_PX },
+    ];
+
+    for (let ci = 0; ci < corners.length; ci++) {
+      const c = corners[ci];
+      const isLeft = c.x === 0;
+      const isTop = c.y === 0;
+
+      // Stepped pyramid blocks — 3 courses projecting outward
+      for (let step = 0; step < 3; step++) {
+        const proj = 4 + step * 4;
+        const sx = isLeft ? c.x - proj : c.x + TILE_PX - 8 + proj;
+        const sy = isTop ? c.y - proj : c.y + TILE_PX - 8 + proj;
+
+        // Stone block
+        g.fillStyle(0x6a5a4a, 0.7);
+        g.fillRect(sx, sy, 8 + proj, 8 + proj);
+        // Block highlight
+        g.fillStyle(0x8a7a6a, 0.5);
+        g.fillRect(sx, sy, 8 + proj, 2);
+        if (isLeft) g.fillRect(sx, sy, 2, 8 + proj);
+        else g.fillRect(sx + (8 + proj) - 2, sy, 2, 8 + proj);
+        // Block shadow
+        g.fillStyle(0x4a3a2a, 0.5);
+        g.fillRect(sx, sy + (8 + proj) - 2, 8 + proj, 2);
+        if (!isLeft) g.fillRect(sx, sy, 2, 8 + proj);
+        else g.fillRect(sx + (8 + proj) - 2, sy, 2, 8 + proj);
+      }
+
+      // Glyph carving on the inner face of the corner
+      const glyphCx = c.x + TILE_PX / 2;
+      const glyphCy = c.y + TILE_PX / 2;
+      const glyphSeed = ci * 137 + 42;
+
+      // Stepped fret glyph (Mesoamerican step motif)
+      g.lineStyle(1.5, 0x4a3a2a, 0.5);
+      const steps = 3;
+      const stepSize = 6;
+      let gx = glyphCx - (steps * stepSize) / 2;
+      let gy = glyphCy - (steps * stepSize) / 2;
+      g.beginPath();
+      g.moveTo(gx, gy);
+      for (let s = 0; s < steps; s++) {
+        g.lineTo(gx + stepSize, gy);
+        g.lineTo(gx + stepSize, gy + stepSize);
+        gx += stepSize / 2;
+        gy += stepSize / 2;
+      }
+      g.strokePath();
+
+      // Spiral accent (deterministic based on seed)
+      g.lineStyle(1, 0x4a3a2a, 0.35);
+      g.beginPath();
+      const spCx = glyphCx + ((glyphSeed % 7) - 3) * 4;
+      const spCy = glyphCy + ((glyphSeed % 5) - 2) * 4;
+      for (let a = 0; a < Math.PI * 3; a += 0.15) {
+        const r = 2 + a * 1.5;
+        const px = spCx + Math.cos(a + glyphSeed) * r;
+        const py = spCy + Math.sin(a + glyphSeed) * r;
+        if (a === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.strokePath();
+    }
   }
 
   /** Create walk/idle/work animations for a custom character texture key. */
