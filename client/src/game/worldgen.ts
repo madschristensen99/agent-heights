@@ -158,9 +158,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
 
       // Obstacle density — noise at scale 8 creates groves and clearings
       const obstacleNoise = valueNoise(worldSeed, wx, wy, 8);
-      const obstacleChance = Math.min(0.45, 0.08 + hostility * 0.06);
+      const obstacleChance = Math.min(0.55, 0.10 + hostility * 0.08);
       // Blend obstacle probability between current and next biome in transition zones
-      const obstacleChanceNext = Math.min(0.45, 0.08 + (hostilityFloor + 1) * 0.06);
+      const obstacleChanceNext = Math.min(0.55, 0.10 + (hostilityFloor + 1) * 0.08);
       const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
       // Hostile tile density — separate noise fields for lava and void so they
@@ -280,6 +280,12 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
     carvePath(tiles, CHUNK_SIZE / 2, CHUNK_SIZE / 2, dir, len);
   }
 
+  // Thinning pass — break up clumps of stone tiles (ROCK, RUIN, CRYSTAL)
+  // into winding maze-like lines. Any stone tile with 3+ cardinal stone
+  // neighbors is converted back to base ground so no tile touches more
+  // than 2 stone neighbors in orthogonal directions.
+  thinStoneTiles(tiles, biome);
+
   return { cx, cy, biome, tiles };
 }
 
@@ -292,6 +298,29 @@ function baseGround(biome: Biome): number {
     case "void": return TILE.GRASS; // walkable ground, void tiles are scattered hazards
     case "infernal": return TILE.SAND; // walkable ground, lava is scattered
   }
+}
+
+const STONE_TILES = new Set<number>([TILE.ROCK, TILE.RUIN, TILE.CRYSTAL]);
+
+/** Thinning pass — convert any stone tile with 3+ cardinal stone neighbors back
+ *  to base ground. This breaks clumps into winding 1-2 tile wide lines so no
+ *  stone tile touches more than 2 stone neighbors orthogonally. */
+function thinStoneTiles(tiles: number[], biome: Biome): void {
+  const ground = baseGround(biome);
+  const toRemove: number[] = [];
+  for (let y = 0; y < CHUNK_SIZE; y++) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const i = idx(x, y);
+      if (!STONE_TILES.has(tiles[i])) continue;
+      let count = 0;
+      if (y > 0 && STONE_TILES.has(tiles[i - CHUNK_SIZE])) count++;
+      if (y < CHUNK_SIZE - 1 && STONE_TILES.has(tiles[i + CHUNK_SIZE])) count++;
+      if (x > 0 && STONE_TILES.has(tiles[i - 1])) count++;
+      if (x < CHUNK_SIZE - 1 && STONE_TILES.has(tiles[i + 1])) count++;
+      if (count >= 3) toRemove.push(i);
+    }
+  }
+  for (const i of toRemove) tiles[i] = ground;
 }
 
 /** Secondary ground tile for visual texture patches within a biome. */
