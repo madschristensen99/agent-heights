@@ -148,12 +148,14 @@ export class HermesClient {
         const stateFile = this.readGatewayStateFile();
         if (stateFile?.gateway_state === "running") {
           gatewayRunning = true;
-          // gateway_state.json has platform states too — merge them
-          if (stateFile.platforms && Object.keys(platforms).length === 0) {
-            platforms = stateFile.platforms;
-          }
           console.log(`[hermes-client] /api/status said not running but gateway_state.json says running — using fallback`);
         }
+      }
+
+      // Always merge platform states from gateway_state.json (more reliable than /api/status in Docker)
+      const stateFile = this.readGatewayStateFile();
+      if (stateFile?.platforms) {
+        platforms = { ...platforms, ...stateFile.platforms };
       }
 
       console.log(`[hermes-client] /api/status: gateway_running=${gatewayRunning}, platforms=${JSON.stringify(platforms)}`);
@@ -377,10 +379,13 @@ export class HermesClient {
 
     return platforms.map((p) => {
       const key = p.toLowerCase();
-      const platState = status.platforms[key] ?? status.platforms[p] ?? {};
+      const platState = status.platforms[key] ?? status.platforms[p] ?? status.platforms[key.replace(/\s+/g, "_")] ?? {};
       // Hermes uses "state" field (e.g. "connected", "disconnected") not "connected" boolean
       const stateStr = platState.state ?? platState.status ?? "";
       const connected = platState.connected ?? (stateStr === "connected");
+      if (p.toLowerCase() === "telegram") {
+        console.log(`[hermes-client] Telegram state lookup: key=${key}, platState=${JSON.stringify(platState)}, connected=${connected}, allPlatformKeys=${Object.keys(status.platforms).join(",")}`);
+      }
       return {
         platform: p,
         connected,

@@ -375,7 +375,6 @@ export class RelationalPersistence {
     }
 
     if (this.pendingPendingTasks) {
-      this.pendingPendingTasks = false;
       const taskCount = Object.keys(this.state.pendingTasks ?? {}).length;
       console.log(`[db-rel] flush: writing pending_tasks for user ${this.userId} (${taskCount} agent(s))...`);
       try {
@@ -388,11 +387,14 @@ export class RelationalPersistence {
           }, { onConflict: "room_id" });
         if (result.error) {
           console.error(`[db-rel] setPendingTasks upsert error for user ${this.userId}:`, result.error);
+          this.pendingPendingTasks = true; // Retry on next flush
         } else {
+          this.pendingPendingTasks = false; // Only clear on success
           console.log(`[db-rel] flush: pending_tasks written successfully for user ${this.userId}`);
         }
       } catch (err) {
         console.error("[db-rel] setPendingTasks failed:", err);
+        this.pendingPendingTasks = true; // Retry on next flush
       }
     }
 
