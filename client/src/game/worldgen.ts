@@ -24,6 +24,36 @@ function chunkSeed(worldSeed: number, cx: number, cy: number): number {
   return h >>> 0;
 }
 
+/** Hash a world-tile coordinate into a pseudo-random float [0,1). */
+function hashTile(worldSeed: number, wx: number, wy: number): number {
+  let h = worldSeed >>> 0;
+  h = Math.imul(h ^ (wx + 0x9e3779b9), 0x85ebca6b);
+  h = Math.imul(h ^ (wy + 0x9e3779b9), 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+/** Smooth value noise at integer lattice points — bilinear interpolation.
+ *  Produces coherent density fields across chunk boundaries for natural clustering. */
+function valueNoise(worldSeed: number, wx: number, wy: number, scale: number): number {
+  const sx = wx / scale;
+  const sy = wy / scale;
+  const x0 = Math.floor(sx);
+  const y0 = Math.floor(sy);
+  const fx = sx - x0;
+  const fy = sy - y0;
+  // Smoothstep for softer transitions
+  const sxw = fx * fx * (3 - 2 * fx);
+  const syw = fy * fy * (3 - 2 * fy);
+  const v00 = hashTile(worldSeed, x0, y0);
+  const v10 = hashTile(worldSeed, x0 + 1, y0);
+  const v01 = hashTile(worldSeed, x0, y0 + 1);
+  const v11 = hashTile(worldSeed, x0 + 1, y0 + 1);
+  const top = v00 * (1 - sxw) + v10 * sxw;
+  const bot = v01 * (1 - sxw) + v11 * sxw;
+  return top * (1 - syw) + bot * syw;
+}
+
 /**
  * Biome types — determined by distance from the office (origin).
  * The farther out you go, the more hostile the environment.
@@ -33,20 +63,29 @@ function chunkSeed(worldSeed: number, cx: number, cy: number): number {
  */
 export type Biome = "meadow" | "forest" | "ruins" | "wasteland" | "void" | "infernal";
 
-/** Hostility level 0–5+, scales with distance from origin. Never hits a wall — always playable. */
+/** Hostility level 0–5+, scales with distance from origin. Never hits a wall — always playable.
+ *  Returns fractional values near biome boundaries to enable smooth transitions. */
 export function hostilityAt(cx: number, cy: number): number {
   const dist = Math.hypot(cx, cy);
-  if (dist < 2) return 0; // meadow — safe zone near office
-  if (dist < 4) return 1; // forest
-  if (dist < 7) return 2; // ruins
-  if (dist < 11) return 3; // wasteland
-  if (dist < 18) return 4; // void
-  return 5; // infernal — keeps scaling difficulty but always passable
+  // Each biome spans a range; transition zone is the outer 20% of each range
+  // where hostility smoothly interpolates to the next level.
+  const thresholds = [2, 4, 7, 11, 18];
+  const transitionWidth = 0.8; // chunk distance for smooth blend
+  for (let i = 0; i < thresholds.length; i++) {
+    if (dist < thresholds[i]) {
+      const boundary = thresholds[i] - transitionWidth;
+      if (dist < boundary) return i;
+      // Smooth interpolation in the transition zone
+      const t = (dist - boundary) / transitionWidth;
+      return i + t * t * (3 - 2 * t); // smoothstep
+    }
+  }
+  return thresholds.length;
 }
 
 export function biomeAt(_worldSeed: number, cx: number, cy: number): Biome {
   const h = hostilityAt(cx, cy);
-  return (["meadow", "forest", "ruins", "wasteland", "void", "infernal"] as Biome[])[h];
+  return (["meadow", "forest", "ruins", "wasteland", "void", "infernal"] as Biome[])[Math.round(h)];
 }
 
 export interface Chunk {
@@ -80,29 +119,57 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   const biome = biomeAt(worldSeed, cx, cy);
   const rng = mulberry32(chunkSeed(worldSeed, cx, cy));
   const hostility = hostilityAt(cx, cy);
+  const hostilityFloor = Math.floor(hostility);
+  const hostilityFrac = hostility - hostilityFloor;
+
+  // Determine adjacent biome for transition blending
+  const biomeList: Biome[] = ["meadow", "forest", "ruins", "wasteland", "void", "infernal"];
+  const nextBiome = biomeList[Math.min(hostilityFloor + 1, biomeList.length - 1)];
 
   // base ground tile for this biome
   const baseTile = baseGround(biome);
   const tiles = new Array<number>(CHUNK_SIZE * CHUNK_SIZE).fill(baseTile);
 
-  // scatter features based on biome + hostility
+  // scatter features using value noise density fields for natural clustering
   for (let y = 0; y < CHUNK_SIZE; y++) {
     for (let x = 0; x < CHUNK_SIZE; x++) {
       const i = idx(x, y);
-      const r = rng();
+      if (!canOverwrite(tiles, i)) continue;
 
-      // obstacle density increases with hostility but capped so terrain is always passable
+      // World tile coordinates for noise sampling (coherent across chunk boundaries)
+      const wx = cx * CHUNK_SIZE + x;
+      const wy = cy * CHUNK_SIZE + y;
+
+      // Obstacle density — noise at scale 8 creates groves and clearings
+      const obstacleNoise = valueNoise(worldSeed, wx, wy, 8);
       const obstacleChance = Math.min(0.25, 0.02 + hostility * 0.04);
-      const hostileChance = hostility >= 2 ? Math.min(0.30, (hostility - 1) * 0.06) : 0;
+      // Blend obstacle probability between current and next biome in transition zones
+      const obstacleChanceNext = Math.min(0.25, 0.02 + (hostilityFloor + 1) * 0.04);
+      const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
-      if (canOverwrite(tiles, i)) {
-        if (r < obstacleChance) {
-          tiles[i] = pickObstacle(biome, rng, hostility);
-        } else if (r < obstacleChance + hostileChance) {
-          tiles[i] = pickHostile(biome, rng);
-        } else if (r < obstacleChance + hostileChance + decorationChance(biome)) {
-          tiles[i] = pickDecoration(biome, rng);
-        }
+      // Hostile tile density — noise at scale 12 for larger hazard regions
+      const hostileNoise = valueNoise(worldSeed ^ 0x12345, wx, wy, 12);
+      const hostileChance = hostilityFloor >= 2 ? Math.min(0.30, (hostilityFloor - 1) * 0.06) : 0;
+      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.30, hostilityFloor * 0.06) : 0;
+      const hostileThreshold = hostileChance * (1 - hostilityFrac) + hostileChanceNext * hostilityFrac;
+
+      // Decoration density — noise at scale 6 for smaller flower/bush patches
+      const decorNoise = valueNoise(worldSeed ^ 0x67890, wx, wy, 6);
+      const decorChance = decorationChance(biome);
+      const decorChanceNext = decorationChance(nextBiome);
+      const decorThreshold = decorChance * (1 - hostilityFrac) + decorChanceNext * hostilityFrac;
+
+      // Use noise value as probability threshold — higher noise = more likely feature
+      if (obstacleNoise < obstacleThreshold) {
+        tiles[i] = hostilityFrac > 0.5 && rng() < hostilityFrac
+          ? pickObstacle(nextBiome, rng, Math.floor(hostility) + 1)
+          : pickObstacle(biome, rng, hostilityFloor);
+      } else if (hostileNoise < hostileThreshold) {
+        tiles[i] = hostilityFrac > 0.5 && rng() < hostilityFrac
+          ? pickHostile(nextBiome, rng)
+          : pickHostile(biome, rng);
+      } else if (decorNoise < decorThreshold) {
+        tiles[i] = pickDecoration(biome, rng);
       }
     }
   }
@@ -146,7 +213,8 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   }
 
   // water features — grouped clusters of 6+ tiles, more common near office
-  if ((biome === "meadow" || biome === "forest" || biome === "ruins") && rng() < (hostility === 0 ? 0.35 : hostility === 1 ? 0.25 : 0.15)) {
+  const hRounded = Math.round(hostility);
+  if ((biome === "meadow" || biome === "forest" || biome === "ruins") && rng() < (hRounded === 0 ? 0.35 : hRounded === 1 ? 0.25 : 0.15)) {
     placeWaterCluster(tiles, rng);
   }
 

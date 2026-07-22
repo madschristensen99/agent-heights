@@ -374,6 +374,12 @@ export const TILE = {
   CHIMNEY: 36,
 } as const;
 
+/** Number of base frames in the world-tiles spritesheet (one per tile type, including 3 water animation frames). */
+export const WORLD_TILE_FRAMES = 24;
+
+/** Number of texture variants generated per tile type for visual variety. */
+export const WORLD_VARIANTS = 4;
+
 export type CardStatus = "backlog" | "in_progress" | "done";
 
 /** A task saved across server restarts so agents can resume exactly where they left off. */

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { CHUNK_SIZE, TILE } from "../../../shared/types";
+import { CHUNK_SIZE, TILE, WORLD_TILE_FRAMES, WORLD_VARIANTS } from "../../../shared/types";
 import type { FiredAgent } from "../../../shared/types";
 import type { Store } from "../store";
 import type { Net } from "../net";
@@ -539,7 +539,7 @@ class FriendlyCreature {
   }
 }
 
-/** A flying stone projectile — sprite-based with rotation. */
+/** A flying stone projectile — sprite-based with rotation and lob arc. */
 class Stone {
   sprite: Phaser.GameObjects.Sprite;
   private trail: Phaser.GameObjects.Image;
@@ -549,20 +549,32 @@ class Stone {
   private damage: number;
   private alive = true;
   private world: WorldLayer;
-  constructor(world: WorldLayer, x: number, y: number, vx: number, vy: number, damage: number) {
+  private scale: number;
+  private lobHeight: number;
+  private travelTime = 0;
+  private startX: number;
+  private startY: number;
+  private totalDist: number;
+
+  constructor(world: WorldLayer, x: number, y: number, vx: number, vy: number, damage: number, scale: number, lobHeight: number) {
     this.world = world;
     this.vx = vx;
     this.vy = vy;
-    this.life = 3000; // 3 seconds
+    this.life = 4000;
     this.damage = damage;
+    this.scale = scale;
+    this.lobHeight = lobHeight;
+    this.startX = x;
+    this.startY = y;
+    this.totalDist = Math.hypot(vx, vy) * (this.life / 1000);
     this.trail = world.scene.add
       .image(x, y, "soft-glow")
-      .setDisplaySize(20, 20)
+      .setDisplaySize(20 * scale, 20 * scale)
       .setTint(0x888890)
       .setAlpha(0.3)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(49);
-    this.sprite = world.scene.add.sprite(x, y, "stone-proj", 0).setDepth(50).setScale(0.8);
+    this.sprite = world.scene.add.sprite(x, y, "stone-proj", 0).setDepth(50).setScale(scale);
   }
 
   get alive_(): boolean { return this.alive; }
@@ -574,16 +586,23 @@ class Stone {
       this.destroy();
       return null;
     }
+    this.travelTime += dt;
     this.sprite.x += this.vx * (dt / 1000);
     this.sprite.y += this.vy * (dt / 1000);
+    // Parabolic lob arc: peak at midpoint of travel
+    const traveled = Math.hypot(this.sprite.x - this.startX, this.sprite.y - this.startY);
+    const progress = Math.min(1, traveled / this.totalDist);
+    const arcOffset = Math.sin(progress * Math.PI) * this.lobHeight;
+    this.sprite.y -= arcOffset * (dt / 1000) * 2; // apply arc as continuous offset
     // rotate based on velocity
     this.sprite.rotation = Math.atan2(this.vy, this.vx);
     // trail follows
     this.trail.setPosition(this.sprite.x, this.sprite.y);
 
+    const hitRadius = 18 + this.scale * 15;
     const dist = Math.hypot(this.sprite.x - playerX, this.sprite.y - playerY);
-    if (dist < 30) {
-      this.world.vfx?.sparkBurst(this.sprite.x, this.sprite.y, 0xaaaaaa, 8, 60);
+    if (dist < hitRadius) {
+      this.world.vfx?.sparkBurst(this.sprite.x, this.sprite.y, 0xaaaaaa, Math.floor(8 * this.scale), 60);
       this.world.audio?.stoneImpact();
       this.destroy();
       return { hit: true, damage: this.damage };
@@ -1411,11 +1430,20 @@ export class WorldLayer {
       [TILE.TENNIS_NET]: "tennis-net",
     };
 
-    const tileToFrame = (tile: number): number => {
+    const tileToFrame = (tile: number, variant: number): number => {
       if (tile === TILE.WATER) return 21;
-      if (tile >= 22) return TILE.GRASS;
-      return tile;
+      if (tile >= 22) return TILE.GRASS + variant * WORLD_TILE_FRAMES;
+      return tile + variant * WORLD_TILE_FRAMES;
     };
+
+    // Edge autotiling: tiles that get a colored border where they meet different terrain
+    const edgeTileColors: Record<number, string> = {
+      [TILE.WATER]: "rgba(42,80,110,0.7)",
+      [TILE.POND]: "rgba(40,70,50,0.6)",
+      [TILE.LAVA]: "rgba(30,8,4,0.8)",
+      [TILE.ACID]: "rgba(50,80,16,0.6)",
+    };
+    const EDGE_WIDTH = 4;
 
     // Render static tiles to a persistent canvas texture (survives scene restarts).
     // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
@@ -1438,12 +1466,19 @@ export class WorldLayer {
           }
         };
 
+        // Pass 1: draw base tiles with per-tile variant selection
         for (let y = 0; y < CHUNK_SIZE; y++) {
           for (let x = 0; x < CHUNK_SIZE; x++) {
             const tile = chunk.tiles[y * CHUNK_SIZE + x];
             const px = x * TILE_PX;
             const py = y * TILE_PX;
-            const frame = tileToFrame(tile);
+            const worldTileX = chunk.cx * CHUNK_SIZE + x;
+            const worldTileY = chunk.cy * CHUNK_SIZE + y;
+            // Position hash for variant — deterministic per world tile
+            let h = (worldTileX * 374761393 + worldTileY * 668265263) | 0;
+            h = (h ^ (h >>> 13)) | 0;
+            const variant = (h & 0x7fffffff) % WORLD_VARIANTS;
+            const frame = tileToFrame(tile, variant);
 
             // Draw base tile
             const fr = worldTilesTex.get(frame);
@@ -1467,6 +1502,42 @@ export class WorldLayer {
             }
           }
         }
+
+        // Pass 2: edge autotiling — draw borders where liquid/hazard tiles meet different terrain
+        for (let y = 0; y < CHUNK_SIZE; y++) {
+          for (let x = 0; x < CHUNK_SIZE; x++) {
+            const tile = chunk.tiles[y * CHUNK_SIZE + x];
+            const edgeColor = edgeTileColors[tile];
+            if (!edgeColor) continue;
+
+            const px = x * TILE_PX;
+            const py = y * TILE_PX;
+            const worldTileX = chunk.cx * CHUNK_SIZE + x;
+            const worldTileY = chunk.cy * CHUNK_SIZE + y;
+
+            // Check 4 cardinal neighbors (use chunk data for interior, cross-chunk for borders)
+            const nTile = y > 0
+              ? chunk.tiles[(y - 1) * CHUNK_SIZE + x]
+              : this.getTileAtLoaded(worldTileX, worldTileY - 1);
+            const sTile = y < CHUNK_SIZE - 1
+              ? chunk.tiles[(y + 1) * CHUNK_SIZE + x]
+              : this.getTileAtLoaded(worldTileX, worldTileY + 1);
+            const wTile = x > 0
+              ? chunk.tiles[y * CHUNK_SIZE + (x - 1)]
+              : this.getTileAtLoaded(worldTileX - 1, worldTileY);
+            const eTile = x < CHUNK_SIZE - 1
+              ? chunk.tiles[y * CHUNK_SIZE + (x + 1)]
+              : this.getTileAtLoaded(worldTileX + 1, worldTileY);
+
+            ctx.fillStyle = edgeColor;
+            // Draw edge band on sides facing different terrain (skip if neighbor not loaded = -1)
+            if (nTile >= 0 && nTile !== tile) ctx.fillRect(px, py, TILE_PX, EDGE_WIDTH);
+            if (sTile >= 0 && sTile !== tile) ctx.fillRect(px, py + TILE_PX - EDGE_WIDTH, TILE_PX, EDGE_WIDTH);
+            if (wTile >= 0 && wTile !== tile) ctx.fillRect(px, py, EDGE_WIDTH, TILE_PX);
+            if (eTile >= 0 && eTile !== tile) ctx.fillRect(px + TILE_PX - EDGE_WIDTH, py, EDGE_WIDTH, TILE_PX);
+          }
+        }
+
         canvasTex.refresh();
       }
     }
@@ -1685,7 +1756,7 @@ export class WorldLayer {
       const cx = Math.floor(tx / CHUNK_SIZE);
       const cy = Math.floor(ty / CHUNK_SIZE);
       const hostility = hostilityAt(cx, cy);
-      const biomeName = ["meadow", "forest", "ruins", "wasteland", "void", "infernal"][hostility];
+      const biomeName = ["meadow", "forest", "ruins", "wasteland", "void", "infernal"][Math.round(hostility)];
       const biomeDisplay = biomeName.toUpperCase();
 
       // HUD compass
@@ -1745,9 +1816,11 @@ export class WorldLayer {
         const oy = playerY + Math.sin(angle) * dist;
         // velocity toward player with slight inaccuracy
         const targetAngle = Math.atan2(playerY - oy, playerX - ox) + (Math.random() - 0.5) * 0.3;
-        const stoneSpeed = 200 + hostility * 30;
-        const damage = 5 + hostility * 3;
-        this.stones.push(new Stone(this, ox, oy, Math.cos(targetAngle) * stoneSpeed, Math.sin(targetAngle) * stoneSpeed, damage));
+        const stoneSpeed = 200 + hostility * 50;
+        const damage = 5 + hostility * 4;
+        const stoneScale = 0.6 + hostility * 0.25;
+        const lobHeight = (hostility - 1) * 20;
+        this.stones.push(new Stone(this, ox, oy, Math.cos(targetAngle) * stoneSpeed, Math.sin(targetAngle) * stoneSpeed, damage, stoneScale, lobHeight));
       }
 
       // --- roll for legendary beast spawn ---

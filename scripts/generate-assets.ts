@@ -2623,17 +2623,27 @@ const worldDrawers: WorldTileDrawer[] = [
   (s, ox, oy, seed) => worldWater(s, ox, oy, seed, 2), // 23 WATER frame 2
 ];
 
+const WORLD_VARIANTS = 4;
+
 function buildWorldTileset(): Sheet {
   const cols = WORLD_COLS;
-  const rows = Math.ceil(worldDrawers.length / cols);
+  const baseFrames = worldDrawers.length;
+  const totalFrames = baseFrames * WORLD_VARIANTS;
+  const rows = Math.ceil(totalFrames / cols);
   const s = new Sheet(cols * WT, rows * WT);
-  for (let i = 0; i < worldDrawers.length; i++) {
-    const drawer = worldDrawers[i];
-    const ox = (i % cols) * WT;
-    const oy = Math.floor(i / cols) * WT;
-    s.clip = { x: ox, y: oy, w: WT, h: WT };
-    drawer(s, ox, oy, i * 137 + 42);
-    s.clip = null;
+  for (let v = 0; v < WORLD_VARIANTS; v++) {
+    for (let i = 0; i < baseFrames; i++) {
+      const drawer = worldDrawers[i];
+      const frameIdx = v * baseFrames + i;
+      const ox = (frameIdx % cols) * WT;
+      const oy = Math.floor(frameIdx / cols) * WT;
+      s.clip = { x: ox, y: oy, w: WT, h: WT };
+      // Water frames (21-23) use the same seed across variants — they animate, not static
+      const isWater = i >= 21;
+      const seed = isWater ? i * 137 + 42 : i * 137 + 42 + v * 9973;
+      drawer(s, ox, oy, seed);
+      s.clip = null;
+    }
   }
   return s;
 }
