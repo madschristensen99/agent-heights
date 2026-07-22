@@ -8,6 +8,7 @@ import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
+import { generateVoxelCharTexture } from "./voxel-spritesheet";
 import { getServerByUrl } from "../../../shared/mcp-catalog";
 import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
 import { upgradeWorkshop } from "./workshop";
@@ -19,6 +20,20 @@ import { ScreenShareManager } from "../screen-share";
 import { WebcamManager } from "../webcam";
 
 const PLAYER_SPEED = 380;
+
+// Toggle: set to true to render characters as 3D voxel models instead of 2D pixel sprites.
+// Can be toggled at runtime via localStorage or a settings button.
+const VOXEL_MODE = (() => {
+  try { return localStorage.getItem("voxel-mode") === "true"; } catch { return false; }
+})();
+
+function dispatchCharTexture(scene: Phaser.Scene, key: string, ap: CharAppearance): void {
+  if (VOXEL_MODE) {
+    generateVoxelCharTexture(scene, key, ap);
+  } else {
+    generateCharTexture(scene, key, ap);
+  }
+}
 
 function hintLabel(text: string): string {
   return isTouchDevice() ? text.replace(/^E:\s*/, "TAP ") : text;
@@ -4448,7 +4463,7 @@ export class OfficeScene extends Phaser.Scene {
     // cosmetic sprite matches the real NPC that syncAgents() will create.
     let agentKey = "char-heli-delivery";
     if (this.heliDelivery?.appearance) {
-      generateCharTexture(this, agentKey, this.heliDelivery.appearance);
+      dispatchCharTexture(this, agentKey, this.heliDelivery.appearance);
       this.ensureCharAnimations(agentKey);
     } else {
       // No custom appearance — fall back to a pre-generated character spritesheet.
@@ -4605,7 +4620,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!info) continue;
       if (info.appearance) {
         const key = agentTextureKey(info);
-        generateCharTexture(this, key, info.appearance);
+        dispatchCharTexture(this, key, info.appearance);
         this.ensureCharAnimations(key);
       }
       const overflow = info.deskIndex - this.seats.length;
@@ -5927,7 +5942,7 @@ export class OfficeScene extends Phaser.Scene {
       const existing = this.textures.get(key);
       if (!existing || (this as any)._lastBossAp !== ap) {
         (this as any)._lastBossAp = ap;
-        generateCharTexture(this, key, ap);
+        dispatchCharTexture(this, key, ap);
         this.ensureCharAnimations(key);
         this.playerTexKey = key;
         return true;
@@ -5969,7 +5984,7 @@ export class OfficeScene extends Phaser.Scene {
         if (info.appearance) {
           const key = agentTextureKey(info);
           console.log(`[syncAgents] generating char texture: key=${key}`);
-          generateCharTexture(this, key, info.appearance);
+          dispatchCharTexture(this, key, info.appearance);
           this.ensureCharAnimations(key);
         }
         const overflow = info.deskIndex - this.seats.length;
@@ -6524,7 +6539,7 @@ export class OfficeScene extends Phaser.Scene {
 
       // If appearance changed, regenerate the texture
       if (entry && p.appearance && JSON.stringify(entry.appearance) !== JSON.stringify(p.appearance)) {
-        generateCharTexture(this, texKey, p.appearance);
+        dispatchCharTexture(this, texKey, p.appearance);
         this.ensureCharAnimations(texKey);
         entry.appearance = p.appearance;
         entry.texKey = texKey;
@@ -6534,7 +6549,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!entry) {
         // Generate custom texture if player has an appearance
         if (p.appearance) {
-          generateCharTexture(this, texKey, p.appearance);
+          dispatchCharTexture(this, texKey, p.appearance);
           this.ensureCharAnimations(texKey);
         }
         const sprite = this.add.sprite(p.x, p.y - 200, texKey, 0)

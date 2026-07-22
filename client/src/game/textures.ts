@@ -3713,13 +3713,13 @@ export function generateAllTextures(scene: Phaser.Scene, force = false): void {
 
 /** Get the creature texture key for a hostility level. */
 export function creatureKey(hostility: number): string {
-  const idx = Math.min(hostility, CREATURE_DESIGNS.length - 1);
+  const idx = Math.min(Math.floor(hostility), CREATURE_DESIGNS.length - 1);
   return `creature-${CREATURE_DESIGNS[idx].name}`;
 }
 
 /** Get the creature design for a hostility level. */
 export function creatureDesign(hostility: number): CreatureDesign {
-  return CREATURE_DESIGNS[Math.min(hostility, CREATURE_DESIGNS.length - 1)];
+  return CREATURE_DESIGNS[Math.min(Math.floor(hostility), CREATURE_DESIGNS.length - 1)];
 }
 
 /** Get the beast texture key by beast name. */

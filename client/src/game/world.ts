@@ -1794,7 +1794,7 @@ export class WorldLayer {
       // --- spawn friendly creatures in the meadow (hostility 0) ---
       if (this.friendlies.length < FRIENDLY_CAP && time - this.lastFriendlySpawnTime > 2000 + Math.random() * 3000) {
         this.lastFriendlySpawnTime = time;
-        if (hostility === 0) {
+        if (Math.round(hostility) === 0) {
           const angle = Math.random() * Math.PI * 2;
           const dist = 200 + Math.random() * 200;
           const sx = playerX + Math.cos(angle) * dist;
