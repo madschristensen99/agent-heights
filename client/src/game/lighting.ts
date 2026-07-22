@@ -121,9 +121,13 @@ export class LightingSystem {
     // Darkness: delayed onset — doesn't start until ~10 tiles out so the
     // brightness boost dominates near the office edge
     const delayedDarkness = Math.max(0, (darknessFactor - 0.1) / 0.9);
+    const showOverlays = delayedDarkness > 0;
     // Make night darker and more ominous — deep blue-purple with higher alpha
     this.dayNightTint.setFillStyle(0x050518, nightFactor * 0.55 * delayedDarkness);
     this.ambientDarkness.setFillStyle(0x000010, nightFactor * 0.45 * delayedDarkness);
+    this.dayNightTint.setVisible(showOverlays);
+    this.ambientDarkness.setVisible(showOverlays);
+    this.brightnessBoost.setVisible(!showOverlays && brightnessFactor > 0);
 
     // Resize overlays to cover the full camera world view (handles zoom-out)
     const cam = this.scene.cameras.main;

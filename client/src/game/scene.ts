@@ -1363,8 +1363,11 @@ export class OfficeScene extends Phaser.Scene {
     this.brightnessBoost.setSize(view.width, view.height).setPosition(view.x, view.y);
     // darkness: delayed onset — doesn't start until ~10 tiles out
     const delayedDarkness = Math.max(0, (distFactor - 0.1) / 0.9);
+    const showOverlays = delayedDarkness > 0;
     this.dayNightTint.setFillStyle(0x050518, nightFactor * 0.55 * delayedDarkness);
     this.dayNightTint.setSize(view.width, view.height).setPosition(view.x, view.y);
+    this.dayNightTint.setVisible(showOverlays);
+    this.brightnessBoost.setVisible(!showOverlays && brightnessFactor > 0);
 
     // monitor glows: pulse for working agents
     const pulse = 0.15 + Math.sin(time * 0.003) * 0.05;
