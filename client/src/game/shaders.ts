@@ -108,7 +108,7 @@ void main() {
   vec4 color = texture2D(uMainSampler, outTexCoord);
 
   // ACES tone mapping for cinematic look
-  vec3 toned = acesTone(color.rgb * 1.1);
+  vec3 toned = acesTone(color.rgb);
 
   // color grading — teal shadows, warm highlights (cinematic split-tone)
   float lum = dot(color.rgb, vec3(0.299, 0.587, 0.114));
@@ -128,7 +128,7 @@ void main() {
 
 export class ColorGradePipeline extends Phaser.Renderer.WebGL.Pipelines
   .PostFXPipeline {
-  private intensity = 0.5;
+  private intensity = 0.3;
 
   constructor(game: Phaser.Game) {
     super({

@@ -157,6 +157,12 @@ export class LightingSystem {
       bloomPipe.setThreshold(0.75 - nightBloom * 0.40);
     }
 
+    // Disable DOF (edge blur) inside the office — only apply outside at night
+    const dofPipe = cam.getPostPipeline("DOF") as unknown as { setStrength: (n: number) => void } | undefined;
+    if (dofPipe && typeof dofPipe.setStrength === "function") {
+      dofPipe.setStrength(delayedDarkness > 0 ? 0.4 * delayedDarkness : 0);
+    }
+
     // Pulse all lights — boost intensity at night so they radiate against the dark
     const nightBoost = 1 + nightFactor * delayedDarkness * 0.8;
     for (const light of this.lights) {

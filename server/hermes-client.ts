@@ -11,6 +11,9 @@
 
 import type { PlatformConnectionState, PlatformEvent } from "../shared/types.js";
 import { getPlatformEntry } from "../shared/types.js";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 const HERMES_BASE_URL = process.env.HERMES_BASE_URL ?? "http://127.0.0.1:9119";
 const POLL_INTERVAL_MS = 10_000; // 10 seconds
@@ -59,7 +62,7 @@ function credentialsToEnvVars(platform: string, credentials: Record<string, stri
 
 export interface HermesStatus {
   gateway_running: boolean;
-  platforms: Record<string, { connected: boolean; status: string }>;
+  platforms: Record<string, Record<string, any>>;
 }
 
 export class HermesClient {
@@ -124,7 +127,10 @@ export class HermesClient {
     }
   }
 
-  /** Fetch the current gateway + platform status. */
+  /** Fetch the current gateway + platform status.
+   *  Hermes /api/status may report gateway_running=false in Docker (known bug #26181)
+   *  because PID/lock files aren't reliable in containers. We fall back to reading
+   *  gateway_state.json directly to check if the gateway is actually running. */
   async getStatus(): Promise<HermesStatus | null> {
     try {
       const res = await fetch(`${this.baseUrl}/api/status`, {
@@ -132,10 +138,39 @@ export class HermesClient {
       });
       if (!res.ok) return null;
       const data = await res.json() as any;
-      return {
-        gateway_running: data.gateway_running ?? data.gatewayRunning ?? false,
-        platforms: data.platforms ?? data.platform_states ?? {},
-      };
+
+      // Hermes uses gateway_platforms (not platforms) and state field (not connected boolean)
+      let platforms = data.platforms ?? data.gateway_platforms ?? data.platform_states ?? {};
+      let gatewayRunning = data.gateway_running ?? data.gatewayRunning ?? false;
+
+      // Docker fallback: if /api/status says gateway not running, check gateway_state.json
+      if (!gatewayRunning) {
+        const stateFile = this.readGatewayStateFile();
+        if (stateFile?.gateway_state === "running") {
+          gatewayRunning = true;
+          // gateway_state.json has platform states too — merge them
+          if (stateFile.platforms && Object.keys(platforms).length === 0) {
+            platforms = stateFile.platforms;
+          }
+          console.log(`[hermes-client] /api/status said not running but gateway_state.json says running — using fallback`);
+        }
+      }
+
+      console.log(`[hermes-client] /api/status: gateway_running=${gatewayRunning}, platforms=${JSON.stringify(platforms)}`);
+      return { gateway_running: gatewayRunning, platforms };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Read ~/.hermes/gateway_state.json as a fallback for Docker PID/lock file bug. */
+  private readGatewayStateFile(): { gateway_state: string; platforms?: Record<string, any> } | null {
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const statePath = join(hermesHome, "gateway_state.json");
+      if (!existsSync(statePath)) return null;
+      const raw = readFileSync(statePath, "utf-8");
+      return JSON.parse(raw);
     } catch {
       return null;
     }
@@ -338,10 +373,13 @@ export class HermesClient {
     return platforms.map((p) => {
       const key = p.toLowerCase();
       const platState = status.platforms[key] ?? status.platforms[p] ?? {};
+      // Hermes uses "state" field (e.g. "connected", "disconnected") not "connected" boolean
+      const stateStr = platState.state ?? platState.status ?? "";
+      const connected = platState.connected ?? (stateStr === "connected");
       return {
         platform: p,
-        connected: platState.connected ?? false,
-        status: platState.status ?? (platState.connected ? "Connected" : "Not configured"),
+        connected,
+        status: stateStr || (connected ? "Connected" : "Not configured"),
         gatewayRunning: status.gateway_running,
       };
     });
