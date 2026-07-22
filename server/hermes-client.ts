@@ -15,6 +15,48 @@ import { getPlatformEntry } from "../shared/types.js";
 const HERMES_BASE_URL = process.env.HERMES_BASE_URL ?? "http://127.0.0.1:9119";
 const POLL_INTERVAL_MS = 10_000; // 10 seconds
 
+/**
+ * Mapping from our platform credential field keys to Hermes env var names.
+ * Hermes stores credentials in ~/.hermes/.env and reads them at gateway startup.
+ */
+const PLATFORM_ENV_VAR_MAP: Record<string, Record<string, string>> = {
+  telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
+  discord: { bot_token: "DISCORD_BOT_TOKEN" },
+  slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN" },
+  whatsapp: { account_sid: "TWILIO_ACCOUNT_SID", auth_token: "TWILIO_AUTH_TOKEN", phone_number: "TWILIO_PHONE_NUMBER" },
+  signal: { phone_number: "SIGNAL_ACCOUNT" },
+  email: {
+    imap_host: "EMAIL_IMAP_HOST", imap_port: "EMAIL_IMAP_PORT",
+    smtp_host: "EMAIL_SMTP_HOST", smtp_port: "EMAIL_SMTP_PORT",
+    email: "EMAIL_ADDRESS", password: "EMAIL_PASSWORD",
+  },
+  sms: { account_sid: "TWILIO_ACCOUNT_SID", auth_token: "TWILIO_AUTH_TOKEN", phone_number: "TWILIO_PHONE_NUMBER" },
+  "microsoft teams": { app_id: "TEAMS_APP_ID", tenant_id: "TEAMS_TENANT_ID", bot_password: "TEAMS_BOT_PASSWORD" },
+  "google chat": { project_id: "GOOGLE_CHAT_PROJECT_ID", service_account: "GOOGLE_CHAT_SERVICE_ACCOUNT_JSON" },
+  matrix: { homeserver_url: "MATRIX_HOMESERVER", access_token: "MATRIX_ACCESS_TOKEN", user_id: "MATRIX_USER_ID" },
+  mattermost: { server_url: "MATTERMOST_URL", bot_token: "MATTERMOST_TOKEN" },
+  line: { channel_access_token: "LINE_CHANNEL_ACCESS_TOKEN", channel_secret: "LINE_CHANNEL_SECRET" },
+  irc: { server: "IRC_SERVER", port: "IRC_PORT", nickname: "IRC_NICKNAME", channels: "IRC_CHANNEL" },
+  bluebubbles: { server_url: "BLUEBUBBLES_SERVER_URL", password: "BLUEBUBBLES_PASSWORD" },
+  ntfy: { server_url: "NTFY_SERVER_URL", topic: "NTFY_TOPIC" },
+};
+
+/** Convert our platform name to the Hermes platform ID (lowercase). */
+function hermesPlatformId(platform: string): string {
+  return platform.toLowerCase().replace(/\s+/g, "_");
+}
+
+/** Map our credential keys to Hermes env var names for a given platform. */
+function credentialsToEnvVars(platform: string, credentials: Record<string, string>): Record<string, string> {
+  const map = PLATFORM_ENV_VAR_MAP[platform.toLowerCase()] ?? {};
+  const envVars: Record<string, string> = {};
+  for (const [key, value] of Object.entries(credentials)) {
+    const envName = map[key] ?? key.toUpperCase();
+    envVars[envName] = value;
+  }
+  return envVars;
+}
+
 export interface HermesStatus {
   gateway_running: boolean;
   platforms: Record<string, { connected: boolean; status: string }>;
@@ -176,7 +218,7 @@ export class HermesClient {
     }
   }
 
-  /** Configure a platform's credentials via the Hermes gateway API. */
+  /** Configure a platform's credentials via the Hermes dashboard API. */
   async configurePlatform(platform: string, credentials: Record<string, string>): Promise<{ success: boolean; error?: string }> {
     // Check reachability first so we can give a clear error instead of "fetch failed"
     const reachable = await this.isReachable();
@@ -186,16 +228,33 @@ export class HermesClient {
         error: `Hermes Agent gateway is not running at ${this.baseUrl}. It should auto-start with the server — check server logs for [hermes-process] errors.`,
       };
     }
+    const platformId = hermesPlatformId(platform);
+    const envVars = credentialsToEnvVars(platform, credentials);
     try {
-      const res = await fetch(`${this.baseUrl}/api/gateway/configure`, {
-        method: "POST",
+      // PUT /api/messaging/platforms/{id} — writes credentials to .env and enabled flag to config.yaml
+      const res = await fetch(`${this.baseUrl}/api/messaging/platforms/${encodeURIComponent(platformId)}`, {
+        method: "PUT",
         headers: this.authHeaders(),
-        body: JSON.stringify({ platform: platform.toLowerCase(), credentials }),
+        body: JSON.stringify({ enabled: true, env: envVars }),
         signal: AbortSignal.timeout(10000),
       });
-      if (res.ok) return { success: true };
-      const data = await res.json().catch(() => ({}));
-      return { success: false, error: data.error ?? data.message ?? `HTTP ${res.status}` };
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { success: false, error: data.error ?? data.detail ?? data.message ?? `HTTP ${res.status}` };
+      }
+
+      // Restart the gateway so it picks up the new credentials
+      const restartRes = await fetch(`${this.baseUrl}/api/gateway/restart`, {
+        method: "POST",
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!restartRes.ok) {
+        // Config was saved but gateway didn't restart — still report partial success
+        console.warn(`[hermes-client] Platform configured but gateway restart returned HTTP ${restartRes.status}`);
+      }
+
+      return { success: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to reach Hermes gateway";
       if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED") || msg.includes("connect")) {

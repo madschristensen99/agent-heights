@@ -373,6 +373,8 @@ export const TILE = {
   SERVER_SCREEN: 35,
   CHIMNEY: 36,
   BIG_ROCK: 37,
+  PALM_TREE: 38,
+  MYSTIC_TREE: 39,
 } as const;
 
 /** Number of base frames in the world-tiles spritesheet (one per tile type, including 3 water animation frames). */

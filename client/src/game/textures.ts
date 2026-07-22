@@ -2797,6 +2797,184 @@ function drawBigRock(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.fill();
 }
 
+/** Draw a palm tree — friendly, tropical, with a curved trunk and fronds. */
+function drawPalmTree(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.2);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + size * 0.35, size * 0.18, size * 0.06, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // trunk — curved, tapering
+  ctx.strokeStyle = rgba(0x8a6a3a, 1);
+  ctx.lineWidth = size * 0.08;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + size * 0.3);
+  ctx.quadraticCurveTo(cx - size * 0.05, cy - size * 0.1, cx + size * 0.02, cy - size * 0.25);
+  ctx.stroke();
+
+  // trunk segments
+  ctx.strokeStyle = rgba(0x6a4a2a, 0.5);
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    const t = i / 4;
+    const sy = cy + size * 0.3 - t * size * 0.5;
+    const sx = cx - size * 0.05 * t + size * 0.02 * t;
+    ctx.beginPath();
+    ctx.moveTo(sx - size * 0.04, sy);
+    ctx.lineTo(sx + size * 0.04, sy);
+    ctx.stroke();
+  }
+
+  // fronds — 6-7 radiating from the top
+  const frondLen = size * 0.22;
+  const topX = cx + size * 0.02;
+  const topY = cy - size * 0.25;
+  const frondColors = [0x3a8a3a, 0x2a7a2a, 0x4a9a4a];
+  for (let i = 0; i < 7; i++) {
+    const angle = (i / 7) * Math.PI * 2 - Math.PI / 2;
+    const droop = 0.15;
+    const ex = topX + Math.cos(angle) * frondLen;
+    const ey = topY + Math.sin(angle) * frondLen + frondLen * droop;
+    ctx.strokeStyle = rgba(frondColors[i % 3], 1);
+    ctx.lineWidth = size * 0.04;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(topX, topY);
+    ctx.quadraticCurveTo(
+      topX + Math.cos(angle) * frondLen * 0.5,
+      topY + Math.sin(angle) * frondLen * 0.5 - frondLen * 0.1,
+      ex, ey
+    );
+    ctx.stroke();
+
+    // small leaflets
+    ctx.fillStyle = rgba(frondColors[(i + 1) % 3], 0.7);
+    for (let j = 1; j <= 3; j++) {
+      const lt = j / 4;
+      const lx = topX + Math.cos(angle) * frondLen * lt;
+      const ly = topY + Math.sin(angle) * frondLen * lt + frondLen * droop * lt;
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, size * 0.025, size * 0.015, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // coconuts
+  ctx.fillStyle = rgba(0x4a3a1a, 1);
+  ctx.beginPath();
+  ctx.arc(topX - size * 0.04, topY + size * 0.04, size * 0.03, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(topX + size * 0.04, topY + size * 0.04, size * 0.03, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw a mystic tree — dark, gnarled, intimidating with glowing eyes. */
+function drawMysticTree(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.35);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + size * 0.35, size * 0.2, size * 0.07, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // trunk — thick, gnarled, dark
+  const trunkW = size * 0.12;
+  ctx.fillStyle = rgba(0x2a1a1a, 1);
+  ctx.beginPath();
+  ctx.moveTo(cx - trunkW / 2, cy + size * 0.3);
+  ctx.lineTo(cx - trunkW / 2 - size * 0.03, cy - size * 0.1);
+  ctx.lineTo(cx - trunkW / 3, cy - size * 0.2);
+  ctx.lineTo(cx + trunkW / 3, cy - size * 0.2);
+  ctx.lineTo(cx + trunkW / 2 + size * 0.03, cy - size * 0.1);
+  ctx.lineTo(cx + trunkW / 2, cy + size * 0.3);
+  ctx.closePath();
+  ctx.fill();
+
+  // trunk texture — bark lines
+  ctx.strokeStyle = rgba(0x1a0a0a, 0.6);
+  ctx.lineWidth = 1.5;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cx + i * trunkW * 0.3, cy + size * 0.25);
+    ctx.lineTo(cx + i * trunkW * 0.3 + size * 0.02, cy - size * 0.15);
+    ctx.stroke();
+  }
+
+  // canopy — dark, twisted, layered
+  const canopyR = size * 0.28;
+  const canopyY = cy - size * 0.22;
+
+  // dark base
+  ctx.fillStyle = rgba(0x1a2a1a, 1);
+  ctx.beginPath();
+  ctx.arc(cx, canopyY, canopyR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // twisted branches
+  ctx.strokeStyle = rgba(0x2a1a1a, 1);
+  ctx.lineWidth = size * 0.03;
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, canopyY);
+    ctx.quadraticCurveTo(
+      cx + Math.cos(angle) * canopyR * 0.6,
+      canopyY + Math.sin(angle) * canopyR * 0.6 - canopyR * 0.2,
+      cx + Math.cos(angle) * canopyR * 1.1,
+      canopyY + Math.sin(angle) * canopyR * 1.1
+    );
+    ctx.stroke();
+  }
+
+  // mid layer — slightly lighter
+  ctx.fillStyle = rgba(0x2a4a2a, 0.8);
+  ctx.beginPath();
+  ctx.arc(cx - canopyR * 0.2, canopyY - canopyR * 0.15, canopyR * 0.75, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + canopyR * 0.2, canopyY - canopyR * 0.1, canopyR * 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // glowing eyes — two eerie spots in the canopy
+  const eyeY = canopyY - canopyR * 0.1;
+  const eyeOffset = canopyR * 0.2;
+  ctx.fillStyle = rgba(0xff4400, 0.9);
+  ctx.beginPath();
+  ctx.arc(cx - eyeOffset, eyeY, size * 0.025, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + eyeOffset, eyeY, size * 0.025, 0, Math.PI * 2);
+  ctx.fill();
+
+  // eye glow
+  ctx.fillStyle = rgba(0xff6600, 0.3);
+  ctx.beginPath();
+  ctx.arc(cx - eyeOffset, eyeY, size * 0.05, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + eyeOffset, eyeY, size * 0.05, 0, Math.PI * 2);
+  ctx.fill();
+
+  // hanging tendrils/moss
+  ctx.strokeStyle = rgba(0x1a3a1a, 0.5);
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    const tx = cx - canopyR * 0.6 + i * canopyR * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(tx, canopyY + canopyR * 0.3);
+    ctx.lineTo(tx + size * 0.01, canopyY + canopyR * 0.6);
+    ctx.stroke();
+  }
+}
+
 /** Draw a golf club lying diagonally on the ground. */
 function drawGolfClub(ctx: CanvasRenderingContext2D, size: number): void {
   const cx = size / 2;
@@ -3505,7 +3683,7 @@ const ALL_PROC_KEYS = [
   "stone-proj", "spark", "dust", "shockwave", "recruit-beam",
   "soft-glow", "fire-glow", "void-glow", "crystal-glow",
   "golf-club", "golf-ball", "axe", "net",
-  "big-tree", "big-rock", "tee-box", "leprechaun", "fountain",
+  "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "fountain",
   "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
   "emote-icons",
 ];
@@ -3707,6 +3885,16 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
       if (!tex.exists("big-rock")) {
         const ct = createCanvasTexture(tex, "big-rock", 64, 64);
         drawBigRock(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("palm-tree")) {
+        const ct = createCanvasTexture(tex, "palm-tree", 64, 64);
+        drawPalmTree(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("mystic-tree")) {
+        const ct = createCanvasTexture(tex, "mystic-tree", 64, 64);
+        drawMysticTree(ct.getContext(), 64);
         ct.refresh();
       }
       if (!tex.exists("tee-box")) {

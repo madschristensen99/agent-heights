@@ -101,6 +101,7 @@ const idx = (x: number, y: number) => y * CHUNK_SIZE + x;
 const PROTECTED_TILES = new Set<number>([
   TILE.GOLF_CLUB, TILE.GOLF_BALL, TILE.GOLF_FLAG, TILE.TEE_BOX,
   TILE.AXE, TILE.LEPRECHAUN, TILE.BIG_TREE, TILE.BIG_ROCK, TILE.FOUNTAIN,
+  TILE.PALM_TREE, TILE.MYSTIC_TREE,
   TILE.TENNIS_COURT, TILE.TENNIS_WALL, TILE.TENNIS_RACKET, TILE.TENNIS_BALL, TILE.TENNIS_NET,
 ]);
 
@@ -385,24 +386,34 @@ function pickObstacle(biome: Biome, rng: () => number, hostility: number): numbe
   // Big trees and big rocks become more common farther from the office
   const bigTreeChance = Math.max(0, (hostility - 1) * 0.15);
   const bigRockChance = Math.max(0, (hostility - 1) * 0.12);
+  // Palm trees near the office (low hostility), mystic trees far out (high hostility)
+  const palmChance = hostility < 1.5 ? 0.45 - hostility * 0.25 : 0;
+  const mysticChance = hostility >= 2 ? Math.min(0.4, (hostility - 2) * 0.15) : 0;
   switch (biome) {
     case "meadow":
+      if (rng() < palmChance) return TILE.PALM_TREE;
       return rng() < 0.5 ? TILE.TREE : TILE.HEDGE;
     case "forest":
+      if (rng() < palmChance * 0.5) return TILE.PALM_TREE;
+      if (rng() < mysticChance) return TILE.MYSTIC_TREE;
       if (rng() < bigTreeChance) return TILE.BIG_TREE;
       if (rng() < bigRockChance * 0.5) return TILE.BIG_ROCK;
       return rng() < 0.7 ? TILE.TREE : TILE.ROCK;
     case "ruins":
+      if (rng() < mysticChance) return TILE.MYSTIC_TREE;
       if (rng() < bigTreeChance * 0.5) return TILE.BIG_TREE;
       if (rng() < bigRockChance) return TILE.BIG_ROCK;
       return rng() < 0.4 ? TILE.RUIN : TILE.ROCK;
     case "wasteland":
+      if (rng() < mysticChance * 0.5) return TILE.MYSTIC_TREE;
       if (rng() < bigRockChance) return TILE.BIG_ROCK;
       return rng() < 0.5 ? TILE.ROCK : TILE.RUIN;
     case "void":
+      if (rng() < mysticChance) return TILE.MYSTIC_TREE;
       if (rng() < bigRockChance * 0.5) return TILE.BIG_ROCK;
       return rng() < 0.5 ? TILE.CRYSTAL : TILE.ROCK;
     case "infernal":
+      if (rng() < mysticChance) return TILE.MYSTIC_TREE;
       if (rng() < bigRockChance * 0.5) return TILE.BIG_ROCK;
       return rng() < 0.5 ? TILE.CRYSTAL : TILE.RUIN;
   }
