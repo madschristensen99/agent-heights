@@ -59,7 +59,9 @@ export class Net {
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data) as ServerMsg;
-        console.log(`[net] received: type=${msg.type}`);
+        if (msg.type !== "mcp_keys_status" && msg.type !== "mcp_key_status") {
+          console.log(`[net] received: type=${msg.type}`);
+        }
         if (msg.type === "refresh_token") {
           void this.handleRefreshToken();
           return;

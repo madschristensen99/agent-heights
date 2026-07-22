@@ -1138,7 +1138,6 @@ export class OfficeScene extends Phaser.Scene {
             this.lastRoomId = this.store.roomId;
             this.store.subscribe(() => {
               if (!this.ready) {
-                console.log("[scene] store emit but scene not ready — skipping syncAgents");
                 return;
               }
               // Room changed — restart scene with appropriate theme
@@ -1150,7 +1149,6 @@ export class OfficeScene extends Phaser.Scene {
                 this.scene.restart();
                 return;
               }
-              console.log("[scene] store emit fired — calling syncAgents. agents in store:", [...this.store.agents.keys()]);
               if (this.store.roomId === null) return; // room_state not yet received — skip theme check
               const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
               const desiredTheme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
@@ -5910,7 +5908,6 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private syncAgents(): void {
-    console.log(`[syncAgents] store.agents=${this.store.agents.size} npcs=${this.npcs.size} heliActive=${this.heliActive} ready=${this.ready}`);
     for (const [id, info] of this.store.agents) {
       if (id === YUKI_ID) {
         this.yuki?.sync(info);

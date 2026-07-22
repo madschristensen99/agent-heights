@@ -22,6 +22,7 @@ export interface HermesStatus {
 
 export class HermesClient {
   private baseUrl: string;
+  private sessionToken: string | null;
   private polling = false;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private lastSessionIds: Set<string> = new Set();
@@ -29,8 +30,18 @@ export class HermesClient {
   private onPlatformEvent: ((event: PlatformEvent) => void) | null = null;
   private mailboxPlatforms: (string | null)[] = [null, null, null, null, null, null];
 
-  constructor(baseUrl?: string) {
+  constructor(baseUrl?: string, sessionToken?: string | null) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
+    this.sessionToken = sessionToken ?? null;
+  }
+
+  /** Auth headers for protected Hermes dashboard endpoints. */
+  private authHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.sessionToken) {
+      headers["X-Hermes-Session-Token"] = this.sessionToken;
+    }
+    return headers;
   }
 
   /** Update which platforms to poll for connection status. */
@@ -92,6 +103,7 @@ export class HermesClient {
   async getNewMessages(): Promise<PlatformEvent[]> {
     try {
       const res = await fetch(`${this.baseUrl}/api/sessions?limit=20`, {
+        headers: this.authHeaders(),
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) return [];
@@ -110,6 +122,7 @@ export class HermesClient {
         // Fetch messages for this session
         try {
           const msgRes = await fetch(`${this.baseUrl}/api/sessions/${sid}/messages`, {
+            headers: this.authHeaders(),
             signal: AbortSignal.timeout(5000),
           });
           if (!msgRes.ok) continue;
@@ -139,7 +152,7 @@ export class HermesClient {
     try {
       const res = await fetch(`${this.baseUrl}/api/gateway/send`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.authHeaders(),
         body: JSON.stringify({ platform, target, text }),
         signal: AbortSignal.timeout(10000),
       });
@@ -154,6 +167,7 @@ export class HermesClient {
     try {
       const res = await fetch(`${this.baseUrl}/api/gateway/start`, {
         method: "POST",
+        headers: this.authHeaders(),
         signal: AbortSignal.timeout(10000),
       });
       return res.ok;
@@ -175,7 +189,7 @@ export class HermesClient {
     try {
       const res = await fetch(`${this.baseUrl}/api/gateway/configure`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.authHeaders(),
         body: JSON.stringify({ platform: platform.toLowerCase(), credentials }),
         signal: AbortSignal.timeout(10000),
       });

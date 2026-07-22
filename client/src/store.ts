@@ -803,10 +803,10 @@ export class Store {
         break;
       case "mcp_key_status":
         // MCP key status is handled via toast — no persistent UI state needed
-        break;
+        return;
       case "mcp_keys_status":
         for (const fn of this.mcpKeysStatusListeners) fn(msg.results);
-        break;
+        return;
       case "mcp_oauth_required":
       case "mcp_oauth_code_needed": {
         console.log(`[mcp-oauth] received ${msg.type}, redirectMode=${msg.redirectMode ?? "manual"}`, msg);

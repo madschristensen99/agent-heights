@@ -158,9 +158,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
 
       // Obstacle density — noise at scale 8 creates groves and clearings
       const obstacleNoise = valueNoise(worldSeed, wx, wy, 8);
-      const obstacleChance = Math.min(0.65, 0.12 + hostility * 0.10);
+      const obstacleChance = Math.min(0.85, 0.15 + hostility * 0.14);
       // Blend obstacle probability between current and next biome in transition zones
-      const obstacleChanceNext = Math.min(0.65, 0.12 + (hostilityFloor + 1) * 0.10);
+      const obstacleChanceNext = Math.min(0.85, 0.15 + (hostilityFloor + 1) * 0.14);
       const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
       // Hostile tile density — separate noise fields for lava and void so they
@@ -168,8 +168,8 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
       // Scale 4 creates small maze-like pockets rather than massive pools.
       const lavaNoise = valueNoise(worldSeed ^ 0x12345, wx, wy, 4);
       const voidNoise = valueNoise(worldSeed ^ 0x67890, wx, wy, 4);
-      const hostileChance = hostilityFloor >= 2 ? Math.min(0.30, (hostilityFloor - 1) * 0.08) : 0;
-      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.30, hostilityFloor * 0.08) : 0;
+      const hostileChance = hostilityFloor >= 2 ? Math.min(0.45, (hostilityFloor - 1) * 0.12) : 0;
+      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.45, hostilityFloor * 0.12) : 0;
       const hostileThreshold = hostileChance * (1 - hostilityFrac) + hostileChanceNext * hostilityFrac;
 
       // Decoration density — noise at scale 6 for smaller flower/bush patches
@@ -228,8 +228,26 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
     placeBigRock(tiles, rng);
   }
 
-  // leprechaun agent — small chance to spawn near a big tree in forest/ruins
-  if ((biome === "forest" || biome === "ruins") && hostility >= 2 && rng() < 0.15) {
+  // multi-tile features — increasingly common further out
+  // 2x2 big trees in forest/ruins
+  if ((biome === "forest" || biome === "ruins") && hostility >= 1 && rng() < 0.30 + hostility * 0.05) {
+    placeBigTreeFeature(tiles, rng);
+  }
+  // 3x3 lava pools in infernal/wasteland
+  if ((biome === "infernal" || biome === "wasteland") && hostility >= 3 && rng() < 0.25 + (hostility - 3) * 0.08) {
+    placeLavaPool(tiles, rng);
+  }
+  // 3x3 void pools in void/wasteland
+  if ((biome === "void" || biome === "wasteland") && hostility >= 3 && rng() < 0.25 + (hostility - 3) * 0.08) {
+    placeVoidPool(tiles, rng);
+  }
+  // 3x3 big rock clusters in wasteland/ruins/void
+  if ((biome === "wasteland" || biome === "ruins" || biome === "void") && hostility >= 2 && rng() < 0.20 + (hostility - 2) * 0.06) {
+    placeBigRockCluster(tiles, rng);
+  }
+
+  // leprechaun agent — chance to spawn near a big tree in forest/ruins/wasteland
+  if ((biome === "forest" || biome === "ruins" || biome === "wasteland") && hostility >= 2 && rng() < 0.25) {
     placeLeprechaun(tiles, rng);
   }
 
@@ -272,10 +290,10 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   }
 
   // scattered hostile tiles — interspersed single lava/void tiles for maze-like terrain
-  if (hostility >= 2 && rng() < 0.35) {
+  if (hostility >= 2 && rng() < 0.35 + hostility * 0.05) {
     placeScatteredHostile(tiles, rng, TILE.LAVA, 3 + Math.floor(rng() * 5));
   }
-  if (hostility >= 3 && rng() < 0.35) {
+  if (hostility >= 3 && rng() < 0.35 + hostility * 0.05) {
     placeScatteredHostile(tiles, rng, TILE.VOID, 3 + Math.floor(rng() * 5));
   }
 
@@ -306,7 +324,7 @@ function baseGround(biome: Biome): number {
     case "forest": return TILE.GRASS;
     case "ruins": return TILE.PATH;
     case "wasteland": return TILE.SAND;
-    case "void": return TILE.GRASS; // walkable ground, void tiles are scattered hazards
+    case "void": return TILE.SAND; // dark sand, void tiles are scattered hazards
     case "infernal": return TILE.SAND; // walkable ground, lava is scattered
   }
 }
@@ -482,6 +500,65 @@ function placeBigRock(tiles: number[], rng: () => number): void {
   if (cx < CHUNK_SIZE && cy < CHUNK_SIZE) tiles[idx(cx, cy)] = TILE.BIG_ROCK;
 }
 
+/** Place a big tree feature — 2x2 cluster of TREE with a BIG_TREE on top-left. */
+function placeBigTreeFeature(tiles: number[], rng: () => number): void {
+  const cx = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  const cy = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      const px = cx + dx, py = cy + dy;
+      if (px < CHUNK_SIZE && py < CHUNK_SIZE && canOverwrite(tiles, idx(px, py))) {
+        tiles[idx(px, py)] = TILE.TREE;
+      }
+    }
+  }
+  if (cx < CHUNK_SIZE && cy < CHUNK_SIZE) tiles[idx(cx, cy)] = TILE.BIG_TREE;
+}
+
+/** Place a lava pool — 3x3 cluster of LAVA tiles. */
+function placeLavaPool(tiles: number[], rng: () => number): void {
+  const cx = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  const cy = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  for (let dy = 0; dy < 3; dy++) {
+    for (let dx = 0; dx < 3; dx++) {
+      const px = cx + dx, py = cy + dy;
+      if (px < CHUNK_SIZE && py < CHUNK_SIZE && canOverwrite(tiles, idx(px, py))) {
+        tiles[idx(px, py)] = TILE.LAVA;
+      }
+    }
+  }
+}
+
+/** Place a void pool — 3x3 cluster of VOID tiles. */
+function placeVoidPool(tiles: number[], rng: () => number): void {
+  const cx = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  const cy = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  for (let dy = 0; dy < 3; dy++) {
+    for (let dx = 0; dx < 3; dx++) {
+      const px = cx + dx, py = cy + dy;
+      if (px < CHUNK_SIZE && py < CHUNK_SIZE && canOverwrite(tiles, idx(px, py))) {
+        tiles[idx(px, py)] = TILE.VOID;
+      }
+    }
+  }
+}
+
+/** Place a big rock cluster — 3x3 of ROCK with a BIG_ROCK in the center. */
+function placeBigRockCluster(tiles: number[], rng: () => number): void {
+  const cx = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  const cy = 1 + Math.floor(rng() * (CHUNK_SIZE - 3));
+  for (let dy = 0; dy < 3; dy++) {
+    for (let dx = 0; dx < 3; dx++) {
+      const px = cx + dx, py = cy + dy;
+      if (px < CHUNK_SIZE && py < CHUNK_SIZE && canOverwrite(tiles, idx(px, py))) {
+        tiles[idx(px, py)] = TILE.ROCK;
+      }
+    }
+  }
+  const mx = cx + 1, my = cy + 1;
+  if (mx < CHUNK_SIZE && my < CHUNK_SIZE) tiles[idx(mx, my)] = TILE.BIG_ROCK;
+}
+
 /** Place an obstacle cluster — a dense grove/pile of biome-appropriate obstacles. */
 function placeObstacleCluster(tiles: number[], biome: Biome, rng: () => number): void {
   const cx = 3 + Math.floor(rng() * (CHUNK_SIZE - 6));
@@ -563,16 +640,31 @@ function placeScatteredHostile(tiles: number[], rng: () => number, tileType: num
 
 /** Place a leprechaun agent near a big tree, with an axe to trade. */
 function placeLeprechaun(tiles: number[], rng: () => number): void {
-  // Find a big tree in the chunk
+  // Find a big tree in the chunk, or place one if none exists
   const bigTrees: { x: number; y: number }[] = [];
   for (let y = 0; y < CHUNK_SIZE; y++) {
     for (let x = 0; x < CHUNK_SIZE; x++) {
       if (tiles[idx(x, y)] === TILE.BIG_TREE) bigTrees.push({ x, y });
     }
   }
-  if (bigTrees.length === 0) return;
-
-  const tree = bigTrees[Math.floor(rng() * bigTrees.length)];
+  let tree: { x: number; y: number };
+  if (bigTrees.length > 0) {
+    tree = bigTrees[Math.floor(rng() * bigTrees.length)];
+  } else {
+    // Place a big tree on any overwritable tile
+    let placed = false;
+    for (let attempt = 0; attempt < 20 && !placed; attempt++) {
+      const tx = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
+      const ty = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
+      if (canOverwrite(tiles, idx(tx, ty))) {
+        tiles[idx(tx, ty)] = TILE.BIG_TREE;
+        tree = { x: tx, y: ty };
+        placed = true;
+      }
+    }
+    if (!placed) return;
+    tree = tree!; // asserted placed
+  }
 
   // Find a walkable tile adjacent to the big tree
   const offsets = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
@@ -581,14 +673,14 @@ function placeLeprechaun(tiles: number[], rng: () => number): void {
     const ly = tree.y + dy;
     if (lx >= 0 && lx < CHUNK_SIZE && ly >= 0 && ly < CHUNK_SIZE) {
       const t = tiles[idx(lx, ly)];
-      if (t === TILE.GRASS || t === TILE.PATH || t === TILE.SAND || t === TILE.FLOWER) {
+      if (t === TILE.GRASS || t === TILE.PATH || t === TILE.SAND || t === TILE.FLOWER || t === TILE.BUSH || t === TILE.FAIRWAY) {
         tiles[idx(lx, ly)] = TILE.LEPRECHAUN;
         // Place an axe tile next to the leprechaun (the axe they offer)
         const ax = lx + (dx === 0 ? 1 : 0);
         const ay = ly + (dy === 0 ? 1 : 0);
         if (ax >= 0 && ax < CHUNK_SIZE && ay >= 0 && ay < CHUNK_SIZE) {
           const at = tiles[idx(ax, ay)];
-          if (at === TILE.GRASS || at === TILE.PATH || at === TILE.SAND || at === TILE.FLOWER) {
+          if (at === TILE.GRASS || at === TILE.PATH || at === TILE.SAND || at === TILE.FLOWER || at === TILE.BUSH || at === TILE.FAIRWAY) {
             tiles[idx(ax, ay)] = TILE.AXE;
           }
         }

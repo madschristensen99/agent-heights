@@ -42,7 +42,7 @@ const MAX_HP = 100;
 const CREATURE_CAP = 30;
 const FRIENDLY_CAP = 12;
 const STONE_INTERVAL = 2500;
-const BEAST_SPAWN_INTERVAL = 15000; // check for legendary beast spawns
+const BEAST_SPAWN_INTERVAL = 8000; // check for legendary beast spawns
 
 /** Legendary beast definitions — rare, powerful, unique. */
 interface BeastDef {
@@ -1830,27 +1830,33 @@ export class WorldLayer {
         // pick a beast that matches current hostility
         const candidates = BEASTS.filter((b) => hostility >= b.minHostility);
         if (candidates.length > 0) {
-          // weighted random by rarity (rarer = less likely)
-          const roll = Math.random();
+          // weighted random — normalize rarities so they sum to 1
+          const totalWeight = candidates.reduce((s, b) => s + b.rarity, 0);
+          let roll = Math.random() * totalWeight;
           let chosen = candidates[0];
           for (const b of candidates) {
-            if (roll < b.rarity) {
+            roll -= b.rarity;
+            if (roll <= 0) {
               chosen = b;
               break;
             }
           }
-          // spawn at distance
-          const angle = Math.random() * Math.PI * 2;
-          const dist = 500 + Math.random() * 200;
-          const sx = playerX + Math.cos(angle) * dist;
-          const sy = playerY + Math.sin(angle) * dist;
-          const { tx, ty } = this.pixelToTile(sx, sy);
-          if (this.isCreatureWalkable(tx, ty)) {
-            this.beasts.push(new LegendaryBeast(this, chosen, sx, sy));
-            this.hud.showBeastBanner(chosen.name, Math.round(dist / TILE_PX));
-            this.audio.beastRoar();
-            this.vfx.shockwave(sx, sy, 0xff4444, 3);
-            this.scene.time.delayedCall(4000, () => this.hud.hideBeastBanner());
+          // spawn at distance — try multiple positions to find walkable tile
+          let spawned = false;
+          for (let attempt = 0; attempt < 8 && !spawned; attempt++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 400 + Math.random() * 250;
+            const sx = playerX + Math.cos(angle) * dist;
+            const sy = playerY + Math.sin(angle) * dist;
+            const { tx, ty } = this.pixelToTile(sx, sy);
+            if (this.isCreatureWalkable(tx, ty)) {
+              this.beasts.push(new LegendaryBeast(this, chosen, sx, sy));
+              this.hud.showBeastBanner(chosen.name, Math.round(dist / TILE_PX));
+              this.audio.beastRoar();
+              this.vfx.shockwave(sx, sy, 0xff4444, 3);
+              this.scene.time.delayedCall(4000, () => this.hud.hideBeastBanner());
+              spawned = true;
+            }
           }
         }
       }

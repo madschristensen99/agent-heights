@@ -582,7 +582,10 @@ export class AgentManager {
     await this.hermesProcess.start();
 
     // Now start the polling client that talks to the Hermes REST API
-    this.hermesClient = new HermesClient();
+    this.hermesClient = new HermesClient(
+      undefined,
+      this.hermesProcess.getSessionToken(),
+    );
     this.hermesClient.setMailboxPlatforms(this.settings.mailboxPlatforms);
     this.hermesClient.start(
       (states) => {

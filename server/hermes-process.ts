@@ -10,6 +10,7 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 
 const HERMES_BASE_URL = process.env.HERMES_BASE_URL ?? "http://127.0.0.1:9119";
 const RESTART_DELAY_MS = 3_000;
@@ -26,12 +27,20 @@ export class HermesProcessManager {
   private started = false;
   private onReady: (() => void) | null = null;
   private ready = false;
+  private sessionToken: string;
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
     // Extract port from base URL
     const match = this.baseUrl.match(/:(\d+)$/);
     this.port = match ? parseInt(match[1], 10) : 9119;
+    // Use existing env var or generate a fresh token for this process lifetime
+    this.sessionToken = process.env.HERMES_DASHBOARD_SESSION_TOKEN ?? randomBytes(32).toString("hex");
+  }
+
+  /** Get the session token for authenticating API requests to the Hermes dashboard. */
+  getSessionToken(): string {
+    return this.sessionToken;
   }
 
   /** Start the Hermes gateway as a child process. Returns a promise that resolves when it's reachable. */
@@ -74,7 +83,10 @@ export class HermesProcessManager {
 
     this.child = spawn("hermes", args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
+      },
     });
 
     this.child.stdout?.on("data", (data: Buffer) => {
