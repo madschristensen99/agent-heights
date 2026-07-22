@@ -48,6 +48,52 @@ const MAILBOX_TILES: Tile[] = [
 /** Dark navy color for unassigned mailboxes. */
 const UNASSIGNED_COLOR = 0x1a2a4a;
 
+/** Mapping of platform names to Simple Icons slugs for logo display.
+ *  Platforms not listed here will fall back to a colored dot. */
+const PLATFORM_ICON_SLUGS: Record<string, string> = {
+  Slack: "slack",
+  Discord: "discord",
+  Telegram: "telegram",
+  WhatsApp: "whatsapp",
+  Signal: "signal",
+  Email: "gmail",
+  SMS: "twilio",
+  "Microsoft Teams": "microsoftteams",
+  "Google Chat": "googlechat",
+  Matrix: "matrix",
+  Mattermost: "mattermost",
+  LINE: "line",
+  IRC: "irc",
+  BlueBubbles: "imessage",
+  ntfy: "ntfy",
+  "Open WebUI": "openwebui",
+  Webhooks: "webhooks",
+  DingTalk: "dingtalk",
+  "Feishu/Lark": "larksuite",
+  WeCom: "wecom",
+  "WeCom Callback": "wecom",
+  Weixin: "wechat",
+  QQ: "tencentqq",
+  Yuanbao: "tencentqq",
+  "Home Assistant": "homeassistant",
+  "Teams Meetings": "microsoftteams",
+  "MS Graph Webhook": "microsoft",
+  Raft: "raft",
+  SimpleX: "simplex",
+};
+
+/** Get a logo img element for a platform, or null if no icon is available. */
+function platformLogoImg(platform: string, size: number): HTMLImageElement | null {
+  const slug = PLATFORM_ICON_SLUGS[platform];
+  if (!slug) return null;
+  const img = document.createElement("img");
+  img.src = `https://cdn.simpleicons.org/${slug}`;
+  img.alt = platform;
+  img.style.cssText = `width:${size}px;height:${size}px;flex-shrink:0;object-fit:contain;`;
+  img.onerror = () => { img.style.display = "none"; };
+  return img;
+}
+
 export class OfficeScene extends Phaser.Scene {
   private store!: Store;
   private grid!: Grid;
@@ -2134,8 +2180,12 @@ export class OfficeScene extends Phaser.Scene {
     `;
     const entry = getPlatformEntry(platform);
     const colorHex = entry ? "#" + entry.color.toString(16).padStart(6, "0") : "#888";
+    const logoSlug = PLATFORM_ICON_SLUGS[platform];
+    const logoHtml = logoSlug
+      ? `<img src="https://cdn.simpleicons.org/${logoSlug}" alt="${platform}" style="width:20px;height:20px;flex-shrink:0;object-fit:contain;" onerror="this.style.display='none'">`
+      : `<span style="width:20px;height:20px;border-radius:5px;background:${colorHex};border:2px solid rgba(0,0,0,0.15);flex-shrink:0;"></span>`;
     header.innerHTML = `
-      <span style="width:20px;height:20px;border-radius:5px;background:${colorHex};border:2px solid rgba(0,0,0,0.15);flex-shrink:0;"></span>
+      ${logoHtml}
       <span style="font-size:18px;font-weight:bold;color:#3d3528;flex:1;">${platform} Mailbox</span>
       <span style="font-size:13px;font-weight:bold;color:${connected ? "#4a9b4a" : "#b07050"};">
         ${connected ? "● Connected" : "○ Not connected"}
@@ -2555,8 +2605,12 @@ export class OfficeScene extends Phaser.Scene {
       padding: 16px 24px; display: flex; align-items: center; gap: 12px;
       flex-shrink: 0;
     `;
+    const connectLogoSlug = PLATFORM_ICON_SLUGS[platform];
+    const connectLogoHtml = connectLogoSlug
+      ? `<img src="https://cdn.simpleicons.org/${connectLogoSlug}" alt="${platform}" style="width:28px;height:28px;flex-shrink:0;object-fit:contain;" onerror="this.parentElement.innerHTML='✉'">`
+      : `<span style="font-size:28px;">✉</span>`;
     header.innerHTML = `
-      <span style="font-size:28px;">✉</span>
+      ${connectLogoHtml}
       <span style="font-size:20px;font-weight:bold;color:#3d3528;flex:1;">${platform} Mailbox</span>
       <span style="font-size:13px;font-weight:bold;color:${gatewayRunning ? "#4a9b4a" : "#b07050"};">
         ${gatewayRunning ? "● Connected" : "○ Not connected"}
@@ -2866,13 +2920,18 @@ export class OfficeScene extends Phaser.Scene {
         item.addEventListener("mouseleave", () => { item.style.borderColor = "#d4c5a9"; });
       }
 
-      const colorDot = document.createElement("div");
-      colorDot.style.cssText = `
-        width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
-        background: #${entry.color.toString(16).padStart(6, "0")};
-        border: 2px solid rgba(0,0,0,0.15);
-      `;
-      item.appendChild(colorDot);
+      const logo = platformLogoImg(entry.name, 24);
+      if (logo) {
+        item.appendChild(logo);
+      } else {
+        const colorDot = document.createElement("div");
+        colorDot.style.cssText = `
+          width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+          background: #${entry.color.toString(16).padStart(6, "0")};
+          border: 2px solid rgba(0,0,0,0.15);
+        `;
+        item.appendChild(colorDot);
+      }
 
       const textCol = document.createElement("div");
       textCol.style.cssText = "flex:1;display:flex;flex-direction:column;";
