@@ -104,8 +104,8 @@ export class HermesProcessManager {
       if (kimiKey) {
         const config = [
           "model:",
-          "  provider: kimi-coding",
-          "  default: kimi-k2",
+          "  provider: moonshot",
+          "  default: kimi-k2.5",
           "",
         ].join("\n");
         writeFileSync(configPath, config, "utf-8");
