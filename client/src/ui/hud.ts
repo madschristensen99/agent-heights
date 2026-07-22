@@ -277,6 +277,7 @@ export class Hud {
       <div class="modal-backdrop" id="hall-of-fame-modal" hidden></div>
       <div class="modal-backdrop" id="railway-modal" hidden></div>
       <div class="modal-backdrop" id="github-modal" hidden></div>
+      <div class="modal-backdrop" id="code-editor-modal" hidden></div>
       <div class="modal-backdrop" id="wardrobe-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
@@ -397,6 +398,7 @@ export class Hud {
     this.bindHallOfFame();
     this.bindRailwayPanel();
     this.bindGitHubPanel();
+    this.bindCodeEditorPanel();
     this.bindShortcuts();
     this.bindMobileControls();
     // agents stream many messages per second — coalesce to one render per frame
@@ -632,6 +634,7 @@ export class Hud {
       const hof = document.getElementById("hall-of-fame-modal")!;
       const railway = document.getElementById("railway-modal")!;
       const github = document.getElementById("github-modal")!;
+      const codeEditor = document.getElementById("code-editor-modal")!;
       const wardrobe = document.getElementById("wardrobe-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
@@ -640,6 +643,7 @@ export class Hud {
         hof.hidden = true;
         railway.hidden = true;
         github.hidden = true;
+        codeEditor.hidden = true;
         wardrobe.hidden = true;
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
@@ -1856,6 +1860,7 @@ export class Hud {
       hireBtn.style.display = this.store.accessLevel === "manage" ? "" : "none";
     }
     this.renderTourBanner();
+    this.renderWorldBanner();
 
     this.renderRoster();
     this.renderDetail();
@@ -1865,6 +1870,7 @@ export class Hud {
     this.renderHallOfFame();
     this.renderRailwayPanel();
     this.renderGitHubPanel();
+    this.renderCodeEditor();
     this.renderWardrobe();
   }
 
@@ -1878,6 +1884,33 @@ export class Hud {
         banner.innerHTML = "🎬 <strong>Tour Mode</strong> — You can look around but not interact.<br>Ask an admin for talk access to chat with agents.";
         document.body.appendChild(banner);
       }
+    } else if (banner) {
+      banner.remove();
+    }
+  }
+
+  private renderWorldBanner(): void {
+    let banner = document.getElementById("world-banner") as HTMLElement | null;
+    if (this.store.currentWorld) {
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "world-banner";
+        banner.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:500;padding:6px 14px;border-radius:8px;background:rgba(20,20,40,0.92);border:1px solid rgba(74,106,138,0.6);color:#c0e0ff;font-size:13px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(4px);";
+        document.body.appendChild(banner);
+      }
+      const worldName = this.store.currentWorld.branchName;
+      banner.innerHTML = `🌀 <strong>${esc(worldName)}</strong>`;
+      const returnBtn = document.createElement("button");
+      returnBtn.textContent = "← Return to HQ";
+      returnBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;cursor:pointer;font-size:12px;";
+      returnBtn.addEventListener("click", () => {
+        const scene = this.store.sceneRef as any;
+        if (scene?.exitWorld) scene.exitWorld();
+      });
+      // Replace existing button if any
+      const oldBtn = banner.querySelector("button");
+      if (oldBtn) oldBtn.remove();
+      banner.appendChild(returnBtn);
     } else if (banner) {
       banner.remove();
     }
@@ -2699,7 +2732,7 @@ export class Hud {
   private bindGitHubPanel(): void {
     const modal = document.getElementById("github-modal")!;
     modal.addEventListener("click", (e) => {
-      if (e.target === modal) this.store.githubPanelOpen = false;
+      if (e.target === modal) this.store.toggleGitHubPanel(false);
     });
   }
 
@@ -2759,6 +2792,7 @@ export class Hud {
           html += `</div>`;
           // Deploy button
           if (branch.name !== "main" && branch.name !== "master") {
+            html += `<button class="btn" id="github-edit-${esc(branch.name)}" style="font-size:11px;padding:3px 8px;margin:4px 0;">📝 Edit Code</button>`;
             if (isDeploying) {
               html += `<span style="font-size:11px;color:#e8a040;padding:3px 8px;">⏳ deploying...</span>`;
             } else if (existingDeploy) {
@@ -2767,8 +2801,9 @@ export class Hud {
               html += `<span style="font-size:11px;color:${statusColor};">● ${esc(existingDeploy.status)}</span>`;
               if (existingDeploy.railwayServiceUrl) {
                 html += `<a href="${esc(existingDeploy.railwayServiceUrl)}" target="_blank" style="font-size:11px;color:#5a9ad6;">open ↗</a>`;
+                html += `<button class="btn" id="github-enter-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;margin-left:auto;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;">🌀 Enter World</button>`;
               }
-              html += `<button class="btn" id="github-stop-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;margin-left:auto;">Stop</button>`;
+              html += `<button class="btn" id="github-stop-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;${existingDeploy.railwayServiceUrl ? "" : "margin-left:auto;"}">Stop</button>`;
               html += `<button class="btn danger" id="github-deldep-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;">Delete</button>`;
               html += `</div>`;
             } else {
@@ -2808,7 +2843,7 @@ export class Hud {
     modal.hidden = false;
 
     document.getElementById("github-close")!.addEventListener("click", () => {
-      this.store.githubPanelOpen = false;
+      this.store.toggleGitHubPanel(false);
     });
 
     const forkBtn = document.getElementById("github-fork-btn");
@@ -2827,6 +2862,31 @@ export class Hud {
       const forkFullName = this.store.githubData.fork?.fullName ?? "";
       for (const branch of this.store.githubData.branches) {
         if (branch.name === "main" || branch.name === "master") continue;
+
+        const editBtn = document.getElementById(`github-edit-${branch.name}`);
+        if (editBtn) {
+          editBtn.addEventListener("click", () => {
+            this.store.codeEditorOpen = true;
+            this.store.codeEditorBranch = branch.name;
+            this.store.codeEditorFile = null;
+            this.store.codeEditorPath = "";
+            this.store.codeEditorDir = [];
+            this.store.toggleGitHubPanel(false);
+            this.store.sendFn?.({ type: "github_list_dir", branchName: branch.name, path: "" });
+          });
+        }
+
+        const enterBtn = document.getElementById(`github-enter-${branch.name}`);
+        if (enterBtn) {
+          enterBtn.addEventListener("click", () => {
+            const dep = this.store.deployments.find(d => d.branchName === branch.name);
+            if (!dep?.railwayServiceUrl) return;
+            const scene = this.store.sceneRef as any;
+            if (scene?.enterWorldPortal) {
+              scene.enterWorldPortal(branch.name, dep.railwayServiceUrl);
+            }
+          });
+        }
 
         const deployBtn = document.getElementById(`github-deploy-${branch.name}`);
         if (deployBtn) {
@@ -2858,6 +2918,183 @@ export class Hud {
           });
         }
       }
+    }
+  }
+
+  private bindCodeEditorPanel(): void {
+    const modal = document.getElementById("code-editor-modal")!;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) this.store.codeEditorOpen = false;
+    });
+  }
+
+  private renderCodeEditor(): void {
+    const modal = document.getElementById("code-editor-modal")!;
+    if (!this.store.codeEditorOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+
+    const branch = this.store.codeEditorBranch ?? "";
+    const dir = this.store.codeEditorDir;
+    const file = this.store.codeEditorFile;
+
+    let html = `<div style="width:90vw;max-width:1100px;height:85vh;background:#1a1a2e;border:1px solid #3a4a5a;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">`;
+
+    // Header
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #2a3a4a;background:#16213e;">`;
+    html += `<span style="color:#8fc9f0;font-size:14px;font-weight:bold;">📝 ${esc(branch)} — ${esc(file ? file.path : this.store.codeEditorPath || "/")}</span>`;
+    html += `<div style="display:flex;gap:6px;">`;
+    if (file) {
+      html += `<button id="ce-save" style="padding:4px 10px;border-radius:6px;border:1px solid #3a6a5a;background:#2a5a4a;color:#e0e0e0;cursor:pointer;font-size:12px;">💾 Save</button>`;
+      html += `<button id="ce-delete" style="padding:4px 10px;border-radius:6px;border:1px solid #6a3a3a;background:#5a2a2a;color:#e0e0e0;cursor:pointer;font-size:12px;">🗑 Delete</button>`;
+    }
+    html += `<button id="ce-new-file" style="padding:4px 10px;border-radius:6px;border:1px solid #3a4a6a;background:#2a3a5a;color:#e0e0e0;cursor:pointer;font-size:12px;">+ New File</button>`;
+    html += `<button class="x" id="ce-close" style="margin-left:4px;">✕</button>`;
+    html += `</div></div>`;
+
+    // Body: file tree (left) + editor (right)
+    html += `<div style="display:flex;flex:1;overflow:hidden;">`;
+
+    // File tree sidebar
+    html += `<div style="width:240px;border-right:1px solid #2a3a4a;overflow-y:auto;padding:4px 0;">`;
+    // Breadcrumb / back button
+    if (this.store.codeEditorPath) {
+      html += `<div id="ce-up" style="padding:4px 12px;cursor:pointer;color:#aaa;font-size:12px;hover:color:#fff;">📁 ../</div>`;
+    }
+    for (const entry of dir) {
+      const icon = entry.type === "dir" ? "📁" : "📄";
+      const name = entry.path.split("/").pop() ?? entry.path;
+      html += `<div class="ce-entry" data-path="${esc(entry.path)}" data-type="${entry.type}" style="padding:3px 12px;cursor:pointer;color:#ccc;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${icon} ${esc(name)}</div>`;
+    }
+    if (dir.length === 0) {
+      html += `<div style="padding:8px 12px;color:#666;font-size:12px;">Loading...</div>`;
+    }
+    html += `</div>`;
+
+    // Editor area
+    html += `<div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">`;
+    if (file) {
+      html += `<textarea id="ce-textarea" spellcheck="false" style="flex:1;background:#0d1117;color:#c9d1d9;border:none;padding:12px;font-family:'Fira Code',monospace,monospace;font-size:13px;line-height:1.5;resize:none;outline:none;tab-size:2;white-space:pre;overflow:auto;">${esc(file.content)}</textarea>`;
+      // Commit message + save bar
+      html += `<div style="padding:6px 8px;border-top:1px solid #2a3a4a;display:flex;gap:6px;align-items:center;background:#161b22;">`;
+      html += `<input id="ce-commit-msg" placeholder="Commit message..." maxlength="100" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid #3a4a5a;background:#0d1117;color:#c9d1d9;font-size:12px;" value="Update ${esc(file.path.split("/").pop() ?? file.path)}" />`;
+      html += `</div>`;
+    } else {
+      html += `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#555;font-size:14px;">Select a file to edit</div>`;
+    }
+    html += `</div>`;
+
+    html += `</div>`; // end body
+    html += `</div>`; // end container
+
+    modal.innerHTML = html;
+    modal.hidden = false;
+
+    // Wire close
+    document.getElementById("ce-close")!.addEventListener("click", () => {
+      this.store.codeEditorOpen = false;
+    });
+
+    // Wire up button
+    const upBtn = document.getElementById("ce-up");
+    if (upBtn) {
+      upBtn.addEventListener("click", () => {
+        const parts = this.store.codeEditorPath.split("/");
+        parts.pop();
+        const parent = parts.join("/");
+        this.store.sendFn?.({ type: "github_list_dir", branchName: branch, path: parent });
+      });
+      upBtn.addEventListener("mouseenter", () => { upBtn.style.color = "#fff"; });
+      upBtn.addEventListener("mouseleave", () => { upBtn.style.color = "#aaa"; });
+    }
+
+    // Wire file/dir entries
+    for (const entryEl of modal.querySelectorAll(".ce-entry")) {
+      const el = entryEl as HTMLDivElement;
+      const path = el.dataset.path!;
+      const type = el.dataset.type as "file" | "dir";
+      el.addEventListener("click", () => {
+        if (type === "dir") {
+          this.store.sendFn?.({ type: "github_list_dir", branchName: branch, path });
+        } else {
+          this.store.sendFn?.({ type: "github_read_file", branchName: branch, path });
+        }
+      });
+      el.addEventListener("mouseenter", () => { el.style.background = "#1a2a3a"; });
+      el.addEventListener("mouseleave", () => { el.style.background = ""; });
+    }
+
+    // Wire save
+    const saveBtn = document.getElementById("ce-save");
+    if (saveBtn && file) {
+      saveBtn.addEventListener("click", () => {
+        const textarea = document.getElementById("ce-textarea") as HTMLTextAreaElement | null;
+        const commitInput = document.getElementById("ce-commit-msg") as HTMLInputElement | null;
+        if (!textarea) return;
+        const content = textarea.value;
+        const commitMsg = commitInput?.value.trim() || `Update ${file.path}`;
+        this.store.sendFn?.({
+          type: "github_write_file",
+          branchName: branch,
+          path: file.path,
+          content,
+          sha: file.sha,
+          commitMessage: commitMsg,
+        });
+      });
+    }
+
+    // Wire delete
+    const delBtn = document.getElementById("ce-delete");
+    if (delBtn && file) {
+      delBtn.addEventListener("click", () => {
+        if (!confirm(`Delete "${file.path}"?`)) return;
+        this.store.sendFn?.({
+          type: "github_delete_file",
+          branchName: branch,
+          path: file.path,
+          sha: file.sha,
+          commitMessage: `Delete ${file.path}`,
+        });
+      });
+    }
+
+    // Wire new file
+    const newFileBtn = document.getElementById("ce-new-file");
+    if (newFileBtn) {
+      newFileBtn.addEventListener("click", () => {
+        const name = prompt("New file path (e.g. src/new-file.ts):");
+        if (!name?.trim()) return;
+        const path = this.store.codeEditorPath ? `${this.store.codeEditorPath}/${name.trim()}` : name.trim();
+        this.store.sendFn?.({
+          type: "github_create_file",
+          branchName: branch,
+          path,
+          content: "",
+          commitMessage: `Create ${path}`,
+        });
+      });
+    }
+
+    // Tab key in textarea inserts spaces instead of changing focus
+    const textarea = document.getElementById("ce-textarea") as HTMLTextAreaElement | null;
+    if (textarea) {
+      textarea.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          textarea.value = textarea.value.substring(0, start) + "  " + textarea.value.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start + 2;
+        }
+        // Ctrl/Cmd+S to save
+        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+          e.preventDefault();
+          saveBtn?.click();
+        }
+      });
     }
   }
 

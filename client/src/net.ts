@@ -7,6 +7,7 @@ export class Net {
   private token: string | null = null;
   private manuallyDisconnected = false;
   private _spectator = false;
+  private customHost: string | null = null;
   onMessage: (msg: ServerMsg) => void = () => {};
   onStatus: (connected: boolean) => void = () => {};
   onRefreshToken: () => Promise<string | null> = async () => null;
@@ -35,12 +36,13 @@ export class Net {
     const fallback = effectiveWsHost || (isLocal && location.port !== "3001"
       ? "localhost:3001"
       : location.host);
+    const host = this.customHost ?? fallback;
     const url = this._spectator
-      ? `${proto}://${fallback}/?spectator=1`
+      ? `${proto}://${host}/?spectator=1`
       : this.token
-        ? `${proto}://${fallback}/?token=${encodeURIComponent(this.token)}`
-        : `${proto}://${fallback}`;
-    console.log(`[net] connecting to ${url} (wsHost=${wsHost}, location.host=${location.host}, location.port=${location.port})`);
+        ? `${proto}://${host}/?token=${encodeURIComponent(this.token)}`
+        : `${proto}://${host}`;
+    console.log(`[net] connecting to ${url} (host=${host}, customHost=${this.customHost})`);
     const ws = new WebSocket(url);
     this.ws = ws;
 
@@ -109,6 +111,34 @@ export class Net {
       this.ws = null;
       this.onStatus(false);
     }
+  }
+
+  /** Reconnect to a different WebSocket host (e.g. a deployed world instance). */
+  reconnectToHost(host: string): void {
+    this.customHost = host;
+    this.disconnect();
+    this.manuallyDisconnected = false;
+    this.retryMs = 500;
+    setTimeout(() => this.connect(), 100);
+  }
+
+  /** Reset back to the default host and reconnect. */
+  resetHost(): void {
+    this.customHost = null;
+    this.disconnect();
+    this.manuallyDisconnected = false;
+    this.retryMs = 500;
+    setTimeout(() => this.connect(), 100);
+  }
+
+  /** Whether currently connected to a custom (world) host. */
+  get isOnCustomHost(): boolean {
+    return this.customHost !== null;
+  }
+
+  /** The current custom host, or null if on default. */
+  get currentHost(): string | null {
+    return this.customHost;
   }
 
   send(msg: ClientMsg): void {

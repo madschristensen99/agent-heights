@@ -119,9 +119,98 @@ export function getGithubToken(userId: string, mcpKeys: Record<string, string>):
   return mcpKeys[GITHUB_MCP_URL] ?? null;
 }
 
-/** Check if a user has a GitHub token stored. */
-export function hasGithubToken(mcpKeys: Record<string, string>): boolean {
-  return !!mcpKeys[GITHUB_MCP_URL];
+// ── File operations for in-game code editing ──────────────────────────
+
+/** A file or directory entry in a repo tree. */
+export interface RepoTreeEntry {
+  path: string;
+  type: "file" | "dir";
+  size: number;
+}
+
+/** List contents of a directory in a repo branch. */
+export async function listRepoDir(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  path = "",
+): Promise<RepoTreeEntry[]> {
+  const query = path ? `?ref=${branch}` : `?ref=${branch}`;
+  const data = await ghRequest(`/repos/${owner}/${repo}/contents/${path}${query}`, token);
+  if (!Array.isArray(data)) return [];
+  return data.map((e: any) => ({
+    path: e.path as string,
+    type: e.type === "dir" ? "dir" : "file",
+    size: e.size ?? 0,
+  }));
+}
+
+/** Read a file's content from a repo branch. Returns decoded text. */
+export async function readRepoFile(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  path: string,
+): Promise<{ content: string; sha: string } | null> {
+  const data = await ghRequest(`/repos/${owner}/${repo}/contents/${path}?ref=${branch}`, token);
+  if (!data || data.type !== "file") return null;
+  const content = Buffer.from(data.content, "base64").toString("utf-8");
+  return { content, sha: data.sha as string };
+}
+
+/** Create or update a file in a repo branch. */
+export async function writeRepoFile(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  path: string,
+  content: string,
+  sha: string | null,
+  commitMessage: string,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    message: commitMessage,
+    content: Buffer.from(content, "utf-8").toString("base64"),
+    branch,
+  };
+  if (sha) body.sha = sha;
+
+  await ghRequest(`/repos/${owner}/${repo}/contents/${path}`, token, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Create a new file in a repo branch. */
+export async function createRepoFile(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  path: string,
+  content: string,
+  commitMessage: string,
+): Promise<void> {
+  await writeRepoFile(token, owner, repo, branch, path, content, null, commitMessage);
+}
+
+/** Delete a file from a repo branch. */
+export async function deleteRepoFile(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  path: string,
+  sha: string,
+  commitMessage: string,
+): Promise<void> {
+  await ghRequest(`/repos/${owner}/${repo}/contents/${path}`, token, {
+    method: "DELETE",
+    body: JSON.stringify({ message: commitMessage, sha, branch }),
+  });
 }
 
 export { SOURCE_REPO_OWNER, SOURCE_REPO_NAME };

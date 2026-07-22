@@ -72,6 +72,14 @@ export class Store {
   githubPanelOpen = false;
   deployments: WorldDeployment[] = [];
   deployingBranch: string | null = null;
+  codeEditorOpen = false;
+  codeEditorBranch: string | null = null;
+  codeEditorPath: string = "";
+  codeEditorDir: { path: string; type: "file" | "dir"; size: number }[] = [];
+  codeEditorFile: { path: string; content: string; sha: string } | null = null;
+  codeEditorDirty = false;
+  currentWorld: { branchName: string; host: string; url: string } | null = null;
+  worldTransitioning = false;
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
@@ -193,6 +201,14 @@ export class Store {
     this.githubPanelOpen = false;
     this.deployments = [];
     this.deployingBranch = null;
+    this.codeEditorOpen = false;
+    this.codeEditorBranch = null;
+    this.codeEditorPath = "";
+    this.codeEditorDir = [];
+    this.codeEditorFile = null;
+    this.codeEditorDirty = false;
+    this.currentWorld = null;
+    this.worldTransitioning = false;
     this.worldSeed = 0;
     this.chunkOverrides = {};
     this.officeOverrides = {};
@@ -440,6 +456,11 @@ export class Store {
 
   toggleRailwayPanel(open?: boolean): void {
     this.railwayPanelOpen = open ?? !this.railwayPanelOpen;
+    this.emit();
+  }
+
+  toggleGitHubPanel(open?: boolean): void {
+    this.githubPanelOpen = open ?? !this.githubPanelOpen;
     this.emit();
   }
 
@@ -700,6 +721,38 @@ export class Store {
           }
           // Refresh deployments list
           this.sendFn?.({ type: "railway_list_deployments" });
+        }
+        break;
+      case "github_dir":
+        if (msg.error) {
+          this.toast(`GitHub: ${msg.error}`);
+        } else {
+          this.codeEditorDir = msg.entries;
+          this.codeEditorPath = msg.path;
+        }
+        break;
+      case "github_file":
+        if (msg.error) {
+          this.toast(`GitHub: ${msg.error}`);
+        } else {
+          this.codeEditorFile = { path: msg.path, content: msg.content, sha: msg.sha };
+          this.codeEditorDirty = false;
+        }
+        break;
+      case "github_file_saved":
+        this.toast(`Saved: ${msg.path}`);
+        this.codeEditorDirty = false;
+        // Re-read to get updated SHA
+        if (this.codeEditorBranch) {
+          this.sendFn?.({ type: "github_read_file", branchName: this.codeEditorBranch, path: msg.path });
+        }
+        break;
+      case "github_file_deleted":
+        this.toast(`Deleted: ${msg.path}`);
+        this.codeEditorFile = null;
+        // Refresh directory listing
+        if (this.codeEditorBranch) {
+          this.sendFn?.({ type: "github_list_dir", branchName: this.codeEditorBranch, path: this.codeEditorPath });
         }
         break;
       case "api_key_status":

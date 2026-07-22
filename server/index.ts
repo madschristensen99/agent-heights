@@ -12,7 +12,7 @@ import { searchPulseMCPStructured } from "./pulsemcp.js";
 import { handleYukiRequest } from "./yuki.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway, deployWorldToRailway, listWorldDeployments, stopWorldDeployment } from "./providers/railway-mcp.js";
-import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken } from "./github.js";
+import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken, listRepoDir, readRepoFile, writeRepoFile, createRepoFile, deleteRepoFile } from "./github.js";
 import { rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
@@ -997,6 +997,80 @@ wss.on("connection", async (ws, req) => {
           } else {
             const listResult = await listWorldDeployments();
             sess.broadcast({ type: "railway_deployments", deployments: listResult.deployments, error: null });
+          }
+          break;
+        }
+        case "github_list_dir": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) { sess.broadcast({ type: "github_error", error: "No GitHub token found." }); break; }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
+            const entries = await listRepoDir(token, user.login, "agent-hq", msg.branchName, msg.path);
+            sess.broadcast({ type: "github_dir", branchName: msg.branchName, path: msg.path, entries, error: null });
+          } catch (err) {
+            sess.broadcast({ type: "github_dir", branchName: msg.branchName, path: msg.path, entries: [], error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "github_read_file": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) { sess.broadcast({ type: "github_error", error: "No GitHub token found." }); break; }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
+            const file = await readRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path);
+            if (!file) {
+              sess.broadcast({ type: "github_file", branchName: msg.branchName, path: msg.path, content: "", sha: "", error: "File not found" });
+            } else {
+              sess.broadcast({ type: "github_file", branchName: msg.branchName, path: msg.path, content: file.content, sha: file.sha, error: null });
+            }
+          } catch (err) {
+            sess.broadcast({ type: "github_file", branchName: msg.branchName, path: msg.path, content: "", sha: "", error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "github_write_file": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) { sess.broadcast({ type: "github_error", error: "No GitHub token found." }); break; }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
+            await writeRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path, msg.content, msg.sha, msg.commitMessage);
+            sess.broadcast({ type: "github_file_saved", branchName: msg.branchName, path: msg.path, message: msg.commitMessage });
+          } catch (err) {
+            sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "github_create_file": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) { sess.broadcast({ type: "github_error", error: "No GitHub token found." }); break; }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
+            await createRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path, msg.content, msg.commitMessage);
+            sess.broadcast({ type: "github_file_saved", branchName: msg.branchName, path: msg.path, message: msg.commitMessage });
+          } catch (err) {
+            sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
+          }
+          break;
+        }
+        case "github_delete_file": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) { sess.broadcast({ type: "github_error", error: "No GitHub token found." }); break; }
+          try {
+            const user = await getAuthenticatedUser(token);
+            if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
+            await deleteRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path, msg.sha, msg.commitMessage);
+            sess.broadcast({ type: "github_file_deleted", branchName: msg.branchName, path: msg.path });
+          } catch (err) {
+            sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
           }
           break;
         }

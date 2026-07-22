@@ -617,6 +617,11 @@ export type ClientMsg =
   | { type: "railway_list_deployments" }
   | { type: "railway_stop_deployment"; branchName: string }
   | { type: "railway_delete_deployment"; branchName: string }
+  | { type: "github_list_dir"; branchName: string; path: string }
+  | { type: "github_read_file"; branchName: string; path: string }
+  | { type: "github_write_file"; branchName: string; path: string; content: string; sha: string | null; commitMessage: string }
+  | { type: "github_create_file"; branchName: string; path: string; content: string; commitMessage: string }
+  | { type: "github_delete_file"; branchName: string; path: string; sha: string; commitMessage: string }
   | { type: "voice_start" }
   | { type: "voice_offer"; targetUserId: string; sdp: string }
   | { type: "voice_answer"; targetUserId: string; sdp: string }
@@ -711,6 +716,10 @@ export type ServerMsg =
   | { type: "railway_deployments"; deployments: WorldDeployment[]; error: string | null }
   | { type: "railway_deploy_started"; branchName: string; message: string }
   | { type: "railway_deploy_result"; deployment: WorldDeployment; error: string | null }
+  | { type: "github_dir"; branchName: string; path: string; entries: { path: string; type: "file" | "dir"; size: number }[]; error: string | null }
+  | { type: "github_file"; branchName: string; path: string; content: string; sha: string; error: string | null }
+  | { type: "github_file_saved"; branchName: string; path: string; message: string }
+  | { type: "github_file_deleted"; branchName: string; path: string }
   | { type: "player_appearance"; roomId: string; userId: string; appearance: CharAppearance | null }
   | { type: "rooms_list"; rooms: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] }
   | { type: "orgs_list"; orgs: (Organization & { memberCount: number; isMember: boolean; role?: "admin" | "member" })[] }

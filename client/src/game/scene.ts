@@ -1380,6 +1380,62 @@ export class OfficeScene extends Phaser.Scene {
     this.cameras.main.setZoom(this.defaultZoom());
   }
 
+  /** Enter a deployed world — fade out, reconnect WebSocket to the world instance, fade in. */
+  enterWorldPortal(branchName: string, worldUrl: string): void {
+    if (this.store.worldTransitioning) return;
+    this.store.worldTransitioning = true;
+
+    // Derive WebSocket host from the world URL
+    let host: string;
+    try {
+      const u = new URL(worldUrl);
+      host = u.host;
+    } catch {
+      host = worldUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    }
+
+    this.cameras.main.fadeOut(600, 10, 10, 30);
+    this.cameras.main.once("camerafadeoutcomplete", () => {
+      // Reconnect to the world instance
+      const net = this.game.registry.get("net") as Net;
+      net.reconnectToHost(host);
+
+      this.store.currentWorld = { branchName, host, url: worldUrl };
+      this.store.worldTransitioning = false;
+      this.store.githubPanelOpen = false;
+
+      // Reset scene state for the new world
+      this.store.reset();
+      this.scene.restart();
+
+      this.cameras.main.fadeIn(600, 10, 10, 30);
+      this.store.toast(`Entering world: ${branchName}`);
+    });
+  }
+
+  /** Exit the current world — fade out, reconnect to default host, fade in. */
+  exitWorld(): void {
+    if (this.store.worldTransitioning) return;
+    if (!this.store.currentWorld) return;
+
+    this.store.worldTransitioning = true;
+
+    this.cameras.main.fadeOut(600, 10, 10, 30);
+    this.cameras.main.once("camerafadeoutcomplete", () => {
+      const net = this.game.registry.get("net") as Net;
+      net.resetHost();
+
+      this.store.currentWorld = null;
+      this.store.worldTransitioning = false;
+
+      this.store.reset();
+      this.scene.restart();
+
+      this.cameras.main.fadeIn(600, 10, 10, 30);
+      this.store.toast("Returning to Agent HQ");
+    });
+  }
+
   /** Set up input listeners for pinch-zoom, wheel-zoom, pan, and tap-to-walk. */
   private setupCameraControls(): void {
     // Enable multi-touch (Phaser needs to be told to track extra pointers)
@@ -2100,7 +2156,7 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         const step = instructionSteps[currentStep];
         titleEl.textContent = step.title;
-        bodyEl.textContent = step.body;
+        bodyEl.innerHTML = step.body.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:#6c5ce7;text-decoration:underline;">$1</a>');
         formContainer.style.display = "none";
         if (step.cmd) {
           cmdBox.style.display = "block";
