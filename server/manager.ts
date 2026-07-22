@@ -2727,31 +2727,91 @@ export class AgentManager {
     }));
   }
 
-  /** Keyword categories for routing mail to the right agent. */
-  private static readonly ROUTING_KEYWORDS: { keywords: string[]; role: AgentRole; hint: string }[] = [
-    { keywords: ["deploy", "server", "down", "cpu", "memory", "disk", "nginx", "docker", "kubernetes", "k8s", "infra", "devops", "pipeline", "ci/cd", "build"], role: "devops", hint: "infrastructure/deploy issue" },
-    { keywords: ["bug", "error", "crash", "stack trace", "exception", "traceback", "fix", "broken", "fail"], role: "worker", hint: "bug/error report" },
-    { keywords: ["design", "ui", "ux", "layout", "css", "frontend", "page", "button", "modal"], role: "worker", hint: "design/UI request" },
-    { keywords: ["api", "endpoint", "database", "query", "sql", "backend", "server-side"], role: "worker", hint: "backend/API request" },
-    { keywords: ["invoice", "payment", "billing", "charge", "refund", "subscription"], role: "worker", hint: "billing/finance matter" },
-    { keywords: ["meeting", "schedule", "calendar", "appointment", "deadline"], role: "manager", hint: "scheduling request" },
-    { keywords: ["roadmap", "priority", "plan", "strategy", "feature request", "requirement"], role: "manager", hint: "planning/strategy matter" },
-  ];
+  /** Build a skill profile string for an agent from system prompt, MCP servers, and task history.
+   *  This is used to score how well an agent matches an incoming message. */
+  private agentSkillProfile(rt: AgentRuntime): string {
+    const parts: string[] = [];
 
-  /** Pick the best idle agent for an inbound message using keyword matching.
-   *  Returns the agent runtime + a human-readable routing reason, or null. */
-  private pickAgentForMail(text: string): { rt: AgentRuntime; reason: string } | null {
-    const lower = text.toLowerCase();
-    let bestRole: AgentRole | null = null;
-    let bestHint = "";
+    // System prompt often describes the agent's specialty
+    if (rt.info.systemPrompt) parts.push(rt.info.systemPrompt);
 
-    for (const rule of AgentManager.ROUTING_KEYWORDS) {
-      if (rule.keywords.some((kw) => lower.includes(kw))) {
-        bestRole = rule.role;
-        bestHint = rule.hint;
-        break;
+    // MCP server names/URLs indicate tool capabilities
+    if (rt.info.mcpServers) {
+      for (const srv of rt.info.mcpServers) {
+        if (srv.name) parts.push(srv.name);
+        if (srv.url) {
+          // Extract domain keywords from URL (e.g. "github.com" -> "github")
+          try {
+            const u = new URL(srv.url);
+            parts.push(u.hostname.replace(/^www\./, "").split(".")[0]);
+          } catch { /* not a URL */ }
+        }
       }
     }
+
+    // Task history shows what the agent has actually worked on
+    for (const th of rt.taskHistory.slice(0, 10)) {
+      parts.push(th.task);
+    }
+
+    // Agent name can be descriptive (e.g. "Design Agent")
+    parts.push(rt.info.name);
+
+    return parts.join(" ").toLowerCase();
+  }
+
+  /** Score an agent's relevance to an incoming message (0 = no match, higher = better). */
+  private scoreAgentForMail(rt: AgentRuntime, lowerText: string): number {
+    const profile = this.agentSkillProfile(rt);
+    let score = 0;
+
+    // Check for word overlap between message and agent profile
+    const msgWords = lowerText.split(/\s+/).filter((w) => w.length > 3);
+    for (const word of msgWords) {
+      if (profile.includes(word)) score += 2;
+    }
+
+    // Bonus: system prompt specialty keywords appearing in the message
+    if (rt.info.systemPrompt) {
+      const promptWords = rt.info.systemPrompt.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
+      for (const word of promptWords) {
+        if (lowerText.includes(word)) score += 1;
+      }
+    }
+
+    // Bonus: MCP server name match (strong signal — agent has tools for this)
+    if (rt.info.mcpServers) {
+      for (const srv of rt.info.mcpServers) {
+        const srvName = (srv.name ?? "").toLowerCase();
+        if (srvName && lowerText.includes(srvName)) score += 5;
+        // Check URL domain
+        if (srv.url) {
+          try {
+            const domain = new URL(srv.url).hostname.replace(/^www\./, "").split(".")[0].toLowerCase();
+            if (domain && domain !== "api" && lowerText.includes(domain)) score += 5;
+          } catch { /* not a URL */ }
+        }
+      }
+    }
+
+    // Bonus: task history overlap (agent has done similar work before)
+    for (const th of rt.taskHistory.slice(0, 10)) {
+      const taskLower = th.task.toLowerCase();
+      const overlap = msgWords.filter((w) => taskLower.includes(w)).length;
+      score += overlap * 3;
+    }
+
+    // Slight penalty for agents with many completed tasks (load balancing)
+    score -= rt.info.tasksDone * 0.1;
+
+    return score;
+  }
+
+  /** Pick the best idle agent for an inbound message using skill profiling.
+   *  Scores agents by system prompt + MCP servers + task history overlap.
+   *  Returns the agent runtime + a human-readable routing reason, or null. */
+  private pickAgentForMail(text: string): { rt: AgentRuntime; reason: string } | null {
+    const lowerText = text.toLowerCase();
 
     // Find idle agents, excluding Hermes and Yuki
     const idleAgents = [...this.agents.values()].filter(
@@ -2759,16 +2819,30 @@ export class AgentManager {
     );
     if (idleAgents.length === 0) return null;
 
-    // Try to match by role first
-    if (bestRole) {
-      const match = idleAgents.find((rt) => rt.info.role === bestRole);
-      if (match) return { rt: match, reason: `keyword match (${bestHint}) → ${match.info.name}` };
+    // Score each agent
+    const scored = idleAgents.map((rt) => ({
+      rt,
+      score: this.scoreAgentForMail(rt, lowerText),
+    }));
+
+    scored.sort((a, b) => b.score - a.score);
+    const best = scored[0];
+
+    // If the best score is > 0, we have a meaningful match
+    if (best.score > 0) {
+      // Build a human-readable reason
+      const profile = this.agentSkillProfile(best.rt);
+      const matchedWords = lowerText.split(/\s+/).filter((w) => w.length > 3 && profile.includes(w));
+      const reason = matchedWords.length > 0
+        ? `skill match (${matchedWords.slice(0, 3).join(", ")}) → ${best.rt.info.name}`
+        : `best fit → ${best.rt.info.name}`;
+      return { rt: best.rt, reason };
     }
 
-    // Fallback: pick the idle agent with the fewest completed tasks (round-robin-ish)
+    // No signal — fallback to fewest tasks (load balancing)
     idleAgents.sort((a, b) => a.info.tasksDone - b.info.tasksDone);
     const picked = idleAgents[0];
-    return { rt: picked, reason: bestRole ? `no ${bestRole} agent idle, assigned to ${picked.info.name}` : `no keyword match, assigned to ${picked.info.name}` };
+    return { rt: picked, reason: `no skill match, assigned to ${picked.info.name}` };
   }
 
   /** Route a platform event to the best idle agent's inbox.

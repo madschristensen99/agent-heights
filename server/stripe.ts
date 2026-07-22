@@ -393,11 +393,7 @@ export async function handleStripeWebhook(
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { verifyToken, type AuthUser } from "./supabase.js";
-
-function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(body));
-}
+import { json } from "./security.js";
 
 async function readBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];

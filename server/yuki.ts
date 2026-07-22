@@ -2,13 +2,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AgentInfo, TaskCard } from "../shared/types.js";
 import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
+import { json } from "./security.js";
 
 const MARKETPLACE_URL = process.env.MARKETPLACE_URL || "http://localhost:3000";
-
-function json(res: ServerResponse, status: number, data: unknown): void {
-  res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(data));
-}
 
 /** Build HQ context string to inject into Yuki's system prompt. */
 function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string): string {

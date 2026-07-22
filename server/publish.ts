@@ -1,10 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { supabaseAdmin, isSupabaseConfigured, verifyToken } from "./supabase.js";
-
-function json(res: ServerResponse, status: number, data: unknown): void {
-  res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(data));
-}
+import { json } from "./security.js";
 
 interface PublishBody {
   agentId: string;

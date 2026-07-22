@@ -23,6 +23,7 @@ import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
 import { SUBSCRIPTION_TIERS } from "../shared/types.js";
+import { applySecurityHeaders, escapeHtml } from "./security.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
@@ -157,7 +158,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
 
   const filePath = normalize(join(distDir, urlPath));
   if (!filePath.startsWith(distDir)) {
-    res.writeHead(403);
+    res.writeHead(403, applySecurityHeaders());
     res.end("Forbidden");
     return;
   }
@@ -167,7 +168,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     if (info.isDirectory()) throw new Error("is directory");
     let data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
-    const headers: Record<string, string> = { "Content-Type": mime };
+    const headers: Record<string, string> = applySecurityHeaders({ "Content-Type": mime });
     // Force no-cache on everything during OAuth debugging
     headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
     // Inject runtime env vars and absolute OG image URLs into index.html
@@ -185,10 +186,10 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
       const html = data.toString("utf-8");
       const injected = await injectMeta(html, req);
       data = Buffer.from(injected, "utf-8");
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8" }));
       res.end(data);
     } catch {
-      res.writeHead(404);
+      res.writeHead(404, applySecurityHeaders());
       res.end("Not found");
     }
   }
@@ -222,7 +223,7 @@ const server = createServer((req, res) => {
     }).then((handled) => {
       if (!handled) {
         serveStatic(req, res).catch(() => {
-          res.writeHead(500);
+          res.writeHead(500, applySecurityHeaders());
           res.end("Internal server error");
         });
       }
@@ -235,7 +236,7 @@ const server = createServer((req, res) => {
     void handlePublishRequest(req, res).then((handled) => {
       if (!handled) {
         serveStatic(req, res).catch(() => {
-          res.writeHead(500);
+          res.writeHead(500, applySecurityHeaders());
           res.end("Internal server error");
         });
       }
@@ -248,7 +249,7 @@ const server = createServer((req, res) => {
     void handleStripeRequest(req, res).then((handled) => {
       if (!handled) {
         serveStatic(req, res).catch(() => {
-          res.writeHead(500);
+          res.writeHead(500, applySecurityHeaders());
           res.end("Internal server error");
         });
       }
@@ -264,12 +265,12 @@ const server = createServer((req, res) => {
     const errorParam = urlObj.searchParams.get("error");
 
     if (errorParam) {
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(`<html><body><h2>Authentication failed</h2><p>${errorParam}</p><script>window.close();</script></body></html>`);
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html" }));
+      res.end(`<html><body><h2>Authentication failed</h2><p>${escapeHtml(errorParam)}</p><script>window.close();</script></body></html>`);
       return;
     }
     if (!code || !state) {
-      res.writeHead(400, { "Content-Type": "text/html" });
+      res.writeHead(400, applySecurityHeaders({ "Content-Type": "text/html" }));
       res.end("<html><body><h2>Missing code or state</h2></body></html>");
       return;
     }
@@ -294,11 +295,11 @@ const server = createServer((req, res) => {
           });
         }
       }
-      res.writeHead(200, { "Content-Type": "text/html" });
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html" }));
       if (result.success) {
         res.end(`<html><body style="background:#111;color:#e0e0e0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2 style="color:#53b86b;">✓ Connected!</h2><p>You can close this window.</p></div><script>setTimeout(function(){try{window.close();}catch(e){}setTimeout(function(){window.location.href='/';},1000);},500);</script></body></html>`);
       } else {
-        res.end(`<html><body style="background:#111;color:#e0e0e0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2 style="color:#e05d5d;">Authentication failed</h2><p>${result.error ?? "Unknown error"}</p></div><script>setTimeout(function(){try{window.close();}catch(e){}setTimeout(function(){window.location.href='/';},2000);},1000);</script></body></html>`);
+        res.end(`<html><body style="background:#111;color:#e0e0e0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2 style="color:#e05d5d;">Authentication failed</h2><p>${escapeHtml(result.error ?? "Unknown error")}</p></div><script>setTimeout(function(){try{window.close();}catch(e){}setTimeout(function(){window.location.href='/';},2000);},1000);</script></body></html>`);
       }
     });
     return;
@@ -308,20 +309,20 @@ const server = createServer((req, res) => {
   if (req.url?.split("?")[0]?.startsWith("/api/agent-screenshot/")) {
     const agentId = req.url.split("/api/agent-screenshot/")[1]?.split("?")[0];
     if (!agentId) {
-      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.writeHead(400, applySecurityHeaders({ "Content-Type": "text/plain" }));
       res.end("Missing agent id");
       return;
     }
     const frame = browserLastFrame(agentId);
     if (frame) {
-      res.writeHead(200, {
+      res.writeHead(200, applySecurityHeaders({
         "Content-Type": "image/jpeg",
         "Cache-Control": "no-store, no-cache, must-revalidate",
         "Access-Control-Allow-Origin": "*",
-      });
+      }));
       res.end(Buffer.from(frame, "base64"));
     } else {
-      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.writeHead(404, applySecurityHeaders({ "Content-Type": "text/plain" }));
       res.end("No screenshot available");
     }
     return;
@@ -2347,6 +2348,13 @@ wss.on("connection", async (ws, req) => {
 });
 
 // ── start ─────────────────────────────────────────────────────────────────
+
+// Production safety: refuse to start without auth in production
+if (process.env.NODE_ENV === "production" && !isSupabaseConfigured) {
+  console.error("[agent-heights] FATAL: NODE_ENV=production but SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not set.");
+  console.error("[agent-heights] Refusing to start in dev mode in production. Set the required env vars and restart.");
+  process.exit(1);
+}
 
 const logMaintenanceInterval = startLogMaintenance();
 

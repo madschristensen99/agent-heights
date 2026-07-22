@@ -6,11 +6,7 @@ import type {
   MarketplaceItemType,
 } from "../shared/marketplace.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
-
-function json(res: ServerResponse, status: number, data: unknown): void {
-  res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(data));
-}
+import { json } from "./security.js";
 
 function parseUseCases(val: unknown): string[] {
   if (!Array.isArray(val)) return [];

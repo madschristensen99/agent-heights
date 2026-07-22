@@ -4,11 +4,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { searchCatalog, getServerById, MCP_CATEGORIES, type MCPCatalogServer } from "../shared/mcp-catalog.js";
-
-function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(body));
-}
+import { json } from "./security.js";
 
 /** Strip internal fields that shouldn't be sent to the client. */
 function sanitize(s: MCPCatalogServer): MCPCatalogServer {

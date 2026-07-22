@@ -8,9 +8,17 @@ import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
  * Falls back to a derived key from SUPABASE_SERVICE_ROLE_KEY if not set.
  */
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? deriveKey();
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
+
+// Production safety: refuse to use the insecure fallback key in production
+if (process.env.NODE_ENV === "production" && !process.env.ENCRYPTION_KEY) {
+  console.error("[apikeys] FATAL: NODE_ENV=production but ENCRYPTION_KEY is not set.");
+  console.error("[apikeys] Refusing to start with insecure fallback key. Generate one with: openssl rand -hex 32");
+  process.exit(1);
+}
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? deriveKey();
 
 function deriveKey(): string {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "fallback-dev-key-not-secure";
