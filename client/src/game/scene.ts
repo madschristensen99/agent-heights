@@ -339,7 +339,6 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   create(): void {
-    console.log("[scene] OfficeScene.create() called");
     this.store = this.game.registry.get("store") as Store;
     this.net = this.game.registry.get("net") as import("../net").Net;
     this._myUserId = (this.game.registry.get("userId") as string) ?? null;
@@ -1271,7 +1270,6 @@ export class OfficeScene extends Phaser.Scene {
           }
 
           // Diagnostic: verify NPC state after init
-          console.log(`[scene] INIT COMPLETE: yuki=${!!this.yuki} hermes=${!!this.hermes} yukiSeat=${JSON.stringify(this.yukiSeat)} hermesSeat=${JSON.stringify(this.hermesSeat)} npcs=${this.npcs.size} store.agents=${this.store.agents.size} ready=${this.ready}`);
 
           // Fade in from black so the transition from BootScene is seamless.
           this.cameras.main.fadeIn(400, 0, 0, 0);
@@ -4620,7 +4618,6 @@ export class OfficeScene extends Phaser.Scene {
         this.walkToAgent(clicked),
       );
       this.npcs.set(id, npc);
-      console.log(`[syncPendingHeliAgents] created NPC for ${info.name} (${id}) at elevator exit — total NPCs: ${this.npcs.size}`);
     }
   }
 
@@ -4628,7 +4625,6 @@ export class OfficeScene extends Phaser.Scene {
    *  syncAgents (when the real NPC arrives) or from heliTakeoff's
    *  delayed call (fallback if the server is slow to confirm). */
   private endHelicopter(): void {
-    console.log("[heli] endHelicopter called — tearing down cosmetic sprite");
     this.heliAgent?.destroy();
     this.heliAgent = null;
     this.heliElevatorGfx?.destroy();
@@ -5924,20 +5920,17 @@ export class OfficeScene extends Phaser.Scene {
       if (existing) {
         existing.sync(info);
       } else {
-        console.log(`[syncAgents] NEW agent detected: id=${id} name=${info.name} desk=${info.deskIndex} appearance=${!!info.appearance}`);
         // If the helicopter cinematic is still playing, defer NPC creation
         // until the agent walks out of the elevator. The agent is already
         // in the sidebar and interactable — they just shouldn't appear in
         // the office until the animation completes.
         if (this.heliActive) {
           this.pendingHeliAgents.push(id);
-          console.log(`[syncAgents] deferring NPC for ${info.name} — helicopter active`);
           continue;
         }
         // Generate custom texture if agent has an appearance
         if (info.appearance) {
           const key = agentTextureKey(info);
-          console.log(`[syncAgents] generating char texture: key=${key}`);
           generateCharTexture(this, key, info.appearance);
           this.ensureCharAnimations(key);
         }
@@ -5954,12 +5947,10 @@ export class OfficeScene extends Phaser.Scene {
           this.walkToAgent(clicked),
         );
         this.npcs.set(id, npc);
-        console.log(`[syncAgents] created NPC for ${info.name} (${id}) at desk ${info.deskIndex} — total NPCs: ${this.npcs.size}`);
       }
     }
     for (const [id, npc] of this.npcs) {
       if (!this.store.agents.has(id)) {
-        console.log(`[syncAgents] DESTROYING NPC ${id} — not in store.agents!`);
         npc.destroy();
         this.npcs.delete(id);
       }

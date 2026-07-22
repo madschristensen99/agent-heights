@@ -519,7 +519,7 @@ export class Store {
   apply(msg: ServerMsg): void {
     switch (msg.type) {
       case "snapshot": {
-            this.agents = new Map(msg.agents.map((a) => [a.id, a]));
+        this.agents = new Map(msg.agents.map((a) => [a.id, a]));
         this.logs = new Map(Object.entries(msg.logs));
         this.board = new Map(msg.board.map((c) => [c.id, c]));
         this.schedules = new Map((msg.schedules ?? []).map((s) => [s.id, s]));
