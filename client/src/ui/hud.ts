@@ -2300,6 +2300,7 @@ export class Hud {
     }
 
     container.innerHTML = html;
+    this.updateScheduleCountdowns();
 
     // Wire up controls
     const addBtn = container.querySelector("#sched-add") as HTMLButtonElement | null;

@@ -39,8 +39,8 @@ const globalChunkCache = new Map<string, Chunk>();
 const MAX_CHUNKS_PER_FRAME = 3;
 const MAX_LIGHTS_PER_CHUNK = 8;
 const MAX_HP = 100;
-const CREATURE_CAP = 20;
-const FRIENDLY_CAP = 8;
+const CREATURE_CAP = 30;
+const FRIENDLY_CAP = 12;
 const STONE_INTERVAL = 2500;
 const BEAST_SPAWN_INTERVAL = 15000; // check for legendary beast spawns
 
@@ -1774,7 +1774,7 @@ export class WorldLayer {
       }
 
       // --- spawn creatures based on hostility ---
-      if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 800 + Math.random() * 1500) {
+      if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 600 + Math.random() * 1200) {
         this.lastSpawnTime = time;
         if (hostility >= 1) {
           const spawnCount = 1 + Math.floor(hostility / 2);
@@ -1792,7 +1792,7 @@ export class WorldLayer {
       }
 
       // --- spawn friendly creatures in the meadow (hostility 0) ---
-      if (this.friendlies.length < FRIENDLY_CAP && time - this.lastFriendlySpawnTime > 2000 + Math.random() * 3000) {
+      if (this.friendlies.length < FRIENDLY_CAP && time - this.lastFriendlySpawnTime > 1500 + Math.random() * 2000) {
         this.lastFriendlySpawnTime = time;
         if (Math.round(hostility) === 0) {
           const angle = Math.random() * Math.PI * 2;
