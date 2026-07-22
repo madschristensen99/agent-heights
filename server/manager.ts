@@ -434,13 +434,13 @@ export class AgentManager {
     if (resumedCount > 0) {
       console.log(`[agent-heights] resumed ${resumedCount} agent task(s) from pending state`);
     }
-    // Only clear pending tasks from save if we actually resumed them.
-    // If drainQueue started a task, persist() will have already written the
-    // new active task to pendingTasks — clearing here would race with that.
-    // drainQueue → startTask → runTask → persist() runs synchronously up to
-    // the first await, so by the time we get here the new pendingTasks are
-    // already set. We skip the clear so the latest state wins.
-    if (!resumedAny) {
+    // Only clear pending tasks from save if we actually loaded saved state
+    // AND didn't resume anything. If saved is null (load failed), clearing
+    // would destroy previously persisted tasks in the DB that we simply
+    // failed to read. If drainQueue started a task, persist() will have
+    // already written the new active task to pendingTasks — clearing here
+    // would race with that.
+    if (!resumedAny && saved) {
       this.save.clearPendingTasks();
     }
   }
@@ -1447,7 +1447,7 @@ export class AgentManager {
    * can resume exactly where they left off after the server restarts.
    * Aborts in-flight tasks, stops loops, and persists everything to disk/DB.
    */
-  prepareForShutdown(): void {
+  async prepareForShutdown(): Promise<void> {
     this.shuttingDown = true;
     // Stop autonomous loops so no new tasks start during drain
     this.stopThinkLoop();
@@ -1476,6 +1476,13 @@ export class AgentManager {
     // Final persist — saves agent state + pending tasks (active + queued)
     this.persist();
     this.persistBoard();
+
+    // Await the flush to guarantee pending tasks are written to disk/DB
+    // before the caller proceeds with shutdown.
+    const f = this.save.flushNow();
+    if (f && typeof (f as any).then === "function") {
+      await (f as Promise<void>).catch(() => {});
+    }
   }
 
   /** One tick of the think loop — check each idle agent for autonomous action. */
@@ -1906,7 +1913,11 @@ export class AgentManager {
       if (idleTimer) clearTimeout(idleTimer);
       console.log(`[manager:${rt.info.id}] finally: sawError=${sawError} aborted=${abort.signal.aborted} exists=${this.agents.has(rt.info.id)}`);
       rt.abort = null;
-      rt.handoffTo = null;
+      // During shutdown, preserve handoffTo and task info so the persisted
+      // pending tasks retain the full handoff chain for resumption.
+      if (!this.shuttingDown) {
+        rt.handoffTo = null;
+      }
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         const duration = Date.now() - rt.taskStartedAt;
         if (sawError) {

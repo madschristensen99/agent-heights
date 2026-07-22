@@ -2525,9 +2525,11 @@ async function shutdown(): Promise<void> {
 
   // 2. Prepare each agent manager for shutdown — saves active + queued tasks
   //    so agents can resume exactly where they left off after restart.
+  const shutdownPrep: Promise<void>[] = [];
   for (const sess of tenants.values()) {
-    sess.manager.prepareForShutdown();
+    shutdownPrep.push(sess.manager.prepareForShutdown());
   }
+  await Promise.all(shutdownPrep);
 
   // 3. Flush all saves to disk/DB (pending tasks are included) — do this
   //    BEFORE browser cleanup so critical task data is persisted even if

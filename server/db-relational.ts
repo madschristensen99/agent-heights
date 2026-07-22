@@ -44,6 +44,7 @@ export class RelationalPersistence {
       board: [],
       schedules: [],
       world: { seed: 0, firedAgents: [] },
+      pendingTasks: {},
     };
   }
 
@@ -366,7 +367,6 @@ export class RelationalPersistence {
             vacationed_agents: this.state.world.vacationedAgents ?? [],
             chunk_overrides: this.state.world.chunkOverrides ?? {},
             office_overrides: this.state.world.officeOverrides ?? {},
-            pending_tasks: this.state.pendingTasks ?? {},
           });
       } catch (err) {
         console.error("[db-rel] setWorld failed:", err);
