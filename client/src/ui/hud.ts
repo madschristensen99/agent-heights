@@ -227,6 +227,7 @@ export class Hud {
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
+        <button class="btn mini" id="worlds-btn">🌀 WORLDS</button>
         <button class="btn mini" id="voice-btn" title="Toggle voice chat">🎤</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
@@ -282,6 +283,7 @@ export class Hud {
       <div class="modal-backdrop" id="railway-modal" hidden></div>
       <div class="modal-backdrop" id="github-modal" hidden></div>
       <div class="modal-backdrop" id="code-editor-modal" hidden></div>
+      <div class="modal-backdrop" id="worlds-modal" hidden></div>
       <div class="modal-backdrop" id="wardrobe-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">

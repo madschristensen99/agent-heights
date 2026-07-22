@@ -1,5 +1,8 @@
 import { defineConfig } from "vite";
-import monacoEditorPlugin from "vite-plugin-monaco-editor";
+import monacoEditorPluginModule from "vite-plugin-monaco-editor";
+
+// The plugin's CJS export is { default: fn }, so extract it
+const monacoEditorPlugin = (monacoEditorPluginModule as any).default ?? monacoEditorPluginModule;
 
 export default defineConfig({
   root: "client",

@@ -81,6 +81,7 @@ export class Store {
   currentWorld: { branchName: string; host: string; url: string } | null = null;
   worldTransitioning = false;
   portalTarget: { branchName: string; url: string } | null = null;
+  worldsPanelOpen = false;
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
@@ -211,6 +212,7 @@ export class Store {
     this.currentWorld = null;
     this.worldTransitioning = false;
     this.portalTarget = null;
+    this.worldsPanelOpen = false;
     this.worldSeed = 0;
     this.chunkOverrides = {};
     this.officeOverrides = {};
@@ -468,6 +470,14 @@ export class Store {
 
   toggleCodeEditor(open?: boolean): void {
     this.codeEditorOpen = open ?? !this.codeEditorOpen;
+    this.emit();
+  }
+
+  toggleWorldsPanel(open?: boolean): void {
+    this.worldsPanelOpen = open ?? !this.worldsPanelOpen;
+    if (this.worldsPanelOpen) {
+      this.sendFn?.({ type: "railway_list_deployments" });
+    }
     this.emit();
   }
 
