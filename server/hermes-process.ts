@@ -128,12 +128,12 @@ export class HermesProcessManager {
   private writeConfig(configPath: string): void {
     const config = [
       "model:",
-      "  provider: moonshot",
+      "  provider: kimi-coding",
       "  default: kimi-k2.7-code-highspeed",
       "",
     ].join("\n");
     writeFileSync(configPath, config, "utf-8");
-    console.log("[hermes-process] Wrote default config.yaml with moonshot/kimi-k2.7-code-highspeed");
+    console.log("[hermes-process] Wrote default config.yaml with kimi-coding/kimi-k2.7-code-highspeed");
   }
 
   /** Check if the Hermes gateway is reachable. */
