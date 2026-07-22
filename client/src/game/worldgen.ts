@@ -316,12 +316,18 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   const doorWX = 14;
   const doorWY = 0;
   const clearRadius = 8;
+  // Tiles that should survive the clearing pass (interactive features, not obstacles)
+  const CLEAR_SPARE = new Set<number>([
+    TILE.GOLF_CLUB, TILE.GOLF_BALL, TILE.GOLF_FLAG, TILE.TEE_BOX,
+    TILE.AXE, TILE.LEPRECHAUN, TILE.FOUNTAIN,
+    TILE.TENNIS_COURT, TILE.TENNIS_WALL, TILE.TENNIS_RACKET, TILE.TENNIS_BALL, TILE.TENNIS_NET,
+  ]);
   for (let y = 0; y < CHUNK_SIZE; y++) {
     for (let x = 0; x < CHUNK_SIZE; x++) {
       const wx = cx * CHUNK_SIZE + x;
       const wy = cy * CHUNK_SIZE + y;
       const d = Math.hypot(wx - doorWX, wy - doorWY);
-      if (d <= clearRadius && !PROTECTED_TILES.has(tiles[idx(x, y)])) {
+      if (d <= clearRadius && !CLEAR_SPARE.has(tiles[idx(x, y)])) {
         tiles[idx(x, y)] = baseTile;
       }
     }

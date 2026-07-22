@@ -274,8 +274,6 @@ export class OfficeScene extends Phaser.Scene {
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
-  private dayNightTint!: Phaser.GameObjects.Rectangle;
-  private brightnessBoost!: Phaser.GameObjects.Rectangle;
 
   /** Multiplayer: remote player sprites keyed by userId. */
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
@@ -1084,19 +1082,8 @@ export class OfficeScene extends Phaser.Scene {
           this.lightingOverlay = this.add.graphics().setDepth(900).setScrollFactor(0);
           this.drawVignette();
 
-          // day/night tint: subtle color overlay that shifts over time
-          // Positioned in world space each frame to cover the full camera view.
-          this.dayNightTint = this.add
-            .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
-            .setOrigin(0, 0)
-            .setDepth(890);
-
-          // brightness boost: makes the area just outside the office brighter than inside
-          this.brightnessBoost = this.add
-            .rectangle(0, 0, this.scale.width, this.scale.height, 0xffffff, 0)
-            .setOrigin(0, 0)
-            .setDepth(830)
-            .setBlendMode(Phaser.BlendModes.ADD);
+          // day/night tint and brightness boost are handled by LightingSystem
+          // (lighting.ts) — no duplicate overlays needed here.
 
           const onResize = () => {
             if (this.userZoom === null) {
@@ -1105,8 +1092,6 @@ export class OfficeScene extends Phaser.Scene {
               cam.setZoom(this.clampZoom(this.userZoom));
             }
             this.drawVignette();
-            if (this.dayNightTint) this.dayNightTint.setSize(this.scale.width, this.scale.height);
-            if (this.brightnessBoost) this.brightnessBoost.setSize(this.scale.width, this.scale.height);
           };
           this.scale.on("resize", onResize);
           this.events.once("shutdown", () => this.scale.off("resize", onResize));
@@ -1350,24 +1335,8 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Update lighting: monitor glows, day/night cycle, vignette refresh. */
   private updateLighting(time: number): void {
-    // day/night cycle: 120s full cycle, shifts between day (0 alpha) and night (0.25 alpha blue)
-    const cycle = (time / 120000) % 1;
-    const nightFactor = (Math.sin(cycle * Math.PI * 2 - Math.PI / 2) + 1) / 2; // 0 = day, 1 = night
-    const distFactor = this.world.distanceFactor(this.player.x, this.player.y);
-    // brightness boost: peaks just outside the office, fades over ~15 tiles
-    const brightnessFactor = distFactor > 0 ? Math.max(0, 1 - distFactor * 7) : 0;
-    this.brightnessBoost.setFillStyle(0xffd88a, brightnessFactor * 0.06);
-    // Resize overlays to cover full camera world view (handles zoom-out)
-    const cam = this.cameras.main;
-    const view = cam.worldView;
-    this.brightnessBoost.setSize(view.width, view.height).setPosition(view.x, view.y);
-    // darkness: delayed onset — doesn't start until ~10 tiles out
-    const delayedDarkness = Math.max(0, (distFactor - 0.1) / 0.9);
-    const showOverlays = delayedDarkness > 0;
-    this.dayNightTint.setFillStyle(0x050518, nightFactor * 0.55 * delayedDarkness);
-    this.dayNightTint.setSize(view.width, view.height).setPosition(view.x, view.y);
-    this.dayNightTint.setVisible(showOverlays);
-    this.brightnessBoost.setVisible(!showOverlays && brightnessFactor > 0);
+    // Day/night darkness and brightness boost are handled by LightingSystem (lighting.ts).
+    // This method only handles monitor glows and matrix rain.
 
     // monitor glows: pulse for working agents
     const pulse = 0.15 + Math.sin(time * 0.003) * 0.05;
