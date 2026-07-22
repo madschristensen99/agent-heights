@@ -131,13 +131,14 @@ export class LightingSystem {
     this.dayNightTint.setSize(view.width, view.height).setPosition(view.x, view.y);
     this.ambientDarkness.setSize(view.width, view.height).setPosition(view.x, view.y);
 
-    // Player aura light — created on first update, follows player, brighter at night
-    const auraIntensity = 0.15 + nightFactor * 0.35 * delayedDarkness;
+    // Player aura light — only visible outside the office at night
+    const auraIntensity = delayedDarkness > 0 ? 0.15 + nightFactor * 0.35 * delayedDarkness : 0;
     if (!this.playerLight) {
-      this.playerLight = this.addLight(playerX, playerY, 120, 0xffdd88, auraIntensity, 0.03, 0.002);
-    } else {
+      this.playerLight = this.addLight(playerX, playerY, 120, 0xffdd88, 0, 0.03, 0.002);
+    }
+    if (this.playerLight) {
       this.updateLight(this.playerLight, playerX, playerY, auraIntensity);
-      // Resize aura at night for wider visibility
+      this.playerLight.sprite.setVisible(auraIntensity > 0);
       const auraRadius = 100 + nightFactor * 80 * delayedDarkness;
       this.playerLight.sprite.setDisplaySize(auraRadius * 2, auraRadius * 2);
     }
