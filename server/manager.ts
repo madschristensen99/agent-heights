@@ -609,6 +609,22 @@ export class AgentManager {
     this.hermesClient.startGateway().catch((err) => {
       console.warn(`[hermes] Auto-start gateway failed: ${err}`);
     });
+
+    // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
+    const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY;
+    if (kimiKey) {
+      this.hermesClient.configureModel("kimi-coding", "kimi-k2").catch((err) => {
+        console.warn(`[hermes] Model config failed: ${err}`);
+      });
+    } else {
+      console.warn("[hermes] KIMI_BACKUP_KEY is NOT SET — Hermes agent will not be able to call LLM");
+    }
+
+    // Log current model info for diagnostics
+    this.hermesClient.getModelInfo().then((info) => {
+      if (info) console.log(`[hermes] Model info: ${JSON.stringify(info)}`);
+      else console.warn("[hermes] Could not retrieve model info from Hermes");
+    }).catch(() => {});
   }
 
   /** Get current platform connection states. */

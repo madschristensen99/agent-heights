@@ -226,6 +226,44 @@ export class HermesClient {
     }
   }
 
+  /** Set the LLM model provider via Hermes REST API.
+   *  This is the authoritative way to configure which model the gateway agent uses.
+   *  POST /api/model/set with {scope, provider, model} */
+  async configureModel(provider: string, model: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/model/set`, {
+        method: "POST",
+        headers: this.authHeaders(),
+        body: JSON.stringify({ scope: "main", provider, model }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) {
+        console.log(`[hermes-client] Model set to ${provider}/${model}`);
+        return true;
+      }
+      const data = await res.json().catch(() => ({}));
+      console.warn(`[hermes-client] /api/model/set returned HTTP ${res.status}: ${JSON.stringify(data)}`);
+      return false;
+    } catch (err) {
+      console.warn(`[hermes-client] Failed to set model: ${err}`);
+      return false;
+    }
+  }
+
+  /** Get current model/config info from Hermes. */
+  async getModelInfo(): Promise<Record<string, unknown> | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/model/info`, {
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) return await res.json() as Record<string, unknown>;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Configure a platform's credentials via the Hermes dashboard API. */
   async configurePlatform(platform: string, credentials: Record<string, string>): Promise<{ success: boolean; error?: string }> {
     // Check reachability first so we can give a clear error instead of "fetch failed"
