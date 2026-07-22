@@ -4,7 +4,7 @@ import type { FiredAgent } from "../../../shared/types";
 import type { Store } from "../store";
 import type { Net } from "../net";
 import { isTouchDevice } from "../touch";
-import { TILE_PX, vecToDir, type Dir } from "./agent";
+import { TILE_PX, type Dir } from "./agent";
 import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
@@ -624,7 +624,7 @@ class GhostNPC {
     const texKey = info.appearance ? `char-ghost-${info.id}` : `char-${info.sprite}`;
     if (info.appearance) {
       generateCharTexture(scene, texKey, info.appearance);
-      const dirs: Dir[] = ["down", "left", "right", "up", "down-right", "down-left", "up-right", "up-left"];
+      const dirs: Dir[] = ["down", "left", "right", "up"];
       const FPR = 8;
       if (!scene.anims.exists(`${texKey}-work`)) {
         dirs.forEach((dir, row) => {
@@ -692,7 +692,7 @@ class GhostNPC {
       } else {
         this.container.x += (dx / d) * step;
         this.container.y += (dy / d) * step;
-        this.dir = vecToDir(dx, dy);
+        this.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
         this.play(`${c}-walk-${this.dir}`);
       }
     } else {

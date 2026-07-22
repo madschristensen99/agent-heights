@@ -437,7 +437,7 @@ export interface PlayerInfo {
 }
 
 /** Direction a player/agent is facing. */
-export type Dir = "up" | "down" | "left" | "right" | "up-left" | "up-right" | "down-left" | "down-right";
+export type Dir = "up" | "down" | "left" | "right";
 
 /** A player visible in a shared room — used for multiplayer presence. */
 /** Room access level for a player.

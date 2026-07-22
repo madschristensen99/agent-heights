@@ -18,6 +18,7 @@
  *   STREAM_HEIGHT          Canvas height (default 720)
  *   STREAM_FPS             Frame rate    (default 30)
  *   STREAM_BITRATE         Video bitrate (default 3000k)
+ *   STREAM_OUTPUT_FILE      If set, write to this file instead of RTMP (for local testing)
  */
 
 import { spawn } from "node:child_process";
@@ -29,9 +30,12 @@ const STREAM_WIDTH = parseInt(process.env.STREAM_WIDTH ?? "1280", 10);
 const STREAM_HEIGHT = parseInt(process.env.STREAM_HEIGHT ?? "720", 10);
 const STREAM_FPS = parseInt(process.env.STREAM_FPS ?? "30", 10);
 const STREAM_BITRATE = process.env.STREAM_BITRATE ?? "3000k";
+const STREAM_OUTPUT_FILE = process.env.STREAM_OUTPUT_FILE ?? "";
 
-if (!RTMP_URL || !RTMP_STREAM_KEY) {
-  console.error("[livestream] Missing RTMP_URL or RTMP_STREAM_KEY — set them in your environment.");
+if (!STREAM_OUTPUT_FILE && (!RTMP_URL || !RTMP_STREAM_KEY)) {
+  console.error("[livestream] Missing RTMP_URL/RTMP_STREAM_KEY or STREAM_OUTPUT_FILE — set one in your environment.");
+  console.error("  For local testing: STREAM_OUTPUT_FILE=./test-output.mp4");
+  console.error("  For RTMP:          RTMP_URL=rtmp://... RTMP_STREAM_KEY=...");
   process.exit(1);
 }
 
@@ -88,7 +92,9 @@ async function main(): Promise<void> {
   // Give the scene a moment to render
   await page.waitForTimeout(3000);
 
-  // Start FFmpeg
+  // Start FFmpeg — output to local file or RTMP
+  const outputTarget = STREAM_OUTPUT_FILE || FULL_RTMP;
+  const outputFormat = STREAM_OUTPUT_FILE ? "mp4" : "flv";
   const ffmpegArgs = [
     "-y",
     "-f", "webm",           // input format (from MediaRecorder)
@@ -102,11 +108,11 @@ async function main(): Promise<void> {
     "-pix_fmt", "yuv420p",
     "-g", String(STREAM_FPS * 2),  // keyframe every 2 seconds
     "-r", String(STREAM_FPS),
-    "-f", "flv",
-    FULL_RTMP,
+    "-f", outputFormat,
+    outputTarget,
   ];
 
-  console.log(`[livestream] starting FFmpeg → ${RTMP_URL}`);
+  console.log(`[livestream] starting FFmpeg → ${outputTarget}`);
   const ffmpeg = spawn("ffmpeg", ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
 
   ffmpeg.stdout?.on("data", (data: Buffer) => {

@@ -2866,7 +2866,7 @@ export class Hud {
         const editBtn = document.getElementById(`github-edit-${branch.name}`);
         if (editBtn) {
           editBtn.addEventListener("click", () => {
-            this.store.codeEditorOpen = true;
+            this.store.toggleCodeEditor(true);
             this.store.codeEditorBranch = branch.name;
             this.store.codeEditorFile = null;
             this.store.codeEditorPath = "";
@@ -2924,7 +2924,7 @@ export class Hud {
   private bindCodeEditorPanel(): void {
     const modal = document.getElementById("code-editor-modal")!;
     modal.addEventListener("click", (e) => {
-      if (e.target === modal) this.store.codeEditorOpen = false;
+      if (e.target === modal) this.store.toggleCodeEditor(false);
     });
   }
 
@@ -2994,7 +2994,7 @@ export class Hud {
 
     // Wire close
     document.getElementById("ce-close")!.addEventListener("click", () => {
-      this.store.codeEditorOpen = false;
+      this.store.toggleCodeEditor(false);
     });
 
     // Wire up button

@@ -4,7 +4,7 @@
  *   client/public/assets/tilesets/agentHeights.png  - Agent Heights-theme recolor of the tileset
  *   client/public/assets/maps/office.json      - Tiled-format map (open it in Tiled!)
  *   client/public/assets/maps/agentHeights.json     - Agent Heights-theme map (carpeted office layout)
- *   client/public/assets/characters/char-N.png - 64x96 8-dir walk sheets, 8 variants
+ *   client/public/assets/characters/char-N.png - 64x96 4-dir walk sheets, 8 variants
  *   client/public/assets/characters/boss.png   - the player character
  *   client/public/assets/sprites/monitor.png   - 2-frame monitor (off/on)
  *   client/public/assets/sprites/bubble.png    - 3-frame thought bubble

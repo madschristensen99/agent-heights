@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, vecToDir, type Dir } from "./agent";
+import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
 import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, PLATFORM_CREDENTIAL_FIELDS } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
@@ -1402,7 +1402,7 @@ export class OfficeScene extends Phaser.Scene {
 
       this.store.currentWorld = { branchName, host, url: worldUrl };
       this.store.worldTransitioning = false;
-      this.store.githubPanelOpen = false;
+      this.store.toggleGitHubPanel(false);
 
       // Reset scene state for the new world
       this.store.reset();
@@ -4364,7 +4364,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Create walk/idle/work animations for a custom character texture key. */
   private ensureCharAnimations(key: string): void {
     if (this.anims.exists(`${key}-work`)) return;
-    const dirs: Dir[] = ["down", "left", "right", "up", "down-right", "down-left", "up-right", "up-left"];
+    const dirs: Dir[] = ["down", "left", "right", "up"];
     const FRAMES_PER_ROW = 8;
     dirs.forEach((dir, row) => {
       const base = row * FRAMES_PER_ROW;
@@ -4427,7 +4427,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     const sheets = ["boss", "char-yuki", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
-    const dirs: Dir[] = ["down", "left", "right", "up", "down-right", "down-left", "up-right", "up-left"];
+    const dirs: Dir[] = ["down", "left", "right", "up"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
       dirs.forEach((dir, row) => {
@@ -4700,10 +4700,9 @@ export class OfficeScene extends Phaser.Scene {
       this.clearPathMarker();
     }
 
-    if (vx !== 0 && vy !== 0) {
-      const mag = Math.hypot(vx, vy);
-      if (mag > 1) { vx /= mag; vy /= mag; }
-      else if (left || right || up || down) { vx *= 0.7071; vy *= 0.7071; }
+    if (vx !== 0 && vy !== 0 && (left || right || up || down)) {
+      vx *= 0.7071;
+      vy *= 0.7071;
     }
 
     const tileSpeedMult = outside ? this.world.getTileSpeedAt(this.player.x, this.player.y) : 1;
@@ -4739,7 +4738,8 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     if (vx !== 0 || vy !== 0) {
-      this.playerDir = vecToDir(vx, vy);
+      this.playerDir =
+        Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
       this.player.play(`${this.playerTexKey}-walk-${this.playerDir}`, true);
     } else {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);

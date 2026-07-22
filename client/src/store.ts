@@ -464,6 +464,11 @@ export class Store {
     this.emit();
   }
 
+  toggleCodeEditor(open?: boolean): void {
+    this.codeEditorOpen = open ?? !this.codeEditorOpen;
+    this.emit();
+  }
+
   toggleWardrobe(open?: boolean): void {
     this.wardrobeOpen = open ?? !this.wardrobeOpen;
     this.emit();
@@ -684,7 +689,6 @@ export class Store {
       case "railway_data":
         this.railwayData = msg.data;
         this.railwayError = msg.error;
-        this.railwayPanelOpen = true;
         break;
       case "github_status":
         this.githubStatus = { connected: msg.connected, login: msg.login, error: msg.error };
@@ -692,8 +696,8 @@ export class Store {
         break;
       case "github_data":
         this.githubData = { branches: msg.branches, fork: msg.fork, error: msg.error };
-        this.githubPanelOpen = true;
-        break;
+        this.toggleGitHubPanel(true);
+        return;
       case "github_fork_created":
         this.toast(`World fork created: ${msg.branchName}`);
         // Refresh branch list
