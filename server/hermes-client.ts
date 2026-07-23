@@ -136,7 +136,10 @@ export class HermesClient {
       const res = await fetch(`${this.baseUrl}/api/status`, {
         signal: AbortSignal.timeout(5000),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.warn(`[hermes-client] /api/status returned HTTP ${res.status}`);
+        return null;
+      }
       const data = await res.json() as any;
 
       // Hermes uses gateway_platforms (not platforms) and state field (not connected boolean)
@@ -257,8 +260,15 @@ export class HermesClient {
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(10000),
       });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.warn(`[hermes-client] startGateway failed: HTTP ${res.status} — ${body.slice(0, 300)}`);
+      } else {
+        console.log(`[hermes-client] startGateway OK`);
+      }
       return res.ok;
-    } catch {
+    } catch (err) {
+      console.warn(`[hermes-client] startGateway error: ${err}`);
       return false;
     }
   }

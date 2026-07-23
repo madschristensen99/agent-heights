@@ -413,6 +413,8 @@ export interface AgentSchedule {
   runCount: number;
   handoffTo: string | null;
   createdAt: number;
+  /** Consecutive failed runs — used for exponential backoff. Reset on success. */
+  consecutiveFailures?: number;
 }
 
 export interface SchedulePreset {

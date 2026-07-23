@@ -665,9 +665,11 @@ export class Hud {
         return;
       }
       // never steal keystrokes from a form field or while a modal is up
-      const active = document.activeElement?.tagName;
-      if (active === "INPUT" || active === "TEXTAREA" || active === "SELECT") return;
-      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.isContentEditable) return;
+      const tag = active?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden || !railway.hidden || !github.hidden || !codeEditor.hidden || !worlds.hidden) return;
       switch (e.key.toLowerCase()) {
         case "h":
           e.preventDefault();

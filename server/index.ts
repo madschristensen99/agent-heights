@@ -681,6 +681,8 @@ wss.on("connection", async (ws, req) => {
       name: currentRoom.name,
       players: tenants.getRoomPlayers(sess.roomId),
       privateOfficeId: sess.privateOfficeId ?? undefined,
+      projectorChannel: currentRoom.projectorChannel,
+      accessLevel,
     } satisfies ServerMsg));
   }
   sendRoomsList();
@@ -1366,6 +1368,8 @@ wss.on("connection", async (ws, req) => {
               name: room.name,
               players: tenants.getRoomPlayers(roomId),
               privateOfficeId: sess.privateOfficeId ?? undefined,
+              projectorChannel: room.projectorChannel,
+              accessLevel: tenants.computeAccessLevel(room, sess.user.id),
             });
             sendRoomsList();
             void sendOutfits(ws, sess);

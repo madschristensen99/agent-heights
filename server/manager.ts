@@ -217,6 +217,8 @@ interface QueuedTask {
   cardId: string | null;
   /** True when this task is being resumed after a server restart. */
   isResume?: boolean;
+  /** Schedule that fired this task, if any (for backoff tracking). */
+  scheduleId?: string | null;
 }
 
 interface TaskHistoryEntry {
@@ -235,6 +237,8 @@ interface AgentRuntime {
   handoffTo: string | null;
   /** Task card this run came from, if any (for auto-moving cards on done/error). */
   cardId: string | null;
+  /** Schedule that fired the current task, if any (for backoff tracking). */
+  scheduleId: string | null;
   /** Pending tasks waiting to run after the current one finishes. */
   taskQueue: QueuedTask[];
   /** Timestamp of next autonomous think tick (0 = no tick scheduled). */
@@ -348,7 +352,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -502,7 +506,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("yuki", YUKI_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
     this.agents.set(YUKI_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -531,7 +535,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -823,7 +827,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -855,7 +859,7 @@ export class AgentManager {
     return rt?.info.id ?? "";
   }
 
-  assign(agentId: string, task: string, handoffTo?: string, cardId?: string): void {
+  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     const cleanTask = task.trim();
@@ -867,6 +871,7 @@ export class AgentManager {
         task: cleanTask,
         handoffTo: target ? target.info.id : null,
         cardId: cardId ?? null,
+        scheduleId: scheduleId ?? null,
       });
       const pos = rt.taskQueue.length;
       this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task queued (#${pos}).` });
@@ -874,11 +879,11 @@ export class AgentManager {
       return;
     }
 
-    this.startTask(rt, cleanTask, handoffTo, cardId);
+    this.startTask(rt, cleanTask, handoffTo, cardId, false, scheduleId);
   }
 
   /** Begin executing a task immediately (assumes agent is idle). */
-  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false): void {
+  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string): void {
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
@@ -887,6 +892,7 @@ export class AgentManager {
     rt.info.task = cleanTask;
     const target = handoffTo && handoffTo !== rt.info.id ? this.agents.get(handoffTo) : undefined;
     rt.handoffTo = target ? target.info.id : null;
+    rt.scheduleId = scheduleId ?? null;
     this.session.record("assign", {
       agentId: rt.info.id,
       agentName: rt.info.name,
@@ -905,7 +911,7 @@ export class AgentManager {
     if (rt.taskQueue.length === 0) return;
     const next = rt.taskQueue.shift()!;
     this.log(rt, "status", `Starting queued task: ${next.task}`);
-    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume);
+    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined);
   }
 
   /** Hand the same task to every agent that isn't already busy. */
@@ -951,6 +957,7 @@ export class AgentManager {
       rt.cardId = null;
     }
     rt.handoffTo = null;
+    rt.scheduleId = null;
     this.session.record("stop", { agentId: rt.info.id, agentName: rt.info.name });
     this.log(rt, "status", "Task stopped by the boss.");
     this.setStatus(rt, "idle");
@@ -974,6 +981,7 @@ export class AgentManager {
           rt.cardId = null;
         }
         rt.handoffTo = null;
+        rt.scheduleId = null;
         this.log(rt, "status", "Emergency stop — all work halted.");
       }
       rt.taskQueue = [];
@@ -1209,7 +1217,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1253,7 +1261,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2040,6 +2048,7 @@ export class AgentManager {
           this.setStatus(rt, "error");
           if (rt.cardId) this.revertCard(rt.cardId);
           rt.cardId = null;
+          this.updateScheduleResult(rt, false);
           rt.doneTimer = setTimeout(() => {
             rt.info.task = null;
             if (rt.taskQueue.length > 0) {
@@ -2056,6 +2065,7 @@ export class AgentManager {
           this.setStatus(rt, "done");
           if (rt.cardId) this.completeCard(rt.cardId);
           rt.cardId = null;
+          this.updateScheduleResult(rt, true);
           if (rt.taskQueue.length > 0 && !this.shuttingDown) {
             this.drainQueue(rt);
           } else {
@@ -2079,6 +2089,7 @@ export class AgentManager {
             this.revertCard(rt.cardId);
             rt.cardId = null;
           }
+          this.updateScheduleResult(rt, false);
           rt.info.task = null;
           if (rt.taskQueue.length > 0) {
             this.drainQueue(rt);
@@ -2087,6 +2098,10 @@ export class AgentManager {
             this.persist();
           }
         }
+      }
+      // Clear scheduleId after result tracking is done
+      if (!this.shuttingDown) {
+        rt.scheduleId = null;
       }
     }
   }
@@ -2693,6 +2708,7 @@ export class AgentManager {
       runCount: 0,
       handoffTo: handoffTo?.trim() || null,
       createdAt: now,
+      consecutiveFailures: 0,
     };
     this.schedules.set(sched.id, sched);
     this.persistSchedules();
@@ -2710,6 +2726,7 @@ export class AgentManager {
       if (updates.enabled && !wasEnabled) {
         const nextRun = nextCronRun(sched.cronExpression);
         if (nextRun !== null) sched.nextRunAt = nextRun;
+        sched.consecutiveFailures = 0;
       }
     }
     if (updates.name !== undefined) sched.name = updates.name.trim().slice(0, 100) || sched.name;
@@ -2757,6 +2774,41 @@ export class AgentManager {
     if (toRemove.length > 0) this.persistSchedules();
   }
 
+  /** Update schedule's consecutive failure counter and apply backoff. */
+  private updateScheduleResult(rt: AgentRuntime, success: boolean): void {
+    if (!rt.scheduleId) return;
+    const sched = this.schedules.get(rt.scheduleId);
+    if (!sched) return;
+
+    if (success) {
+      if (sched.consecutiveFailures && sched.consecutiveFailures > 0) {
+        sched.consecutiveFailures = 0;
+        this.persistSchedules();
+        this.broadcast({ type: "schedule", schedule: sched });
+      }
+      return;
+    }
+
+    // Failure — increment and apply backoff
+    sched.consecutiveFailures = (sched.consecutiveFailures ?? 0) + 1;
+    const failures = sched.consecutiveFailures;
+
+    if (failures >= 3) {
+      // Auto-disable after 3 consecutive failures
+      sched.enabled = false;
+      const msg = `Schedule "${sched.name}" auto-disabled after ${failures} consecutive failures.`;
+      this.broadcast({ type: "toast", text: msg });
+      this.log(rt, "status", msg);
+    } else if (failures >= 2) {
+      // Delay next run by 30 minutes
+      sched.nextRunAt = Date.now() + 30 * 60 * 1000;
+      this.log(rt, "status", `Schedule "${sched.name}" delayed by 30 min after ${failures} consecutive failures.`);
+    }
+
+    this.persistSchedules();
+    this.broadcast({ type: "schedule", schedule: sched });
+  }
+
   /** Scheduler tick — check all enabled schedules and fire due ones. */
   private tickSchedules(): void {
     const now = Date.now();
@@ -2782,7 +2834,7 @@ export class AgentManager {
       this.persistSchedules();
       this.broadcast({ type: "schedule", schedule: sched });
       this.log(rt, "status", `Schedule fired: ${sched.name}`);
-      this.assign(sched.agentId, sched.task, sched.handoffTo ?? undefined);
+      this.assign(sched.agentId, sched.task, sched.handoffTo ?? undefined, undefined, sched.id);
     }
   }
 
