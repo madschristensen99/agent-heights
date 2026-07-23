@@ -122,11 +122,11 @@ export class HermesProcessManager {
     const config = [
       "model:",
       "  provider: kimi-coding",
-      "  default: kimi-k2.7-code-highspeed",
+      "  default: kimi-k2.7-code",
       "",
     ].join("\n");
     writeFileSync(configPath, config, "utf-8");
-    console.log("[hermes-process] Wrote default config.yaml with kimi-coding/kimi-k2.7-code-highspeed");
+    console.log("[hermes-process] Wrote default config.yaml with kimi-coding/kimi-k2.7-code");
   }
 
   /** Check if the Hermes gateway is reachable. */

@@ -613,7 +613,7 @@ export class AgentManager {
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
     const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY;
     if (kimiKey) {
-      this.hermesClient!.configureModel("kimi-coding", "kimi-k2.7-code-highspeed").then((ok) => {
+      this.hermesClient!.configureModel("kimi-coding", "kimi-k2.7-code").then((ok) => {
         if (ok) {
           // Restart gateway so new model config takes effect for all sessions
           // (Hermes docs: "Restart the gateway if you want to force all sessions to pick up the change")
