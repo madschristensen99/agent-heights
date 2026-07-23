@@ -139,6 +139,10 @@ export class MarketplaceBrowser {
     this.panel.style.display = "flex";
     if (this.currentTab === "agents") void this.load();
     else void this.renderCommunity();
+    if (!localStorage.getItem("agent-heights-market-seen")) {
+      localStorage.setItem("agent-heights-market-seen", "1");
+      this.showWelcomeBanner();
+    }
   }
 
   hide(): void {
@@ -148,6 +152,30 @@ export class MarketplaceBrowser {
   toggle(): void {
     if (this.panel.style.display === "flex") this.hide();
     else this.show();
+  }
+
+  private showWelcomeBanner(): void {
+    const banner = document.createElement("div");
+    banner.style.cssText = `
+      padding: 0.75rem 1rem; border-bottom: 1px solid #333;
+      background: linear-gradient(135deg, #1a2a1a, #0d1d0d);
+      font-size: 0.8rem; color: #aaa; line-height: 1.5;
+    `;
+    banner.innerHTML = `
+      <div style="font-weight:700; color:#53b86b; font-size:0.85rem; margin-bottom:0.3rem;">🛒 Welcome to the Marketplace</div>
+      <div style="margin-bottom:0.4rem;"><strong>Agents</strong> — Browse curated, ready-to-hire AI agents. Click a card for details, then hit <strong>Hire into HQ</strong> to add them to your office.</div>
+      <div><strong>Community MCPs</strong> — Search 22,000+ MCP servers. Hiring one gives your agent those tools instantly.</div>
+    `;
+    const close = document.createElement("button");
+    close.textContent = "×";
+    close.style.cssText = "position:absolute;right:0.5rem;top:0.5rem;background:none;border:none;color:#666;font-size:1rem;cursor:pointer;";
+    close.addEventListener("click", () => banner.remove());
+    banner.style.position = "relative";
+    banner.appendChild(close);
+
+    const header = this.panel.querySelector("div");
+    header?.after(banner);
+    setTimeout(() => banner.remove(), 15000);
   }
 
   private async load(): Promise<void> {

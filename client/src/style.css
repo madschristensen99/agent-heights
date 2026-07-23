@@ -2625,3 +2625,131 @@ kbd {
   padding: 0.35rem;
   border-style: dashed;
 }
+
+/* --------------------------------------------------- intro guide */
+
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.intro-modal {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 12px;
+  max-width: 480px;
+  width: 90vw;
+  padding: 2rem 2rem 1.5rem;
+  text-align: center;
+  font-family: var(--font-body);
+  color: #e0e0e0;
+  animation: intro-pop 0.3s ease-out;
+}
+
+@keyframes intro-pop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.intro-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.intro-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  color: #e0e0e0;
+}
+
+.intro-body {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #aaa;
+  margin: 0 0 1.25rem;
+  text-align: left;
+}
+
+.intro-body strong {
+  color: #e0e0e0;
+}
+
+.intro-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.intro-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #333;
+  transition: background 0.2s;
+}
+
+.intro-dot.active {
+  background: var(--accent);
+}
+
+.intro-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.intro-skip {
+  display: block;
+  margin: 0.75rem auto 0;
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.intro-skip:hover {
+  color: #888;
+}
+
+/* --------------------------------------------------- intro tooltips */
+
+.intro-tooltip {
+  position: fixed;
+  z-index: 11000;
+  background: rgba(20, 20, 30, 0.95);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: #e0e0e0;
+  font-family: var(--font-body);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: intro-tooltip-fade 0.3s ease-out;
+  backdrop-filter: blur(4px);
+}
+
+@keyframes intro-tooltip-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.intro-pulse {
+  animation: intro-pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes intro-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 157, 222, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(79, 157, 222, 0); }
+}

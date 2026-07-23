@@ -231,6 +231,7 @@ export class Hud {
         <button class="btn mini" id="worlds-btn">🌀 WORLDS</button>
         <button class="btn mini" id="voice-btn" title="Toggle voice chat">🎤</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
+        <button class="btn mini" id="help-btn" title="How to play">? HELP</button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
           <span id="user-email" style="font-size:0.75rem; color:#888; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
           <button class="btn mini" id="signout-btn" title="Sign out" style="font-size:0.75rem;">⏻</button>
@@ -333,6 +334,7 @@ export class Hud {
 
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
     document.getElementById("settings-btn")!.addEventListener("click", () => this.openSettings());
+    document.getElementById("help-btn")!.addEventListener("click", () => this.showIntroGuide());
     document.getElementById("rooms-btn")!.addEventListener("click", () => {
       this.net.send({ type: "list_orgs" });
       this.openRoomsPanel();
@@ -892,6 +894,9 @@ export class Hud {
       localStorage.setItem(PLAYER_KEY, JSON.stringify(player));
       this.net.send({ type: "setup", player });
       modal.hidden = true;
+      if (!localStorage.getItem("agent-heights-intro-seen")) {
+        setTimeout(() => this.showIntroGuide(), 800);
+      }
     };
     document.getElementById("ob-go")!.addEventListener("click", go);
     modal.querySelectorAll("input").forEach((el) =>
@@ -899,6 +904,122 @@ export class Hud {
         if ((e as KeyboardEvent).key === "Enter") go();
       }),
     );
+  }
+
+  // --------------------------------------------------------------- intro guide
+
+  private showIntroGuide(): void {
+    const seen = localStorage.getItem("agent-heights-intro-seen");
+    localStorage.setItem("agent-heights-intro-seen", "1");
+
+    const steps = [
+      {
+        icon: "🏢",
+        title: "Welcome to Agent Heights",
+        body: "You're the boss of a pixel-art office full of <strong>real AI agents</strong>. Each employee at a desk is a live coding agent that reads, writes, and runs code in its own workspace. Your job: hire them, give them tasks, and watch them work.",
+      },
+      {
+        icon: "➕",
+        title: "Hire Your First Agent",
+        body: "Click <strong>+ HIRE AGENT</strong> (bottom-left) to create a custom agent from scratch — pick a name, model, role, and personality. Or browse the <strong>🛒 MARKET</strong> (top bar) for pre-built agents with specialized skills like trading, data analysis, or DevOps.",
+      },
+      {
+        icon: "📋",
+        title: "Assign Tasks & Watch Them Work",
+        body: "Click any agent in the office to open their detail panel. Type a task, hit <strong>ASSIGN ▶</strong>, and watch them walk to their desk and start working. Speech bubbles and the <strong>Office Feed</strong> (left panel) stream their real tool calls and output in real time.",
+      },
+      {
+        icon: "🛒",
+        title: "The Marketplace",
+        body: "The <strong>🛒 MARKET</strong> button opens the agent marketplace. Browse the <strong>Agents</strong> tab for curated, ready-to-hire AI agents. The <strong>Community MCPs</strong> tab lets you search 22,000+ MCP servers — hire one and your agent gets those tools instantly. Click any agent card to see details, then hit <strong>Hire into HQ</strong>.",
+      },
+    ];
+
+    let current = 0;
+    const overlay = document.createElement("div");
+    overlay.className = "intro-overlay";
+    overlay.innerHTML = `<div class="intro-modal"></div>`;
+    document.body.appendChild(overlay);
+
+    const render = () => {
+      const step = steps[current];
+      const modal = overlay.querySelector(".intro-modal") as HTMLDivElement;
+      modal.innerHTML = `
+        <div class="intro-icon">${step.icon}</div>
+        <h2 class="intro-title">${step.title}</h2>
+        <p class="intro-body">${step.body}</p>
+        <div class="intro-dots">
+          ${steps.map((_, i) => `<span class="intro-dot${i === current ? " active" : ""}"></span>`).join("")}
+        </div>
+        <div class="intro-actions">
+          ${current > 0 ? '<button class="btn" id="intro-back">◀ BACK</button>' : '<span></span>'}
+          ${current < steps.length - 1
+            ? '<button class="btn primary" id="intro-next">NEXT ▶</button>'
+            : '<button class="btn primary" id="intro-done">LET\'S GO ▶</button>'}
+        </div>
+        <button class="intro-skip" id="intro-skip">Skip tour</button>
+      `;
+
+      const next = modal.querySelector("#intro-next");
+      if (next) next.addEventListener("click", () => { current++; render(); });
+      const back = modal.querySelector("#intro-back");
+      if (back) back.addEventListener("click", () => { current--; render(); });
+      const done = modal.querySelector("#intro-done");
+      if (done) done.addEventListener("click", () => {
+        overlay.remove();
+        if (!seen) this.showFirstTimeTooltips();
+      });
+      const skip = modal.querySelector("#intro-skip");
+      if (skip) skip.addEventListener("click", () => overlay.remove());
+    };
+
+    render();
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  }
+
+  private showFirstTimeTooltips(): void {
+    const targets = [
+      { id: "hire-btn", text: "Hire a custom AI agent", side: "top" },
+      { id: "marketplace-btn", text: "Browse pre-built agents & MCP servers", side: "bottom" },
+      { id: "feed", text: "Live activity from all your agents", side: "left" },
+    ];
+
+    const tips: HTMLDivElement[] = [];
+    for (const t of targets) {
+      const el = document.getElementById(t.id);
+      if (!el) continue;
+      const tip = document.createElement("div");
+      tip.className = `intro-tooltip intro-tooltip-${t.side}`;
+      tip.textContent = t.text;
+      const rect = el.getBoundingClientRect();
+      if (t.side === "top") {
+        tip.style.left = `${rect.left + rect.width / 2}px`;
+        tip.style.top = `${rect.bottom + 10}px`;
+        tip.style.transform = "translateX(-50%)";
+      } else if (t.side === "bottom") {
+        tip.style.left = `${rect.left + rect.width / 2}px`;
+        tip.style.bottom = `${window.innerHeight - rect.top + 10}px`;
+        tip.style.transform = "translateX(-50%)";
+      } else {
+        tip.style.left = `${rect.right + 10}px`;
+        tip.style.top = `${rect.top + rect.height / 2}px`;
+        tip.style.transform = "translateY(-50%)";
+      }
+      document.body.appendChild(tip);
+      tips.push(tip);
+      el.classList.add("intro-pulse");
+    }
+
+    const dismiss = () => {
+      tips.forEach((t) => t.remove());
+      targets.forEach((t) => document.getElementById(t.id)?.classList.remove("intro-pulse"));
+      document.removeEventListener("click", dismiss, true);
+      document.removeEventListener("keydown", dismiss, true);
+    };
+    setTimeout(() => {
+      document.addEventListener("click", dismiss, true);
+      document.addEventListener("keydown", dismiss, true);
+    }, 100);
   }
 
   // --------------------------------------------------------------- rooms
