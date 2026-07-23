@@ -350,6 +350,17 @@ export class HermesClient {
         console.log(`[hermes-client] Gateway start/restart OK after platform config`);
       }
 
+      // Wait 3s for gateway to connect to the platform, then dump status for debugging
+      setTimeout(async () => {
+        try {
+          const statusRes = await fetch(`${this.baseUrl}/api/status`, { signal: AbortSignal.timeout(5000) });
+          const statusData = await statusRes.json() as any;
+          console.log(`[hermes-client] Post-config /api/status: ${JSON.stringify(statusData).slice(0, 500)}`);
+        } catch (e) { console.warn(`[hermes-client] Post-config status fetch failed: ${e}`); }
+        const sf = this.readGatewayStateFile();
+        console.log(`[hermes-client] Post-config gateway_state.json: ${JSON.stringify(sf)}`);
+      }, 3000);
+
       return { success: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to reach Hermes gateway";
