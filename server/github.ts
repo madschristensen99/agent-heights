@@ -37,14 +37,12 @@ async function ghRequest(path: string, token: string, opts: RequestInit = {}): P
     },
   });
 
-  // Rate-limited: wait 10 minutes before throwing so callers don't tight-loop retry
+  // Rate-limited: throw immediately — callers (MCP client) handle cooldown/backoff
   if (res.status === 429 || res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") {
     const resetEpoch = res.headers.get("x-ratelimit-reset");
     const resetDate = resetEpoch ? new Date(Number(resetEpoch) * 1000).toISOString() : "unknown";
     const body = await res.text().catch(() => "");
-    const cooldownMs = 10 * 60 * 1000;
-    console.warn(`[github] rate limited on ${path}. Reset at ${resetDate}. Cooling down for ${cooldownMs / 60_000} minutes.`);
-    await new Promise((r) => setTimeout(r, cooldownMs));
+    console.warn(`[github] rate limited on ${path}. Reset at ${resetDate}.`);
     throw new Error(`GitHub API rate limit exceeded (429). Reset at ${resetDate}. Body: ${body.slice(0, 200)}`);
   }
 

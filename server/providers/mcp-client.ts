@@ -492,11 +492,14 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
           inputSchema: def.inputSchema ?? { type: "object", properties: {} },
           async execute(input: any) {
             try {
-              // If this server is in rate-limit cooldown, wait before calling
+              // If this server is in rate-limit cooldown, throw immediately to abort the run.
+              // Returning a string lets the LLM ignore it and keep calling tools, wasting iterations.
               const cooldownRemaining = rateLimitedUntil - Date.now();
               if (cooldownRemaining > 0) {
                 const mins = Math.ceil(cooldownRemaining / 60_000);
-                return `[RATE LIMITED] This API is rate-limited. Please wait ${mins} minute(s) before retrying. The cooldown ends at ${new Date(rateLimitedUntil).toISOString()}. Do NOT retry until then.`;
+                const msg = `This API is rate-limited. Please wait ${mins} minute(s) before retrying. The cooldown ends at ${new Date(rateLimitedUntil).toISOString()}. Do NOT retry until then.`;
+                onApiError?.("rate_limit", { serverLabel: label, toolName: def.name, message: msg });
+                throw new Error(`[RATE LIMITED] ${msg}`);
               }
 
               // Throttle: wait if we're calling too fast
@@ -527,7 +530,13 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
 
-              // Detect rate-limit errors and activate cooldown
+              // Re-throw cooldown-originated errors so they abort the run instead of
+              // being caught and returned as a string the LLM can ignore.
+              if (msg.startsWith("[RATE LIMITED]")) {
+                throw err;
+              }
+
+              // Detect rate-limit errors from the API and activate cooldown
               if (isRateLimitError(msg)) {
                 rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
                 console.warn(`[mcp:${label}] rate limit detected on tool ${def.name} (error), cooling down for ${RATE_LIMIT_COOLDOWN_MS / 60_000} minutes`);

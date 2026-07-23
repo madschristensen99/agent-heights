@@ -93,6 +93,9 @@ const DONE_LINGER_MS = 6000;
 const TASK_IDLE_TIMEOUT_MS = 90 * 1000; // Abort if no events arrive for 90s (model hung or rate-limited)
 const SCHEDULER_TICK_MS = 30 * 1000;
 const MIN_SCHEDULE_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_DUPLICATE_TOOL_CALLS = 3; // Abort after 3 identical tool calls (was 5 — too permissive)
+const MAX_CALLS_PER_TOOL = 10; // Abort after 10 calls to the same tool name (catches varied-input loops)
+const MAX_MCP_TOOL_CALLS = 20; // Total MCP-originated tool calls per task before aborting
 
 /** Validate a 5-field cron expression and return a specific error message. */
 function validateCron(cron: string): { valid: boolean; error?: string } {
@@ -613,6 +616,23 @@ export class AgentManager {
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
     const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY;
     if (kimiKey) {
+      // Test direct API connectivity to verify key + network from inside the container
+      fetch("https://api.moonshot.ai/v1/models", {
+        headers: { Authorization: `Bearer ${kimiKey}` },
+        signal: AbortSignal.timeout(10000),
+      }).then(async (res) => {
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const modelIds = Array.isArray(data?.data) ? data.data.map((m: any) => m.id).join(",") : "unknown";
+          console.log(`[hermes] Kimi API direct test: OK (HTTP ${res.status}), models: ${modelIds.slice(0, 200)}`);
+        } else {
+          const body = await res.text().catch(() => "");
+          console.warn(`[hermes] Kimi API direct test: FAILED (HTTP ${res.status}): ${body.slice(0, 200)}`);
+        }
+      }).catch((err) => {
+        console.warn(`[hermes] Kimi API direct test: CONNECTION ERROR: ${err}`);
+      });
+
       this.hermesClient!.configureModel("kimi-coding", "kimi-k2.7-code").then((ok) => {
         if (ok) {
           // Restart gateway so new model config takes effect for all sessions
@@ -1751,15 +1771,20 @@ export class AgentManager {
       `You have a LIMITED number of tool calls per task. Wasting them on redundant API calls will cause your task to FAIL.`,
       ``,
       `When working with GitHub or any external repository:`,
-      `  1. FIRST: Use bash to run: git clone https://$GITHUB_TOKEN@github.com/owner/repo.git — This gets the ENTIRE repo locally in ONE call.`,
+      `  1. FIRST: Use bash to run: git clone https://x-access-token:$GITHUB_TOKEN@github.com/owner/repo.git — This gets the ENTIRE repo locally in ONE call. The exact URL format matters: use "x-access-token" as the username before the colon.`,
       `  2. THEN: Use read_files, write_files, bash (grep, sed, cat) to explore and edit files LOCALLY. These do NOT count against any API rate limit.`,
       `  3. FINALLY: Push your changes with a single git push, or at most one create_or_update_file API call.`,
+      ``,
+      `  If git clone fails, do NOT fall back to individual API calls (get_file_contents, search_code, etc.). Report the clone failure in your summary and submit. Trying to fetch files one-by-one via the API will exhaust your rate limit and fail the task.`,
+      ``,
+      `You have a HARD LIMIT of 20 MCP/API tool calls per task. After that, your task will be aborted. Use them wisely: clone the repo (1 bash call), get issues (1 API call), then work locally.`,
       ``,
       `NEVER do these — they waste your budget and hit rate limits:`,
       `  - NEVER call search_code or get_file_contents repeatedly. Clone the repo and use bash (grep, find) instead.`,
       `  - NEVER use fetch_web_content to read files from a repo you already cloned. Read them from disk.`,
       `  - NEVER call list_issues more than once. Get the issues list once, pick one, and move on.`,
       `  - NEVER re-read the same file via API after you already have it locally.`,
+      `  - NEVER retry an API call that returned a rate-limit error. Wait or switch to local tools.`,
       ``,
       `General efficiency: batch related operations into single calls, never repeat the same tool call expecting different results. After making changes, do a single verification pass (read the file back once), then submit. Do not loop on verification.`,
       `=== END API & TOOL BUDGET RULES ===`,
@@ -1903,9 +1928,10 @@ export class AgentManager {
         onApiError: (type, details) => this.notifyApiError(rt, type, details),
       });
 
-      // Track tool calls to detect redundant loops
-      const toolCallCounts = new Map<string, number>();
-      const MAX_DUPLICATE_TOOL_CALLS = 5;
+      // Track tool calls to detect redundant loops and budget exhaustion
+      const toolCallCounts = new Map<string, number>(); // exact signature → count
+      const perToolCounts = new Map<string, number>(); // tool name only → count
+      let mcpToolCallTotal = 0;
 
       for await (const ev of events) {
         if (abort.signal.aborted) return;
@@ -1927,15 +1953,44 @@ export class AgentManager {
           }
           this.log(rt, ev.kind, ev.text);
 
-          // Detect redundant tool calls — same tool+input signature repeated too many times
+          // Detect tool-call budget exhaustion and redundant loops
           if (ev.kind === "tool") {
             const sig = ev.text; // tool name + truncated input
+            const toolName = sig.split(" ")[0]; // just the tool name
+
+            // Track exact-signature duplicates
             const count = (toolCallCounts.get(sig) ?? 0) + 1;
             toolCallCounts.set(sig, count);
             if (count >= MAX_DUPLICATE_TOOL_CALLS) {
               this.log(rt, "error", `Aborted: tool call repeated ${count} times — possible loop. Call: ${sig.slice(0, 100)}`);
               abort.abort();
               return;
+            }
+
+            // Track per-tool call counts (catches varied-input loops like calling get_file_contents on 15 different paths)
+            const toolCount = (perToolCounts.get(toolName) ?? 0) + 1;
+            perToolCounts.set(toolName, toolCount);
+            if (toolCount >= MAX_CALLS_PER_TOOL) {
+              this.log(rt, "error", `Aborted: tool "${toolName}" called ${toolCount} times — budget exhausted for this tool.`);
+              abort.abort();
+              return;
+            }
+
+            // Track total MCP-originated tool calls (tools from MCP servers, not built-in tools)
+            // MCP tools are prefixed with server label (e.g. "github__list_issues") or are non-standard tool names
+            const isMcpTool = toolName.includes("__") || ![
+              "read_files", "write_files", "list_files", "bash", "submit_and_exit",
+              "read_shared", "write_shared", "list_shared", "post_message", "read_messages",
+              "browse_url", "browser_screenshot", "browser_extract_text", "browser_click",
+              "browser_fill", "read_board", "claim_card", "append_event",
+            ].includes(toolName);
+            if (isMcpTool) {
+              mcpToolCallTotal++;
+              if (mcpToolCallTotal >= MAX_MCP_TOOL_CALLS) {
+                this.log(rt, "error", `Aborted: ${mcpToolCallTotal} MCP tool calls in one task — API budget exhausted. Use bash (git clone) instead of individual API calls.`);
+                abort.abort();
+                return;
+              }
             }
           }
         }
