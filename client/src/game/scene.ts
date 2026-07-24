@@ -207,8 +207,8 @@ export class OfficeScene extends Phaser.Scene {
   private redButtonTile: Tile = { x: 25, y: 7 };
   private redButtonHint!: Phaser.GameObjects.Text;
   private redButtonUntil = 0;
-  private padCenter = { x: 960, y: -130 };
-  private padFrontPx = { x: 932, y: -92 };
+  private padCenter = { x: 1200, y: -195 };
+  private padFrontPx = { x: 1158, y: -138 };
   private heliActive = false;
   private heliContainer: Phaser.GameObjects.Container | null = null;
   private heliRotor: Phaser.GameObjects.Graphics | null = null;
@@ -3806,16 +3806,16 @@ export class OfficeScene extends Phaser.Scene {
     const g = this.add.graphics().setDepth(-0.5);
 
     const mapPxW = 30 * TILE_PX; // 1920
-    const cx = mapPxW / 2;       // 960
+    const cx = mapPxW / 2 + 240; // 1200 — shifted right
     const roofY = 0;             // top edge of the office map
 
     // ── LAYOUT ── bigger pad, viewed at a diagonal 3/4 angle.
     // The skew shifts the back of the pad to the right, simulating a
     // camera that's looking from the front-left rather than dead-centre.
-    const padRX = 140;           // horizontal radius (bigger!)
-    const padRY = 38;            // vertical radius (foreshortened)
-    const padCY = roofY - 130;   // pad centre, high above the roof
-    const skew  = 28;            // horizontal offset applied to back vs front
+    const padRX = 210;           // horizontal radius (bigger!)
+    const padRY = 57;            // vertical radius (foreshortened)
+    const padCY = roofY - 195;   // pad centre, high above the roof
+    const skew  = 42;            // horizontal offset applied to back vs front
 
     // Helper: map a parametric angle (0..2π) to a screen point on the
     // skewed ellipse.  t=0 is the front-centre, t=π is the back-centre.
@@ -3835,7 +3835,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // ── COLUMNS ── four support pillars at ~45° intervals, asymmetric
     // heights because of the diagonal view.  Back columns are taller.
-    const colW = 9;
+    const colW = 14;
     const colAngles = [
       { angle: -Math.PI * 0.75, base: 0x5a5a66, hi: 0x727280, lo: 0x404048 }, // back-left
       { angle: -Math.PI * 0.25, base: 0x52525e, hi: 0x6a6a76, lo: 0x383840 }, // back-right
@@ -3878,9 +3878,9 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // ── STAIRS ── wider, more dramatic, with railing posts
-    const stairCount = 12;
-    const stairBaseW = 80;
-    const stairTopW  = 48;
+    const stairCount = 18;
+    const stairBaseW = 120;
+    const stairTopW  = 72;
     const stairBaseY = roofY;
     const stairTopY  = padFront.y + 4;
     const stairH     = stairBaseY - stairTopY;
@@ -4024,11 +4024,11 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // H marker — foreshortened and skewed to lie flat on the angled pad
-    const hW = 56;
-    const hH = 16;
-    const hT = 8;
+    const hW = 84;
+    const hH = 24;
+    const hT = 12;
     // skew the H slightly to match the pad's diagonal
-    const hSkew = 6;
+    const hSkew = 9;
     g.fillStyle(0xf0f0f0, 1);
     // left leg (skewed)
     g.beginPath();
@@ -4352,6 +4352,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // create helicopter high above the pad (same x, well above)
     const heli = this.drawHelicopter();
+    heli.setScale(1.5);
     heli.setPosition(padCx, padCy - 600);
     heli.setDepth(-0.4);
     heli.setAlpha(0);
