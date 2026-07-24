@@ -158,6 +158,7 @@ export class HermesProcessManager {
         ...process.env,
         HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
         KIMI_API_KEY: process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "",
+        GATEWAY_ALLOW_ALL_USERS: "true",
       },
     });
 
@@ -192,6 +193,17 @@ export class HermesProcessManager {
       console.error(`[hermes-process] Failed to spawn gateway: ${err.message}`);
       this.gatewayChild = null;
     });
+  }
+
+  /** Restart the gateway child process (used after platform credentials change). */
+  restartGateway(): void {
+    if (this.gatewayChild) {
+      console.log("[hermes-process] Restarting gateway child process...");
+      this.gatewayChild.kill("SIGTERM");
+      this.gatewayChild = null;
+    }
+    // Spawn a fresh gateway that picks up the new .env / config.yaml
+    this.spawnGateway();
   }
 
   /** Spawn the hermes serve child process. */

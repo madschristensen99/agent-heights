@@ -13,14 +13,41 @@
 
 export interface KnownOAuthConfig {
   clientId: string;
+  clientSecret?: string;
   tokenEndpoint: string;
   authorizationEndpoint: string;
   scopes: string[];
 }
 
 export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
-  // Robinhood was previously hardcoded here with a pre-registered clientId
-  // that used localhost:1/callback as the redirect URI. Now that we use
-  // dynamic redirect URIs (baseUrl/oauth/callback), all servers use DCR.
-  // Robinhood supports Dynamic Client Registration so this works automatically.
+  // Strava MCP — DCR endpoint is broken (returns 400 "invalid_client_metadata" for all requests).
+  // Register an app at https://www.strava.com/settings/api
+  // Set callback domain to your app domain, then fill in clientId and clientSecret below.
+  "https://mcp.strava.com/mcp": {
+    clientId: "",
+    clientSecret: "",
+    authorizationEndpoint: "https://www.strava.com/oauth/mcp/authorize",
+    tokenEndpoint: "https://www.strava.com/oauth/mcp/token",
+    scopes: ["read", "activity:read", "profile:read_all"],
+  },
+
+  // Booking.com MCP — CloudFront WAF blocks all server-side requests (403).
+  // Register at https://developers.booking.com
+  // Set callback URL to https://your-app-domain/oauth/callback, then fill in clientId below.
+  "https://demandapi-mcp.booking.com/v1/mcp/8132308": {
+    clientId: "",
+    authorizationEndpoint: "https://demandapi-mcp.booking.com/oauth/authorize",
+    tokenEndpoint: "https://demandapi-mcp.booking.com/oauth/token",
+    scopes: [],
+  },
+
+  // Expedia MCP — Akamai WAF blocks all server-side requests (403).
+  // Register at https://developers.expedia.com
+  // Set callback URL to https://your-app-domain/oauth/callback, then fill in clientId below.
+  "https://www.expedia.com/mcp": {
+    clientId: "",
+    authorizationEndpoint: "https://www.expedia.com/oauth/authorize",
+    tokenEndpoint: "https://www.expedia.com/oauth/token",
+    scopes: [],
+  },
 };

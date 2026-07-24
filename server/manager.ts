@@ -711,11 +711,18 @@ export class AgentManager {
       return { success: false, error: "Hermes Agent gateway is not running. It should auto-start with the server — check server logs for [hermes-process] errors." };
     }
     const result = await this.hermesClient.configurePlatform(platform, credentials);
-    // After configuring, immediately poll for fresh status
-    if (result.success && this.hermesClient) {
-      const states = await this.hermesClient.getPlatformStates(this.settings.mailboxPlatforms);
-      this.platformStates = states;
-      this.broadcast({ type: "platform_connection", states });
+    // After configuring, restart the gateway process so it picks up the new credentials
+    if (result.success) {
+      console.log(`[manager] Platform ${platform} configured — restarting gateway process`);
+      this.hermesProcess?.restartGateway();
+      // Wait a few seconds for the gateway to connect, then poll for fresh status
+      setTimeout(async () => {
+        if (this.hermesClient) {
+          const states = await this.hermesClient.getPlatformStates(this.settings.mailboxPlatforms);
+          this.platformStates = states;
+          this.broadcast({ type: "platform_connection", states });
+        }
+      }, 5000);
     }
     return result;
   }

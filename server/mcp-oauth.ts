@@ -3,6 +3,31 @@ import { setUserMcpKey } from "./apikeys.js";
 import { KNOWN_OAUTH_CONFIGS } from "./oauth-config.js";
 import { client as redisClient, isRedisConfigured } from "./redis.js";
 
+/**
+ * Optional DCR proxy URL (Cloudflare Worker) for bypassing WAF blocks on datacenter IPs.
+ * Set DCR_PROXY_URL env var to your Worker URL, e.g. https://your-worker.workers.dev
+ * When set, requests that get 403 from a WAF are retried through the proxy.
+ */
+const DCR_PROXY_URL = process.env.DCR_PROXY_URL || "";
+
+/** Fetch a URL directly, retrying through the DCR proxy on 403 (WAF block). */
+async function fetchWithProxyRetry(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, init);
+  if (res.status === 403 && DCR_PROXY_URL) {
+    console.log(`[mcp-oauth] Direct fetch 403 for ${url}, retrying via proxy`);
+    const proxyUrl = `${DCR_PROXY_URL}/proxy?url=${encodeURIComponent(url)}`;
+    const proxyInit: RequestInit = {
+      method: init?.method || "GET",
+      headers: init?.headers,
+    };
+    if (init?.body && init.method === "POST") {
+      proxyInit.body = init.body;
+    }
+    return fetch(proxyUrl, proxyInit);
+  }
+  return res;
+}
+
 /** Shape of the token blob stored in user_mcp_keys. */
 export interface StoredToken {
   access_token: string;
@@ -195,9 +220,9 @@ export function parseResourceMetadataUrl(wwwAuth: string): string | null {
   return match ? match[1] : null;
 }
 
-/** Fetch and parse JSON from a URL. */
+/** Fetch and parse JSON from a URL, with proxy retry on 403. */
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetchWithProxyRetry(url, {
     headers: {
       "Accept": "application/json",
       "User-Agent": "AgentHeights/1.0",
@@ -212,7 +237,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 /** Probe an MCP server with an initialize request to get the WWW-Authenticate header. */
 async function probeMcpServer(serverUrl: string): Promise<string | null> {
   try {
-    const res = await fetch(serverUrl, {
+    const res = await fetchWithProxyRetry(serverUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -276,7 +301,11 @@ export async function startOAuthFlow(
   let scopes: string[];
 
   if (known) {
+    if (!known.clientId) {
+      throw new Error(`This MCP server requires a pre-registered OAuth app. The app owner needs to add credentials to oauth-config.ts. For now, try the API Key option instead.`);
+    }
     clientId = known.clientId;
+    clientSecret = known.clientSecret;
     tokenEndpoint = known.tokenEndpoint;
     authorizationEndpoint = known.authorizationEndpoint;
     scopes = known.scopes;
@@ -381,7 +410,7 @@ export async function startOAuthFlow(
       dcrBody.token_endpoint_auth_method = authMethod;
     }
 
-    const registration = await fetch(registrationEndpoint, {
+    const registration = await fetchWithProxyRetry(registrationEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
