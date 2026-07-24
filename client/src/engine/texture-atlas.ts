@@ -64,7 +64,10 @@ export class TextureAtlas {
 
   addSubRegion(key: string, canvas: HTMLCanvasElement | OffscreenCanvas, srcX: number, srcY: number, srcW: number, srcH: number): AtlasRegion | null {
     const slot = this.findSlot(srcW, srcH);
-    if (!slot) return null;
+    if (!slot) {
+      console.warn("[atlas] addSubRegion findSlot failed:", key, srcW, srcH);
+      return null;
+    }
 
     const region: AtlasRegion = {
       key,
@@ -77,8 +80,17 @@ export class TextureAtlas {
     };
 
     const ctx = (canvas as HTMLCanvasElement).getContext("2d") ?? (canvas as OffscreenCanvas).getContext("2d");
-    if (!ctx) return null;
-    const imageData = ctx.getImageData(srcX, srcY, srcW, srcH);
+    if (!ctx) {
+      console.warn("[atlas] addSubRegion getContext failed:", key);
+      return null;
+    }
+    let imageData: ImageData;
+    try {
+      imageData = ctx.getImageData(srcX, srcY, srcW, srcH);
+    } catch (e) {
+      console.warn("[atlas] addSubRegion getImageData failed:", key, srcX, srcY, srcW, srcH, e);
+      return null;
+    }
 
     this.gl.bindTexture(GL.TEXTURE_2D, this.texture);
     this.gl.texSubImage2D(GL.TEXTURE_2D, 0, slot.x, slot.y, srcW, srcH, GL.RGBA, GL.UNSIGNED_BYTE, imageData.data);

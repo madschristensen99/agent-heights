@@ -49,6 +49,7 @@ in float vElevation;
 in vec2 vWorldPos;
 
 uniform sampler2D uAtlas;
+uniform vec4 uTileUV;  // xy=offset, zw=scale
 uniform vec3 uAmbient;
 uniform int uLightCount;
 uniform vec3 uLightPos[32];
@@ -63,7 +64,8 @@ void main() {
   float dist = length(vUV - 0.5);
   if (dist > 0.5) discard;
 
-  vec4 texColor = texture(uAtlas, vUV);
+  vec2 atlasUV = uTileUV.xy + vUV * uTileUV.zw;
+  vec4 texColor = texture(uAtlas, atlasUV);
   vec3 albedo = texColor.rgb * vTint;
 
   vec3 lit = uAmbient * albedo;
@@ -146,13 +148,14 @@ export class TileBatcher {
   private uniforms: ReturnType<typeof getUniformLocations>;
   private sideUniforms: ReturnType<typeof getUniformLocations>;
   private tileHeight: number = 16;
+  tileUVOffset: [number, number, number, number] = [0, 0, 1, 1];
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
     this.program = createProgram(gl, VERT, FRAG);
     this.sideProgram = createProgram(gl, SIDE_VERT, SIDE_FRAG);
     this.uniforms = getUniformLocations(gl, this.program, [
-      "uViewProj", "uHexSize", "uTileHeight", "uTime", "uAtlas",
+      "uViewProj", "uHexSize", "uTileHeight", "uTime", "uAtlas", "uTileUV",
       "uAmbient", "uLightCount", "uLightPos", "uLightColor", "uLightRadius", "uLightIntensity",
     ]);
     this.sideUniforms = getUniformLocations(gl, this.sideProgram, [
@@ -254,6 +257,7 @@ export class TileBatcher {
     gl.uniform1f(this.uniforms.uTileHeight, this.tileHeight);
     gl.uniform1f(this.uniforms.uTime, time);
     gl.uniform1i(this.uniforms.uAtlas, atlasUnit);
+    gl.uniform4f(this.uniforms.uTileUV, this.tileUVOffset[0], this.tileUVOffset[1], this.tileUVOffset[2], this.tileUVOffset[3]);
 
     gl.bindBuffer(GL.ARRAY_BUFFER, this.instanceBuffer);
     gl.bufferSubData(GL.ARRAY_BUFFER, 0, instanceData.subarray(0, Math.min(tiles.length, MAX_TILES) * 8));

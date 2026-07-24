@@ -231,6 +231,7 @@ export function generateCharSprite(
   const pal = appearanceToPalette(ap);
   const sheet = buildCharSheet(pal);
   const canvas = sheet.toCanvas();
+  console.log("[chargen] sheet canvas:", canvas.width, "x", canvas.height);
 
   const frames: { u: number; v: number; w: number; h: number }[][] = [];
 

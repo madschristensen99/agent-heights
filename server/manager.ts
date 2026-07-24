@@ -1,5 +1,6 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import type {
   AgentInfo,
@@ -653,6 +654,9 @@ export class AgentManager {
       console.warn(`[hermes] Auto-start gateway failed: ${err}`);
     });
 
+    // Auto-reconfigure platforms from persisted .env credentials (survives redeploy)
+    this.autoReconfigurePlatforms();
+
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
     const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY;
     if (kimiKey) {
@@ -698,6 +702,61 @@ export class AgentManager {
   /** Get current platform connection states. */
   getPlatformConnectionStates(): PlatformConnectionState[] {
     return this.platformStates;
+  }
+
+  /** Auto-reconfigure platforms from persisted .env credentials after redeploy.
+   *  The .env file survives on the persistent volume, but config.yaml may get
+   *  overwritten. This re-enables any platform that has credentials saved. */
+  private autoReconfigurePlatforms(): void {
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const envPath = join(hermesHome, ".env");
+      if (!existsSync(envPath)) {
+        console.log("[hermes] autoReconfigurePlatforms: no .env file found — skipping");
+        return;
+      }
+      const envContent = readFileSync(envPath, "utf-8");
+      const envVars: Record<string, string> = {};
+      for (const line of envContent.split("\n")) {
+        const match = line.match(/^([A-Z_]+)=(.+)$/);
+        if (match) envVars[match[1]] = match[2].trim();
+      }
+
+      // Check each configured mailbox platform for saved credentials
+      const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
+      for (const platform of platforms) {
+        const lower = platform.toLowerCase();
+        if (lower === "telegram" && envVars.TELEGRAM_BOT_TOKEN) {
+          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Telegram from saved .env credentials`);
+          this.hermesClient?.configurePlatform(platform, { bot_token: envVars.TELEGRAM_BOT_TOKEN }).then((result) => {
+            if (result.success) {
+              console.log(`[hermes] autoReconfigurePlatforms: Telegram re-enabled successfully`);
+              this.hermesProcess?.restartGateway();
+            } else {
+              console.warn(`[hermes] autoReconfigurePlatforms: Telegram re-enable failed: ${result.error}`);
+            }
+          }).catch((err) => console.warn(`[hermes] autoReconfigurePlatforms: error: ${err}`));
+        } else if (lower === "discord" && envVars.DISCORD_BOT_TOKEN) {
+          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Discord from saved .env credentials`);
+          this.hermesClient?.configurePlatform(platform, { bot_token: envVars.DISCORD_BOT_TOKEN }).then((result) => {
+            if (result.success) {
+              console.log(`[hermes] autoReconfigurePlatforms: Discord re-enabled successfully`);
+              this.hermesProcess?.restartGateway();
+            }
+          }).catch(() => {});
+        } else if (lower === "slack" && envVars.SLACK_BOT_TOKEN) {
+          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Slack from saved .env credentials`);
+          this.hermesClient?.configurePlatform(platform, { bot_token: envVars.SLACK_BOT_TOKEN, signing_secret: envVars.SLACK_APP_TOKEN ?? "" }).then((result) => {
+            if (result.success) {
+              console.log(`[hermes] autoReconfigurePlatforms: Slack re-enabled successfully`);
+              this.hermesProcess?.restartGateway();
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn(`[hermes] autoReconfigurePlatforms: error reading .env: ${err}`);
+    }
   }
 
   /** Broadcast current platform connection states to all clients. */

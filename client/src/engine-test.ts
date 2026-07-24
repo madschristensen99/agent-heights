@@ -33,32 +33,31 @@ const tiles: TileData[] = hexes.map((hex) => {
   };
 });
 
-// ---- Generate a procedural atlas texture ----
-// Atlas is 2048x2048, shader samples UV 0-1 across full atlas,
-// so we fill the entire canvas with visible color
-const atlasCanvas = document.createElement("canvas");
-atlasCanvas.width = 2048;
-atlasCanvas.height = 2048;
-const actx = atlasCanvas.getContext("2d")!;
+// ---- Generate a procedural tile texture (small, leaves atlas room for sprites) ----
+const tileCanvas = document.createElement("canvas");
+tileCanvas.width = 256;
+tileCanvas.height = 256;
+const tctx = tileCanvas.getContext("2d")!;
 
-// Fill with a visible green gradient
-const grad = actx.createRadialGradient(1024, 1024, 0, 1024, 1024, 1200);
+const grad = tctx.createRadialGradient(128, 128, 0, 128, 128, 150);
 grad.addColorStop(0, "rgb(80, 120, 70)");
 grad.addColorStop(0.5, "rgb(50, 90, 55)");
 grad.addColorStop(1, "rgb(30, 60, 40)");
-actx.fillStyle = grad;
-actx.fillRect(0, 0, 2048, 2048);
+tctx.fillStyle = grad;
+tctx.fillRect(0, 0, 256, 256);
 
-// Add noise pixels for texture
-for (let i = 0; i < 2000; i++) {
-  const px = Math.random() * 2048;
-  const py = Math.random() * 2048;
+for (let i = 0; i < 300; i++) {
+  const px = Math.random() * 256;
+  const py = Math.random() * 256;
   const v = Math.random() * 40 - 20;
-  actx.fillStyle = `rgba(${Math.max(0, 50 + v)},${Math.max(0, 90 + v)},${Math.max(0, 55 + v)},0.6)`;
-  actx.fillRect(px, py, 3, 3);
+  tctx.fillStyle = `rgba(${Math.max(0, 50 + v)},${Math.max(0, 90 + v)},${Math.max(0, 55 + v)},0.6)`;
+  tctx.fillRect(px, py, 2, 2);
 }
 
-engine.atlas.addCanvas("tiles", atlasCanvas);
+const tileRegion = engine.atlas.addCanvas("tiles", tileCanvas);
+if (tileRegion) {
+  engine.tiles.tileUVOffset = [tileRegion.u, tileRegion.v, tileRegion.w, tileRegion.h];
+}
 
 // ---- Add some lights ----
 const lights: { data: LightData; hex: { q: number; r: number } }[] = [
@@ -78,11 +77,16 @@ for (const l of lights) {
 engine.lights.setAmbient(0.25, 0.28, 0.35);
 
 // ---- Generate character sprites ----
+console.log("[test] atlas utilization before charSprite:", engine.atlas.getUtilization());
 const charSprite = generateCharSprite(engine.atlas, "boss", {
   skin: 0, hair: 0, shirt: 0, pants: 0,
   hairStyle: 0, accessory: 0, eyeColor: 0, headFeature: 0, beard: 0,
   accent: 0,
 });
+console.log("[test] charSprite:", charSprite ? "OK" : "NULL", "atlas util after:", engine.atlas.getUtilization());
+if (charSprite) {
+  console.log("[test] frame[0][6] UV:", charSprite.frames[0][6]);
+}
 
 // Place a few character sprites on the grid
 const agentPositions = [
@@ -220,6 +224,7 @@ engine.onRender = (time) => {
   const dpr = (engine as any).opts.dpr ?? 1;
   const w = (engine as any).opts.width * dpr;
   const h = (engine as any).opts.height * dpr;
+  if (time < 100) console.log("[test] onRender called, agentSprites:", agentSprites.length);
 
   gl.viewport(0, 0, w, h);
 

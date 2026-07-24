@@ -126,6 +126,39 @@ export class HermesProcessManager {
   }
 
   private writeConfig(configPath: string): void {
+    // Preserve existing platform config (enabled flags, etc.) from the current config.yaml
+    // so Telegram/Discord/etc. survive redeploys. The credentials are in .env (persistent volume).
+    let preservedPlatforms = "";
+    if (existsSync(configPath)) {
+      const existing = readFileSync(configPath, "utf-8");
+      // Extract everything after a "platforms:" or "messaging:" top-level key
+      const lines = existing.split("\n");
+      let inPlatforms = false;
+      let platformsIndent = "";
+      for (const line of lines) {
+        if (/^platforms:\s*$/.test(line) || /^messaging:\s*$/.test(line)) {
+          inPlatforms = true;
+          platformsIndent = "";
+          preservedPlatforms += line + "\n";
+          continue;
+        }
+        if (inPlatforms) {
+          // Check if this line is still part of the platforms section (indented)
+          if (line.trim() === "" ) { preservedPlatforms += "\n"; continue; }
+          const indent = line.match(/^(\s+)/)?.[1] ?? "";
+          if (indent.length > 0 && (platformsIndent === "" || indent.startsWith(platformsIndent))) {
+            if (platformsIndent === "") platformsIndent = indent;
+            preservedPlatforms += line + "\n";
+          } else {
+            inPlatforms = false;
+          }
+        }
+      }
+      if (preservedPlatforms.trim()) {
+        console.log(`[hermes-process] Preserving platform config from existing config.yaml:\n${preservedPlatforms.slice(0, 300)}`);
+      }
+    }
+
     const config = [
       "model:",
       "  provider: kimi-coding",
@@ -139,9 +172,12 @@ export class HermesProcessManager {
       "    If someone wants to talk to a specific agent or give a task to the team, let",
       "    them know their message has been forwarded to the office.",
       "",
-    ].join("\n");
-    writeFileSync(configPath, config, "utf-8");
-    console.log("[hermes-process] Wrote config.yaml with kimi-coding/kimi-k2.7-code + Agent Heights system prompt");
+    ];
+    if (preservedPlatforms.trim()) {
+      config.push(preservedPlatforms.trimEnd(), "");
+    }
+    writeFileSync(configPath, config.join("\n"), "utf-8");
+    console.log("[hermes-process] Wrote config.yaml with kimi-coding/kimi-k2.7-code + Agent Heights system prompt" + (preservedPlatforms.trim() ? " + preserved platforms" : ""));
 
     // Write SOUL.md — Hermes's primary identity file
     const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
