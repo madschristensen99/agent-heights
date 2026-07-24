@@ -64,7 +64,12 @@ void main() {
   float dist = length(vUV - 0.5);
   if (dist > 0.5) discard;
 
-  vec2 atlasUV = uTileUV.xy + vUV * uTileUV.zw;
+  // 4 tile textures packed horizontally; texIndex selects which one
+  float tileW = uTileUV.z / 4.0;
+  vec2 atlasUV = vec2(
+    uTileUV.x + vTexIndex * tileW + vUV.x * tileW,
+    uTileUV.y + vUV.y * uTileUV.w
+  );
   vec4 texColor = texture(uAtlas, atlasUV);
   vec3 albedo = texColor.rgb * vTint;
 

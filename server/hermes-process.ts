@@ -110,6 +110,9 @@ export class HermesProcessManager {
         let envContent = "";
         if (existsSync(envPath)) {
           envContent = readFileSync(envPath, "utf-8");
+          // Log existing keys for debugging persistence
+          const existingKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
+          console.log(`[hermes-process] Existing .env keys: ${existingKeys.join(", ") || "(none)"}`);
         }
         // Check if KIMI_API_KEY is already in .env
         if (!envContent.includes("KIMI_API_KEY=")) {

@@ -64,10 +64,7 @@ export class TextureAtlas {
 
   addSubRegion(key: string, canvas: HTMLCanvasElement | OffscreenCanvas, srcX: number, srcY: number, srcW: number, srcH: number): AtlasRegion | null {
     const slot = this.findSlot(srcW, srcH);
-    if (!slot) {
-      console.warn("[atlas] addSubRegion findSlot failed:", key, srcW, srcH);
-      return null;
-    }
+    if (!slot) return null;
 
     const region: AtlasRegion = {
       key,
@@ -80,17 +77,8 @@ export class TextureAtlas {
     };
 
     const ctx = (canvas as HTMLCanvasElement).getContext("2d") ?? (canvas as OffscreenCanvas).getContext("2d");
-    if (!ctx) {
-      console.warn("[atlas] addSubRegion getContext failed:", key);
-      return null;
-    }
-    let imageData: ImageData;
-    try {
-      imageData = ctx.getImageData(srcX, srcY, srcW, srcH);
-    } catch (e) {
-      console.warn("[atlas] addSubRegion getImageData failed:", key, srcX, srcY, srcW, srcH, e);
-      return null;
-    }
+    if (!ctx) return null;
+    const imageData = ctx.getImageData(srcX, srcY, srcW, srcH);
 
     this.gl.bindTexture(GL.TEXTURE_2D, this.texture);
     this.gl.texSubImage2D(GL.TEXTURE_2D, 0, slot.x, slot.y, srcW, srcH, GL.RGBA, GL.UNSIGNED_BYTE, imageData.data);
@@ -146,21 +134,32 @@ export class TextureAtlas {
   private findSlot(w: number, h: number): { x: number; y: number } | null {
     if (w > this.size || h > this.size) return null;
 
-    let bestNode: SkylineNode | null = null;
     let bestY = this.size + 1;
     let bestX = 0;
 
     for (const node of this.skyline) {
       if (node.width < w) continue;
+      const x = node.x;
       const y = node.y;
+
+      // Check that the skyline is low enough across the full width [x, x+w)
+      let fits = true;
+      for (const other of this.skyline) {
+        if (other.x + other.width <= x || other.x >= x + w) continue;
+        if (other.y > y) {
+          fits = false;
+          break;
+        }
+      }
+      if (!fits) continue;
+
       if (y < bestY) {
         bestY = y;
-        bestNode = node;
-        bestX = node.x;
+        bestX = x;
       }
     }
 
-    if (!bestNode) return null;
+    if (bestY > this.size) return null;
     if (bestY + h > this.size) return null;
 
     return { x: bestX, y: bestY };
@@ -168,7 +167,9 @@ export class TextureAtlas {
 
   private placeSlot(x: number, y: number, w: number, h: number): void {
     const newSkyline: SkylineNode[] = [];
-    const newNode: SkylineNode = { x: x + w, y, width: 0 };
+
+    // New skyline segment: top edge of the placed rectangle
+    newSkyline.push({ x, y: y + h, width: w });
 
     for (const node of this.skyline) {
       if (node.x + node.width <= x) {
@@ -179,6 +180,7 @@ export class TextureAtlas {
         newSkyline.push(node);
         continue;
       }
+      // Partially overlapping — trim the node to the sides
       if (node.x < x) {
         newSkyline.push({ x: node.x, y: node.y, width: x - node.x });
       }
@@ -186,9 +188,6 @@ export class TextureAtlas {
         newSkyline.push({ x: x + w, y: node.y, width: node.x + node.width - (x + w) });
       }
     }
-
-    newNode.width = this.size - newNode.x;
-    newSkyline.push(newNode);
 
     newSkyline.sort((a, b) => a.y - b.y || a.x - b.x);
 

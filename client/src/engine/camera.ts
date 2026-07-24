@@ -55,6 +55,20 @@ export class Camera {
     this.transitionTo({ ...this.state, ...preset }, tween, duration);
   }
 
+  setModeInstant(mode: CameraMode, zoom?: number): void {
+    const presets: Record<CameraMode, Partial<CameraState>> = {
+      topdown: { mode, pitch: 0.01, distance: 1200, fov: 1.2, zoom: 1.0 },
+      diorama: { mode, pitch: 0.5236, distance: 600, fov: 0.7854, zoom: 1.0 },
+      cinematic: { mode, pitch: 0.4363, distance: 700, fov: 0.6981, zoom: 1.1 },
+    };
+    const preset = presets[mode];
+    this.state = { ...this.state, ...preset };
+    if (zoom !== undefined) this.state.zoom = zoom;
+    this.targetState = { ...this.state };
+    this.fromState = { ...this.state };
+    this.transitionT = 1;
+  }
+
   private transitionTo(target: CameraState, tween: TweenManager, duration: number): void {
     this.fromState = { ...this.state };
     this.targetState = target;

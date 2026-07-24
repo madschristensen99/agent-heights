@@ -104,7 +104,7 @@ export class TweenManager {
 
       if (tween.state === "running" || tween.state === "yoyoing") {
         tween.elapsed += dt;
-        const rawT = Math.min(tween.elapsed / tween.duration, 1);
+        const rawT = tween.duration <= 0 ? 1 : Math.min(tween.elapsed / tween.duration, 1);
         const t = tween.ease(rawT);
         const reversing = tween.state === "yoyoing";
 

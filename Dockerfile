@@ -42,5 +42,7 @@ ENV PORT=3001
 ENV NODE_ENV=production
 # Hermes gateway auto-started by the Node server as a child process
 ENV HERMES_BASE_URL=http://127.0.0.1:9119
+# Explicit HERMES_HOME on the persistent volume so credentials survive redeploy
+ENV HERMES_HOME=/app/ag/hermes
 
 CMD ["pnpm", "exec", "tsx", "server/index.ts"]

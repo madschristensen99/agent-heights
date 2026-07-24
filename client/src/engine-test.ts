@@ -14,44 +14,128 @@ const engine = new Engine(canvas, {
 
 // ---- Cinematic auto-tour (camera mode 3) ----
 const CENTER = { q: 0, r: 0 };
-const RADIUS = 8;
+const RADIUS = 40;
 const hexes = hexInRange(CENTER, RADIUS);
 
+// Biome zones: 0=office floor (center), 1=grass, 2=sand, 3=stone
+const OFFICE_RADIUS = 6;
+const GRASS_RADIUS = 14;
+const SAND_RADIUS = 24;
+
 const tiles: TileData[] = hexes.map((hex) => {
-  const dist = Math.abs(hex.q) + Math.abs(hex.r) + Math.abs(-hex.q - hex.r);
-  const elevation = dist > 5 ? (dist - 5) * 0.5 : 0;
+  const dist = Math.max(Math.abs(hex.q), Math.abs(hex.r), Math.abs(-hex.q - hex.r));
   const noise = Math.sin(hex.q * 2.1) * Math.cos(hex.r * 1.7);
+  let texIndex: number;
+  let tintR: number, tintG: number, tintB: number;
+
+  if (dist <= OFFICE_RADIUS) {
+    texIndex = 0; // wood floor
+    tintR = 0.85 + noise * 0.05;
+    tintG = 0.80 + noise * 0.05;
+    tintB = 0.72 + noise * 0.04;
+  } else if (dist <= GRASS_RADIUS) {
+    texIndex = 1; // grass
+    tintR = 0.55 + noise * 0.15;
+    tintG = 0.70 + noise * 0.12;
+    tintB = 0.40 + noise * 0.10;
+  } else if (dist <= SAND_RADIUS) {
+    texIndex = 2; // sand
+    tintR = 0.80 + noise * 0.08;
+    tintG = 0.72 + noise * 0.06;
+    tintB = 0.55 + noise * 0.05;
+  } else {
+    texIndex = 3; // stone
+    tintR = 0.50 + noise * 0.08;
+    tintG = 0.50 + noise * 0.08;
+    tintB = 0.52 + noise * 0.08;
+  }
+
   return {
     q: hex.q,
     r: hex.r,
-    elevation,
-    texIndex: Math.floor(Math.abs(noise) * 4),
-    tintR: 0.4 + noise * 0.2,
-    tintG: 0.5 + noise * 0.15,
-    tintB: 0.3 + noise * 0.1,
+    elevation: 0,
+    texIndex,
+    tintR, tintG, tintB,
     animFrame: 0,
   };
 });
 
-// ---- Generate a procedural tile texture (small, leaves atlas room for sprites) ----
+// ---- Generate 4 tile textures packed in a 1024x256 canvas ----
+// texIndex 0=wood floor, 1=grass, 2=sand, 3=stone
 const tileCanvas = document.createElement("canvas");
-tileCanvas.width = 256;
+tileCanvas.width = 1024;
 tileCanvas.height = 256;
 const tctx = tileCanvas.getContext("2d")!;
+const TILE_SIZE = 256;
 
-const grad = tctx.createRadialGradient(128, 128, 0, 128, 128, 150);
-grad.addColorStop(0, "rgb(80, 120, 70)");
-grad.addColorStop(0.5, "rgb(50, 90, 55)");
-grad.addColorStop(1, "rgb(30, 60, 40)");
+// 0: Wood floor (office)
+let tx = 0;
+let grad = tctx.createLinearGradient(tx, 0, tx + TILE_SIZE, TILE_SIZE);
+grad.addColorStop(0, "rgb(180, 160, 130)");
+grad.addColorStop(0.5, "rgb(160, 140, 110)");
+grad.addColorStop(1, "rgb(140, 120, 95)");
 tctx.fillStyle = grad;
-tctx.fillRect(0, 0, 256, 256);
+tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
+tctx.strokeStyle = "rgba(100, 80, 60, 0.4)";
+tctx.lineWidth = 1;
+for (let i = 0; i < TILE_SIZE; i += 32) {
+  tctx.beginPath(); tctx.moveTo(tx, i); tctx.lineTo(tx + TILE_SIZE, i); tctx.stroke();
+}
+for (let i = 0; i < 400; i++) {
+  const v = Math.random() * 30 - 15;
+  tctx.fillStyle = `rgba(${Math.max(0,160+v)},${Math.max(0,140+v)},${Math.max(0,110+v)},0.4)`;
+  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
+}
 
-for (let i = 0; i < 300; i++) {
-  const px = Math.random() * 256;
-  const py = Math.random() * 256;
+// 1: Grass
+tx = 256;
+grad = tctx.createRadialGradient(tx + 128, 128, 0, tx + 128, 128, 150);
+grad.addColorStop(0, "rgb(90, 140, 70)");
+grad.addColorStop(0.5, "rgb(70, 110, 55)");
+grad.addColorStop(1, "rgb(50, 85, 40)");
+tctx.fillStyle = grad;
+tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
+for (let i = 0; i < 600; i++) {
   const v = Math.random() * 40 - 20;
-  tctx.fillStyle = `rgba(${Math.max(0, 50 + v)},${Math.max(0, 90 + v)},${Math.max(0, 55 + v)},0.6)`;
-  tctx.fillRect(px, py, 2, 2);
+  tctx.fillStyle = `rgba(${Math.max(0,70+v)},${Math.max(0,110+v)},${Math.max(0,55+v)},0.5)`;
+  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 2, 2);
+}
+
+// 2: Sand
+tx = 512;
+grad = tctx.createLinearGradient(tx, 0, tx + TILE_SIZE, TILE_SIZE);
+grad.addColorStop(0, "rgb(210, 190, 140)");
+grad.addColorStop(0.5, "rgb(195, 175, 130)");
+grad.addColorStop(1, "rgb(180, 160, 115)");
+tctx.fillStyle = grad;
+tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
+for (let i = 0; i < 500; i++) {
+  const v = Math.random() * 25 - 12;
+  tctx.fillStyle = `rgba(${Math.max(0,195+v)},${Math.max(0,175+v)},${Math.max(0,130+v)},0.4)`;
+  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
+}
+
+// 3: Stone
+tx = 768;
+grad = tctx.createLinearGradient(tx, 0, tx + TILE_SIZE, TILE_SIZE);
+grad.addColorStop(0, "rgb(130, 130, 135)");
+grad.addColorStop(0.5, "rgb(115, 115, 120)");
+grad.addColorStop(1, "rgb(100, 100, 105)");
+tctx.fillStyle = grad;
+tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
+for (let i = 0; i < 400; i++) {
+  const v = Math.random() * 30 - 15;
+  tctx.fillStyle = `rgba(${Math.max(0,115+v)},${Math.max(0,115+v)},${Math.max(0,120+v)},0.4)`;
+  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 2, 2);
+}
+// Stone cracks
+tctx.strokeStyle = "rgba(70, 70, 75, 0.3)";
+tctx.lineWidth = 1;
+for (let i = 0; i < 8; i++) {
+  tctx.beginPath();
+  tctx.moveTo(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE);
+  tctx.lineTo(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE);
+  tctx.stroke();
 }
 
 const tileRegion = engine.atlas.addCanvas("tiles", tileCanvas);
@@ -59,12 +143,14 @@ if (tileRegion) {
   engine.tiles.tileUVOffset = [tileRegion.u, tileRegion.v, tileRegion.w, tileRegion.h];
 }
 
-// ---- Add some lights ----
+// ---- Add warm overhead office lights ----
 const lights: { data: LightData; hex: { q: number; r: number } }[] = [
-  { hex: { q: 2, r: -1 }, data: { x: 0, y: 0, z: 20, r: 0.9, g: 0.6, b: 0.2, radius: 120, intensity: 1.2 } },
-  { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 20, r: 0.2, g: 0.7, b: 0.9, radius: 100, intensity: 1.0 } },
-  { hex: { q: 0, r: 4 }, data: { x: 0, y: 0, z: 20, r: 0.8, g: 0.2, b: 0.3, radius: 110, intensity: 0.9 } },
-  { hex: { q: 5, r: 0 }, data: { x: 0, y: 0, z: 20, r: 0.5, g: 0.9, b: 0.3, radius: 90, intensity: 0.8 } },
+  { hex: { q: 0, r: 0 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 180, intensity: 1.5 } },
+  { hex: { q: 3, r: -2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
+  { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
+  { hex: { q: 0, r: 5 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
+  { hex: { q: -5, r: -2 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
+  { hex: { q: 5, r: 1 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
 ];
 
 for (const l of lights) {
@@ -74,19 +160,14 @@ for (const l of lights) {
   engine.lights.addLight(l.data);
 }
 
-engine.lights.setAmbient(0.25, 0.28, 0.35);
+engine.lights.setAmbient(0.65, 0.62, 0.58);
 
 // ---- Generate character sprites ----
-console.log("[test] atlas utilization before charSprite:", engine.atlas.getUtilization());
 const charSprite = generateCharSprite(engine.atlas, "boss", {
   skin: 0, hair: 0, shirt: 0, pants: 0,
   hairStyle: 0, accessory: 0, eyeColor: 0, headFeature: 0, beard: 0,
   accent: 0,
 });
-console.log("[test] charSprite:", charSprite ? "OK" : "NULL", "atlas util after:", engine.atlas.getUtilization());
-if (charSprite) {
-  console.log("[test] frame[0][6] UV:", charSprite.frames[0][6]);
-}
 
 // Place a few character sprites on the grid
 const agentPositions = [
@@ -125,9 +206,9 @@ if (charSprite) {
 let animTime = 0;
 const ANIM_FPS = 8;
 
-// ---- Camera setup: start in diorama mode ----
+// ---- Camera setup: top-down view ----
 engine.camera.setCenter(0, 0);
-engine.camera.setMode("diorama", engine.tweens, 0);
+engine.camera.setModeInstant("topdown", 0.5);
 
 // ---- Input handling ----
 let isDragging = false;
@@ -224,7 +305,7 @@ engine.onRender = (time) => {
   const dpr = (engine as any).opts.dpr ?? 1;
   const w = (engine as any).opts.width * dpr;
   const h = (engine as any).opts.height * dpr;
-  if (time < 100) console.log("[test] onRender called, agentSprites:", agentSprites.length);
+  if (time < 200) console.log("[test] camera mode:", engine.camera.getMode(), "zoom:", (engine.camera as any).state.zoom, "pitch:", (engine.camera as any).state.pitch, "dist:", (engine.camera as any).state.distance);
 
   gl.viewport(0, 0, w, h);
 
@@ -237,7 +318,7 @@ engine.onRender = (time) => {
     }
   } else {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.clearColor(0.05, 0.06, 0.1, 1.0);
+    gl.clearColor(0.20, 0.20, 0.21, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
 

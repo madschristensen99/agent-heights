@@ -721,6 +721,8 @@ export class AgentManager {
         const match = line.match(/^([A-Z_]+)=(.+)$/);
         if (match) envVars[match[1]] = match[2].trim();
       }
+      console.log(`[hermes] autoReconfigurePlatforms: .env keys found: ${Object.keys(envVars).join(", ") || "(none)"}`);
+      console.log(`[hermes] autoReconfigurePlatforms: mailboxPlatforms=${JSON.stringify(this.settings.mailboxPlatforms)}`);
 
       // Check each configured mailbox platform for saved credentials
       const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
