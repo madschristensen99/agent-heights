@@ -208,6 +208,20 @@ function pixelToHex(x: number, y: number): { q: number; r: number } {
   return hexRound(q, r);
 }
 
+// CRITICAL: hexRound must use cube coordinate rounding to avoid
+// edge-case artifacts where the pointer snaps to the wrong hex at
+// vertex boundaries. Convert axial → cube, round each axis, convert back.
+function hexRound(q: number, r: number): { q: number; r: number } {
+  const s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
+  const qDiff = Math.abs(rq - q);
+  const rDiff = Math.abs(rr - r);
+  const sDiff = Math.abs(rs - s);
+  if (qDiff > rDiff && qDiff > sDiff) rq = -rr - rs;
+  else if (rDiff > sDiff) rr = -rq - rs;
+  return { q: rq, r: rr };
+}
+
 // 6 neighbors (vs current 4-directional)
 const HEX_NEIGHBORS = [
   { q: +1, r:  0 },  // E
@@ -244,7 +258,11 @@ Each visible hex tile is an instanced quad with per-instance attributes:
 
 **Vertex shader** transforms the hex quad into a 3D prism:
 - Top face at `z = aElevation * TILE_HEIGHT`
-- Side walls drawn when `aElevation > 0` (via geometry shader or instanced side quads)
+- Side walls drawn when `aElevation > 0` via a **second instanced pass**
+  (WebGL2 / OpenGL ES 3.0 has **no geometry shader support** — must use
+  instanced side quads). The instance buffer contains the 6 edge
+directions of the hex. The vertex shader generates side wall geometry in
+camera space for each elevated tile.
 - Camera matrices applied
 
 **Fragment shader** samples the atlas texture, applies tint, applies lighting:
@@ -446,10 +464,21 @@ class Camera {
 - No DOF
 - Used for building/editing/precise interaction
 
-**Transitions:** Tween the camera position, pitch, and projection matrix
-over 800-1200ms with ease-in-out. The projection matrix interpolation
-requires lerping between ortho and persp — standard technique is to
-blend the projection matrices or switch at the midpoint.
+**Transitions:** Tween the camera position, pitch, and distance over
+800-1200ms with ease-in-out. **Do NOT lerp between ortho and perspective
+projection matrices** — this produces a nauseating shearing distortion
+because depth distribution is fundamentally different between the two.
+
+Instead, use a **single perspective frustum with animated FOV**:
+- Top-down mode: camera pulled far back along look vector, FOV widened
+  proportionally → parallax flattens to near-zero (simulates ortho)
+- Diorama mode: camera closer, 30° pitch, narrower FOV → visible depth
+- Cinematic mode: same frustum, orbiting position
+- Transitions animate the camera distance + FOV + pitch together,
+  producing a smooth "focus pull" without projection switching
+
+This avoids the ortho/persp matrix blend entirely. All three modes use
+`mat4.perspective()` — only the parameters change.
 
 ### 4.10 Input (`input.ts`)
 
@@ -555,14 +584,24 @@ class TextureAtlas {
 }
 ```
 
-**Atlas packing:** Simple shelf packing (left-to-right, top-to-bottom).
+**Atlas packing:** **Skyline packing** algorithm (not shelf packing).
+Shelf packing fragments when agents are dynamically generated and deleted
+— freed slots are not contiguous. Skyline packing tracks the upper
+contour of packed rectangles and finds the lowest fitting gap, minimizing
+wasted vertical space.
+
+If fragmentation becomes severe during long sessions, implement a
+**defragmentation pass** during scene transitions: pause rendering,
+rebuild the atlas from all live textures, re-upload in one batch.
+
 The existing `textures.ts` generates ~50 textures totaling ~512KB of pixel
 data. A 2048×2048 atlas has 4MB of space — plenty of headroom.
 
 **Dynamic registration:** Character textures generated at runtime (via
 `chargen.ts`) are uploaded on-demand. When a new agent with a custom
 appearance is hired, their sprite sheet is drawn to a canvas and uploaded
-to the next free atlas slot.
+to the next free atlas slot. When an agent is fired, their slot is freed
+and the skyline is updated.
 
 ### 4.14 Engine Entry Point (`engine.ts`)
 
@@ -962,7 +1001,9 @@ For each phase, verify feature parity:
 | Performance regression during migration | Keep Phaser build on a branch. A/B test. Roll back if metrics drop. |
 | Post-processing too heavy on mobile | Detect mobile GPU → disable DOF, reduce bloom samples, lower particle cap. Feature flag per device class. |
 | Texture atlas too small | Start at 2048². If overflow, expand to 4096² (16MB — still fine for modern GPUs). |
-| Camera mode transition (ortho ↔ persp) | Use the standard technique: interpolate a single projection matrix by lerping the matrix elements. Slight distortion during transition is acceptable and looks like a "focus pull." |
+| Camera mode transition (ortho ↔ persp) | **Solved:** Use a single perspective frustum with animated FOV + distance. Top-down = far camera + wide FOV (parallax flattens). No ortho/persp matrix blend. |
+| Texture atlas fragmentation | **Solved:** Skyline packing instead of shelf packing. Defragmentation pass during scene transitions if needed. |
+| Geometry shaders for tile side walls | **Solved:** WebGL2 has no geometry shaders. Use second instanced pass with 6 edge directions per hex. |
 
 ---
 
@@ -992,7 +1033,25 @@ composition, not from a lookup table.
 ### Drafts (Compositions)
 
 A draft is a sequence of threads. The engine composes the visual effect
-by playing each thread's base animation in sequence with overlap:
+by playing each thread's base animation in sequence with overlap.
+
+**Critical: decouple initiation from resolution.** Complex tool calls
+(`npm install`) can take 10+ seconds. If the visual spell completes in
+1.2s, the visual disconnects from the computation. The draft has three
+phases:
+
+1. **Initiation** (0-1.2s): Agent plays the opening threads (Weave →
+   Spin → Stretch). Aura flares, distaff glows, environment reacts.
+2. **Execution State** (until server responds): Agent remains in a
+   "casting state" — subtle looping animation of the final thread
+   (e.g., energy slowly spiraling). The distaff pulses. This can last
+   indefinitely.
+3. **Resolution** (0.8s): When the server returns success/failure:
+   - Success: closing animation plays — object materializes fully,
+     light radiates outward, aura brightens.
+   - Error: threads snap — sparks fly, aura flickers red, agent recoils.
+
+This keeps the visual synchronized with the actual computation time.
 
 ```typescript
 type Thread = "open" | "close" | "weave" | "unweave" | "dye" | "spin" | "stretch" | "twist";
@@ -1029,10 +1088,17 @@ computation:
 | Dye (compile) | Reverse Dye (decompile) | `tsc` / source maps |
 | Twist (refactor) | Reverse Twist (un-refactor) | `git commit` / `git revert` |
 
-When an agent runs `git revert`, the engine plays the original spell's
-draft **backward** — the same animation reversed. Energy unspirals,
-objects unweave, the domain briefly rewinds. This is legible without
-text: you can *see* that an agent is undoing something.
+When an agent runs `git revert`, the engine plays a **mirrored reversal
+effect** — not a time-reversed playback of the original particle system
+(which would require storing large history buffers).
+
+Instead, spawn a new effect that mirrors the forward effect:
+- Forward Spin: Energy spirals inward, then radiates outward.
+- Reverse Spin: Energy rushes inward from the periphery, then spirals
+  down into the distaff.
+
+This achieves the visual narrative of "undoing" without the CPU cost of
+state history. The reversal is a new draft manifestation, not a rewind.
 
 ### The Distaff (Agent's Instrument)
 
@@ -1150,6 +1216,25 @@ works:
   deep nested structures create towers
 - Other agents can visit a domain (walk to it) and see the workspace
   made physical
+
+### Domain Summarization (Scaling)
+
+Real workspaces can contain hundreds of files. Rendering every file as
+a physical object would overwhelm the scene and the GPU.
+
+- **Depth limits:** Only render the first 2-3 levels of directory depth
+  as physical rooms. Deeper structures are represented as "towers"
+  (vertical elevation) rather than explorable rooms.
+- **node_modules abstraction:** Do not render every package as a
+  creature. Render the directory as a "summoning circle" with a counter
+  (e.g., "247 summoned"). Expand individual packages only when inspected.
+- **File size capping:** Cap the physical size of any single domain
+  object to prevent a 100MB log file from becoming a skyscraper that
+  blocks the camera. Max object height = 3 tiles. Beyond that, show a
+  size indicator instead of scaling further.
+- **Batched updates:** Domain layout changes are batched — the server
+  sends a `domain_layout` message at most once per 2 seconds per agent,
+  not on every file write.
 
 ### Implementation (`domain.ts`)
 
@@ -1276,7 +1361,7 @@ function handleMutation(msg: WorldMutationMsg): void {
 
 | Phase | Weeks | Deliverable | Conversion Impact |
 |---|---|---|---|
-| 1. Engine Core + Spectator | 1-2 | Beautiful spectator link with diorama camera | Shareability, first impression |
+| 1. Engine Core + Spectator | 1-2 | Beautiful spectator link with diorama camera, **tween engine** | Shareability, first impression |
 | 2. Agents + Thread System | 3-4 | Agents casting visible spells, aura system, distaff | Spectator → signup rate |
 | 3. Full Gameplay + Domains | 5-6 | Playable game, agent domains growing with work | Signup → engagement rate |
 | 4. World & Combat | 7-8 | Elevated hex terrain, expeditions, biome magic | Session length, retention |

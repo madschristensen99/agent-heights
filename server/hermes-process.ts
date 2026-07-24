@@ -36,6 +36,7 @@ export class HermesProcessManager {
   private ready = false;
   private sessionToken: string;
   private externalMode = false; // true if Hermes was already running externally
+  private gatewayRestarting = false; // true when restartGateway() is handling the restart
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
@@ -180,12 +181,20 @@ export class HermesProcessManager {
       console.log(`[hermes-process] Gateway process exited (code=${code}, signal=${signal})`);
       this.gatewayChild = null;
       if (!this.started) return;
-      // Restart the gateway after a delay
-      if (this.restartCount < MAX_RESTARTS) {
-        console.log(`[hermes-process] Restarting gateway in ${RESTART_DELAY_MS / 1000}s...`);
+      // If restartGateway() is handling the restart, don't schedule another one
+      if (this.gatewayRestarting) {
+        this.gatewayRestarting = false;
+        return;
+      }
+      // Only auto-restart on crash (code !== 0), not on clean exit or intentional kill
+      if (code !== 0 && this.restartCount < MAX_RESTARTS) {
+        this.restartCount++;
+        console.log(`[hermes-process] Gateway crashed (code=${code}), restarting in ${RESTART_DELAY_MS / 1000}s (attempt ${this.restartCount}/${MAX_RESTARTS})...`);
         this.restartTimer = setTimeout(() => {
           if (this.started) this.spawnGateway();
         }, RESTART_DELAY_MS);
+      } else if (code === 0) {
+        console.log(`[hermes-process] Gateway exited cleanly — not auto-restarting`);
       }
     });
 
@@ -197,6 +206,7 @@ export class HermesProcessManager {
 
   /** Restart the gateway child process (used after platform credentials change). */
   restartGateway(): void {
+    this.gatewayRestarting = true; // Prevent exit handler from also scheduling a restart
     if (this.gatewayChild) {
       console.log("[hermes-process] Restarting gateway child process...");
       this.gatewayChild.kill("SIGTERM");

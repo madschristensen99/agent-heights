@@ -20,6 +20,7 @@
     "@railway/cli": "^4.0.0",
     "@supabase/supabase-js": "^2.108.2",
     "dompurify": "^3.4.9",
+    "gl-matrix": "^3.4.4",
     "ioredis": "^5.11.1",
     "marked": "^18.0.5",
     "monaco-editor": "^0.56.0",
