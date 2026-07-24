@@ -174,6 +174,8 @@ export class HermesProcessManager {
       "    and can answer questions about Agent Heights. Be friendly, helpful, and concise.",
       "    If someone wants to talk to a specific agent or give a task to the team, let",
       "    them know their message has been forwarded to the office.",
+      "telegram:",
+      "  require_mention: true",
       "",
     ];
     if (preservedPlatforms.trim()) {

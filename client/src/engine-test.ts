@@ -168,6 +168,10 @@ const charSprite = generateCharSprite(engine.atlas, "boss", {
   hairStyle: 0, accessory: 0, eyeColor: 0, headFeature: 0, beard: 0,
   accent: 0,
 });
+console.log("[test] charSprite:", charSprite ? "OK" : "NULL",
+  "frames len:", charSprite?.frames.length,
+  "frames[0] len:", charSprite?.frames[0]?.length,
+  "atlas util:", engine.atlas.getUtilization());
 
 // Place a few character sprites on the grid
 const agentPositions = [
@@ -287,25 +291,31 @@ engine.onUpdate = (dt) => {
   animTime += dt;
   if (charSprite && agentSprites.length > 0) {
     const pose = Math.floor(animTime * ANIM_FPS) % 6;
-    for (const id of agentSprites) {
-      const sprite = engine.sprites.get(id);
-      if (sprite) {
-        const frame = charSprite.frames[0][pose];
-        sprite.u = frame.u;
-        sprite.v = frame.v;
-        sprite.w = frame.w;
-        sprite.h = frame.h;
+    const frame = charSprite.frames[0]?.[pose];
+    if (frame) {
+      for (const id of agentSprites) {
+        const sprite = engine.sprites.get(id);
+        if (sprite) {
+          sprite.u = frame.u;
+          sprite.v = frame.v;
+          sprite.w = frame.w;
+          sprite.h = frame.h;
+        }
       }
     }
   }
 };
 
+let renderFrameCount = 0;
 engine.onRender = (time) => {
   const gl = (engine as any).gl as WebGL2RenderingContext;
   const dpr = (engine as any).opts.dpr ?? 1;
   const w = (engine as any).opts.width * dpr;
   const h = (engine as any).opts.height * dpr;
-  if (time < 200) console.log("[test] camera mode:", engine.camera.getMode(), "zoom:", (engine.camera as any).state.zoom, "pitch:", (engine.camera as any).state.pitch, "dist:", (engine.camera as any).state.distance);
+  if (renderFrameCount < 3) {
+    renderFrameCount++;
+    console.log("[test] camera mode:", engine.camera.getMode(), "zoom:", (engine.camera as any).state.zoom, "pitch:", (engine.camera as any).state.pitch, "dist:", (engine.camera as any).state.distance);
+  }
 
   gl.viewport(0, 0, w, h);
 

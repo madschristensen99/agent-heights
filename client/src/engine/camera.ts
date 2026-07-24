@@ -47,7 +47,7 @@ export class Camera {
 
   setMode(mode: CameraMode, tween: TweenManager, duration = 1000): void {
     const presets: Record<CameraMode, Partial<CameraState>> = {
-      topdown: { mode, pitch: 0.01, distance: 1200, fov: 1.2, zoom: 1.0 },
+      topdown: { mode, pitch: Math.PI / 2 - 0.01, distance: 1200, fov: 1.2, zoom: 1.0 },
       diorama: { mode, pitch: 0.5236, distance: 600, fov: 0.7854, zoom: 1.0 },
       cinematic: { mode, pitch: 0.4363, distance: 700, fov: 0.6981, zoom: 1.1 },
     };
@@ -57,7 +57,7 @@ export class Camera {
 
   setModeInstant(mode: CameraMode, zoom?: number): void {
     const presets: Record<CameraMode, Partial<CameraState>> = {
-      topdown: { mode, pitch: 0.01, distance: 1200, fov: 1.2, zoom: 1.0 },
+      topdown: { mode, pitch: Math.PI / 2 - 0.01, distance: 1200, fov: 1.2, zoom: 1.0 },
       diorama: { mode, pitch: 0.5236, distance: 600, fov: 0.7854, zoom: 1.0 },
       cinematic: { mode, pitch: 0.4363, distance: 700, fov: 0.6981, zoom: 1.1 },
     };
