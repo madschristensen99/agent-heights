@@ -1,7 +1,8 @@
-import { mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { generateOfficeScreenshot, type OfficeSnapshotAgent } from "./office-screenshot.js";
 import type {
   AgentInfo,
   AgentRole,
@@ -777,6 +778,37 @@ export class AgentManager {
     // After configuring, restart the gateway process so it picks up the new credentials
     if (result.success) {
       console.log(`[manager] Platform ${platform} configured — restarting gateway process`);
+
+      // Also write credentials directly to ~/.hermes/.env so they survive redeploys
+      // The Hermes API may not persist to .env on its own
+      try {
+        const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+        const envPath = join(hermesHome, ".env");
+        let envContent = "";
+        if (existsSync(envPath)) {
+          envContent = readFileSync(envPath, "utf-8");
+        }
+        // Map credential keys to env var names
+        const envVarMap: Record<string, Record<string, string>> = {
+          telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
+          discord: { bot_token: "DISCORD_BOT_TOKEN" },
+          slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN" },
+        };
+        const varMap = envVarMap[platform.toLowerCase()] ?? {};
+        for (const [credKey, envVar] of Object.entries(varMap)) {
+          const value = credentials[credKey];
+          if (!value) continue;
+          // Remove existing line if present, then append
+          const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
+          lines.push(`${envVar}=${value}`);
+          envContent = lines.join("\n");
+          console.log(`[manager] Wrote ${envVar} to ${envPath}`);
+        }
+        writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
+      } catch (err) {
+        console.warn(`[manager] Failed to write platform credentials to .env: ${err}`);
+      }
+
       this.hermesProcess?.restartGateway();
       // Wait a few seconds for the gateway to connect, then poll for fresh status
       setTimeout(async () => {
@@ -2143,6 +2175,8 @@ export class AgentManager {
               if (ok) console.log(`[manager] Platform reply sent to ${sender} via ${platform}`);
               else console.warn(`[manager] Platform reply failed for ${sender} via ${platform}`);
             }).catch((err) => console.warn(`[manager] Platform reply error: ${err}`));
+            // Send an office screenshot showing the completed task
+            this.sendOfficeScreenshot(platform, sender, `${rt.info.name} finished!`).catch(() => {});
           }
           rt.platformContext = null;
         }
@@ -3306,6 +3340,27 @@ export class AgentManager {
     ].join("\n");
     this.log(rt, "status", `📬 Received mail from ${sender} via ${platform} — ${reason}`);
     this.assign(rt.info.id, task);
+
+    // Send a "task started" office screenshot to the platform
+    this.sendOfficeScreenshot(platform, sender, `${rt.info.name} is on it!`).catch(() => {});
+  }
+
+  /** Generate an office screenshot and send it to a platform user. */
+  private async sendOfficeScreenshot(platform: string, target: string, caption: string): Promise<void> {
+    try {
+      const agents: OfficeSnapshotAgent[] = [...this.agents.values()].map((rt) => ({
+        info: rt.info,
+        task: rt.info.task,
+      }));
+      const screenshotPath = await generateOfficeScreenshot(agents, caption);
+      if (!screenshotPath || !this.hermesClient) return;
+      // hermes send supports MEDIA:/path/to/file.png for image attachments
+      const mediaMsg = `MEDIA:${screenshotPath}`;
+      await this.hermesClient.sendMessage(platform, target, mediaMsg);
+      console.log(`[manager] Office screenshot sent to ${target} via ${platform}`);
+    } catch (err) {
+      console.warn(`[manager] Failed to send office screenshot: ${err}`);
+    }
   }
 
   /** Drain the mail queue — called when an agent becomes idle. */
