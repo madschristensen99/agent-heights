@@ -138,7 +138,15 @@ export class Camera {
     const aspect = (this.viewportW * this.dpr) / (this.viewportH * this.dpr);
     const near = 1;
     const far = 5000;
-    mat4.perspective(this.projMatrix, this.state.fov, aspect, near, far);
+
+    if (this.state.mode === "topdown") {
+      // Orthographic projection for true 2D top-down view
+      const halfH = 1000 / this.state.zoom;
+      const halfW = halfH * aspect;
+      mat4.ortho(this.projMatrix, -halfW, halfW, -halfH, halfH, near, far);
+    } else {
+      mat4.perspective(this.projMatrix, this.state.fov, aspect, near, far);
+    }
 
     const pitch = this.state.pitch;
     const dist = this.state.distance / this.state.zoom;

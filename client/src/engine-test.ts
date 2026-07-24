@@ -12,23 +12,48 @@ const engine = new Engine(canvas, {
   postfx: true,
 });
 
-// ---- Cinematic auto-tour (camera mode 3) ----
-const CENTER = { q: 0, r: 0 };
+// ---- Build the world: office building in center, grass field around ----
+// Hex grid covers a large area. Office is a rectangular region in the center.
+// texIndex: 0=wood floor, 1=grass, 2=sand, 3=stone, 4=wall
 const RADIUS = 40;
-const hexes = hexInRange(CENTER, RADIUS);
+const hexes = hexInRange({ q: 0, r: 0 }, RADIUS);
 
-// Biome zones: 0=office floor (center), 1=grass, 2=sand, 3=stone
-const OFFICE_RADIUS = 6;
-const GRASS_RADIUS = 14;
-const SAND_RADIUS = 24;
+// Office bounds in hex coords (roughly rectangular)
+const OFFICE_Q_MIN = -5;
+const OFFICE_Q_MAX = 5;
+const OFFICE_R_MIN = -4;
+const OFFICE_R_MAX = 4;
+
+function isOfficeInterior(q: number, r: number): boolean {
+  return q > OFFICE_Q_MIN && q < OFFICE_Q_MAX && r > OFFICE_R_MIN && r < OFFICE_R_MAX;
+}
+
+function isOfficeWall(q: number, r: number): boolean {
+  // Wall on perimeter of office rectangle, with a door gap at the bottom
+  const onPerimeter =
+    (q === OFFICE_Q_MIN || q === OFFICE_Q_MAX) && r >= OFFICE_R_MIN && r <= OFFICE_R_MAX ||
+    (r === OFFICE_R_MIN || r === OFFICE_R_MAX) && q >= OFFICE_Q_MIN && q <= OFFICE_Q_MAX;
+  if (!onPerimeter) return false;
+  // Door gap at bottom center (2 tiles wide)
+  if (r === OFFICE_R_MAX && (q === 0 || q === 1)) return false;
+  return true;
+}
+
+const GRASS_RADIUS = 15;
+const SAND_RADIUS = 28;
 
 const tiles: TileData[] = hexes.map((hex) => {
   const dist = Math.max(Math.abs(hex.q), Math.abs(hex.r), Math.abs(-hex.q - hex.r));
   const noise = Math.sin(hex.q * 2.1) * Math.cos(hex.r * 1.7);
   let texIndex: number;
   let tintR: number, tintG: number, tintB: number;
+  let elevation = 0;
 
-  if (dist <= OFFICE_RADIUS) {
+  if (isOfficeWall(hex.q, hex.r)) {
+    texIndex = 4; // wall
+    tintR = 0.75; tintG = 0.72; tintB = 0.68;
+    elevation = 2; // raised walls
+  } else if (isOfficeInterior(hex.q, hex.r)) {
     texIndex = 0; // wood floor
     tintR = 0.85 + noise * 0.05;
     tintG = 0.80 + noise * 0.05;
@@ -53,17 +78,17 @@ const tiles: TileData[] = hexes.map((hex) => {
   return {
     q: hex.q,
     r: hex.r,
-    elevation: 0,
+    elevation,
     texIndex,
     tintR, tintG, tintB,
     animFrame: 0,
   };
 });
 
-// ---- Generate 4 tile textures packed in a 1024x256 canvas ----
-// texIndex 0=wood floor, 1=grass, 2=sand, 3=stone
+// ---- Generate 5 tile textures packed in a 1280x256 canvas ----
+// texIndex 0=wood floor, 1=grass, 2=sand, 3=stone, 4=wall
 const tileCanvas = document.createElement("canvas");
-tileCanvas.width = 1024;
+tileCanvas.width = 1280;
 tileCanvas.height = 256;
 const tctx = tileCanvas.getContext("2d")!;
 const TILE_SIZE = 256;
@@ -128,7 +153,6 @@ for (let i = 0; i < 400; i++) {
   tctx.fillStyle = `rgba(${Math.max(0,115+v)},${Math.max(0,115+v)},${Math.max(0,120+v)},0.4)`;
   tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 2, 2);
 }
-// Stone cracks
 tctx.strokeStyle = "rgba(70, 70, 75, 0.3)";
 tctx.lineWidth = 1;
 for (let i = 0; i < 8; i++) {
@@ -138,19 +162,39 @@ for (let i = 0; i < 8; i++) {
   tctx.stroke();
 }
 
+// 4: Wall (office exterior wall)
+tx = 1024;
+grad = tctx.createLinearGradient(tx, 0, tx, TILE_SIZE);
+grad.addColorStop(0, "rgb(200, 195, 185)");
+grad.addColorStop(0.5, "rgb(180, 175, 165)");
+grad.addColorStop(1, "rgb(160, 155, 145)");
+tctx.fillStyle = grad;
+tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
+// Brick pattern
+tctx.strokeStyle = "rgba(120, 110, 100, 0.5)";
+tctx.lineWidth = 2;
+for (let row = 0; row < 8; row++) {
+  const y = row * 32;
+  tctx.beginPath(); tctx.moveTo(tx, y); tctx.lineTo(tx + TILE_SIZE, y); tctx.stroke();
+  const offset = row % 2 === 0 ? 0 : 32;
+  for (let bx = offset; bx < TILE_SIZE; bx += 64) {
+    tctx.beginPath(); tctx.moveTo(tx + bx, y); tctx.lineTo(tx + bx, y + 32); tctx.stroke();
+  }
+}
+
 const tileRegion = engine.atlas.addCanvas("tiles", tileCanvas);
 if (tileRegion) {
   engine.tiles.tileUVOffset = [tileRegion.u, tileRegion.v, tileRegion.w, tileRegion.h];
 }
 
-// ---- Add warm overhead office lights ----
+// ---- Add warm overhead office lights (inside the building) ----
 const lights: { data: LightData; hex: { q: number; r: number } }[] = [
   { hex: { q: 0, r: 0 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 180, intensity: 1.5 } },
   { hex: { q: 3, r: -2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
   { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
-  { hex: { q: 0, r: 5 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
-  { hex: { q: -5, r: -2 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
-  { hex: { q: 5, r: 1 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
+  { hex: { q: 0, r: 3 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
+  { hex: { q: -4, r: -2 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
+  { hex: { q: 4, r: 1 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
 ];
 
 for (const l of lights) {
@@ -160,7 +204,7 @@ for (const l of lights) {
   engine.lights.addLight(l.data);
 }
 
-engine.lights.setAmbient(0.65, 0.62, 0.58);
+engine.lights.setAmbient(0.75, 0.73, 0.70);
 
 // ---- Generate character sprites ----
 const charSprite = generateCharSprite(engine.atlas, "boss", {
@@ -168,17 +212,14 @@ const charSprite = generateCharSprite(engine.atlas, "boss", {
   hairStyle: 0, accessory: 0, eyeColor: 0, headFeature: 0, beard: 0,
   accent: 0,
 });
-console.log("[test] charSprite:", charSprite ? "OK" : "NULL",
-  "frames len:", charSprite?.frames.length,
-  "frames[0] len:", charSprite?.frames[0]?.length,
-  "atlas util:", engine.atlas.getUtilization());
 
-// Place a few character sprites on the grid
+// Place character sprites inside the office
 const agentPositions = [
   { q: 0, r: 0, name: "Boss" },
-  { q: 1, r: -1, name: "Agent 1" },
-  { q: -1, r: 1, name: "Agent 2" },
-  { q: 2, r: 1, name: "Agent 3" },
+  { q: 2, r: -1, name: "Agent 1" },
+  { q: -2, r: 1, name: "Agent 2" },
+  { q: 3, r: 2, name: "Agent 3" },
+  { q: -3, r: -2, name: "Agent 4" },
 ];
 
 const agentSprites: number[] = [];
@@ -210,9 +251,9 @@ if (charSprite) {
 let animTime = 0;
 const ANIM_FPS = 8;
 
-// ---- Camera setup: top-down view ----
+// ---- Camera setup: top-down orthographic view ----
 engine.camera.setCenter(0, 0);
-engine.camera.setModeInstant("topdown", 0.5);
+engine.camera.setModeInstant("topdown", 0.6);
 
 // ---- Input handling ----
 let isDragging = false;
@@ -306,16 +347,11 @@ engine.onUpdate = (dt) => {
   }
 };
 
-let renderFrameCount = 0;
 engine.onRender = (time) => {
   const gl = (engine as any).gl as WebGL2RenderingContext;
   const dpr = (engine as any).opts.dpr ?? 1;
   const w = (engine as any).opts.width * dpr;
   const h = (engine as any).opts.height * dpr;
-  if (renderFrameCount < 3) {
-    renderFrameCount++;
-    console.log("[test] camera mode:", engine.camera.getMode(), "zoom:", (engine.camera as any).state.zoom, "pitch:", (engine.camera as any).state.pitch, "dist:", (engine.camera as any).state.distance);
-  }
 
   gl.viewport(0, 0, w, h);
 
@@ -328,7 +364,7 @@ engine.onRender = (time) => {
     }
   } else {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.clearColor(0.20, 0.20, 0.21, 1.0);
+    gl.clearColor(0.53, 0.72, 0.88, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
 
@@ -416,5 +452,6 @@ setInterval(() => {
 }, 2000);
 
 console.log("HexStage engine running. Controls: drag=pan, scroll=zoom, 1/2/3=camera modes, space=toggle postfx");
+console.log("Office:", OFFICE_Q_MIN, "to", OFFICE_Q_MAX, "q,", OFFICE_R_MIN, "to", OFFICE_R_MAX, "r");
 
 engine.start();

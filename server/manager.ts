@@ -254,6 +254,8 @@ interface AgentRuntime {
   taskStartedAt: number;
   /** Context for review tasks: which agent+task is being reviewed. */
   reviewContext: { agentId: string; agentName: string; originalTask: string } | null;
+  /** Platform context for tasks that came from a messaging platform (Telegram, etc.). */
+  platformContext: { platform: string; sender: string } | null;
 }
 
 export class AgentManager {
@@ -381,7 +383,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -543,7 +545,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
     this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -572,7 +574,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -920,7 +922,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -1319,7 +1321,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1363,7 +1365,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2129,6 +2131,21 @@ export class AgentManager {
         if (isManager && isReviewTask && rt.reviewContext) this.processReviewVerdict(rt, finalText);
         this.notifyManagersOfCompletion(rt, task, finalText, false);
         this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
+
+        // If this task came from a messaging platform, send the result back
+        if (rt.platformContext && finalText) {
+          const { platform, sender } = rt.platformContext;
+          const replyText = finalText.slice(0, 1000);
+          console.log(`[manager] Sending platform reply to ${sender} via ${platform}`);
+          this.emitPlatformEvent(platform, "outbound", rt.info.name, replyText);
+          if (this.hermesClient) {
+            this.hermesClient.sendMessage(platform, sender, replyText).then((ok) => {
+              if (ok) console.log(`[manager] Platform reply sent to ${sender} via ${platform}`);
+              else console.warn(`[manager] Platform reply failed for ${sender} via ${platform}`);
+            }).catch((err) => console.warn(`[manager] Platform reply error: ${err}`));
+          }
+          rt.platformContext = null;
+        }
       } else if (sawError && !abort.signal.aborted) {
         this.notifyManagersOfCompletion(rt, task, "Task failed.", true);
         this.logEvent("task_error", `${rt.info.name} failed: "${task.slice(0, 100)}" — ${firstErrorText.slice(0, 100)}`);
@@ -2142,6 +2159,8 @@ export class AgentManager {
       if (idleTimer) clearTimeout(idleTimer);
       console.log(`[manager:${rt.info.id}] finally: sawError=${sawError} aborted=${abort.signal.aborted} exists=${this.agents.has(rt.info.id)}`);
       rt.abort = null;
+      // Clear platform context if the task was aborted (already cleared on success above)
+      if (abort.signal.aborted) rt.platformContext = null;
       // During shutdown, preserve handoffTo and task info so the persisted
       // pending tasks retain the full handoff chain for resumption.
       if (!this.shuttingDown) {
@@ -3272,24 +3291,21 @@ export class AgentManager {
     this.deliverMail(platform, sender, text, pick.rt, pick.reason);
   }
 
-  /** Deliver mail to a specific agent's inbox.jsonl with routing context. */
+  /** Deliver mail to a specific agent — assigns as a task with platform reply context. */
   private deliverMail(platform: string, sender: string, text: string, rt: AgentRuntime, reason: string): void {
-    const slug = this.slugFor(rt);
-    const inboxPath = join(this.cwdFor(slug, rt.info.id), "inbox.jsonl");
-    const entry = JSON.stringify({
-      ts: Date.now(),
-      from: "Hermes",
-      platform,
-      sender,
-      message: text,
-      routing_reason: reason,
-    }) + "\n";
-    import("node:fs/promises").then(({ appendFile, mkdir }) => {
-      mkdir(dirname(inboxPath), { recursive: true }).then(() =>
-        appendFile(inboxPath, entry, "utf-8").catch(() => {}),
-      );
-    }).catch(() => {});
+    // Set platform context so the agent knows to reply via the platform
+    rt.platformContext = { platform, sender };
+    // Build a task prompt that includes the platform context and reply instructions
+    const task = [
+      `📬 Incoming message from ${sender} via ${platform}:`,
+      `"${text}"`,
+      ``,
+      `This message was forwarded by the office receptionist (Hermes).`,
+      `Complete the request and provide a clear response — your final summary will be`,
+      `automatically sent back to ${sender} on ${platform}.`,
+    ].join("\n");
     this.log(rt, "status", `📬 Received mail from ${sender} via ${platform} — ${reason}`);
+    this.assign(rt.info.id, task);
   }
 
   /** Drain the mail queue — called when an agent becomes idle. */

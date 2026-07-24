@@ -215,7 +215,7 @@ void main() {
   bindSceneFBO(): void {
     const gl = this.gl;
     gl.bindFramebuffer(GL.FRAMEBUFFER, this.sceneFBO);
-    gl.clearColor(0.20, 0.20, 0.21, 1.0);
+    gl.clearColor(0.53, 0.72, 0.88, 1.0);
     gl.clear(GL.COLOR_BUFFER_BIT | GL.DEPTH_BUFFER_BIT);
   }
 

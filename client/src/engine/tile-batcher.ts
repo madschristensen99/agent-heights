@@ -64,8 +64,8 @@ void main() {
   float dist = length(vUV - 0.5);
   if (dist > 0.5) discard;
 
-  // 4 tile textures packed horizontally; texIndex selects which one
-  float tileW = uTileUV.z / 4.0;
+  // 5 tile textures packed horizontally; texIndex selects which one
+  float tileW = uTileUV.z / 5.0;
   vec2 atlasUV = vec2(
     uTileUV.x + vTexIndex * tileW + vUV.x * tileW,
     uTileUV.y + vUV.y * uTileUV.w

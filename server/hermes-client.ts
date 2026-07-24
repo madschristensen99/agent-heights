@@ -201,6 +201,12 @@ export class HermesClient {
         const platform = sess.platform ?? sess.source;
         if (!platform || platform === "cli" || platform === "local") continue;
 
+        // Capture chat_id for reply routing (Telegram needs numeric chat_id)
+        const chatId = sess.chat_id ?? sess.chatId ?? sess.channel_id ?? null;
+        const senderName = sess.username ?? sess.user_name ?? sess.sender ?? null;
+        // Use chat_id as the reply target if available, otherwise fall back to sender name
+        const replyTarget = chatId ?? senderName ?? "unknown";
+
         // Fetch messages for this session
         try {
           const msgRes = await fetch(`${this.baseUrl}/api/sessions/${sid}/messages`, {
@@ -214,7 +220,7 @@ export class HermesClient {
               events.push({
                 platform: this.normalizePlatform(platform),
                 direction: "inbound",
-                sender: msg.author ?? msg.username ?? "unknown",
+                sender: replyTarget,
                 text: (msg.content ?? msg.text ?? "").slice(0, 500),
                 timestamp: msg.timestamp ?? Date.now(),
               });
@@ -235,7 +241,7 @@ export class HermesClient {
       const { execFile } = await import("node:child_process");
       const targetStr = target ? `${platform}:${target}` : platform;
       return await new Promise((resolve) => {
-        execFile("hermes", ["send", targetStr, text], {
+        execFile("hermes", ["send", "--to", targetStr, text], {
           timeout: 15000,
           env: { ...process.env },
         }, (err) => {
