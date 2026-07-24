@@ -25,6 +25,7 @@ let _instance: HermesProcessManager | null = null;
 
 export class HermesProcessManager {
   private child: ChildProcess | null = null;
+  private gatewayChild: ChildProcess | null = null;
   private baseUrl: string;
   private port: number;
   private restartCount = 0;
@@ -80,6 +81,11 @@ export class HermesProcessManager {
 
     // Wait for it to become reachable
     await this.waitForReady();
+
+    // Now spawn the messaging gateway process (hermes gateway run)
+    // This is separate from `hermes serve` which only provides the dashboard API.
+    // Without this, gateway_mode stays "none" and no platforms connect.
+    this.spawnGateway();
   }
 
   /** Ensure Hermes has config.yaml and .env with the Kimi API key. */
@@ -139,6 +145,53 @@ export class HermesProcessManager {
     } catch {
       return false;
     }
+  }
+
+  /** Spawn the hermes gateway run child process (messaging gateway). */
+  private spawnGateway(): void {
+    const args = ["gateway", "run", "--replace"];
+    console.log(`[hermes-process] Spawning: hermes ${args.join(" ")}`);
+
+    this.gatewayChild = spawn("hermes", args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
+        KIMI_API_KEY: process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "",
+      },
+    });
+
+    this.gatewayChild.stdout?.on("data", (data: Buffer) => {
+      const lines = data.toString().trim().split("\n");
+      for (const line of lines) {
+        if (line) console.log(`[hermes-gateway] ${line}`);
+      }
+    });
+
+    this.gatewayChild.stderr?.on("data", (data: Buffer) => {
+      const lines = data.toString().trim().split("\n");
+      for (const line of lines) {
+        if (line) console.error(`[hermes-gateway] ${line}`);
+      }
+    });
+
+    this.gatewayChild.on("exit", (code, signal) => {
+      console.log(`[hermes-process] Gateway process exited (code=${code}, signal=${signal})`);
+      this.gatewayChild = null;
+      if (!this.started) return;
+      // Restart the gateway after a delay
+      if (this.restartCount < MAX_RESTARTS) {
+        console.log(`[hermes-process] Restarting gateway in ${RESTART_DELAY_MS / 1000}s...`);
+        this.restartTimer = setTimeout(() => {
+          if (this.started) this.spawnGateway();
+        }, RESTART_DELAY_MS);
+      }
+    });
+
+    this.gatewayChild.on("error", (err) => {
+      console.error(`[hermes-process] Failed to spawn gateway: ${err.message}`);
+      this.gatewayChild = null;
+    });
   }
 
   /** Spawn the hermes serve child process. */
@@ -262,6 +315,11 @@ export class HermesProcessManager {
     if (this.healthTimer) {
       clearInterval(this.healthTimer);
       this.healthTimer = null;
+    }
+    if (this.gatewayChild) {
+      console.log("[hermes-process] Stopping hermes gateway child process...");
+      this.gatewayChild.kill("SIGTERM");
+      this.gatewayChild = null;
     }
     if (this.child) {
       console.log("[hermes-process] Stopping hermes serve child process...");
