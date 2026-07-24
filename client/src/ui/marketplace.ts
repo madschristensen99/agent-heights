@@ -29,7 +29,7 @@ const KNOWN_CATEGORIES = [
 
 function normalizeCategory(cat: string): string {
   const c = cat.toLowerCase().trim();
-  if (["trading", "finance", "payments", "banking", "crypto", "commerce"].some((k) => c.includes(k))) return "Trading & Finance";
+  if (["trading", "finance", "payments", "banking", "crypto", "commerce", "defi", "wallet"].some((k) => c.includes(k))) return "Trading & Finance";
   if (["development", "git", "code", "infrastructure", "api", "debugging", "testing"].some((k) => c.includes(k))) return "Development";
   if (["data", "analytics", "database"].some((k) => c.includes(k))) return "Data";
   if (["productivity", "automation", "scheduling", "project-management", "project management"].some((k) => c.includes(k))) return "Productivity";
@@ -304,7 +304,7 @@ export class MarketplaceBrowser {
       : "None";
 
     // Parse agent config to detect MCP servers that need auth
-    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey"; keyLabel?: string; keyPlaceholder?: string; keyHelpUrl?: string }[] = [];
+    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey"; keyLabel?: string; keyPlaceholder?: string; keyHelpUrl?: string; envVars?: { name: string; description: string; isRequired: boolean }[] }[] = [];
     try {
       const config = agent.agent ? JSON.parse(agent.agent) : {};
       if (config.mcpServers && Array.isArray(config.mcpServers)) {
@@ -327,18 +327,36 @@ export class MarketplaceBrowser {
             const kHelpHtml = s.keyHelpUrl
               ? `<a href="${s.keyHelpUrl}" target="_blank" style="font-size:0.65rem; color:#4f9dde; text-decoration:none; margin-left:0.4rem;">Get key →</a>`
               : "";
+            const hasEnvVars = s.envVars && s.envVars.length > 0;
+            const inputsHtml = hasEnvVars
+              ? s.envVars!.map((ev, j) => `
+                  <div style="margin-bottom:0.35rem;">
+                    <div style="font-size:0.65rem; color:#666; margin-bottom:0.15rem;">${this.escape(ev.name)}${ev.isRequired ? ' <span style="color:#e05d5d;">*</span>' : ''} — ${this.escape(ev.description)}</div>
+                    <input id="mq-mcp-env-${i}-${j}" type="password" placeholder="${this.escape(ev.name)}" autocomplete="off"
+                      style="width:100%; padding:0.35rem 0.5rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.78rem; box-sizing:border-box;" />
+                  </div>`).join("")
+                : `<input id="mq-mcp-key-${i}" type="password" placeholder="${this.escape(kPlaceholder)}" autocomplete="off"
+                    style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />`;
             return `
             <div style="margin-bottom:0.5rem;">
               <div style="font-size:0.75rem; color:#888; margin-bottom:0.25rem;">${this.escape(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.65rem;">OAuth</span>' : `<span style="color:#666;font-size:0.65rem;">${this.escape(kLabel)}</span>${kHelpHtml}`}</div>
-              <div style="display:flex; gap:0.25rem; align-items:center;">
-                ${isOAuth
-                  ? `<button id="mq-mcp-connect-${i}" style="flex:1; padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#2a4a6a; color:#e0e0e0; font-size:0.8rem; cursor:pointer;">🔗 Connect via OAuth</button>`
-                  : `<input id="mq-mcp-key-${i}" type="password" placeholder="${this.escape(kPlaceholder)}" autocomplete="off"
-                      style="flex:1; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem;" />
-                    <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>`
-                }
-                <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
-              </div>
+              ${isOAuth
+                ? `<div style="display:flex; gap:0.25rem; align-items:center;">
+                    <button id="mq-mcp-connect-${i}" style="flex:1; padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#2a4a6a; color:#e0e0e0; font-size:0.8rem; cursor:pointer;">🔗 Connect via OAuth</button>
+                    <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
+                  </div>`
+                : hasEnvVars
+                  ? `${inputsHtml}
+                    <div style="display:flex; gap:0.25rem; align-items:center; margin-top:0.35rem;">
+                      <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save Credentials</button>
+                      <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
+                    </div>`
+                  : `<div style="display:flex; gap:0.25rem; align-items:center;">
+                      ${inputsHtml}
+                      <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>
+                      <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
+                    </div>`
+              }
             </div>`;
           }).join("")}
         </div>`
@@ -380,45 +398,69 @@ export class MarketplaceBrowser {
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
 
     // Track which MCP servers have keys saved
+    // Use url for remote servers, name for stdio servers (no url)
     const mcpKeyState: Record<string, boolean> = {};
-    const serverUrls = authRequiredServers.map((s) => s.url).filter((u): u is string => !!u);
+    const serverKeys = authRequiredServers.map((s) => s.url ?? s.name).filter((k): k is string => !!k);
 
     const updateHireButton = () => {
       const hireBtn = modal.querySelector("#mq-hire") as HTMLButtonElement | null;
       const warning = modal.querySelector("#mq-mcp-warning") as HTMLDivElement | null;
       if (!hireBtn) return;
-      const allHaveKeys = serverUrls.every((u) => mcpKeyState[u]);
+      const allHaveKeys = serverKeys.every((k) => mcpKeyState[k]);
       hireBtn.disabled = !allHaveKeys;
       hireBtn.style.opacity = allHaveKeys ? "1" : "0.4";
       hireBtn.style.cursor = allHaveKeys ? "pointer" : "not-allowed";
       if (warning) {
         warning.style.display = allHaveKeys ? "none" : "block";
         if (!allHaveKeys) {
-          const missing = serverUrls.filter((u) => !mcpKeyState[u]).length;
+          const missing = serverKeys.filter((k) => !mcpKeyState[k]).length;
           warning.textContent = `${missing} service(s) still need authentication before you can hire.`;
         }
       }
     };
 
     // Ask server which MCP servers already have keys
-    if (serverUrls.length > 0) {
-      this.onCheckMcpKeys(serverUrls);
+    if (serverKeys.length > 0) {
+      this.onCheckMcpKeys(serverKeys);
     }
 
     // Wire up MCP key save buttons (API key auth)
     authRequiredServers.forEach((s, i) => {
       const saveBtn = modal.querySelector(`#mq-mcp-save-${i}`) as HTMLButtonElement | null;
-      if (saveBtn && s.url) {
+      const keyId = s.url ?? s.name;
+      if (saveBtn && keyId) {
         saveBtn.addEventListener("click", () => {
-          const input = modal.querySelector(`#mq-mcp-key-${i}`) as HTMLInputElement | null;
-          if (!input) return;
-          const key = input.value.trim();
-          if (!key) { input.focus(); return; }
-          this.onSetMcpKey(s.url!, key);
-          input.value = "";
+          const hasEnvVars = s.envVars && s.envVars.length > 0;
+          if (hasEnvVars) {
+            // Collect multiple env var inputs into a JSON blob
+            const envBlob: Record<string, string> = {};
+            let allFilled = true;
+            s.envVars!.forEach((ev, j) => {
+              const input = modal.querySelector(`#mq-mcp-env-${i}-${j}`) as HTMLInputElement | null;
+              if (input) {
+                const val = input.value.trim();
+                if (ev.isRequired && !val) allFilled = false;
+                if (val) envBlob[ev.name] = val;
+              }
+            });
+            if (!allFilled) { saveBtn.focus(); return; }
+            this.onSetMcpKey(keyId, JSON.stringify(envBlob));
+            s.envVars!.forEach((_, j) => {
+              const input = modal.querySelector(`#mq-mcp-env-${i}-${j}`) as HTMLInputElement | null;
+              if (input) input.value = "";
+            });
+          } else {
+            // Single key input
+            const input = modal.querySelector(`#mq-mcp-key-${i}`) as HTMLInputElement | null;
+            if (!input) return;
+            const key = input.value.trim();
+            if (!key) { input.focus(); return; }
+            this.onSetMcpKey(keyId, key);
+            input.value = "";
+          }
           saveBtn.textContent = "✓ Saved";
-          setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
-          mcpKeyState[s.url!] = true;
+          setTimeout(() => { saveBtn.textContent = hasEnvVars ? "Save Credentials" : "Save"; }, 2000);
+          mcpKeyState[keyId] = true;
           const statusEl = modal.querySelector(`#mq-mcp-status-${i}`) as HTMLSpanElement | null;
           if (statusEl) { statusEl.textContent = "✓"; statusEl.style.color = "#53b86b"; }
           updateHireButton();
@@ -426,7 +468,7 @@ export class MarketplaceBrowser {
       }
     });
 
-    // Wire up OAuth connect buttons
+    // Wire up OAuth connect buttons (only for remote servers with URL)
     authRequiredServers.forEach((s, i) => {
       const connectBtn = modal.querySelector(`#mq-mcp-connect-${i}`) as HTMLButtonElement | null;
       if (connectBtn && s.url) {
@@ -444,7 +486,7 @@ export class MarketplaceBrowser {
     this.onMcpKeysStatusHandler = (results: { serverUrl: string; hasKey: boolean }[]) => {
       for (const r of results) {
         mcpKeyState[r.serverUrl] = r.hasKey;
-        const idx = serverUrls.indexOf(r.serverUrl);
+        const idx = serverKeys.indexOf(r.serverUrl);
         if (idx >= 0) {
           const statusEl = modal.querySelector(`#mq-mcp-status-${idx}`) as HTMLSpanElement | null;
           if (statusEl) {
@@ -515,9 +557,14 @@ export class MarketplaceBrowser {
           ? `<span style="font-size:0.6rem; padding:0.1rem 0.3rem; background:#1a2a1a; border-radius:0.25rem; color:#53b86b;">remote</span>`
           : mcp.mcpConfig.command
             ? `<span style="font-size:0.6rem; padding:0.1rem 0.3rem; background:#1a1a2a; border-radius:0.25rem; color:#6b8acf;">stdio</span>`
-            : "";
+            : mcp.mcpConfig.sourceUrl
+              ? `<span style="font-size:0.6rem; padding:0.1rem 0.3rem; background:#2a1a1a; border-radius:0.25rem; color:#cf9b6b;">self-setup</span>`
+              : "";
 
-        const canHire = !!(mcp.mcpConfig.url || mcp.mcpConfig.command);
+        const hasInstall = !!(mcp.mcpConfig.url || mcp.mcpConfig.command);
+        const hasSourceUrl = !!mcp.mcpConfig.sourceUrl;
+        const canHire = hasInstall || hasSourceUrl;
+        const needsSetup = hasSourceUrl && !hasInstall;
 
         card.innerHTML = `
           <div style="display:flex; align-items:flex-start; gap:0.5rem;">
@@ -530,8 +577,8 @@ export class MarketplaceBrowser {
               </div>
             </div>
           </div>
-          <button style="margin-top:0.5rem; width:100%; padding:0.4rem; border:none; border-radius:0.375rem; background:${canHire ? "#e0e0e0" : "#333"}; color:${canHire ? "#0d0d0d" : "#666"}; font-size:0.8rem; font-weight:600; cursor:${canHire ? "pointer" : "not-allowed"};" ${canHire ? "" : "disabled"}>
-            ${canHire ? "🚁 Hire into HQ" : "No auto-install (see source)"}
+          <button style="margin-top:0.5rem; width:100%; padding:0.4rem; border:none; border-radius:0.375rem; background:${canHire ? (needsSetup ? "#1a2a1a" : "#e0e0e0") : "#333"}; color:${canHire ? (needsSetup ? "#53b86b" : "#0d0d0d") : "#666"}; font-size:0.8rem; font-weight:600; cursor:${canHire ? "pointer" : "not-allowed"};" ${canHire ? "" : "disabled"}>
+            ${canHire ? (needsSetup ? "� Hire & Setup" : "�� Hire into HQ") : "No source available"}
           </button>
         `;
 

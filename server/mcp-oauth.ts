@@ -197,19 +197,50 @@ export function parseResourceMetadataUrl(wwwAuth: string): string | null {
 
 /** Fetch and parse JSON from a URL. */
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      "Accept": "application/json",
+      "User-Agent": "AgentHeights/1.0",
+    },
+  });
   if (!res.ok) {
     throw new Error(`Fetch ${url} failed: ${res.status} ${res.statusText}`);
   }
   return res.json() as Promise<T>;
 }
 
-/** Derive the authorization server metadata URL from the MCP server URL. */
-function deriveAuthServerMetadataUrl(mcpServerUrl: string): string {
-  // Per MCP spec: /.well-known/oauth-authorization-server relative to the server URL
-  const url = new URL(mcpServerUrl);
-  const path = url.pathname === '/' ? '' : url.pathname;
-  return `${url.origin}/.well-known/oauth-authorization-server${path}`;
+/** Probe an MCP server with an initialize request to get the WWW-Authenticate header. */
+async function probeMcpServer(serverUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(serverUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "User-Agent": "AgentHeights/1.0",
+        "MCP-Protocol-Version": "2025-03-26",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "Agent Heights", version: "1.0" },
+        },
+        id: 1,
+      }),
+    });
+    const wwwAuth = res.headers.get("www-authenticate");
+    if (wwwAuth) {
+      const url = parseResourceMetadataUrl(wwwAuth);
+      if (url) console.log(`[mcp-oauth] WWW-Authenticate resource_metadata=${url}`);
+      return url;
+    }
+  } catch {
+    // Ignore — fall back to well-known endpoints
+  }
+  return null;
 }
 
 /** Cached OAuth metadata + client registration per server URL (avoids 429s). */
@@ -258,63 +289,93 @@ export async function startOAuthFlow(
     scopes = cached.scopes;
     console.log(`[mcp-oauth] Using cached registration for ${serverUrl}`);
   } else {
-    // Unknown server — fetch metadata + register dynamically
+    // Unknown server — discover OAuth metadata + register dynamically
     const origin = new URL(serverUrl).origin;
     const path = new URL(serverUrl).pathname === '/' ? '' : new URL(serverUrl).pathname;
     let authServerUrl: string;
 
-    try {
-      // Try with path suffix first (per RFC 9728), then without as fallback
-      let protectedMetadata: ProtectedResourceMetadata;
+    // Step 1: Probe MCP server for WWW-Authenticate header (primary discovery per MCP spec)
+    const resourceMetadataUrl = await probeMcpServer(serverUrl);
+
+    if (resourceMetadataUrl) {
       try {
-        protectedMetadata = await fetchJson<ProtectedResourceMetadata>(`${origin}/.well-known/oauth-protected-resource${path}`);
+        const protectedMetadata = await fetchJson<ProtectedResourceMetadata>(resourceMetadataUrl);
+        if (protectedMetadata.authorization_servers?.length > 0) {
+          authServerUrl = protectedMetadata.authorization_servers[0];
+          console.log(`[mcp-oauth] Found authorization_servers via WWW-Authenticate: ${authServerUrl}`);
+        } else {
+          authServerUrl = serverUrl;
+        }
       } catch {
-        protectedMetadata = await fetchJson<ProtectedResourceMetadata>(`${origin}/.well-known/oauth-protected-resource`);
+        authServerUrl = serverUrl;
       }
-      if (!protectedMetadata.authorization_servers || protectedMetadata.authorization_servers.length === 0) {
-        throw new Error("No authorization_servers in protected resource metadata");
+    } else {
+      // Fall back to .well-known endpoints (RFC 9728)
+      try {
+        let protectedMetadata: ProtectedResourceMetadata;
+        try {
+          protectedMetadata = await fetchJson<ProtectedResourceMetadata>(`${origin}/.well-known/oauth-protected-resource${path}`);
+        } catch {
+          protectedMetadata = await fetchJson<ProtectedResourceMetadata>(`${origin}/.well-known/oauth-protected-resource`);
+        }
+        if (!protectedMetadata.authorization_servers || protectedMetadata.authorization_servers.length === 0) {
+          throw new Error("No authorization_servers in protected resource metadata");
+        }
+        authServerUrl = protectedMetadata.authorization_servers[0];
+      } catch {
+        authServerUrl = serverUrl;
       }
-      authServerUrl = protectedMetadata.authorization_servers[0];
-    } catch {
-      authServerUrl = serverUrl;
     }
 
-    let metadata: AuthServerMetadata;
-    try {
-      // Try with path suffix first, then without (some servers don't include the path)
-      const metadataUrlWith = deriveAuthServerMetadataUrl(authServerUrl);
+    // Step 2: Fetch authorization server metadata (try multiple URL patterns per RFC 8414 + OIDC)
+    const authOrigin = new URL(authServerUrl).origin;
+    const authPath = new URL(authServerUrl).pathname === '/' ? '' : new URL(authServerUrl).pathname;
+
+    const metadataUrls = [
+      `${authOrigin}/.well-known/oauth-authorization-server${authPath}`,
+      `${authOrigin}/.well-known/oauth-authorization-server`,
+      `${authOrigin}/.well-known/openid-configuration${authPath}`,
+      `${authOrigin}/.well-known/openid-configuration`,
+    ];
+
+    let metadata: AuthServerMetadata | null = null;
+    for (const metadataUrl of metadataUrls) {
       try {
-        metadata = await fetchJson<AuthServerMetadata>(metadataUrlWith);
+        metadata = await fetchJson<AuthServerMetadata>(metadataUrl);
+        console.log(`[mcp-oauth] Found auth server metadata at ${metadataUrl}`);
+        break;
       } catch {
-        const metadataUrlWithout = `${new URL(authServerUrl).origin}/.well-known/oauth-authorization-server`;
-        metadata = await fetchJson<AuthServerMetadata>(metadataUrlWithout);
+        // Try next URL pattern
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("fetch failed") || msg.includes("ENOTFOUND") || msg.includes("ECONNREFUSED")) {
-        throw new Error(`Could not reach the MCP server at ${serverUrl} — it may be offline or not yet available.`);
-      }
-      throw new Error(`Failed to fetch OAuth metadata: ${msg}`);
     }
 
-    if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
-      throw new Error("Missing authorization_endpoint or token_endpoint in metadata");
+    if (!metadata || !metadata.authorization_endpoint || !metadata.token_endpoint) {
+      // All metadata discovery failed — fall back to default endpoints per MCP spec
+      console.log(`[mcp-oauth] No metadata found for ${serverUrl}, using default endpoints at ${authOrigin}`);
+      metadata = {
+        authorization_endpoint: `${authOrigin}/authorize`,
+        token_endpoint: `${authOrigin}/token`,
+        registration_endpoint: `${authOrigin}/register`,
+      };
     }
 
     const redirectUri = baseUrl ? `${baseUrl}/oauth/callback` : `http://localhost:1/callback`;
-    console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}`);
+    console.log(`[mcp-oauth] redirectUri=${redirectUri}, serverUrl=${serverUrl}, authEndpoint=${metadata.authorization_endpoint}`);
 
-    if (!metadata.registration_endpoint) {
-      throw new Error("This MCP server does not support automatic OAuth registration. It may require a pre-registered API key or a specific OAuth app — try using the API Key option instead.");
-    }
+    // Use registration_endpoint from metadata, or fall back to default /register
+    const registrationEndpoint = metadata.registration_endpoint || `${authOrigin}/register`;
 
     // Determine the best auth method supported by the server
     const supportedMethods = metadata.token_endpoint_auth_methods_supported || ["none"];
     const authMethod = supportedMethods.includes("none") ? "none" : supportedMethods[0] || "none";
 
-    const registration = await fetch(`${metadata.registration_endpoint}`, {
+    const registration = await fetch(registrationEndpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "AgentHeights/1.0",
+      },
       body: JSON.stringify({
         client_name: "Agent Heights",
         redirect_uris: [redirectUri],
@@ -357,6 +418,7 @@ export async function startOAuthFlow(
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("code_challenge", challenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
+  authUrl.searchParams.set("resource", serverUrl);
   if (scopes.length > 0) {
     authUrl.searchParams.set("scope", scopes.join(" "));
   }

@@ -7,12 +7,12 @@
 - Messages are in-memory only (lost on redeploy)
 - No reply capability from the UI
 - No conversation threading
-- Hermes and Yuki have no distinct mail-related roles
+- Hermes and Agent Resources have no distinct mail-related roles
 
 ## Goals
 
 1. **Hermes = postal worker** — receives, sorts, delivers, dispatches. Mechanical + light LLM triage.
-2. **Yuki = office manager** — assigns, tracks, escalates, reports. Managerial.
+2. **Agent Resources = office manager** — assigns, tracks, escalates, reports. Managerial.
 3. Persist messages across deploys.
 4. Allow agents to reply through the gateway.
 5. Give the player visibility into mail status.
@@ -77,20 +77,20 @@
 
 ---
 
-## Phase 4: Yuki Oversight
+## Phase 4: Agent Resources Oversight
 
-**Yuki tracks mail assignments and escalates.**
+**Agent Resources tracks mail assignments and escalates.**
 
-- Yuki periodically checks:
+- Agent Resources periodically checks:
   - Are there messages with status 'delivered' but no agent response after N minutes?
   - If so, escalate: reassign to another idle agent, or alert the player
-- When the player visits Yuki, she gives a mail summary:
+- When the player visits Agent Resources, she gives a mail summary:
   - "You have 3 unread messages: 1 urgent (Slack, 15 min ago), 2 normal"
   - "Agent X is handling the deploy issue from Telegram"
   - "1 message has been waiting 2 hours — no available agents"
-- Yuki can reassign tasks if an agent is stuck or on vacation
+- Agent Resources can reassign tasks if an agent is stuck or on vacation
 
-**Files:** `server/manager.ts`, `client/src/game/scene.ts` (Yuki dialogue)
+**Files:** `server/manager.ts`, `client/src/game/scene.ts` (Agent Resources dialogue)
 
 ---
 
@@ -102,7 +102,7 @@
   - `platform`, `sender`, `text`, `timestamp`, `retry_count`, `last_retry`
 - When all agents are busy, message goes to queue
 - On agent state change (busy → idle), Hermes checks queue and delivers
-- Max retry count (e.g., 3) before escalating to Yuki/player
+- Max retry count (e.g., 3) before escalating to Agent Resources/player
 - UI: mailbox shows a small "queued" indicator when messages are waiting
 
 **Files:** `server/manager.ts`, `client/src/game/scene.ts`
@@ -130,7 +130,7 @@
 | 1. Persistence | Small | High | None |
 | 2. Smart Routing | Medium | High | Phase 1 |
 | 3. Reply Capability | Medium | High | None |
-| 4. Yuki Oversight | Medium | Medium | Phase 1, 2 |
+| 4. Agent Resources Oversight | Medium | Medium | Phase 1, 2 |
 | 5. Queue & Retry | Small | Medium | Phase 2 |
 | 6. Mail Digest | Small | Medium | Phase 1 |
 

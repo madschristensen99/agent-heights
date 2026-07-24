@@ -1,9 +1,9 @@
 /**
- * The Singularity Will Be Livestreamed — Twitch chat → Yuki bridge.
+ * The Singularity Will Be Livestreamed — Twitch chat → Agent Resources bridge.
  *
  * Connects to Twitch IRC, receives chat messages, and forwards them
- * to the Agent Heights server as spectator_chat messages. Yuki's
- * existing isYukiQuestion() logic determines whether to answer
+ * to the Agent Heights server as spectator_chat messages. Agent Resources's
+ * existing isAgentResourcesQuestion() logic determines whether to answer
  * directly or delegate as a task.
  *
  * Usage:
@@ -128,11 +128,11 @@ function connectWS(): void {
   ws.on("message", (data: Buffer) => {
     try {
       const msg = JSON.parse(data.toString());
-      // Relay Yuki's log messages back to Twitch chat
-      if (msg.type === "log" && msg.agentId === "yuki") {
+      // Relay Agent Resources's log messages back to Twitch chat
+      if (msg.type === "log" && msg.agentId === "agent-resources") {
         const text = msg.entry?.text;
         if (text && typeof text === "string") {
-          sendTwitchMessage(`Yuki: ${text.slice(0, 450)}`);
+          sendTwitchMessage(`Agent Resources: ${text.slice(0, 450)}`);
         }
       }
       // Relay toasts (hire confirmations, etc.)
@@ -165,10 +165,10 @@ function handleChatMessage(nick: string, message: string): void {
     const [cmd, ...args] = message.slice(1).split(" ");
     switch (cmd.toLowerCase()) {
       case "status":
-        sendTwitchMessage("The office is live! Agents are working 24/7. Type a message to talk to Yuki.");
+        sendTwitchMessage("The office is live! Agents are working 24/7. Type a message to talk to Agent Resources.");
         return;
       case "help":
-        sendTwitchMessage("Just type naturally! Yuki can answer questions, hire agents, and create tasks. Try: 'hire a React agent' or 'what is everyone working on?'");
+        sendTwitchMessage("Just type naturally! Agent Resources can answer questions, hire agents, and create tasks. Try: 'hire a React agent' or 'what is everyone working on?'");
         return;
       case "agents":
         if (wsConnected && ws?.readyState === WebSocket.OPEN) {
@@ -192,7 +192,7 @@ function handleChatMessage(nick: string, message: string): void {
   const text = message.slice(0, MAX_LENGTH);
   if (!text.trim()) return;
 
-  // Forward to Yuki via spectator_chat
+  // Forward to Agent Resources via spectator_chat
   if (wsConnected && ws?.readyState === WebSocket.OPEN) {
     console.log(`[chat-bot] ${nick}: ${text}`);
     ws.send(JSON.stringify({ type: "spectator_chat", fromName: nick, text }));

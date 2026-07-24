@@ -269,6 +269,10 @@ export interface MCPServerConfig {
   keyHelpUrl?: string;
   /** Brand logo URL (e.g. from simpleicons.org CDN) or inline SVG string. */
   icon?: string;
+  /** GitHub source URL for community MCPs that need agent self-setup. */
+  sourceUrl?: string;
+  /** For stdio servers: credential fields the user must provide (rendered as separate inputs). */
+  envVars?: { name: string; description: string; isRequired: boolean }[];
 }
 
 // ----------------------------------------------------------- Labyrinth ---
@@ -326,8 +330,6 @@ export interface WorldState {
   vacationedAgents?: VacationedAgent[];
   /** Tile overrides per chunk: { "cx,cy" -> { tileIndex -> newTile } } */
   chunkOverrides?: Record<string, Record<number, number>>;
-  /** Office tile overrides: { tileIndex -> newTile } for the 30×20 office map */
-  officeOverrides?: Record<number, number>;
 }
 
 /** Chunk side length in tiles. */
@@ -623,7 +625,6 @@ export type ClientMsg =
   | { type: "player_move"; x: number; y: number; dir: Dir }
   | { type: "npc_update"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_update"; cx: number; cy: number; tileIndex: number; tile: number }
-  | { type: "office_tile_update"; tileIndex: number; tile: number; layer: "ground" | "walls" | "furniture" }
   | { type: "github_query" }
   | { type: "github_fork"; branchName: string }
   | { type: "github_list_branches" }
@@ -727,7 +728,6 @@ export type ServerMsg =
   | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string }
   | { type: "npc_state"; npcId: string; x: number; y: number; dir: Dir; state: string }
   | { type: "tile_updated"; cx: number; cy: number; tileIndex: number; tile: number }
-  | { type: "office_tile_updated"; tileIndex: number; tile: number; layer: "ground" | "walls" | "furniture" }
   | { type: "github_status"; connected: boolean; login: string | null; error: string | null }
   | { type: "github_data"; branches: { name: string; sha: string }[]; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string } | null; error: string | null }
   | { type: "github_fork_created"; fork: { owner: string; name: string; fullName: string; cloneUrl: string; branch: string }; branchName: string }
@@ -850,8 +850,8 @@ export function parseTier(s: string | null | undefined): SubscriptionTier | null
 
 export const SERVER_PORT = (typeof process !== "undefined" && Number(process.env?.PORT)) || 3001;
 
-/** Fixed agent id for Yuki, the office manager NPC. */
-export const YUKI_ID = "yuki";
+/** Fixed agent id for Agent Resources, the office manager NPC. */
+export const AGENT_RESOURCES_ID = "agent-resources";
 
 /** Fixed agent id for Hermes, the devops core engineer NPC in the mail room. */
 export const HERMES_ID = "hermes";

@@ -3786,6 +3786,126 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.zoominfo.com/mcp",
   },
 
+  // ── DeFi / Wallet MCPs ────────────────────────────────────────────────
+
+  {
+    id: "coinbase-cdp",
+    name: "Coinbase CDP",
+    summary: "Create wallets, sign transactions, swap tokens, and pay for services on EVM + Solana.",
+    description:
+      "Coinbase Developer Platform MCP server. Gives agents non-custodial wallets across EVM chains (Ethereum, Base, Polygon, Arbitrum, Optimism, BSC) and Solana. Create accounts, sign messages, send transactions, swap tokens via the encode-sign-send pipeline, and manage ERC-4337 smart accounts with optional gas sponsorship. Supports x402 agentic payments. Requires a CDP API key and wallet secret from the Coinbase Developer Portal.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["defi", "wallet", "trading", "crypto", "payments"],
+    icon: "https://cdn.simpleicons.org/coinbase/white",
+    command: "npx",
+    args: ["-y", "@coinbase/cdp-cli", "mcp"],
+    envVars: [
+      { name: "CDP_API_KEY_NAME", description: "CDP API Key Name (from Portal → API Keys)", isRequired: true },
+      { name: "CDP_API_KEY_PRIVATE_KEY", description: "CDP API Key Private Key (downloaded JSON key file content)", isRequired: true },
+      { name: "CDP_WALLET_SECRET", description: "Wallet Secret (from Portal → Non-custodial Wallet → Security). Required for signing/sending.", isRequired: false },
+    ],
+    keyLabel: "CDP Credentials",
+    keyPlaceholder: "Paste JSON credentials...",
+    keyHelpUrl: "https://portal.cdp.coinbase.com/",
+  },
+  {
+    id: "talken-agentic-wallet",
+    name: "Talken Agentic Wallet",
+    summary: "Multi-chain wallet for agents: swap, bridge, stake, trade perps on Hyperliquid & Polymarket.",
+    description:
+      "Talken Agentic Wallet is a multi-chain MPC wallet designed for AI agents. Supports 10+ chains including Ethereum, Arbitrum, Solana, Bitcoin, and TRON. Features DEX aggregation swaps, cross-chain bridges (Circle CCTP, LayerZero), Hyperliquid perpetual futures and spot trading, Polymarket prediction markets, staking, and gasless transactions (pay fees in USDC/USDT). Available as npm package with 95+ MCP tools.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["defi", "wallet", "trading", "crypto"],
+    icon: "https://cdn.simpleicons.org/talken",
+    command: "npx",
+    args: ["-y", "@talken/agentic-wallet"],
+    envVars: [
+      { name: "TALKEN_API_KEY", description: "Talken API Key (from talken.io dashboard)", isRequired: true },
+    ],
+    keyLabel: "Talken API Key",
+    keyPlaceholder: "tk_...",
+    keyHelpUrl: "https://docs.talken.io/",
+  },
+  {
+    id: "phantom-mcp",
+    name: "Phantom",
+    summary: "Agent wallet for Solana & EVM: sign transactions, transfer tokens, swap, and trade perps.",
+    description:
+      "Phantom MCP server gives AI agents a dedicated wallet to sign transactions, transfer tokens, and interact on-chain across Solana, Ethereum, Bitcoin, and Sui. Agents receive a new dedicated wallet on authentication — not the user's personal wallet. Includes simulate-then-sign flow, token balances with USD pricing, and perp trading. Uses Phantom Connect (OIDC) for authentication.",
+    transport: "remote",
+    authType: "oauth",
+    isOfficial: true,
+    category: ["defi", "wallet", "trading", "crypto"],
+    icon: "https://cdn.simpleicons.org/phantom",
+    url: "https://mcp.phantom.com/mcp",
+  },
+  {
+    id: "metamask-agent",
+    name: "MetaMask Agent",
+    summary: "Self-custodial agent wallet: swaps, perps, staking with mandatory security pipeline.",
+    description:
+      "MetaMask Agent Wallet is a self-custodial AI trading wallet. Agents execute DeFi trades — swaps, perpetuals, prediction markets, staking, liquidity provision — across all EVM chains and Hyperliquid. Every transaction passes through a mandatory 3-step security pipeline: simulation, Blockaid threat scanning, and MEV protection. Guard Mode (allowlisted protocols, spend limits, 2FA) or Beast Mode (any protocol, malicious tx auto-blocked). User controls the secret recovery phrase.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["defi", "wallet", "trading", "crypto"],
+    icon: "https://cdn.simpleicons.org/metamask",
+    command: "npx",
+    args: ["-y", "@metamask/agent-wallet", "mcp"],
+    envVars: [
+      { name: "METAMASK_AGENT_SECRET", description: "Secret recovery phrase or private key for the agent wallet", isRequired: true },
+      { name: "METAMASK_AGENT_MODE", description: "Risk profile: 'guard' (allowlisted protocols, spend limits) or 'beast' (any protocol)", isRequired: false },
+    ],
+    keyLabel: "MetaMask Agent Credentials",
+    keyPlaceholder: "Paste credentials...",
+    keyHelpUrl: "https://metamask.io/agent-wallet",
+  },
+  {
+    id: "agentwallet-mcp",
+    name: "AgentWallet",
+    summary: "Permissionless agent wallets: create, sign, broadcast on EVM + Solana with built-in guards.",
+    description:
+      "AgentWallet MCP server provides permissionless wallet infrastructure for AI agents. Create wallets, sign transactions, and broadcast on-chain across 9 EVM chains (Ethereum, Base, Polygon, BSC, Arbitrum, Optimism, Avalanche, Zora, PulseChain) and Solana. 29 MCP tools including transfers, token approvals, wrapping, and x402 payments. Built-in guards: daily spending limits, gas price protection, emergency pause, rate limiting. No KYC required.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: false,
+    category: ["defi", "wallet", "trading", "crypto", "payments"],
+    icon: "https://cdn.simpleicons.org/agentwallet",
+    command: "npx",
+    args: ["-y", "agentwallet-mcp"],
+    envVars: [
+      { name: "AGENTWALLET_API_KEY", description: "AgentWallet API Key (from hifriendbot.com)", isRequired: true },
+    ],
+    keyLabel: "AgentWallet API Key",
+    keyPlaceholder: "aw_...",
+    keyHelpUrl: "https://hifriendbot.com",
+  },
+  {
+    id: "waiaas",
+    name: "WAIaaS",
+    summary: "Self-hosted wallet daemon: swap, bridge, stake, lend across EVM + Solana with policy engine.",
+    description:
+      "WAIaaS (Wallet AI as a Service) is a self-hosted daemon that gives AI agents secure, policy-controlled access to crypto wallets across EVM and Solana chains. 42 MCP tools, 13+ DeFi protocols (Jupiter, 0x, LI.FI, Lido, Jito, Aave V3, Kamino, Pendle, Drift, Hyperliquid, Across Bridge, Polymarket). Default-deny policy engine with spending limits, token/contract allowlists, time-delay approvals, and kill switch. Private keys encrypted with Argon2id. Runs locally — your keys, your machine.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: false,
+    category: ["defi", "wallet", "trading", "crypto", "infrastructure"],
+    icon: "https://cdn.simpleicons.org/waiaas",
+    command: "npx",
+    args: ["-y", "@waiaas/sdk", "mcp"],
+    envVars: [
+      { name: "WAIaaS_API_URL", description: "WAIaaS daemon URL (default: http://localhost:3839)", isRequired: true },
+      { name: "WAIaaS_SESSION_TOKEN", description: "JWT session token from the daemon", isRequired: true },
+    ],
+    keyLabel: "WAIaaS Connection",
+    keyPlaceholder: "Paste connection details...",
+    keyHelpUrl: "https://waiaas.ai/",
+  },
+
 ];
 
 // ── Helper functions ───────────────────────────────────────────────────
@@ -3823,7 +3943,7 @@ export function getServerByUrl(url: string): MCPCatalogServer | undefined {
 
 /**
  * Build a compact categorized summary of the curated MCP catalog.
- * Used to inject knowledge into Yuki's context so she can recommend
+ * Used to inject knowledge into Agent Resources's context so she can recommend
  * MCP servers to users without browsing the marketplace.
  */
 export function catalogSummary(): string {
@@ -3852,12 +3972,18 @@ export function catalogSummary(): string {
 /**
  * Build a summary of notable curated marketplace agents.
  * These are the seed agents from the Supabase migrations — big tech,
- * proven services. Yuki uses this to recommend specific agents.
+ * proven services. Agent Resources uses this to recommend specific agents.
  */
 export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via MARKET button)
 - Yahoo Finance Agent: Strategy evaluator — fetches market data, computes technical indicators inline (RSI, MACD, SMA, Bollinger Bands), evaluates strategy conditions, and emits structured trade signals. No auth needed. Pairs with Robinhood agent via schedule + handoff.
 - Robinhood Trading Agent: Trade executor — receives trade signal handoffs from analysis agents, confirms with boss, places trades via Robinhood MCP (OAuth). Always requires human confirmation before executing.
-- GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.`;
+- GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.
+- Coinbase DeFi Trader: Wallet agent — create wallets, swap tokens, send transactions across EVM + Solana via Coinbase CDP MCP. Requires CDP API key + wallet secret.
+- Talken Swap Agent: Multi-chain DeFi agent — DEX swaps, cross-chain bridges, Hyperliquid perps, Polymarket, staking via Talken MCP. Requires Talken API key.
+- Phantom Wallet Agent: Solana & EVM wallet agent — transfers, swaps, perps via Phantom MCP (OAuth). Dedicated agent wallet, fund before transacting.
+- MetaMask Agent Wallet: Self-custodial DeFi agent — swaps, perps, staking with mandatory security pipeline (simulation + threat scan + MEV protection). Requires agent wallet credentials.
+- AgentWallet Trader: Permissionless wallet agent — create wallets, send tokens, x402 payments on 9 EVM chains + Solana. No KYC. Requires AgentWallet API key.
+- WAIaaS DeFi Agent: Self-hosted DeFi agent — 13+ protocols (Jupiter, 0x, Aave V3, Lido, etc.) with policy engine and 6-stage tx pipeline. Requires local daemon + session token.`;
 
 
 /** Convert a catalog entry to an MCPServerConfig for agent assignment. */
@@ -3880,5 +4006,6 @@ export function toMCPServerConfig(server: MCPCatalogServer): import("./types.js"
   if (server.keyPlaceholder) config.keyPlaceholder = server.keyPlaceholder;
   if (server.keyHelpUrl) config.keyHelpUrl = server.keyHelpUrl;
   if (server.icon) config.icon = server.icon;
+  if (server.envVars) config.envVars = server.envVars;
   return config;
 }

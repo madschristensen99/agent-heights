@@ -60,9 +60,9 @@ No `refresh_token` messages (spectator connections don't use auth tokens).
 
 ---
 
-## 2. Spectator Chat → Yuki
+## 2. Spectator Chat → Agent Resources
 
-**What it tests:** Spectator can send messages to Yuki and get
+**What it tests:** Spectator can send messages to Agent Resources and get
 responses. This is the same path the Twitch chat bot uses.
 
 ### Steps
@@ -76,16 +76,16 @@ const net = game.registry.get("net");
 net.send({
   type: "spectator_chat",
   fromName: "test_viewer",
-  text: "hey Yuki what is everyone working on?"
+  text: "hey Agent Resources what is everyone working on?"
 });
 ```
 
 ### Expected
 
-- Server console logs: `[spectator] chat from test_viewer: hey Yuki...`
-- Yuki's agent status changes to `thinking`
-- After a few seconds, a log entry from Yuki appears in the spectator view
-- Yuki's response describes what agents are doing
+- Server console logs: `[spectator] chat from test_viewer: hey Agent Resources...`
+- Agent Resources's agent status changes to `thinking`
+- After a few seconds, a log entry from Agent Resources appears in the spectator view
+- Agent Resources's response describes what agents are doing
 
 ### Test rejection of non-chat messages
 
@@ -152,7 +152,7 @@ Check YouTube Studio → Go Live → Stream Health:
 
 ## 4. Twitch Chat Bot
 
-**What it tests:** Twitch IRC → spectator_chat → Yuki → response
+**What it tests:** Twitch IRC → spectator_chat → Agent Resources → response
 relayed back to Twitch chat.
 
 ### Setup
@@ -183,10 +183,10 @@ Type these in your Twitch chat:
 | Command | Expected bot response |
 |---------|----------------------|
 | `!status` | "The office is live! Agents are working 24/7..." |
-| `!help` | "Just type naturally! Yuki can answer questions..." |
-| `!agents` | Forwards "list all agents" to Yuki, response relayed |
-| `hey Yuki what is everyone doing?` | Forwarded to Yuki, response relayed |
-| `hire a React agent named TestBot` | Forwarded to Yuki as a task command |
+| `!help` | "Just type naturally! Agent Resources can answer questions..." |
+| `!agents` | Forwards "list all agents" to Agent Resources, response relayed |
+| `hey Agent Resources what is everyone doing?` | Forwarded to Agent Resources, response relayed |
+| `hire a React agent named TestBot` | Forwarded to Agent Resources as a task command |
 
 ### Rate limiting test
 
@@ -206,7 +206,7 @@ dropped — no response from the bot.
 | `Missing TWITCH_OAUTH_TOKEN` | Get token from https://twitchapps.com/tmi/ |
 | IRC connection closes immediately | Token may be invalid or expired |
 | `[chat-bot] (disconnected, dropping)` | Server not running — check `LIVESTREAM_SERVER_URL` |
-| No response from Yuki | Yuki may be busy — check server console for `[spectator] chat from...` |
+| No response from Agent Resources | Agent Resources may be busy — check server console for `[spectator] chat from...` |
 
 ---
 
@@ -237,8 +237,8 @@ npx tsx scripts/chat-bot.ts
 - [ ] YouTube Studio shows live video of the office
 - [ ] Agents are moving and working in the stream
 - [ ] Twitch chat `!status` gets a response
-- [ ] Twitch chat message → Yuki responds → response appears in Twitch chat
-- [ ] Yuki's response is also visible in the stream (agent status changes)
+- [ ] Twitch chat message → Agent Resources responds → response appears in Twitch chat
+- [ ] Agent Resources's response is also visible in the stream (agent status changes)
 - [ ] Stream stays stable for 5+ minutes without drops
 - [ ] Ctrl+C on livestream.ts cleanly shuts down FFmpeg and Chromium
 

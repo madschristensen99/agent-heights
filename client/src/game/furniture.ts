@@ -398,7 +398,7 @@ function drawOfficeChairUp(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fill();
 }
 
-/** Office chair facing left — side view (Yuki's chair) */
+/** Office chair facing left — side view (Agent Resources's chair) */
 function drawOfficeChairLeft(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
 
@@ -1404,7 +1404,7 @@ function drawToaster(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fill();
 }
 
-/** Side-view desk — top tile (desk surface on left, front panel on right facing Yuki) */
+/** Side-view desk — top tile (desk surface on left, front panel on right facing Agent Resources) */
 function drawDeskSideTop(ctx: CanvasRenderingContext2D, s: number): void {
   const surfaceW = s * 0.7;
   const panelX = surfaceW;
@@ -1431,7 +1431,7 @@ function drawDeskSideTop(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillStyle = hexRGBA(0xb8babc, 0.5);
   ctx.fillRect(0, 0, surfaceW, 2);
 
-  // front panel — right portion (facing Yuki who sits on the right)
+  // front panel — right portion (facing Agent Resources who sits on the right)
   const panelGrad = linearGrad(ctx, panelX, 0, s, 0, [
     [0, shade(0xc3c8cd, 0)],
     [0.5, shade(0xb3b8bd, -5)],
@@ -1640,7 +1640,7 @@ function drawDeskSideBottomMirror(ctx: CanvasRenderingContext2D, s: number): voi
   ctx.fillRect(s * 0.88, s * 0.95, 10, 3);
 }
 
-/** Office chair facing right — side view (Hermes's chair, mirrored from Yuki's) */
+/** Office chair facing right — side view (Hermes's chair, mirrored from Agent Resources's) */
 function drawOfficeChairRight(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
 
@@ -1718,7 +1718,7 @@ function drawOfficeChairRight(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fill();
 }
 
-/** Side-view monitor — thin profile seen from the side, screen faces right toward Yuki */
+/** Side-view monitor — thin profile seen from the side, screen faces right toward Agent Resources */
 function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
   const cx = s * 0.5;
 
@@ -1738,7 +1738,7 @@ function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: bool
   ctx.fillRect(cx - 2, s * 0.62, 4, s * 0.2);
 
   // monitor body — thin profile seen from the side
-  // The screen faces RIGHT (toward Yuki who sits on the right)
+  // The screen faces RIGHT (toward Agent Resources who sits on the right)
   const bezelGrad = linearGrad(ctx, 0, s * 0.15, 0, s * 0.62, [
     [0, shade(0x2a2a30, 5)],
     [0.5, shade(0x1a1a20, 0)],
@@ -1752,7 +1752,7 @@ function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: bool
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // screen edge glow — on the RIGHT side (facing Yuki)
+  // screen edge glow — on the RIGHT side (facing Agent Resources)
   if (lit) {
     ctx.fillStyle = hexRGBA(0x4affa8, 0.6);
   } else {
@@ -2216,7 +2216,7 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
     }
   }
 
-  // Generate side-view monitor texture (2 frames: off / on) — for Yuki's desk
+  // Generate side-view monitor texture (2 frames: off / on) — for Agent Resources's desk
   if (!tex.exists(MONITOR_SIDE_TEX)) {
     const canvasTex = tex.createCanvas(MONITOR_SIDE_TEX, TILE_PX * 2, TILE_PX);
     if (canvasTex) {

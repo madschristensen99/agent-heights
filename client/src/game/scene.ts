@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, YukiNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
-import { YUKI_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
+import { AgentNPC, AgentResourcesNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
+import { AGENT_RESOURCES_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -91,15 +91,15 @@ export class OfficeScene extends Phaser.Scene {
   private store!: Store;
   private grid!: Grid;
   private npcs = new Map<string, AgentNPC>();
-  private yuki: YukiNPC | null = null;
+  private agentResources: AgentResourcesNPC | null = null;
   private hermes: HermesNPC | null = null;
-  private yukiSeat: Tile | null = null;
-  private yukiOfficeZone: Phaser.GameObjects.Zone | null = null;
+  private agentResourcesSeat: Tile | null = null;
+  private agentResourcesOfficeZone: Phaser.GameObjects.Zone | null = null;
   private seats: Tile[] = [];
   private extraSpots: Tile[] = [];
   private monitors: Phaser.GameObjects.Sprite[] = [];
   private chairs: Phaser.GameObjects.Sprite[] = [];
-  private yukiMonitor: Phaser.GameObjects.Sprite | null = null;
+  private agentResourcesMonitor: Phaser.GameObjects.Sprite | null = null;
   private hermesSeat: Tile | null = null;
   private hermesMonitor: Phaser.GameObjects.Sprite | null = null;
   private spawnTile: Tile = { x: 14, y: 16 };
@@ -232,18 +232,6 @@ export class OfficeScene extends Phaser.Scene {
   private portalCollider: Phaser.Physics.Arcade.Collider | null = null;
   private portalZone: Phaser.GameObjects.Arc | null = null;
   private portalHint!: Phaser.GameObjects.Text;
-
-  // --- office tilemap layer refs (for build mode editing) ---
-  private groundLayer!: Phaser.Tilemaps.TilemapLayer;
-  private wallsLayer!: Phaser.Tilemaps.TilemapLayer;
-  private furnitureLayer!: Phaser.Tilemaps.TilemapLayer;
-  private officeMap!: Phaser.Tilemaps.Tilemap;
-
-  // --- build mode (office tile editing) ---
-  private buildMode = false;
-  private buildLayer: "ground" | "walls" | "furniture" = "furniture";
-  private buildSelectedTile = 1;
-  private buildPaletteEl: HTMLDivElement | null = null;
 
   // --- expedition workshop (break room) ---
   // Each tile is the center of the multi-tile piece for proximity checks.
@@ -454,8 +442,6 @@ export class OfficeScene extends Phaser.Scene {
     this.events.once("shutdown", () => {
       this.closeAgentViewModal();
       this.hideProjectorAgentFrame();
-      this.hideBuildPalette();
-      this.buildMode = false;
       this.closePortal();
       for (const overlay of this.monitorMatrixOverlays.values()) overlay.destroy();
       this.monitorMatrixOverlays.clear();
@@ -532,14 +518,14 @@ export class OfficeScene extends Phaser.Scene {
     // a theme change restarts the scene — drop everything the last run built
     this.npcs.clear();
     this.initialSyncDone = false;
-    this.yuki = null;
+    this.agentResources = null;
     this.hermes = null;
-    this.yukiSeat = null;
+    this.agentResourcesSeat = null;
     this.seats = [];
     this.extraSpots = [];
     this.monitors = [];
     this.chairs = [];
-    this.yukiMonitor = null;
+    this.agentResourcesMonitor = null;
     this.hermesMonitor = null;
     this.coffeeUntil = 0;
     this.fridgeUntil = 0;
@@ -607,8 +593,6 @@ export class OfficeScene extends Phaser.Scene {
             this.theme === "agentHeights" ? "agentHeights" : "office",
             `tiles-${this.theme}`,
           )!;
-          this.officeMap = map;
-
           // draw a floor-colored backdrop so empty map tiles aren't white
           const floorColor = this.theme === "agentHeights" ? 0x4a6a8a : 0xd4d0c8;
           const bg = this.add.graphics().setDepth(-1);
@@ -626,17 +610,12 @@ export class OfficeScene extends Phaser.Scene {
           }
           bg.strokePath();
 
-          this.groundLayer = map.createLayer("Ground", tiles)!.setDepth(0);
+          map.createLayer("Ground", tiles)!.setDepth(0);
 
           const walls = map.createLayer("Walls", tiles)!.setDepth(1);
           const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
-          this.wallsLayer = walls;
-          this.furnitureLayer = furniture;
           walls.setCollisionByProperty({ solid: true });
           furniture.setCollisionByProperty({ solid: true });
-
-          // Apply persisted office tile overrides
-          this.applyOfficeOverrides();
 
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
           upgradeFurniture(this, furniture);
@@ -680,16 +659,16 @@ export class OfficeScene extends Phaser.Scene {
               this.spawnTile = { x: tx, y: ty };
             } else if (obj.name === "coffee") {
               this.coffeeTile = { x: tx, y: ty };
-            } else if (obj.name === "yuki-seat") {
-              this.yukiSeat = { x: tx, y: ty };
-            } else if (obj.name === "yuki-monitor") {
-              // Side-view monitor on Yuki's desk — thin profile, screen faces right toward her
+            } else if (obj.name === "agent-resources-seat") {
+              this.agentResourcesSeat = { x: tx, y: ty };
+            } else if (obj.name === "agent-resources-monitor") {
+              // Side-view monitor on Agent Resources's desk — thin profile, screen faces right toward her
               const mx = (obj.x ?? 0) + TILE_PX * 0.35;
               const my = (obj.y ?? 0) - TILE_PX * 0.15;
               const spr = this.add
                 .sprite(mx, my, MONITOR_SIDE_TEX, "0")
                 .setDepth(10 + (obj.y ?? 0) - 10);
-              this.yukiMonitor = spr;
+              this.agentResourcesMonitor = spr;
             } else if (obj.name === "hermes-seat") {
               this.hermesSeat = { x: tx, y: ty };
             } else if (obj.name === "hermes-monitor") {
@@ -740,28 +719,28 @@ export class OfficeScene extends Phaser.Scene {
           }
           this.grid = new Grid(map.width, map.height, walkable);
 
-          // Yuki — the office manager NPC
-          if (this.yukiSeat) {
-            // Create Yuki's left-facing chair sprite
-            const ycx = this.yukiSeat.x * TILE_PX + TILE_PX / 2;
-            const ycy = this.yukiSeat.y * TILE_PX + TILE_PX / 2;
+          // Agent Resources — the office manager NPC
+          if (this.agentResourcesSeat) {
+            // Create Agent Resources's left-facing chair sprite
+            const ycx = this.agentResourcesSeat.x * TILE_PX + TILE_PX / 2;
+            const ycy = this.agentResourcesSeat.y * TILE_PX + TILE_PX / 2;
             this.add
               .sprite(ycx, ycy, CHAIR_TEX_LEFT)
-              .setDepth(5 + this.yukiSeat.y * TILE_PX + 1);
+              .setDepth(5 + this.agentResourcesSeat.y * TILE_PX + 1);
 
-            this.yuki = new YukiNPC(this, this.grid, this.yukiSeat, (clicked) =>
+            this.agentResources = new AgentResourcesNPC(this, this.grid, this.agentResourcesSeat, (clicked) =>
               this.walkToAgent(clicked),
             );
 
-            // clickable zone over Yuki's office — clicking anywhere inside opens her chat
+            // clickable zone over Agent Resources's office — clicking anywhere inside opens her chat
             const zo = { x0: 22, y0: 8, x1: 27, y1: 11 };
             const zx = (zo.x0 + zo.x1 + 1) / 2 * TILE_PX;
             const zy = (zo.y0 + zo.y1 + 1) / 2 * TILE_PX;
             const zw = (zo.x1 - zo.x0 + 1) * TILE_PX;
             const zh = (zo.y1 - zo.y0 + 1) * TILE_PX;
-            this.yukiOfficeZone = this.add.zone(zx, zy, zw, zh);
-            this.yukiOfficeZone.setInteractive({ useHandCursor: true });
-            this.yukiOfficeZone.on("pointerdown", () => this.walkToAgent(YUKI_ID));
+            this.agentResourcesOfficeZone = this.add.zone(zx, zy, zw, zh);
+            this.agentResourcesOfficeZone.setInteractive({ useHandCursor: true });
+            this.agentResourcesOfficeZone.on("pointerdown", () => this.walkToAgent(AGENT_RESOURCES_ID));
           }
 
           // Hermes — right-facing chair at the mail room desk
@@ -783,7 +762,7 @@ export class OfficeScene extends Phaser.Scene {
             for (let x = 2; x < map.width - 2; x++) {
               if (!walkable[y][x] || (x + y) % 3 !== 0) continue;
               if (this.seats.some((s) => s && s.x === x && s.y === y)) continue;
-              if (this.yukiSeat && this.yukiSeat.x === x && this.yukiSeat.y === y) continue;
+              if (this.agentResourcesSeat && this.agentResourcesSeat.x === x && this.agentResourcesSeat.y === y) continue;
               if (this.hermesSeat && this.hermesSeat.x === x && this.hermesSeat.y === y) continue;
               this.extraSpots.push({ x, y });
             }
@@ -1107,10 +1086,6 @@ export class OfficeScene extends Phaser.Scene {
           this.input.keyboard!.on("keydown-ESC", () => {
             this.store.select(null);
             this.store.toggleBoard(false);
-            if (this.buildMode) this.toggleBuildMode();
-          });
-          this.input.keyboard!.on("keydown-B", () => {
-            this.toggleBuildMode();
           });
           // never swallow keystrokes meant for HUD inputs (onboarding, task box, …)
           this.input.keyboard!.disableGlobalCapture();
@@ -1179,16 +1154,12 @@ export class OfficeScene extends Phaser.Scene {
             });
             this.store.onNpcState((npcId, x, y, dir, state) => {
               if (!this.ready || this.store.roomId === "hq2") return;
-              if (npcId === YUKI_ID) this.yuki?.remoteUpdate(x, y, dir, state);
+              if (npcId === AGENT_RESOURCES_ID) this.agentResources?.remoteUpdate(x, y, dir, state);
               else if (npcId === HERMES_ID) this.hermes?.remoteUpdate(x, y, dir, state);
             });
             this.store.onTileUpdated((cx, cy, tileIndex, tile) => {
               if (!this.ready) return;
               this.world.applyRemoteTileUpdate(cx, cy, tileIndex, tile);
-            });
-            this.store.onOfficeTileUpdated((tileIndex, tile, layer) => {
-              if (!this.ready) return;
-              this.applyOfficeTile(tileIndex, tile, layer);
             });
             this.store.onEmote((agentId, emote) => {
               if (!this.ready) return;
@@ -1835,9 +1806,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Mobile: walk to the agent first, then select on arrival
     let npcX = 0, npcY = 0;
-    if (id === YUKI_ID && this.yuki) {
-      npcX = this.yuki.container.x;
-      npcY = this.yuki.container.y;
+    if (id === AGENT_RESOURCES_ID && this.agentResources) {
+      npcX = this.agentResources.container.x;
+      npcY = this.agentResources.container.y;
     } else if (id === HERMES_ID && this.hermes) {
       npcX = this.hermes.container.x;
       npcY = this.hermes.container.y;
@@ -1872,7 +1843,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Select an agent and open chat. */
   private selectAgent(id: string): void {
     this.store.select(id);
-    if (id === YUKI_ID) achievements.unlock("yuki_visit");
+    if (id === AGENT_RESOURCES_ID) achievements.unlock("agent-resources_visit");
     setTimeout(() => {
       (document.getElementById("d-chat") as HTMLInputElement | null)?.focus();
     }, 0);
@@ -3384,7 +3355,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Water cooler: show a random agent's current status. */
   private waterCoolerGossip(): void {
-    const agents = [...this.store.agents.values()].filter((a) => a.id !== YUKI_ID);
+    const agents = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID);
     if (agents.length === 0) {
       this.store.toast("The water cooler bubbles quietly. Nobody to gossip about yet.");
       return;
@@ -4189,7 +4160,7 @@ export class OfficeScene extends Phaser.Scene {
     this.padFrontPx = { x: _pf.x, y: _pf.y };
   }
 
-  /** Draw a big red emergency button on the wall in Yuki's office. */
+  /** Draw a big red emergency button on the wall in Agent Resources's office. */
   private drawRedButton(): void {
     const g = this.add.graphics().setDepth(3);
     const bx = this.redButtonTile.x * TILE_PX + 32;
@@ -5833,7 +5804,7 @@ export class OfficeScene extends Phaser.Scene {
       this.anims.create({ key: `${key}-hop`, frames: this.anims.generateFrameNumbers(key, { frames: [3, 1, 0] }), frameRate: 5, repeat: 0 });
     }
 
-    const sheets = ["boss", "char-yuki", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
+    const sheets = ["boss", "char-agent-resources", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
     const dirs: Dir[] = ["down", "left", "right", "up"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
@@ -5878,8 +5849,8 @@ export class OfficeScene extends Phaser.Scene {
 
   private syncAgents(): void {
     for (const [id, info] of this.store.agents) {
-      if (id === YUKI_ID) {
-        this.yuki?.sync(info);
+      if (id === AGENT_RESOURCES_ID) {
+        this.agentResources?.sync(info);
         continue;
       }
       if (id === HERMES_ID) {
@@ -5954,15 +5925,15 @@ export class OfficeScene extends Phaser.Scene {
       }
     });
 
-    // Yuki's monitor — always on since she's always at her desk
-    if (this.yukiMonitor) {
-      const yukiInfo = this.store.agents.get(YUKI_ID);
-      if (yukiInfo && yukiInfo.status !== "idle") {
-        this.yukiMonitor.setFrame("1");
-        this.yukiMonitor.setTint(STATUS_COLORS[yukiInfo.status]);
+    // Agent Resources's monitor — always on since she's always at her desk
+    if (this.agentResourcesMonitor) {
+      const agentResourcesInfo = this.store.agents.get(AGENT_RESOURCES_ID);
+      if (agentResourcesInfo && agentResourcesInfo.status !== "idle") {
+        this.agentResourcesMonitor.setFrame("1");
+        this.agentResourcesMonitor.setTint(STATUS_COLORS[agentResourcesInfo.status]);
       } else {
-        this.yukiMonitor.setFrame("0");
-        this.yukiMonitor.clearTint();
+        this.agentResourcesMonitor.setFrame("0");
+        this.agentResourcesMonitor.clearTint();
       }
     }
 
@@ -5999,15 +5970,15 @@ export class OfficeScene extends Phaser.Scene {
       const myRoleTyping = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
       const isVisitorTyping = (myRoleTyping === "member" || myRoleTyping === "guest") && this.store.roomId !== "hq2";
       if (!isVisitorTyping) {
-        this.yuki?.update(time, dt, false, this.player.x, this.player.y);
+        this.agentResources?.update(time, dt, false, this.player.x, this.player.y);
         this.hermes?.update(time, dt);
       }
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
-      const selYuki = this.store.selectedId === YUKI_ID ? this.yuki : null;
+      const selAgentResources = this.store.selectedId === AGENT_RESOURCES_ID ? this.agentResources : null;
       const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
-      this.selectRing.setVisible(!!(sel || selYuki || selHermes));
+      this.selectRing.setVisible(!!(sel || selAgentResources || selHermes));
       if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
-      else if (selYuki) this.selectRing.setPosition(selYuki.container.x, selYuki.container.y + 1);
+      else if (selAgentResources) this.selectRing.setPosition(selAgentResources.container.x, selAgentResources.container.y + 1);
       else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
       return;
     }
@@ -6243,15 +6214,15 @@ export class OfficeScene extends Phaser.Scene {
             );
             if (d < 144 && (!best || d < best.d)) best = { id, d };
           }
-          // also check Yuki
-          if (this.yuki) {
+          // also check Agent Resources
+          if (this.agentResources) {
             const d = Phaser.Math.Distance.Between(
               this.player.x,
               this.player.y,
-              this.yuki.container.x,
-              this.yuki.container.y,
+              this.agentResources.container.x,
+              this.agentResources.container.y,
             );
-            if (d < 144 && (!best || d < best.d)) best = { id: YUKI_ID, d };
+            if (d < 144 && (!best || d < best.d)) best = { id: AGENT_RESOURCES_ID, d };
           }
           // also check Hermes
           if (this.hermes) {
@@ -6265,7 +6236,7 @@ export class OfficeScene extends Phaser.Scene {
           }
           this.store.select(best ? best.id : null);
           if (best) {
-            if (best.id === YUKI_ID) achievements.unlock("yuki_visit");
+            if (best.id === AGENT_RESOURCES_ID) achievements.unlock("agent-resources_visit");
             // defer focus so this keypress doesn't type "e" into the chat box
             setTimeout(() => {
               (document.getElementById("d-chat") as HTMLInputElement | null)?.focus();
@@ -6283,21 +6254,21 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
-    // Run Yuki/Hermes state machine unless we're a visitor in someone else's private office
+    // Run Agent Resources/Hermes state machine unless we're a visitor in someone else's private office
     const myRole = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
     const isVisitor = (myRole === "member" || myRole === "guest") && this.store.roomId !== "hq2";
     if (!isVisitor) {
-      this.yuki?.update(time, dt, false, this.player.x, this.player.y);
+      this.agentResources?.update(time, dt, false, this.player.x, this.player.y);
       this.hermes?.update(time, dt);
     }
 
     // selection ring
     const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
-    const selYuki = this.store.selectedId === YUKI_ID ? this.yuki : null;
+    const selAgentResources = this.store.selectedId === AGENT_RESOURCES_ID ? this.agentResources : null;
     const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
-    this.selectRing.setVisible(!!(sel || selYuki || selHermes));
+    this.selectRing.setVisible(!!(sel || selAgentResources || selHermes));
     if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
-    else if (selYuki) this.selectRing.setPosition(selYuki.container.x, selYuki.container.y + 1);
+    else if (selAgentResources) this.selectRing.setPosition(selAgentResources.container.x, selAgentResources.container.y + 1);
     else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
 
     // --- lighting ---
@@ -6415,9 +6386,9 @@ export class OfficeScene extends Phaser.Scene {
     const isOwnerForNpc = myRoleForNpc === "owner" && this.store.roomId !== "hq2";
     if (isOwnerForNpc && now - this.lastNpcSyncSent > 200) {
       this.lastNpcSyncSent = now;
-      if (this.yuki) {
-        const s = this.yuki.getState();
-        this.net?.send({ type: "npc_update", npcId: YUKI_ID, ...s });
+      if (this.agentResources) {
+        const s = this.agentResources.getState();
+        this.net?.send({ type: "npc_update", npcId: AGENT_RESOURCES_ID, ...s });
       }
       if (this.hermes) {
         const s = this.hermes.getState();
@@ -7353,8 +7324,8 @@ export class OfficeScene extends Phaser.Scene {
 
     // Resolve sprite image for the dashboard header
     let spriteImg: string;
-    if (agent.id === YUKI_ID) {
-      spriteImg = "assets/characters/char-yuki.png";
+    if (agent.id === AGENT_RESOURCES_ID) {
+      spriteImg = "assets/characters/char-agent-resources.png";
     } else if (agent.id === HERMES_ID) {
       spriteImg = "assets/characters/char-hermes.png";
     } else if (agent.appearance) {
@@ -7821,174 +7792,6 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  // ── Office tile editing (build mode) ───────────────────────────────
-
-  /** Apply all persisted office tile overrides from the store. */
-  private applyOfficeOverrides(): void {
-    const overrides = this.store.officeOverrides;
-    if (!overrides || Object.keys(overrides).length === 0) return;
-    const mapW = this.officeMap.width;
-    for (const [key, tile] of Object.entries(overrides)) {
-      const tileIndex = parseInt(key, 10);
-      const x = tileIndex % mapW;
-      const y = Math.floor(tileIndex / mapW);
-      if (tile === -1) {
-        this.furnitureLayer.removeTileAt(x, y, false);
-      } else {
-        this.furnitureLayer.putTileAt(tile, x, y);
-      }
-    }
-  }
-
-  /** Apply a single office tile override (from remote player or local edit). */
-  private applyOfficeTile(tileIndex: number, tile: number, layer: "ground" | "walls" | "furniture"): void {
-    const mapW = this.officeMap.width;
-    const x = tileIndex % mapW;
-    const y = Math.floor(tileIndex / mapW);
-    const targetLayer = layer === "ground" ? this.groundLayer : layer === "walls" ? this.wallsLayer : this.furnitureLayer;
-    if (tile === -1) {
-      targetLayer.removeTileAt(x, y, false);
-    } else {
-      targetLayer.putTileAt(tile, x, y);
-    }
-  }
-
-  /** Toggle build mode on/off. */
-  private toggleBuildMode(): void {
-    this.buildMode = !this.buildMode;
-    if (this.buildMode) {
-      this.showBuildPalette();
-      this.input.on("pointerdown", this.handleBuildClick, this);
-      this.store.toast("Build mode ON — click tiles to place. Press B or ESC to exit.");
-    } else {
-      this.hideBuildPalette();
-      this.input.off("pointerdown", this.handleBuildClick, this);
-      this.store.toast("Build mode OFF");
-    }
-  }
-
-  /** Handle clicking on the tilemap while in build mode. */
-  private handleBuildClick(pointer: Phaser.Input.Pointer): void {
-    if (!this.buildMode) return;
-    // Don't place if clicking on UI
-    if (pointer.event.target && pointer.event.target !== this.game.canvas) return;
-
-    const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-    const tx = Math.floor(worldPoint.x / TILE_PX);
-    const ty = Math.floor(worldPoint.y / TILE_PX);
-
-    if (tx < 0 || ty < 0 || tx >= this.officeMap.width || ty >= this.officeMap.height) return;
-
-    const tileIndex = ty * this.officeMap.width + tx;
-    const tile = this.buildSelectedTile;
-
-    // Apply locally
-    this.applyOfficeTile(tileIndex, tile, this.buildLayer);
-
-    // Track in store
-    this.store.officeOverrides[tileIndex] = tile;
-
-    // Send to server
-    if (this.net) {
-      this.net.send({ type: "office_tile_update", tileIndex, tile, layer: this.buildLayer });
-    }
-  }
-
-  /** Show the build mode palette UI. */
-  private showBuildPalette(): void {
-    if (this.buildPaletteEl) return;
-
-    const el = document.createElement("div");
-    el.id = "build-palette";
-    el.style.cssText = `
-      position: fixed; top: 60px; right: 16px; z-index: 10000;
-      background: rgba(20, 22, 30, 0.95); border: 1px solid #3a4a5a;
-      border-radius: 10px; padding: 12px; max-width: 280px;
-      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
-      color: #e0e0e0; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      max-height: 80vh; overflow-y: auto;
-    `;
-
-    // Layer selector
-    const layerRow = document.createElement("div");
-    layerRow.style.cssText = "display: flex; gap: 6px; margin-bottom: 10px;";
-    const layers: ("ground" | "walls" | "furniture")[] = ["ground", "walls", "furniture"];
-    for (const l of layers) {
-      const btn = document.createElement("button");
-      btn.textContent = l.charAt(0).toUpperCase() + l.slice(1);
-      btn.style.cssText = `
-        flex: 1; padding: 6px 8px; border: 1px solid #3a4a5a;
-        border-radius: 6px; background: ${l === this.buildLayer ? "#2a5a8a" : "#1a2a3a"};
-        color: #e0e0e0; cursor: pointer; font-size: 12px; font-family: inherit;
-      `;
-      btn.onclick = () => {
-        this.buildLayer = l;
-        for (const sib of layerRow.children) {
-          (sib as HTMLButtonElement).style.background = "#1a2a3a";
-        }
-        btn.style.background = "#2a5a8a";
-      };
-      layerRow.appendChild(btn);
-    }
-    el.appendChild(layerRow);
-
-    // Tile palette — tiles 1..94 (firstgid=1, so tile 0 = empty), 8 columns
-    const grid = document.createElement("div");
-    grid.style.cssText = "display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px;";
-    const tilesetKey = `tiles-${this.theme}`;
-    const cols = 8;
-    const tileCount = 94;
-    for (let i = 1; i <= tileCount; i++) {
-      const tileBtn = document.createElement("div");
-      const spriteIdx = i - 1; // 0-indexed for sprite sheet position
-      tileBtn.style.cssText = `
-        width: 28px; height: 28px; border: 2px solid ${i === this.buildSelectedTile ? "#4cb866" : "transparent"};
-        border-radius: 4px; cursor: pointer; image-rendering: pixelated;
-        background-image: url(${this.game.textures.getBase64(tilesetKey)});
-        background-position: -${(spriteIdx % cols) * 28}px -${Math.floor(spriteIdx / cols) * 28}px;
-        background-size: ${cols * 28}px ${Math.ceil(tileCount / cols) * 28}px;
-      `;
-      tileBtn.onclick = () => {
-        this.buildSelectedTile = i;
-        for (const sib of grid.children) {
-          (sib as HTMLDivElement).style.border = "2px solid transparent";
-        }
-        tileBtn.style.border = "2px solid #4cb866";
-      };
-      grid.appendChild(tileBtn);
-    }
-    el.appendChild(grid);
-
-    // Eraser button
-    const eraserRow = document.createElement("div");
-    eraserRow.style.cssText = "margin-top: 8px;";
-    const eraserBtn = document.createElement("button");
-    eraserBtn.textContent = "🧹 Erase";
-    eraserBtn.style.cssText = `
-      width: 100%; padding: 6px; border: 1px solid #3a4a5a;
-      border-radius: 6px; background: #3a1a1a; color: #e0e0e0;
-      cursor: pointer; font-size: 12px; font-family: inherit;
-    `;
-    eraserBtn.onclick = () => {
-      this.buildSelectedTile = -1;
-      for (const sib of grid.children) {
-        (sib as HTMLDivElement).style.border = "2px solid transparent";
-      }
-    };
-    eraserRow.appendChild(eraserBtn);
-    el.appendChild(eraserRow);
-
-    document.body.appendChild(el);
-    this.buildPaletteEl = el;
-  }
-
-  /** Hide the build mode palette UI. */
-  private hideBuildPalette(): void {
-    if (this.buildPaletteEl) {
-      this.buildPaletteEl.remove();
-      this.buildPaletteEl = null;
-    }
-  }
 }
 
 export { tileOf };

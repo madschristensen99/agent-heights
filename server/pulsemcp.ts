@@ -45,7 +45,7 @@ const PULSEMCP_SEARCH_TIMEOUT_MS = 8_000;
 
 /**
  * Search PulseMCP for MCP servers matching the query.
- * Returns a formatted string suitable for injecting into Yuki's context.
+ * Returns a formatted string suitable for injecting into Agent Resources's context.
  * Returns null if the search fails, times out, or finds no results.
  */
 /**
@@ -123,12 +123,10 @@ async function fetchPulseMCPServers(query: string, limit: number): Promise<Pulse
  */
 async function fetchServerJsonRemote(githubUrl: string): Promise<string | null> {
   try {
-    // Convert https://github.com/owner/repo to raw URL
     const match = githubUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
     if (!match) return null;
     const [, owner, repo] = match;
     const cleanRepo = repo.replace(/\.git$/, "");
-    // Try common branch names
     for (const branch of ["main", "master"]) {
       try {
         const rawUrl = `https://raw.githubusercontent.com/${owner}/${cleanRepo}/${branch}/server.json`;
@@ -141,11 +139,50 @@ async function fetchServerJsonRemote(githubUrl: string): Promise<string | null> 
           remotes?: { type: string; url: string }[];
           packages?: { identifier?: string; transport?: { type: string }; runtimeHint?: string }[];
         };
-        // Return first remote URL that looks like an MCP endpoint
         const remote = json.remotes?.find((r) => r.url && !r.url.includes("github.com"));
         if (remote?.url) {
           console.log(`[pulsemcp] found remote URL in server.json: ${remote.url}`);
           return remote.url;
+        }
+      } catch { /* try next branch */ }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch package.json from a GitHub repo to find the npm package name.
+ * Returns { command, args } for npx install, or null.
+ */
+async function fetchPackageJsonFromGithub(githubUrl: string): Promise<{ command: string; args: string[] } | null> {
+  try {
+    const match = githubUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+    if (!match) return null;
+    const [, owner, repo] = match;
+    const cleanRepo = repo.replace(/\.git$/, "");
+    for (const branch of ["main", "master"]) {
+      try {
+        const rawUrl = `https://raw.githubusercontent.com/${owner}/${cleanRepo}/${branch}/package.json`;
+        const res = await fetch(rawUrl, {
+          signal: AbortSignal.timeout(5_000),
+          headers: { "Accept": "application/json" },
+        });
+        if (!res.ok) continue;
+        const pkg = await res.json() as {
+          name?: string;
+          bin?: string | Record<string, string>;
+          scripts?: Record<string, string>;
+        };
+        if (pkg.name) {
+          // If it has a bin field or a start script, it's likely an MCP server package
+          const hasBin = typeof pkg.bin === "string" || (pkg.bin && Object.keys(pkg.bin).length > 0);
+          const hasStart = pkg.scripts?.start;
+          if (hasBin || hasStart) {
+            console.log(`[pulsemcp] found npm package in package.json: ${pkg.name}`);
+            return { command: "npx", args: ["-y", pkg.name] };
+          }
         }
       } catch { /* try next branch */ }
     }
@@ -192,7 +229,7 @@ function toMCPConfigSync(s: PulseMCPServer): MCPServerConfig {
 
 /**
  * Search PulseMCP for MCP servers matching the query.
- * Returns a formatted string suitable for injecting into Yuki's context.
+ * Returns a formatted string suitable for injecting into Agent Resources's context.
  * Returns null if the search fails, times out, or finds no results.
  */
 export async function searchPulseMCP(query: string, limit = 10): Promise<string | null> {
@@ -235,12 +272,25 @@ export async function searchPulseMCPStructured(query: string, limit = 20): Promi
   for (const s of servers) {
     let config = toMCPConfigSync(s);
 
-    // If no installable config yet, try fetching server.json from GitHub
+    // If no installable config yet, try fetching server.json from GitHub for a remote URL
     if (!config.url && !config.command && s.source_code_url) {
       const remoteUrl = await fetchServerJsonRemote(s.source_code_url);
       if (remoteUrl) {
         config = { name: s.name, url: remoteUrl };
       }
+    }
+
+    // Still no installable config — try fetching package.json for npm package name
+    if (!config.url && !config.command && s.source_code_url) {
+      const pkgConfig = await fetchPackageJsonFromGithub(s.source_code_url);
+      if (pkgConfig) {
+        config = { name: s.name, ...pkgConfig };
+      }
+    }
+
+    // Still no installable config — include sourceUrl for agent self-setup
+    if (!config.url && !config.command && s.source_code_url) {
+      config.sourceUrl = s.source_code_url;
     }
 
     results.push({
@@ -255,7 +305,7 @@ export async function searchPulseMCPStructured(query: string, limit = 20): Promi
 }
 
 /**
- * Determine if a user's message to Yuki seems like it's asking about
+ * Determine if a user's message to Agent Resources seems like it's asking about
  * finding tools, agents, or capabilities that would warrant a PulseMCP search.
  * Only triggers on messages that look like they're seeking a specific tool/service,
  * not generic questions about the office or current agents.

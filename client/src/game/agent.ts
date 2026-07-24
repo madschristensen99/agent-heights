@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { AgentInfo } from "../../../shared/types";
-import { YUKI_ID, HERMES_ID } from "../../../shared/types";
+import { AGENT_RESOURCES_ID, HERMES_ID } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
 
 /** Returns the Phaser texture key for an agent's character sprite. */
@@ -461,14 +461,14 @@ export class AgentNPC {
   }
 }
 
-// --- Yuki's office geometry (must match generate-assets.ts) ---
-const YUKI_OFFICE = { x0: 22, y0: 8, x1: 27, y1: 11 };
-const YUKI_GREET_TILE: Tile = { x: 23, y: 10 };
+// --- Agent Resources's office geometry (must match generate-assets.ts) ---
+const AGENT_RESOURCES_OFFICE = { x0: 22, y0: 8, x1: 27, y1: 11 };
+const AGENT_RESOURCES_GREET_TILE: Tile = { x: 23, y: 10 };
 
-type YukiState = "sitting" | "greeting" | "returning";
+type AgentResourcesState = "sitting" | "greeting" | "returning";
 
-/** Yuki — the office manager. Sits at her desk; stands up to greet visitors. */
-export class YukiNPC {
+/** Agent Resources — the office manager. Sits at her desk; stands up to greet visitors. */
+export class AgentResourcesNPC {
   container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite;
   private label: Phaser.GameObjects.Text;
@@ -480,7 +480,7 @@ export class YukiNPC {
   private seat: Tile;
   private path: Tile[] = [];
   private dir: Dir = "down";
-  private state: YukiState = "sitting";
+  private state: AgentResourcesState = "sitting";
   private greetUntil = 0;
   private wasPlayerInside = false;
 
@@ -491,14 +491,14 @@ export class YukiNPC {
     onClick: (id: string) => void,
   ) {
     this.seat = seat;
-    const c = "char-yuki";
+    const c = "char-agent-resources";
 
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
     this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(1);
     this.nameBg = scene.add.graphics();
     this.label = scene.add
-      .text(0, -108, "Yuki", {
+      .text(0, -108, "Agent Resources", {
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
         fontSize: "16px",
         color: "#1d2126",
@@ -524,7 +524,7 @@ export class YukiNPC {
     this.play(`${c}-idle-left`);
 
     this.sprite.setInteractive({ useHandCursor: true });
-    this.sprite.on("pointerdown", () => onClick(YUKI_ID));
+    this.sprite.on("pointerdown", () => onClick(AGENT_RESOURCES_ID));
   }
 
   /** Update status dot + label from server state. */
@@ -547,10 +547,10 @@ export class YukiNPC {
   remoteUpdate(x: number, y: number, dir: Dir, state: string): void {
     this.container.setPosition(x, y);
     this.dir = dir;
-    this.state = state as YukiState;
+    this.state = state as AgentResourcesState;
     // Clear path — visitors don't run the pathfinding state machine
     this.path = [];
-    const c = "char-yuki";
+    const c = "char-agent-resources";
     this.play(`${c}-idle-${this.dir}`);
     this.container.setDepth(10 + this.container.y);
   }
@@ -580,16 +580,16 @@ export class YukiNPC {
   }
 
   update(time: number, _dt: number, _wander: boolean, playerX: number, playerY: number): void {
-    const c = "char-yuki";
+    const c = "char-agent-resources";
     const pt = tileOf(playerX, playerY);
     const playerInside =
-      pt.x >= YUKI_OFFICE.x0 && pt.x <= YUKI_OFFICE.x1 &&
-      pt.y >= YUKI_OFFICE.y0 && pt.y <= YUKI_OFFICE.y1;
+      pt.x >= AGENT_RESOURCES_OFFICE.x0 && pt.x <= AGENT_RESOURCES_OFFICE.x1 &&
+      pt.y >= AGENT_RESOURCES_OFFICE.y0 && pt.y <= AGENT_RESOURCES_OFFICE.y1;
 
     // detect player entering the office
     if (playerInside && !this.wasPlayerInside && this.state === "sitting") {
       this.state = "greeting";
-      const path = findPath(this.grid, this.tile(), YUKI_GREET_TILE);
+      const path = findPath(this.grid, this.tile(), AGENT_RESOURCES_GREET_TILE);
       this.path = path;
       this.greetUntil = 0;
     }

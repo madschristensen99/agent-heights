@@ -36,7 +36,7 @@ export class BootScene extends Phaser.Scene {
       frameWidth: CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     });
-    this.load.spritesheet("char-yuki", `assets/characters/char-yuki.png${v}`, {
+    this.load.spritesheet("char-agent-resources", `assets/characters/char-agent-resources.png${v}`, {
       frameWidth: CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     });
@@ -246,7 +246,7 @@ export class BootScene extends Phaser.Scene {
     }
 
     // --- character sheet animations ---
-    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss", "char-yuki"];
+    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss", "char-agent-resources"];
     const dirs: Dir[] = ["down", "left", "right", "up"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;

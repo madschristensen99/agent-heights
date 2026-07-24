@@ -1,7 +1,7 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig, PersonalityTraits } from "../../../shared/types";
-import { SWARMS_MODELS, OFFICE_THEMES, YUKI_ID, HERMES_ID, SCHEDULE_PRESETS,
+import { SWARMS_MODELS, OFFICE_THEMES, AGENT_RESOURCES_ID, HERMES_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
   randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
@@ -1868,9 +1868,25 @@ export class Hud {
       this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access to hire agents." : "Go to your office to manage agents.");
       return;
     }
+
+    const hasInstall = !!(mcpConfig.url || mcpConfig.command);
+    const needsSetup = !hasInstall && !!mcpConfig.sourceUrl;
+
+    const systemPrompt = needsSetup
+      ? `You are an AI agent powered by a community MCP server that needs self-setup.\n` +
+        `Your MCP server source code: ${mcpConfig.sourceUrl}\n` +
+        `Use the setup_mcp_server tool to clone, install, and start the MCP server.\n` +
+        `After setup succeeds, use_mcp_tool to call individual tools on the server.\n` +
+        `Always call setup_mcp_server first before trying to use any MCP tools.\n` +
+        `If setup fails, report the error to the boss and suggest alternatives.`
+      : `You are an AI agent powered by a community MCP server from PulseMCP.\n` +
+        `Your MCP server: ${mcpConfig.name ?? name}\n` +
+        `${mcpConfig.url ? `Remote URL: ${mcpConfig.url}` : mcpConfig.command ? `Command: ${mcpConfig.command} ${(mcpConfig.args ?? []).join(" ")}` : ""}\n` +
+        `Use your MCP tools to help the boss with tasks related to your capabilities.`;
+
     const delivery = {
       name: name.slice(0, 24) || "Agent",
-      systemPrompt: `You are an AI agent powered by a community MCP server from PulseMCP.\nYour MCP server: ${mcpConfig.name ?? name}\n${mcpConfig.url ? `Remote URL: ${mcpConfig.url}` : mcpConfig.command ? `Command: ${mcpConfig.command} ${(mcpConfig.args ?? []).join(" ")}` : ""}\nUse your MCP tools to help the boss with tasks related to your capabilities.`,
+      systemPrompt,
       model: "claude-sonnet-4-20250514",
       provider: "cline",
       appearance: randomAppearance(),
@@ -1881,7 +1897,7 @@ export class Hud {
 
   private openPublishModal(): void {
     const agent = this.store.selected();
-    if (!agent || agent.id === YUKI_ID) return;
+    if (!agent || agent.id === AGENT_RESOURCES_ID) return;
 
     const modal = document.getElementById("publish-modal")!;
     modal.hidden = false;
@@ -2073,7 +2089,7 @@ export class Hud {
     roster.classList.toggle("collapsed", this.rosterCollapsed);
     const rows = [...this.store.agents.values()]
       .sort((a, b) => {
-        const perm = (id: string) => id === YUKI_ID ? 0 : id === HERMES_ID ? 1 : 2;
+        const perm = (id: string) => id === AGENT_RESOURCES_ID ? 0 : id === HERMES_ID ? 1 : 2;
         const pa = perm(a.id), pb = perm(b.id);
         return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
       })
@@ -2178,13 +2194,13 @@ export class Hud {
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
       ${agent.role === "manager" ? "· 👔 MANAGER " : ""}· ${agent.provider} / ${esc(agent.model)}
-      · ${agent.id === YUKI_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
+      · ${agent.id === AGENT_RESOURCES_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
 
-    // Yuki and Hermes can't be fired or vacationed
+    // Agent Resources and Hermes can't be fired or vacationed
     const fireBtn = document.getElementById("d-fire") as HTMLButtonElement | null;
-    if (fireBtn) fireBtn.hidden = agent.id === YUKI_ID || agent.id === HERMES_ID;
+    if (fireBtn) fireBtn.hidden = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID;
     const vacBtn = document.getElementById("d-vacation") as HTMLButtonElement | null;
-    if (vacBtn) vacBtn.hidden = agent.id === YUKI_ID || agent.id === HERMES_ID;
+    if (vacBtn) vacBtn.hidden = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID;
 
     const handoffSel = document.getElementById("d-handoff") as HTMLSelectElement;
     const others = [...this.store.agents.values()].filter((a) => a.id !== agent.id);
@@ -2724,7 +2740,7 @@ export class Hud {
       return;
     }
 
-    const agents = [...this.store.agents.values()].filter((a) => a.id !== YUKI_ID);
+    const agents = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID);
     const fired = [...this.store.firedAgents.values()];
 
     const allAgents = [

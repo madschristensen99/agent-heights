@@ -39,11 +39,11 @@ export interface RunContext {
   loadMessages?: (agentId: string) => Promise<unknown[]>;
   /** Clear persisted conversation messages for an agent. */
   clearMessages?: (agentId: string) => Promise<void>;
-  /** Hire an agent (Yuki only). Triggers helicopter delivery + creates agent. */
+  /** Hire an agent (Agent Resources only). Triggers helicopter delivery + creates agent. */
   hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]) => Promise<string>;
   /** Called when an agent posts a message to a colleague's inbox. Lets the manager assign a review task to an idle recipient. */
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
-  /** Called when an MCP tool encounters a rate-limit or API funding error. Lets the manager notify Yuki, Hermes, and the user. */
+  /** Called when an MCP tool encounters a rate-limit or API funding error. Lets the manager notify Agent Resources, Hermes, and the user. */
   onApiError?: (type: "rate_limit" | "funding", details: { serverLabel: string; toolName: string; message: string }) => void;
 }
 

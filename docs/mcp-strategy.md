@@ -16,7 +16,7 @@ This document outlines the current MCP (Model Context Protocol) integration, ana
 - **Agent engine**: Cline SDK (`@cline/sdk`) with tool-calling
 - **Built-in tools**: `read_files`, `write_files`, `list_files`, `bash`, `search`, `web_fetch`, `editor`, `post_message`, `read_messages`, `read_board`, `claim_card`, `read_events`, `submit_and_exit`
 - **Agent roles**: `worker`, `manager`, `devops` (Railway operator)
-- **Special NPCs**: Yuki (office manager), Hermes (devops engineer)
+- **Special NPCs**: Agent Resources (office manager), Hermes (devops engineer)
 - **Persistence**: Save state for agents, world, task board, fired agents
 - **Models**: Claude Sonnet 4, Claude 3.7 Sonnet, Claude Opus 4, GPT-4o, GPT-4.1 Mini/Nano, o3-mini, Gemini 1.5 Pro, Tencent Hy3 (free)
 

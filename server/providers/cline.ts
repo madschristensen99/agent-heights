@@ -613,10 +613,10 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     const abortRef = { signal: ctx.abort.signal };
     if (!agent) {
       const submitState = { called: false, verified: false, callCount: 0 };
-      // Yuki chat with hireAgent capability gets special tools
-      const yukiHireTools: AgentTool<any, any>[] = [];
+      // Agent Resources chat with hireAgent capability gets special tools
+      const agentResourcesHireTools: AgentTool<any, any>[] = [];
       if (isChat && ctx.hireAgent) {
-        yukiHireTools.push({
+        agentResourcesHireTools.push({
           name: "hire_agent",
           description: "Hire a new AI agent into the office. The agent will arrive via helicopter. Use this when the boss asks you to hire someone, bring someone in, or add an agent to the office. You can specify MCP servers for community MCP agents.",
           inputSchema: {
@@ -654,7 +654,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
             }
           },
         });
-        yukiHireTools.push({
+        agentResourcesHireTools.push({
           name: "search_community_mcps",
           description: "Search the PulseMCP community database of 22,000+ MCP servers. Returns names, descriptions, and install configs. Use this when the boss asks about tools, integrations, or capabilities not in the curated catalog.",
           inputSchema: {
@@ -685,7 +685,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           },
         });
       }
-      const tools = isChat ? yukiHireTools : await makeTools(ctx.cwd, {
+      const tools = isChat ? agentResourcesHireTools : await makeTools(ctx.cwd, {
         railway: ctx.railway,
         sharedCwd: ctx.sharedCwd,
         workspaceRoot: resolve(ctx.cwd, ".."),
@@ -699,7 +699,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         abortRef,
         onApiError: ctx.onApiError,
       });
-      const maxIter = isChat ? (yukiHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
+      const maxIter = isChat ? (agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
         providerId: "openai-compatible",

@@ -32,7 +32,7 @@ This guide covers how to run both apps simultaneously, sharing the same local Su
      └─────────────┘          └─────────────┘
 ```
 
-- **Marketplace** (Next.js, port 3000): Browse/hire agents, chat with Yuki, publish agents
+- **Marketplace** (Next.js, port 3000): Browse/hire agents, chat with Agent Resources, publish agents
 - **Agent Heights** (Node WS server port 3001 + Vite client port 5173/5174): Pixel-art office for managing AI agents
 - **Supabase** (Docker, port 54321): Shared database — marketplace tables + sprite_heights_saves + auth.users
 - Both apps read/write the same Supabase instance. Auth tokens are interchangeable.
@@ -91,7 +91,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
 
-# Marketplace URL for Yuki proxy
+# Marketplace URL for Agent Resources proxy
 MARKETPLACE_URL=http://localhost:3000
 
 # WebSocket host for Vite dev client
@@ -119,7 +119,7 @@ pnpm dev
 ```
 
 - Runs on **http://localhost:3000**
-- Provides the Yuki API at `/api/yuki`
+- Provides the Agent Resources API at `/api/agent-resources`
 - Provides the marketplace UI for browsing/publishing agents
 
 ## Step 5: Start Agent Heights
@@ -154,9 +154,9 @@ pnpm client
 Visit **http://localhost:5173** (or 5174).
 
 In dev mode without authentication, the server falls back to a dev session. You'll see:
-- Yuki sitting at her desk in the office
+- Agent Resources sitting at her desk in the office
 - The 🛒 MARKET button in the topbar to browse marketplace agents
-- The red emergency stop button on the wall in Yuki's office
+- The red emergency stop button on the wall in Agent Resources's office
 
 ## Features That Work When Both Are Running
 
@@ -170,14 +170,14 @@ Click **🛒 MARKET** in the Agent Heights topbar. This queries Supabase directl
 4. The agent walks out, takes an elevator down into the office
 5. The agent is hired via WebSocket and becomes a real NPC in the office
 
-### Chat with Yuki (Marketplace-Aware)
-Walk up to Yuki in the office, click her, and type in the chat box. Messages are proxied to the marketplace's `/api/yuki` endpoint with HQ context (office roster, task board, boss name). Yuki has full marketplace knowledge plus awareness of your HQ state.
+### Chat with Agent Resources (Marketplace-Aware)
+Walk up to Agent Resources in the office, click her, and type in the chat box. Messages are proxied to the marketplace's `/api/agent-resources` endpoint with HQ context (office roster, task board, boss name). Agent Resources has full marketplace knowledge plus awareness of your HQ state.
 
 ### Publish HQ Agents to Marketplace
 Select an agent in HQ, click **📤 PUBLISH**, fill in the form. The agent is inserted into the `swarms_cloud_agents` table in Supabase and becomes visible in the marketplace.
 
 ### Emergency Stop
-Press E near the red button in Yuki's office. All agents stop working and line up in an organized formation by the entrance.
+Press E near the red button in Agent Resources's office. All agents stop working and line up in an organized formation by the entrance.
 
 ## Troubleshooting
 

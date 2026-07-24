@@ -191,7 +191,7 @@ export class RelationalPersistence {
         .maybeSingle();
 
       const world: WorldState = worldRow
-        ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], vacationedAgents: (worldRow as any).vacationed_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {}, officeOverrides: (worldRow as any).office_overrides ?? {} }
+        ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], vacationedAgents: (worldRow as any).vacationed_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {} }
         : { seed: room.seed, firedAgents: [] };
 
       // Load pending tasks (stored as JSONB on world_state)
@@ -368,7 +368,6 @@ export class RelationalPersistence {
             fired_agents: this.state.world.firedAgents,
             vacationed_agents: this.state.world.vacationedAgents ?? [],
             chunk_overrides: this.state.world.chunkOverrides ?? {},
-            office_overrides: this.state.world.officeOverrides ?? {},
           });
       } catch (err) {
         console.error("[db-rel] setWorld failed:", err);

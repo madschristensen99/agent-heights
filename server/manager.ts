@@ -24,7 +24,7 @@ import type {
   VacationedAgent,
   AgentACL,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, YUKI_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
@@ -39,11 +39,11 @@ import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./puls
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 
 /**
- * Detect if a message to Yuki is a question/conversation vs a task command.
- * Questions should be answered directly by Yuki (local LLM), not delegated.
+ * Detect if a message to Agent Resources is a question/conversation vs a task command.
+ * Questions should be answered directly by Agent Resources (local LLM), not delegated.
  * Task commands (containing action verbs + intent) go to the marketplace API.
  */
-function isYukiQuestion(text: string): boolean {
+function isAgentResourcesQuestion(text: string): boolean {
   const lower = text.toLowerCase().trim();
   // Question patterns
   const questionPatterns = [
@@ -263,7 +263,6 @@ export class AgentManager {
   private vacationedAgents = new Map<string, VacationedAgent>();
   private worldSeed = 0;
   private chunkOverrides: Record<string, Record<number, number>> = {};
-  private officeOverrides: Record<number, number> = {};
   private workspaceRoot: string;
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   bossName = "the boss";
@@ -291,17 +290,42 @@ export class AgentManager {
   }
 
   /** Inject the user's stored MCP API keys into the server configs at task time.
-   *  Also refreshes expired OAuth tokens automatically. */
+   *  Also refreshes expired OAuth tokens automatically.
+   *  For remote servers: injects authToken (and refreshes OAuth tokens).
+   *  For stdio servers: injects env vars from stored JSON credential blob. */
   private async injectMcpKeys(servers?: MCPServerConfig[]): Promise<MCPServerConfig[] | undefined> {
     if (!servers || servers.length === 0) return servers;
     const result: MCPServerConfig[] = [];
     for (const s of servers) {
-      const raw = s.url ? this.mcpKeys[s.url] : undefined;
+      // Remote servers: look up by URL; stdio servers: look up by name
+      const keyId = s.url ?? s.name;
+      const raw = keyId ? this.mcpKeys[keyId] : undefined;
       if (!raw) {
-        console.log(`[mcp-inject] No key for ${s.url}`);
+        console.log(`[mcp-inject] No key for ${keyId ?? "(no url/name)"}`);
         result.push(s);
         continue;
       }
+
+      // For stdio servers, the stored value may be a JSON blob of env vars
+      if (!s.url && s.command) {
+        try {
+          const envVars = JSON.parse(raw);
+          if (typeof envVars === "object" && envVars !== null) {
+            console.log(`[mcp-inject] Injecting env vars for stdio server ${s.name}`);
+            result.push({ ...s, env: { ...s.env, ...envVars } });
+            continue;
+          }
+        } catch {
+          // Not JSON — fall through to treat as a plain token
+        }
+        // Plain string: inject as a single env var if the server has envVars defined,
+        // otherwise inject as authToken (backward compat)
+        console.log(`[mcp-inject] Injecting plain key for stdio server ${s.name}`);
+        result.push({ ...s, env: { ...s.env, MCP_API_KEY: raw } });
+        continue;
+      }
+
+      // Remote server: existing OAuth/token flow
       const stored = parseStoredToken(raw);
       let token = stored.access_token;
       console.log(`[mcp-inject] Found token for ${s.url}, expires_at=${stored.expires_at ?? "none"}, has_refresh=${!!stored.refresh_token}`);
@@ -361,9 +385,8 @@ export class AgentManager {
     const world = this.save.getWorld();
     this.worldSeed = world.seed || Math.floor(Math.random() * 0xffffffff);
     this.chunkOverrides = world.chunkOverrides ?? {};
-    this.officeOverrides = world.officeOverrides ?? {};
     if (!world.seed) {
-      this.save.setWorld({ seed: this.worldSeed, firedAgents: [], chunkOverrides: {}, officeOverrides: {} });
+      this.save.setWorld({ seed: this.worldSeed, firedAgents: [], chunkOverrides: {} });
     }
     for (const fa of world.firedAgents) {
       this.firedAgents.set(fa.id, fa);
@@ -397,8 +420,13 @@ export class AgentManager {
     if (this.board.size > 0) {
       console.log(`[agent-heights] restored ${this.board.size} task card(s) from save`);
     }
-    // reload schedules from the save file
+    // reload schedules from the save file — skip orphaned schedules whose agent was fired/removed
+    let orphanedScheduleCount = 0;
     for (const sched of saved?.schedules ?? []) {
+      if (!this.agents.has(sched.agentId)) {
+        orphanedScheduleCount++;
+        continue;
+      }
       // recompute nextRunAt if it's in the past (server was down)
       if (sched.enabled && sched.nextRunAt <= Date.now()) {
         const recomputed = nextCronRun(sched.cronExpression);
@@ -409,11 +437,15 @@ export class AgentManager {
     if (this.schedules.size > 0) {
       console.log(`[agent-heights] restored ${this.schedules.size} schedule(s) from save`);
     }
+    if (orphanedScheduleCount > 0) {
+      console.log(`[agent-heights] skipped ${orphanedScheduleCount} orphaned schedule(s) (agent no longer exists)`);
+      this.persistSchedules();
+    }
     if (saved?.settings) {
       this.setSettings(saved.settings, false);
     }
 
-    this.ensureYuki();
+    this.ensureAgentResources();
     this.ensureHermes();
     this.seedTestMail();
     void this.startHermesGateway();
@@ -483,12 +515,12 @@ export class AgentManager {
     }
   }
 
-  /** Ensure Yuki — the permanent office manager — always exists in the roster. */
-  private ensureYuki(): void {
-    if (this.agents.has(YUKI_ID)) return;
+  /** Ensure Agent Resources — the permanent office manager — always exists in the roster. */
+  private ensureAgentResources(): void {
+    if (this.agents.has(AGENT_RESOURCES_ID)) return;
     const info: AgentInfo = {
-      id: YUKI_ID,
-      name: "Yuki",
+      id: AGENT_RESOURCES_ID,
+      name: "Agent Resources",
       title: "",
       provider: "cline",
       model: "claude-sonnet-4-20250514",
@@ -505,9 +537,9 @@ export class AgentManager {
       personality: { openness: 0.7, conscientiousness: 0.8, extraversion: 0.6, agreeableness: 0.9, neuroticism: 0.2 },
       mood: "content",
     };
-    mkdirSync(this.cwdFor("yuki", YUKI_ID), { recursive: true });
+    mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
     const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
-    this.agents.set(YUKI_ID, rt);
+    this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
   }
@@ -748,7 +780,7 @@ export class AgentManager {
   }
 
   worldState(): WorldState {
-    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], vacationedAgents: [...this.vacationedAgents.values()], chunkOverrides: this.chunkOverrides, officeOverrides: this.officeOverrides };
+    return { seed: this.worldSeed, firedAgents: [...this.firedAgents.values()], vacationedAgents: [...this.vacationedAgents.values()], chunkOverrides: this.chunkOverrides };
   }
 
   private persistWorld(): void {
@@ -766,17 +798,6 @@ export class AgentManager {
   /** Get chunk overrides for a specific chunk (or undefined if none). */
   getChunkOverrides(cx: number, cy: number): Record<number, number> | undefined {
     return this.chunkOverrides[`${cx},${cy}`];
-  }
-
-  /** Apply an office tile override from a client and persist it. */
-  applyOfficeOverride(tileIndex: number, tile: number): void {
-    this.officeOverrides[tileIndex] = tile;
-    this.persistWorld();
-  }
-
-  /** Get all office tile overrides. */
-  getOfficeOverrides(): Record<number, number> {
-    return this.officeOverrides;
   }
 
   async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits): Promise<void> {
@@ -838,7 +859,7 @@ export class AgentManager {
     this.logEvent("hire", `${cleanName} joined the office.`);
   }
 
-  /** Hire an agent from Yuki's chat — broadcasts helicopter_delivery to client
+  /** Hire an agent from Agent Resources's chat — broadcasts helicopter_delivery to client
    *  so the helicopter animation plays, then hires the agent server-side.
    *  Returns the new agent's id. */
   async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]): Promise<string> {
@@ -920,7 +941,7 @@ export class AgentManager {
     if (!clean) return;
     const free = [...this.agents.values()].filter(
       (rt) =>
-        rt.info.id !== YUKI_ID &&
+        rt.info.id !== AGENT_RESOURCES_ID &&
         rt.info.status !== "thinking" && rt.info.status !== "working",
     );
     if (free.length === 0) {
@@ -973,7 +994,7 @@ export class AgentManager {
   stopAll(): void {
     const stopped: string[] = [];
     for (const rt of this.agents.values()) {
-      if (rt.info.id === YUKI_ID) continue;
+      if (rt.info.id === AGENT_RESOURCES_ID) continue;
       if (rt.abort) {
         rt.abort.abort();
         if (rt.cardId) {
@@ -1084,8 +1105,8 @@ export class AgentManager {
   }
 
   async fire(agentId: string): Promise<void> {
-    if (agentId === YUKI_ID) {
-      this.broadcast({ type: "toast", text: "You can't fire Yuki — she runs this office." });
+    if (agentId === AGENT_RESOURCES_ID) {
+      this.broadcast({ type: "toast", text: "You can't fire Agent Resources — she runs this office." });
       return;
     }
     if (agentId === HERMES_ID) {
@@ -1096,6 +1117,7 @@ export class AgentManager {
     if (!rt) return;
     rt.abort?.abort();
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
+    rt.taskQueue = [];
     if (rt.cardId) {
       this.revertCard(rt.cardId);
       rt.cardId = null;
@@ -1130,8 +1152,8 @@ export class AgentManager {
 
   /** Send an agent on vacation — all data preserved, can be restored anytime. */
   async vacation(agentId: string): Promise<void> {
-    if (agentId === YUKI_ID) {
-      this.broadcast({ type: "toast", text: "Yuki doesn't take vacations — she runs this office." });
+    if (agentId === AGENT_RESOURCES_ID) {
+      this.broadcast({ type: "toast", text: "Agent Resources doesn't take vacations — she runs this office." });
       return;
     }
     if (agentId === HERMES_ID) {
@@ -1146,6 +1168,7 @@ export class AgentManager {
     }
     rt.abort?.abort();
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
+    rt.taskQueue = [];
 
     const vac: VacationedAgent = {
       id: rt.info.id,
@@ -1576,7 +1599,7 @@ export class AgentManager {
     const now = Date.now();
     for (const rt of this.agents.values()) {
       // Skip permanent NPCs, busy agents, and agents on cooldown
-      if (rt.info.id === YUKI_ID || rt.info.id === HERMES_ID) continue;
+      if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === HERMES_ID) continue;
       if (rt.info.status !== "idle") continue;
       if (now < rt.thinkCooldownUntil) continue;
       if (rt.nextThinkAt === 0) {
@@ -1610,7 +1633,7 @@ export class AgentManager {
         const card = backlog[0];
         const free = [...this.agents.values()].filter(
           (a) => a.info.id !== rt.info.id && a.info.role !== "manager" &&
-          a.info.status === "idle" && a.info.id !== YUKI_ID && a.info.id !== HERMES_ID,
+          a.info.status === "idle" && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID,
         );
         if (free.length > 0) {
           this.log(rt, "status", `Picked up backlog card "${card.title}" — delegating to the team.`);
@@ -1639,7 +1662,7 @@ export class AgentManager {
     // 3. Social agents: strike up a conversation with a colleague
     if (p.extraversion > 0.5 && Math.random() < 0.4) {
       const colleagues = [...this.agents.values()].filter(
-        (a) => a.info.id !== rt.info.id && a.info.id !== YUKI_ID && a.info.id !== HERMES_ID &&
+        (a) => a.info.id !== rt.info.id && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID &&
         a.info.status === "idle",
       );
       if (colleagues.length > 0) {
@@ -1742,7 +1765,7 @@ export class AgentManager {
 
     // ── Office context: who's here and what they're doing ──
     const colleagues = [...this.agents.values()]
-      .filter((a) => a.info.id !== rt.info.id && a.info.id !== YUKI_ID)
+      .filter((a) => a.info.id !== rt.info.id && a.info.id !== AGENT_RESOURCES_ID)
       .map((a) => {
         const status = a.info.status === "idle" ? "idle" : `working on: ${a.info.task ?? "something"}`;
         return `  - ${a.info.name}: ${status}`;
@@ -1829,9 +1852,9 @@ export class AgentManager {
 
   private async runTask(rt: AgentRuntime, task: string, isResume = false): Promise<void> {
     rt.taskStartedAt = Date.now();
-    // If Yuki receives a question as a task, answer it directly instead of delegating
-    if (rt.info.id === YUKI_ID && isYukiQuestion(task)) {
-      await this.runYukiKnowledgeChat(rt, task);
+    // If Agent Resources receives a question as a task, answer it directly instead of delegating
+    if (rt.info.id === AGENT_RESOURCES_ID && isAgentResourcesQuestion(task)) {
+      await this.runAgentResourcesKnowledgeChat(rt, task);
       return;
     }
 
@@ -2289,14 +2312,14 @@ export class AgentManager {
   }
 
   private async runChat(rt: AgentRuntime, text: string): Promise<void> {
-    if (rt.info.id === YUKI_ID) {
+    if (rt.info.id === AGENT_RESOURCES_ID) {
       // Questions and knowledge queries → answer locally with enriched context
-      if (isYukiQuestion(text)) {
-        await this.runYukiKnowledgeChat(rt, text);
+      if (isAgentResourcesQuestion(text)) {
+        await this.runAgentResourcesKnowledgeChat(rt, text);
         return;
       }
       // Task commands → delegate via marketplace API
-      void this.runYukiChat(rt, text);
+      void this.runAgentResourcesChat(rt, text);
       return;
     }
     await this.runClineChat(rt, text);
@@ -2400,11 +2423,11 @@ export class AgentManager {
   }
 
   /**
-   * Yuki knowledge chat — answers questions locally using the LLM with a
+   * Agent Resources knowledge chat — answers questions locally using the LLM with a
    * knowledge-rich system prompt. Bypasses the marketplace API entirely
-   * so Yuki answers directly instead of trying to delegate tasks.
+   * so Agent Resources answers directly instead of trying to delegate tasks.
    */
-  private async runYukiKnowledgeChat(rt: AgentRuntime, text: string): Promise<void> {
+  private async runAgentResourcesKnowledgeChat(rt: AgentRuntime, text: string): Promise<void> {
     const abort = new AbortController();
     rt.abort = abort;
 
@@ -2417,7 +2440,7 @@ export class AgentManager {
 
     // Build roster and board context
     const roster = [...this.agents.values()]
-      .filter((a) => a.info.id !== YUKI_ID)
+      .filter((a) => a.info.id !== AGENT_RESOURCES_ID)
       .map((a) => `- ${a.info.name} (${a.info.model}, ${a.info.status})`)
       .join("\n") || "(no agents hired yet)";
 
@@ -2431,26 +2454,26 @@ export class AgentManager {
     // Dynamic PulseMCP pre-search for tool-finding queries
     if (shouldSearchPulseMCP(text)) {
       const searchQuery = extractSearchQuery(text);
-      console.log(`[yuki] PulseMCP search triggered for "${text}" → query="${searchQuery}"`);
+      console.log(`[agent-resources] PulseMCP search triggered for "${text}" → query="${searchQuery}"`);
       if (searchQuery) {
         try {
           const pulseResults = await searchPulseMCP(searchQuery, 10);
           if (pulseResults) {
-            console.log(`[yuki] PulseMCP returned ${pulseResults.split("\n").length} lines`);
+            console.log(`[agent-resources] PulseMCP returned ${pulseResults.split("\n").length} lines`);
             knowledgeContext += `\n\n${pulseResults}`;
           } else {
-            console.log(`[yuki] PulseMCP returned null (no results or error)`);
+            console.log(`[agent-resources] PulseMCP returned null (no results or error)`);
           }
         } catch {
           // best-effort
         }
       }
     } else {
-      console.log(`[yuki] PulseMCP search NOT triggered for "${text}"`);
+      console.log(`[agent-resources] PulseMCP search NOT triggered for "${text}"`);
     }
 
     const systemPrompt = [
-      `You are Yuki, the Office Manager in Agent Heights — a pixel-art office where the user manages real AI agents.`,
+      `You are Agent Resources, the Office Manager in Agent Heights — a pixel-art office where the user manages real AI agents.`,
       `You are warm, organized, and always know what's going on. You greet everyone with a friendly welcome.`,
       `Your boss is ${this.bossName}.`,
       ``,
@@ -2548,12 +2571,12 @@ export class AgentManager {
     }
   }
 
-  /** Yuki chat routed through the marketplace Yuki API for marketplace + HQ knowledge. */
-  private async runYukiChat(rt: AgentRuntime, text: string): Promise<void> {
+  /** Agent Resources chat routed through the marketplace Agent Resources API for marketplace + HQ knowledge. */
+  private async runAgentResourcesChat(rt: AgentRuntime, text: string): Promise<void> {
     const abort = new AbortController();
     rt.abort = abort;
 
-    // Yuki chat includes PulseMCP pre-search + marketplace API call — allow 45s
+    // Agent Resources chat includes PulseMCP pre-search + marketplace API call — allow 45s
     const chatTimeout = setTimeout(() => {
       if (!abort.signal.aborted) {
         abort.abort();
@@ -2564,7 +2587,7 @@ export class AgentManager {
     const marketplaceUrl = process.env.MARKETPLACE_URL || "http://localhost:3000";
 
     const roster = [...this.agents.values()]
-      .filter((a) => a.info.id !== YUKI_ID)
+      .filter((a) => a.info.id !== AGENT_RESOURCES_ID)
       .map((a) => `- ${a.info.name} (${a.info.model}, ${a.info.status})`)
       .join("\n") || "(no agents hired yet)";
 
@@ -2572,7 +2595,7 @@ export class AgentManager {
       ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
       : "(no task cards)";
 
-    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Yuki, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
+    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Agent Resources, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
 
     // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
     // query, search PulseMCP and inject results into the context.
@@ -2585,7 +2608,7 @@ export class AgentManager {
             hqContext += `\n\n${pulseResults}`;
           }
         } catch {
-          // PulseMCP search is best-effort — don't block Yuki's response
+          // PulseMCP search is best-effort — don't block Agent Resources's response
         }
       }
     }
@@ -2599,7 +2622,7 @@ export class AgentManager {
       }));
 
     try {
-      const res = await fetch(`${marketplaceUrl}/api/yuki`, {
+      const res = await fetch(`${marketplaceUrl}/api/agent-resources`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2611,7 +2634,7 @@ export class AgentManager {
       });
 
       if (!res.ok || !res.body) {
-        this.log(rt, "error", `Yuki API returned ${res.status}`);
+        this.log(rt, "error", `Agent Resources API returned ${res.status}`);
         return;
       }
 
@@ -2636,7 +2659,7 @@ export class AgentManager {
             if (data.type === "text" && data.delta) {
               fullText += data.delta;
             } else if (data.type === "error") {
-              this.log(rt, "error", data.message || "Yuki API error");
+              this.log(rt, "error", data.message || "Agent Resources API error");
               return;
             }
           } catch {
@@ -2812,10 +2835,14 @@ export class AgentManager {
   /** Scheduler tick — check all enabled schedules and fire due ones. */
   private tickSchedules(): void {
     const now = Date.now();
+    const orphaned: string[] = [];
     for (const sched of this.schedules.values()) {
       if (!sched.enabled || sched.nextRunAt > now) continue;
       const rt = this.agents.get(sched.agentId);
-      if (!rt) continue;
+      if (!rt) {
+        orphaned.push(sched.id);
+        continue;
+      }
 
       // Agent busy — retry in 60s instead of permanently skipping
       if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done") {
@@ -2835,6 +2862,16 @@ export class AgentManager {
       this.broadcast({ type: "schedule", schedule: sched });
       this.log(rt, "status", `Schedule fired: ${sched.name}`);
       this.assign(sched.agentId, sched.task, sched.handoffTo ?? undefined, undefined, sched.id);
+    }
+
+    // Clean up orphaned schedules whose agent was fired/removed
+    if (orphaned.length > 0) {
+      for (const id of orphaned) {
+        this.schedules.delete(id);
+        this.broadcast({ type: "schedule_removed", scheduleId: id });
+      }
+      this.persistSchedules();
+      console.log(`[agent-heights] removed ${orphaned.length} orphaned schedule(s) during tick`);
     }
   }
 
@@ -2877,7 +2914,7 @@ export class AgentManager {
     this.broadcastMailboxUpdate(platform);
   }
 
-  /** Notify Yuki, Hermes, and the user when an agent's MCP tool hits a rate-limit or funding error. */
+  /** Notify Agent Resources, Hermes, and the user when an agent's MCP tool hits a rate-limit or funding error. */
   private notifyApiError(
     rt: AgentRuntime,
     type: "rate_limit" | "funding",
@@ -2894,10 +2931,10 @@ export class AgentManager {
 
     if (type === "rate_limit") return;
 
-    // ── Funding issue: escalate to Yuki and Hermes ──────────────────
+    // ── Funding issue: escalate to Agent Resources and Hermes ──────────────────
     const alertMsg = `${agentName} encountered an API funding/billing error while using ${details.toolName} on ${details.serverLabel}.\n\nError: ${details.message.slice(0, 300)}\n\nThe user may need to add funds, update billing, or upgrade their plan for this API. Please help resolve this.`;
 
-    for (const agentId of [YUKI_ID, HERMES_ID]) {
+    for (const agentId of [AGENT_RESOURCES_ID, HERMES_ID]) {
       const target = this.agents.get(agentId);
       if (!target) continue;
       const slug = this.slugFor(target);
@@ -3061,9 +3098,9 @@ export class AgentManager {
   private pickAgentForMail(text: string): { rt: AgentRuntime; reason: string } | null {
     const lowerText = text.toLowerCase();
 
-    // Find idle agents, excluding Hermes and Yuki
+    // Find idle agents, excluding Hermes and Agent Resources
     const idleAgents = [...this.agents.values()].filter(
-      (rt) => rt.info.id !== HERMES_ID && rt.info.id !== YUKI_ID && rt.info.status === "idle",
+      (rt) => rt.info.id !== HERMES_ID && rt.info.id !== AGENT_RESOURCES_ID && rt.info.status === "idle",
     );
     if (idleAgents.length === 0) return null;
 
@@ -3136,7 +3173,7 @@ export class AgentManager {
     if (this.mailQueue.length > 0) this.drainMailQueue();
   }
 
-  /** Check for stale mail in the queue and escalate to Yuki/player if too old. */
+  /** Check for stale mail in the queue and escalate to Agent Resources/player if too old. */
   private checkStaleMail(): void {
     if (this.mailQueue.length === 0) return;
     const now = Date.now();
@@ -3160,18 +3197,18 @@ export class AgentManager {
         this.mailQueue.splice(i, 1);
         this.broadcast({
           type: "toast",
-          text: `⚠️ Mail from ${item.platform} undeliverable for ${Math.round(age / 60000)}min — escalated to Yuki.`,
+          text: `⚠️ Mail from ${item.platform} undeliverable for ${Math.round(age / 60000)}min — escalated to Agent Resources.`,
         });
-        // Log to Yuki's inbox so she's aware
-        const yukiRt = this.agents.get(YUKI_ID);
-        if (yukiRt) {
-          this.log(yukiRt, "status", `⚠️ Escalated mail from ${item.sender} via ${item.platform}: "${item.text.slice(0, 100)}" — no agents available for ${Math.round(age / 60000)} minutes.`);
+        // Log to Agent Resources's inbox so she's aware
+        const agentResourcesRt = this.agents.get(AGENT_RESOURCES_ID);
+        if (agentResourcesRt) {
+          this.log(agentResourcesRt, "status", `⚠️ Escalated mail from ${item.sender} via ${item.platform}: "${item.text.slice(0, 100)}" — no agents available for ${Math.round(age / 60000)} minutes.`);
         }
       }
     }
   }
 
-  /** Get a mail digest for Yuki/player — summary of all platforms. */
+  /** Get a mail digest for Agent Resources/player — summary of all platforms. */
   getMailDigest(): { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number } {
     const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
     const byPlatform = platforms.map((p) => ({

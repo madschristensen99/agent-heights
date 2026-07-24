@@ -1800,10 +1800,10 @@ export class WorldLayer {
         this.vfx.startAmbient(biomeName as any);
       }
 
-      // --- spawn creatures based on hostility ---
+      // --- spawn creatures based on hostility (skip farthest infernal region) ---
       if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 600 + Math.random() * 1200) {
         this.lastSpawnTime = time;
-        if (hostility >= 1) {
+        if (hostility >= 1 && hostility < 5) {
           const spawnCount = 1 + Math.floor(hostility / 2);
           for (let s = 0; s < spawnCount; s++) {
             const angle = Math.random() * Math.PI * 2;
@@ -1850,18 +1850,26 @@ export class WorldLayer {
         this.stones.push(new Stone(this, ox, oy, Math.cos(targetAngle) * stoneSpeed, Math.sin(targetAngle) * stoneSpeed, damage, stoneScale, lobHeight));
       }
 
-      // --- roll for legendary beast spawn ---
-      if (this.beasts.length < 3 && time - this.lastBeastTime > BEAST_SPAWN_INTERVAL) {
+      // --- roll for legendary beast spawn (more frequent + bigger beasts further out) ---
+      const beastCap = 2 + Math.floor(hostility / 2);
+      const beastInterval = BEAST_SPAWN_INTERVAL - hostility * 800;
+      if (this.beasts.length < beastCap && time - this.lastBeastTime > beastInterval) {
         this.lastBeastTime = time;
         // pick a beast that matches current hostility
         const candidates = BEASTS.filter((b) => hostility >= b.minHostility);
         if (candidates.length > 0) {
-          // weighted random — normalize rarities so they sum to 1
-          const totalWeight = candidates.reduce((s, b) => s + b.rarity, 0);
+          // weighted random — bias toward beasts whose minHostility is close to
+          // current hostility so bigger beasts appear more often further out
+          const weighted = candidates.map((b) => {
+            const distance = hostility - b.minHostility;
+            const proximityBoost = Math.max(0.1, 1 - distance * 0.25);
+            return { ...b, weight: b.rarity * proximityBoost };
+          });
+          const totalWeight = weighted.reduce((s, b) => s + b.weight, 0);
           let roll = Math.random() * totalWeight;
-          let chosen = candidates[0];
-          for (const b of candidates) {
-            roll -= b.rarity;
+          let chosen = weighted[0];
+          for (const b of weighted) {
+            roll -= b.weight;
             if (roll <= 0) {
               chosen = b;
               break;

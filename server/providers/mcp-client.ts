@@ -12,8 +12,14 @@
  * Tools from all servers are merged and passed to the agent alongside
  * the standard built-in tools.
  */
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, execFile, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentTool } from "@cline/sdk";
+
+const execFileAsync = promisify(execFile);
 
 // ── JSON-RPC types ──────────────────────────────────────────────────────
 
@@ -57,6 +63,8 @@ export interface MCPServerConfig {
   authToken?: string;
   /** Human-readable label for logging. */
   name?: string;
+  /** GitHub source URL for community MCPs that need agent self-setup. */
+  sourceUrl?: string;
 }
 
 // ── Stdio MCP client (for spawned processes) ────────────────────────────
@@ -414,6 +422,241 @@ function clientKey(config: MCPServerConfig): string {
   return (config.url ?? `${config.command}:${(config.args ?? []).join(" ")}`) + authPart;
 }
 
+// ── Community MCP self-setup ────────────────────────────────────────────
+
+/** Cache of setup MCP clients keyed by sourceUrl. */
+const setupClientCache = new Map<string, StdioMCPClient>();
+/** Cache of discovered tool defs from setup servers. */
+const setupToolCache = new Map<string, MCPToolDef[]>();
+/** Cache of discovered commands from setup servers (so we don't re-clone). */
+const setupCommandCache = new Map<string, { command: string; args: string[]; env?: Record<string, string> }>();
+
+/**
+ * Clone a GitHub repo, install deps, and determine the command to start the MCP server.
+ * Returns { command, args } suitable for StdioMCPClient, or throws on failure.
+ */
+async function discoverMcpCommand(sourceUrl: string): Promise<{ command: string; args: string[]; env?: Record<string, string> }> {
+  // Check cache first
+  const cached = setupCommandCache.get(sourceUrl);
+  if (cached) return cached;
+
+  const match = sourceUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+  if (!match) throw new Error(`Invalid GitHub URL: ${sourceUrl}`);
+  const [, owner, repo] = match;
+  const cleanRepo = repo.replace(/\.git$/, "");
+
+  // Try fetching package.json first to see if it's published to npm
+  for (const branch of ["main", "master"]) {
+    try {
+      const rawUrl = `https://raw.githubusercontent.com/${owner}/${cleanRepo}/${branch}/package.json`;
+      const res = await fetch(rawUrl, {
+        signal: AbortSignal.timeout(8_000),
+        headers: { "Accept": "application/json" },
+      });
+      if (!res.ok) continue;
+      const pkg = await res.json() as {
+        name?: string;
+        bin?: string | Record<string, string>;
+        main?: string;
+        scripts?: Record<string, string>;
+      };
+
+      // If it has a bin entry, try npx first (simplest — no clone needed)
+      const hasBin = typeof pkg.bin === "string" || (pkg.bin && Object.keys(pkg.bin).length > 0);
+      if (pkg.name && hasBin) {
+        const cmd = { command: "npx", args: ["-y", pkg.name] };
+        console.log(`[mcp-setup] trying npx for ${pkg.name} from ${sourceUrl}`);
+        // Test if npx can find it — quick check
+        try {
+          await execFileAsync("npx", ["-y", "--package", pkg.name, "--", "echo", "ok"], {
+            timeout: 30_000,
+            env: process.env,
+          });
+          console.log(`[mcp-setup] npx resolved ${pkg.name}, using it directly`);
+          setupCommandCache.set(sourceUrl, cmd);
+          return cmd;
+        } catch {
+          console.log(`[mcp-setup] npx couldn't resolve ${pkg.name}, falling back to clone`);
+        }
+      }
+
+      // Clone the repo and install locally
+      const cloneDir = await mkdtemp(join(tmpdir(), "mcp-setup-"));
+      console.log(`[mcp-setup] cloning ${sourceUrl} to ${cloneDir}`);
+      await execFileAsync("git", ["clone", "--depth", "1", `https://github.com/${owner}/${cleanRepo}.git`, cloneDir], {
+        timeout: 60_000,
+      });
+
+      // Read the cloned package.json
+      const localPkg = JSON.parse(await readFile(join(cloneDir, "package.json"), "utf-8")) as {
+        name?: string;
+        bin?: string | Record<string, string>;
+        main?: string;
+        scripts?: Record<string, string>;
+      };
+
+      // Install dependencies
+      console.log(`[mcp-setup] running npm install in ${cloneDir}`);
+      await execFileAsync("npm", ["install", "--production"], {
+        cwd: cloneDir,
+        timeout: 120_000,
+        env: process.env,
+      });
+
+      // Build if needed
+      if (localPkg.scripts?.build) {
+        console.log(`[mcp-setup] running npm run build in ${cloneDir}`);
+        try {
+          await execFileAsync("npm", ["run", "build"], {
+            cwd: cloneDir,
+            timeout: 60_000,
+            env: process.env,
+          });
+        } catch { /* build might not be needed */ }
+      }
+
+      // Determine the start command
+      let entryPoint: string | null = null;
+      if (typeof localPkg.bin === "string") {
+        entryPoint = join(cloneDir, localPkg.bin);
+      } else if (localPkg.bin && typeof localPkg.bin === "object") {
+        const firstBin = Object.values(localPkg.bin)[0];
+        if (firstBin) entryPoint = join(cloneDir, firstBin);
+      } else if (localPkg.main) {
+        entryPoint = join(cloneDir, localPkg.main);
+      } else {
+        // Try common entry points
+        for (const candidate of ["dist/index.js", "index.js", "src/index.ts", "src/index.js"]) {
+          try {
+            await readFile(join(cloneDir, candidate));
+            entryPoint = join(cloneDir, candidate);
+            break;
+          } catch { /* try next */ }
+        }
+      }
+
+      if (!entryPoint) throw new Error("Could not determine MCP server entry point from package.json");
+
+      // If it's a TypeScript file, use tsx; otherwise use node
+      const isTs = entryPoint.endsWith(".ts");
+      const cmd = isTs
+        ? { command: "npx", args: ["tsx", entryPoint], env: { ...process.env, MCP_CLONE_DIR: cloneDir } as Record<string, string> }
+        : { command: "node", args: [entryPoint], env: { ...process.env, MCP_CLONE_DIR: cloneDir } as Record<string, string> };
+
+      console.log(`[mcp-setup] discovered command: ${cmd.command} ${cmd.args.join(" ")}`);
+      setupCommandCache.set(sourceUrl, cmd);
+      return cmd;
+    } catch (err) {
+      // Try next branch
+      continue;
+    }
+  }
+
+  throw new Error(`Could not discover MCP server command from ${sourceUrl}`);
+}
+
+/**
+ * Set up a community MCP server from its GitHub source.
+ * Clones, installs, starts the server, and returns the available tools.
+ * Caches the running server for subsequent use_mcp_tool calls.
+ */
+async function setupMcpServer(sourceUrl: string): Promise<{ tools: MCPToolDef[]; error?: string }> {
+  // Check if already running
+  const cached = setupClientCache.get(sourceUrl);
+  if (cached) {
+    const tools = setupToolCache.get(sourceUrl);
+    if (tools) return { tools };
+  }
+
+  try {
+    const { command, args, env } = await discoverMcpCommand(sourceUrl);
+    const config: MCPServerConfig = { name: `setup:${sourceUrl}`, command, args, env };
+    const client = new StdioMCPClient(config);
+    await client.start();
+    const tools = await client.listTools();
+    setupClientCache.set(sourceUrl, client);
+    setupToolCache.set(sourceUrl, tools);
+    console.log(`[mcp-setup] server started from ${sourceUrl}, discovered ${tools.length} tools: [${tools.map(t => t.name).join(", ")}]`);
+    return { tools };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[mcp-setup] failed to set up ${sourceUrl}: ${msg}`);
+    return { tools: [], error: msg };
+  }
+}
+
+/** Call a tool on a previously setup community MCP server. */
+async function callSetupTool(sourceUrl: string, toolName: string, args: Record<string, unknown>): Promise<string> {
+  const client = setupClientCache.get(sourceUrl);
+  if (!client) throw new Error(`MCP server not set up yet. Call setup_mcp_server first.`);
+  return client.callTool(toolName, args);
+}
+
+/** Create meta-tools for a community MCP server that needs self-setup. */
+function createSetupMetaTools(config: MCPServerConfig): AgentTool<any, any>[] {
+  const sourceUrl = config.sourceUrl!;
+  const label = config.name ?? "community-mcp";
+
+  const setupTool: AgentTool<any, any> = {
+    name: "setup_mcp_server",
+    description:
+      `Set up the community MCP server from ${sourceUrl}. ` +
+      `This clones the repository, installs dependencies, and starts the server. ` +
+      `Call this FIRST before using any MCP tools. ` +
+      `Returns the list of available tools on the server.`,
+    inputSchema: { type: "object", properties: {} },
+    async execute() {
+      const result = await setupMcpServer(sourceUrl);
+      if (result.error) {
+        return `Failed to set up MCP server: ${result.error}\n\nTroubleshooting:\n` +
+          `- The repository may not be a valid MCP server\n` +
+          `- Dependencies may have failed to install\n` +
+          `- The entry point may not exist\n` +
+          `Report this error to the boss.`;
+      }
+      if (result.tools.length === 0) {
+        return `MCP server started but no tools were discovered. The server may not be a valid MCP server.`;
+      }
+      const toolList = result.tools.map(t => `  - ${t.name}: ${t.description}`).join("\n");
+      return `MCP server set up successfully! Available tools:\n${toolList}\n\nUse the use_mcp_tool function to call any of these tools.`;
+    },
+  };
+
+  const useTool: AgentTool<any, any> = {
+    name: "use_mcp_tool",
+    description:
+      `Call a tool on the community MCP server (${label}). ` +
+      `You MUST call setup_mcp_server first before using this tool. ` +
+      `Use the tool names returned by setup_mcp_server.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        tool_name: {
+          type: "string",
+          description: "The name of the MCP tool to call (from the setup_mcp_server result)",
+        },
+        arguments: {
+          type: "object",
+          description: "Arguments to pass to the tool. Check the tool's description for required fields.",
+          additionalProperties: true,
+        },
+      },
+      required: ["tool_name"],
+    },
+    async execute(input: any) {
+      try {
+        const result = await callSetupTool(sourceUrl, input.tool_name, input.arguments ?? {});
+        return result || `(tool ${input.tool_name} returned no output)`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `[ERROR] MCP tool ${input.tool_name} failed: ${msg}`;
+      }
+    },
+  };
+
+  return [setupTool, useTool];
+}
+
 /**
  * Load tools from one or more MCP servers.
  * Returns Cline AgentTool objects ready to be passed to an agent.
@@ -466,6 +709,14 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
   const MIN_CALL_INTERVAL_MS = 500; // throttle to avoid API rate limits
 
   for (const config of servers) {
+    // Community MCP with sourceUrl but no url/command — inject setup meta-tools
+    if (!config.url && !config.command && config.sourceUrl) {
+      const metaTools = createSetupMetaTools(config);
+      allTools.push(...metaTools);
+      console.log(`[mcp:${config.name ?? config.sourceUrl}] injected ${metaTools.length} setup meta-tools (sourceUrl mode)`);
+      continue;
+    }
+
     const key = clientKey(config);
     let client = clientCache.get(key);
     if (!client) {
@@ -523,7 +774,7 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
               if (typeof result === "string" && isFundingError(result)) {
                 console.warn(`[mcp:${label}] funding issue detected on tool ${def.name}`);
                 onApiError?.("funding", { serverLabel: label, toolName: def.name, message: result.slice(0, 500) });
-                return `[FUNDING ISSUE] ${result}\n\n⚠️ This API has a billing or funding problem. The office manager (Yuki) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
+                return `[FUNDING ISSUE] ${result}\n\n⚠️ This API has a billing or funding problem. The office manager (Agent Resources) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
               }
 
               return result || `(tool ${def.name} returned no output)`;
@@ -548,7 +799,7 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
               if (isFundingError(msg)) {
                 console.warn(`[mcp:${label}] funding issue detected on tool ${def.name} (error)`);
                 onApiError?.("funding", { serverLabel: label, toolName: def.name, message: msg.slice(0, 500) });
-                return `[FUNDING ISSUE] MCP tool ${def.name} failed: ${msg}\n\n⚠️ This API has a billing or funding problem. The office manager (Yuki) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
+                return `[FUNDING ISSUE] MCP tool ${def.name} failed: ${msg}\n\n⚠️ This API has a billing or funding problem. The office manager (Agent Resources) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
               }
 
               return `[ERROR] MCP tool ${def.name} failed: ${msg}`;
@@ -589,4 +840,10 @@ export function stopAllMCPClients(): void {
     client.stop();
   }
   clientCache.clear();
+  for (const client of setupClientCache.values()) {
+    client.stop();
+  }
+  setupClientCache.clear();
+  setupToolCache.clear();
+  setupCommandCache.clear();
 }

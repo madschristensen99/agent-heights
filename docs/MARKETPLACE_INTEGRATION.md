@@ -26,7 +26,7 @@ Complete documentation of how Agent Heights integrates with the Swarms Marketpla
                         │     │  sprite_heights_saves          │          │
                         │     └─────────────────────────┘          │
                         │                                           │
-                        │  Yuki chat proxy (HTTP)                   │
+                        │  Agent Resources chat proxy (HTTP)                   │
                         └──────────────────────────────────────────▶│
                                                                     │
                                           ┌─────────────┐           │
@@ -37,7 +37,7 @@ Complete documentation of how Agent Heights integrates with the Swarms Marketpla
 
 ### Key Insight
 
-Agent Heights and the Swarms Marketplace share a **single Supabase project**. Most marketplace data operations go directly to Supabase, bypassing swarms.world entirely. Only the Yuki chat proxy hits the Vercel deployment.
+Agent Heights and the Swarms Marketplace share a **single Supabase project**. Most marketplace data operations go directly to Supabase, bypassing swarms.world entirely. Only the Agent Resources chat proxy hits the Vercel deployment.
 
 ---
 
@@ -97,22 +97,22 @@ Client: user clicks "Hire into HQ"
       → Cline SDK spawns agent with config from marketplace
 ```
 
-### 4. Yuki Chat Proxy (Calls swarms.world)
+### 4. Agent Resources Chat Proxy (Calls swarms.world)
 
 **This is the only path that hits the Vercel deployment.**
 
-- **Agent Heights server**: `server/yuki.ts` — proxies POST to `${MARKETPLACE_URL}/api/yuki`
-- **Marketplace server**: `app/api/yuki/route.ts` — calls Anthropic Claude Haiku directly
-- **No auth** on the Yuki endpoint
+- **Agent Heights server**: `server/agent-resources.ts` — proxies POST to `${MARKETPLACE_URL}/api/agent-resources`
+- **Marketplace server**: `app/api/agent-resources/route.ts` — calls Anthropic Claude Haiku directly
+- **No auth** on the Agent Resources endpoint
 - **Rate limited**: 300 requests / 60 seconds per IP (via Upstash + Vercel KV middleware)
 
 ```
 Client (browser)
-  → POST /api/yuki { message, history, conversationId }
-    → server/yuki.ts
-      → fetch(`${MARKETPLACE_URL}/api/yuki`, { ...entityContext })
+  → POST /api/agent-resources { message, history, conversationId }
+    → server/agent-resources.ts
+      → fetch(`${MARKETPLACE_URL}/api/agent-resources`, { ...entityContext })
         → swarms.world (Vercel)
-          → app/api/yuki/route.ts
+          → app/api/agent-resources/route.ts
             → Anthropic Claude Haiku (streaming SSE)
               ← SSE stream piped back through
 ```
@@ -140,7 +140,7 @@ All agent LLM calls go through the Swarms API at `api.swarms.world/v1`.
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes* | Supabase service role key (bypasses RLS) |
 | `VITE_SUPABASE_URL` | Yes* | Same Supabase URL, exposed to client |
 | `VITE_SUPABASE_ANON_KEY` | Yes* | Supabase anon key for client-side auth |
-| `MARKETPLACE_URL` | No | URL of swarms.world (for Yuki proxy). Defaults to `http://localhost:3000` |
+| `MARKETPLACE_URL` | No | URL of swarms.world (for Agent Resources proxy). Defaults to `http://localhost:3000` |
 
 *Required for marketplace browsing, publishing, and user auth. Without these, the server runs in dev mode with no marketplace.
 
@@ -148,7 +148,7 @@ All agent LLM calls go through the Swarms API at `api.swarms.world/v1`.
 
 | Variable | Used By | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Yuki route | Powers Yuki chat (Claude Haiku) |
+| `ANTHROPIC_API_KEY` | Agent Resources route | Powers Agent Resources chat (Claude Haiku) |
 | `MASTER_SWARMS_API_KEY` | Various | Server-side Swarms API key |
 | `KV_REST_API_URL` | Rate limiter | Vercel KV for Upstash rate limiting |
 | `KV_REST_API_TOKEN` | Rate limiter | Vercel KV token |
@@ -225,7 +225,7 @@ The marketplace middleware (`shared/utils/stack-middlewares/middlewares.ts`) app
 - **Fails open** — if Upstash KV is unreachable, requests are allowed
 - **Exempted paths**: webhooks, Solana RPC, explorer data, server actions
 
-Only affects requests to swarms.world's Vercel deployment (primarily the Yuki proxy).
+Only affects requests to swarms.world's Vercel deployment (primarily the Agent Resources proxy).
 
 ---
 
@@ -240,7 +240,7 @@ When swarms.world is under DDoS attack, Vercel may block or challenge traffic at
 | Marketplace browsing | No | Queries Supabase directly |
 | Agent publishing | No | Writes to Supabase directly |
 | Hiring marketplace agents | No | Agent config from Supabase directly |
-| Yuki chat | **Yes** | Proxies to swarms.world Vercel deployment |
+| Agent Resources chat | **Yes** | Proxies to swarms.world Vercel deployment |
 | Agent LLM calls | Possibly | Goes to `api.swarms.world` (may be on same Vercel) |
 
 ### Railway Egress IP
@@ -251,7 +251,7 @@ Railway does **not** provide static egress IPs. The outbound IP can change on re
 
 ### Recommended Mitigations
 
-1. **For Yuki chat**: Move Yuki into Agent Heights directly (use Anthropic API key in Agent Heights, eliminate the proxy to swarms.world). The marketplace's Yuki route is a thin wrapper around the Anthropic API — the system prompt and HQ context injection already live in Agent Heights's `server/yuki.ts`.
+1. **For Agent Resources chat**: Move Agent Resources into Agent Heights directly (use Anthropic API key in Agent Heights, eliminate the proxy to swarms.world). The marketplace's Agent Resources route is a thin wrapper around the Anthropic API — the system prompt and HQ context injection already live in Agent Heights's `server/agent-resources.ts`.
 
 2. **For programmatic marketplace API access**: If Agent Heights needs to call swarms.world API routes in the future, add a secret header bypass in the marketplace's `withRateLimit` middleware:
    ```ts
@@ -281,9 +281,9 @@ Marketplace queries go to Supabase directly — they should work regardless of s
    - **200 with empty results** = tables exist but no approved agents (data issue, not infra)
 3. If Supabase has IP restrictions, add Railway's egress IPs or disable restrictions (Supabase Free tier doesn't have IP restrictions by default)
 
-### Step 2: Make the Yuki proxy reliable (Short-term)
+### Step 2: Make the Agent Resources proxy reliable (Short-term)
 
-Yuki stays on the marketplace — one Yuki, unified across platforms. Agent Heights already injects HQ context (office roster, task board, boss name) via the `entityContext` field in the proxy request, so the marketplace Yuki already knows about the user's HQ state. The problem is just that the proxy breaks when swarms.world is under DDoS.
+Agent Resources stays on the marketplace — one Agent Resources, unified across platforms. Agent Heights already injects HQ context (office roster, task board, boss name) via the `entityContext` field in the proxy request, so the marketplace Agent Resources already knows about the user's HQ state. The problem is just that the proxy breaks when swarms.world is under DDoS.
 
 **Approach: Secret header bypass on the marketplace + Vercel Firewall rule**
 
@@ -296,17 +296,17 @@ Yuki stays on the marketplace — one Yuki, unified across platforms. Agent Heig
      }
      ```
 2. **On the marketplace** (Vercel Firewall / WAF):
-   - Create a custom firewall rule that skips DDoS challenge/block for requests to `/api/yuki` with the `x-hq-secret` header
+   - Create a custom firewall rule that skips DDoS challenge/block for requests to `/api/agent-resources` with the `x-hq-secret` header
    - This is IP-independent — works regardless of Railway's changing egress IP
    - Requires Vercel Pro or Enterprise plan for custom firewall rules
-3. **On Agent Heights** (`server/yuki.ts`):
+3. **On Agent Heights** (`server/agent-resources.ts`):
    - Set `HQ_PROXY_SECRET` env var on Railway (same value as marketplace)
-   - Add `x-hq-secret` header to the outbound `fetch()` to `${MARKETPLACE_URL}/api/yuki`
+   - Add `x-hq-secret` header to the outbound `fetch()` to `${MARKETPLACE_URL}/api/agent-resources`
    - Add a retry with backoff in case of transient failures
 4. **Fallback**: If Vercel Firewall isn't available (Free plan), use an egress proxy with a static IP (see Step 3) so Railway's requests come from a known, allowlisted IP
 
-**Why not duplicate Yuki into Agent Heights?**
-Keeping Yuki on the marketplace ensures she stays unified across platforms. Any changes to her system prompt, personality, or capabilities only need to be made in one place. The HQ context injection already makes her aware of the user's office state, so she can be both a marketplace support agent and an HQ office manager through the same instance.
+**Why not duplicate Agent Resources into Agent Heights?**
+Keeping Agent Resources on the marketplace ensures she stays unified across platforms. Any changes to her system prompt, personality, or capabilities only need to be made in one place. The HQ context injection already makes her aware of the user's office state, so she can be both a marketplace support agent and an HQ office manager through the same instance.
 
 The same `x-hq-secret` header mechanism also covers any future programmatic API calls from Agent Heights to swarms.world (e.g., paid agent verification, marketplace search with different filters). Just add the header to any outbound `fetch()` to swarms.world.
 
@@ -349,7 +349,7 @@ Currently Agent Heights reads the `agent` config JSON from Supabase using the se
 |---|---|
 | `server/marketplace.ts` | HTTP handler for `/api/marketplace/*` — queries Supabase directly |
 | `server/publish.ts` | HTTP handler for `/api/publish-agent` — writes to Supabase directly |
-| `server/yuki.ts` | HTTP handler for `/api/yuki` — proxies to swarms.world |
+| `server/agent-resources.ts` | HTTP handler for `/api/agent-resources` — proxies to swarms.world |
 | `server/supabase.ts` | Supabase client + `verifyToken()` for JWT auth |
 | `server/providers/cline.ts` | Cline SDK agent runner — uses `api.swarms.world/v1` for LLM calls |
 | `client/src/ui/marketplace.ts` | Marketplace browser UI panel |
@@ -359,7 +359,7 @@ Currently Agent Heights reads the `agent` config JSON from Supabase using the se
 
 | File | Role |
 |---|---|
-| `app/api/yuki/route.ts` | Yuki chat endpoint — calls Anthropic Claude Haiku |
+| `app/api/agent-resources/route.ts` | Agent Resources chat endpoint — calls Anthropic Claude Haiku |
 | `app/api/swarms/agent-completions/route.ts` | Proxies agent completions to `api.swarms.world/v1/agent/completions` |
 | `app/api/swarms-chat/route.ts` | Streaming chat with marketplace agents via Swarms API |
 | `pages/api/get-agents/index.ts` | List approved agents (paginated, filtered) |

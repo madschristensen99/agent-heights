@@ -28,7 +28,7 @@ lets the audience participate.
   new MCPs, new capabilities, new interactions. No two streams are the
   same. The narrative emerges from agent behavior.
 - **Community interactive.** Viewers aren't watching — they're
-  managing. Chat messages become tasks for Yuki, who can hire agents,
+  managing. Chat messages become tasks for Agent Resources, who can hire agents,
   create board cards, and respond to questions. The audience staffs
   the office.
 - **Endless.** Agents on cron schedules run recurring tasks forever.
@@ -53,7 +53,7 @@ lets the audience participate.
 │  ┌────┴───────────────────────────────────────────────────────┐  │
 │  │  Spectator WebSocket (new)                                  │  │
 │  │  Read-only connection — receives all broadcasts,            │  │
-│  │  cannot assign/fire/stop. Optional chat→Yuki bridge.        │  │
+│  │  cannot assign/fire/stop. Optional chat→Agent Resources bridge.        │  │
 │  └────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
          │                              │
@@ -63,7 +63,7 @@ lets the audience participate.
 │  Headless       │            │  Twitch/YouTube      │
 │  Browser Client │            │  Chat Bot (new)      │
 │  (Playwright)   │            │                      │
-│                 │            │  IRC → Yuki chat     │
+│                 │            │  IRC → Agent Resources chat     │
 │  Phaser scene   │            │  commands            │
 │  renders to     │            │  (hire, assign,      │
 │  <canvas>       │            │   ask questions)     │
@@ -101,8 +101,8 @@ lets the audience participate.
 4. **FFmpeg** encodes the stream to H.264 and pushes it via RTMP to
    YouTube or Twitch.
 5. **Chat bot** connects to Twitch IRC or YouTube Live Chat API,
-   receives viewer messages, and forwards them to the server as Yuki
-   chat commands. Yuki's existing `isYukiQuestion()` logic
+   receives viewer messages, and forwards them to the server as Agent Resources
+   chat commands. Agent Resources's existing `isAgentResourcesQuestion()` logic
    (`server/manager.ts:45`) distinguishes questions from task commands.
 
 ---
@@ -139,9 +139,9 @@ Add a spectator connection path that:
   `hire`, `fire`, `stop`, `chat`, and all other boss commands. Only
   `spectator_join` is accepted.
 - **Optional chat bridge** — If `spectator_chat_relay` is enabled,
-  chat messages from the Twitch/YouTube bot are forwarded to Yuki's
+  chat messages from the Twitch/YouTube bot are forwarded to Agent Resources's
   chat handler. The bot authenticates as a special user (e.g.
-  `twitch-chat`) with limited permissions — only chat with Yuki,
+  `twitch-chat`) with limited permissions — only chat with Agent Resources,
   no direct agent control.
 
 ### Rate limiting
@@ -326,9 +326,9 @@ Chat bot (Node.js)
     ↓
 WebSocket → server
     ↓
-manager.chat(YUKI_ID, message)
+manager.chat(AGENT_RESOURCES_ID, message)
     ↓
-Yuki processes via isYukiQuestion() / runYukiChat()
+Agent Resources processes via isAgentResourcesQuestion() / runAgentResourcesChat()
     ↓
 Response broadcast to all connections (including headless client)
 ```
@@ -351,7 +351,7 @@ const irc = new IRCClient({
 const ws = new WebSocket("ws://localhost:3001/?spectator=1&chat=1");
 
 irc.on("message", (channel, user, message) => {
-  // Forward chat messages to Yuki
+  // Forward chat messages to Agent Resources
   ws.send(JSON.stringify({
     type: "spectator_chat_relay",
     fromUserId: `twitch:${user.username}`,
@@ -360,12 +360,12 @@ irc.on("message", (channel, user, message) => {
   }));
 });
 
-// Relay Yuki's responses back to Twitch chat
+// Relay Agent Resources's responses back to Twitch chat
 ws.on("message", (data) => {
   const msg = JSON.parse(data.toString());
   if (msg.type === "log" && msg.kind === "text") {
-    // Only relay Yuki's responses, not all agent chatter
-    if (msg.agentId === "yuki") {
+    // Only relay Agent Resources's responses, not all agent chatter
+    if (msg.agentId === "agent-resources") {
       irc.say("#agentheights", msg.text);
     }
   }
@@ -374,25 +374,25 @@ ws.on("message", (data) => {
 
 ### Chat commands
 
-Viewers can type natural language — Yuki's `isYukiQuestion()` handles
+Viewers can type natural language — Agent Resources's `isAgentResourcesQuestion()` handles
 intent detection. But explicit commands also work:
 
 | Command | Effect | Example |
 |---------|--------|---------|
-| `hire <name>` | Yuki hires an agent | `hire ReactBot` |
+| `hire <name>` | Agent Resources hires an agent | `hire ReactBot` |
 | `assign <task>` | Creates a board card | `assign fix the login bug` |
-| `ask <question>` | Yuki answers locally | `ask what agents are working` |
-| `!cam <name>` | Camera follows agent | `!cam Yuki` |
+| `ask <question>` | Agent Resources answers locally | `ask what agents are working` |
+| `!cam <name>` | Camera follows agent | `!cam Agent Resources` |
 | `!status` | Bot posts office summary | `!status` |
 
 ### Spam & moderation
 
 - **Rate limit**: 1 message per user per 30 seconds (enforced server-side)
 - **Twitch AutoMod**: Rely on Twitch's built-in moderation
-- **Profanity filter**: Simple word list before forwarding to Yuki
+- **Profanity filter**: Simple word list before forwarding to Agent Resources
 - **Max message length**: 500 characters
-- **Cooldown**: If Yuki is busy (thinking/working), queue messages and
-  process them when she's idle. Show a "Yuki is busy" toast on stream.
+- **Cooldown**: If Agent Resources is busy (thinking/working), queue messages and
+  process them when she's idle. Show a "Agent Resources is busy" toast on stream.
 
 ---
 
@@ -405,7 +405,7 @@ there's always activity:
 
 | Agent | Role | Schedule | Purpose |
 |-------|------|----------|---------|
-| **Yuki** | Office manager | Always on | Chat interface, hires agents, answers questions |
+| **Agent Resources** | Office manager | Always on | Chat interface, hires agents, answers questions |
 | **GitHub Agent** | Worker | Every 30 min | Reviews PRs, merges approved ones, creates cards for issues |
 | **Railway Agent** | DevOps | On handoff | Deploys what GitHub agent produces |
 | **Supabase Agent** | Worker | On handoff | Handles database migrations |
@@ -425,7 +425,7 @@ The stream generates stories naturally:
 - **The 3am collaboration** — Two idle agents start talking
   (`startAgentConversation`), one mentions a bug it noticed, the other
   picks it up as a task. Nobody asked them to. Chat goes wild.
-- **Helicopter delivery** — A viewer asks Yuki to hire a specialist.
+- **Helicopter delivery** — A viewer asks Agent Resources to hire a specialist.
   The helicopter animation plays on stream. Chat erupts.
 
 ### Stream overlays
@@ -439,7 +439,7 @@ client, not the main client):
   agent actions (same as the office feed, but formatted for video)
 - **Activity indicator** — Top corner: "3 agents working · 2 idle · 1
   scheduled task in 12m"
-- **Chat highlights** — When a chat message triggers a Yuki response,
+- **Chat highlights** — When a chat message triggers a Agent Resources response,
   show the exchange on screen
 - **Logo + URL** — "AGENT HEIGHTS · agent-heights.com" in corner
 
@@ -477,7 +477,7 @@ $20.00 full office (unlimited agents + managers)
 
 - **Periodic overlay**: "Want your own office? agent-heights.com ·
   starts at $0.99"
-- **Yuki mentions**: When Yuki answers a chat question, she can append
+- **Agent Resources mentions**: When Agent Resources answers a chat question, she can append
   "You can hire your own agents at agent-heights.com"
 - **Agent bios**: When a new agent is hired, the overlay shows their
   name, role, and "Hire agents like this at agent-heights.com"
@@ -514,7 +514,7 @@ LIVESTREAM_SERVER_URL=http://localhost:3001
 # Whether to enable TTS for agent chat (uses ElevenLabs)
 LIVESTREAM_TTS=true
 
-# Whether to enable chat → Yuki bridge
+# Whether to enable chat → Agent Resources bridge
 LIVESTREAM_CHAT_BRIDGE=true
 ```
 
@@ -531,7 +531,7 @@ LIVESTREAM_CHAT_BRIDGE=true
 | `client/src/main.ts` | Modify | Detect `?spectator=1` URL param — skip auth, connect as spectator, hide HUD, disable input |
 | `client/src/game/scene.ts` | Modify | Spectator camera modes (follow, overview, event), stream overlays (name tags, feed ticker, activity indicator) |
 | `scripts/livestream.ts` | **Create** | Playwright headless client — launches browser, loads spectator page, captures canvas, pipes to FFmpeg, pushes RTMP |
-| `scripts/chat-bot.ts` | **Create** | Twitch IRC / YouTube Live Chat bot — receives messages, forwards to server via WebSocket, relays Yuki responses back to chat |
+| `scripts/chat-bot.ts` | **Create** | Twitch IRC / YouTube Live Chat bot — receives messages, forwards to server via WebSocket, relays Agent Resources responses back to chat |
 | `.env.example` | Modify | Add livestream env vars |
 | `docs/LIVESTREAM.md` | **Create** | This document |
 
@@ -603,8 +603,8 @@ When the stream grows:
 2. **Canvas capture** — Run `scripts/livestream.ts`, verify FFmpeg
    receives video and pushes to RTMP. Check stream on YouTube
    dashboard.
-3. **Chat → Yuki** — Send a message in Twitch chat, verify it reaches
-   Yuki, verify Yuki's response appears on stream and in Twitch chat.
+3. **Chat → Agent Resources** — Send a message in Twitch chat, verify it reaches
+   Agent Resources, verify Agent Resources's response appears on stream and in Twitch chat.
 4. **Hire via chat** — Type "hire a React agent" in Twitch chat.
    Verify helicopter delivery animation plays on stream.
 5. **Autonomous activity** — Leave stream running for 1 hour with no
@@ -615,14 +615,14 @@ When the stream grows:
 7. **Reconnection** — Kill the headless client, verify it restarts
    and reconnects automatically. Verify stream resumes.
 8. **Chat spam** — Send 20 messages in 10 seconds. Verify rate
-   limiting kicks in and Yuki isn't overwhelmed.
+   limiting kicks in and Agent Resources isn't overwhelmed.
 
 ### Automated testing
 
 - **Spectator WebSocket** — Unit test: connect without auth, verify
   world state is received, verify commands are rejected.
 - **Chat relay** — Unit test: send `spectator_chat_relay`, verify it
-  reaches Yuki's chat handler, verify response is broadcast.
+  reaches Agent Resources's chat handler, verify response is broadcast.
 - **Rate limiting** — Unit test: send 11 messages in 30 seconds,
   verify 11th is rejected.
 

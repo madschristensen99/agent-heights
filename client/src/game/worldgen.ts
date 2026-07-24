@@ -159,9 +159,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
 
       // Obstacle density — noise at scale 8 creates groves and clearings
       const obstacleNoise = valueNoise(worldSeed, wx, wy, 8);
-      const obstacleChance = Math.min(0.99, 0.20 + hostility * 0.18);
+      const obstacleChance = Math.min(0.75, 0.20 + hostility * 0.11);
       // Blend obstacle probability between current and next biome in transition zones
-      const obstacleChanceNext = Math.min(0.99, 0.20 + (hostilityFloor + 1) * 0.18);
+      const obstacleChanceNext = Math.min(0.75, 0.20 + (hostilityFloor + 1) * 0.11);
       const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
       // Hostile tile density — separate noise fields for lava and void so they
@@ -169,8 +169,8 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
       // Scale 4 creates small maze-like pockets rather than massive pools.
       const lavaNoise = valueNoise(worldSeed ^ 0x12345, wx, wy, 4);
       const voidNoise = valueNoise(worldSeed ^ 0x67890, wx, wy, 4);
-      const hostileChance = hostilityFloor >= 2 ? Math.min(0.45, (hostilityFloor - 1) * 0.12) : 0;
-      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.45, hostilityFloor * 0.12) : 0;
+      const hostileChance = hostilityFloor >= 2 ? Math.min(0.28, (hostilityFloor - 1) * 0.07) : 0;
+      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.28, hostilityFloor * 0.07) : 0;
       const hostileThreshold = hostileChance * (1 - hostilityFrac) + hostileChanceNext * hostilityFrac;
 
       // Decoration density — noise at scale 6 for smaller flower/bush patches

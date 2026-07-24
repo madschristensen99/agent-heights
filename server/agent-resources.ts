@@ -6,10 +6,10 @@ import { json } from "./security.js";
 
 const MARKETPLACE_URL = process.env.MARKETPLACE_URL || "http://localhost:3000";
 
-/** Build HQ context string to inject into Yuki's system prompt. */
+/** Build HQ context string to inject into Agent Resources's system prompt. */
 function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string): string {
   const roster = agents
-    .filter((a) => a.id !== "yuki")
+    .filter((a) => a.id !== "agent-resources")
     .map((a) => `- ${a.name} (${a.model}, ${a.status}${a.task ? `, working on: ${a.task.slice(0, 60)}` : ""})`)
     .join("\n") || "(no agents hired yet)";
 
@@ -34,7 +34,7 @@ Agents have individual workspaces, can be assigned tasks, collaborate via handof
 Users can browse the Swarms Marketplace from inside Agent Heights and hire marketplace agents directly into their office.
 
 ### YOUR ROLE — Office Manager (IMPORTANT)
-You are Yuki, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.
+You are Agent Resources, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.
 Do NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.
 The user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.
 
@@ -58,13 +58,13 @@ If PulseMCP search results are included in this context, summarize them and sugg
 the relevant MCP server on a new or existing agent.`;
 }
 
-export async function handleYukiRequest(
+export async function handleAgentResourcesRequest(
   req: IncomingMessage,
   res: ServerResponse,
   getHqContext: () => { agents: AgentInfo[]; board: TaskCard[]; bossName: string } | null,
 ): Promise<boolean> {
   const url = req.url?.split("?")[0] ?? "";
-  if (url !== "/api/yuki") return false;
+  if (url !== "/api/agent-resources") return false;
 
   if (req.method !== "POST") {
     json(res, 405, { error: "Method not allowed" });
@@ -102,7 +102,7 @@ export async function handleYukiRequest(
   let hqContextStr = hqCtx ? buildHqContext(hqCtx.agents, hqCtx.board, hqCtx.bossName) : undefined;
 
   // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
-  // query, search PulseMCP and inject results into the context so Yuki can
+  // query, search PulseMCP and inject results into the context so Agent Resources can
   // recommend community MCP servers beyond the curated catalog.
   if (hqContextStr && shouldSearchPulseMCP(parsed.message)) {
     const searchQuery = extractSearchQuery(parsed.message);
@@ -113,12 +113,12 @@ export async function handleYukiRequest(
           hqContextStr += `\n\n${pulseResults}`;
         }
       } catch {
-        // PulseMCP search is best-effort — don't block Yuki's response
+        // PulseMCP search is best-effort — don't block Agent Resources's response
       }
     }
   }
 
-  // Forward to marketplace Yuki API
+  // Forward to marketplace Agent Resources API
   const forwardBody = {
     message: parsed.message,
     history: parsed.history ?? [],
@@ -127,14 +127,14 @@ export async function handleYukiRequest(
   };
 
   try {
-    const upstream = await fetch(`${MARKETPLACE_URL}/api/yuki`, {
+    const upstream = await fetch(`${MARKETPLACE_URL}/api/agent-resources`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(forwardBody),
     });
 
     if (!upstream.ok || !upstream.body) {
-      json(res, 502, { error: `Marketplace Yuki returned ${upstream.status}` });
+      json(res, 502, { error: `Marketplace Agent Resources returned ${upstream.status}` });
       return true;
     }
 

@@ -9,7 +9,7 @@ import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supab
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleMcpCatalogRequest } from "./mcp-store.js";
 import { searchPulseMCPStructured } from "./pulsemcp.js";
-import { handleYukiRequest } from "./yuki.js";
+import { handleAgentResourcesRequest } from "./agent-resources.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway, deployWorldToRailway, listWorldDeployments, stopWorldDeployment } from "./providers/railway-mcp.js";
 import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken, listRepoDir, readRepoFile, writeRepoFile, createRepoFile, deleteRepoFile } from "./github.js";
@@ -212,13 +212,13 @@ const screenshots = new ScreenshotManager();
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
 const server = createServer((req, res) => {
-  // Yuki chat proxy — needs HQ context from the session
-  if (req.url?.split("?")[0] === "/api/yuki") {
-    void handleYukiRequest(req, res, () => {
+  // Agent Resources chat proxy — needs HQ context from the session
+  if (req.url?.split("?")[0] === "/api/agent-resources") {
+    void handleAgentResourcesRequest(req, res, () => {
       // In dev mode, use the dev session; in auth mode, find by token
       if (isSupabaseConfigured) {
         // Extract token from the request to find the session
-        // For now, use the first session (single-user for Yuki context)
+        // For now, use the first session (single-user for Agent Resources context)
         const sess = tenants.values().next().value;
         if (!sess) return null;
         const snap = sess.manager.snapshot();
@@ -507,11 +507,11 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      // Only spectator_chat is accepted — forward to Yuki
+      // Only spectator_chat is accepted — forward to Agent Resources
       if (msg.type === "spectator_chat") {
         const text = `[${msg.fromName}]: ${msg.text}`.slice(0, 500);
         console.log(`[spectator] chat from ${msg.fromName}: ${msg.text}`);
-        sess.manager.chat("yuki", text);
+        sess.manager.chat("agent-resources", text);
         return;
       }
 
@@ -1711,27 +1711,6 @@ wss.on("connection", async (ws, req) => {
                     cy: msg.cy,
                     tileIndex: msg.tileIndex,
                     tile: msg.tile,
-                  });
-                }
-              }
-            }
-          }
-          break;
-        }
-        case "office_tile_update": {
-          activeManager.applyOfficeOverride(msg.tileIndex, msg.tile);
-          if (sess.roomId) {
-            const room = tenants.getRoom(sess.roomId);
-            if (room) {
-              for (const [pid] of room.players) {
-                if (pid === sess.user.id) continue;
-                const otherSess = tenants.get(pid);
-                if (otherSess) {
-                  otherSess.broadcast({
-                    type: "office_tile_updated",
-                    tileIndex: msg.tileIndex,
-                    tile: msg.tile,
-                    layer: msg.layer,
                   });
                 }
               }

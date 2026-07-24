@@ -46,7 +46,6 @@ export class Store {
   vacationedAgents = new Map<string, VacationedAgent>();
   worldSeed = 0;
   chunkOverrides: Record<string, Record<number, number>> = {};
-  officeOverrides: Record<number, number> = {};
   /** Every agent's messages merged chronologically, for the office feed. */
   feed: FeedItem[] = [];
   /** Bumped when the feed is rebuilt or items vanish mid-list (not appended). */
@@ -126,7 +125,6 @@ export class Store {
   private assemblyListeners = new Set<(agentIds: string[]) => void>();
   private npcStateListeners = new Set<(npcId: string, x: number, y: number, dir: import("../../shared/types").Dir, state: string) => void>();
   private tileUpdatedListeners = new Set<(cx: number, cy: number, tileIndex: number, tile: number) => void>();
-  private officeTileUpdatedListeners = new Set<(tileIndex: number, tile: number, layer: "ground" | "walls" | "furniture") => void>();
   private emoteListeners = new Set<(agentId: string, emote: string) => void>();
   private agentChatListeners = new Set<(fromId: string, toId: string, fromName: string, toName: string, text: string) => void>();
   private voicePeerListeners = new Set<(userId: string, name: string) => void>();
@@ -216,7 +214,6 @@ export class Store {
     this.worldsPanelOpen = false;
     this.worldSeed = 0;
     this.chunkOverrides = {};
-    this.officeOverrides = {};
     this.initialDataReady = false;
     this.emit();
   }
@@ -247,10 +244,6 @@ export class Store {
 
   onTileUpdated(fn: (cx: number, cy: number, tileIndex: number, tile: number) => void): void {
     this.tileUpdatedListeners.add(fn);
-  }
-
-  onOfficeTileUpdated(fn: (tileIndex: number, tile: number, layer: "ground" | "walls" | "furniture") => void): void {
-    this.officeTileUpdatedListeners.add(fn);
   }
 
   onEmote(fn: (agentId: string, emote: string) => void): void {
@@ -528,7 +521,6 @@ export class Store {
         if (msg.world) {
           this.worldSeed = msg.world.seed;
           this.chunkOverrides = msg.world.chunkOverrides ?? {};
-          this.officeOverrides = msg.world.officeOverrides ?? {};
           this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
         } else {
           this.firedAgents.clear();
@@ -601,6 +593,10 @@ export class Store {
         this.agents.delete(msg.agentId);
         this.logs.delete(msg.agentId);
         if (this.selectedId === msg.agentId) this.selectedId = null;
+        // Remove any schedules belonging to the fired agent
+        for (const s of [...this.schedules.values()]) {
+          if (s.agentId === msg.agentId) this.schedules.delete(s.id);
+        }
         break;
       case "chat_cleared":
         this.logs.set(msg.agentId, []);
@@ -650,7 +646,6 @@ export class Store {
       case "world":
         this.worldSeed = msg.world.seed;
         this.chunkOverrides = msg.world.chunkOverrides ?? {};
-        this.officeOverrides = msg.world.officeOverrides ?? {};
         this.firedAgents = new Map(msg.world.firedAgents.map((fa) => [fa.id, fa]));
         this.vacationedAgents = new Map((msg.world.vacationedAgents ?? []).map((va) => [va.id, va]));
         break;
@@ -976,11 +971,6 @@ export class Store {
       }
       case "tile_updated": {
         for (const fn of this.tileUpdatedListeners) fn(msg.cx, msg.cy, msg.tileIndex, msg.tile);
-        break;
-      }
-      case "office_tile_updated": {
-        this.officeOverrides[msg.tileIndex] = msg.tile;
-        for (const fn of this.officeTileUpdatedListeners) fn(msg.tileIndex, msg.tile, msg.layer);
         break;
       }
       case "rooms_list": {
