@@ -366,8 +366,19 @@ export async function startOAuthFlow(
     const registrationEndpoint = metadata.registration_endpoint || `${authOrigin}/register`;
 
     // Determine the best auth method supported by the server
-    const supportedMethods = metadata.token_endpoint_auth_methods_supported || ["none"];
-    const authMethod = supportedMethods.includes("none") ? "none" : supportedMethods[0] || "none";
+    // Only include token_endpoint_auth_method if the server explicitly advertises supported methods.
+    // Some providers (e.g. Strava) reject "none" and require a client secret, but don't list
+    // supported methods in their metadata. Omitting the field lets the server pick its default.
+    const supportedMethods = metadata.token_endpoint_auth_methods_supported;
+    const dcrBody: Record<string, unknown> = {
+      client_name: "Agent Heights",
+      redirect_uris: [redirectUri],
+      grant_types: ["authorization_code", "refresh_token"],
+    };
+    if (supportedMethods && supportedMethods.length > 0) {
+      const authMethod = supportedMethods.includes("none") ? "none" : supportedMethods[0];
+      dcrBody.token_endpoint_auth_method = authMethod;
+    }
 
     const registration = await fetch(registrationEndpoint, {
       method: "POST",
@@ -376,15 +387,16 @@ export async function startOAuthFlow(
         "Accept": "application/json",
         "User-Agent": "AgentHeights/1.0",
       },
-      body: JSON.stringify({
-        client_name: "Agent Heights",
-        redirect_uris: [redirectUri],
-        grant_types: ["authorization_code", "refresh_token"],
-        token_endpoint_auth_method: authMethod,
-      }),
+      body: JSON.stringify(dcrBody),
     });
     if (!registration.ok) {
-      const errText = await registration.text().catch(() => "");
+      let errText = await registration.text().catch(() => "");
+      // Truncate HTML error pages from WAFs/CDNs (Akamai, CloudFront) that can be thousands of chars
+      if (errText.length > 300) errText = errText.slice(0, 300) + "... (truncated)";
+      // Provide a friendlier message for common WAF blocks
+      if (registration.status === 403) {
+        throw new Error(`OAuth registration blocked (403) — ${serverUrl} may be behind a firewall or not support server-side registration. Try the API Key option instead.`);
+      }
       throw new Error(`Dynamic client registration failed: ${registration.status} ${errText}`);
     }
     const regData = await registration.json() as { client_id: string; client_secret?: string };

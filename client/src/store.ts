@@ -12,6 +12,7 @@ export interface HelicopterDelivery {
   sprite?: number;
   appearance?: CharAppearance;
   mcpServers?: MCPServerConfig[];
+  alreadyHired?: boolean;
 }
 
 export interface FeedItem {
@@ -694,6 +695,7 @@ export class Store {
           systemPrompt: msg.systemPrompt,
           appearance: msg.appearance,
           mcpServers: msg.mcpServers,
+          alreadyHired: msg.alreadyHired,
         });
         return;
       case "railway_status":
@@ -809,8 +811,8 @@ export class Store {
         if (isAuto) {
           // Open the OAuth login page in a popup
           const _w = 600, _h = 700;
-          const _l = Math.round((window.screen.width - _w) / 2);
-          const _t = Math.round((window.screen.height - _h) / 2);
+          const _l = Math.round((window.screenLeft ?? window.screenX) + (window.outerWidth - _w) / 2);
+          const _t = Math.round((window.screenTop ?? window.screenY) + (window.outerHeight - _h) / 2);
           window.open(msg.authUrl, "mcp-oauth-popup", `width=${_w},height=${_h},left=${_l},top=${_t},scrollbars=yes`);
           // Show a small waiting toast — the popup will redirect to /oauth/callback,
           // the server will exchange the code and send mcp_oauth_complete via WS
@@ -859,8 +861,8 @@ export class Store {
 
         openBtn.addEventListener("click", () => {
           const _w = 600, _h = 700;
-          const _l = Math.round((window.screen.width - _w) / 2);
-          const _t = Math.round((window.screen.height - _h) / 2);
+          const _l = Math.round((window.screenLeft ?? window.screenX) + (window.outerWidth - _w) / 2);
+          const _t = Math.round((window.screenTop ?? window.screenY) + (window.outerHeight - _h) / 2);
           window.open(msg.authUrl, "mcp-oauth-popup", `width=${_w},height=${_h},left=${_l},top=${_t},scrollbars=yes`);
         });
 

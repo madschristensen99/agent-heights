@@ -22,7 +22,6 @@ import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBro
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
-import { SUBSCRIPTION_TIERS } from "../shared/types.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
@@ -778,21 +777,6 @@ wss.on("connection", async (ws, req) => {
       // Use the room's agent manager (shared for org rooms, owner's for private rooms)
       const roomMgr = sess.roomId ? tenants.getRoomManager(sess.roomId) : null;
       const activeManager = roomMgr ?? manager;
-
-      // Stripe gating: hiring agents requires an active subscription with agent slots available
-      if (msg.type === "hire" && isSupabaseConfigured && isStripeConfigured) {
-        const payStatus = await getUserPaymentStatus(sess.user.id);
-        if (!payStatus.subscriptionActive) {
-          sess.broadcast({ type: "payment_required", reason: "subscription", message: "You need an active subscription to hire agents. Plans start at $0.99/month." });
-          return;
-        }
-        if (activeManager.agentCount >= payStatus.agentLimit) {
-          const tierLabel = payStatus.subscriptionTier ? SUBSCRIPTION_TIERS[payStatus.subscriptionTier].name : "your plan";
-          const limitLabel = payStatus.agentLimit === Infinity ? "unlimited" : String(payStatus.agentLimit);
-          sess.broadcast({ type: "payment_required", reason: "agent_limit", message: `Your ${tierLabel} plan allows ${limitLabel} agent${payStatus.agentLimit === 1 ? "" : "s"}. Upgrade to hire more.`, tier: payStatus.subscriptionTier, agentLimit: payStatus.agentLimit });
-          return;
-        }
-      }
 
       switch (msg.type) {
         case "setup": {

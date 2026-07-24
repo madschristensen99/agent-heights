@@ -4332,7 +4332,8 @@ export class OfficeScene extends Phaser.Scene {
     // sidebar and is interactable right away. The helicopter animation
     // is purely cosmetic — syncAgents() will replace the cosmetic sprite
     // with the real NPC when the server confirms.
-    if (delivery) {
+    // Skip if the server already created the agent (Agent Resources hire).
+    if (delivery && !delivery.alreadyHired) {
       const net = this.game.registry.get("net") as import("../net").Net;
       net.send({
         type: "hire",

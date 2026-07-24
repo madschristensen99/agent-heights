@@ -784,7 +784,7 @@ export type ServerMsg =
   | { type: "schedules"; schedules: AgentSchedule[] }
   | { type: "schedule"; schedule: AgentSchedule }
   | { type: "schedule_removed"; scheduleId: string }
-  | { type: "helicopter_delivery"; name: string; model: string; provider: string; systemPrompt: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[] }
+  | { type: "helicopter_delivery"; name: string; model: string; provider: string; systemPrompt: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; alreadyHired?: boolean }
   | { type: "server_restarting"; estimatedSeconds: number }
   | { type: "spectator_chat_relay"; fromName: string; text: string };
 

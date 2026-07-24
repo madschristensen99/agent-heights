@@ -872,6 +872,7 @@ export class AgentManager {
       provider: "cline",
       systemPrompt,
       mcpServers,
+      alreadyHired: true,
     });
     // Hire the agent server-side (this creates the agent + broadcasts "agent" msg)
     await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers);

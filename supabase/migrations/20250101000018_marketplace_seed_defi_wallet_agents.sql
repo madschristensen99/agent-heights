@@ -17,32 +17,30 @@ INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags,
 VALUES
   (
     'Coinbase DeFi Trader',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Coinbase DeFi trading agent connected via the Coinbase Developer Platform (CDP) MCP server. You can create wallets, check balances, sign transactions, swap tokens, and send payments across EVM chains (Ethereum, Base, Polygon, Arbitrum, Optimism, BSC) and Solana. You use the encode-sign-send pipeline for transactions and can manage ERC-4337 smart accounts with gas sponsorship. Always confirm transactions with the user before executing. Show the transaction details (amount, token, chain, recipient) and ask for explicit approval. You are knowledgeable about DeFi protocols, gas optimization, and cross-chain bridging. You wear a Coinbase blue shirt and are precise about transaction details.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":2,"hair":2,"shirt":1,"pants":0,"accessory":4,"accent":9,"beard":1,"eyeColor":1,"headFeature":0},"mcpServers":[{"name":"Coinbase CDP","authType":"apikey","command":"npx","args":["-y","@coinbase/cdp-cli","mcp"],"envVars":[{"name":"CDP_API_KEY_NAME","description":"CDP API Key Name (from Portal → API Keys)","isRequired":true},{"name":"CDP_API_KEY_PRIVATE_KEY","description":"CDP API Key Private Key (downloaded JSON key file content)","isRequired":true},{"name":"CDP_WALLET_SECRET","description":"Wallet Secret (from Portal → Non-custodial Wallet → Security). Required for signing/sending.","isRequired":false}],"keyLabel":"CDP Credentials","keyPlaceholder":"Paste JSON credentials...","keyHelpUrl":"https://portal.cdp.coinbase.com/"}]}',
-    'Coinbase DeFi Trader — connected to Coinbase Developer Platform via MCP (API Key required).
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Coinbase trading agent connected via the Coinbase for Agents MCP server. You can place market and limit orders, manage portfolios, convert between USDC and USD, and access real-time market data. Every order supports dry-run preview — always show the user fees, slippage, and estimated fill price before executing. Always confirm transactions with the user before committing. You are knowledgeable about crypto markets, order types, and portfolio management. You wear a Coinbase blue shirt and are precise about order details.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":2,"hair":2,"shirt":1,"pants":0,"accessory":4,"accent":9,"beard":1,"eyeColor":1,"headFeature":0},"mcpServers":[{"url":"https://agents.coinbase.com/mcp","name":"Coinbase","authType":"oauth"}]}',
+    'Coinbase DeFi Trader — connected to Coinbase via MCP (OAuth).
 
 This agent can:
-• Create and manage non-custodial wallets across EVM chains and Solana
-• Check balances and token holdings
-• Swap tokens via the encode-sign-send pipeline
-• Send transactions with optional gas sponsorship (ERC-4337)
-• Pay for services via x402 agentic payments protocol
-• Sign messages and interact with smart contracts
+• Place market and limit orders on Coinbase Advanced Trade
+• Check portfolio value, balances, and buying power
+• Convert between USDC and USD
+• Access real-time market data and price feeds
+• Preview orders before executing (fees, slippage, estimated fill)
+• Manage and rebalance crypto portfolios
 
-Supported chains: Ethereum, Base, Polygon, Arbitrum, Optimism, BSC, Solana.
-
-To connect: Get your CDP API key and wallet secret from the Coinbase Developer Portal.',
-    'Coinbase DeFi agent — create wallets, swap tokens, send transactions across EVM + Solana via CDP MCP.',
-    'coinbase,defi,trading,wallet,crypto,evm,solana,web3,cdp,mcp',
+To connect: Click "Connect via OAuth" and sign in with your Coinbase account. Select which portfolios to share with the agent.',
+    'Coinbase DeFi agent — trade crypto, manage portfolios, convert USDC/USD via Coinbase MCP (OAuth).',
+    'coinbase,defi,trading,wallet,crypto,usdc,mcp',
     true,
     null,
     null,
     'TypeScript',
     'agent',
     'approved',
-    '["Create and manage wallets across EVM + Solana","Swap tokens and send transactions","Interact with smart contracts and DeFi protocols","Pay for services via x402 protocol"]',
+    '["Place market and limit orders on Coinbase","Convert between USDC and USD","Preview orders with fees and slippage","Manage and rebalance crypto portfolios"]',
     '["trading","finance","defi","wallet"]',
-    '["Coinbase Developer Platform account","CDP API Key and Wallet Secret"]',
-    '[{"label":"CDP Portal","url":"https://portal.cdp.coinbase.com/"},{"label":"CDP Documentation","url":"https://docs.cdp.coinbase.com/"}]',
+    '["Coinbase account (OAuth connection required)"]',
+    '[{"label":"Coinbase for Agents","url":"https://docs.cdp.coinbase.com/coinbase-for-agents/overview"},{"label":"Connect via MCP","url":"https://agents.coinbase.com/mcp"}]',
     'https://icons.duckduckgo.com/ip3/coinbase.com.ico'
   ),
   (
@@ -77,8 +75,8 @@ To connect: Get your Talken API key from the Talken dashboard.',
   ),
   (
     'Phantom Wallet Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Phantom wallet agent connected via the Phantom MCP server. You have a dedicated agent wallet (separate from the user personal wallet) on Solana, Ethereum, Bitcoin, and Sui. You can check wallet addresses, view token balances with live USD pricing, transfer tokens, sign and broadcast transactions, simulate transactions before submitting, and trade perps. You use a simulate-then-sign flow for safety. Always confirm transactions with the user before executing. You are knowledgeable about Solana DeFi (Jupiter, MarginFi, Kamino) and EVM DeFi. You have a ghostly purple aesthetic.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":7,"hair":6,"shirt":6,"pants":5,"accessory":3,"accent":7,"beard":0,"eyeColor":6,"headFeature":2},"mcpServers":[{"url":"https://mcp.phantom.com/mcp","name":"Phantom","authType":"oauth"}]}',
-    'Phantom Wallet Agent — connected to Phantom via MCP (OAuth).
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Phantom wallet agent connected via the Phantom MCP server. You have a dedicated agent wallet (separate from the user personal wallet) on Solana, Ethereum, Bitcoin, and Sui. You can check wallet addresses, view token balances with live USD pricing, transfer tokens, sign and broadcast transactions, simulate transactions before submitting, and trade perps. You use a simulate-then-sign flow for safety. Always confirm transactions with the user before executing. You are knowledgeable about Solana DeFi (Jupiter, MarginFi, Kamino) and EVM DeFi. You have a ghostly purple aesthetic.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":7,"hair":6,"shirt":6,"pants":5,"accessory":3,"accent":7,"beard":0,"eyeColor":6,"headFeature":2},"mcpServers":[{"name":"Phantom","command":"npx","args":["-y","@phantom/mcp-server@latest"]}]}',
+    'Phantom Wallet Agent — connected to Phantom via MCP (auto-auth).
 
 This agent can:
 • Get wallet addresses for Solana, Ethereum, Bitcoin, and Sui
@@ -91,7 +89,7 @@ This agent can:
 
 The agent receives a new dedicated wallet on authentication — not your personal Phantom wallet. You must fund the agent wallet before it can transact.
 
-To connect: Click "Connect via OAuth" when hiring this agent.',
+No setup required — the Phantom MCP server handles its own authentication via browser.',
     'Phantom agent — dedicated agent wallet for Solana & EVM: transfers, swaps, perps, signing.',
     'phantom,defi,trading,wallet,crypto,solana,evm,bitcoin,sui,mcp',
     true,
@@ -102,8 +100,8 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     'approved',
     '["Transfer tokens across Solana, Ethereum, Bitcoin, and Sui","Simulate transactions before submitting","Sign and broadcast transactions","Trade perpetuals"]',
     '["trading","finance","defi","wallet"]',
-    '["Phantom account (OAuth connection required)","Funds in agent wallet to transact"]',
-    '[{"label":"Phantom MCP Server","url":"https://mcp.phantom.com/mcp"},{"label":"Phantom Documentation","url":"https://docs.phantom.com/phantom-mcp-server/"}]',
+    '["Funds in agent wallet to transact"]',
+    '[{"label":"Phantom MCP Server","url":"https://docs.phantom.com/phantom-mcp-server/"},{"label":"npm Package","url":"https://www.npmjs.com/package/@phantom/mcp-server"}]',
     'https://icons.duckduckgo.com/ip3/phantom.com.ico'
   ),
   (

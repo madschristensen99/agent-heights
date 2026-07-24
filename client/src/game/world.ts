@@ -1956,12 +1956,17 @@ export class WorldLayer {
       if (hit && time > this.invulnUntil && !this.isDying) {
         this.takeDamage(hit.damage, playerX, playerY, time);
       }
+      // despawn creatures that wandered too far — frees cap for current biome
+      const cd = Math.hypot(playerX - c.container.x, playerY - c.container.y);
+      if (cd > 900) c.destroy();
     }
     this.creatures = this.creatures.filter((c) => c.alive_);
 
     // --- update friendly creatures ---
     for (const f of this.friendlies) {
       f.update(time, dt, playerX, playerY);
+      const fd = Math.hypot(playerX - f.container.x, playerY - f.container.y);
+      if (fd > 900) f.destroy();
     }
     this.friendlies = this.friendlies.filter((f) => f.alive_);
 
@@ -1978,6 +1983,8 @@ export class WorldLayer {
         nearestBeastDist = bd;
         nearestBeast = b;
       }
+      // despawn beasts that are too far — frees cap for current biome
+      if (bd > 1200) b.destroy();
     }
     this.beasts = this.beasts.filter((b) => b.alive_);
 

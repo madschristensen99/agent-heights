@@ -24,8 +24,7 @@ net.onMessage = (msg) => {
       freeTrialExpiresAt: msg.freeTrialExpiresAt,
     });
   } else if (msg.type === "payment_required") {
-    paymentOverlayDismissed = false;
-    paymentOverlay.show();
+    store.toast(msg.message);
   }
   store.apply(msg);
 };

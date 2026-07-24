@@ -3789,26 +3789,17 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
   // ── DeFi / Wallet MCPs ────────────────────────────────────────────────
 
   {
-    id: "coinbase-cdp",
-    name: "Coinbase CDP",
-    summary: "Create wallets, sign transactions, swap tokens, and pay for services on EVM + Solana.",
+    id: "coinbase-agents",
+    name: "Coinbase",
+    summary: "Trade crypto, manage portfolios, convert USDC/USD — sign in with Coinbase account.",
     description:
-      "Coinbase Developer Platform MCP server. Gives agents non-custodial wallets across EVM chains (Ethereum, Base, Polygon, Arbitrum, Optimism, BSC) and Solana. Create accounts, sign messages, send transactions, swap tokens via the encode-sign-send pipeline, and manage ERC-4337 smart accounts with optional gas sponsorship. Supports x402 agentic payments. Requires a CDP API key and wallet secret from the Coinbase Developer Portal.",
-    transport: "stdio",
-    authType: "apikey",
+      "Coinbase for Agents MCP server. Connects directly via OAuth — sign in with your Coinbase account, select which portfolios to share, and your agent gets instant access to crypto trading (market and limit orders), portfolio management, USDC/USD conversions, and real-time market data. Every order supports dry-run preview so agents can inspect fees, slippage, and estimated fill price before committing. No API keys or terminal required.",
+    transport: "remote",
+    authType: "oauth",
     isOfficial: true,
     category: ["defi", "wallet", "trading", "crypto", "payments"],
     icon: "https://cdn.simpleicons.org/coinbase/white",
-    command: "npx",
-    args: ["-y", "@coinbase/cdp-cli", "mcp"],
-    envVars: [
-      { name: "CDP_API_KEY_NAME", description: "CDP API Key Name (from Portal → API Keys)", isRequired: true },
-      { name: "CDP_API_KEY_PRIVATE_KEY", description: "CDP API Key Private Key (downloaded JSON key file content)", isRequired: true },
-      { name: "CDP_WALLET_SECRET", description: "Wallet Secret (from Portal → Non-custodial Wallet → Security). Required for signing/sending.", isRequired: false },
-    ],
-    keyLabel: "CDP Credentials",
-    keyPlaceholder: "Paste JSON credentials...",
-    keyHelpUrl: "https://portal.cdp.coinbase.com/",
+    url: "https://agents.coinbase.com/mcp",
   },
   {
     id: "talken-agentic-wallet",
@@ -3835,13 +3826,14 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     name: "Phantom",
     summary: "Agent wallet for Solana & EVM: sign transactions, transfer tokens, swap, and trade perps.",
     description:
-      "Phantom MCP server gives AI agents a dedicated wallet to sign transactions, transfer tokens, and interact on-chain across Solana, Ethereum, Bitcoin, and Sui. Agents receive a new dedicated wallet on authentication — not the user's personal wallet. Includes simulate-then-sign flow, token balances with USD pricing, and perp trading. Uses Phantom Connect (OIDC) for authentication.",
-    transport: "remote",
-    authType: "oauth",
+      "Phantom MCP server gives AI agents a dedicated wallet to sign transactions, transfer tokens, and interact on-chain across Solana, Ethereum, Bitcoin, and Sui. Agents receive a new dedicated wallet on authentication — not the user's personal wallet. Includes simulate-then-sign flow, token balances with USD pricing, and perp trading. Auth is handled internally via phantom_login tool (opens browser). No API key or OAuth setup needed — the server manages its own sessions.",
+    transport: "stdio",
+    authType: "open",
     isOfficial: true,
     category: ["defi", "wallet", "trading", "crypto"],
     icon: "https://cdn.simpleicons.org/phantom",
-    url: "https://mcp.phantom.com/mcp",
+    command: "npx",
+    args: ["-y", "@phantom/mcp-server@latest"],
   },
   {
     id: "metamask-agent",
@@ -3978,9 +3970,9 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Yahoo Finance Agent: Strategy evaluator — fetches market data, computes technical indicators inline (RSI, MACD, SMA, Bollinger Bands), evaluates strategy conditions, and emits structured trade signals. No auth needed. Pairs with Robinhood agent via schedule + handoff.
 - Robinhood Trading Agent: Trade executor — receives trade signal handoffs from analysis agents, confirms with boss, places trades via Robinhood MCP (OAuth). Always requires human confirmation before executing.
 - GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.
-- Coinbase DeFi Trader: Wallet agent — create wallets, swap tokens, send transactions across EVM + Solana via Coinbase CDP MCP. Requires CDP API key + wallet secret.
+- Coinbase DeFi Trader: Trading agent — place orders, manage portfolios, convert USDC/USD via Coinbase MCP (OAuth). Sign in with Coinbase account, one click.
 - Talken Swap Agent: Multi-chain DeFi agent — DEX swaps, cross-chain bridges, Hyperliquid perps, Polymarket, staking via Talken MCP. Requires Talken API key.
-- Phantom Wallet Agent: Solana & EVM wallet agent — transfers, swaps, perps via Phantom MCP (OAuth). Dedicated agent wallet, fund before transacting.
+- Phantom Wallet Agent: Solana & EVM wallet agent — transfers, swaps, perps via Phantom MCP (stdio, auto-auth). Dedicated agent wallet, fund before transacting.
 - MetaMask Agent Wallet: Self-custodial DeFi agent — swaps, perps, staking with mandatory security pipeline (simulation + threat scan + MEV protection). Requires agent wallet credentials.
 - AgentWallet Trader: Permissionless wallet agent — create wallets, send tokens, x402 payments on 9 EVM chains + Solana. No KYC. Requires AgentWallet API key.
 - WAIaaS DeFi Agent: Self-hosted DeFi agent — 13+ protocols (Jupiter, 0x, Aave V3, Lido, etc.) with policy engine and 6-stage tx pipeline. Requires local daemon + session token.`;
