@@ -219,6 +219,8 @@ interface QueuedTask {
   isResume?: boolean;
   /** Schedule that fired this task, if any (for backoff tracking). */
   scheduleId?: string | null;
+  /** Review context if this queued task is a manager review. */
+  reviewContext?: { agentId: string; agentName: string; originalTask: string } | null;
 }
 
 interface TaskHistoryEntry {
@@ -249,6 +251,8 @@ interface AgentRuntime {
   taskHistory: TaskHistoryEntry[];
   /** Timestamp when the current task started (for duration tracking). */
   taskStartedAt: number;
+  /** Context for review tasks: which agent+task is being reviewed. */
+  reviewContext: { agentId: string; agentName: string; originalTask: string } | null;
 }
 
 export class AgentManager {
@@ -376,7 +380,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -538,7 +542,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
     this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -567,7 +571,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -848,7 +852,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -881,7 +885,7 @@ export class AgentManager {
     return rt?.info.id ?? "";
   }
 
-  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string): void {
+  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     const cleanTask = task.trim();
@@ -894,6 +898,7 @@ export class AgentManager {
         handoffTo: target ? target.info.id : null,
         cardId: cardId ?? null,
         scheduleId: scheduleId ?? null,
+        reviewContext: reviewContext ?? null,
       });
       const pos = rt.taskQueue.length;
       this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task queued (#${pos}).` });
@@ -901,11 +906,11 @@ export class AgentManager {
       return;
     }
 
-    this.startTask(rt, cleanTask, handoffTo, cardId, false, scheduleId);
+    this.startTask(rt, cleanTask, handoffTo, cardId, false, scheduleId, reviewContext);
   }
 
   /** Begin executing a task immediately (assumes agent is idle). */
-  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string): void {
+  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null): void {
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
@@ -915,6 +920,7 @@ export class AgentManager {
     const target = handoffTo && handoffTo !== rt.info.id ? this.agents.get(handoffTo) : undefined;
     rt.handoffTo = target ? target.info.id : null;
     rt.scheduleId = scheduleId ?? null;
+    rt.reviewContext = reviewContext ?? null;
     this.session.record("assign", {
       agentId: rt.info.id,
       agentName: rt.info.name,
@@ -933,7 +939,7 @@ export class AgentManager {
     if (rt.taskQueue.length === 0) return;
     const next = rt.taskQueue.shift()!;
     this.log(rt, "status", `Starting queued task: ${next.task}`);
-    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined);
+    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null);
   }
 
   /** Hand the same task to every agent that isn't already busy. */
@@ -1132,9 +1138,13 @@ export class AgentManager {
     // Clear in-memory provider state (conversation history)
     clearAllMemory(agentId);
 
-    // Soft-delete persisted conversation messages (archived, not hard-deleted)
+    // Null out the session ID so the provider conversation can't be resumed
+    rt.info.sessionId = null;
+
+    // Soft-delete persisted conversation messages and logs (archived, not hard-deleted)
     void this.save.clearMessages(agentId);
     void this.save.clearMessages(`${agentId}:chat`);
+    void this.save.clearLogs(agentId);
 
     // Delete the agent's workspace directory (code repos, images, files)
     try {
@@ -1147,7 +1157,7 @@ export class AgentManager {
     this.session.record("fire", { agentId, agentName: rt.info.name });
     this.persist();
     this.broadcast({ type: "agent_removed", agentId });
-    this.broadcast({ type: "toast", text: `${rt.info.name} was fired. Their workspace was cleared, but inference logs are preserved.` });
+    this.broadcast({ type: "toast", text: `${rt.info.name} was fired. Their workspace, session, and logs were cleared.` });
     await this.save.flushNow();
   }
 
@@ -1241,7 +1251,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1285,7 +1295,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1759,6 +1769,9 @@ export class AgentManager {
     const devopsLine = rt.info.role === "devops"
       ? "You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. Use them when asked about deployments or infrastructure."
       : "";
+    const managerLine = rt.info.role === "manager"
+      ? "You are the office manager. When a colleague completes or fails a task, you will receive a review task — review it yourself and sign off. Do NOT delegate reviews. Only delegate when the boss gives the office a new goal that requires workers to execute. When reviewing, end your response with either APPROVED or NEEDS REWORK: <feedback>."
+      : "";
 
     // ── Personality-driven behavior ──
     const p = rt.info.personality ?? DEFAULT_PERSONALITY;
@@ -1795,6 +1808,7 @@ export class AgentManager {
       `Your workspace directory is ${this.cwdFor(this.slugFor(rt), rt.info.id)}. Work only inside this directory. Use absolute paths when calling tools. Be effective and concise.`,
       sharedLine,
       devopsLine,
+      managerLine,
       rosterLine,
       boardLine,
       `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
@@ -1904,7 +1918,7 @@ export class AgentManager {
     // Managers get the planning brief instead of the raw task — UNLESS this is
     // a review/assessment task (from notifyManagersOfCompletion or onPostMessage),
     // which the manager should process directly rather than delegate.
-    const isReviewTask = isManager && /\b(failed|completed) their task\b.*\bReview\b/i.test(task);
+    const isReviewTask = isManager && (/\b(failed|completed) their task\b[\s\S]*\bReview\b|sent you a message[\s\S]*\bReview\b/i).test(task);
     const resumePrefix = isResume
       ? "You were interrupted mid-task by a server restart. Your previous conversation history has been restored. Continue where you left off — do NOT redo work you already completed. Here is your original task:\n\n"
       : "";
@@ -2044,6 +2058,7 @@ export class AgentManager {
       if (!sawError && !abort.signal.aborted) {
         if (isManager && !isReviewTask) this.delegate(rt, task, finalText);
         this.completeHandoff(rt, task, finalText);
+        if (isManager && isReviewTask && rt.reviewContext) this.processReviewVerdict(rt, finalText);
         this.notifyManagersOfCompletion(rt, task, finalText, false);
         this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
       } else if (sawError && !abort.signal.aborted) {
@@ -2229,6 +2244,52 @@ export class AgentManager {
     }
   }
 
+  /** Process a manager's review verdict (APPROVED or NEEDS REWORK) and act on it. */
+  private processReviewVerdict(mgr: AgentRuntime, reviewText: string): void {
+    const ctx = mgr.reviewContext;
+    if (!ctx) return;
+    mgr.reviewContext = null;
+
+    const target = this.agents.get(ctx.agentId);
+    if (!target) {
+      this.log(mgr, "status", `Review complete — ${ctx.agentName} no longer works here, can't act on verdict.`);
+      return;
+    }
+
+    // Check for NEEDS REWORK first (APPROVED might appear in the body too)
+    const reworkMatch = reviewText.match(/\bNEEDS?\s+REWORK\b[:\s]*([\s\S]*)/i);
+    if (reworkMatch) {
+      const feedback = reworkMatch[1].trim().slice(0, 1000) || "No specific feedback provided.";
+      const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${ctx.originalTask.slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.`;
+      this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback.`);
+      this.broadcast({ type: "toast", text: `${mgr.info.name} requested rework from ${ctx.agentName}.` });
+      this.assign(ctx.agentId, reworkTask);
+      return;
+    }
+
+    if (/\bAPPROVED\b/i.test(reviewText)) {
+      this.log(mgr, "status", `Review verdict: APPROVED — ${ctx.agentName}'s work accepted.`);
+      this.broadcast({ type: "toast", text: `${mgr.info.name} approved ${ctx.agentName}'s work.` });
+      // Post approval message to the original agent's inbox
+      const slug = this.slugFor(target);
+      const inboxPath = join(this.cwdFor(slug, ctx.agentId), "inbox.jsonl");
+      const entry = JSON.stringify({
+        ts: Date.now(),
+        from: mgr.info.name,
+        message: `Your work on "${ctx.originalTask.slice(0, 200)}" was reviewed and APPROVED. Nice job!`,
+      }) + "\n";
+      import("node:fs/promises").then(({ appendFile, mkdir }) => {
+        mkdir(dirname(inboxPath), { recursive: true }).then(() =>
+          appendFile(inboxPath, entry, "utf-8").catch(() => {}),
+        );
+      }).catch(() => {});
+      return;
+    }
+
+    // No clear verdict — default to approved
+    this.log(mgr, "status", `Review complete — no explicit APPROVED/NEEDS REWORK verdict, defaulting to approved.`);
+  }
+
   /** Forward a finished task's result to the agent chosen at assign time. */
   private completeHandoff(rt: AgentRuntime, task: string, result: string): void {
     const targetId = rt.handoffTo;
@@ -2286,9 +2347,9 @@ export class AgentManager {
       // If the manager is idle, assign them a task to review the completion report
       if (mgr.info.status !== "thinking" && mgr.info.status !== "working") {
         const reviewTask = failed
-          ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}. Review the situation and decide if any action is needed.`
-          : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed.`;
-        this.assign(mgr.info.id, reviewTask);
+          ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}. Review the situation and decide if any action is needed. End your response with either APPROVED (if no further action is needed) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`
+          : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed. End your response with either APPROVED (if the work is acceptable) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`;
+        this.assign(mgr.info.id, reviewTask, undefined, undefined, undefined, { agentId: rt.info.id, agentName: rt.info.name, originalTask: task });
       }
     }
   }

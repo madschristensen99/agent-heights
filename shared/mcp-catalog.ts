@@ -3793,20 +3793,20 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     name: "Coinbase",
     summary: "Trade crypto, manage portfolios, convert USDC/USD via Coinbase Advanced Trade.",
     description:
-      "Coinbase for Agents MCP server. Download a CDP API key JSON file from the Coinbase Developer Portal, then paste the two values (name and privateKey) from that file. Your agent gets access to crypto trading (market and limit orders), portfolio management, USDC/USD conversions, and real-time market data. Every order supports dry-run preview so agents can inspect fees, slippage, and estimated fill price before committing.",
+      "Coinbase for Agents MCP server. Create a Secret API Key (ECDSA) in the Coinbase Developer Portal, download the JSON key file, then paste the two values from it. Your agent gets access to crypto trading (market and limit orders), portfolio management, USDC/USD conversions, and real-time market data. Every order supports dry-run preview so agents can inspect fees, slippage, and estimated fill price before committing.",
     transport: "stdio",
     authType: "apikey",
     isOfficial: true,
     category: ["defi", "wallet", "trading", "crypto", "payments"],
     icon: "https://cdn.simpleicons.org/coinbase/white",
     command: "npx",
-    args: ["-y", "@coinbase/cdp-cli", "mcp"],
+    args: ["-y", "@coinbase/coinbase-cli", "mcp"],
     envVars: [
-      { name: "CDP_API_KEY_NAME", description: "From your downloaded JSON key file — copy the 'name' value (e.g. organizations/.../apiKeys/...)", isRequired: true },
-      { name: "CDP_API_KEY_PRIVATE_KEY", description: "From your downloaded JSON key file — copy the 'privateKey' value (starts with -----BEGIN EC PRIVATE KEY-----)", isRequired: true },
+      { name: "CDP_KEY_ID", description: "API Key ID — from the JSON key file you downloaded (the 'id' field)", isRequired: true },
+      { name: "CDP_KEY_SECRET", description: "Private Key — from the JSON key file you downloaded (the 'privateKey' field)", isRequired: true },
     ],
     keyLabel: "CDP API Key",
-    keyPlaceholder: "Paste key name...",
+    keyPlaceholder: "Paste API Key ID...",
     keyHelpUrl: "https://portal.cdp.coinbase.com/api-keys/secret",
   },
   {
@@ -3977,7 +3977,8 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Talken Swap Agent: Multi-chain DeFi agent — DEX swaps, cross-chain bridges, Hyperliquid perps, Polymarket, staking via Talken MCP. Requires Talken API key.
 - Phantom Wallet Agent: Solana & EVM wallet agent — transfers, swaps, perps via Phantom MCP (stdio, auto-auth). Dedicated agent wallet, fund before transacting.
 - AgentWallet Trader: Permissionless wallet agent — create wallets, send tokens, x402 payments on 9 EVM chains + Solana. No KYC. Requires AgentWallet API key.
-- WAIaaS DeFi Agent: Self-hosted DeFi agent — 13+ protocols (Jupiter, 0x, Aave V3, Lido, etc.) with policy engine and 6-stage tx pipeline. Requires local daemon + session token.`;
+- WAIaaS DeFi Agent: Self-hosted DeFi agent — 13+ protocols (Jupiter, 0x, Aave V3, Lido, etc.) with policy engine and 6-stage tx pipeline. Requires local daemon + session token.
+- Runpod GPU Agent: Cloud infrastructure agent — launch GPU Pods, deploy serverless endpoints, manage storage via Runpod MCP. Requires Runpod API key.`;
 
 
 /** Convert a catalog entry to an MCPServerConfig for agent assignment. */

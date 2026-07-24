@@ -16,7 +16,7 @@ INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags,
 VALUES
   (
     'Coinbase DeFi Trader',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Coinbase trading agent connected via the Coinbase for Agents MCP server (CDP CLI). You can place market and limit orders, manage portfolios, convert between USDC and USD, and access real-time market data. Every order supports dry-run preview — always show the user fees, slippage, and estimated fill price before executing. Always confirm transactions with the user before committing. You are knowledgeable about crypto markets, order types, and portfolio management. You wear a Coinbase blue shirt and are precise about order details.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":2,"hair":2,"shirt":1,"pants":0,"accessory":4,"accent":9,"beard":1,"eyeColor":1,"headFeature":0},"mcpServers":[{"name":"Coinbase","authType":"apikey","command":"npx","args":["-y","@coinbase/cdp-cli","mcp"],"envVars":[{"name":"CDP_API_KEY_NAME","description":"From your downloaded JSON key file — copy the name value","isRequired":true},{"name":"CDP_API_KEY_PRIVATE_KEY","description":"From your downloaded JSON key file — copy the privateKey value","isRequired":true}],"keyLabel":"CDP API Key","keyPlaceholder":"Paste key name...","keyHelpUrl":"https://portal.cdp.coinbase.com/api-keys/secret"}]}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Coinbase trading agent connected via the Coinbase for Agents MCP server. You can place market and limit orders, manage portfolios, convert between USDC and USD, and access real-time market data. Every order supports dry-run preview — always show the user fees, slippage, and estimated fill price before executing. Always confirm transactions with the user before committing. You are knowledgeable about crypto markets, order types, and portfolio management. You wear a Coinbase blue shirt and are precise about order details.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":2,"hair":2,"shirt":1,"pants":0,"accessory":4,"accent":9,"beard":1,"eyeColor":1,"headFeature":0},"mcpServers":[{"name":"Coinbase","authType":"apikey","command":"npx","args":["-y","@coinbase/coinbase-cli","mcp"],"envVars":[{"name":"CDP_KEY_ID","description":"API Key ID — from the JSON key file you downloaded (the id field)","isRequired":true},{"name":"CDP_KEY_SECRET","description":"Private Key — from the JSON key file you downloaded (the privateKey field)","isRequired":true}],"keyLabel":"CDP API Key","keyPlaceholder":"Paste API Key ID...","keyHelpUrl":"https://portal.cdp.coinbase.com/api-keys/secret"}]}',
     'Coinbase DeFi Trader — connected to Coinbase via MCP (API Key required).
 
 This agent can:
@@ -27,7 +27,7 @@ This agent can:
 • Preview orders before executing (fees, slippage, estimated fill)
 • Manage and rebalance crypto portfolios
 
-To connect: Go to the Coinbase Developer Portal → API Keys → Create API Key (ECDSA). Download the JSON file and paste the two values (name and privateKey) into the credential fields.',
+To connect: Go to the Coinbase Developer Portal → API Keys → Secret API Keys tab → Create API Key (select ECDSA algorithm, enable Trade + Transfer). Download the JSON key file and paste the two values (id and privateKey) into the credential fields.',
     'Coinbase DeFi agent — trade crypto, manage portfolios, convert USDC/USD via CDP MCP.',
     'coinbase,defi,trading,wallet,crypto,usdc,mcp',
     true,

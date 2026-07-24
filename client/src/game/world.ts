@@ -1154,7 +1154,8 @@ export class WorldLayer {
         const ly = (((worldTileY + dy) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
         const t = chunk.tiles[ly * CHUNK_SIZE + lx];
         if (t === TILE.TENNIS_COURT || t === TILE.TENNIS_NET || t === TILE.TENNIS_WALL ||
-            t === TILE.TENNIS_RACKET || t === TILE.TENNIS_BALL) {
+            t === TILE.TENNIS_RACKET || t === TILE.TENNIS_BALL ||
+            t === TILE.LEPRECHAUN) {
           return false;
         }
       }
@@ -1321,7 +1322,8 @@ export class WorldLayer {
     for (let i = 0; i < chunk.tiles.length; i++) {
       const t = chunk.tiles[i];
       if (t === TILE.TENNIS_COURT || t === TILE.TENNIS_NET || t === TILE.TENNIS_WALL ||
-          t === TILE.TENNIS_RACKET || t === TILE.TENNIS_BALL) {
+          t === TILE.TENNIS_RACKET || t === TILE.TENNIS_BALL ||
+          t === TILE.LEPRECHAUN) {
         this.tennisChunks.add(key);
         return;
       }
@@ -1477,7 +1479,7 @@ export class WorldLayer {
         const ctx = canvasTex.getContext();
         const worldTilesTex = this.scene.textures.get("world-tiles");
 
-        const drawTexToCanvas = (textureKey: string, px: number, py: number) => {
+        const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = TILE_PX, h: number = TILE_PX) => {
           if (!this.scene.textures.exists(textureKey)) return;
           const tex = this.scene.textures.get(textureKey);
           const fr = tex.get(0);
@@ -1485,7 +1487,7 @@ export class WorldLayer {
             ctx.drawImage(
               fr.source.image as CanvasImageSource,
               fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-              px, py, TILE_PX, TILE_PX,
+              px, py, w, h,
             );
           }
         };
@@ -1522,7 +1524,12 @@ export class WorldLayer {
             // Draw overlay textures (golf items, trees, etc.)
             const overlayKey = overlayTextures[tile];
             if (overlayKey) {
-              drawTexToCanvas(overlayKey, px, py);
+              if (tile === TILE.LEPRECHAUN) {
+                // leprechaun rendered at 2x scale, centered on tile
+                drawTexToCanvas(overlayKey, px - TILE_PX / 2, py - TILE_PX / 2, TILE_PX * 2, TILE_PX * 2);
+              } else {
+                drawTexToCanvas(overlayKey, px, py);
+              }
             }
           }
         }
