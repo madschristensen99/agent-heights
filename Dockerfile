@@ -6,7 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Hermes Agent
-RUN pip3 install --no-cache-dir --break-system-packages 'hermes-agent[telegram]'
+# Install Hermes Agent with messaging extra (Telegram, Discord, Slack, etc.)
+# The extra is called "messaging" not "telegram" per pyproject.toml
+RUN pip3 install --no-cache-dir --break-system-packages 'hermes-agent[messaging]'
+# Belt-and-suspenders: directly install python-telegram-bot in case the extra doesn't resolve
+RUN pip3 install --no-cache-dir --break-system-packages 'python-telegram-bot[webhooks]>=22.6,<23'
 
 RUN corepack enable && corepack prepare pnpm@10.10.0 --activate
 

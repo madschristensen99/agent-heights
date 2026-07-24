@@ -1,7 +1,11 @@
 # HexStage — Custom WebGL2 Engine Plan
 
 A hand-rolled WebGL2 hex-grid 2.5D engine to replace Phaser 3.
-Optimized for visual identity, bundle size, and user conversion.
+Optimized for visual identity, bundle size, user conversion, and
+**agent-authored world generation** — the world builds itself from
+computational actions, manifested as symbolic magic (inspired by
+Loom's compositional thread system and the Snow Crash / True Names
+vision of computation-as-magic).
 
 ---
 
@@ -58,6 +62,10 @@ client/src/
     tween.ts                 Eased value animation (replaces Phaser tweens)
     engine.ts                Main loop (rAF), ties everything together
     types.ts                 Engine-internal types (GameObject, Sprite, Tile, etc.)
+    threads.ts               Loom-inspired thread composition system (8 fundamental forces)
+    spell-library.ts         Tool call → draft mapping, visual manifestation of spells
+    domain.ts                Agent workspace → physical domain mapping (files as objects)
+    mutation.ts              World mutation protocol (server → engine event stream)
 
   game/                      ← REWRITTEN — game logic on top of engine
     scene.ts                 Office scene (rewritten from Phaser to engine API)
@@ -958,7 +966,279 @@ For each phase, verify feature parity:
 
 ---
 
-## 11. Package Changes
+## 11. The Thread System (Loom-Inspired Compositional Magic)
+
+### Design Philosophy
+
+Inspired by Loom (1990): magic is a **language**, not a button. Instead of
+hardcoding 50 tool calls to 50 visual effects, we define 8 fundamental
+**threads** (forces of computation) and compose them into **drafts**
+(sequences) that manifest as visible spells. The effect emerges from the
+composition, not from a lookup table.
+
+### The 8 Threads
+
+| Thread | Note | Computational Primitive | Visual Signature |
+|---|---|---|---|
+| **Open** | C | Read / access / connect | Unfolding — portals part, files unfurl, doors open |
+| **Close** | D | Terminate / disconnect / seal | Folding inward — barriers close, connections sever |
+| **Weave** | E | Create / write / compose | Threads interlace — objects materialize from interwoven light |
+| **Unweave** | F | Delete / remove / destroy | Threads unravel — objects dissolve into scattered filaments |
+| **Dye** | G | Transform / convert / compile | Color washes through — object changes nature |
+| **Spin** | A | Execute / run / compute | Rotation accelerates — energy spirals, output radiates |
+| **Stretch** | B | Extend / scale / deploy | Lines extend outward — reach grows, domain expands |
+| **Twist** | (sharp) | Refactor / restructure | Object reshapes — same material, new form |
+
+### Drafts (Compositions)
+
+A draft is a sequence of threads. The engine composes the visual effect
+by playing each thread's base animation in sequence with overlap:
+
+```typescript
+type Thread = "open" | "close" | "weave" | "unweave" | "dye" | "spin" | "stretch" | "twist";
+type Draft = Thread[];
+
+// Tool calls map to draft compositions
+const TOOL_DRAFTS: Record<string, Draft> = {
+  "read_file":      ["open"],
+  "write_file":     ["weave"],
+  "execute_bash":   ["spin"],
+  "search_web":     ["open", "stretch"],
+  "npm_install":    ["weave", "spin", "stretch"],
+  "git_push":       ["spin", "stretch", "open"],
+  "git_revert":     ["twist", "spin_reverse"],  // reverse = unwind
+  "delete_file":    ["unweave"],
+  "compile":        ["dye", "spin"],
+  "refactor":       ["twist"],
+  "list_directory": ["open", "open"],           // deeper access
+  "grep_search":    ["open", "stretch", "dye"], // reach + transform result
+};
+```
+
+### Reversibility (Loom's Core Mechanic)
+
+Playing a draft backward **undoes** the spell. This maps directly to
+computation:
+
+| Forward Spell | Reverse Spell | Computation |
+|---|---|---|
+| Weave (create file) | Unweave (delete file) | `touch` / `rm` |
+| Open (read) | Close (seal) | `cat` / `chmod 000` |
+| Spin (execute) | Reverse Spin (halt) | `node script.js` / `kill -9` |
+| Stretch (deploy) | Reverse Stretch (retract) | `docker up` / `docker down` |
+| Dye (compile) | Reverse Dye (decompile) | `tsc` / source maps |
+| Twist (refactor) | Reverse Twist (un-refactor) | `git commit` / `git revert` |
+
+When an agent runs `git revert`, the engine plays the original spell's
+draft **backward** — the same animation reversed. Energy unspirals,
+objects unweave, the domain briefly rewinds. This is legible without
+text: you can *see* that an agent is undoing something.
+
+### The Distaff (Agent's Instrument)
+
+In Loom, the distaff is the magical instrument. In AgentHeights:
+
+- **The distaff = the agent's connected tools and capabilities**
+- An agent with no MCP tools has a small, quiet distaff — basic drafts only
+- An agent with GitHub MCP, browser tool, API keys has a **richer instrument** — more threads available, more complex drafts
+- Connecting a new MCP server visibly grows the distaff — a new thread glows with potential
+- The distaff is rendered as a physical object the agent holds — their wand/staff, visible in the diorama
+
+### Learning Drafts
+
+- New agents start with basic threads (Weave, Spin, Open — file I/O + execution)
+- First successful use of a new tool → brief cinematic where the tool's pattern inscribes itself on the distaff
+- Agent handoffs → inheriting agent's learned drafts (visual ritual)
+- User connecting an MCP server → ceremony where a new thread is inscribed
+
+### Thread Visual Effects
+
+Each thread has a **base particle pattern + light behavior + shape morph**.
+The engine composes them with temporal overlap (~200ms stagger):
+
+```
+Weave:   Two streams of light cross and interlace → object materializes
+Unweave: Object's filaments separate and scatter → dissolves
+Open:    Surface splits along a seam → reveals interior / portal
+Close:   Surfaces fold together → seam seals
+Dye:     Color wave propagates through object → nature changes
+Spin:    Energy spirals inward then radiates outward → execution result
+Stretch: Lines extend from agent outward → reach grows
+Twist:   Object rotates and reshapes → same material, new form
+```
+
+The agent's **aura color** (determined by their primary language) tints
+all thread effects. Python = blue threads, Rust = orange, TypeScript =
+blue-white. Same draft, different aesthetic per agent.
+
+### Implementation (`threads.ts` + `spell-library.ts`)
+
+```typescript
+// threads.ts — fundamental force definitions
+interface ThreadEffect {
+  particles: ParticlePattern;    // spawn pattern for particles
+  light: LightBehavior;          // temporary light source behavior
+  duration: number;              // base duration in ms
+  shape: ShapeMorph;             // how affected objects transform
+}
+
+const THREAD_EFFECTS: Record<Thread, ThreadEffect> = { ... };
+
+// spell-library.ts — tool → draft mapping + manifestation
+function manifestDraft(
+  draft: Draft,
+  position: Hex,
+  agent: AgentState,
+  engine: Engine,
+): void {
+  for (let i = 0; i < draft.length; i++) {
+    const thread = draft[i];
+    const delay = i * 200; // 200ms stagger between threads
+    engine.tweens.delay(delay, () => {
+      spawnThreadEffect(thread, position, agent.auraColor, agent.instrument);
+    });
+  }
+}
+```
+
+---
+
+## 12. The Domain System (Workspace as Physical Space)
+
+### Design Philosophy
+
+Each agent's workspace directory (`ag/workspace/<name>/`) IS their domain
+in the virtual world. The engine watches the filesystem (via server
+events) and manifests changes in real-time. The domain grows and shrinks
+with the workspace.
+
+### File → Object Mapping
+
+| Filesystem Entity | Domain Representation |
+|---|---|
+| `package.json` | Foundation keystone — the domain's anchor |
+| `src/` directory | Inner sanctum — where real work happens (a room) |
+| `node_modules/` | Garden of summoned creatures (each package = small entity) |
+| `.git/` | Vault of runes — history inscribed on walls |
+| `README.md` | Signpost at domain entrance |
+| Test files | Training dummies / practice targets |
+| Config files | Control panels / levers |
+| Large files | Towering structures |
+| Empty directories | Unfurnished rooms (potential) |
+| Symlinks | Portals to other domains |
+
+### Domain Growth
+
+The domain starts as a single hex tile (the agent's desk). As the agent
+works:
+
+- **File created** → new object materializes (Weave thread effect)
+- **File deleted** → object dissolves (Unweave thread effect)
+- **Directory created** → new room boundary grows (walls extend outward)
+- **File modified** → object glows briefly (Dye thread effect)
+- **Large codebase** → domain sprawls into a laboratory complex
+- **Clean workspace** → domain is tidy, minimal, elegant
+- **Messy workspace** → domain is cluttered, chaotic, alive
+
+### Domain Visualization
+
+- Each domain is a cluster of hex tiles around the agent's desk
+- Objects sit on tiles — files are glowing documents, directories are
+  room boundaries (visible as translucent walls)
+- The domain's size is proportional to workspace file count
+- The domain's complexity (directory depth) determines verticality —
+  deep nested structures create towers
+- Other agents can visit a domain (walk to it) and see the workspace
+  made physical
+
+### Implementation (`domain.ts`)
+
+```typescript
+interface DomainObject {
+  id: string;              // file path
+  type: "file" | "directory" | "symlink";
+  position: Hex;           // position in domain
+  size: number;            // file size → object scale
+  modifiedAt: number;      // last modification time
+  glowIntensity: number;   // fades after modification
+}
+
+class DomainManager {
+  private domains: Map<string, Domain>;  // agentId → Domain
+
+  // Called when server reports filesystem changes
+  onFileEvent(agentId: string, event: FileEvent): void;
+
+  // Render domains that are visible on screen
+  render(engine: Engine, camera: Camera): void;
+}
+```
+
+---
+
+## 13. World Mutation Protocol
+
+### Design Philosophy
+
+The server already streams agent tool calls and results via WebSocket.
+The engine interprets these as **world mutations** — structured events
+that manifest as visual changes. This is the bridge between computation
+and the symbolic realm.
+
+### Message Types
+
+Extended `ServerMsg` types added to the existing protocol:
+
+```typescript
+type WorldMutationMsg =
+  | { type: "spell"; agentId: string; tool: string; draft: Draft;
+      position: { q: number; r: number }; result: "success" | "error" }
+  | { type: "domain_update"; agentId: string; event: FileEvent;
+      path: string; fileType: "file" | "directory" }
+  | { type: "aura_change"; agentId: string; language: string;
+      intensity: number; pulse: "smooth" | "rapid" | "chaotic" }
+  | { type: "distaff_growth"; agentId: string; newThread: Thread;
+      toolName: string }
+  | { type: "domain_layout"; agentId: string; files: FileNode[] };
+```
+
+### Server-Side Integration
+
+The server already processes tool calls via the Cline SDK. For each tool
+call event, it emits a `spell` mutation. For filesystem changes detected
+in the agent's workspace, it emits `domain_update` mutations. The
+mapping from tool name to draft is defined in a shared module so both
+server and client agree on the semantics.
+
+### Engine-Side Handling
+
+```typescript
+// In the scene's update loop
+function handleMutation(msg: WorldMutationMsg): void {
+  switch (msg.type) {
+    case "spell":
+      spellLibrary.manifestDraft(msg.draft, msg.position, agent, engine);
+      if (msg.result === "error") spawnErrorEffect(msg.position);
+      break;
+    case "domain_update":
+      domainManager.onFileEvent(msg.agentId, msg.event, msg.path);
+      break;
+    case "aura_change":
+      agent.setAura(msg.language, msg.intensity, msg.pulse);
+      break;
+    case "distaff_growth":
+      agent.learnThread(msg.newThread, msg.toolName);
+      break;
+    case "domain_layout":
+      domainManager.setLayout(msg.agentId, msg.files);
+      break;
+  }
+}
+```
+
+---
+
+## 14. Package Changes
 
 ### Remove from `package.json`
 ```
@@ -977,7 +1257,7 @@ For each phase, verify feature parity:
 
 ---
 
-## 12. Success Metrics
+## 15. Success Metrics
 
 | Metric | Current (Phaser) | Target (HexStage) |
 |---|---|---|
@@ -987,17 +1267,20 @@ For each phase, verify feature parity:
 | 60fps with 50 sprites + postfx | yes (Phaser) | yes (engine) |
 | Visual uniqueness | "looks like a Phaser game" | "looks like AgentHeights" |
 | Screenshot shareability | low (flat 2D) | high (diorama + bloom + DOF) |
+| Agent work legibility | text logs only | visible spells + domains |
+| World builds itself | no (fixed tilemap) | yes (agent-authored domains) |
 
 ---
 
-## 13. Timeline Summary
+## 16. Timeline Summary
 
 | Phase | Weeks | Deliverable | Conversion Impact |
 |---|---|---|---|
-| 1. Engine Core + Spectator | 1-2 | Beautiful spectator link | Shareability, first impression |
-| 2. Agents Come Alive | 3-4 | Working office in spectator | Spectator → signup rate |
-| 3. Full Gameplay | 5-6 | Playable game, onboarding cinematic | Signup → first hire rate |
-| 4. World & Combat | 7-8 | Elevated hex terrain, expeditions | Session length, retention |
-| 5. Multiplayer & Polish | 9-10 | Feature parity, Phaser removed | A/B test vs old build |
+| 1. Engine Core + Spectator | 1-2 | Beautiful spectator link with diorama camera | Shareability, first impression |
+| 2. Agents + Thread System | 3-4 | Agents casting visible spells, aura system, distaff | Spectator → signup rate |
+| 3. Full Gameplay + Domains | 5-6 | Playable game, agent domains growing with work | Signup → engagement rate |
+| 4. World & Combat | 7-8 | Elevated hex terrain, expeditions, biome magic | Session length, retention |
+| 5. Multiplayer & Polish | 9-10 | Feature parity, Phaser removed, A/B test | Final conversion validation |
+| 6. Domain Depth + Spell Polish | 11-12 | Full file→object mapping, reversibility, learning drafts | Long-term retention, virality |
 
-Total: 10 weeks. Spectator link shippable in week 2. Full replacement in week 10.
+Total: 12 weeks. Spectator link shippable in week 2. Full replacement in week 10. Domain + spell depth in weeks 11-12.
