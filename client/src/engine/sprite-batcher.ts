@@ -24,15 +24,25 @@ out vec4 vTint;
 out float vDepth;
 
 void main() {
-  vec2 offset = aCorner * aDisplaySize;
+  // Sprites stand upright: X extends horizontally, Z extends upward
+  // Feet at spritePos.z, head at spritePos.z + displayH
+  // Centered horizontally around spritePos.x
+  float halfW = aDisplaySize.x * 0.5;
+  vec3 offset = vec3(
+    (aCorner.x - 0.5) * aDisplaySize.x,
+    0.0,
+    aCorner.y * aDisplaySize.y
+  );
   if (aFlip > 0.5) offset.x = -offset.x;
-  vec3 worldPos = aSpritePos + vec3(offset, 0.0);
+  vec3 worldPos = aSpritePos + offset;
 
   vec2 uvOffset = aCorner * 0.5 + 0.5;
+  // aCorner.y=0 is bottom (feet), =1 is top (head) — flip V to match texture
+  uvOffset.y = 1.0 - uvOffset.y;
   if (aFlip > 0.5) uvOffset.x = 1.0 - uvOffset.x;
   vUV = aUV.xy + uvOffset * aUV.zw;
   vTint = aTint;
-  vDepth = aSpritePos.z;
+  vDepth = aSpritePos.z + aCorner.y * aDisplaySize.y;
 
   gl_Position = uViewProj * vec4(worldPos, 1.0);
 }`;

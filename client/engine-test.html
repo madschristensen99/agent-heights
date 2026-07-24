@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HexStage Engine Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #05060a; overflow: hidden; }
+    canvas { display: block; }
+    #info {
+      position: fixed; top: 8px; left: 8px;
+      color: #8a8aa0; font: 12px monospace;
+      pointer-events: none; z-index: 10;
+      text-shadow: 0 0 4px #000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="info">HexStage Engine — drag to pan, scroll to zoom, 1/2/3 to switch camera</div>
+  <script type="module" src="/src/engine-test.ts"></script>
+</body>
+</html>

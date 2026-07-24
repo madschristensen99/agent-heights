@@ -124,6 +124,7 @@ export class PostFX {
 
   private sceneFBO: WebGLFramebuffer;
   private sceneTexture: WebGLTexture;
+  private sceneDepthBuffer: WebGLRenderbuffer;
   private bloomFBO: WebGLFramebuffer;
   private bloomTexture: WebGLTexture;
   private blurFBO: WebGLFramebuffer;
@@ -160,8 +161,12 @@ export class PostFX {
 
     this.sceneTexture = createTexture(gl, width, height, GL.RGBA8, GL.LINEAR);
     this.sceneFBO = createFramebuffer(gl);
+    this.sceneDepthBuffer = gl.createRenderbuffer()!;
+    gl.bindRenderbuffer(GL.RENDERBUFFER, this.sceneDepthBuffer);
+    gl.renderbufferStorage(GL.RENDERBUFFER, GL.DEPTH24_STENCIL8, width, height);
     gl.bindFramebuffer(GL.FRAMEBUFFER, this.sceneFBO);
     gl.framebufferTexture2D(GL.FRAMEBUFFER, GL.COLOR_ATTACHMENT0, GL.TEXTURE_2D, this.sceneTexture, 0);
+    gl.framebufferRenderbuffer(GL.FRAMEBUFFER, GL.DEPTH_STENCIL_ATTACHMENT, GL.RENDERBUFFER, this.sceneDepthBuffer);
 
     this.bloomTexture = createTexture(gl, width, height, GL.RGBA8, GL.LINEAR);
     this.bloomFBO = createFramebuffer(gl);
@@ -305,6 +310,8 @@ void main() {
       gl.bindTexture(GL.TEXTURE_2D, tex);
       gl.texImage2D(GL.TEXTURE_2D, 0, GL.RGBA8, width, height, 0, GL.RGBA, GL.UNSIGNED_BYTE, null);
     }
+    gl.bindRenderbuffer(GL.RENDERBUFFER, this.sceneDepthBuffer);
+    gl.renderbufferStorage(GL.RENDERBUFFER, GL.DEPTH24_STENCIL8, width, height);
   }
 
   setEnabled(enabled: boolean): void {

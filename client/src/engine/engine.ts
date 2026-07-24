@@ -37,6 +37,9 @@ export class Engine {
   private lastTime = 0;
   private running = false;
 
+  onUpdate: ((dt: number) => void) | null = null;
+  onRender: ((time: number) => void) | null = null;
+
   constructor(canvas: HTMLCanvasElement, opts: Partial<EngineOptions> = {}) {
     this.canvas = canvas;
     this.opts = { ...DEFAULT_ENGINE_OPTS, ...opts };
@@ -102,6 +105,7 @@ export class Engine {
     this.particles.update(dt);
     this.camera.update(dt);
     this.scenes.update(time, dt * 1000);
+    this.onUpdate?.(dt);
 
     this.render(time);
 
@@ -109,6 +113,11 @@ export class Engine {
   };
 
   private render(time: number): void {
+    if (this.onRender) {
+      this.onRender(time);
+      return;
+    }
+
     const gl = this.gl;
     const dpr = this.opts.dpr ?? 1;
     const w = this.opts.width * dpr;
