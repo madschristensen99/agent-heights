@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Hermes Agent
-RUN pip3 install --no-cache-dir --break-system-packages hermes-agent
+RUN pip3 install --no-cache-dir --break-system-packages 'hermes-agent[telegram]'
 
 RUN corepack enable && corepack prepare pnpm@10.10.0 --activate
 

@@ -202,8 +202,10 @@ export class HermesProcessManager {
       this.gatewayChild.kill("SIGTERM");
       this.gatewayChild = null;
     }
-    // Spawn a fresh gateway that picks up the new .env / config.yaml
-    this.spawnGateway();
+    // Delay 1s before respawning to let the old process fully exit
+    setTimeout(() => {
+      if (this.started) this.spawnGateway();
+    }, 1000);
   }
 
   /** Spawn the hermes serve child process. */
