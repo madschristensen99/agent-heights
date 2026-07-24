@@ -1447,7 +1447,6 @@ export class WorldLayer {
       [TILE.AXE]: "axe",
       [TILE.LEPRECHAUN]: "leprechaun",
       [TILE.TEE_BOX]: "tee-box",
-      [TILE.FOUNTAIN]: "fountain",
       [TILE.TENNIS_COURT]: "tennis-court",
       [TILE.TENNIS_WALL]: "tennis-wall",
       [TILE.TENNIS_RACKET]: "tennis-racket",
@@ -1586,6 +1585,19 @@ export class WorldLayer {
           waterSprite.setOrigin(0, 0);
           waterSprite.play({ key: "water-anim", repeat: -1 }, true);
           container.add(waterSprite);
+        }
+
+        // Fountain: 3x3 animated sprite centered on the fountain tile
+        if (tile === TILE.FOUNTAIN) {
+          const fountainSprite = this.scene.add.sprite(
+            ox + px + TILE_PX / 2 - 96,
+            oy + py + TILE_PX / 2 - 96,
+            "fountain-sheet", 0,
+          );
+          fountainSprite.setOrigin(0, 0);
+          fountainSprite.setDepth(-0.5);
+          fountainSprite.play({ key: "fountain-anim", repeat: -1 }, true);
+          container.add(fountainSprite);
         }
 
         // Add tile-based light sources for special tiles (capped per chunk for perf)
@@ -1802,19 +1814,28 @@ export class WorldLayer {
 
       // --- spawn creatures based on hostility (skip farthest infernal region) ---
       if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 600 + Math.random() * 1200) {
-        this.lastSpawnTime = time;
         if (hostility >= 1 && hostility < 5) {
-          const spawnCount = 1 + Math.floor(hostility / 2);
+          const spawnCount = 2 + Math.floor(hostility / 2);
+          let spawnedAny = false;
           for (let s = 0; s < spawnCount; s++) {
-            const angle = Math.random() * Math.PI * 2;
-            const dist = 300 + Math.random() * 250;
-            const sx = playerX + Math.cos(angle) * dist;
-            const sy = playerY + Math.sin(angle) * dist;
-            const { tx, ty } = this.pixelToTile(sx, sy);
-            if (this.isCreatureWalkable(tx, ty)) {
-              this.creatures.push(new Creature(this, sx, sy, hostility));
+            // try up to 5 positions to find a walkable tile
+            let placed = false;
+            for (let attempt = 0; attempt < 5 && !placed; attempt++) {
+              const angle = Math.random() * Math.PI * 2;
+              const dist = 250 + Math.random() * 300;
+              const sx = playerX + Math.cos(angle) * dist;
+              const sy = playerY + Math.sin(angle) * dist;
+              const { tx, ty } = this.pixelToTile(sx, sy);
+              if (this.isCreatureWalkable(tx, ty)) {
+                this.creatures.push(new Creature(this, sx, sy, hostility));
+                placed = true;
+                spawnedAny = true;
+              }
             }
           }
+          if (spawnedAny) this.lastSpawnTime = time;
+        } else {
+          this.lastSpawnTime = time;
         }
       }
 

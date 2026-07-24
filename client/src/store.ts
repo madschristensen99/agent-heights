@@ -808,7 +808,10 @@ export class Store {
         // Auto mode: server has a public callback URL, OAuth redirect will be handled automatically
         if (isAuto) {
           // Open the OAuth login page in a popup
-          window.open(msg.authUrl, "mcp-oauth-popup", "width=600,height=700,scrollbars=yes");
+          const _w = 600, _h = 700;
+          const _l = Math.round((window.screen.width - _w) / 2);
+          const _t = Math.round((window.screen.height - _h) / 2);
+          window.open(msg.authUrl, "mcp-oauth-popup", `width=${_w},height=${_h},left=${_l},top=${_t},scrollbars=yes`);
           // Show a small waiting toast — the popup will redirect to /oauth/callback,
           // the server will exchange the code and send mcp_oauth_complete via WS
           this.toast(`Opening ${svcName} login... Complete authorization in the popup.`);
@@ -855,7 +858,10 @@ export class Store {
         modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
 
         openBtn.addEventListener("click", () => {
-          window.open(msg.authUrl, "mcp-oauth-popup", "width=600,height=700,scrollbars=yes");
+          const _w = 600, _h = 700;
+          const _l = Math.round((window.screen.width - _w) / 2);
+          const _t = Math.round((window.screen.height - _h) / 2);
+          window.open(msg.authUrl, "mcp-oauth-popup", `width=${_w},height=${_h},left=${_l},top=${_t},scrollbars=yes`);
         });
 
         pasteBtn.addEventListener("click", async () => {

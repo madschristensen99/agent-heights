@@ -2598,78 +2598,194 @@ function drawAxe(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.restore();
 }
 
-/** Draw a decorative fountain — stone basin with water and splashing. */
-function drawFountain(ctx: CanvasRenderingContext2D, size: number): void {
+/** Draw a decorative fountain frame — large multi-tile stone basin with animated water.
+ *  @param frame   Animation frame index (0..totalFrames-1)
+ *  @param totalFrames  Total number of animation frames */
+function drawFountainFrame(ctx: CanvasRenderingContext2D, size: number, frame: number, totalFrames: number): void {
   const cx = size / 2;
   const cy = size / 2;
+  const t = frame / totalFrames; // 0..1 animation phase
 
-  // outer stone basin — wide circular base
-  const basinR = size * 0.38;
-  ctx.fillStyle = rgba(0x888899, 1);
+  // ── Outer stone plaza ring (subtle paving around basin) ──
+  const plazaR = size * 0.46;
+  ctx.fillStyle = rgba(0x998877, 0.25);
   ctx.beginPath();
-  ctx.arc(cx, cy + size * 0.05, basinR, 0, Math.PI * 2);
-  ctx.fill();
-  // basin rim shading
-  ctx.strokeStyle = rgba(0x6a6a7a, 1);
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  // basin top highlight
-  ctx.strokeStyle = rgba(0xaaaabb, 0.6);
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(cx, cy + size * 0.05, basinR - 2, Math.PI * 1.1, Math.PI * 1.9);
-  ctx.stroke();
-
-  // inner water pool
-  const waterR = size * 0.28;
-  const waterGrad = ctx.createRadialGradient(cx, cy + size * 0.02, 2, cx, cy + size * 0.05, waterR);
-  waterGrad.addColorStop(0, rgba(0x88ccff, 0.9));
-  waterGrad.addColorStop(0.5, rgba(0x4499dd, 0.85));
-  waterGrad.addColorStop(1, rgba(0x3366aa, 0.8));
-  ctx.fillStyle = waterGrad;
-  ctx.beginPath();
-  ctx.arc(cx, cy + size * 0.05, waterR, 0, Math.PI * 2);
+  ctx.arc(cx, cy + size * 0.02, plazaR, 0, Math.PI * 2);
   ctx.fill();
 
-  // water ripples — concentric circles
-  ctx.strokeStyle = rgba(0xaaeeff, 0.4);
+  // plaza stone segments
+  ctx.strokeStyle = rgba(0x7a6a5a, 0.3);
   ctx.lineWidth = 1;
-  for (let i = 0; i < 3; i++) {
-    const r = waterR * (0.3 + i * 0.25);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
     ctx.beginPath();
-    ctx.arc(cx, cy + size * 0.05, r, 0, Math.PI * 2);
+    ctx.moveTo(cx + Math.cos(a) * size * 0.34, cy + size * 0.02 + Math.sin(a) * size * 0.34);
+    ctx.lineTo(cx + Math.cos(a) * plazaR, cy + size * 0.02 + Math.sin(a) * plazaR);
     ctx.stroke();
   }
 
-  // central pillar
-  const pillarW = size * 0.08;
-  const pillarH = size * 0.18;
-  ctx.fillStyle = rgba(0x9999aa, 1);
-  ctx.fillRect(cx - pillarW / 2, cy - pillarH + size * 0.05, pillarW, pillarH);
-  ctx.fillStyle = rgba(0x777788, 0.5);
-  ctx.fillRect(cx - pillarW / 2, cy - pillarH + size * 0.05, pillarW * 0.3, pillarH);
+  // ── Outer stone basin — wide tiered circular base ──
+  const basinR = size * 0.40;
+  const basinY = cy + size * 0.03;
 
-  // water spout on top — glowing splash
-  radialGradient(ctx, cx, cy - pillarH + size * 0.05, size * 0.12, 0xaaeeff, 0x4499dd, 0.5, 0);
-  ctx.fillStyle = rgba(0xddffff, 0.7);
+  // basin shadow
+  ctx.fillStyle = rgba(0x444455, 0.3);
   ctx.beginPath();
-  ctx.arc(cx, cy - pillarH + size * 0.05, size * 0.06, 0, Math.PI * 2);
+  ctx.ellipse(cx, basinY + size * 0.04, basinR, basinR * 0.92, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // splash droplets
-  ctx.fillStyle = rgba(0xaaeeff, 0.6);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const r = size * 0.1;
+  // basin outer ring (thick stone)
+  ctx.fillStyle = rgba(0x9a9aab, 1);
+  ctx.beginPath();
+  ctx.arc(cx, basinY, basinR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // basin top edge highlight
+  ctx.strokeStyle = rgba(0xb8b8cc, 0.7);
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(cx, basinY, basinR - 1, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.stroke();
+
+  // basin outer rim shadow
+  ctx.strokeStyle = rgba(0x6a6a7a, 0.8);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, basinY, basinR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // basin inner edge (where water meets stone)
+  const innerR = size * 0.33;
+  ctx.fillStyle = rgba(0x7a7a8a, 0.6);
+  ctx.beginPath();
+  ctx.arc(cx, basinY, innerR + 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ── Inner water pool ──
+  const waterR = innerR;
+  const waterGrad = ctx.createRadialGradient(cx, basinY - size * 0.02, 2, cx, basinY, waterR);
+  waterGrad.addColorStop(0, rgba(0x99ddff, 0.92));
+  waterGrad.addColorStop(0.4, rgba(0x5599cc, 0.88));
+  waterGrad.addColorStop(0.8, rgba(0x336699, 0.85));
+  waterGrad.addColorStop(1, rgba(0x224477, 0.8));
+  ctx.fillStyle = waterGrad;
+  ctx.beginPath();
+  ctx.arc(cx, basinY, waterR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ── Animated water ripples — concentric circles expanding outward ──
+  for (let i = 0; i < 4; i++) {
+    const phase = (t + i / 4) % 1;
+    const r = waterR * (0.15 + phase * 0.75);
+    const alpha = (1 - phase) * 0.35;
+    ctx.strokeStyle = rgba(0xaaeeff, alpha);
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(cx + Math.cos(a) * r, cy - pillarH + size * 0.05 + Math.sin(a) * r * 0.5, 1.5, 0, Math.PI * 2);
+    ctx.arc(cx, basinY, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // ── Central pillar — tiered stone column ──
+  const pillarW = size * 0.07;
+  const pillarBaseH = size * 0.06;
+  const pillarH = size * 0.22;
+  const pillarTopY = basinY - pillarH;
+
+  // pillar base (wider)
+  ctx.fillStyle = rgba(0x888899, 1);
+  ctx.beginPath();
+  ctx.ellipse(cx, basinY, pillarW * 1.4, pillarBaseH * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // pillar shaft
+  ctx.fillStyle = rgba(0x9a9aab, 1);
+  ctx.fillRect(cx - pillarW / 2, pillarTopY, pillarW, pillarH);
+  // pillar left shading
+  ctx.fillStyle = rgba(0x777788, 0.5);
+  ctx.fillRect(cx - pillarW / 2, pillarTopY, pillarW * 0.3, pillarH);
+  // pillar right highlight
+  ctx.fillStyle = rgba(0xbbbbcc, 0.3);
+  ctx.fillRect(cx + pillarW * 0.3, pillarTopY, pillarW * 0.2, pillarH);
+
+  // pillar capital (wider top)
+  ctx.fillStyle = rgba(0xaaaabb, 1);
+  ctx.beginPath();
+  ctx.ellipse(cx, pillarTopY, pillarW * 1.0, pillarW * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x777788, 0.6);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // ── Water spout — animated jet from pillar top ──
+  const spoutPhase = t;
+  const spoutHeight = size * 0.10 + Math.sin(spoutPhase * Math.PI * 2) * size * 0.03;
+  const spoutTopY = pillarTopY - spoutHeight;
+
+  // water column (translucent blue)
+  const colGrad = ctx.createLinearGradient(cx, pillarTopY, cx, spoutTopY);
+  colGrad.addColorStop(0, rgba(0x88ccff, 0.7));
+  colGrad.addColorStop(1, rgba(0xddffff, 0.5));
+  ctx.fillStyle = colGrad;
+  ctx.beginPath();
+  ctx.moveTo(cx - pillarW * 0.3, pillarTopY);
+  ctx.quadraticCurveTo(cx - pillarW * 0.15, spoutTopY + spoutHeight * 0.3, cx - 1, spoutTopY);
+  ctx.lineTo(cx + 1, spoutTopY);
+  ctx.quadraticCurveTo(cx + pillarW * 0.15, spoutTopY + spoutHeight * 0.3, cx + pillarW * 0.3, pillarTopY);
+  ctx.closePath();
+  ctx.fill();
+
+  // spout glow
+  radialGradient(ctx, cx, spoutTopY, size * 0.10, 0xddffff, 0x4499dd, 0.6, 0);
+
+  // spout tip splash
+  ctx.fillStyle = rgba(0xeeffff, 0.8);
+  ctx.beginPath();
+  ctx.arc(cx, spoutTopY, size * 0.025 + Math.sin(t * Math.PI * 2) * 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ── Splash droplets — animated falling particles around spout ──
+  const numDrops = 10;
+  for (let i = 0; i < numDrops; i++) {
+    const dropPhase = (t + i / numDrops) % 1;
+    const angle = (i / numDrops) * Math.PI * 2 + t * 0.5;
+    const dist = size * 0.04 + dropPhase * size * 0.08;
+    const dropY = spoutTopY + dropPhase * (basinY - spoutTopY) * 0.8;
+    const dropX = cx + Math.cos(angle) * dist;
+    const dropAlpha = (1 - dropPhase) * 0.7;
+    const dropSize = 2 + (1 - dropPhase) * 1.5;
+    ctx.fillStyle = rgba(0xaaeeff, dropAlpha);
+    ctx.beginPath();
+    ctx.arc(dropX, dropY, dropSize, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // water highlight on pool surface
-  ctx.fillStyle = rgba(0xffffff, 0.3);
+  // ── Water cascading over basin rim — animated streams ──
+  for (let i = 0; i < 3; i++) {
+    const cascadeAngle = (i / 3) * Math.PI * 2 + t * 0.3;
+    const cascadePhase = (t * 2 + i * 0.33) % 1;
+    const startX = cx + Math.cos(cascadeAngle) * waterR * 0.9;
+    const startY = basinY + Math.sin(cascadeAngle) * waterR * 0.9;
+    const endX = cx + Math.cos(cascadeAngle) * basinR;
+    const endY = basinY + Math.sin(cascadeAngle) * basinR;
+    const cascadeAlpha = Math.sin(cascadePhase * Math.PI) * 0.4;
+    ctx.strokeStyle = rgba(0x99ccff, cascadeAlpha);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+  }
+
+  // ── Water surface highlights — shifting specular reflections ──
+  const highlightOffset = Math.sin(t * Math.PI * 2) * waterR * 0.15;
+  ctx.fillStyle = rgba(0xffffff, 0.25);
   ctx.beginPath();
-  ctx.ellipse(cx - waterR * 0.3, cy + size * 0.02, waterR * 0.3, waterR * 0.1, -0.3, 0, Math.PI * 2);
+  ctx.ellipse(cx - waterR * 0.3 + highlightOffset, basinY - waterR * 0.1, waterR * 0.35, waterR * 0.12, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = rgba(0xffffff, 0.15);
+  ctx.beginPath();
+  ctx.ellipse(cx + waterR * 0.2 - highlightOffset * 0.5, basinY + waterR * 0.15, waterR * 0.2, waterR * 0.06, 0.4, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -3683,7 +3799,7 @@ const ALL_PROC_KEYS = [
   "stone-proj", "spark", "dust", "shockwave", "recruit-beam",
   "soft-glow", "fire-glow", "void-glow", "crystal-glow",
   "golf-club", "golf-ball", "axe", "net",
-  "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "fountain",
+  "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "fountain-sheet",
   "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
   "emote-icons",
 ];
@@ -3907,10 +4023,19 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         drawLeprechaun(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("fountain")) {
-        const ct = createCanvasTexture(tex, "fountain", 64, 64);
-        drawFountain(ct.getContext(), 64);
+      if (!tex.exists("fountain-sheet")) {
+        const FOUNTAIN_FRAMES = 4;
+        const FOUNTAIN_SIZE = 192; // 3x3 tiles at 64px each
+        const ct = createCanvasTexture(tex, "fountain-sheet", FOUNTAIN_SIZE * FOUNTAIN_FRAMES, FOUNTAIN_SIZE);
+        const ctx = ct.getContext();
+        for (let f = 0; f < FOUNTAIN_FRAMES; f++) {
+          ctx.save();
+          ctx.translate(f * FOUNTAIN_SIZE, 0);
+          drawFountainFrame(ctx, FOUNTAIN_SIZE, f, FOUNTAIN_FRAMES);
+          ctx.restore();
+        }
         ct.refresh();
+        registerFrames(tex.get("fountain-sheet")!, FOUNTAIN_FRAMES, FOUNTAIN_SIZE);
       }
     },
   });

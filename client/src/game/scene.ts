@@ -5822,6 +5822,10 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.anims.exists("water-anim")) {
       this.anims.create({ key: "water-anim", frames: this.anims.generateFrameNumbers("world-tiles", { frames: [21, 22, 23] }), frameRate: 4, repeat: -1 });
     }
+
+    if (!this.anims.exists("fountain-anim")) {
+      this.anims.create({ key: "fountain-anim", frames: this.anims.generateFrameNumbers("fountain-sheet", { frames: [0, 1, 2, 3] }), frameRate: 6, repeat: -1 });
+    }
   }
 
 /** Generate or refresh the boss texture from the player's appearance.

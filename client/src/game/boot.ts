@@ -290,5 +290,15 @@ export class BootScene extends Phaser.Scene {
         repeat: -1,
       });
     }
+
+    // --- fountain animation ---
+    if (!this.anims.exists("fountain-anim")) {
+      this.anims.create({
+        key: "fountain-anim",
+        frames: this.anims.generateFrameNumbers("fountain-sheet", { frames: [0, 1, 2, 3] }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
   }
 }

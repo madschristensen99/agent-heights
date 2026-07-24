@@ -159,9 +159,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
 
       // Obstacle density — noise at scale 8 creates groves and clearings
       const obstacleNoise = valueNoise(worldSeed, wx, wy, 8);
-      const obstacleChance = Math.min(0.75, 0.20 + hostility * 0.11);
+      const obstacleChance = Math.min(0.55, 0.18 + hostility * 0.08);
       // Blend obstacle probability between current and next biome in transition zones
-      const obstacleChanceNext = Math.min(0.75, 0.20 + (hostilityFloor + 1) * 0.11);
+      const obstacleChanceNext = Math.min(0.55, 0.18 + (hostilityFloor + 1) * 0.08);
       const obstacleThreshold = obstacleChance * (1 - hostilityFrac) + obstacleChanceNext * hostilityFrac;
 
       // Hostile tile density — separate noise fields for lava and void so they
@@ -169,8 +169,8 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
       // Scale 4 creates small maze-like pockets rather than massive pools.
       const lavaNoise = valueNoise(worldSeed ^ 0x12345, wx, wy, 4);
       const voidNoise = valueNoise(worldSeed ^ 0x67890, wx, wy, 4);
-      const hostileChance = hostilityFloor >= 2 ? Math.min(0.28, (hostilityFloor - 1) * 0.07) : 0;
-      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.28, hostilityFloor * 0.07) : 0;
+      const hostileChance = hostilityFloor >= 2 ? Math.min(0.20, (hostilityFloor - 1) * 0.05) : 0;
+      const hostileChanceNext = (hostilityFloor + 1) >= 2 ? Math.min(0.20, hostilityFloor * 0.05) : 0;
       const hostileThreshold = hostileChance * (1 - hostilityFrac) + hostileChanceNext * hostilityFrac;
 
       // Decoration density — noise at scale 6 for smaller flower/bush patches
@@ -1011,18 +1011,32 @@ function placeParkFeature(tiles: number[], rng: () => number): void {
   }
 }
 
-/** Place a fountain — stone basin with surrounding flowers. */
+/** Place a fountain — large multi-tile stone basin with surrounding plaza and flowers. */
 function placeFountain(tiles: number[], rng: () => number): void {
   const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
   const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
-  // place fountain center
+
+  // 3x3 stone path plaza under the fountain
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx >= 0 && nx < CHUNK_SIZE && ny >= 0 && ny < CHUNK_SIZE) {
+        if (canOverwrite(tiles, idx(nx, ny))) {
+          tiles[idx(nx, ny)] = TILE.PATH;
+        }
+      }
+    }
+  }
+
+  // place fountain center on top of plaza
   if (canOverwrite(tiles, idx(cx, cy))) {
     tiles[idx(cx, cy)] = TILE.FOUNTAIN;
   }
+
   // surround with flowers for a garden feel
   for (let dy = -2; dy <= 2; dy++) {
     for (let dx = -2; dx <= 2; dx++) {
-      if (dx === 0 && dy === 0) continue;
+      if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) continue; // skip plaza area
       const nx = cx + dx, ny = cy + dy;
       if (nx >= 0 && nx < CHUNK_SIZE && ny >= 0 && ny < CHUNK_SIZE) {
         if (tiles[idx(nx, ny)] === TILE.GRASS && rng() < 0.6) {
