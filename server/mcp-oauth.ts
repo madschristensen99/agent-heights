@@ -374,6 +374,7 @@ export async function startOAuthFlow(
       client_name: "Agent Heights",
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
     };
     if (supportedMethods && supportedMethods.length > 0) {
       const authMethod = supportedMethods.includes("none") ? "none" : supportedMethods[0];
@@ -393,11 +394,20 @@ export async function startOAuthFlow(
       let errText = await registration.text().catch(() => "");
       // Truncate HTML error pages from WAFs/CDNs (Akamai, CloudFront) that can be thousands of chars
       if (errText.length > 300) errText = errText.slice(0, 300) + "... (truncated)";
-      // Provide a friendlier message for common WAF blocks
+      // Provide a friendlier message for common failure modes
       if (registration.status === 403) {
         throw new Error(`OAuth registration blocked (403) — ${serverUrl} may be behind a firewall or not support server-side registration. Try the API Key option instead.`);
       }
-      throw new Error(`Dynamic client registration failed: ${registration.status} ${errText}`);
+      if (registration.status === 404) {
+        throw new Error(`This MCP server does not support OAuth registration (404 at ${registrationEndpoint}). It may require a pre-registered API key — try the API Key option instead.`);
+      }
+      if (registration.status === 429) {
+        throw new Error(`Rate limited by the MCP server (429). Please wait a minute and try again.`);
+      }
+      // Try to parse JSON error for a cleaner message
+      let desc = errText;
+      try { const j = JSON.parse(errText); desc = j.error_description || j.error || errText; } catch { /* not JSON */ }
+      throw new Error(`OAuth registration failed (${registration.status}): ${desc}`);
     }
     const regData = await registration.json() as { client_id: string; client_secret?: string };
     clientId = regData.client_id;

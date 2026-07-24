@@ -8,7 +8,6 @@ WHERE name IN (
   'Coinbase DeFi Trader',
   'Talken Swap Agent',
   'Phantom Wallet Agent',
-  'MetaMask Agent Wallet',
   'AgentWallet Trader',
   'WAIaaS DeFi Agent'
 );
@@ -17,8 +16,8 @@ INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags,
 VALUES
   (
     'Coinbase DeFi Trader',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Coinbase trading agent connected via the Coinbase for Agents MCP server. You can place market and limit orders, manage portfolios, convert between USDC and USD, and access real-time market data. Every order supports dry-run preview — always show the user fees, slippage, and estimated fill price before executing. Always confirm transactions with the user before committing. You are knowledgeable about crypto markets, order types, and portfolio management. You wear a Coinbase blue shirt and are precise about order details.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":2,"hair":2,"shirt":1,"pants":0,"accessory":4,"accent":9,"beard":1,"eyeColor":1,"headFeature":0},"mcpServers":[{"url":"https://agents.coinbase.com/mcp","name":"Coinbase","authType":"oauth"}]}',
-    'Coinbase DeFi Trader — connected to Coinbase via MCP (OAuth).
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Coinbase trading agent connected via the Coinbase for Agents MCP server (CDP CLI). You can place market and limit orders, manage portfolios, convert between USDC and USD, and access real-time market data. Every order supports dry-run preview — always show the user fees, slippage, and estimated fill price before executing. Always confirm transactions with the user before committing. You are knowledgeable about crypto markets, order types, and portfolio management. You wear a Coinbase blue shirt and are precise about order details.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":2,"hair":2,"shirt":1,"pants":0,"accessory":4,"accent":9,"beard":1,"eyeColor":1,"headFeature":0},"mcpServers":[{"name":"Coinbase","authType":"apikey","command":"npx","args":["-y","@coinbase/cdp-cli","mcp"],"envVars":[{"name":"CDP_API_KEY_NAME","description":"From your downloaded JSON key file — copy the name value","isRequired":true},{"name":"CDP_API_KEY_PRIVATE_KEY","description":"From your downloaded JSON key file — copy the privateKey value","isRequired":true}],"keyLabel":"CDP API Key","keyPlaceholder":"Paste key name...","keyHelpUrl":"https://portal.cdp.coinbase.com/api-keys/secret"}]}',
+    'Coinbase DeFi Trader — connected to Coinbase via MCP (API Key required).
 
 This agent can:
 • Place market and limit orders on Coinbase Advanced Trade
@@ -28,8 +27,8 @@ This agent can:
 • Preview orders before executing (fees, slippage, estimated fill)
 • Manage and rebalance crypto portfolios
 
-To connect: Click "Connect via OAuth" and sign in with your Coinbase account. Select which portfolios to share with the agent.',
-    'Coinbase DeFi agent — trade crypto, manage portfolios, convert USDC/USD via Coinbase MCP (OAuth).',
+To connect: Go to the Coinbase Developer Portal → API Keys → Create API Key (ECDSA). Download the JSON file and paste the two values (name and privateKey) into the credential fields.',
+    'Coinbase DeFi agent — trade crypto, manage portfolios, convert USDC/USD via CDP MCP.',
     'coinbase,defi,trading,wallet,crypto,usdc,mcp',
     true,
     null,
@@ -39,8 +38,8 @@ To connect: Click "Connect via OAuth" and sign in with your Coinbase account. Se
     'approved',
     '["Place market and limit orders on Coinbase","Convert between USDC and USD","Preview orders with fees and slippage","Manage and rebalance crypto portfolios"]',
     '["trading","finance","defi","wallet"]',
-    '["Coinbase account (OAuth connection required)"]',
-    '[{"label":"Coinbase for Agents","url":"https://docs.cdp.coinbase.com/coinbase-for-agents/overview"},{"label":"Connect via MCP","url":"https://agents.coinbase.com/mcp"}]',
+    '["Coinbase Developer Platform account","CDP API Key (download JSON from portal)"]',
+    '[{"label":"CDP API Keys","url":"https://portal.cdp.coinbase.com/api-keys/secret"},{"label":"Documentation","url":"https://docs.cdp.coinbase.com/coinbase-for-agents/overview"}]',
     'https://icons.duckduckgo.com/ip3/coinbase.com.ico'
   ),
   (
@@ -103,39 +102,6 @@ No setup required — the Phantom MCP server handles its own authentication via 
     '["Funds in agent wallet to transact"]',
     '[{"label":"Phantom MCP Server","url":"https://docs.phantom.com/phantom-mcp-server/"},{"label":"npm Package","url":"https://www.npmjs.com/package/@phantom/mcp-server"}]',
     'https://icons.duckduckgo.com/ip3/phantom.com.ico'
-  ),
-  (
-    'MetaMask Agent Wallet',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a MetaMask Agent Wallet trading agent. You execute DeFi trades — swaps, perpetuals, prediction markets, staking, and liquidity provision — across all EVM chains and Hyperliquid. Every transaction passes through a mandatory 3-step security pipeline: simulation, Blockaid threat scanning, and MEV protection. You operate in Guard Mode (allowlisted protocols, spend limits, 2FA on anything outside policy) or Beast Mode (any protocol, malicious tx auto-blocked). The user controls the secret recovery phrase. Always show the user what a transaction will do before executing — balance changes, approvals, and gas costs. You are security-first and cautious. You wear a fox-inspired outfit.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":1,"hair":3,"shirt":2,"pants":3,"accessory":4,"accent":10,"beard":2,"eyeColor":3,"headFeature":0},"mcpServers":[{"name":"MetaMask Agent","authType":"apikey","command":"npx","args":["-y","@metamask/agent-wallet","mcp"],"envVars":[{"name":"METAMASK_AGENT_SECRET","description":"Secret recovery phrase or private key for the agent wallet","isRequired":true},{"name":"METAMASK_AGENT_MODE","description":"Risk profile: guard (allowlisted protocols, spend limits) or beast (any protocol)","isRequired":false}],"keyLabel":"MetaMask Agent Credentials","keyPlaceholder":"Paste credentials...","keyHelpUrl":"https://metamask.io/agent-wallet"}]}',
-    'MetaMask Agent Wallet — self-custodial AI trading wallet via MCP (API Key required).
-
-This agent can:
-• Execute swaps across all EVM chains with MEV protection
-• Trade perpetuals on Hyperliquid
-• Participate in prediction markets
-• Stake assets and provide liquidity
-• Run every tx through simulation + Blockaid threat scan + MEV protection
-
-Security modes:
-• Guard Mode — allowlisted protocols only, daily spend limits, 2FA on out-of-policy actions
-• Beast Mode — any protocol, malicious transactions auto-blocked and surfaced for 2FA
-
-The user controls the secret recovery phrase. Self-custodial — no one else has access to keys.
-
-To connect: Set up MetaMask Agent Wallet and provide credentials.',
-    'MetaMask agent — self-custodial DeFi trading with mandatory security pipeline across EVM + Hyperliquid.',
-    'metamask,defi,trading,wallet,crypto,evm,hyperliquid,security,mcp',
-    true,
-    null,
-    null,
-    'TypeScript',
-    'agent',
-    'approved',
-    '["Execute swaps with MEV protection across EVM chains","Trade perps on Hyperliquid","Stake and provide liquidity","Security-first: every tx simulated and threat-scanned"]',
-    '["trading","finance","defi","wallet"]',
-    '["MetaMask Agent Wallet setup","Agent wallet credentials (secret phrase + mode)"]',
-    '[{"label":"MetaMask Agent Wallet","url":"https://metamask.io/agent-wallet"},{"label":"Documentation","url":"https://metamask.io/agent-wallet/docs"}]',
-    'https://icons.duckduckgo.com/ip3/metamask.io.ico'
   ),
   (
     'AgentWallet Trader',

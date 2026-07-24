@@ -3789,17 +3789,25 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
   // ── DeFi / Wallet MCPs ────────────────────────────────────────────────
 
   {
-    id: "coinbase-agents",
+    id: "coinbase-cdp",
     name: "Coinbase",
-    summary: "Trade crypto, manage portfolios, convert USDC/USD — sign in with Coinbase account.",
+    summary: "Trade crypto, manage portfolios, convert USDC/USD via Coinbase Advanced Trade.",
     description:
-      "Coinbase for Agents MCP server. Connects directly via OAuth — sign in with your Coinbase account, select which portfolios to share, and your agent gets instant access to crypto trading (market and limit orders), portfolio management, USDC/USD conversions, and real-time market data. Every order supports dry-run preview so agents can inspect fees, slippage, and estimated fill price before committing. No API keys or terminal required.",
-    transport: "remote",
-    authType: "oauth",
+      "Coinbase for Agents MCP server. Download a CDP API key JSON file from the Coinbase Developer Portal, then paste the two values (name and privateKey) from that file. Your agent gets access to crypto trading (market and limit orders), portfolio management, USDC/USD conversions, and real-time market data. Every order supports dry-run preview so agents can inspect fees, slippage, and estimated fill price before committing.",
+    transport: "stdio",
+    authType: "apikey",
     isOfficial: true,
     category: ["defi", "wallet", "trading", "crypto", "payments"],
     icon: "https://cdn.simpleicons.org/coinbase/white",
-    url: "https://agents.coinbase.com/mcp",
+    command: "npx",
+    args: ["-y", "@coinbase/cdp-cli", "mcp"],
+    envVars: [
+      { name: "CDP_API_KEY_NAME", description: "From your downloaded JSON key file — copy the 'name' value (e.g. organizations/.../apiKeys/...)", isRequired: true },
+      { name: "CDP_API_KEY_PRIVATE_KEY", description: "From your downloaded JSON key file — copy the 'privateKey' value (starts with -----BEGIN EC PRIVATE KEY-----)", isRequired: true },
+    ],
+    keyLabel: "CDP API Key",
+    keyPlaceholder: "Paste key name...",
+    keyHelpUrl: "https://portal.cdp.coinbase.com/api-keys/secret",
   },
   {
     id: "talken-agentic-wallet",
@@ -3834,27 +3842,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/phantom",
     command: "npx",
     args: ["-y", "@phantom/mcp-server@latest"],
-  },
-  {
-    id: "metamask-agent",
-    name: "MetaMask Agent",
-    summary: "Self-custodial agent wallet: swaps, perps, staking with mandatory security pipeline.",
-    description:
-      "MetaMask Agent Wallet is a self-custodial AI trading wallet. Agents execute DeFi trades — swaps, perpetuals, prediction markets, staking, liquidity provision — across all EVM chains and Hyperliquid. Every transaction passes through a mandatory 3-step security pipeline: simulation, Blockaid threat scanning, and MEV protection. Guard Mode (allowlisted protocols, spend limits, 2FA) or Beast Mode (any protocol, malicious tx auto-blocked). User controls the secret recovery phrase.",
-    transport: "stdio",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["defi", "wallet", "trading", "crypto"],
-    icon: "https://cdn.simpleicons.org/metamask",
-    command: "npx",
-    args: ["-y", "@metamask/agent-wallet", "mcp"],
-    envVars: [
-      { name: "METAMASK_AGENT_SECRET", description: "Secret recovery phrase or private key for the agent wallet", isRequired: true },
-      { name: "METAMASK_AGENT_MODE", description: "Risk profile: 'guard' (allowlisted protocols, spend limits) or 'beast' (any protocol)", isRequired: false },
-    ],
-    keyLabel: "MetaMask Agent Credentials",
-    keyPlaceholder: "Paste credentials...",
-    keyHelpUrl: "https://metamask.io/agent-wallet",
   },
   {
     id: "agentwallet-mcp",
@@ -3897,7 +3884,23 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyPlaceholder: "Paste connection details...",
     keyHelpUrl: "https://waiaas.ai/",
   },
-
+  {
+    id: "runpod-api",
+    name: "Runpod API",
+    summary: "Manage Pods, serverless endpoints, storage, and GPU infrastructure.",
+    description:
+      "Official Runpod MCP server bridging the Runpod REST API. Agents can launch and manage GPU Pods, deploy serverless endpoints, handle storage volumes, and query infrastructure state — all through natural language.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["cloud", "devops", "ai"],
+    icon: "https://cdn.simpleicons.org/runpod/white",
+    command: "npx",
+    args: ["-y", "@runpod/mcp-server"],
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste Runpod API key...",
+    keyHelpUrl: "https://docs.runpod.io/get-started/api-keys",
+  },
 ];
 
 // ── Helper functions ───────────────────────────────────────────────────
@@ -3970,10 +3973,9 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Yahoo Finance Agent: Strategy evaluator — fetches market data, computes technical indicators inline (RSI, MACD, SMA, Bollinger Bands), evaluates strategy conditions, and emits structured trade signals. No auth needed. Pairs with Robinhood agent via schedule + handoff.
 - Robinhood Trading Agent: Trade executor — receives trade signal handoffs from analysis agents, confirms with boss, places trades via Robinhood MCP (OAuth). Always requires human confirmation before executing.
 - GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.
-- Coinbase DeFi Trader: Trading agent — place orders, manage portfolios, convert USDC/USD via Coinbase MCP (OAuth). Sign in with Coinbase account, one click.
+- Coinbase DeFi Trader: Trading agent — place orders, manage portfolios, convert USDC/USD via Coinbase MCP. Requires CDP API key (2 fields from downloaded JSON file).
 - Talken Swap Agent: Multi-chain DeFi agent — DEX swaps, cross-chain bridges, Hyperliquid perps, Polymarket, staking via Talken MCP. Requires Talken API key.
 - Phantom Wallet Agent: Solana & EVM wallet agent — transfers, swaps, perps via Phantom MCP (stdio, auto-auth). Dedicated agent wallet, fund before transacting.
-- MetaMask Agent Wallet: Self-custodial DeFi agent — swaps, perps, staking with mandatory security pipeline (simulation + threat scan + MEV protection). Requires agent wallet credentials.
 - AgentWallet Trader: Permissionless wallet agent — create wallets, send tokens, x402 payments on 9 EVM chains + Solana. No KYC. Requires AgentWallet API key.
 - WAIaaS DeFi Agent: Self-hosted DeFi agent — 13+ protocols (Jupiter, 0x, Aave V3, Lido, etc.) with policy engine and 6-stage tx pipeline. Requires local daemon + session token.`;
 
