@@ -3796,7 +3796,7 @@ const ALL_PROC_KEYS = [
   "beast-groveheart", "beast-stone-colossus", "beast-ash-wyrm",
   "beast-void-leviathan", "beast-infernal-sovereign",
   "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
-  "stone-proj", "spark", "dust", "shockwave", "recruit-beam",
+  "stone-proj", "spark", "dust", "shockwave", "recruit-beam", "slash-vfx",
   "soft-glow", "fire-glow", "void-glow", "crystal-glow",
   "golf-club", "golf-ball", "axe", "net",
   "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "fountain-sheet",
@@ -3935,6 +3935,23 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         ctx.fillStyle = grad;
         ctx.fillRect(10, 0, 12, 96);
         radialGradient(ctx, 16, 48, 16, 0x88ffaa, 0x4cb866, 0.4, 0);
+        ct.refresh();
+      }
+      if (!tex.exists("slash-vfx")) {
+        const ct = createCanvasTexture(tex, "slash-vfx", 64, 64);
+        const ctx = ct.getContext();
+        // Draw a crescent arc — thick at base, thinning toward the tip
+        ctx.strokeStyle = rgba(0xffffff, 0.9);
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.arc(0, 32, 28, -Math.PI / 3, Math.PI / 3);
+        ctx.stroke();
+        // Inner brighter line
+        ctx.strokeStyle = rgba(0xffffff, 0.5);
+        ctx.lineWidth = 16;
+        ctx.beginPath();
+        ctx.arc(0, 32, 28, -Math.PI / 3, Math.PI / 3);
+        ctx.stroke();
         ct.refresh();
       }
     },

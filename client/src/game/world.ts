@@ -44,6 +44,30 @@ const FRIENDLY_CAP = 12;
 const STONE_INTERVAL = 2500;
 const BEAST_SPAWN_INTERVAL = 8000; // check for legendary beast spawns
 
+// --- Weapon system ---
+type WeaponType = "tennis_racket" | "axe" | "iron_sword" | "void_blade" | "flame_greatsword" | "void_daggers" | "crystal_bow";
+
+interface WeaponDef {
+  damage: number;
+  cooldown: number;   // ms
+  range: number;      // px
+  melee: boolean;
+  hitCone: number;    // degrees, ± from facing
+  hitsTwice?: boolean;
+  aoeRadius?: number; // px — flame greatsword splash
+  color: number;      // slash VFX tint
+}
+
+const WEAPONS: Record<WeaponType, WeaponDef> = {
+  tennis_racket:      { damage: 5,  cooldown: 600,  range: 40,  melee: true,  hitCone: 60, color: 0xeeff44 },
+  axe:                { damage: 15, cooldown: 800,  range: 50,  melee: true,  hitCone: 60, color: 0xcc8844 },
+  iron_sword:         { damage: 25, cooldown: 600,  range: 55,  melee: true,  hitCone: 60, color: 0xcccccc },
+  void_blade:         { damage: 40, cooldown: 400,  range: 60,  melee: true,  hitCone: 60, color: 0xaa44ff },
+  flame_greatsword:   { damage: 60, cooldown: 1000, range: 100, melee: true,  hitCone: 60, aoeRadius: 100, color: 0xff6600 },
+  void_daggers:       { damage: 35, cooldown: 300,  range: 45,  melee: true,  hitCone: 60, hitsTwice: true, color: 0xdd44ff },
+  crystal_bow:        { damage: 50, cooldown: 700,  range: 300, melee: false, hitCone: 0,  color: 0x44ffdd },
+};
+
 /** Legendary beast definitions — rare, powerful, unique. */
 interface BeastDef {
   name: string;
@@ -813,6 +837,14 @@ export class WorldLayer {
   private axeHint!: Phaser.GameObjects.Text;
   private bigTreesChopped = 0;
 
+  // --- weapon / combat state ---
+  private weapon: WeaponType | null = null;
+  private weaponCooldown = 0;
+  private weaponCooldownMax = 0;
+  private weaponDamage = 0;
+  private weaponCooldownBar!: Phaser.GameObjects.Graphics;
+  private lastNoWeaponToast = 0;
+
   // --- flower picking state ---
   private flowers = 0;
   private flowerHint!: Phaser.GameObjects.Text;
@@ -950,6 +982,9 @@ export class WorldLayer {
       .setScale(0.8)
       .setDepth(400)
       .setVisible(false);
+
+    // weapon cooldown bar — shows above player while on cooldown
+    this.weaponCooldownBar = scene.add.graphics().setDepth(410).setVisible(false);
 
     // Spawn the background worker for chunk generation
     try {
@@ -1788,7 +1823,7 @@ export class WorldLayer {
   }
 
   /** Called every frame. Manages chunks, ghosts, compass, hazards, and interaction. */
-  update(time: number, dt: number, playerX: number, playerY: number, ePressed: boolean, vx = 0, vy = 0): void {
+  update(time: number, dt: number, playerX: number, playerY: number, ePressed: boolean, vx = 0, vy = 0, playerDir: Dir = "down", attackPressed = false): void {
     const outside = this.isOutside(playerX, playerY);
 
     // show compass + health bar when outside
@@ -2030,6 +2065,28 @@ export class WorldLayer {
           this.audio.hit();
         }
       }
+    }
+
+    // --- player attack (SPACE) ---
+    if (outside && attackPressed && !this.isDying) {
+      this.tryAttack(time, playerX, playerY, playerDir);
+    }
+
+    // --- weapon cooldown bar ---
+    if (outside && this.weapon && time < this.weaponCooldown) {
+      const remaining = (this.weaponCooldown - time) / this.weaponCooldownMax;
+      const barW = 50;
+      const barH = 5;
+      const bx = playerX - barW / 2;
+      const by = playerY - 60;
+      this.weaponCooldownBar.clear();
+      this.weaponCooldownBar.fillStyle(0x000000, 0.5);
+      this.weaponCooldownBar.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
+      this.weaponCooldownBar.fillStyle(0xffaa00, 0.9);
+      this.weaponCooldownBar.fillRect(bx, by, barW * remaining, barH);
+      this.weaponCooldownBar.setVisible(true);
+    } else {
+      this.weaponCooldownBar.setVisible(false);
     }
 
     // --- update lighting ---
@@ -2359,8 +2416,9 @@ export class WorldLayer {
           .setVisible(true);
         if (ePressed) {
           this.hasTennisRacket = true;
+          this.equipWeapon("tennis_racket");
           this.setTileAt(nearestRacket.tx, nearestRacket.ty, TILE.TENNIS_COURT);
-          this.store.toast("Picked up tennis racket! 🎾");
+          this.store.toast("Picked up tennis racket! 🎾 Press SPACE to bonk.");
           this.vfx.sparkBurst(
             nearestRacket.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
             nearestRacket.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
@@ -2549,8 +2607,9 @@ export class WorldLayer {
           .setVisible(true);
         if (ePressed) {
           this.hasAxe = true;
+          this.equipWeapon("axe");
           this.setTileAt(nearestAxe.tx, nearestAxe.ty, TILE.GRASS);
-          this.store.toast("Picked up axe! 🪓");
+          this.store.toast("Picked up axe! 🪓 Press SPACE to attack.");
           this.vfx.sparkBurst(
             nearestAxe.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
             nearestAxe.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
@@ -2566,8 +2625,9 @@ export class WorldLayer {
         if (ePressed) {
           this.hasGolfClub = false;
           this.hasAxe = true;
+          this.equipWeapon("axe");
           this.setTileAt(nearestLep.tx, nearestLep.ty, TILE.GRASS);
-          this.store.toast("Traded golf club for axe! The leprechaun vanishes. 🍀🪓");
+          this.store.toast("Traded golf club for axe! The leprechaun vanishes. 🍀🪓 Press SPACE to attack.");
           this.vfx.sparkBurst(
             nearestLep.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
             nearestLep.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
@@ -2642,6 +2702,129 @@ export class WorldLayer {
     if (ePressed && nearestGhost && nearestGhost.d < 140) {
       this.tryRecruit(nearestGhost.id);
     }
+  }
+
+  /** Equip a weapon, updating combat stats. */
+  equipWeapon(type: WeaponType): void {
+    const def = WEAPONS[type];
+    this.weapon = type;
+    this.weaponDamage = def.damage;
+    this.weaponCooldownMax = def.cooldown;
+  }
+
+  /** Player attacks with equipped weapon — melee cone or ranged projectile. */
+  private tryAttack(time: number, playerX: number, playerY: number, playerDir: Dir): void {
+    // No weapon — punch does nothing
+    if (!this.weapon) {
+      if (time - this.lastNoWeaponToast > 3000) {
+        this.lastNoWeaponToast = time;
+        this.store.toast("You have no weapon. You punch. It does nothing.");
+      }
+      return;
+    }
+
+    // On cooldown
+    if (time < this.weaponCooldown) return;
+
+    const def = WEAPONS[this.weapon];
+    this.weaponCooldown = time + def.cooldown;
+
+    // Direction vector
+    const dirVec = { down: { x: 0, y: 1 }, up: { x: 0, y: -1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } }[playerDir];
+    const facingAngle = Math.atan2(dirVec.y, dirVec.x);
+
+    // Spawn slash VFX arc
+    this.spawnSlashVFX(playerX, playerY, facingAngle, def.color, def.range);
+    achievements.unlock("first_swing");
+
+    // Attack sound
+    this.audio.creatureGrowl(); // reuse as a swing sound for now
+
+    if (def.melee) {
+      // Melee: scan creatures in range within ±hitCone degrees of facing
+      const hitConeRad = (def.hitCone * Math.PI) / 180;
+
+      for (const c of this.creatures) {
+        if (!c.alive_) continue;
+        const dx = c.container.x - playerX;
+        const dy = c.container.y - playerY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > def.range) continue;
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - facingAngle);
+        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff <= hitConeRad) {
+          c.takeDamage(this.weaponDamage);
+          if (def.hitsTwice) c.takeDamage(this.weaponDamage);
+        }
+      }
+
+      // Also hit beasts
+      for (const b of this.beasts) {
+        if (!b.alive_) continue;
+        const dx = b.container.x - playerX;
+        const dy = b.container.y - playerY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > def.range) continue;
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - facingAngle);
+        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff <= hitConeRad) {
+          b.takeDamage(this.weaponDamage);
+          if (def.hitsTwice) b.takeDamage(this.weaponDamage);
+        }
+      }
+
+      // AoE splash for flame greatsword
+      if (def.aoeRadius) {
+        for (const c of this.creatures) {
+          if (!c.alive_) continue;
+          const dist = Math.hypot(c.container.x - playerX, c.container.y - playerY);
+          if (dist <= def.aoeRadius) {
+            c.takeDamage(this.weaponDamage);
+          }
+        }
+        for (const b of this.beasts) {
+          if (!b.alive_) continue;
+          const dist = Math.hypot(b.container.x - playerX, b.container.y - playerY);
+          if (dist <= def.aoeRadius) {
+            b.takeDamage(this.weaponDamage);
+          }
+        }
+        this.vfx.shockwave(playerX, playerY, def.color, 3);
+      }
+    } else {
+      // Ranged: spawn projectile (crystal bow)
+      // TODO: implement projectile entity reusing golf ball physics
+      this.store.toast("Crystal bow not yet implemented — coming soon!");
+    }
+  }
+
+  /** Spawn a slash arc VFX in the facing direction. */
+  private spawnSlashVFX(x: number, y: number, angle: number, color: number, range: number): void {
+    const scene = this.scene;
+    const slash = scene.add.image(x, y, "slash-vfx")
+      .setOrigin(0, 0.5)
+      .setScale(range / 64, 1)
+      .setRotation(angle)
+      .setTint(color)
+      .setAlpha(0.8)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(200);
+
+    scene.tweens.add({
+      targets: slash,
+      alpha: 0,
+      scaleX: range / 64 * 1.3,
+      duration: 200,
+      ease: "Cubic.easeOut",
+      onComplete: () => slash.destroy(),
+    });
+
+    // Small spark burst at arc end
+    const endX = x + Math.cos(angle) * range * 0.8;
+    const endY = y + Math.sin(angle) * range * 0.8;
+    this.vfx.sparkBurst(endX, endY, color, 6, 60);
   }
 
   /** Player takes damage — flash red, shake screen, update health bar, maybe teleport home. */

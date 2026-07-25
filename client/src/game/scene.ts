@@ -257,7 +257,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerNameBg!: Phaser.GameObjects.Graphics;
   private playerDir: Dir = "down";
   private playerTexKey = "boss";
-  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "SPACE", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
@@ -1084,7 +1084,7 @@ export class OfficeScene extends Phaser.Scene {
           });
 
           this.cursors = this.input.keyboard!.createCursorKeys();
-          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q") as OfficeScene["keys"];
+          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,SPACE") as OfficeScene["keys"];
           this.input.keyboard!.on("keydown-ESC", () => {
             this.store.select(null);
             this.store.toggleBoard(false);
@@ -6284,7 +6284,8 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- world layer: chunks, ghosts, compass, recruit ---
     this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
-    this.world.update(time, dt, this.player.x, this.player.y, ePressed, vx, vy);
+    const spacePressed = Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
+    this.world.update(time, dt, this.player.x, this.player.y, ePressed, vx, vy, this.playerDir, spacePressed);
     this.world.vfx.updateSmoke();
 
     // Q: teleport back to office when outside
