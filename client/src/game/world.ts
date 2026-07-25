@@ -1324,6 +1324,7 @@ export class WorldLayer {
   private captureHint!: Phaser.GameObjects.Text;
   private deployedAllies: DeployedAlly[] = [];
   private lastNemesisSave = 0;
+  private nemesisPanel: Phaser.GameObjects.Container | null = null;
 
   // --- arrow projectile (crystal bow) ---
   private arrow: Phaser.GameObjects.Image | null = null;
@@ -3350,6 +3351,11 @@ export class WorldLayer {
     this.store.toast(`Equipped: ${def.name} (${def.damage} dmg)`);
   }
 
+  /** Get current weapon type for visual rendering. */
+  getCurrentWeapon(): WeaponType | null {
+    return this.weapon;
+  }
+
   /** Add void shards and check for upgrade threshold. */
   addShards(count: number): void {
     this.voidShards += count;
@@ -3464,6 +3470,140 @@ export class WorldLayer {
     } catch {
       // ignore corrupt data
     }
+  }
+
+  /** Toggle the nemesis info panel on/off. */
+  toggleNemesisPanel(): void {
+    if (this.nemesisPanel) {
+      this.nemesisPanel.destroy();
+      this.nemesisPanel = null;
+      return;
+    }
+
+    const scene = this.scene;
+    const cam = scene.cameras.main;
+    const panelW = 420;
+    const panelH = 480;
+    const px = cam.scrollX + cam.width / 2 - panelW / 2;
+    const py = cam.scrollY + cam.height / 2 - panelH / 2;
+
+    const panel = scene.add.container(px, py).setDepth(100).setScrollFactor(0);
+
+    // background
+    const bg = scene.add.graphics();
+    bg.fillStyle(0x1a1a22, 0.95);
+    bg.fillRoundedRect(0, 0, panelW, panelH, 12);
+    bg.lineStyle(2, 0x4affa8, 0.6);
+    bg.strokeRoundedRect(0, 0, panelW, panelH, 12);
+    panel.add(bg);
+
+    // title
+    const title = scene.add.text(panelW / 2, 16, "NEMESIS CODEX", {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "18px",
+      color: "#4affa8",
+      stroke: "#1a1a22",
+      strokeThickness: 3,
+    }).setOrigin(0.5, 0).setResolution(4);
+    panel.add(title);
+
+    let yPos = 48;
+
+    // Active nemeses section
+    const active = this.nemesis.active();
+    const activeLabel = scene.add.text(12, yPos, `Active Nemeses (${active.length})`, {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "13px",
+      color: "#ff6644",
+    }).setResolution(4);
+    panel.add(activeLabel);
+    yPos += 20;
+
+    if (active.length === 0) {
+      const empty = scene.add.text(16, yPos, "No active nemeses. Go antagonize some creatures!", {
+        fontFamily: "'M Plus Rounded 1c', sans-serif",
+        fontSize: "11px",
+        color: "#888899",
+      }).setResolution(4);
+      panel.add(empty);
+      yPos += 16;
+    } else {
+      for (const entry of active.slice(0, 6)) {
+        const traitNames = entry.traitIds.map((id) => this.nemesis.getTrait(id)?.name ?? id).join(", ");
+        const weakNames = entry.weaknessIds.map((id) => this.nemesis.getWeakness(id)?.name ?? id).join(", ");
+        const line = scene.add.text(16, yPos,
+          `${entry.name} — ${entry.title}\n` +
+          `  Rank ${entry.rank} | Kills: ${entry.playerKills} | Encounters: ${entry.encounters}\n` +
+          `  Traits: ${traitNames || "none"} | Weakness: ${weakNames || "none"}`,
+          {
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            fontSize: "10px",
+            color: "#ccccee",
+            stroke: "#1a1a22",
+            strokeThickness: 2,
+          },
+        ).setResolution(4);
+        panel.add(line);
+        yPos += 36;
+      }
+    }
+
+    yPos += 8;
+
+    // Captured roster section
+    const rosterLabel = scene.add.text(12, yPos, `Captured Roster (${this.capturedRoster.length})`, {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "13px",
+      color: "#44ff88",
+    }).setResolution(4);
+    panel.add(rosterLabel);
+    yPos += 20;
+
+    if (this.capturedRoster.length === 0) {
+      const empty = scene.add.text(16, yPos, "No captured creatures. Weaken them and press E to capture!", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "11px",
+        color: "#888899",
+      }).setResolution(4);
+      panel.add(empty);
+      yPos += 16;
+    } else {
+      for (const entry of this.capturedRoster.slice(0, 6)) {
+        const line = scene.add.text(16, yPos,
+          `${entry.name} — ${entry.title} (Rank ${entry.rank})`,
+          {
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            fontSize: "10px",
+            color: "#aaccaa",
+            stroke: "#1a1a22",
+            strokeThickness: 2,
+          },
+        ).setResolution(4);
+        panel.add(line);
+        yPos += 16;
+      }
+    }
+
+    yPos += 8;
+
+    // Stats section
+    const statsLabel = scene.add.text(12, yPos, `Void Shards: ${this.voidShards} | Weapons: ${this.ownedWeapons.length}`, {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "12px",
+      color: "#aa44ff",
+    }).setResolution(4);
+    panel.add(statsLabel);
+    yPos += 20;
+
+    // Close hint
+    const closeHint = scene.add.text(panelW / 2, panelH - 20, "Press N to close", {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "10px",
+      color: "#666677",
+    }).setOrigin(0.5, 0.5).setResolution(4);
+    panel.add(closeHint);
+
+    this.nemesisPanel = panel;
   }
 
   /** Attempt to capture a weakened creature. */

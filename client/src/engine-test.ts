@@ -13,46 +13,46 @@ const engine = new Engine(canvas, {
 });
 
 // ---- Build the world: sky above, office on a ground line, grass field below ----
-// Layout (in pixel space, y increases downward):
-//   y < HORIZON_Y         → sky (no tiles, clear color shows through)
-//   HORIZON_Y to OFFICE_BOTTOM → office building sitting on the ground
-//   below OFFICE_BOTTOM    → grass field extending downward
+// Engine convention: +Y is UP on screen (standard GL)
+//   y > HORIZON_Y          → sky (no tiles, clear color shows through)
+//   HORIZON_Y down to OFFICE_BOTTOM → office building sitting on the ground
+//   below OFFICE_BOTTOM     → grass field extending downward
 // texIndex: 0=wood floor, 1=grass, 2=sand, 3=stone, 4=wall
 const RADIUS = 26;
 const allHexes = hexInRange({ q: 0, r: 0 }, RADIUS);
 
-// Scene layout in pixel space
-const HORIZON_Y = -280;      // ground starts here (above this is sky)
+// Scene layout in pixel space (+Y is up)
+const HORIZON_Y = 280;       // ground starts here (above this is sky)
 const OFFICE_HALF_W = 280;   // office half-width
-const OFFICE_TOP = -260;     // office top wall
-const OFFICE_BOTTOM = 180;   // office bottom wall (door at bottom center)
+const OFFICE_TOP = 260;      // office top wall (near horizon)
+const OFFICE_BOTTOM = -180;  // office bottom wall (door at bottom center)
 const WALL_THICKNESS = 36;
-const FIELD_BOTTOM = 900;    // how far down the grass field goes
+const FIELD_BOTTOM = -900;   // how far down the grass field goes
 
 // Only keep hexes that are below the horizon (on the ground)
 const hexes = allHexes.filter((hex) => {
   const pos = hexToPixel(hex.q, hex.r);
-  return pos.y >= HORIZON_Y - 20 && pos.y < FIELD_BOTTOM;
+  return pos.y <= HORIZON_Y + 20 && pos.y > FIELD_BOTTOM;
 });
 
 function classifyTile(q: number, r: number): "wall" | "floor" | "grass" | "sky" {
   const pos = hexToPixel(q, r);
 
   // Above horizon = sky (no tile)
-  if (pos.y < HORIZON_Y) return "sky";
+  if (pos.y > HORIZON_Y) return "sky";
 
   // Office building region
   const inOfficeX = Math.abs(pos.x) < OFFICE_HALF_W;
-  const inOfficeY = pos.y > OFFICE_TOP && pos.y < OFFICE_BOTTOM;
+  const inOfficeY = pos.y < OFFICE_TOP && pos.y > OFFICE_BOTTOM;
 
   if (inOfficeX && inOfficeY) {
     const distToEdgeX = OFFICE_HALF_W - Math.abs(pos.x);
-    const distToEdgeY = Math.min(pos.y - OFFICE_TOP, OFFICE_BOTTOM - pos.y);
+    const distToEdgeY = Math.min(OFFICE_TOP - pos.y, pos.y - OFFICE_BOTTOM);
     const minDistToEdge = Math.min(distToEdgeX, distToEdgeY);
 
     if (minDistToEdge < WALL_THICKNESS) {
-      // Door gap at bottom center
-      if (pos.y > OFFICE_BOTTOM - WALL_THICKNESS && Math.abs(pos.x) < 55) return "floor";
+      // Door gap at bottom center (bottom = lower Y)
+      if (pos.y < OFFICE_BOTTOM + WALL_THICKNESS && Math.abs(pos.x) < 55) return "floor";
       return "wall";
     }
     return "floor";
@@ -179,8 +179,8 @@ engine.tiles.gridRadius = 1200; // large since we have a wide horizontal band
 
 // ---- Soft, even lighting inside the office ----
 const lightPositions = [
-  { x: 80, y: -80 },
-  { x: -80, y: 40 },
+  { x: 80, y: 80 },
+  { x: -80, y: -40 },
 ];
 
 for (const lp of lightPositions) {
@@ -201,12 +201,12 @@ const charSprite = generateCharSprite(engine.atlas, "boss", {
 });
 
 // Place a player character and a few NPCs inside the office
-const playerPos = { x: 0, y: -40 }; // inside the office, near center
+const playerPos = { x: 0, y: 40 }; // inside the office, near center
 const npcPositions = [
-  { x: 120, y: -80, name: "Agent 1" },
+  { x: 120, y: 80, name: "Agent 1" },
   { x: -120, y: 0, name: "Agent 2" },
-  { x: 80, y: 80, name: "Agent 3" },
-  { x: -100, y: -120, name: "Agent 4" },
+  { x: 80, y: -80, name: "Agent 3" },
+  { x: -100, y: 120, name: "Agent 4" },
 ];
 
 const agentSprites: number[] = [];
@@ -247,9 +247,10 @@ let animTime = 0;
 const ANIM_FPS = 8;
 
 // ---- Camera setup: follow player, zoomed in ----
-engine.camera.setCenter(0, -40);
+engine.camera.setCenter(0, 40);
 engine.camera.setModeInstant("topdown", 1.0);
-engine.camera.follow(0, -40);
+engine.camera.follow(0, 40);
+engine.sprites.topDown = true;
 
 // ---- Input handling ----
 const keys: Record<string, boolean> = {};
@@ -258,6 +259,10 @@ let lastX = 0;
 let lastY = 0;
 
 window.addEventListener("keydown", (e) => {
+  // Prevent arrow keys from scrolling the page
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
+    e.preventDefault();
+  }
   keys[e.key.toLowerCase()] = true;
   // Camera mode shortcuts
   switch (e.key) {
@@ -339,9 +344,10 @@ engine.onUpdate = (dt) => {
   updateTour(dt * 1000);
 
   // ---- Player movement (WASD + arrow keys) ----
+  // +Y is up on screen, so W/up = +Y, S/down = -Y
   let dx = 0, dy = 0;
-  if (keys["w"] || keys["arrowup"]) { dy -= 1; playerDir = 3; }
-  if (keys["s"] || keys["arrowdown"]) { dy += 1; playerDir = 0; }
+  if (keys["w"] || keys["arrowup"]) { dy += 1; playerDir = 3; }
+  if (keys["s"] || keys["arrowdown"]) { dy -= 1; playerDir = 0; }
   if (keys["a"] || keys["arrowleft"]) { dx -= 1; playerDir = 1; }
   if (keys["d"] || keys["arrowright"]) { dx += 1; playerDir = 2; }
 
@@ -352,12 +358,12 @@ engine.onUpdate = (dt) => {
     playerY += (dy / len) * PLAYER_SPEED * dt;
     // Clamp to office bounds (with wiggle room for the door)
     playerX = Math.max(-OFFICE_HALF_W + 16, Math.min(OFFICE_HALF_W - 16, playerX));
-    if (playerY < OFFICE_TOP + 16) playerY = OFFICE_TOP + 16;
-    // Allow walking out through the door (bottom center) into the field
+    if (playerY > OFFICE_TOP - 16) playerY = OFFICE_TOP - 16;
+    // Allow walking out through the door (bottom center = lower Y) into the field
     if (Math.abs(playerX) < 55) {
-      playerY = Math.min(FIELD_BOTTOM - 50, playerY);
+      playerY = Math.max(FIELD_BOTTOM + 50, playerY);
     } else {
-      playerY = Math.min(OFFICE_BOTTOM - 16, playerY);
+      playerY = Math.max(OFFICE_BOTTOM + 16, playerY);
     }
 
     // Update player sprite position
