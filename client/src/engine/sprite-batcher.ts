@@ -190,6 +190,7 @@ export class SpriteBatcher {
     gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.uniforms.uViewProj, false, viewProj);
     gl.uniform1i(this.uniforms.uAtlas, atlasUnit);
+    gl.uniform1i(this.uniforms.uTopDown, this.topDown ? 1 : 0);
 
     gl.bindBuffer(GL.ARRAY_BUFFER, this.instanceBuffer);
     gl.bufferSubData(GL.ARRAY_BUFFER, 0, data.subarray(0, Math.min(visible.length, MAX_SPRITES) * stride));
