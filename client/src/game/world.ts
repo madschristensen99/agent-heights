@@ -805,6 +805,201 @@ class FriendlyCreature {
   }
 }
 
+/** A captured creature deployed as a combat ally — follows player, attacks hostiles. */
+class DeployedAlly {
+  container: Phaser.GameObjects.Container;
+  private alive = true;
+  private world: WorldLayer;
+  private entry: NemesisEntry;
+  private hp: number;
+  private maxHp: number;
+  private damage: number;
+  private speed: number;
+  private attackCd = 0;
+  private animKey: string;
+  private sprite: Phaser.GameObjects.Sprite;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private lightGlow: Phaser.GameObjects.Image;
+  private walkTimer = 0;
+  private nameTag: Phaser.GameObjects.Text;
+  private hpBar: Phaser.GameObjects.Graphics;
+
+  constructor(world: WorldLayer, x: number, y: number, entry: NemesisEntry) {
+    this.world = world;
+    this.entry = entry;
+    this.maxHp = entry.maxHp;
+    this.hp = entry.maxHp;
+    this.damage = entry.damage;
+    this.speed = entry.speed;
+    this.animKey = creatureKey(entry.hostility);
+    const scene = world.scene;
+    const radius = 14 + entry.hostility * 2;
+
+    this.shadow = scene.add.ellipse(0, 2, radius * 2.8, radius * 0.9, 0x000000, 0.2);
+    this.sprite = scene.add.sprite(0, 0, this.animKey, 0).setOrigin(0.5, 0.7).setScale(1.2);
+
+    // green ally glow
+    this.lightGlow = scene.add
+      .image(0, 0, "soft-glow")
+      .setDisplaySize(radius * 4, radius * 4)
+      .setTint(0x44ff88)
+      .setAlpha(0.15)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(19);
+
+    this.container = scene.add.container(x, y, [this.lightGlow, this.shadow, this.sprite]).setDepth(20 + y);
+
+    // name tag
+    this.nameTag = scene.add.text(x, y - 30, entry.name, {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "10px",
+      color: "#44ff88",
+      stroke: "#1a1a22",
+      strokeThickness: 3,
+    }).setOrigin(0.5, 1).setResolution(4).setScale(0.6).setDepth(30);
+
+    this.hpBar = scene.add.graphics().setDepth(31);
+  }
+
+  get alive_(): boolean { return this.alive; }
+  get entryId(): string { return this.entry.id; }
+
+  update(dt: number, playerX: number, playerY: number): void {
+    if (!this.alive) return;
+
+    // Find nearest hostile creature
+    let nearestEnemy: Creature | null = null;
+    let nearestDist = Infinity;
+    for (const c of this.world.creatures) {
+      if (!c.alive_) continue;
+      const d = Math.hypot(c.container.x - this.container.x, c.container.y - this.container.y);
+      if (d < 250 && d < nearestDist) {
+        nearestDist = d;
+        nearestEnemy = c;
+      }
+    }
+
+    // Also check beasts
+    let nearestBeast: LegendaryBeast | null = null;
+    let nearestBeastDist = Infinity;
+    for (const b of this.world.beasts) {
+      if (!b.alive_) continue;
+      const d = Math.hypot(b.container.x - this.container.x, b.container.y - this.container.y);
+      if (d < 250 && d < nearestBeastDist) {
+        nearestBeastDist = d;
+        nearestBeast = b;
+      }
+    }
+
+    // Decide target: enemy if closer than beast, else beast, else follow player
+    let targetX: number, targetY: number;
+    let attacking = false;
+
+    if (nearestEnemy && nearestDist < 40) {
+      attacking = true;
+      targetX = this.container.x;
+      targetY = this.container.y;
+      this.attackCd -= dt;
+      if (this.attackCd <= 0) {
+        this.attackCd = 800;
+        this.sprite.setFrame(3);
+        nearestEnemy.takeDamage(this.damage);
+        this.world.vfx?.sparkBurst(nearestEnemy.container.x, nearestEnemy.container.y, 0x44ff88, 6, 60);
+      }
+    } else if (nearestBeast && nearestBeastDist < 40) {
+      attacking = true;
+      targetX = this.container.x;
+      targetY = this.container.y;
+      this.attackCd -= dt;
+      if (this.attackCd <= 0) {
+        this.attackCd = 800;
+        this.sprite.setFrame(3);
+        nearestBeast.takeDamage(this.damage);
+        this.world.vfx?.sparkBurst(nearestBeast.container.x, nearestBeast.container.y, 0x44ff88, 6, 60);
+      }
+    } else if (nearestEnemy && nearestDist < 250) {
+      targetX = nearestEnemy.container.x;
+      targetY = nearestEnemy.container.y;
+    } else if (nearestBeast && nearestBeastDist < 250) {
+      targetX = nearestBeast.container.x;
+      targetY = nearestBeast.container.y;
+    } else {
+      // Follow player at a distance
+      const pdx = playerX - this.container.x;
+      const pdy = playerY - this.container.y;
+      const pd = Math.hypot(pdx, pdy);
+      if (pd > 80) {
+        targetX = playerX;
+        targetY = playerY;
+      } else {
+        targetX = this.container.x;
+        targetY = this.container.y;
+      }
+    }
+
+    // Move toward target
+    if (!attacking) {
+      const mdx = targetX - this.container.x;
+      const mdy = targetY - this.container.y;
+      const md = Math.hypot(mdx, mdy);
+      if (md > 5) {
+        const step = this.speed * (dt / 1000);
+        const nx = this.container.x + (mdx / md) * Math.min(step, md);
+        const ny = this.container.y + (mdy / md) * Math.min(step, md);
+        const { tx, ty } = this.world.pixelToTile(nx, ny);
+        if (this.world.isCreatureWalkable(tx, ty)) {
+          this.container.setPosition(nx, ny);
+          this.sprite.setFlipX(mdx < 0);
+          this.walkTimer += dt;
+          const frame = Math.floor(this.walkTimer / 200) % 2 + 1;
+          this.sprite.setFrame(frame);
+        } else {
+          this.sprite.setFrame(0);
+        }
+      } else {
+        this.sprite.setFrame(0);
+      }
+    }
+
+    this.container.setDepth(20 + this.container.y);
+
+    // Update name tag + HP bar
+    this.nameTag.setPosition(this.container.x, this.container.y - 30);
+    this.hpBar.clear();
+    if (this.hp < this.maxHp) {
+      const barW = 30;
+      const barH = 3;
+      const bx = this.container.x - barW / 2;
+      const by = this.container.y - 22;
+      this.hpBar.fillStyle(0x000000, 0.5);
+      this.hpBar.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+      this.hpBar.fillStyle(0x44ff88, 0.9);
+      this.hpBar.fillRect(bx, by, barW * (this.hp / this.maxHp), barH);
+    }
+  }
+
+  takeDamage(amount: number): void {
+    this.hp -= amount;
+    this.world.vfx?.hitFlash(this.sprite);
+    if (this.hp <= 0) {
+      this.alive = false;
+      this.world.vfx?.deathDissolve(this.container.x, this.container.y, 0x44ff88, 1);
+      this.world.audio?.death();
+      this.nameTag.destroy();
+      this.hpBar.destroy();
+      this.container.destroy();
+      this.world.store.toast(`${this.entry.name} fell in battle!`);
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.nameTag.destroy();
+    this.hpBar.destroy();
+    this.container.destroy();
+  }
+}
+
 /** A flying stone projectile — sprite-based with rotation and lob arc. */
 class Stone {
   sprite: Phaser.GameObjects.Sprite;
@@ -1005,7 +1200,7 @@ class GhostNPC {
  */
 export class WorldLayer {
   scene: Phaser.Scene;
-  private store: Store;
+  store: Store;
   private net: Net;
   offset: WorldOffset;
   private officeW: number;
@@ -1029,8 +1224,8 @@ export class WorldLayer {
   private ghostDialog!: Phaser.GameObjects.Text;
   private recruitedHint!: Phaser.GameObjects.Text;
   private damageFlash!: Phaser.GameObjects.Rectangle;
-  private creatures: Creature[] = [];
-  private beasts: LegendaryBeast[] = [];
+  creatures: Creature[] = [];
+  beasts: LegendaryBeast[] = [];
   private stones: Stone[] = [];
   private friendlies: FriendlyCreature[] = [];
   private hp = MAX_HP;
@@ -1091,6 +1286,7 @@ export class WorldLayer {
   nemesis = new NemesisRegistry();
   private capturedRoster: NemesisEntry[] = [];
   private captureHint!: Phaser.GameObjects.Text;
+  private deployedAllies: DeployedAlly[] = [];
 
   // --- arrow projectile (crystal bow) ---
   private arrow: Phaser.GameObjects.Image | null = null;
@@ -2319,6 +2515,12 @@ export class WorldLayer {
     }
     this.friendlies = this.friendlies.filter((f) => f.alive_);
 
+    // --- update deployed allies ---
+    for (const a of this.deployedAllies) {
+      if (a.alive_) a.update(dt, playerX, playerY);
+    }
+    this.deployedAllies = this.deployedAllies.filter((a) => a.alive_);
+
     // --- update legendary beasts ---
     let nearestBeast: LegendaryBeast | null = null;
     let nearestBeastDist = Infinity;
@@ -2676,6 +2878,10 @@ export class WorldLayer {
         this.arrowActive = false;
       }
       this.captureHint.setVisible(false);
+      // recall deployed allies when entering office
+      if (this.deployedAllies.length > 0) {
+        this.recallAllies();
+      }
     }
 
     // --- tennis interaction ---
@@ -3085,6 +3291,48 @@ export class WorldLayer {
     return this.capturedRoster;
   }
 
+  /** Deploy a captured creature as a combat ally near the player. */
+  deployAlly(entry: NemesisEntry, playerX: number, playerY: number): boolean {
+    if (this.deployedAllies.length >= 3) {
+      this.store.toast("Max 3 allies deployed. Recall one first.");
+      return false;
+    }
+    if (this.deployedAllies.some((a) => a.alive_ && a.entryId === entry.id)) {
+      this.store.toast(`${entry.name} is already deployed.`);
+      return false;
+    }
+    // Spawn near player
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 40 + Math.random() * 30;
+    const x = playerX + Math.cos(angle) * dist;
+    const y = playerY + Math.sin(angle) * dist;
+    const ally = new DeployedAlly(this, x, y, entry);
+    this.deployedAllies.push(ally);
+    this.vfx.sparkBurst(x, y, 0x44ff88, 12, 60);
+    this.store.toast(`${entry.name} deployed!`);
+    return true;
+  }
+
+  /** Recall all deployed allies. */
+  recallAllies(): void {
+    for (const a of this.deployedAllies) {
+      if (a.alive_) {
+        this.vfx.sparkBurst(a.container.x, a.container.y, 0x44ff88, 8, 40);
+        a.destroy();
+      }
+    }
+    this.deployedAllies = [];
+  }
+
+  /** Get set of currently deployed ally entry IDs. */
+  getDeployedIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const a of this.deployedAllies) {
+      if (a.alive_) ids.add(a.entryId);
+    }
+    return ids;
+  }
+
   /** Attempt to capture a weakened creature. */
   private tryCapture(creature: Creature, time: number): void {
     // Success chance: lower HP = higher chance. 25% HP → 75% chance, 1% HP → 99% chance
@@ -3279,6 +3527,8 @@ export class WorldLayer {
       this.hud.setHealth(this.hp, MAX_HP);
       this.isDying = true;
       achievements.unlock("knocked_out");
+      // Recall deployed allies
+      this.recallAllies();
       // Record nemesis player kills before clearing
       for (const c of this.creatures) {
         if (c.nemesisId) {

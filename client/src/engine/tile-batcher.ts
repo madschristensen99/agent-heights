@@ -57,24 +57,78 @@ uniform vec3 uLightColor[32];
 uniform float uLightRadius[32];
 uniform float uLightIntensity[32];
 uniform float uTime;
+uniform vec3 uSkyColor;
+uniform float uGridRadius;
 
 out vec4 fragColor;
 
-void main() {
-  // World-space UV: texture repeats seamlessly across hexes
-  // Scale world coords so texture tiles at a natural rate
-  float texScale = 0.04;
-  vec2 tiledUV = vUV * texScale;
+// Simple hash noise for natural color variation
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
 
-  // 5 tile textures packed horizontally; texIndex selects which one
+float noise2D(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
+             mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+}
+
+// Sample tile texture by integer index
+vec3 sampleTile(int idx, vec2 worldUV) {
   float tileW = uTileUV.z / 5.0;
+  float texScale = 0.05;
+  vec2 tiledUV = worldUV * texScale;
   vec2 atlasUV = vec2(
-    uTileUV.x + vTexIndex * tileW + fract(tiledUV.x) * tileW,
+    uTileUV.x + float(idx) * tileW + fract(tiledUV.x) * tileW,
     uTileUV.y + fract(tiledUV.y) * uTileUV.w
   );
-  vec4 texColor = texture(uAtlas, atlasUV);
-  vec3 albedo = texColor.rgb * vTint;
+  return texture(uAtlas, atlasUV).rgb;
+}
 
+void main() {
+  // Blend between adjacent tile types at hex boundaries
+  // vTexIndex is interpolated across hex edges, so at a boundary between
+  // texIndex 1 (grass) and 2 (sand), vTexIndex will be ~1.5
+  int idx0 = int(floor(vTexIndex + 0.5));
+  int idx1 = idx0 + 1;
+  int idx2 = idx0 - 1;
+  float blend = fract(vTexIndex + 0.5);
+
+  // Determine which two textures to blend between
+  int blendIdx = idx0;
+  int blendNext = idx0;
+  float blendWeight = 0.0;
+
+  if (vTexIndex < float(idx0) - 0.5 + 1.0) {
+    // Between idx0-1 and idx0
+    if (idx2 >= 0 && abs(vTexIndex - float(idx2)) < abs(vTexIndex - float(idx1))) {
+      blendNext = idx2;
+      blendWeight = 1.0 - blend;
+    } else if (idx1 <= 4) {
+      blendNext = idx1;
+      blendWeight = blend;
+    }
+  }
+
+  // Clamp indices
+  blendIdx = clamp(blendIdx, 0, 4);
+  blendNext = clamp(blendNext, 0, 4);
+  blendWeight = clamp(blendWeight, 0.0, 1.0);
+  // Smooth the blend
+  blendWeight = blendWeight * blendWeight * (3.0 - 2.0 * blendWeight);
+
+  vec3 tex0 = sampleTile(blendIdx, vWorldPos);
+  vec3 tex1 = sampleTile(blendNext, vWorldPos);
+  vec3 texColor = mix(tex0, tex1, blendWeight);
+
+  // World-space noise for natural color variation (replaces per-hex tint noise)
+  float n = noise2D(vWorldPos * 0.01) * 0.15 - 0.075;
+  float n2 = noise2D(vWorldPos * 0.03) * 0.08 - 0.04;
+  vec3 albedo = texColor * vTint * (1.0 + n + n2);
+
+  // Lighting
   vec3 lit = uAmbient * albedo;
   for (int i = 0; i < 32; i++) {
     if (i >= uLightCount) break;
@@ -83,7 +137,12 @@ void main() {
     lit += uLightColor[i] * albedo * atten * uLightIntensity[i];
   }
 
-  fragColor = vec4(lit, 1.0);
+  // Fade to sky color at grid edges for horizon effect
+  float distFromCenter = length(vWorldPos);
+  float edgeFade = 1.0 - smoothstep(uGridRadius * 0.65, uGridRadius, distFromCenter);
+  lit = mix(uSkyColor, lit, edgeFade);
+
+  fragColor = vec4(lit, edgeFade);
 }`;
 
 const SIDE_VERT = `#version 300 es
@@ -156,6 +215,8 @@ export class TileBatcher {
   private sideUniforms: ReturnType<typeof getUniformLocations>;
   private tileHeight: number = 16;
   tileUVOffset: [number, number, number, number] = [0, 0, 1, 1];
+  skyColor: [number, number, number] = [0.53, 0.72, 0.88];
+  gridRadius: number = 700;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -164,6 +225,7 @@ export class TileBatcher {
     this.uniforms = getUniformLocations(gl, this.program, [
       "uViewProj", "uHexSize", "uTileHeight", "uTime", "uAtlas", "uTileUV",
       "uAmbient", "uLightCount", "uLightPos", "uLightColor", "uLightRadius", "uLightIntensity",
+      "uSkyColor", "uGridRadius",
     ]);
     this.sideUniforms = getUniformLocations(gl, this.sideProgram, [
       "uViewProj", "uHexSize", "uTileHeight", "uAmbient",
@@ -265,6 +327,8 @@ export class TileBatcher {
     gl.uniform1f(this.uniforms.uTime, time);
     gl.uniform1i(this.uniforms.uAtlas, atlasUnit);
     gl.uniform4f(this.uniforms.uTileUV, this.tileUVOffset[0], this.tileUVOffset[1], this.tileUVOffset[2], this.tileUVOffset[3]);
+    gl.uniform3f(this.uniforms.uSkyColor, this.skyColor[0], this.skyColor[1], this.skyColor[2]);
+    gl.uniform1f(this.uniforms.uGridRadius, this.gridRadius);
 
     gl.bindBuffer(GL.ARRAY_BUFFER, this.instanceBuffer);
     gl.bufferSubData(GL.ARRAY_BUFFER, 0, instanceData.subarray(0, Math.min(tiles.length, MAX_TILES) * 8));

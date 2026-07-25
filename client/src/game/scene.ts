@@ -257,7 +257,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerNameBg!: Phaser.GameObjects.Graphics;
   private playerDir: Dir = "down";
   private playerTexKey = "boss";
-  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "SPACE", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "SPACE", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
@@ -1084,7 +1084,7 @@ export class OfficeScene extends Phaser.Scene {
           });
 
           this.cursors = this.input.keyboard!.createCursorKeys();
-          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,SPACE") as OfficeScene["keys"];
+          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,SPACE") as OfficeScene["keys"];
           this.input.keyboard!.on("keydown-ESC", () => {
             this.store.select(null);
             this.store.toggleBoard(false);
@@ -6301,6 +6301,26 @@ export class OfficeScene extends Phaser.Scene {
         this.player.setPosition(spawn.x, spawn.y);
         this.cameras.main.fadeIn(300, 10, 10, 30);
       });
+    }
+
+    // R: deploy next captured ally (when outside)
+    const rPressed = Phaser.Input.Keyboard.JustDown(this.keys.R);
+    if (outside && rPressed) {
+      const roster = this.world.getRoster();
+      if (roster.length === 0) {
+        this.store.toast("No captured creatures to deploy. Weaken and capture some first!");
+      } else {
+        // Deploy first roster entry not already deployed
+        const deployed = this.world.getDeployedIds();
+        const next = roster.find((e) => !deployed.has(e.id));
+        if (next) {
+          this.world.deployAlly(next, this.player.x, this.player.y);
+        } else {
+          // All deployed — recall them
+          this.world.recallAllies();
+          this.store.toast("All allies recalled.");
+        }
+      }
     }
 
     // check for death teleport from world layer

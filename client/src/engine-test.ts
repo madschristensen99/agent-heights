@@ -42,11 +42,11 @@ function classifyOffice(q: number, r: number): "wall" | "floor" | "outside" {
   return "floor";
 }
 
-const GRASS_RADIUS = 15;
+const GRASS_RADIUS = 12;
+const SAND_RADIUS = 18;
 
 const tiles: TileData[] = hexes.map((hex) => {
   const dist = Math.max(Math.abs(hex.q), Math.abs(hex.r), Math.abs(-hex.q - hex.r));
-  const noise = Math.sin(hex.q * 2.1) * Math.cos(hex.r * 1.7);
   let texIndex: number;
   let tintR: number, tintG: number, tintB: number;
   let elevation = 0;
@@ -55,23 +55,20 @@ const tiles: TileData[] = hexes.map((hex) => {
 
   if (zone === "wall") {
     texIndex = 4; // wall
-    tintR = 0.75; tintG = 0.72; tintB = 0.68;
+    tintR = 0.85; tintG = 0.82; tintB = 0.75;
     elevation = 2;
   } else if (zone === "floor") {
     texIndex = 0; // wood floor
-    tintR = 0.85 + noise * 0.05;
-    tintG = 0.80 + noise * 0.05;
-    tintB = 0.72 + noise * 0.04;
+    tintR = 0.95; tintG = 0.92; tintB = 0.85;
   } else if (dist <= GRASS_RADIUS) {
     texIndex = 1; // grass
-    tintR = 0.55 + noise * 0.15;
-    tintG = 0.70 + noise * 0.12;
-    tintB = 0.40 + noise * 0.10;
+    tintR = 0.85; tintG = 0.95; tintB = 0.75;
+  } else if (dist <= SAND_RADIUS) {
+    texIndex = 2; // sand (transition zone)
+    tintR = 0.90; tintG = 0.88; tintB = 0.72;
   } else {
     texIndex = 3; // stone
-    tintR = 0.50 + noise * 0.08;
-    tintG = 0.50 + noise * 0.08;
-    tintB = 0.52 + noise * 0.08;
+    tintR = 0.80; tintG = 0.80; tintB = 0.82;
   }
 
   return {
@@ -166,11 +163,14 @@ if (tileRegion) {
   engine.tiles.tileUVOffset = [tileRegion.u, tileRegion.v, tileRegion.w, tileRegion.h];
 }
 
+// Set sky color and grid radius for edge fade / horizon
+engine.tiles.skyColor = [0.53, 0.72, 0.88];
+engine.tiles.gridRadius = RADIUS * 32 * 0.9; // hex size * radius
+
 // ---- Soft, even lighting ----
 const lights: { data: LightData; hex: { q: number; r: number } }[] = [
-  { hex: { q: 0, r: 0 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 400, intensity: 0.6 } },
-  { hex: { q: 3, r: -2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 350, intensity: 0.5 } },
-  { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 350, intensity: 0.5 } },
+  { hex: { q: 3, r: -2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 500, intensity: 0.3 } },
+  { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 500, intensity: 0.3 } },
 ];
 
 for (const l of lights) {
@@ -180,7 +180,7 @@ for (const l of lights) {
   engine.lights.addLight(l.data);
 }
 
-engine.lights.setAmbient(0.88, 0.86, 0.82);
+engine.lights.setAmbient(0.92, 0.90, 0.86);
 
 // ---- Generate character sprites ----
 const charSprite = generateCharSprite(engine.atlas, "boss", {
@@ -433,6 +433,8 @@ engine.onRender = (time) => {
 
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   const viewProj = engine.camera.getViewProjMatrix() as Float32Array;
 
