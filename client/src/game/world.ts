@@ -315,6 +315,174 @@ class LegendaryBeast {
   }
 }
 
+// --- Nemesis system ---
+type NemesisRank = "creature" | "captain" | "warchief";
+
+interface NemesisEntry {
+  id: string;
+  name: string;
+  title: string;
+  rank: NemesisRank;
+  hostility: number;
+  hp: number;
+  maxHp: number;
+  damage: number;
+  speed: number;
+  traitIds: string[];
+  weaknessIds: string[];
+  grudge: string | null;
+  encounters: number;
+  playerKills: number;
+  survivedAgainstPlayer: number;
+  promotedAt: number;
+  lastSeenChunk: string;
+  captured: boolean;
+}
+
+const NEMESIS_NAME_PARTS_1 = ["Grok", "Slib", "Kresh", "Vorn", "Zix", "Brak", "Drel", "Quor", "Mox", "Ygar", "Thex", "Nyl"];
+const NEMESIS_NAME_PARTS_2 = ["the Unflammable", "the Disappointed", "Skullsplitter", "the Relentless", "Ironhide", "the Cowardly", "Bloodfang", "the Patient", "Void-touched", "the Reborn", "Glassjaw", "the Unkillable"];
+
+const NEMESIS_TITLES: Record<NemesisRank, string> = {
+  creature: "",
+  captain: "Captain",
+  warchief: "Warchief",
+};
+
+const NEMESIS_TRAITS = [
+  { id: "armored", name: "Armored", desc: "Takes 50% reduced damage", damageMult: 0.5 },
+  { id: "berserker", name: "Berserker", desc: "Deals 2x damage", damageMult: 2.0 },
+  { id: "swift", name: "Swift", desc: "Moves 50% faster", speedMult: 1.5 },
+  { id: "regen", name: "Regenerating", desc: "Heals over time", regen: true },
+  { id: "void_touched", name: "Void-touched", desc: "Immune to void damage", voidImmune: true },
+  { id: "fire_blood", name: "Fire Blood", desc: "Immune to fire damage", fireImmune: true },
+];
+
+const NEMESIS_WEAKNESSES = [
+  { id: "fire_vuln", name: "Fire Vulnerable", desc: "Takes 2x fire damage" },
+  { id: "void_vuln", name: "Void Vulnerable", desc: "Takes 2x void damage" },
+  { id: "slow", name: "Sluggish", desc: "Moves 30% slower", speedMult: 0.7 },
+  { id: "fragile", name: "Fragile", desc: "Takes 1.5x all damage", damageMult: 1.5 },
+];
+
+function generateNemesisName(): string {
+  const a = NEMESIS_NAME_PARTS_1[Math.floor(Math.random() * NEMESIS_NAME_PARTS_1.length)];
+  const b = NEMESIS_NAME_PARTS_2[Math.floor(Math.random() * NEMESIS_NAME_PARTS_2.length)];
+  return `${a} ${b}`;
+}
+
+function rollTraits(hostility: number): string[] {
+  const count = Math.min(3, 1 + Math.floor(hostility / 2));
+  const pool = [...NEMESIS_TRAITS];
+  const picked: string[] = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picked.push(pool.splice(idx, 1)[0].id);
+  }
+  return picked;
+}
+
+function rollWeaknesses(hostility: number): string[] {
+  const count = Math.min(2, 1 + Math.floor(hostility / 3));
+  const pool = [...NEMESIS_WEAKNESSES];
+  const picked: string[] = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picked.push(pool.splice(idx, 1)[0].id);
+  }
+  return picked;
+}
+
+class NemesisRegistry {
+  private entries = new Map<string, NemesisEntry>();
+  private nextId = 1;
+
+  create(hostility: number, hp: number, damage: number, speed: number, chunkKey: string): NemesisEntry {
+    const id = `nemesis_${this.nextId++}`;
+    const rank: NemesisRank = hostility >= 4 ? "warchief" : hostility >= 2 ? "captain" : "creature";
+    const entry: NemesisEntry = {
+      id,
+      name: generateNemesisName(),
+      title: NEMESIS_TITLES[rank],
+      rank,
+      hostility,
+      hp,
+      maxHp: hp,
+      damage,
+      speed,
+      traitIds: rollTraits(hostility),
+      weaknessIds: rollWeaknesses(hostility),
+      grudge: null,
+      encounters: 0,
+      playerKills: 0,
+      survivedAgainstPlayer: 0,
+      promotedAt: Date.now(),
+      lastSeenChunk: chunkKey,
+      captured: false,
+    };
+    this.entries.set(id, entry);
+    return entry;
+  }
+
+  get(id: string): NemesisEntry | undefined {
+    return this.entries.get(id);
+  }
+
+  promote(id: string): NemesisEntry | undefined {
+    const e = this.entries.get(id);
+    if (!e) return undefined;
+    if (e.rank === "creature") {
+      e.rank = "captain";
+      e.title = NEMESIS_TITLES["captain"];
+    } else if (e.rank === "captain") {
+      e.rank = "warchief";
+      e.title = NEMESIS_TITLES["warchief"];
+    }
+    e.promotedAt = Date.now();
+    return e;
+  }
+
+  recordPlayerKill(id: string): void {
+    const e = this.entries.get(id);
+    if (e) e.playerKills++;
+  }
+
+  recordSurvival(id: string): void {
+    const e = this.entries.get(id);
+    if (e) {
+      e.survivedAgainstPlayer++;
+      if (e.survivedAgainstPlayer >= 2 && e.rank === "creature") {
+        this.promote(id);
+      }
+    }
+  }
+
+  recordEncounter(id: string): void {
+    const e = this.entries.get(id);
+    if (e) e.encounters++;
+  }
+
+  markCaptured(id: string): void {
+    const e = this.entries.get(id);
+    if (e) e.captured = true;
+  }
+
+  all(): NemesisEntry[] {
+    return Array.from(this.entries.values());
+  }
+
+  active(): NemesisEntry[] {
+    return this.all().filter((e) => !e.captured);
+  }
+
+  getTrait(id: string) {
+    return NEMESIS_TRAITS.find((t) => t.id === id);
+  }
+
+  getWeakness(id: string) {
+    return NEMESIS_WEAKNESSES.find((w) => w.id === id);
+  }
+}
+
 /** A hostile creature that chases the player — sprite-based with animations. */
 class Creature {
   container: Phaser.GameObjects.Container;
@@ -330,6 +498,10 @@ class Creature {
   private animKey: string;
   private lightGlow: Phaser.GameObjects.Image;
   private walkTimer = 0;
+  nemesisId: string | null = null;
+  private nameTag: Phaser.GameObjects.Text | null = null;
+  private hasHitPlayer = false;
+  private regenAccumulator = 0;
 
   constructor(world: WorldLayer, x: number, y: number, hostility: number) {
     this.world = world;
@@ -361,10 +533,52 @@ class Creature {
     this.container = scene.add.container(x, y, [this.lightGlow, this.shadow, this.sprite]).setDepth(20 + y);
   }
 
+  /** Link this creature to a Nemesis entry and show its name tag. */
+  linkNemesis(entry: NemesisEntry): void {
+    this.nemesisId = entry.id;
+    this.hp = entry.hp;
+    this.maxHp = entry.maxHp;
+    this.damage = entry.damage;
+    this.speed = entry.speed;
+    // Apply trait modifiers
+    for (const traitId of entry.traitIds) {
+      if (traitId === "armored") this.maxHp = Math.floor(this.maxHp * 1.5);
+      if (traitId === "berserker") this.damage = Math.floor(this.damage * 2);
+      if (traitId === "swift") this.speed = Math.floor(this.speed * 1.5);
+      if (traitId === "fragile") this.maxHp = Math.floor(this.maxHp * 0.75);
+      if (traitId === "slow") this.speed = Math.floor(this.speed * 0.7);
+    }
+    this.hp = this.maxHp;
+    // Show name tag above creature
+    const label = entry.title ? `${entry.name}\n[${entry.title}]` : entry.name;
+    this.nameTag = this.world.scene.add.text(this.container.x, this.container.y - 30, label, {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "11px",
+      color: entry.rank === "warchief" ? "#ff4444" : entry.rank === "captain" ? "#ffaa44" : "#ffdd44",
+      stroke: "#1a1a22",
+      strokeThickness: 3,
+    }).setOrigin(0.5, 1).setResolution(4).setScale(0.7).setDepth(30);
+  }
+
   get alive_(): boolean { return this.alive; }
 
   update(dt: number, playerX: number, playerY: number): { hit: boolean; damage: number } | null {
     if (!this.alive) return null;
+
+    // Nemesis regen trait
+    if (this.nemesisId && this.hp < this.maxHp) {
+      this.regenAccumulator += dt;
+      if (this.regenAccumulator >= 1000) {
+        this.regenAccumulator = 0;
+        this.hp = Math.min(this.maxHp, this.hp + Math.floor(this.maxHp * 0.05));
+      }
+    }
+
+    // Update name tag position
+    if (this.nameTag) {
+      this.nameTag.setPosition(this.container.x, this.container.y - 30);
+    }
+
     const dx = playerX - this.container.x;
     const dy = playerY - this.container.y;
     const dist = Math.hypot(dx, dy);
@@ -404,19 +618,38 @@ class Creature {
       this.sprite.setFrame(3);
       this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff3333, 4, 60);
       this.world.audio?.creatureGrowl();
+      this.hasHitPlayer = true;
       return { hit: true, damage: this.damage };
     }
     return null;
   }
 
   takeDamage(amount: number): void {
-    this.hp -= amount;
+    let dmg = amount;
+    // Apply nemesis trait damage modifiers
+    if (this.nemesisId) {
+      const entry = this.world.nemesis?.get(this.nemesisId);
+      if (entry) {
+        for (const traitId of entry.traitIds) {
+          if (traitId === "armored") dmg = Math.floor(dmg * 0.5);
+        }
+        for (const weakId of entry.weaknessIds) {
+          if (weakId === "fragile") dmg = Math.floor(dmg * 1.5);
+        }
+      }
+    }
+    this.hp -= dmg;
     this.world.vfx?.hitFlash(this.sprite);
     this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff4444, 8, 80);
     if (this.hp <= 0) {
       this.alive = false;
       this.world.vfx?.deathDissolve(this.container.x, this.container.y, 0x8a3a3a, 1);
       this.world.audio?.death();
+      this.nameTag?.destroy();
+      // Record nemesis encounter on death
+      if (this.nemesisId) {
+        this.world.nemesis?.recordEncounter(this.nemesisId);
+      }
       this.container.destroy();
       achievements.unlock("first_blood");
       if (achievements.incStat("creaturesKilled") >= 20) achievements.unlock("creature_slayer");
@@ -425,6 +658,11 @@ class Creature {
 
   destroy(): void {
     this.alive = false;
+    this.nameTag?.destroy();
+    // Record survival if this nemesis hit the player and is despawning alive
+    if (this.nemesisId && this.hasHitPlayer) {
+      this.world.nemesis?.recordSurvival(this.nemesisId);
+    }
     this.container.destroy();
   }
 }
@@ -844,6 +1082,9 @@ export class WorldLayer {
   private weaponDamage = 0;
   private weaponCooldownBar!: Phaser.GameObjects.Graphics;
   private lastNoWeaponToast = 0;
+
+  // --- nemesis registry ---
+  nemesis = new NemesisRegistry();
 
   // --- arrow projectile (crystal bow) ---
   private arrow: Phaser.GameObjects.Image | null = null;
@@ -1877,7 +2118,15 @@ export class WorldLayer {
               const sy = playerY + Math.sin(angle) * dist;
               const { tx, ty } = this.pixelToTile(sx, sy);
               if (this.isCreatureWalkable(tx, ty)) {
-                this.creatures.push(new Creature(this, sx, sy, hostility));
+                const creature = new Creature(this, sx, sy, hostility);
+                // Chance to spawn as a tracked Nemesis — scales with hostility
+                const nemesisChance = 0.1 + hostility * 0.08;
+                if (Math.random() < nemesisChance) {
+                  const chunkKey = `${Math.floor(tx / CHUNK_SIZE)},${Math.floor(ty / CHUNK_SIZE)}`;
+                  const entry = this.nemesis.create(hostility, creature.maxHp, creature.maxHp * 0.5, 70 + hostility * 25, chunkKey);
+                  creature.linkNemesis(entry);
+                }
+                this.creatures.push(creature);
                 placed = true;
                 spawnedAny = true;
               }
@@ -2053,6 +2302,58 @@ export class WorldLayer {
       }
     }
     this.stones = this.stones.filter((s) => s.alive_);
+
+    // --- update arrow projectile (crystal bow) ---
+    if (this.arrowActive && this.arrow) {
+      const arrowDt = dt / 1000;
+      this.arrow.x += this.arrowVx * arrowDt;
+      this.arrow.y += this.arrowVy * arrowDt;
+      this.arrowTrail?.setPosition(this.arrow.x, this.arrow.y);
+
+      // Check creature collisions
+      let hitSomething = false;
+      for (const c of this.creatures) {
+        if (!c.alive_) continue;
+        const dist = Math.hypot(this.arrow.x - c.container.x, this.arrow.y - c.container.y);
+        if (dist < 24) {
+          c.takeDamage(this.arrowDamage);
+          this.vfx.sparkBurst(this.arrow.x, this.arrow.y, 0x44ffdd, 10, 80);
+          this.audio.hit();
+          hitSomething = true;
+          break;
+        }
+      }
+
+      // Check beast collisions
+      if (!hitSomething) {
+        for (const b of this.beasts) {
+          if (!b.alive_) continue;
+          const dist = Math.hypot(this.arrow.x - b.container.x, this.arrow.y - b.container.y);
+          if (dist < 30) {
+            b.takeDamage(this.arrowDamage);
+            this.vfx.sparkBurst(this.arrow.x, this.arrow.y, 0x44ffdd, 10, 80);
+            this.audio.hit();
+            hitSomething = true;
+            break;
+          }
+        }
+      }
+
+      // Check wall/tile collision or out of range
+      const { tx: atx, ty: aty } = this.pixelToTile(this.arrow.x, this.arrow.y);
+      const arrowTile = this.getTileAt(atx, aty);
+      const arrowDist = Math.hypot(this.arrow.x - playerX, this.arrow.y - playerY);
+      if (hitSomething || !isWalkable(arrowTile) || arrowDist > 400) {
+        if (!hitSomething) {
+          this.vfx.sparkBurst(this.arrow.x, this.arrow.y, 0x44ffdd, 6, 50);
+        }
+        this.arrow.destroy();
+        this.arrow = null;
+        this.arrowTrail?.destroy();
+        this.arrowTrail = null;
+        this.arrowActive = false;
+      }
+    }
 
     // --- tile hazard damage (water, lava, void) ---
     if (outside) {
@@ -2315,6 +2616,14 @@ export class WorldLayer {
         this.golfBall?.setVisible(false);
         this.golfBall = null;
         this.golfBallActive = false;
+      }
+      // reset arrow when entering office
+      if (this.arrowActive) {
+        this.arrow?.destroy();
+        this.arrow = null;
+        this.arrowTrail?.destroy();
+        this.arrowTrail = null;
+        this.arrowActive = false;
       }
     }
 
@@ -2868,12 +3177,31 @@ export class WorldLayer {
       this.hud.setHealth(this.hp, MAX_HP);
       this.isDying = true;
       achievements.unlock("knocked_out");
-      for (const c of this.creatures) c.destroy();
+      // Record nemesis player kills before clearing
+      for (const c of this.creatures) {
+        if (c.nemesisId) {
+          this.nemesis.recordPlayerKill(c.nemesisId);
+          const entry = this.nemesis.get(c.nemesisId);
+          if (entry && entry.playerKills === 1) {
+            // First kill by this nemesis — promote and toast
+            this.nemesis.promote(c.nemesisId);
+            this.store.toast(`${entry.name} killed you and was promoted to ${entry.title}!`);
+          }
+        }
+        c.destroy();
+      }
       this.creatures = [];
       for (const s of this.stones) s.destroy();
       this.stones = [];
       for (const f of this.friendlies) f.destroy();
       this.friendlies = [];
+      if (this.arrowActive) {
+        this.arrow?.destroy();
+        this.arrow = null;
+        this.arrowTrail?.destroy();
+        this.arrowTrail = null;
+        this.arrowActive = false;
+      }
       const scene = this.scene as Phaser.Scene;
       const spawn = scene.registry.get("spawnTile") as { x: number; y: number } | undefined;
       if (spawn) {

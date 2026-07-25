@@ -61,9 +61,6 @@ uniform float uTime;
 out vec4 fragColor;
 
 void main() {
-  float dist = length(vUV - 0.5);
-  if (dist > 0.5) discard;
-
   // 5 tile textures packed horizontally; texIndex selects which one
   float tileW = uTileUV.z / 5.0;
   vec2 atlasUV = vec2(
@@ -81,7 +78,7 @@ void main() {
     lit += uLightColor[i] * albedo * atten * uLightIntensity[i];
   }
 
-  fragColor = vec4(lit, texColor.a);
+  fragColor = vec4(lit, 1.0);
 }`;
 
 const SIDE_VERT = `#version 300 es

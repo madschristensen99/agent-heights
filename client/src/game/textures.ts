@@ -3796,7 +3796,7 @@ const ALL_PROC_KEYS = [
   "beast-groveheart", "beast-stone-colossus", "beast-ash-wyrm",
   "beast-void-leviathan", "beast-infernal-sovereign",
   "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
-  "stone-proj", "spark", "dust", "shockwave", "recruit-beam", "slash-vfx",
+  "stone-proj", "spark", "dust", "shockwave", "recruit-beam", "slash-vfx", "crystal-arrow",
   "soft-glow", "fire-glow", "void-glow", "crystal-glow",
   "golf-club", "golf-ball", "axe", "net",
   "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "fountain-sheet",
@@ -3952,6 +3952,31 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         ctx.beginPath();
         ctx.arc(0, 32, 28, -Math.PI / 3, Math.PI / 3);
         ctx.stroke();
+        ct.refresh();
+      }
+      if (!tex.exists("crystal-arrow")) {
+        const ct = createCanvasTexture(tex, "crystal-arrow", 32, 12);
+        const ctx = ct.getContext();
+        // Arrow shaft
+        ctx.fillStyle = rgba(0x44ffdd, 0.9);
+        ctx.fillRect(2, 4, 24, 4);
+        // Arrowhead
+        ctx.beginPath();
+        ctx.moveTo(26, 0);
+        ctx.lineTo(32, 6);
+        ctx.lineTo(26, 12);
+        ctx.closePath();
+        ctx.fill();
+        // Fletching
+        ctx.fillStyle = rgba(0x88ffee, 0.7);
+        ctx.beginPath();
+        ctx.moveTo(2, 4);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(6, 4);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(2, 8);
+        ctx.closePath();
+        ctx.fill();
         ct.refresh();
       }
     },

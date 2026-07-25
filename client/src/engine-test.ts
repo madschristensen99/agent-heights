@@ -12,35 +12,37 @@ const engine = new Engine(canvas, {
   postfx: true,
 });
 
-// ---- Build the world: office building in center, grass field around ----
-// Hex grid covers a large area. Office is a rectangular region in the center.
+// ---- Build the world: rectangular office building in center, grass field around ----
+// Hex axial coords are sheared (60°), so we define the office as a rectangle in
+// pixel space and classify each hex by its pixel center position.
 // texIndex: 0=wood floor, 1=grass, 2=sand, 3=stone, 4=wall
-const RADIUS = 40;
+const RADIUS = 22;
 const hexes = hexInRange({ q: 0, r: 0 }, RADIUS);
 
-// Office bounds in hex coords (roughly rectangular)
-const OFFICE_Q_MIN = -5;
-const OFFICE_Q_MAX = 5;
-const OFFICE_R_MIN = -4;
-const OFFICE_R_MAX = 4;
+// Office rectangle in pixel space (centered at origin)
+const OFFICE_HALF_W = 320;
+const OFFICE_HALF_H = 240;
+const WALL_THICKNESS = 32; // hexes within this distance of the border are walls
 
-function isOfficeInterior(q: number, r: number): boolean {
-  return q > OFFICE_Q_MIN && q < OFFICE_Q_MAX && r > OFFICE_R_MIN && r < OFFICE_R_MAX;
-}
+function classifyOffice(q: number, r: number): "wall" | "floor" | "outside" {
+  const pos = hexToPixel(q, r);
+  const insideX = Math.abs(pos.x) < OFFICE_HALF_W;
+  const insideY = Math.abs(pos.y) < OFFICE_HALF_H;
+  if (!insideX || !insideY) return "outside";
 
-function isOfficeWall(q: number, r: number): boolean {
-  // Wall on perimeter of office rectangle, with a door gap at the bottom
-  const onPerimeter =
-    (q === OFFICE_Q_MIN || q === OFFICE_Q_MAX) && r >= OFFICE_R_MIN && r <= OFFICE_R_MAX ||
-    (r === OFFICE_R_MIN || r === OFFICE_R_MAX) && q >= OFFICE_Q_MIN && q <= OFFICE_Q_MAX;
-  if (!onPerimeter) return false;
-  // Door gap at bottom center (2 tiles wide)
-  if (r === OFFICE_R_MAX && (q === 0 || q === 1)) return false;
-  return true;
+  const distToEdgeX = OFFICE_HALF_W - Math.abs(pos.x);
+  const distToEdgeY = OFFICE_HALF_H - Math.abs(pos.y);
+  const minDistToEdge = Math.min(distToEdgeX, distToEdgeY);
+
+  if (minDistToEdge < WALL_THICKNESS) {
+    // Door gap at bottom center (y near +OFFICE_HALF_H, x near 0)
+    if (pos.y > OFFICE_HALF_H - WALL_THICKNESS && Math.abs(pos.x) < 60) return "floor";
+    return "wall";
+  }
+  return "floor";
 }
 
 const GRASS_RADIUS = 15;
-const SAND_RADIUS = 28;
 
 const tiles: TileData[] = hexes.map((hex) => {
   const dist = Math.max(Math.abs(hex.q), Math.abs(hex.r), Math.abs(-hex.q - hex.r));
@@ -49,11 +51,13 @@ const tiles: TileData[] = hexes.map((hex) => {
   let tintR: number, tintG: number, tintB: number;
   let elevation = 0;
 
-  if (isOfficeWall(hex.q, hex.r)) {
+  const zone = classifyOffice(hex.q, hex.r);
+
+  if (zone === "wall") {
     texIndex = 4; // wall
     tintR = 0.75; tintG = 0.72; tintB = 0.68;
-    elevation = 2; // raised walls
-  } else if (isOfficeInterior(hex.q, hex.r)) {
+    elevation = 2;
+  } else if (zone === "floor") {
     texIndex = 0; // wood floor
     tintR = 0.85 + noise * 0.05;
     tintG = 0.80 + noise * 0.05;
@@ -63,11 +67,6 @@ const tiles: TileData[] = hexes.map((hex) => {
     tintR = 0.55 + noise * 0.15;
     tintG = 0.70 + noise * 0.12;
     tintB = 0.40 + noise * 0.10;
-  } else if (dist <= SAND_RADIUS) {
-    texIndex = 2; // sand
-    tintR = 0.80 + noise * 0.08;
-    tintG = 0.72 + noise * 0.06;
-    tintB = 0.55 + noise * 0.05;
   } else {
     texIndex = 3; // stone
     tintR = 0.50 + noise * 0.08;
@@ -93,22 +92,22 @@ tileCanvas.height = 256;
 const tctx = tileCanvas.getContext("2d")!;
 const TILE_SIZE = 256;
 
-// 0: Wood floor (office)
+// 0: Wood floor (office) — warm, cozy
 let tx = 0;
 let grad = tctx.createLinearGradient(tx, 0, tx + TILE_SIZE, TILE_SIZE);
-grad.addColorStop(0, "rgb(180, 160, 130)");
-grad.addColorStop(0.5, "rgb(160, 140, 110)");
-grad.addColorStop(1, "rgb(140, 120, 95)");
+grad.addColorStop(0, "rgb(190, 170, 140)");
+grad.addColorStop(0.5, "rgb(175, 155, 125)");
+grad.addColorStop(1, "rgb(160, 140, 110)");
 tctx.fillStyle = grad;
 tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
-tctx.strokeStyle = "rgba(100, 80, 60, 0.4)";
+tctx.strokeStyle = "rgba(120, 100, 75, 0.3)";
 tctx.lineWidth = 1;
-for (let i = 0; i < TILE_SIZE; i += 32) {
+for (let i = 0; i < TILE_SIZE; i += 48) {
   tctx.beginPath(); tctx.moveTo(tx, i); tctx.lineTo(tx + TILE_SIZE, i); tctx.stroke();
 }
-for (let i = 0; i < 400; i++) {
-  const v = Math.random() * 30 - 15;
-  tctx.fillStyle = `rgba(${Math.max(0,160+v)},${Math.max(0,140+v)},${Math.max(0,110+v)},0.4)`;
+for (let i = 0; i < 300; i++) {
+  const v = Math.random() * 25 - 12;
+  tctx.fillStyle = `rgba(${Math.max(0,175+v)},${Math.max(0,155+v)},${Math.max(0,125+v)},0.3)`;
   tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
 }
 
@@ -162,17 +161,17 @@ for (let i = 0; i < 8; i++) {
   tctx.stroke();
 }
 
-// 4: Wall (office exterior wall)
+// 4: Wall (office exterior wall) — warm, soft
 tx = 1024;
 grad = tctx.createLinearGradient(tx, 0, tx, TILE_SIZE);
-grad.addColorStop(0, "rgb(200, 195, 185)");
-grad.addColorStop(0.5, "rgb(180, 175, 165)");
-grad.addColorStop(1, "rgb(160, 155, 145)");
+grad.addColorStop(0, "rgb(210, 200, 185)");
+grad.addColorStop(0.5, "rgb(190, 180, 165)");
+grad.addColorStop(1, "rgb(170, 160, 145)");
 tctx.fillStyle = grad;
 tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
-// Brick pattern
-tctx.strokeStyle = "rgba(120, 110, 100, 0.5)";
-tctx.lineWidth = 2;
+// Subtle brick pattern
+tctx.strokeStyle = "rgba(140, 125, 110, 0.35)";
+tctx.lineWidth = 1.5;
 for (let row = 0; row < 8; row++) {
   const y = row * 32;
   tctx.beginPath(); tctx.moveTo(tx, y); tctx.lineTo(tx + TILE_SIZE, y); tctx.stroke();
@@ -213,9 +212,9 @@ const charSprite = generateCharSprite(engine.atlas, "boss", {
   accent: 0,
 });
 
-// Place character sprites inside the office
-const agentPositions = [
-  { q: 0, r: 0, name: "Boss" },
+// Place a player character and a few NPCs inside the office
+const playerPos = hexToPixel(0, 0);
+const npcPositions = [
   { q: 2, r: -1, name: "Agent 1" },
   { q: -2, r: 1, name: "Agent 2" },
   { q: 3, r: 2, name: "Agent 3" },
@@ -223,25 +222,34 @@ const agentPositions = [
 ];
 
 const agentSprites: number[] = [];
+let playerSpriteId = -1;
+
 if (charSprite) {
-  for (const ap of agentPositions) {
+  // Player sprite (bigger)
+  const frame = charSprite.frames[0][6]; // dir=down, pose=idle
+  playerSpriteId = engine.sprites.add({
+    x: playerPos.x,
+    y: playerPos.y,
+    z: 0,
+    u: frame.u, v: frame.v, w: frame.w, h: frame.h,
+    displayW: 32,
+    displayH: 48,
+    tintR: 1, tintG: 1, tintB: 1,
+    alpha: 1, flip: 0, visible: true, fixedToScreen: false,
+  } as Omit<SpriteData, "id">);
+
+  // NPC sprites (smaller)
+  for (const ap of npcPositions) {
     const pos = hexToPixel(ap.q, ap.r);
-    const frame = charSprite.frames[0][6]; // dir=down, pose=idle
     const id = engine.sprites.add({
       x: pos.x,
       y: pos.y,
       z: 0,
-      u: frame.u,
-      v: frame.v,
-      w: frame.w,
-      h: frame.h,
+      u: frame.u, v: frame.v, w: frame.w, h: frame.h,
       displayW: 24,
       displayH: 36,
-      tintR: 1, tintG: 1, tintB: 1,
-      alpha: 1,
-      flip: 0,
-      visible: true,
-      fixedToScreen: false,
+      tintR: 0.9, tintG: 0.9, tintB: 1.0,
+      alpha: 1, flip: 0, visible: true, fixedToScreen: false,
     } as Omit<SpriteData, "id">);
     agentSprites.push(id);
   }
@@ -251,14 +259,49 @@ if (charSprite) {
 let animTime = 0;
 const ANIM_FPS = 8;
 
-// ---- Camera setup: top-down orthographic view ----
-engine.camera.setCenter(0, 0);
-engine.camera.setModeInstant("topdown", 0.6);
+// ---- Camera setup: follow player, zoomed in ----
+engine.camera.setCenter(playerPos.x, playerPos.y);
+engine.camera.setModeInstant("topdown", 1.2);
+engine.camera.follow(playerPos.x, playerPos.y);
 
 // ---- Input handling ----
+const keys: Record<string, boolean> = {};
 let isDragging = false;
 let lastX = 0;
 let lastY = 0;
+
+window.addEventListener("keydown", (e) => {
+  keys[e.key.toLowerCase()] = true;
+  // Camera mode shortcuts
+  switch (e.key) {
+    case "1":
+      engine.camera.setMode("topdown", engine.tweens, 800);
+      engine.postfx?.setDOFStrength(0);
+      break;
+    case "2":
+      engine.camera.setMode("diorama", engine.tweens, 800);
+      engine.postfx?.setDOFStrength(0.5);
+      engine.postfx?.setDOFMode(1);
+      break;
+    case "3":
+      engine.camera.setMode("cinematic", engine.tweens, 800);
+      engine.postfx?.setDOFStrength(0.7);
+      engine.postfx?.setDOFMode(1);
+      break;
+    case " ":
+      if (engine.postfx) {
+        engine.postfx.setEnabled(!(
+          engine.get("postfxEnabled") ?? true
+        ));
+        engine.set("postfxEnabled", engine.get("postfxEnabled") === false);
+      }
+      break;
+  }
+});
+
+window.addEventListener("keyup", (e) => {
+  keys[e.key.toLowerCase()] = false;
+});
 
 canvas.addEventListener("pointerdown", (e) => {
   isDragging = true;
@@ -280,38 +323,10 @@ canvas.addEventListener("pointerleave", () => { isDragging = false; });
 
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
-  const wheel = engine.input.getWheel();
-  if (wheel < 0 || e.deltaY > 0) engine.camera.zoomBy(0.9);
+  if (e.deltaY > 0) engine.camera.zoomBy(0.9);
   else engine.camera.zoomBy(1.1);
 });
 
-window.addEventListener("keydown", (e) => {
-  switch (e.key) {
-    case "1":
-      engine.camera.setMode("topdown", engine.tweens, 800);
-      engine.postfx?.setDOFStrength(0);
-      break;
-    case "2":
-      engine.camera.setMode("diorama", engine.tweens, 800);
-      engine.postfx?.setDOFStrength(0.5);
-      engine.postfx?.setDOFMode(1);
-      break;
-    case "3":
-      engine.camera.setMode("cinematic", engine.tweens, 800);
-      engine.postfx?.setDOFStrength(0.7);
-      engine.postfx?.setDOFMode(1);
-      break;
-    case " ":
-      // Toggle post-processing
-      if (engine.postfx) {
-        engine.postfx.setEnabled(!(
-          engine.get("postfxEnabled") ?? true
-        ));
-        engine.set("postfxEnabled", engine.get("postfxEnabled") === false);
-      }
-      break;
-  }
-});
 
 // ---- Cinematic auto-tour (camera mode 3) ----
 let tourAngle = 0;
@@ -324,19 +339,85 @@ const tourPoints = [
 ];
 let tourIdx = 0;
 
+// ---- Player state ----
+const PLAYER_SPEED = 120;
+let playerX = playerPos.x;
+let playerY = playerPos.y;
+let playerDir = 0; // 0=down, 1=left, 2=right, 3=up
+let playerMoving = false;
+let playerAnimTime = 0;
+
 // ---- Scene update + render hooks ----
 engine.onUpdate = (dt) => {
   updateTour(dt * 1000);
 
-  // Animate character sprites — cycle through walk poses (0-5)
+  // ---- Player movement (WASD + arrow keys) ----
+  let dx = 0, dy = 0;
+  if (keys["w"] || keys["arrowup"]) { dy -= 1; playerDir = 3; }
+  if (keys["s"] || keys["arrowdown"]) { dy += 1; playerDir = 0; }
+  if (keys["a"] || keys["arrowleft"]) { dx -= 1; playerDir = 1; }
+  if (keys["d"] || keys["arrowright"]) { dx += 1; playerDir = 2; }
+
+  playerMoving = (dx !== 0 || dy !== 0);
+  if (playerMoving) {
+    const len = Math.hypot(dx, dy);
+    playerX += (dx / len) * PLAYER_SPEED * dt;
+    playerY += (dy / len) * PLAYER_SPEED * dt;
+    // Clamp to office bounds (with a little wiggle room for the door)
+    playerX = Math.max(-OFFICE_HALF_W + 16, Math.min(OFFICE_HALF_W - 16, playerX));
+    if (playerY < -OFFICE_HALF_H + 16) playerY = -OFFICE_HALF_H + 16;
+    // Allow walking out through the door (bottom center)
+    if (Math.abs(playerX) < 60) {
+      playerY = Math.min(OFFICE_HALF_H + 200, playerY);
+    } else {
+      playerY = Math.min(OFFICE_HALF_H - 16, playerY);
+    }
+
+    // Update player sprite position
+    if (playerSpriteId >= 0) {
+      const ps = engine.sprites.get(playerSpriteId);
+      if (ps) {
+        ps.x = playerX;
+        ps.y = playerY;
+        ps.flip = playerDir === 1 ? 1 : 0; // flip for left
+      }
+    }
+
+    // Walk animation (poses 0-5)
+    playerAnimTime += dt;
+    const pose = Math.floor(playerAnimTime * ANIM_FPS) % 6;
+    if (charSprite && playerSpriteId >= 0) {
+      const dirIdx = playerDir === 1 ? 2 : playerDir; // left uses right frames flipped
+      const frame = charSprite.frames[dirIdx]?.[pose];
+      const ps = engine.sprites.get(playerSpriteId);
+      if (frame && ps) {
+        ps.u = frame.u; ps.v = frame.v; ps.w = frame.w; ps.h = frame.h;
+      }
+    }
+
+    // Camera follows player
+    engine.camera.follow(playerX, playerY);
+  } else {
+    // Idle pose
+    if (charSprite && playerSpriteId >= 0) {
+      const dirIdx = playerDir === 1 ? 2 : playerDir;
+      const frame = charSprite.frames[dirIdx]?.[6];
+      const ps = engine.sprites.get(playerSpriteId);
+      if (frame && ps) {
+        ps.u = frame.u; ps.v = frame.v; ps.w = frame.w; ps.h = frame.h;
+      }
+    }
+  }
+
+  // ---- NPC idle animation (gentle breathing) ----
   animTime += dt;
   if (charSprite && agentSprites.length > 0) {
-    const pose = Math.floor(animTime * ANIM_FPS) % 6;
-    const frame = charSprite.frames[0]?.[pose];
-    if (frame) {
-      for (const id of agentSprites) {
-        const sprite = engine.sprites.get(id);
-        if (sprite) {
+    const npcPose = Math.floor(animTime * 2) % 2 === 0 ? 6 : 7; // idle/work toggle
+    for (const id of agentSprites) {
+      const sprite = engine.sprites.get(id);
+      if (sprite) {
+        const frame = charSprite.frames[0]?.[npcPose];
+        if (frame) {
           sprite.u = frame.u;
           sprite.v = frame.v;
           sprite.w = frame.w;
@@ -444,14 +525,7 @@ window.addEventListener("resize", () => {
   engine.resize(window.innerWidth, window.innerHeight);
 });
 
-// ---- Emit some particles periodically for visual interest ----
-setInterval(() => {
-  const lightHex = lights[Math.floor(Math.random() * lights.length)];
-  const pos = hexToPixel(lightHex.hex.q, lightHex.hex.r);
-  engine.particles.embers(pos.x, pos.y, 4);
-}, 2000);
 
 console.log("HexStage engine running. Controls: drag=pan, scroll=zoom, 1/2/3=camera modes, space=toggle postfx");
-console.log("Office:", OFFICE_Q_MIN, "to", OFFICE_Q_MAX, "q,", OFFICE_R_MIN, "to", OFFICE_R_MAX, "r");
 
 engine.start();
