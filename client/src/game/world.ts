@@ -483,6 +483,29 @@ class NemesisRegistry {
   getWeakness(id: string) {
     return NEMESIS_WEAKNESSES.find((w) => w.id === id);
   }
+
+  /** Serialize all entries for localStorage persistence. */
+  serialize(): string {
+    const data = {
+      entries: this.all(),
+      nextId: this.nextId,
+    };
+    return JSON.stringify(data);
+  }
+
+  /** Restore entries from serialized data. */
+  deserialize(json: string): void {
+    try {
+      const data = JSON.parse(json);
+      this.entries.clear();
+      this.nextId = data.nextId ?? 1;
+      for (const entry of data.entries ?? []) {
+        this.entries.set(entry.id, entry as NemesisEntry);
+      }
+    } catch {
+      // ignore corrupt data
+    }
+  }
 }
 
 /** A hostile creature that chases the player — sprite-based with animations. */
@@ -1300,6 +1323,7 @@ export class WorldLayer {
   private capturedRoster: NemesisEntry[] = [];
   private captureHint!: Phaser.GameObjects.Text;
   private deployedAllies: DeployedAlly[] = [];
+  private lastNemesisSave = 0;
 
   // --- arrow projectile (crystal bow) ---
   private arrow: Phaser.GameObjects.Image | null = null;
@@ -1335,6 +1359,9 @@ export class WorldLayer {
     this.audio = new AudioSystem();
     this.lighting = new LightingSystem(scene);
     this.hud = new HUDSystem(scene);
+
+    // Load persisted nemesis/roster data
+    this.loadNemesis();
 
     this.ghostDialog = scene.add
       .text(0, 0, "", {
@@ -3353,6 +3380,7 @@ export class WorldLayer {
       this.store.toast("Forged Crystal Bow! (50 dmg, ranged)");
       achievements.unlock("legendary_weapon");
     }
+    this.saveNemesis();
   }
 
   /** Get the captured creature roster. */
@@ -3402,6 +3430,36 @@ export class WorldLayer {
     return ids;
   }
 
+  /** Save nemesis data + roster to localStorage. */
+  saveNemesis(): void {
+    try {
+      const data = {
+        nemesis: this.nemesis.serialize(),
+        roster: this.capturedRoster,
+        voidShards: this.voidShards,
+        ownedWeapons: this.ownedWeapons,
+      };
+      localStorage.setItem("agentHQ_nemesis", JSON.stringify(data));
+    } catch {
+      // localStorage might be full or unavailable
+    }
+  }
+
+  /** Load nemesis data + roster from localStorage. */
+  loadNemesis(): void {
+    try {
+      const raw = localStorage.getItem("agentHQ_nemesis");
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data.nemesis) this.nemesis.deserialize(data.nemesis);
+      if (data.roster) this.capturedRoster = data.roster;
+      if (data.voidShards) this.voidShards = data.voidShards;
+      if (data.ownedWeapons) this.ownedWeapons = data.ownedWeapons;
+    } catch {
+      // ignore corrupt data
+    }
+  }
+
   /** Attempt to capture a weakened creature. */
   private tryCapture(creature: Creature, time: number): void {
     // Success chance: lower HP = higher chance. 25% HP → 75% chance, 1% HP → 99% chance
@@ -3436,6 +3494,7 @@ export class WorldLayer {
       this.audio.recruit();
       this.store.toast(`Captured ${name}! Added to roster. (${this.capturedRoster.length} captured)`);
       achievements.unlock("first_capture");
+      this.saveNemesis();
 
       // Remove creature from world
       creature.destroy();
@@ -3607,6 +3666,7 @@ export class WorldLayer {
             // First kill by this nemesis — promote and toast
             this.nemesis.promote(c.nemesisId);
             this.store.toast(`${entry.name} killed you and was promoted to ${entry.title}!`);
+            this.saveNemesis();
           }
         }
         c.destroy();

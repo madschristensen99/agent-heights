@@ -806,7 +806,7 @@ export class AgentManager {
 
       // Also write to backup JSON file that Hermes API can't overwrite
       if (Object.keys(credVarsToSave).length > 0) {
-        const backupPath = join(hermesHome, "platform-credentials.json");
+        const backupPath = join("/app/ag", "platform-credentials.json");
         let backup: Record<string, string> = {};
         if (existsSync(backupPath)) {
           try { backup = JSON.parse(readFileSync(backupPath, "utf-8")); } catch { /* ignore */ }
