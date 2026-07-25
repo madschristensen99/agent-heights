@@ -776,40 +776,39 @@ export class AgentManager {
     if (!this.hermesClient) {
       return { success: false, error: "Hermes Agent gateway is not running. It should auto-start with the server — check server logs for [hermes-process] errors." };
     }
+
+    // Always write credentials directly to ~/.hermes/.env so they survive redeploys
+    // Do this BEFORE the API call so even if Hermes API fails, the token is persisted
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const envPath = join(hermesHome, ".env");
+      let envContent = "";
+      if (existsSync(envPath)) {
+        envContent = readFileSync(envPath, "utf-8");
+      }
+      const envVarMap: Record<string, Record<string, string>> = {
+        telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
+        discord: { bot_token: "DISCORD_BOT_TOKEN" },
+        slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" },
+      };
+      const varMap = envVarMap[platform.toLowerCase()] ?? {};
+      for (const [credKey, envVar] of Object.entries(varMap)) {
+        const value = credentials[credKey];
+        if (!value) continue;
+        const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
+        lines.push(`${envVar}=${value}`);
+        envContent = lines.join("\n");
+        console.log(`[manager] Wrote ${envVar} to ${envPath}`);
+      }
+      writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
+    } catch (err) {
+      console.warn(`[manager] Failed to write platform credentials to .env: ${err}`);
+    }
+
     const result = await this.hermesClient.configurePlatform(platform, credentials);
     // After configuring, restart the gateway process so it picks up the new credentials
     if (result.success) {
       console.log(`[manager] Platform ${platform} configured — restarting gateway process`);
-
-      // Also write credentials directly to ~/.hermes/.env so they survive redeploys
-      // The Hermes API may not persist to .env on its own
-      try {
-        const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-        const envPath = join(hermesHome, ".env");
-        let envContent = "";
-        if (existsSync(envPath)) {
-          envContent = readFileSync(envPath, "utf-8");
-        }
-        // Map credential keys to env var names
-        const envVarMap: Record<string, Record<string, string>> = {
-          telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
-          discord: { bot_token: "DISCORD_BOT_TOKEN" },
-          slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" },
-        };
-        const varMap = envVarMap[platform.toLowerCase()] ?? {};
-        for (const [credKey, envVar] of Object.entries(varMap)) {
-          const value = credentials[credKey];
-          if (!value) continue;
-          // Remove existing line if present, then append
-          const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
-          lines.push(`${envVar}=${value}`);
-          envContent = lines.join("\n");
-          console.log(`[manager] Wrote ${envVar} to ${envPath}`);
-        }
-        writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
-      } catch (err) {
-        console.warn(`[manager] Failed to write platform credentials to .env: ${err}`);
-      }
 
       this.hermesProcess?.restartGateway();
       // Wait a few seconds for the gateway to connect, then poll for fresh status
