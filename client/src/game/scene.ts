@@ -946,7 +946,7 @@ export class OfficeScene extends Phaser.Scene {
           });
 
           // Subscribe to mail digest responses
-          this.store.onMailDigest((digest) => {
+          const mailDigestHandler = (digest: { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }) => {
             if (digest.totalUnread === 0 && digest.queued === 0) {
               this.store.toast("📬 No new mail across any platform.");
               return;
@@ -957,7 +957,9 @@ export class OfficeScene extends Phaser.Scene {
             }
             const queuedStr = digest.queued > 0 ? ` + ${digest.queued} queued` : "";
             this.store.toast(`📬 ${digest.totalUnread} unread (${parts.join(", ")})${queuedStr}`);
-          });
+          };
+          this.store.onMailDigest(mailDigestHandler);
+          this.events.once("shutdown", () => this.store.offMailDigest(mailDigestHandler));
         },
       },
       {

@@ -3355,10 +3355,18 @@ export class AgentManager {
       }));
       const screenshotPath = await generateOfficeScreenshot(agents, caption);
       if (!screenshotPath || !this.hermesClient) return;
-      // hermes send supports MEDIA:/path/to/file.png for image attachments
-      const mediaMsg = `MEDIA:${screenshotPath}`;
-      await this.hermesClient.sendMessage(platform, target, mediaMsg);
-      console.log(`[manager] Office screenshot sent to ${target} via ${platform}`);
+
+      // For Telegram, use the Bot API directly to send photos
+      if (platform.toLowerCase() === "telegram") {
+        const ok = await this.hermesClient.sendTelegramPhoto(target, screenshotPath, caption);
+        if (ok) console.log(`[manager] Office screenshot sent to ${target} via Telegram Bot API`);
+        else console.warn(`[manager] Office screenshot failed for ${target} via Telegram`);
+        return;
+      }
+
+      // For other platforms, fall back to text message (no photo support yet)
+      await this.hermesClient.sendMessage(platform, target, `[📷 Office Update] ${caption}`);
+      console.log(`[manager] Office update text sent to ${target} via ${platform}`);
     } catch (err) {
       console.warn(`[manager] Failed to send office screenshot: ${err}`);
     }

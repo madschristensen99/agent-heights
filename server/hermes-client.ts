@@ -217,11 +217,16 @@ export class HermesClient {
           const messages = await msgRes.json() as any[];
           for (const msg of messages) {
             if (msg.role === "user") {
+              const text = (msg.content ?? msg.text ?? "").slice(0, 500);
+              // Skip system notifications — these are Hermes internal alerts, not user messages
+              if (text.startsWith("⚠️") || text.includes("API Funding Alert") || text.startsWith("System ·")) {
+                continue;
+              }
               events.push({
                 platform: this.normalizePlatform(platform),
                 direction: "inbound",
                 sender: replyTarget,
-                text: (msg.content ?? msg.text ?? "").slice(0, 500),
+                text,
                 timestamp: msg.timestamp ?? Date.now(),
               });
             }
@@ -254,6 +259,53 @@ export class HermesClient {
         });
       });
     } catch {
+      return false;
+    }
+  }
+
+  /** Send a photo to a Telegram chat via the Telegram Bot API directly. */
+  async sendTelegramPhoto(chatId: string, photoPath: string, caption?: string): Promise<boolean> {
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (!botToken) {
+        // Try reading from Hermes .env
+        const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+        const envPath = join(hermesHome, ".env");
+        if (existsSync(envPath)) {
+          const envContent = readFileSync(envPath, "utf-8");
+          const match = envContent.match(/^TELEGRAM_BOT_TOKEN=(.+)$/m);
+          if (match) {
+            (process.env.TELEGRAM_BOT_TOKEN as string) = match[1].trim();
+          }
+        }
+      }
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) {
+        console.warn("[hermes-client] sendTelegramPhoto: no TELEGRAM_BOT_TOKEN found");
+        return false;
+      }
+
+      const formData = new FormData();
+      formData.append("chat_id", chatId);
+      const photoBuf = await readFile(photoPath);
+      formData.append("photo", new Blob([photoBuf]), photoPath.split("/").pop() ?? "office.png");
+      if (caption) formData.append("caption", caption);
+
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+        method: "POST",
+        body: formData,
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        const data = await res.text();
+        console.warn(`[hermes-client] Telegram sendPhoto failed: HTTP ${res.status} — ${data.slice(0, 200)}`);
+        return false;
+      }
+      console.log(`[hermes-client] Telegram photo sent to ${chatId}`);
+      return true;
+    } catch (err) {
+      console.warn(`[hermes-client] sendTelegramPhoto error: ${err}`);
       return false;
     }
   }
