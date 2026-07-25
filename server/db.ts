@@ -107,6 +107,15 @@ export class DbPersistence {
     }
   }
 
+  setPlatformCredentials(creds: Record<string, string>): void {
+    this.state.platformCredentials = creds;
+    this.schedule();
+  }
+
+  getPlatformCredentials(): Record<string, string> {
+    return this.state.platformCredentials ?? {};
+  }
+
   async saveMessages(agentId: string, messages: unknown[]): Promise<void> {
     if (!this.state.messages) this.state.messages = {};
     this.state.messages[agentId] = [...messages];

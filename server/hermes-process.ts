@@ -105,40 +105,15 @@ export class HermesProcessManager {
         this.writeConfig(configPath);
       }
 
-      // Restore platform credentials from backup file into .env
-      // Store in /app/ag/config/ subdirectory — Railway volumes persist subdirs but not root-level loose files
-      const volumeRoot = "/app/ag";
-      const configDir = join(volumeRoot, "config");
-      const backupPath = join(configDir, "platform-credentials.json");
-      let restoredCreds = "";
-      if (existsSync(backupPath)) {
-        try {
-          const backup = JSON.parse(readFileSync(backupPath, "utf-8"));
-          const credLines = Object.entries(backup).map(([k, v]) => `${k}=${v}`);
-          if (credLines.length > 0) {
-            restoredCreds = credLines.join("\n") + "\n";
-            console.log(`[hermes-process] Found platform credentials backup at ${backupPath}: ${Object.keys(backup).join(", ")}`);
-          }
-        } catch { /* ignore corrupt backup */ }
-      } else {
-        console.log(`[hermes-process] No backup file at ${backupPath}`);
-      }
+      // Restore platform credentials from save.json (handled by manager.autoReconfigurePlatforms)
+      // No file-based backup needed — save.json in users/<id>/ag/ persists on the volume
 
-      // List /app/ag/ and /app/ag/config/ contents to verify volume persistence
+      // List /app/ag/ and hermes home contents for diagnostics
+      const volumeRoot = "/app/ag";
       try {
         const volFiles = readdirSync(volumeRoot);
         console.log(`[hermes-process] Files in ${volumeRoot} (volume root): ${volFiles.join(", ")}`);
       } catch { /* ignore */ }
-      try {
-        if (existsSync(configDir)) {
-          const configFiles = readdirSync(configDir);
-          console.log(`[hermes-process] Files in ${configDir}: ${configFiles.join(", ")}`);
-        } else {
-          console.log(`[hermes-process] No config dir at ${configDir}`);
-        }
-      } catch { /* ignore */ }
-
-      // List all files in hermesHome for debugging persistence
       try {
         const files = readdirSync(hermesHome);
         console.log(`[hermes-process] Files in ${hermesHome}: ${files.join(", ")}`);
@@ -153,18 +128,6 @@ export class HermesProcessManager {
           console.log(`[hermes-process] Existing .env keys: ${existingKeys.join(", ") || "(none)"}`);
         }
 
-        // Restore any missing platform credentials from backup
-        if (restoredCreds) {
-          const credLines = restoredCreds.split("\n").filter(l => l.trim());
-          for (const line of credLines) {
-            const varName = line.split("=")[0];
-            if (!envContent.includes(`${varName}=`)) {
-              envContent += (envContent && !envContent.endsWith("\n") ? "\n" : "") + line + "\n";
-              console.log(`[hermes-process] Restored ${varName} from backup into .env`);
-            }
-          }
-        }
-
         // Check if KIMI_API_KEY is already in .env
         if (!envContent.includes("KIMI_API_KEY=")) {
           envContent += (envContent && !envContent.endsWith("\n") ? "\n" : "") + `KIMI_API_KEY=${kimiKey}\n`;
@@ -172,6 +135,7 @@ export class HermesProcessManager {
         } else {
           console.log("[hermes-process] KIMI_API_KEY already in ~/.hermes/.env — not overwriting");
         }
+
         writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
 
         // Log final .env keys (from the actual written content)

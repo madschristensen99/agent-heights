@@ -286,6 +286,15 @@ export class RelationalPersistence {
     this.schedule();
   }
 
+  setPlatformCredentials(creds: Record<string, string>): void {
+    this.state.platformCredentials = creds;
+    this.schedule();
+  }
+
+  getPlatformCredentials(): Record<string, string> {
+    return this.state.platformCredentials ?? {};
+  }
+
   flushNow(): Promise<void> {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);

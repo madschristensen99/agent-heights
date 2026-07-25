@@ -707,33 +707,42 @@ export class AgentManager {
     return this.platformStates;
   }
 
-  /** Auto-reconfigure platforms from persisted .env credentials after redeploy.
-   *  The .env file survives on the persistent volume, but config.yaml may get
-   *  overwritten. This re-enables any platform that has credentials saved. */
+  /** Auto-reconfigure platforms from persisted credentials in save.json after redeploy.
+   *  The .env file gets wiped on redeploy, but save.json in users/<id>/ag/ persists. */
   private autoReconfigurePlatforms(): void {
     try {
-      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-      const envPath = join(hermesHome, ".env");
-      if (!existsSync(envPath)) {
-        console.log("[hermes] autoReconfigurePlatforms: no .env file found — skipping");
+      // Read credentials from save.json (persists on volume in users/<id>/ag/)
+      const savedCreds = this.save.getPlatformCredentials();
+      console.log(`[hermes] autoReconfigurePlatforms: saved credentials: ${Object.keys(savedCreds).join(", ") || "(none)"}`);
+      console.log(`[hermes] autoReconfigurePlatforms: mailboxPlatforms=${JSON.stringify(this.settings.mailboxPlatforms)}`);
+
+      if (Object.keys(savedCreds).length === 0) {
+        console.log("[hermes] autoReconfigurePlatforms: no saved credentials — skipping");
         return;
       }
-      const envContent = readFileSync(envPath, "utf-8");
-      const envVars: Record<string, string> = {};
-      for (const line of envContent.split("\n")) {
-        const match = line.match(/^([A-Z_]+)=(.+)$/);
-        if (match) envVars[match[1]] = match[2].trim();
+
+      // Write saved credentials to Hermes .env so the gateway can use them
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const envPath = join(hermesHome, ".env");
+      let envContent = "";
+      if (existsSync(envPath)) {
+        envContent = readFileSync(envPath, "utf-8");
       }
-      console.log(`[hermes] autoReconfigurePlatforms: .env keys found: ${Object.keys(envVars).join(", ") || "(none)"}`);
-      console.log(`[hermes] autoReconfigurePlatforms: mailboxPlatforms=${JSON.stringify(this.settings.mailboxPlatforms)}`);
+      for (const [varName, value] of Object.entries(savedCreds)) {
+        if (!envContent.includes(`${varName}=`)) {
+          envContent += (envContent && !envContent.endsWith("\n") ? "\n" : "") + `${varName}=${value}\n`;
+          console.log(`[hermes] autoReconfigurePlatforms: wrote ${varName} to .env from save.json`);
+        }
+      }
+      writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
 
       // Check each configured mailbox platform for saved credentials
       const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
       for (const platform of platforms) {
         const lower = platform.toLowerCase();
-        if (lower === "telegram" && envVars.TELEGRAM_BOT_TOKEN) {
-          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Telegram from saved .env credentials`);
-          this.hermesClient?.configurePlatform(platform, { bot_token: envVars.TELEGRAM_BOT_TOKEN }).then((result) => {
+        if (lower === "telegram" && savedCreds.TELEGRAM_BOT_TOKEN) {
+          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Telegram from save.json`);
+          this.hermesClient?.configurePlatform(platform, { bot_token: savedCreds.TELEGRAM_BOT_TOKEN }).then((result) => {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Telegram re-enabled successfully`);
               this.hermesProcess?.restartGateway();
@@ -741,18 +750,18 @@ export class AgentManager {
               console.warn(`[hermes] autoReconfigurePlatforms: Telegram re-enable failed: ${result.error}`);
             }
           }).catch((err) => console.warn(`[hermes] autoReconfigurePlatforms: error: ${err}`));
-        } else if (lower === "discord" && envVars.DISCORD_BOT_TOKEN) {
-          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Discord from saved .env credentials`);
-          this.hermesClient?.configurePlatform(platform, { bot_token: envVars.DISCORD_BOT_TOKEN }).then((result) => {
+        } else if (lower === "discord" && savedCreds.DISCORD_BOT_TOKEN) {
+          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Discord from save.json`);
+          this.hermesClient?.configurePlatform(platform, { bot_token: savedCreds.DISCORD_BOT_TOKEN }).then((result) => {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Discord re-enabled successfully`);
               this.hermesProcess?.restartGateway();
             }
           }).catch(() => {});
-        } else if (lower === "slack" && envVars.SLACK_BOT_TOKEN) {
-          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Slack from saved .env credentials`);
-          const creds: Record<string, string> = { bot_token: envVars.SLACK_BOT_TOKEN, signing_secret: envVars.SLACK_APP_TOKEN ?? "" };
-          if (envVars.SLACK_ALLOWED_USERS) creds.allowed_users = envVars.SLACK_ALLOWED_USERS;
+        } else if (lower === "slack" && savedCreds.SLACK_BOT_TOKEN) {
+          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Slack from save.json`);
+          const creds: Record<string, string> = { bot_token: savedCreds.SLACK_BOT_TOKEN, signing_secret: savedCreds.SLACK_APP_TOKEN ?? "" };
+          if (savedCreds.SLACK_ALLOWED_USERS) creds.allowed_users = savedCreds.SLACK_ALLOWED_USERS;
           this.hermesClient?.configurePlatform(platform, creds).then((result) => {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Slack re-enabled successfully`);
@@ -762,7 +771,7 @@ export class AgentManager {
         }
       }
     } catch (err) {
-      console.warn(`[hermes] autoReconfigurePlatforms: error reading .env: ${err}`);
+      console.warn(`[hermes] autoReconfigurePlatforms: error: ${err}`);
     }
   }
 
@@ -804,21 +813,13 @@ export class AgentManager {
       }
       writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
 
-      // Also write to backup JSON file that Hermes API can't overwrite
-      // Store in /app/ag/config/ subdirectory — Railway volumes persist subdirs but not root-level loose files
+      // Save credentials to the user's save.json (persists on the volume in users/<id>/ag/)
       if (Object.keys(credVarsToSave).length > 0) {
-        const configDir = join("/app/ag", "config");
-        mkdirSync(configDir, { recursive: true });
-        const backupPath = join(configDir, "platform-credentials.json");
-        let backup: Record<string, string> = {};
-        if (existsSync(backupPath)) {
-          try { backup = JSON.parse(readFileSync(backupPath, "utf-8")); } catch { /* ignore */ }
-        }
-        Object.assign(backup, credVarsToSave);
-        writeFileSync(backupPath, JSON.stringify(backup, null, 2), "utf-8");
-        // Read back to verify it was written
-        const verify = existsSync(backupPath) ? JSON.parse(readFileSync(backupPath, "utf-8")) : {};
-        console.log(`[manager] Saved credentials backup to ${backupPath}: ${Object.keys(credVarsToSave).join(", ")} (verified: ${Object.keys(verify).join(", ")})`);
+        const existing = this.save.getPlatformCredentials();
+        const merged = { ...existing, ...credVarsToSave };
+        this.save.setPlatformCredentials(merged);
+        void this.save.flushNow();
+        console.log(`[manager] Saved platform credentials to save.json: ${Object.keys(credVarsToSave).join(", ")}`);
       }
     } catch (err) {
       console.warn(`[manager] Failed to write platform credentials to .env: ${err}`);

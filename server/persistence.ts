@@ -16,6 +16,8 @@ export interface SaveState {
   pendingTasks?: Record<string, PendingTask[]>;
   /** Persisted platform mail events (inbound/outbound messages). */
   mailEvents?: PlatformEvent[];
+  /** Per-user platform credentials (e.g. TELEGRAM_BOT_TOKEN) that survive redeploys. */
+  platformCredentials?: Record<string, string>;
 }
 
 export interface Persistence {
@@ -29,6 +31,8 @@ export interface Persistence {
   setPendingTasks(tasks: Record<string, PendingTask[]>): void;
   getPendingTasks(): Record<string, PendingTask[]>;
   clearPendingTasks(): void;
+  setPlatformCredentials(creds: Record<string, string>): void;
+  getPlatformCredentials(): Record<string, string>;
   flushNow(): void | Promise<void>;
   saveMessages(agentId: string, messages: unknown[]): Promise<void>;
   loadMessages(agentId: string): Promise<unknown[]>;
@@ -45,7 +49,7 @@ export interface Persistence {
  */
 export class SaveFile implements Persistence {
   readonly path: string;
-  private state: SaveState = { player: null, agents: [], logs: {}, board: [], schedules: [], world: { seed: 0, firedAgents: [] }, pendingTasks: {} };
+  private state: SaveState = { player: null, agents: [], logs: {}, board: [], schedules: [], world: { seed: 0, firedAgents: [] }, pendingTasks: {}, platformCredentials: {} };
   private timer: ReturnType<typeof setTimeout> | null = null;
   private messages: Map<string, unknown[]> = new Map();
   private archivedMessages: Map<string, unknown[]> = new Map();
@@ -69,6 +73,7 @@ export class SaveFile implements Persistence {
         schedules: parsed.schedules ?? [],
         world: parsed.world ?? { seed: 0, firedAgents: [] },
         pendingTasks: parsed.pendingTasks ?? {},
+        platformCredentials: parsed.platformCredentials ?? {},
       };
       const savedMessages = (parsed as any).messages;
       if (savedMessages && typeof savedMessages === "object") {
@@ -181,6 +186,15 @@ export class SaveFile implements Persistence {
   clearPendingTasks(): void {
     this.state.pendingTasks = {};
     this.schedule();
+  }
+
+  setPlatformCredentials(creds: Record<string, string>): void {
+    this.state.platformCredentials = creds;
+    this.schedule();
+  }
+
+  getPlatformCredentials(): Record<string, string> {
+    return this.state.platformCredentials ?? {};
   }
 
   async insertMailEvent(_ev: PlatformEvent): Promise<void> {
