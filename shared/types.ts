@@ -889,7 +889,8 @@ export const PLATFORM_CATALOG: PlatformCatalogEntry[] = [
     description: "Slack workspace bot — channels, DMs, threads",
     credentialFields: [
       { key: "bot_token", label: "Bot User OAuth Token", placeholder: "xoxb-...", type: "password", required: true },
-      { key: "signing_secret", label: "Signing Secret", placeholder: "abc123...", type: "password", required: true },
+      { key: "signing_secret", label: "App-Level Token", placeholder: "xapp-...", type: "password", required: true },
+      { key: "allowed_users", label: "Allowed User IDs (optional)", placeholder: "U01ABC2DEF3,U02HIJK3LMN", type: "text", required: false },
     ],
   },
   {

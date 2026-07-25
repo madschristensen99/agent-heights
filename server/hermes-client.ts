@@ -25,7 +25,7 @@ const POLL_INTERVAL_MS = 10_000; // 10 seconds
 const PLATFORM_ENV_VAR_MAP: Record<string, Record<string, string>> = {
   telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
   discord: { bot_token: "DISCORD_BOT_TOKEN" },
-  slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN" }, // signing_secret field actually receives the app-level token (xapp-)
+  slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" }, // signing_secret field actually receives the app-level token (xapp-)
   whatsapp: { account_sid: "TWILIO_ACCOUNT_SID", auth_token: "TWILIO_AUTH_TOKEN", phone_number: "TWILIO_PHONE_NUMBER" },
   signal: { phone_number: "SIGNAL_ACCOUNT" },
   email: {

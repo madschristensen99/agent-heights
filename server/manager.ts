@@ -751,7 +751,9 @@ export class AgentManager {
           }).catch(() => {});
         } else if (lower === "slack" && envVars.SLACK_BOT_TOKEN) {
           console.log(`[hermes] autoReconfigurePlatforms: re-enabling Slack from saved .env credentials`);
-          this.hermesClient?.configurePlatform(platform, { bot_token: envVars.SLACK_BOT_TOKEN, signing_secret: envVars.SLACK_APP_TOKEN ?? "" }).then((result) => {
+          const creds: Record<string, string> = { bot_token: envVars.SLACK_BOT_TOKEN, signing_secret: envVars.SLACK_APP_TOKEN ?? "" };
+          if (envVars.SLACK_ALLOWED_USERS) creds.allowed_users = envVars.SLACK_ALLOWED_USERS;
+          this.hermesClient?.configurePlatform(platform, creds).then((result) => {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Slack re-enabled successfully`);
               this.hermesProcess?.restartGateway();
@@ -792,7 +794,7 @@ export class AgentManager {
         const envVarMap: Record<string, Record<string, string>> = {
           telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
           discord: { bot_token: "DISCORD_BOT_TOKEN" },
-          slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN" },
+          slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" },
         };
         const varMap = envVarMap[platform.toLowerCase()] ?? {};
         for (const [credKey, envVar] of Object.entries(varMap)) {
