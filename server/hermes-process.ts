@@ -11,7 +11,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -130,6 +130,12 @@ export class HermesProcessManager {
           console.log(`[hermes-process] Existing .env keys: ${existingKeys.join(", ") || "(none)"}`);
         }
 
+        // List all files in hermesHome for debugging persistence
+        try {
+          const files = readdirSync(hermesHome);
+          console.log(`[hermes-process] Files in ${hermesHome}: ${files.join(", ")}`);
+        } catch { /* ignore */ }
+
         // Restore any missing platform credentials from backup
         if (restoredCreds) {
           const credLines = restoredCreds.split("\n").filter(l => l.trim());
@@ -144,14 +150,14 @@ export class HermesProcessManager {
 
         // Check if KIMI_API_KEY is already in .env
         if (!envContent.includes("KIMI_API_KEY=")) {
-          const newContent = envContent + (envContent && !envContent.endsWith("\n") ? "\n" : "") + `KIMI_API_KEY=${kimiKey}\n`;
-          writeFileSync(envPath, newContent, "utf-8");
+          envContent += (envContent && !envContent.endsWith("\n") ? "\n" : "") + `KIMI_API_KEY=${kimiKey}\n`;
           console.log("[hermes-process] Wrote KIMI_API_KEY to ~/.hermes/.env");
         } else {
           console.log("[hermes-process] KIMI_API_KEY already in ~/.hermes/.env — not overwriting");
         }
+        writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
 
-        // Log final .env keys
+        // Log final .env keys (from the actual written content)
         const finalKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
         console.log(`[hermes-process] Final .env keys: ${finalKeys.join(", ") || "(none)"}`);
       }

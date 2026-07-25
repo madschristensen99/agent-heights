@@ -845,6 +845,14 @@ export class WorldLayer {
   private weaponCooldownBar!: Phaser.GameObjects.Graphics;
   private lastNoWeaponToast = 0;
 
+  // --- arrow projectile (crystal bow) ---
+  private arrow: Phaser.GameObjects.Image | null = null;
+  private arrowVx = 0;
+  private arrowVy = 0;
+  private arrowDamage = 0;
+  private arrowActive = false;
+  private arrowTrail: Phaser.GameObjects.Image | null = null;
+
   // --- flower picking state ---
   private flowers = 0;
   private flowerHint!: Phaser.GameObjects.Text;
@@ -2794,9 +2802,22 @@ export class WorldLayer {
         this.vfx.shockwave(playerX, playerY, def.color, 3);
       }
     } else {
-      // Ranged: spawn projectile (crystal bow)
-      // TODO: implement projectile entity reusing golf ball physics
-      this.store.toast("Crystal bow not yet implemented — coming soon!");
+      // Ranged: spawn arrow projectile (crystal bow)
+      const speed = 400;
+      this.arrowVx = dirVec.x * speed;
+      this.arrowVy = dirVec.y * speed;
+      this.arrowDamage = this.weaponDamage;
+      this.arrow = this.scene.add.image(playerX, playerY, "crystal-arrow")
+        .setDepth(50)
+        .setScale(0.8)
+        .setRotation(facingAngle);
+      this.arrowTrail = this.scene.add.image(playerX, playerY, "soft-glow")
+        .setDisplaySize(16, 16)
+        .setTint(0x44ffdd)
+        .setAlpha(0.4)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(49);
+      this.arrowActive = true;
     }
   }
 
