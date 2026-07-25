@@ -92,86 +92,60 @@ tileCanvas.height = 256;
 const tctx = tileCanvas.getContext("2d")!;
 const TILE_SIZE = 256;
 
-// 0: Wood floor (office) — warm, cozy
+// 0: Wood floor (office) — warm, seamless
 let tx = 0;
-let grad = tctx.createLinearGradient(tx, 0, tx + TILE_SIZE, TILE_SIZE);
-grad.addColorStop(0, "rgb(190, 170, 140)");
-grad.addColorStop(0.5, "rgb(175, 155, 125)");
-grad.addColorStop(1, "rgb(160, 140, 110)");
-tctx.fillStyle = grad;
+tctx.fillStyle = "rgb(178, 158, 128)";
 tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
-tctx.strokeStyle = "rgba(120, 100, 75, 0.3)";
+// Subtle plank lines
+tctx.strokeStyle = "rgba(140, 118, 90, 0.2)";
 tctx.lineWidth = 1;
-for (let i = 0; i < TILE_SIZE; i += 48) {
+for (let i = 0; i < TILE_SIZE; i += 64) {
   tctx.beginPath(); tctx.moveTo(tx, i); tctx.lineTo(tx + TILE_SIZE, i); tctx.stroke();
 }
-for (let i = 0; i < 300; i++) {
-  const v = Math.random() * 25 - 12;
-  tctx.fillStyle = `rgba(${Math.max(0,175+v)},${Math.max(0,155+v)},${Math.max(0,125+v)},0.3)`;
+// Fine grain noise
+for (let i = 0; i < 2000; i++) {
+  const v = Math.random() * 20 - 10;
+  tctx.fillStyle = `rgba(${Math.max(0,178+v)},${Math.max(0,158+v)},${Math.max(0,128+v)},0.15)`;
   tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
 }
 
-// 1: Grass
+// 1: Grass — uniform, seamless
 tx = 256;
-grad = tctx.createRadialGradient(tx + 128, 128, 0, tx + 128, 128, 150);
-grad.addColorStop(0, "rgb(90, 140, 70)");
-grad.addColorStop(0.5, "rgb(70, 110, 55)");
-grad.addColorStop(1, "rgb(50, 85, 40)");
-tctx.fillStyle = grad;
+tctx.fillStyle = "rgb(72, 112, 56)";
 tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
-for (let i = 0; i < 600; i++) {
-  const v = Math.random() * 40 - 20;
-  tctx.fillStyle = `rgba(${Math.max(0,70+v)},${Math.max(0,110+v)},${Math.max(0,55+v)},0.5)`;
-  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 2, 2);
-}
-
-// 2: Sand
-tx = 512;
-grad = tctx.createLinearGradient(tx, 0, tx + TILE_SIZE, TILE_SIZE);
-grad.addColorStop(0, "rgb(210, 190, 140)");
-grad.addColorStop(0.5, "rgb(195, 175, 130)");
-grad.addColorStop(1, "rgb(180, 160, 115)");
-tctx.fillStyle = grad;
-tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
-for (let i = 0; i < 500; i++) {
-  const v = Math.random() * 25 - 12;
-  tctx.fillStyle = `rgba(${Math.max(0,195+v)},${Math.max(0,175+v)},${Math.max(0,130+v)},0.4)`;
+for (let i = 0; i < 3000; i++) {
+  const v = Math.random() * 30 - 15;
+  tctx.fillStyle = `rgba(${Math.max(0,72+v)},${Math.max(0,112+v)},${Math.max(0,56+v)},0.2)`;
   tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
 }
 
-// 3: Stone
-tx = 768;
-grad = tctx.createLinearGradient(tx, 0, tx + TILE_SIZE, TILE_SIZE);
-grad.addColorStop(0, "rgb(130, 130, 135)");
-grad.addColorStop(0.5, "rgb(115, 115, 120)");
-grad.addColorStop(1, "rgb(100, 100, 105)");
-tctx.fillStyle = grad;
+// 2: Sand — uniform, seamless
+tx = 512;
+tctx.fillStyle = "rgb(196, 176, 132)";
 tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
-for (let i = 0; i < 400; i++) {
-  const v = Math.random() * 30 - 15;
-  tctx.fillStyle = `rgba(${Math.max(0,115+v)},${Math.max(0,115+v)},${Math.max(0,120+v)},0.4)`;
-  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 2, 2);
-}
-tctx.strokeStyle = "rgba(70, 70, 75, 0.3)";
-tctx.lineWidth = 1;
-for (let i = 0; i < 8; i++) {
-  tctx.beginPath();
-  tctx.moveTo(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE);
-  tctx.lineTo(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE);
-  tctx.stroke();
+for (let i = 0; i < 2000; i++) {
+  const v = Math.random() * 20 - 10;
+  tctx.fillStyle = `rgba(${Math.max(0,196+v)},${Math.max(0,176+v)},${Math.max(0,132+v)},0.15)`;
+  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
 }
 
-// 4: Wall (office exterior wall) — warm, soft
-tx = 1024;
-grad = tctx.createLinearGradient(tx, 0, tx, TILE_SIZE);
-grad.addColorStop(0, "rgb(210, 200, 185)");
-grad.addColorStop(0.5, "rgb(190, 180, 165)");
-grad.addColorStop(1, "rgb(170, 160, 145)");
-tctx.fillStyle = grad;
+// 3: Stone — uniform, seamless
+tx = 768;
+tctx.fillStyle = "rgb(112, 112, 116)";
 tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
-// Subtle brick pattern
-tctx.strokeStyle = "rgba(140, 125, 110, 0.35)";
-tctx.lineWidth = 1.5;
+for (let i = 0; i < 2000; i++) {
+  const v = Math.random() * 20 - 10;
+  tctx.fillStyle = `rgba(${Math.max(0,112+v)},${Math.max(0,112+v)},${Math.max(0,116+v)},0.15)`;
+  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
+}
+
+// 4: Wall (office exterior wall) — warm, seamless
+tx = 1024;
+tctx.fillStyle = "rgb(192, 182, 168)";
+tctx.fillRect(tx, 0, TILE_SIZE, TILE_SIZE);
+// Very subtle brick pattern
+tctx.strokeStyle = "rgba(160, 145, 128, 0.15)";
+tctx.lineWidth = 1;
 for (let row = 0; row < 8; row++) {
   const y = row * 32;
   tctx.beginPath(); tctx.moveTo(tx, y); tctx.lineTo(tx + TILE_SIZE, y); tctx.stroke();
@@ -180,20 +154,23 @@ for (let row = 0; row < 8; row++) {
     tctx.beginPath(); tctx.moveTo(tx + bx, y); tctx.lineTo(tx + bx, y + 32); tctx.stroke();
   }
 }
+// Fine noise
+for (let i = 0; i < 1000; i++) {
+  const v = Math.random() * 16 - 8;
+  tctx.fillStyle = `rgba(${Math.max(0,192+v)},${Math.max(0,182+v)},${Math.max(0,168+v)},0.12)`;
+  tctx.fillRect(tx + Math.random()*TILE_SIZE, Math.random()*TILE_SIZE, 1, 1);
+}
 
 const tileRegion = engine.atlas.addCanvas("tiles", tileCanvas);
 if (tileRegion) {
   engine.tiles.tileUVOffset = [tileRegion.u, tileRegion.v, tileRegion.w, tileRegion.h];
 }
 
-// ---- Add warm overhead office lights (inside the building) ----
+// ---- Soft, even lighting ----
 const lights: { data: LightData; hex: { q: number; r: number } }[] = [
-  { hex: { q: 0, r: 0 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 180, intensity: 1.5 } },
-  { hex: { q: 3, r: -2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
-  { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
-  { hex: { q: 0, r: 3 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.92, b: 0.78, radius: 160, intensity: 1.3 } },
-  { hex: { q: -4, r: -2 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
-  { hex: { q: 4, r: 1 }, data: { x: 0, y: 0, z: 40, r: 0.9, g: 0.85, b: 0.7, radius: 140, intensity: 1.0 } },
+  { hex: { q: 0, r: 0 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 400, intensity: 0.6 } },
+  { hex: { q: 3, r: -2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 350, intensity: 0.5 } },
+  { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 350, intensity: 0.5 } },
 ];
 
 for (const l of lights) {
@@ -203,7 +180,7 @@ for (const l of lights) {
   engine.lights.addLight(l.data);
 }
 
-engine.lights.setAmbient(0.75, 0.73, 0.70);
+engine.lights.setAmbient(0.88, 0.86, 0.82);
 
 // ---- Generate character sprites ----
 const charSprite = generateCharSprite(engine.atlas, "boss", {

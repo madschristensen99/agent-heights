@@ -70,6 +70,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 
   // ── Warrior ──
   { id: "first_swing", name: "Going On The Offensive", desc: "Swing a weapon for the first time.", tier: "Warrior", icon: "🤺" },
+  { id: "first_capture", name: "Beast Tamer", desc: "Capture your first creature.", tier: "Warrior", icon: "🪤" },
   { id: "first_blood", name: "First Blood", desc: "Defeat your first creature.", tier: "Warrior", icon: "⚔️" },
   { id: "creature_slayer", name: "Pest Control", desc: "Defeat 20 creatures.", tier: "Warrior", icon: "🗡️" },
   { id: "beast_slayer", name: "Legend Killer", desc: "Defeat a legendary beast.", tier: "Warrior", icon: "🐲" },

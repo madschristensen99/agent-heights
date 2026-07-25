@@ -502,6 +502,10 @@ class Creature {
   private nameTag: Phaser.GameObjects.Text | null = null;
   private hasHitPlayer = false;
   private regenAccumulator = 0;
+  captureImmune = 0; // timestamp — can't capture again until this passes
+
+  get hpRatio(): number { return this.hp / this.maxHp; }
+  get captureReady(): boolean { return this.hpRatio < 0.25 && this.captureImmune === 0; }
 
   constructor(world: WorldLayer, x: number, y: number, hostility: number) {
     this.world = world;
@@ -1085,6 +1089,8 @@ export class WorldLayer {
 
   // --- nemesis registry ---
   nemesis = new NemesisRegistry();
+  private capturedRoster: NemesisEntry[] = [];
+  private captureHint!: Phaser.GameObjects.Text;
 
   // --- arrow projectile (crystal bow) ---
   private arrow: Phaser.GameObjects.Image | null = null;
@@ -1234,6 +1240,23 @@ export class WorldLayer {
 
     // weapon cooldown bar — shows above player while on cooldown
     this.weaponCooldownBar = scene.add.graphics().setDepth(410).setVisible(false);
+
+    // capture hint — shows above weakened creatures
+    this.captureHint = scene.add
+      .text(0, 0, "", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "14px",
+        color: "#44ff88",
+        stroke: "#1a1a22",
+        strokeThickness: 3,
+        backgroundColor: "#1a1a22",
+        padding: { x: 8, y: 6 },
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.8)
+      .setDepth(400)
+      .setVisible(false);
 
     // Spawn the background worker for chunk generation
     try {
@@ -2261,6 +2284,33 @@ export class WorldLayer {
     }
     this.creatures = this.creatures.filter((c) => c.alive_);
 
+    // --- capture system: check for weakened creatures near player ---
+    let captureTarget: Creature | null = null;
+    let captureDist = Infinity;
+    if (outside && !this.isDying) {
+      for (const c of this.creatures) {
+        if (!c.alive_ || !c.captureReady) continue;
+        const d = Math.hypot(playerX - c.container.x, playerY - c.container.y);
+        if (d < 60 && d < captureDist) {
+          captureDist = d;
+          captureTarget = c;
+        }
+      }
+    }
+
+    if (captureTarget) {
+      const hpPct = Math.round(captureTarget.hpRatio * 100);
+      this.captureHint
+        .setText(isTouchDevice() ? `TAP Capture (${hpPct}% HP)` : `E: Capture (${hpPct}% HP)`)
+        .setPosition(captureTarget.container.x, captureTarget.container.y - 45)
+        .setVisible(true);
+      if (ePressed) {
+        this.tryCapture(captureTarget, time);
+      }
+    } else {
+      this.captureHint.setVisible(false);
+    }
+
     // --- update friendly creatures ---
     for (const f of this.friendlies) {
       f.update(time, dt, playerX, playerY);
@@ -2625,6 +2675,7 @@ export class WorldLayer {
         this.arrowTrail = null;
         this.arrowActive = false;
       }
+      this.captureHint.setVisible(false);
     }
 
     // --- tennis interaction ---
@@ -3027,6 +3078,57 @@ export class WorldLayer {
     this.weapon = type;
     this.weaponDamage = def.damage;
     this.weaponCooldownMax = def.cooldown;
+  }
+
+  /** Get the captured creature roster. */
+  getRoster(): NemesisEntry[] {
+    return this.capturedRoster;
+  }
+
+  /** Attempt to capture a weakened creature. */
+  private tryCapture(creature: Creature, time: number): void {
+    // Success chance: lower HP = higher chance. 25% HP → 75% chance, 1% HP → 99% chance
+    const hpRatio = creature.hpRatio;
+    const successChance = Math.min(0.99, 1 - hpRatio - 0.1);
+    const roll = Math.random();
+
+    if (roll < successChance) {
+      // Success!
+      const name = creature.nemesisId
+        ? this.nemesis.get(creature.nemesisId)?.name ?? "Unknown Beast"
+        : "Wild Creature";
+
+      // Mark nemesis as captured if applicable
+      if (creature.nemesisId) {
+        this.nemesis.markCaptured(creature.nemesisId);
+        const entry = this.nemesis.get(creature.nemesisId);
+        if (entry) this.capturedRoster.push(entry);
+      } else {
+        // Create a nemesis entry for non-nemesis creatures
+        const { tx, ty } = this.pixelToTile(creature.container.x, creature.container.y);
+        const chunkKey = `${Math.floor(tx / CHUNK_SIZE)},${Math.floor(ty / CHUNK_SIZE)}`;
+        const entry = this.nemesis.create(1, creature.maxHp, creature.maxHp * 0.5, 70, chunkKey);
+        entry.captured = true;
+        this.capturedRoster.push(entry);
+      }
+
+      // VFX
+      this.vfx.sparkBurst(creature.container.x, creature.container.y, 0x44ff88, 20, 100);
+      this.vfx.shockwave(creature.container.x, creature.container.y, 0x44ff88, 2);
+      this.vfx.celebrate(creature.container.x, creature.container.y);
+      this.audio.recruit();
+      this.store.toast(`Captured ${name}! Added to roster. (${this.capturedRoster.length} captured)`);
+      achievements.unlock("first_capture");
+
+      // Remove creature from world
+      creature.destroy();
+    } else {
+      // Failed — creature becomes capture-immune for 5s and flees
+      creature.captureImmune = time + 5000;
+      this.vfx.sparkBurst(creature.container.x, creature.container.y, 0xff4444, 8, 60);
+      this.store.toast("Capture failed! The creature resists.");
+      this.audio.uiClick();
+    }
   }
 
   /** Player attacks with equipped weapon — melee cone or ranged projectile. */

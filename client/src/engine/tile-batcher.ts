@@ -32,7 +32,7 @@ void main() {
   vec2 worldPos = aOffset + aCorner * uHexSize;
   float z = aElevation * uTileHeight;
   vWorldPos = worldPos;
-  vUV = aCorner * 0.5 + 0.5;
+  vUV = worldPos;  // world-space UVs for seamless tiling
   vTint = aTint;
   vTexIndex = aTexIndex;
   vElevation = aElevation;
@@ -61,11 +61,16 @@ uniform float uTime;
 out vec4 fragColor;
 
 void main() {
+  // World-space UV: texture repeats seamlessly across hexes
+  // Scale world coords so texture tiles at a natural rate
+  float texScale = 0.04;
+  vec2 tiledUV = vUV * texScale;
+
   // 5 tile textures packed horizontally; texIndex selects which one
   float tileW = uTileUV.z / 5.0;
   vec2 atlasUV = vec2(
-    uTileUV.x + vTexIndex * tileW + vUV.x * tileW,
-    uTileUV.y + vUV.y * uTileUV.w
+    uTileUV.x + vTexIndex * tileW + fract(tiledUV.x) * tileW,
+    uTileUV.y + fract(tiledUV.y) * uTileUV.w
   );
   vec4 texColor = texture(uAtlas, atlasUV);
   vec3 albedo = texColor.rgb * vTint;
