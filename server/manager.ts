@@ -806,6 +806,52 @@ export class AgentManager {
     }
 
     const result = await this.hermesClient.configurePlatform(platform, credentials);
+
+    // Re-write credentials to .env AFTER the API call too — the Hermes API
+    // may have overwritten .env, wiping our token
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const envPath = join(hermesHome, ".env");
+      let envContent = "";
+      if (existsSync(envPath)) {
+        envContent = readFileSync(envPath, "utf-8");
+      }
+      const envVarMap: Record<string, Record<string, string>> = {
+        telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
+        discord: { bot_token: "DISCORD_BOT_TOKEN" },
+        slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" },
+      };
+      const varMap = envVarMap[platform.toLowerCase()] ?? {};
+      let wroteAny = false;
+      for (const [credKey, envVar] of Object.entries(varMap)) {
+        const value = credentials[credKey];
+        if (!value) continue;
+        // Check if the env var is already present and correct
+        const existingLine = envContent.split("\n").find((l) => l.startsWith(`${envVar}=`));
+        if (existingLine === `${envVar}=${value}`) continue; // already correct
+        // Remove existing line if present, then append
+        const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
+        lines.push(`${envVar}=${value}`);
+        envContent = lines.join("\n");
+        wroteAny = true;
+        console.log(`[manager] Re-wrote ${envVar} to ${envPath} after API call`);
+      }
+      if (wroteAny) {
+        // Also ensure KIMI_API_KEY is still there (Hermes API might have wiped it)
+        const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
+        if (kimiKey && !envContent.includes("KIMI_API_KEY=")) {
+          envContent += (envContent.endsWith("\n") ? "" : "\n") + `KIMI_API_KEY=${kimiKey}\n`;
+          console.log(`[manager] Re-added KIMI_API_KEY to ${envPath}`);
+        }
+        writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
+        // Log final .env keys for debugging
+        const finalKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
+        console.log(`[manager] Final .env keys after configure: ${finalKeys.join(", ")}`);
+      }
+    } catch (err) {
+      console.warn(`[manager] Failed to re-write credentials to .env after API call: ${err}`);
+    }
+
     // After configuring, restart the gateway process so it picks up the new credentials
     if (result.success) {
       console.log(`[manager] Platform ${platform} configured — restarting gateway process`);
