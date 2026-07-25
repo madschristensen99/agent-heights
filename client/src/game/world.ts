@@ -3290,6 +3290,12 @@ export class WorldLayer {
       this.axeHint.setVisible(false);
     }
 
+    // periodic nemesis save (every 10s)
+    if (time - this.lastNemesisSave > 10000) {
+      this.lastNemesisSave = time;
+      this.saveNemesis();
+    }
+
     // find nearest ghost for dialogue
     let nearestGhost: { id: string; d: number; ghost: GhostNPC } | null = null;
     for (const [id, ghost] of this.ghosts) {

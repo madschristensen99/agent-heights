@@ -18,31 +18,43 @@ layout(location = 5) in float aFlip;
 
 uniform mat4 uViewProj;
 uniform vec2 uViewport;
+uniform int uTopDown;
 
 out vec2 vUV;
 out vec4 vTint;
 out float vDepth;
 
 void main() {
-  // Sprites stand upright: X extends horizontally, Z extends upward
-  // Feet at spritePos.z, head at spritePos.z + displayH
-  // Centered horizontally around spritePos.x
   float halfW = aDisplaySize.x * 0.5;
-  vec3 offset = vec3(
-    (aCorner.x - 0.5) * aDisplaySize.x,
-    0.0,
-    aCorner.y * aDisplaySize.y
-  );
+  vec3 offset;
+
+  if (uTopDown == 1) {
+    // Top-down: sprite is a flat quad on the XY plane
+    // aCorner.y=0 is bottom (feet), =1 is top (head)
+    // In top-down, "up" on the sprite is -Y (screen up)
+    offset = vec3(
+      (aCorner.x - 0.5) * aDisplaySize.x,
+      (0.5 - aCorner.y) * aDisplaySize.y,
+      0.0
+    );
+  } else {
+    // Perspective: sprite stands upright in Z
+    offset = vec3(
+      (aCorner.x - 0.5) * aDisplaySize.x,
+      0.0,
+      aCorner.y * aDisplaySize.y
+    );
+  }
+
   if (aFlip > 0.5) offset.x = -offset.x;
   vec3 worldPos = aSpritePos + offset;
 
   vec2 uvOffset = aCorner * 0.5 + 0.5;
-  // aCorner.y=0 is bottom (feet), =1 is top (head) — flip V to match texture
   uvOffset.y = 1.0 - uvOffset.y;
   if (aFlip > 0.5) uvOffset.x = 1.0 - uvOffset.x;
   vUV = aUV.xy + uvOffset * aUV.zw;
   vTint = aTint;
-  vDepth = aSpritePos.z + aCorner.y * aDisplaySize.y;
+  vDepth = worldPos.y;
 
   gl_Position = uViewProj * vec4(worldPos, 1.0);
 }`;
@@ -83,11 +95,12 @@ export class SpriteBatcher {
   private uniforms: ReturnType<typeof getUniformLocations>;
   private sprites: Map<number, SpriteData> = new Map();
   private nextId = 1;
+  topDown: boolean = false;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
     this.program = createProgram(gl, VERT, FRAG);
-    this.uniforms = getUniformLocations(gl, this.program, ["uViewProj", "uViewport", "uAtlas"]);
+    this.uniforms = getUniformLocations(gl, this.program, ["uViewProj", "uViewport", "uAtlas", "uTopDown"]);
 
     this.vao = createVertexArray(gl);
     gl.bindVertexArray(this.vao);

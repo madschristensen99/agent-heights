@@ -221,7 +221,7 @@ export class HermesProcessManager {
       "    If someone wants to talk to a specific agent or give a task to the team, let",
       "    them know their message has been forwarded to the office.",
       "telegram:",
-      "  require_mention: true",
+      "  require_mention: false",
       "",
     ];
     if (preservedPlatforms.trim()) {
