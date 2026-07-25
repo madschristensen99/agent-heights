@@ -2346,8 +2346,8 @@ export class OfficeScene extends Phaser.Scene {
         body: `1. Left sidebar → "OAuth & Permissions"\n2. Under "Bot Token Scopes" add:\n   - chat:write\n   - channels:history\n   - channels:read\n   - groups:history\n   - groups:read\n   - im:history\n   - im:write\n   - mpim:history`,
       },
       {
-        title: "Slack — Install & Copy Token",
-        body: `1. Click "Install to Workspace" at the top\n2. Authorize the app\n3. Copy the "Bot User OAuth Token"\n   (starts with xoxb-)\n4. Note your "Signing Secret" from\n   Basic Information → App Credentials`,
+        title: "Slack — Install & Copy Tokens",
+        body: `1. Click "Install to Workspace" at the top\n2. Authorize the app\n3. Copy the "Bot User OAuth Token"\n   (starts with xoxb-)\n4. Go to Basic Information →\n   App-Level Tokens → Generate Token\n   with scope connections:write\n   (starts with xapp-)`,
       },
       {
         title: "Slack — Invite Bot to Channels",
