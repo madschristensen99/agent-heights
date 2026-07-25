@@ -536,10 +536,10 @@ class Creature {
   constructor(world: WorldLayer, x: number, y: number, hostility: number) {
     this.world = world;
     this.hostilityLevel = hostility;
-    this.maxHp = 30 + hostility * 30;
+    this.maxHp = 20 + hostility * 20;
     this.hp = this.maxHp;
     this.speed = 70 + hostility * 25;
-    this.damage = 10 + hostility * 6;
+    this.damage = 8 + hostility * 5;
     const scene = world.scene;
     const radius = 14 + hostility * 2;
 
@@ -601,7 +601,7 @@ class Creature {
       this.regenAccumulator += dt;
       if (this.regenAccumulator >= 1000) {
         this.regenAccumulator = 0;
-        this.hp = Math.min(this.maxHp, this.hp + Math.floor(this.maxHp * 0.05));
+        this.hp = Math.min(this.maxHp, this.hp + Math.floor(this.maxHp * 0.03));
       }
     }
 
@@ -3596,7 +3596,7 @@ export class WorldLayer {
     yPos += 20;
 
     // Close hint
-    const closeHint = scene.add.text(panelW / 2, panelH - 20, "Press N to close", {
+    const closeHint = scene.add.text(panelW / 2, panelH - 20, "Press E to close", {
       fontFamily: "'M PLUS Rounded 1c', sans-serif",
       fontSize: "10px",
       color: "#666677",

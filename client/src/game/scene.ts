@@ -192,6 +192,11 @@ export class OfficeScene extends Phaser.Scene {
   private wardrobeHint!: Phaser.GameObjects.Text;
   private wardrobeGfx!: Phaser.GameObjects.Graphics;
 
+  // --- nemesis terminal (break room) ---
+  private nemesisTerminalTile: Tile = { x: 20, y: 15 };
+  private nemesisTerminalHint!: Phaser.GameObjects.Text;
+  private nemesisTerminalGfx!: Phaser.GameObjects.Graphics;
+
   private trophyTile: Tile = { x: 1, y: 8 };
   private trophyHint!: Phaser.GameObjects.Text;
   private trophyGfx!: Phaser.GameObjects.Graphics;
@@ -258,7 +263,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerDir: Dir = "down";
   private playerTexKey = "boss";
   private weaponVisual!: Phaser.GameObjects.Container;
-  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "N" | "SPACE", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "SPACE", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
@@ -822,6 +827,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawHelipad();
           this.drawRedButton();
           this.drawWardrobe();
+          this.drawNemesisTerminal();
           this.boardHint = this.add
             .text(0, 0, "", {
               fontFamily: "'M PLUS Rounded 1c', sans-serif",
@@ -858,6 +864,7 @@ export class OfficeScene extends Phaser.Scene {
           this.platformMailboxHint = this.makeHint();
           this.redButtonHint = this.makeHint();
           this.wardrobeHint = this.makeHint();
+          this.nemesisTerminalHint = this.makeHint();
           this.projectorHint = this.makeHint();
           this.phoneBoothHint = this.makeHint();
           this.screenShareHint = this.makeHint();
@@ -865,7 +872,8 @@ export class OfficeScene extends Phaser.Scene {
             this.boardHint, this.coffeeHint, this.fridgeHint, this.coolerHint,
             this.clockHint, this.vendingHint, this.sofaHint, this.filingHint,
             this.plantHint, this.mailboxHint, this.platformMailboxHint,
-            this.redButtonHint, this.wardrobeHint, this.projectorHint,
+            this.redButtonHint, this.wardrobeHint, this.nemesisTerminalHint,
+            this.projectorHint,
             this.projectorControlHint, this.projectorSpeakerHint,
             this.phoneBoothHint, this.screenShareHint, this.trophyHint,
             this.hallOfFameHint, this.serverRackHint, this.warTableHint,
@@ -1088,7 +1096,7 @@ export class OfficeScene extends Phaser.Scene {
           });
 
           this.cursors = this.input.keyboard!.createCursorKeys();
-          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,N,SPACE") as OfficeScene["keys"];
+          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,SPACE") as OfficeScene["keys"];
           this.input.keyboard!.on("keydown-ESC", () => {
             this.store.select(null);
             this.store.toggleBoard(false);
@@ -3257,6 +3265,14 @@ export class OfficeScene extends Phaser.Scene {
       return true;
     }
 
+    // Nemesis Terminal — open codex panel
+    const ntPx = { x: this.nemesisTerminalTile.x * TILE_PX + 32, y: this.nemesisTerminalTile.y * TILE_PX + 32 };
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, ntPx.x, ntPx.y) < 144) {
+      this.world.toggleNemesisPanel();
+      this.world.audio.uiClick();
+      return true;
+    }
+
     // ── Expedition Workshop (before plants — plants at (26,16) overlap war table) ──
     const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y) < 144) {
@@ -3500,6 +3516,12 @@ export class OfficeScene extends Phaser.Scene {
     {
       const px = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
       add(this.wardrobeHint, px.x, px.y, 144, "E: WARDROBE", px.x, px.y + 64);
+    }
+
+    // Nemesis Terminal
+    {
+      const px = { x: this.nemesisTerminalTile.x * TILE_PX + 32, y: this.nemesisTerminalTile.y * TILE_PX + 32 };
+      add(this.nemesisTerminalHint, px.x, px.y, 144, "E: NEMESIS CODEX", px.x, px.y + 64);
     }
 
     // War Table
@@ -4245,6 +4267,58 @@ export class OfficeScene extends Phaser.Scene {
     g.fillRoundedRect(bx + 12, by + 16, 18, 24, 2);
     g.fillStyle(0xffffff, 0.15);
     g.fillRect(bx + 13, by + 17, 16, 3);
+  }
+
+  /** Draw a nemesis codex terminal in the break room. */
+  private drawNemesisTerminal(): void {
+    this.nemesisTerminalGfx = this.add.graphics().setDepth(3);
+    const g = this.nemesisTerminalGfx;
+    const bx = this.nemesisTerminalTile.x * TILE_PX;
+    const by = this.nemesisTerminalTile.y * TILE_PX;
+
+    // shadow
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(bx + 32, by + 60, 52, 10);
+
+    // desk/stand
+    g.fillStyle(0x2a2a35, 1);
+    g.fillRoundedRect(bx + 8, by + 40, 48, 20, 3);
+    g.fillStyle(0x1a1a22, 1);
+    g.fillRoundedRect(bx + 10, by + 42, 44, 16, 2);
+
+    // terminal body — dark metal
+    g.fillStyle(0x1a1a2a, 1);
+    g.fillRoundedRect(bx + 6, by + 4, 52, 42, 4);
+    g.fillStyle(0x2a2a3a, 1);
+    g.fillRoundedRect(bx + 8, by + 6, 48, 38, 3);
+
+    // screen — glowing green
+    g.fillStyle(0x0a1a0a, 1);
+    g.fillRoundedRect(bx + 12, by + 10, 40, 30, 2);
+    g.fillStyle(0x4affa8, 0.15);
+    g.fillRoundedRect(bx + 12, by + 10, 40, 30, 2);
+
+    // scanlines
+    g.fillStyle(0x4affa8, 0.08);
+    for (let i = 0; i < 6; i++) {
+      g.fillRect(bx + 12, by + 12 + i * 5, 40, 2);
+    }
+
+    // screen text lines (decorative)
+    g.fillStyle(0x4affa8, 0.6);
+    g.fillRect(bx + 15, by + 14, 20, 2);
+    g.fillRect(bx + 15, by + 18, 14, 2);
+    g.fillRect(bx + 15, by + 22, 24, 2);
+    g.fillRect(bx + 15, by + 26, 10, 2);
+    g.fillRect(bx + 15, by + 30, 18, 2);
+
+    // power LED
+    g.fillStyle(0x4affa8, 0.9);
+    g.fillCircle(bx + 52, by + 44, 1.5);
+
+    // glow
+    g.fillStyle(0x4affa8, 0.05);
+    g.fillCircle(bx + 32, by + 25, 40);
   }
 
   /** Create the helicopter visual as a container and return it.
@@ -6405,12 +6479,6 @@ export class OfficeScene extends Phaser.Scene {
     const tPressed = Phaser.Input.Keyboard.JustDown(this.keys.T);
     if (tPressed) {
       this.world.swapWeapon();
-    }
-
-    // N: toggle nemesis info panel
-    const nPressed = Phaser.Input.Keyboard.JustDown(this.keys.N);
-    if (nPressed) {
-      this.world.toggleNemesisPanel();
     }
 
     // check for death teleport from world layer
