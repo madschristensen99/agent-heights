@@ -105,7 +105,22 @@ export class HermesProcessManager {
         this.writeConfig(configPath);
       }
 
-      // Write/merge .env with KIMI_API_KEY so the gateway subprocess can find it
+      // Restore platform credentials from backup file into .env
+      // The Hermes API may overwrite .env, so we keep a separate backup
+      const backupPath = join(hermesHome, "platform-credentials.json");
+      let restoredCreds = "";
+      if (existsSync(backupPath)) {
+        try {
+          const backup = JSON.parse(readFileSync(backupPath, "utf-8"));
+          const credLines = Object.entries(backup).map(([k, v]) => `${k}=${v}`);
+          if (credLines.length > 0) {
+            restoredCreds = credLines.join("\n") + "\n";
+            console.log(`[hermes-process] Found platform credentials backup: ${Object.keys(backup).join(", ")}`);
+          }
+        } catch { /* ignore corrupt backup */ }
+      }
+
+      // Write/merge .env with KIMI_API_KEY + restored platform credentials
       if (kimiKey) {
         let envContent = "";
         if (existsSync(envPath)) {
@@ -114,6 +129,19 @@ export class HermesProcessManager {
           const existingKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
           console.log(`[hermes-process] Existing .env keys: ${existingKeys.join(", ") || "(none)"}`);
         }
+
+        // Restore any missing platform credentials from backup
+        if (restoredCreds) {
+          const credLines = restoredCreds.split("\n").filter(l => l.trim());
+          for (const line of credLines) {
+            const varName = line.split("=")[0];
+            if (!envContent.includes(`${varName}=`)) {
+              envContent += (envContent && !envContent.endsWith("\n") ? "\n" : "") + line + "\n";
+              console.log(`[hermes-process] Restored ${varName} from backup into .env`);
+            }
+          }
+        }
+
         // Check if KIMI_API_KEY is already in .env
         if (!envContent.includes("KIMI_API_KEY=")) {
           const newContent = envContent + (envContent && !envContent.endsWith("\n") ? "\n" : "") + `KIMI_API_KEY=${kimiKey}\n`;
@@ -122,6 +150,10 @@ export class HermesProcessManager {
         } else {
           console.log("[hermes-process] KIMI_API_KEY already in ~/.hermes/.env — not overwriting");
         }
+
+        // Log final .env keys
+        const finalKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
+        console.log(`[hermes-process] Final .env keys: ${finalKeys.join(", ") || "(none)"}`);
       }
     } catch (err) {
       console.warn(`[hermes-process] Failed to write Hermes config: ${err}`);

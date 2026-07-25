@@ -792,15 +792,29 @@ export class AgentManager {
         slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" },
       };
       const varMap = envVarMap[platform.toLowerCase()] ?? {};
+      const credVarsToSave: Record<string, string> = {};
       for (const [credKey, envVar] of Object.entries(varMap)) {
         const value = credentials[credKey];
         if (!value) continue;
         const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
         lines.push(`${envVar}=${value}`);
         envContent = lines.join("\n");
+        credVarsToSave[envVar] = value;
         console.log(`[manager] Wrote ${envVar} to ${envPath}`);
       }
       writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
+
+      // Also write to backup JSON file that Hermes API can't overwrite
+      if (Object.keys(credVarsToSave).length > 0) {
+        const backupPath = join(hermesHome, "platform-credentials.json");
+        let backup: Record<string, string> = {};
+        if (existsSync(backupPath)) {
+          try { backup = JSON.parse(readFileSync(backupPath, "utf-8")); } catch { /* ignore */ }
+        }
+        Object.assign(backup, credVarsToSave);
+        writeFileSync(backupPath, JSON.stringify(backup, null, 2), "utf-8");
+        console.log(`[manager] Saved credentials backup to ${backupPath}: ${Object.keys(credVarsToSave).join(", ")}`);
+      }
     } catch (err) {
       console.warn(`[manager] Failed to write platform credentials to .env: ${err}`);
     }
