@@ -71,6 +71,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   // ── Warrior ──
   { id: "first_swing", name: "Going On The Offensive", desc: "Swing a weapon for the first time.", tier: "Warrior", icon: "🤺" },
   { id: "first_capture", name: "Beast Tamer", desc: "Capture your first creature.", tier: "Warrior", icon: "🪤" },
+  { id: "iron_sword_pickup", name: "Armed and Dangerous", desc: "Forge an iron sword from void shards.", tier: "Warrior", icon: "🗡️" },
+  { id: "void_blade_pickup", name: "Forged in Darkness", desc: "Forge a void blade from void shards.", tier: "Warrior", icon: "🔮" },
+  { id: "legendary_weapon", name: "Chosen One", desc: "Forge a legendary weapon.", tier: "Warrior", icon: "⚔️" },
   { id: "first_blood", name: "First Blood", desc: "Defeat your first creature.", tier: "Warrior", icon: "⚔️" },
   { id: "creature_slayer", name: "Pest Control", desc: "Defeat 20 creatures.", tier: "Warrior", icon: "🗡️" },
   { id: "beast_slayer", name: "Legend Killer", desc: "Defeat a legendary beast.", tier: "Warrior", icon: "🐲" },

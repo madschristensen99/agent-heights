@@ -45,9 +45,10 @@ const STONE_INTERVAL = 2500;
 const BEAST_SPAWN_INTERVAL = 8000; // check for legendary beast spawns
 
 // --- Weapon system ---
-type WeaponType = "tennis_racket" | "axe" | "iron_sword" | "void_blade" | "flame_greatsword" | "void_daggers" | "crystal_bow";
+type WeaponType = "tennis_racket" | "golf_club" | "axe" | "iron_sword" | "void_blade" | "flame_greatsword" | "void_daggers" | "crystal_bow";
 
 interface WeaponDef {
+  name: string;
   damage: number;
   cooldown: number;   // ms
   range: number;      // px
@@ -59,13 +60,14 @@ interface WeaponDef {
 }
 
 const WEAPONS: Record<WeaponType, WeaponDef> = {
-  tennis_racket:      { damage: 5,  cooldown: 600,  range: 40,  melee: true,  hitCone: 60, color: 0xeeff44 },
-  axe:                { damage: 15, cooldown: 800,  range: 50,  melee: true,  hitCone: 60, color: 0xcc8844 },
-  iron_sword:         { damage: 25, cooldown: 600,  range: 55,  melee: true,  hitCone: 60, color: 0xcccccc },
-  void_blade:         { damage: 40, cooldown: 400,  range: 60,  melee: true,  hitCone: 60, color: 0xaa44ff },
-  flame_greatsword:   { damage: 60, cooldown: 1000, range: 100, melee: true,  hitCone: 60, aoeRadius: 100, color: 0xff6600 },
-  void_daggers:       { damage: 35, cooldown: 300,  range: 45,  melee: true,  hitCone: 60, hitsTwice: true, color: 0xdd44ff },
-  crystal_bow:        { damage: 50, cooldown: 700,  range: 300, melee: false, hitCone: 0,  color: 0x44ffdd },
+  tennis_racket:      { name: "Tennis Racket", damage: 5,  cooldown: 600,  range: 40,  melee: true,  hitCone: 60, color: 0xeeff44 },
+  golf_club:          { name: "Golf Club", damage: 10, cooldown: 700,  range: 55,  melee: true,  hitCone: 75, color: 0xdddd44 },
+  axe:                { name: "Axe", damage: 15, cooldown: 800,  range: 50,  melee: true,  hitCone: 60, color: 0xcc8844 },
+  iron_sword:         { name: "Iron Sword", damage: 25, cooldown: 600,  range: 55,  melee: true,  hitCone: 60, color: 0xcccccc },
+  void_blade:         { name: "Void Blade", damage: 40, cooldown: 400,  range: 60,  melee: true,  hitCone: 60, color: 0xaa44ff },
+  flame_greatsword:   { name: "Flame Greatsword", damage: 60, cooldown: 1000, range: 100, melee: true,  hitCone: 60, aoeRadius: 100, color: 0xff6600 },
+  void_daggers:       { name: "Void Daggers", damage: 35, cooldown: 300,  range: 45,  melee: true,  hitCone: 60, hitsTwice: true, color: 0xdd44ff },
+  crystal_bow:        { name: "Crystal Bow", damage: 50, cooldown: 700,  range: 300, melee: false, hitCone: 0,  color: 0x44ffdd },
 };
 
 /** Legendary beast definitions — rare, powerful, unique. */
@@ -503,12 +505,14 @@ class Creature {
   private hasHitPlayer = false;
   private regenAccumulator = 0;
   captureImmune = 0; // timestamp — can't capture again until this passes
+  private hostilityLevel: number;
 
   get hpRatio(): number { return this.hp / this.maxHp; }
   get captureReady(): boolean { return this.hpRatio < 0.25 && this.captureImmune === 0; }
 
   constructor(world: WorldLayer, x: number, y: number, hostility: number) {
     this.world = world;
+    this.hostilityLevel = hostility;
     this.maxHp = 30 + hostility * 30;
     this.hp = this.maxHp;
     this.speed = 70 + hostility * 25;
@@ -645,6 +649,7 @@ class Creature {
     this.hp -= dmg;
     this.world.vfx?.hitFlash(this.sprite);
     this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff4444, 8, 80);
+    this.world.vfx?.damageNumber(this.container.x, this.container.y - 30, dmg);
     if (this.hp <= 0) {
       this.alive = false;
       this.world.vfx?.deathDissolve(this.container.x, this.container.y, 0x8a3a3a, 1);
@@ -657,6 +662,12 @@ class Creature {
       this.container.destroy();
       achievements.unlock("first_blood");
       if (achievements.incStat("creaturesKilled") >= 20) achievements.unlock("creature_slayer");
+      // Drop void shards — 50% chance, 1-2 shards scaling with hostility
+      if (Math.random() < 0.5) {
+        const shards = 1 + Math.floor(this.hostilityLevel / 2);
+        this.world.addShards(shards);
+        this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xaa44ff, 8, 60);
+      }
     }
   }
 
@@ -1281,6 +1292,8 @@ export class WorldLayer {
   private weaponDamage = 0;
   private weaponCooldownBar!: Phaser.GameObjects.Graphics;
   private lastNoWeaponToast = 0;
+  private voidShards = 0;
+  private ownedWeapons: WeaponType[] = [];
 
   // --- nemesis registry ---
   nemesis = new NemesisRegistry();
@@ -2753,8 +2766,9 @@ export class WorldLayer {
           .setVisible(true);
         if (ePressed) {
           this.hasGolfClub = true;
+          this.equipWeapon("golf_club");
           this.setTileAt(nearestClub.tx, nearestClub.ty, TILE.TEE_BOX);
-          this.store.toast("Picked up golf club! ⛳");
+          this.store.toast("Picked up golf club! ⛳ Press SPACE to swing.");
           this.vfx.sparkBurst(
             nearestClub.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
             nearestClub.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
@@ -3284,6 +3298,61 @@ export class WorldLayer {
     this.weapon = type;
     this.weaponDamage = def.damage;
     this.weaponCooldownMax = def.cooldown;
+    if (!this.ownedWeapons.includes(type)) {
+      this.ownedWeapons.push(type);
+    }
+  }
+
+  /** Cycle to next owned weapon. */
+  swapWeapon(): void {
+    if (this.ownedWeapons.length <= 1) {
+      this.store.toast("No other weapons to swap to.");
+      return;
+    }
+    const currentIdx = this.ownedWeapons.indexOf(this.weapon!);
+    const nextIdx = (currentIdx + 1) % this.ownedWeapons.length;
+    const next = this.ownedWeapons[nextIdx];
+    this.equipWeapon(next);
+    const def = WEAPONS[next];
+    this.store.toast(`Equipped: ${def.name} (${def.damage} dmg)`);
+  }
+
+  /** Add void shards and check for upgrade threshold. */
+  addShards(count: number): void {
+    this.voidShards += count;
+    this.store.toast(`+${count} void shard${count > 1 ? "s" : ""} (total: ${this.voidShards})`);
+    // Upgrade thresholds: 5 shards → iron sword, 15 → void blade
+    if (this.voidShards >= 5 && !this.ownedWeapons.includes("iron_sword")) {
+      this.equipWeapon("iron_sword");
+      this.voidShards -= 5;
+      this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
+      this.store.toast("Forged Iron Sword from void shards! (25 dmg, 600ms cd)");
+      achievements.unlock("iron_sword_pickup");
+    } else if (this.voidShards >= 15 && !this.ownedWeapons.includes("void_blade")) {
+      this.equipWeapon("void_blade");
+      this.voidShards -= 15;
+      this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
+      this.store.toast("Forged Void Blade from void shards! (40 dmg, 400ms cd)");
+      achievements.unlock("void_blade_pickup");
+    } else if (this.voidShards >= 30 && !this.ownedWeapons.includes("flame_greatsword")) {
+      this.equipWeapon("flame_greatsword");
+      this.voidShards -= 30;
+      this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
+      this.store.toast("Forged Flame Greatsword! (60 dmg, AoE splash)");
+      achievements.unlock("legendary_weapon");
+    } else if (this.voidShards >= 30 && !this.ownedWeapons.includes("void_daggers")) {
+      this.equipWeapon("void_daggers");
+      this.voidShards -= 30;
+      this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
+      this.store.toast("Forged Void Daggers! (35 dmg x2, 300ms cd)");
+      achievements.unlock("legendary_weapon");
+    } else if (this.voidShards >= 30 && !this.ownedWeapons.includes("crystal_bow")) {
+      this.equipWeapon("crystal_bow");
+      this.voidShards -= 30;
+      this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
+      this.store.toast("Forged Crystal Bow! (50 dmg, ranged)");
+      achievements.unlock("legendary_weapon");
+    }
   }
 
   /** Get the captured creature roster. */

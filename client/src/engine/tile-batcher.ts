@@ -137,9 +137,9 @@ void main() {
     lit += uLightColor[i] * albedo * atten * uLightIntensity[i];
   }
 
-  // Fade to sky color at grid edges for horizon effect
+  // Gentle fade at far edges of the ground band into sky
   float distFromCenter = length(vWorldPos);
-  float edgeFade = 1.0 - smoothstep(uGridRadius * 0.65, uGridRadius, distFromCenter);
+  float edgeFade = 1.0 - smoothstep(uGridRadius * 0.7, uGridRadius, distFromCenter);
   lit = mix(uSkyColor, lit, edgeFade);
 
   fragColor = vec4(lit, edgeFade);

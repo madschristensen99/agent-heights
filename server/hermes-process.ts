@@ -106,8 +106,9 @@ export class HermesProcessManager {
       }
 
       // Restore platform credentials from backup file into .env
-      // The Hermes API may overwrite .env, so we keep a separate backup
-      const backupPath = join(hermesHome, "platform-credentials.json");
+      // Store OUTSIDE hermes home (at /app/ag/) in case Hermes gateway cleans its home dir
+      const volumeRoot = "/app/ag";
+      const backupPath = join(volumeRoot, "platform-credentials.json");
       let restoredCreds = "";
       if (existsSync(backupPath)) {
         try {
@@ -115,26 +116,33 @@ export class HermesProcessManager {
           const credLines = Object.entries(backup).map(([k, v]) => `${k}=${v}`);
           if (credLines.length > 0) {
             restoredCreds = credLines.join("\n") + "\n";
-            console.log(`[hermes-process] Found platform credentials backup: ${Object.keys(backup).join(", ")}`);
+            console.log(`[hermes-process] Found platform credentials backup at ${backupPath}: ${Object.keys(backup).join(", ")}`);
           }
         } catch { /* ignore corrupt backup */ }
+      } else {
+        console.log(`[hermes-process] No backup file at ${backupPath}`);
       }
+
+      // List /app/ag/ contents to verify volume persistence
+      try {
+        const volFiles = readdirSync(volumeRoot);
+        console.log(`[hermes-process] Files in ${volumeRoot} (volume root): ${volFiles.join(", ")}`);
+      } catch { /* ignore */ }
+
+      // List all files in hermesHome for debugging persistence
+      try {
+        const files = readdirSync(hermesHome);
+        console.log(`[hermes-process] Files in ${hermesHome}: ${files.join(", ")}`);
+      } catch { /* ignore */ }
 
       // Write/merge .env with KIMI_API_KEY + restored platform credentials
       if (kimiKey) {
         let envContent = "";
         if (existsSync(envPath)) {
           envContent = readFileSync(envPath, "utf-8");
-          // Log existing keys for debugging persistence
           const existingKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
           console.log(`[hermes-process] Existing .env keys: ${existingKeys.join(", ") || "(none)"}`);
         }
-
-        // List all files in hermesHome for debugging persistence
-        try {
-          const files = readdirSync(hermesHome);
-          console.log(`[hermes-process] Files in ${hermesHome}: ${files.join(", ")}`);
-        } catch { /* ignore */ }
 
         // Restore any missing platform credentials from backup
         if (restoredCreds) {

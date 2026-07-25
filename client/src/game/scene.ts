@@ -257,7 +257,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerNameBg!: Phaser.GameObjects.Graphics;
   private playerDir: Dir = "down";
   private playerTexKey = "boss";
-  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "SPACE", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "SPACE", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
@@ -1084,7 +1084,7 @@ export class OfficeScene extends Phaser.Scene {
           });
 
           this.cursors = this.input.keyboard!.createCursorKeys();
-          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,SPACE") as OfficeScene["keys"];
+          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,SPACE") as OfficeScene["keys"];
           this.input.keyboard!.on("keydown-ESC", () => {
             this.store.select(null);
             this.store.toggleBoard(false);
@@ -6321,6 +6321,12 @@ export class OfficeScene extends Phaser.Scene {
           this.store.toast("All allies recalled.");
         }
       }
+    }
+
+    // T: swap weapon (cycle owned weapons)
+    const tPressed = Phaser.Input.Keyboard.JustDown(this.keys.T);
+    if (tPressed) {
+      this.world.swapWeapon();
     }
 
     // check for death teleport from world layer

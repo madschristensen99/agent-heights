@@ -1,5 +1,5 @@
 import { Engine } from "./engine/engine";
-import type { TileData, LightData, SpriteData } from "./engine/types";
+import type { TileData, SpriteData } from "./engine/types";
 import { hexToPixel, hexInRange } from "./engine/hexgrid";
 import { Ease } from "./engine/tween";
 import { generateCharSprite } from "./game/chargen-engine";
@@ -12,46 +12,62 @@ const engine = new Engine(canvas, {
   postfx: true,
 });
 
-// ---- Build the world: rectangular office building in center, grass field around ----
-// Hex axial coords are sheared (60°), so we define the office as a rectangle in
-// pixel space and classify each hex by its pixel center position.
+// ---- Build the world: sky above, office on a ground line, grass field below ----
+// Layout (in pixel space, y increases downward):
+//   y < HORIZON_Y         → sky (no tiles, clear color shows through)
+//   HORIZON_Y to OFFICE_BOTTOM → office building sitting on the ground
+//   below OFFICE_BOTTOM    → grass field extending downward
 // texIndex: 0=wood floor, 1=grass, 2=sand, 3=stone, 4=wall
-const RADIUS = 22;
-const hexes = hexInRange({ q: 0, r: 0 }, RADIUS);
+const RADIUS = 26;
+const allHexes = hexInRange({ q: 0, r: 0 }, RADIUS);
 
-// Office rectangle in pixel space (centered at origin)
-const OFFICE_HALF_W = 320;
-const OFFICE_HALF_H = 240;
-const WALL_THICKNESS = 32; // hexes within this distance of the border are walls
+// Scene layout in pixel space
+const HORIZON_Y = -280;      // ground starts here (above this is sky)
+const OFFICE_HALF_W = 280;   // office half-width
+const OFFICE_TOP = -260;     // office top wall
+const OFFICE_BOTTOM = 180;   // office bottom wall (door at bottom center)
+const WALL_THICKNESS = 36;
+const FIELD_BOTTOM = 900;    // how far down the grass field goes
 
-function classifyOffice(q: number, r: number): "wall" | "floor" | "outside" {
+// Only keep hexes that are below the horizon (on the ground)
+const hexes = allHexes.filter((hex) => {
+  const pos = hexToPixel(hex.q, hex.r);
+  return pos.y >= HORIZON_Y - 20 && pos.y < FIELD_BOTTOM;
+});
+
+function classifyTile(q: number, r: number): "wall" | "floor" | "grass" | "sky" {
   const pos = hexToPixel(q, r);
-  const insideX = Math.abs(pos.x) < OFFICE_HALF_W;
-  const insideY = Math.abs(pos.y) < OFFICE_HALF_H;
-  if (!insideX || !insideY) return "outside";
 
-  const distToEdgeX = OFFICE_HALF_W - Math.abs(pos.x);
-  const distToEdgeY = OFFICE_HALF_H - Math.abs(pos.y);
-  const minDistToEdge = Math.min(distToEdgeX, distToEdgeY);
+  // Above horizon = sky (no tile)
+  if (pos.y < HORIZON_Y) return "sky";
 
-  if (minDistToEdge < WALL_THICKNESS) {
-    // Door gap at bottom center (y near +OFFICE_HALF_H, x near 0)
-    if (pos.y > OFFICE_HALF_H - WALL_THICKNESS && Math.abs(pos.x) < 60) return "floor";
-    return "wall";
+  // Office building region
+  const inOfficeX = Math.abs(pos.x) < OFFICE_HALF_W;
+  const inOfficeY = pos.y > OFFICE_TOP && pos.y < OFFICE_BOTTOM;
+
+  if (inOfficeX && inOfficeY) {
+    const distToEdgeX = OFFICE_HALF_W - Math.abs(pos.x);
+    const distToEdgeY = Math.min(pos.y - OFFICE_TOP, OFFICE_BOTTOM - pos.y);
+    const minDistToEdge = Math.min(distToEdgeX, distToEdgeY);
+
+    if (minDistToEdge < WALL_THICKNESS) {
+      // Door gap at bottom center
+      if (pos.y > OFFICE_BOTTOM - WALL_THICKNESS && Math.abs(pos.x) < 55) return "floor";
+      return "wall";
+    }
+    return "floor";
   }
-  return "floor";
+
+  // Everything else below horizon is grass field
+  return "grass";
 }
 
-const GRASS_RADIUS = 12;
-const SAND_RADIUS = 18;
-
 const tiles: TileData[] = hexes.map((hex) => {
-  const dist = Math.max(Math.abs(hex.q), Math.abs(hex.r), Math.abs(-hex.q - hex.r));
   let texIndex: number;
   let tintR: number, tintG: number, tintB: number;
   let elevation = 0;
 
-  const zone = classifyOffice(hex.q, hex.r);
+  const zone = classifyTile(hex.q, hex.r);
 
   if (zone === "wall") {
     texIndex = 4; // wall
@@ -60,15 +76,9 @@ const tiles: TileData[] = hexes.map((hex) => {
   } else if (zone === "floor") {
     texIndex = 0; // wood floor
     tintR = 0.95; tintG = 0.92; tintB = 0.85;
-  } else if (dist <= GRASS_RADIUS) {
+  } else {
     texIndex = 1; // grass
     tintR = 0.85; tintG = 0.95; tintB = 0.75;
-  } else if (dist <= SAND_RADIUS) {
-    texIndex = 2; // sand (transition zone)
-    tintR = 0.90; tintG = 0.88; tintB = 0.72;
-  } else {
-    texIndex = 3; // stone
-    tintR = 0.80; tintG = 0.80; tintB = 0.82;
   }
 
   return {
@@ -163,21 +173,22 @@ if (tileRegion) {
   engine.tiles.tileUVOffset = [tileRegion.u, tileRegion.v, tileRegion.w, tileRegion.h];
 }
 
-// Set sky color and grid radius for edge fade / horizon
+// Set sky color and grid radius for edge fade
 engine.tiles.skyColor = [0.53, 0.72, 0.88];
-engine.tiles.gridRadius = RADIUS * 32 * 0.9; // hex size * radius
+engine.tiles.gridRadius = 1200; // large since we have a wide horizontal band
 
-// ---- Soft, even lighting ----
-const lights: { data: LightData; hex: { q: number; r: number } }[] = [
-  { hex: { q: 3, r: -2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 500, intensity: 0.3 } },
-  { hex: { q: -3, r: 2 }, data: { x: 0, y: 0, z: 40, r: 1.0, g: 0.95, b: 0.85, radius: 500, intensity: 0.3 } },
+// ---- Soft, even lighting inside the office ----
+const lightPositions = [
+  { x: 80, y: -80 },
+  { x: -80, y: 40 },
 ];
 
-for (const l of lights) {
-  const pos = hexToPixel(l.hex.q, l.hex.r);
-  l.data.x = pos.x;
-  l.data.y = pos.y;
-  engine.lights.addLight(l.data);
+for (const lp of lightPositions) {
+  engine.lights.addLight({
+    x: lp.x, y: lp.y, z: 40,
+    r: 1.0, g: 0.95, b: 0.85,
+    radius: 450, intensity: 0.3,
+  });
 }
 
 engine.lights.setAmbient(0.92, 0.90, 0.86);
@@ -190,12 +201,12 @@ const charSprite = generateCharSprite(engine.atlas, "boss", {
 });
 
 // Place a player character and a few NPCs inside the office
-const playerPos = hexToPixel(0, 0);
+const playerPos = { x: 0, y: -40 }; // inside the office, near center
 const npcPositions = [
-  { q: 2, r: -1, name: "Agent 1" },
-  { q: -2, r: 1, name: "Agent 2" },
-  { q: 3, r: 2, name: "Agent 3" },
-  { q: -3, r: -2, name: "Agent 4" },
+  { x: 120, y: -80, name: "Agent 1" },
+  { x: -120, y: 0, name: "Agent 2" },
+  { x: 80, y: 80, name: "Agent 3" },
+  { x: -100, y: -120, name: "Agent 4" },
 ];
 
 const agentSprites: number[] = [];
@@ -217,10 +228,9 @@ if (charSprite) {
 
   // NPC sprites (smaller)
   for (const ap of npcPositions) {
-    const pos = hexToPixel(ap.q, ap.r);
     const id = engine.sprites.add({
-      x: pos.x,
-      y: pos.y,
+      x: ap.x,
+      y: ap.y,
       z: 0,
       u: frame.u, v: frame.v, w: frame.w, h: frame.h,
       displayW: 24,
@@ -237,9 +247,9 @@ let animTime = 0;
 const ANIM_FPS = 8;
 
 // ---- Camera setup: follow player, zoomed in ----
-engine.camera.setCenter(playerPos.x, playerPos.y);
-engine.camera.setModeInstant("topdown", 1.2);
-engine.camera.follow(playerPos.x, playerPos.y);
+engine.camera.setCenter(0, -40);
+engine.camera.setModeInstant("topdown", 1.0);
+engine.camera.follow(0, -40);
 
 // ---- Input handling ----
 const keys: Record<string, boolean> = {};
@@ -340,14 +350,14 @@ engine.onUpdate = (dt) => {
     const len = Math.hypot(dx, dy);
     playerX += (dx / len) * PLAYER_SPEED * dt;
     playerY += (dy / len) * PLAYER_SPEED * dt;
-    // Clamp to office bounds (with a little wiggle room for the door)
+    // Clamp to office bounds (with wiggle room for the door)
     playerX = Math.max(-OFFICE_HALF_W + 16, Math.min(OFFICE_HALF_W - 16, playerX));
-    if (playerY < -OFFICE_HALF_H + 16) playerY = -OFFICE_HALF_H + 16;
-    // Allow walking out through the door (bottom center)
-    if (Math.abs(playerX) < 60) {
-      playerY = Math.min(OFFICE_HALF_H + 200, playerY);
+    if (playerY < OFFICE_TOP + 16) playerY = OFFICE_TOP + 16;
+    // Allow walking out through the door (bottom center) into the field
+    if (Math.abs(playerX) < 55) {
+      playerY = Math.min(FIELD_BOTTOM - 50, playerY);
     } else {
-      playerY = Math.min(OFFICE_HALF_H - 16, playerY);
+      playerY = Math.min(OFFICE_BOTTOM - 16, playerY);
     }
 
     // Update player sprite position
