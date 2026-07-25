@@ -106,9 +106,10 @@ export class HermesProcessManager {
       }
 
       // Restore platform credentials from backup file into .env
-      // Store OUTSIDE hermes home (at /app/ag/) in case Hermes gateway cleans its home dir
+      // Store in /app/ag/config/ subdirectory — Railway volumes persist subdirs but not root-level loose files
       const volumeRoot = "/app/ag";
-      const backupPath = join(volumeRoot, "platform-credentials.json");
+      const configDir = join(volumeRoot, "config");
+      const backupPath = join(configDir, "platform-credentials.json");
       let restoredCreds = "";
       if (existsSync(backupPath)) {
         try {
@@ -123,10 +124,18 @@ export class HermesProcessManager {
         console.log(`[hermes-process] No backup file at ${backupPath}`);
       }
 
-      // List /app/ag/ contents to verify volume persistence
+      // List /app/ag/ and /app/ag/config/ contents to verify volume persistence
       try {
         const volFiles = readdirSync(volumeRoot);
         console.log(`[hermes-process] Files in ${volumeRoot} (volume root): ${volFiles.join(", ")}`);
+      } catch { /* ignore */ }
+      try {
+        if (existsSync(configDir)) {
+          const configFiles = readdirSync(configDir);
+          console.log(`[hermes-process] Files in ${configDir}: ${configFiles.join(", ")}`);
+        } else {
+          console.log(`[hermes-process] No config dir at ${configDir}`);
+        }
       } catch { /* ignore */ }
 
       // List all files in hermesHome for debugging persistence

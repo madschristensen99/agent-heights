@@ -805,15 +805,20 @@ export class AgentManager {
       writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
 
       // Also write to backup JSON file that Hermes API can't overwrite
+      // Store in /app/ag/config/ subdirectory — Railway volumes persist subdirs but not root-level loose files
       if (Object.keys(credVarsToSave).length > 0) {
-        const backupPath = join("/app/ag", "platform-credentials.json");
+        const configDir = join("/app/ag", "config");
+        mkdirSync(configDir, { recursive: true });
+        const backupPath = join(configDir, "platform-credentials.json");
         let backup: Record<string, string> = {};
         if (existsSync(backupPath)) {
           try { backup = JSON.parse(readFileSync(backupPath, "utf-8")); } catch { /* ignore */ }
         }
         Object.assign(backup, credVarsToSave);
         writeFileSync(backupPath, JSON.stringify(backup, null, 2), "utf-8");
-        console.log(`[manager] Saved credentials backup to ${backupPath}: ${Object.keys(credVarsToSave).join(", ")}`);
+        // Read back to verify it was written
+        const verify = existsSync(backupPath) ? JSON.parse(readFileSync(backupPath, "utf-8")) : {};
+        console.log(`[manager] Saved credentials backup to ${backupPath}: ${Object.keys(credVarsToSave).join(", ")} (verified: ${Object.keys(verify).join(", ")})`);
       }
     } catch (err) {
       console.warn(`[manager] Failed to write platform credentials to .env: ${err}`);
