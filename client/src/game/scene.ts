@@ -262,7 +262,6 @@ export class OfficeScene extends Phaser.Scene {
   private playerNameBg!: Phaser.GameObjects.Graphics;
   private playerDir: Dir = "down";
   private playerTexKey = "boss";
-  private weaponVisual!: Phaser.GameObjects.Container;
   private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "SPACE", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
@@ -789,9 +788,6 @@ export class OfficeScene extends Phaser.Scene {
             .setOrigin(0.5, 1)
             .setScale(1);
           // no physics body — we do manual movement for smoothness
-
-          // weapon visual — small icon that follows player, shows equipped weapon
-          this.weaponVisual = this.add.container(0, 0).setDepth(11).setVisible(false);
 
           this.playerNameBg = this.add.graphics();
           this.playerLabel = this.add
@@ -5933,68 +5929,6 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  private lastWeaponDrawn: string | null = null;
-
-  /** Draw a small weapon icon next to the player based on equipped weapon. */
-  private updateWeaponVisual(weapon: string): void {
-    if (this.lastWeaponDrawn === weapon) return;
-    this.lastWeaponDrawn = weapon;
-    this.weaponVisual.removeAll(true);
-
-    const dir = this.playerDir;
-    const offsetX = dir === "left" ? -12 : 12;
-    const offsetY = -20;
-
-    // weapon colors per type
-    const colors: Record<string, number> = {
-      tennis_racket: 0xeeff44,
-      golf_club: 0xdddd44,
-      axe: 0xcc8844,
-      iron_sword: 0xcccccc,
-      void_blade: 0xaa44ff,
-      flame_greatsword: 0xff6600,
-      void_daggers: 0xdd44ff,
-      crystal_bow: 0x44ffdd,
-    };
-    const color = colors[weapon] ?? 0xffffff;
-
-    // draw a simple weapon shape
-    const g = this.add.graphics();
-    if (weapon === "crystal_bow") {
-      // bow shape — arc
-      g.lineStyle(2, color, 1);
-      g.beginPath();
-      g.arc(0, 0, 8, -Math.PI / 3, Math.PI / 3, false);
-      g.strokePath();
-      // string
-      g.lineStyle(1, 0x888888, 0.5);
-      g.beginPath();
-      g.moveTo(4, -7);
-      g.lineTo(4, 7);
-      g.strokePath();
-    } else if (weapon === "tennis_racket" || weapon === "golf_club") {
-      // club/racket — shaft + head
-      g.fillStyle(color, 0.9);
-      g.fillRect(-1, -2, 2, 14);
-      g.fillCircle(0, -4, 5);
-    } else if (weapon === "void_daggers") {
-      // two small blades
-      g.fillStyle(color, 0.9);
-      g.fillTriangle(-3, -8, -1, -8, -2, 2);
-      g.fillTriangle(3, -8, 1, -8, 2, 2);
-    } else {
-      // sword/blade — shaft + blade
-      g.fillStyle(0x886644, 0.9);
-      g.fillRect(-1, 4, 2, 6); // handle
-      g.fillStyle(color, 0.9);
-      g.fillTriangle(-2, 4, 2, 4, 0, -10); // blade
-      g.fillStyle(0x886644, 0.7);
-      g.fillRect(-4, 3, 8, 2); // guard
-    }
-    g.setPosition(offsetX, offsetY);
-    this.weaponVisual.add(g);
-  }
-
   private syncAgents(): void {
     for (const [id, info] of this.store.agents) {
       if (id === AGENT_RESOURCES_ID) {
@@ -6265,18 +6199,6 @@ export class OfficeScene extends Phaser.Scene {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
     }
     this.player.setDepth(10 + this.player.y);
-
-    // update weapon visual
-    const currentWeapon = this.world.getCurrentWeapon();
-    if (currentWeapon && this.world.isOutside(this.player.x, this.player.y)) {
-      this.weaponVisual.setVisible(true);
-      this.weaponVisual.setPosition(this.player.x, this.player.y);
-      this.weaponVisual.setDepth(10 + this.player.y + 1);
-      // rebuild weapon icon if changed
-      this.updateWeaponVisual(currentWeapon);
-    } else {
-      this.weaponVisual.setVisible(false);
-    }
     const playerName = (this.store.player?.name ?? "BOSS").toUpperCase();
     if (this.playerLabel.text !== playerName) {
       this.playerLabel.setText(playerName);

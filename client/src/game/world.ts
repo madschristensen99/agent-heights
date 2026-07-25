@@ -3351,11 +3351,6 @@ export class WorldLayer {
     this.store.toast(`Equipped: ${def.name} (${def.damage} dmg)`);
   }
 
-  /** Get current weapon type for visual rendering. */
-  getCurrentWeapon(): WeaponType | null {
-    return this.weapon;
-  }
-
   /** Add void shards and check for upgrade threshold. */
   addShards(count: number): void {
     this.voidShards += count;
