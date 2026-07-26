@@ -94,7 +94,7 @@ const MAX_LOG = 500;
 const DONE_LINGER_MS = 6000;
 const TASK_IDLE_TIMEOUT_MS = 90 * 1000; // Abort if no events arrive for 90s (model hung or rate-limited)
 const SCHEDULER_TICK_MS = 30 * 1000;
-const MIN_SCHEDULE_INTERVAL_MS = 5 * 60 * 1000;
+const MIN_SCHEDULE_INTERVAL_MS = 15 * 60 * 1000;
 const MAX_DUPLICATE_TOOL_CALLS = 3; // Abort after 3 identical tool calls (was 5 — too permissive)
 const MAX_CALLS_PER_TOOL = 10; // Abort after 10 calls to the same tool name (catches varied-input loops)
 const MAX_MCP_TOOL_CALLS = 20; // Total MCP-originated tool calls per task before aborting
@@ -223,6 +223,10 @@ interface QueuedTask {
   scheduleId?: string | null;
   /** Review context if this queued task is a manager review. */
   reviewContext?: { agentId: string; agentName: string; originalTask: string } | null;
+  /** Agent to release from "waiting" when this task finishes. */
+  notifyOnComplete?: string | null;
+  /** Agent to walk to and wait at after completing this task. */
+  waitFor?: string | null;
 }
 
 interface TaskHistoryEntry {
@@ -257,6 +261,12 @@ interface AgentRuntime {
   reviewContext: { agentId: string; agentName: string; originalTask: string } | null;
   /** Platform context for tasks that came from a messaging platform (Telegram, etc.). */
   platformContext: { platform: string; sender: string } | null;
+  /** Agent ID we are waiting at (status "waiting"). */
+  waitingFor: string | null;
+  /** Agent to release from "waiting" when the current task finishes. */
+  notifyOnComplete: string | null;
+  /** Agent to walk to and wait at after completing the current task. */
+  waitFor: string | null;
 }
 
 export class AgentManager {
@@ -384,7 +394,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -469,7 +479,7 @@ export class AgentManager {
       const rt = this.agents.get(agentId);
       if (!rt) continue; // agent was fired or removed
       for (const t of tasks) {
-        rt.taskQueue.push({ task: t.task, handoffTo: t.handoffTo, cardId: t.cardId, isResume: true });
+        rt.taskQueue.push({ task: t.task, handoffTo: t.handoffTo, cardId: t.cardId, isResume: true, notifyOnComplete: t.notifyOnComplete ?? null, waitFor: t.waitFor ?? null });
       }
       const first = tasks[0];
       this.log(rt, "status", `Resuming task from before update: ${first.task}`);
@@ -546,7 +556,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
     this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -575,7 +585,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -905,10 +915,10 @@ export class AgentManager {
     for (const rt of this.agents.values()) {
       const tasks: PendingTask[] = [];
       if (rt.info.task && (rt.info.status === "thinking" || rt.info.status === "working")) {
-        tasks.push({ task: rt.info.task, handoffTo: rt.handoffTo, cardId: rt.cardId });
+        tasks.push({ task: rt.info.task, handoffTo: rt.handoffTo, cardId: rt.cardId, notifyOnComplete: rt.notifyOnComplete, waitFor: rt.waitFor });
       }
       for (const qt of rt.taskQueue) {
-        tasks.push({ task: qt.task, handoffTo: qt.handoffTo, cardId: qt.cardId });
+        tasks.push({ task: qt.task, handoffTo: qt.handoffTo, cardId: qt.cardId, notifyOnComplete: qt.notifyOnComplete ?? null, waitFor: qt.waitFor ?? null });
       }
       if (tasks.length > 0) {
         pendingTasks[rt.info.id] = tasks;
@@ -973,7 +983,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits): Promise<void> {
+  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean): Promise<void> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -1014,6 +1024,7 @@ export class AgentManager {
       sessionId: null,
       tasksDone: 0,
       mcpServers: mcpServers?.length ? mcpServers : undefined,
+      cdpSolana: cdpSolana ?? false,
       personality: traits,
       mood: "content",
     };
@@ -1021,7 +1032,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -1035,7 +1046,7 @@ export class AgentManager {
   /** Hire an agent from Agent Resources's chat — broadcasts helicopter_delivery to client
    *  so the helicopter animation plays, then hires the agent server-side.
    *  Returns the new agent's id. */
-  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]): Promise<string> {
+  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean): Promise<string> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     // Broadcast helicopter delivery to all clients so the animation plays
     this.broadcast({
@@ -1048,19 +1059,19 @@ export class AgentManager {
       alreadyHired: true,
     });
     // Hire the agent server-side (this creates the agent + broadcasts "agent" msg)
-    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers);
+    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana);
     // Find the agent we just hired by name
     const rt = [...this.agents.values()].find((a) => a.info.name === cleanName);
     return rt?.info.id ?? "";
   }
 
-  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null): void {
+  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null, notifyOnComplete?: string, waitFor?: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
-    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done") {
+    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
       const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
       rt.taskQueue.push({
         task: cleanTask,
@@ -1068,6 +1079,8 @@ export class AgentManager {
         cardId: cardId ?? null,
         scheduleId: scheduleId ?? null,
         reviewContext: reviewContext ?? null,
+        notifyOnComplete: notifyOnComplete ?? null,
+        waitFor: waitFor ?? null,
       });
       const pos = rt.taskQueue.length;
       this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task queued (#${pos}).` });
@@ -1075,11 +1088,11 @@ export class AgentManager {
       return;
     }
 
-    this.startTask(rt, cleanTask, handoffTo, cardId, false, scheduleId, reviewContext);
+    this.startTask(rt, cleanTask, handoffTo, cardId, false, scheduleId, reviewContext, notifyOnComplete, waitFor);
   }
 
   /** Begin executing a task immediately (assumes agent is idle). */
-  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null): void {
+  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null, notifyOnComplete?: string, waitFor?: string): void {
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
@@ -1090,6 +1103,8 @@ export class AgentManager {
     rt.handoffTo = target ? target.info.id : null;
     rt.scheduleId = scheduleId ?? null;
     rt.reviewContext = reviewContext ?? null;
+    rt.notifyOnComplete = notifyOnComplete ?? null;
+    rt.waitFor = waitFor ?? null;
     this.session.record("assign", {
       agentId: rt.info.id,
       agentName: rt.info.name,
@@ -1108,7 +1123,7 @@ export class AgentManager {
     if (rt.taskQueue.length === 0) return;
     const next = rt.taskQueue.shift()!;
     this.log(rt, "status", `Starting queued task: ${next.task}`);
-    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null);
+    this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null, next.notifyOnComplete ?? undefined, next.waitFor ?? undefined);
   }
 
   /** Hand the same task to every agent that isn't already busy. */
@@ -1118,7 +1133,7 @@ export class AgentManager {
     const free = [...this.agents.values()].filter(
       (rt) =>
         rt.info.id !== AGENT_RESOURCES_ID &&
-        rt.info.status !== "thinking" && rt.info.status !== "working",
+        rt.info.status !== "thinking" && rt.info.status !== "working" && rt.info.status !== "waiting",
     );
     if (free.length === 0) {
       this.broadcast({ type: "toast", text: "Everyone is busy (or nobody works here yet)." });
@@ -1155,7 +1170,9 @@ export class AgentManager {
     }
     rt.handoffTo = null;
     rt.scheduleId = null;
-    this.session.record("stop", { agentId: rt.info.id, agentName: rt.info.name });
+    rt.notifyOnComplete = null;
+    rt.waitFor = null;
+    rt.waitingFor = null;
     this.log(rt, "status", "Task stopped by the boss.");
     this.setStatus(rt, "idle");
     rt.info.task = null;
@@ -1179,8 +1196,12 @@ export class AgentManager {
         }
         rt.handoffTo = null;
         rt.scheduleId = null;
+        rt.notifyOnComplete = null;
+        rt.waitFor = null;
         this.log(rt, "status", "Emergency stop — all work halted.");
       }
+      rt.waitingFor = null;
+      rt.info.waitingFor = null;
       rt.taskQueue = [];
       if (rt.doneTimer) {
         clearTimeout(rt.doneTimer);
@@ -1204,7 +1225,7 @@ export class AgentManager {
   clearChat(agentId: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
-    if (rt.info.status === "thinking" || rt.info.status === "working") {
+    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "waiting") {
       this.broadcast({ type: "toast", text: `${rt.info.name} is mid-task — stop them first.` });
       return;
     }
@@ -1229,7 +1250,7 @@ export class AgentManager {
       return;
     }
     const free = all.filter(
-      (rt) => rt.info.status !== "thinking" && rt.info.status !== "working",
+      (rt) => rt.info.status !== "thinking" && rt.info.status !== "working" && rt.info.status !== "waiting",
     );
     this.session.record("clear_all", { agentIds: free.map((rt) => rt.info.id) });
     for (const rt of free) {
@@ -1294,6 +1315,9 @@ export class AgentManager {
     rt.abort?.abort();
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
     rt.taskQueue = [];
+    rt.waitingFor = null;
+    rt.info.waitingFor = null;
+    rt.waitFor = null;
     if (rt.cardId) {
       this.revertCard(rt.cardId);
       rt.cardId = null;
@@ -1342,7 +1366,7 @@ export class AgentManager {
     }
     const rt = this.agents.get(agentId);
     if (!rt) return;
-    if (rt.info.status === "thinking" || rt.info.status === "working") {
+    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "waiting") {
       this.broadcast({ type: "toast", text: `${rt.info.name} is mid-task — stop them first.` });
       return;
     }
@@ -1420,7 +1444,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1464,7 +1488,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1501,7 +1525,7 @@ export class AgentManager {
     const card = this.board.get(cardId);
     const rt = this.agents.get(agentId);
     if (!card || !rt) return;
-    if (rt.info.status === "thinking" || rt.info.status === "working") {
+    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "waiting") {
       this.broadcast({ type: "toast", text: `${rt.info.name} is already busy.` });
       return;
     }
@@ -1678,6 +1702,7 @@ export class AgentManager {
   private computeMood(rt: AgentRuntime): AgentMood {
     const p = rt.info.personality ?? DEFAULT_PERSONALITY;
     if (rt.info.status === "thinking" || rt.info.status === "working") return "focused";
+    if (rt.info.status === "waiting") return "content";
     if (rt.info.status === "error") return p.neuroticism > 0.5 ? "frustrated" : "content";
     if (rt.info.status === "done") return "excited";
     // idle
@@ -2015,7 +2040,8 @@ export class AgentManager {
         rt.info.id !== mgr.info.id &&
         rt.info.role !== "manager" &&
         rt.info.status !== "thinking" &&
-        rt.info.status !== "working",
+        rt.info.status !== "working" &&
+        rt.info.status !== "waiting",
     );
     const roster =
       free
@@ -2117,6 +2143,7 @@ export class AgentManager {
         railway: this.settings.railway.enabled && rt.info.role === "devops",
         apiKey: this.apiKey,
         mcpServers: await this.injectMcpKeys(rt.info.mcpServers),
+        cdpSolana: rt.info.cdpSolana ?? false,
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);
@@ -2134,13 +2161,32 @@ export class AgentManager {
         onPostMessage: (recipientFolder: string, fromFolder: string, message: string) => {
           const target = this.agentByFolder(recipientFolder);
           if (!target) return;
-          if (target.info.status === "thinking" || target.info.status === "working") return;
+          if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "waiting") return;
           const sender = this.agentByFolder(fromFolder);
           const senderName = sender?.info.name ?? fromFolder;
           const reviewTask = `${senderName} sent you a message. Review it and respond if needed:\n\n"${message}"`;
           this.assign(target.info.id, reviewTask);
         },
         onApiError: (type, details) => this.notifyApiError(rt, type, details),
+        createSelfSchedule: (name: string, task: string, cronExpression: string) => {
+          return this.createSchedule(rt.info.id, name, task, cronExpression);
+        },
+        listSelfSchedules: () => {
+          return this.listSchedulesForAgent(rt.info.id).map((s) => ({
+            id: s.id, name: s.name, task: s.task, cronExpression: s.cronExpression,
+            enabled: s.enabled, nextRunAt: s.nextRunAt, runCount: s.runCount, lastRunAt: s.lastRunAt,
+          }));
+        },
+        updateSelfSchedule: (scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }) => {
+          const sched = this.schedules.get(scheduleId);
+          if (!sched || sched.agentId !== rt.info.id) return "Schedule not found or does not belong to you.";
+          return this.updateSchedule(scheduleId, updates);
+        },
+        deleteSelfSchedule: (scheduleId: string) => {
+          const sched = this.schedules.get(scheduleId);
+          if (!sched || sched.agentId !== rt.info.id) return "Schedule not found or does not belong to you.";
+          return this.deleteSchedule(scheduleId);
+        },
       });
 
       // Track tool calls to detect redundant loops and budget exhaustion
@@ -2227,8 +2273,14 @@ export class AgentManager {
       if (!sawError && !abort.signal.aborted) {
         if (isManager && !isReviewTask) this.delegate(rt, task, finalText);
         this.completeHandoff(rt, task, finalText);
+        // If this task has a waitFor target, walk to their desk and wait.
+        // For Flow 2 (handoff + wait), completeHandoff already set notifyOnComplete on the target.
+        // For Flow 4 (just wait, no handoff), startWaiting sets it directly.
+        if (rt.waitFor) this.startWaiting(rt, rt.waitFor);
         if (isManager && isReviewTask && rt.reviewContext) this.processReviewVerdict(rt, finalText);
         this.notifyManagersOfCompletion(rt, task, finalText, false);
+        // Release any agent that was waiting for this task to finish.
+        if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
         this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
 
         // If this task came from a messaging platform, send the result back
@@ -2250,6 +2302,8 @@ export class AgentManager {
       } else if (sawError && !abort.signal.aborted) {
         this.notifyManagersOfCompletion(rt, task, "Task failed.", true);
         this.logEvent("task_error", `${rt.info.name} failed: "${task.slice(0, 100)}" — ${firstErrorText.slice(0, 100)}`);
+        // Release any agent that was waiting for this task, even on failure.
+        if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
       }
     } catch (err) {
       if (!abort.signal.aborted) {
@@ -2266,6 +2320,8 @@ export class AgentManager {
       // pending tasks retain the full handoff chain for resumption.
       if (!this.shuttingDown) {
         rt.handoffTo = null;
+        rt.notifyOnComplete = null;
+        rt.waitFor = null;
       }
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         const duration = Date.now() - rt.taskStartedAt;
@@ -2381,7 +2437,7 @@ export class AgentManager {
         this.log(mgr, "status", `Skipped a subtask for "${name}" — nobody by that name.`);
         continue;
       }
-      if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "done") {
+      if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "done" || target.info.status === "waiting") {
         // Queue it — the agent is busy
         this.assign(
           target.info.id,
@@ -2478,7 +2534,9 @@ export class AgentManager {
     this.log(mgr, "status", `Review complete — no explicit APPROVED/NEEDS REWORK verdict, defaulting to approved.`);
   }
 
-  /** Forward a finished task's result to the agent chosen at assign time. */
+  /** Forward a finished task's result to the agent chosen at assign time.
+   *  If waitFor is also set, the sender will be sent to "waiting" status separately
+   *  by the caller (runTask finally block) via startWaiting(). */
   private completeHandoff(rt: AgentRuntime, task: string, result: string): void {
     const targetId = rt.handoffTo;
     rt.handoffTo = null;
@@ -2486,10 +2544,6 @@ export class AgentManager {
     const target = this.agents.get(targetId);
     if (!target) {
       this.log(rt, "status", "Handoff skipped — that agent no longer works here.");
-      return;
-    }
-    if (target.info.status === "thinking" || target.info.status === "working") {
-      this.log(rt, "status", `Wanted to hand off to ${target.info.name}, but they're busy.`);
       return;
     }
     const workerWs = this.cwdFor(this.slugFor(rt), rt.info.id);
@@ -2507,7 +2561,51 @@ export class AgentManager {
       .join("\n\n");
     this.log(rt, "status", `Handed the result to ${target.info.name}.`);
     this.broadcast({ type: "toast", text: `${rt.info.name} handed off to ${target.info.name}.` });
-    this.assign(target.info.id, handoffTask);
+    // Assign the handoff task to the target (queued if they're busy).
+    // If the sender is also waiting (waitFor), notifyOnComplete ensures they're released.
+    const notifyId = rt.waitFor ? rt.info.id : undefined;
+    this.assign(target.info.id, handoffTask, undefined, undefined, undefined, undefined, notifyId);
+  }
+
+  /** Send an agent to "waiting" status at the target agent's desk.
+   *  Used for Flow 2 (handoff + wait) and Flow 4 (just wait, no handoff).
+   *  For Flow 2, completeHandoff already set notifyOnComplete on the target via assign().
+   *  For Flow 4, we set notifyOnComplete on the target's runtime directly. */
+  private startWaiting(rt: AgentRuntime, targetId: string): void {
+    const target = this.agents.get(targetId);
+    if (!target) {
+      this.log(rt, "status", "Can't wait — that agent no longer works here.");
+      return;
+    }
+    rt.waitingFor = targetId;
+    rt.info.waitingFor = targetId;
+    rt.waitFor = null;
+    // For Flow 4 (no handoff), set notifyOnComplete on the target directly.
+    // For Flow 2, completeHandoff already set it via assign() — setting it again is harmless.
+    if (!target.notifyOnComplete) {
+      target.notifyOnComplete = rt.info.id;
+    }
+    this.log(rt, "status", `Heading to ${target.info.name}'s desk to wait.`);
+    this.setStatus(rt, "waiting");
+  }
+
+  /** Release an agent from "waiting" status after the agent they were waiting for finishes. */
+  private releaseWaitingAgent(waiterId: string): void {
+    const waiter = this.agents.get(waiterId);
+    if (!waiter || waiter.info.status !== "waiting") return;
+    waiter.waitingFor = null;
+    waiter.info.waitingFor = null;
+    this.log(waiter, "status", `The agent I was waiting for finished — heading back.`);
+    this.setStatus(waiter, "done");
+    waiter.doneTimer = setTimeout(() => {
+      waiter.info.task = null;
+      if (waiter.taskQueue.length > 0) {
+        this.drainQueue(waiter);
+      } else {
+        this.setStatus(waiter, "idle");
+        this.persist();
+      }
+    }, DONE_LINGER_MS);
   }
 
   /** Notify any manager agents about a worker's task completion/failure. */
@@ -2533,7 +2631,7 @@ export class AgentManager {
       }).catch(() => {});
 
       // If the manager is idle, assign them a task to review the completion report
-      if (mgr.info.status !== "thinking" && mgr.info.status !== "working") {
+      if (mgr.info.status !== "thinking" && mgr.info.status !== "working" && mgr.info.status !== "waiting") {
         const reviewTask = failed
           ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}. Review the situation and decide if any action is needed. End your response with either APPROVED (if no further action is needed) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`
           : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed. End your response with either APPROVED (if the work is acceptable) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`;
@@ -2940,34 +3038,35 @@ export class AgentManager {
     this.save.setSchedules([...this.schedules.values()]);
   }
 
-  createSchedule(agentId: string, name: string, task: string, cronExpression: string, handoffTo?: string): void {
+  createSchedule(agentId: string, name: string, task: string, cronExpression: string, handoffTo?: string): string {
     const rt = this.agents.get(agentId);
     if (!rt) {
       this.broadcast({ type: "toast", text: "That agent doesn't work here." });
-      return;
+      return "That agent doesn't work here.";
     }
     const cleanName = name.trim().slice(0, 100) || "Untitled Schedule";
     const cleanTask = task.trim().slice(0, 4000);
     if (!cleanTask) {
       this.broadcast({ type: "toast", text: "Schedule task can't be empty." });
-      return;
+      return "Schedule task can't be empty.";
     }
     const cleanCron = cronExpression.trim();
     const cronCheck = validateCron(cleanCron);
     if (!cronCheck.valid) {
       this.broadcast({ type: "toast", text: cronCheck.error! });
-      return;
+      return cronCheck.error!;
     }
     const now = Date.now();
     const nextRun = nextCronRun(cleanCron);
     if (nextRun === null) {
       this.broadcast({ type: "toast", text: "Invalid cron expression — could not compute next run time." });
-      return;
+      return "Invalid cron expression — could not compute next run time.";
     }
     // Enforce minimum interval
     if (nextRun - now < MIN_SCHEDULE_INTERVAL_MS) {
-      this.broadcast({ type: "toast", text: `Schedule interval too short — minimum is ${MIN_SCHEDULE_INTERVAL_MS / 60000} minutes.` });
-      return;
+      const msg = `Schedule interval too short — minimum is ${MIN_SCHEDULE_INTERVAL_MS / 60000} minutes.`;
+      this.broadcast({ type: "toast", text: msg });
+      return msg;
     }
     const sched: AgentSchedule = {
       id: randomUUID().slice(0, 8),
@@ -2988,11 +3087,17 @@ export class AgentManager {
     this.broadcast({ type: "schedule", schedule: sched });
     this.broadcast({ type: "toast", text: `Schedule "${cleanName}" created for ${rt.info.name}.` });
     this.log(rt, "status", `New schedule: ${cleanName} (${cleanCron})`);
+    return `Schedule "${cleanName}" created. Next run: ${new Date(nextRun).toISOString()}.`;
   }
 
-  updateSchedule(scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }): void {
+  /** List all schedules belonging to a specific agent. */
+  listSchedulesForAgent(agentId: string): AgentSchedule[] {
+    return [...this.schedules.values()].filter((s) => s.agentId === agentId);
+  }
+
+  updateSchedule(scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }): string {
     const sched = this.schedules.get(scheduleId);
-    if (!sched) return;
+    if (!sched) return "Schedule not found.";
     if (updates.enabled !== undefined) {
       const wasEnabled = sched.enabled;
       sched.enabled = updates.enabled;
@@ -3010,16 +3115,17 @@ export class AgentManager {
         const cronCheck = validateCron(cleanCron);
         if (!cronCheck.valid) {
           this.broadcast({ type: "toast", text: cronCheck.error! });
-          return;
+          return cronCheck.error!;
         }
         const nextRun = nextCronRun(cleanCron);
         if (nextRun === null) {
           this.broadcast({ type: "toast", text: "Invalid cron expression — could not compute next run time." });
-          return;
+          return "Invalid cron expression — could not compute next run time.";
         }
         if (nextRun - Date.now() < MIN_SCHEDULE_INTERVAL_MS) {
-          this.broadcast({ type: "toast", text: `Schedule interval too short — minimum is ${MIN_SCHEDULE_INTERVAL_MS / 60000} minutes.` });
-          return;
+          const msg = `Schedule interval too short — minimum is ${MIN_SCHEDULE_INTERVAL_MS / 60000} minutes.`;
+          this.broadcast({ type: "toast", text: msg });
+          return msg;
         }
         sched.cronExpression = cleanCron;
         sched.nextRunAt = nextRun;
@@ -3027,14 +3133,17 @@ export class AgentManager {
     }
     this.persistSchedules();
     this.broadcast({ type: "schedule", schedule: sched });
+    return `Schedule "${sched.name}" updated.`;
   }
 
-  deleteSchedule(scheduleId: string): void {
+  deleteSchedule(scheduleId: string): string {
     const sched = this.schedules.get(scheduleId);
-    if (!sched) return;
+    if (!sched) return "Schedule not found.";
+    const name = sched.name;
     this.schedules.delete(scheduleId);
     this.persistSchedules();
     this.broadcast({ type: "schedule_removed", scheduleId });
+    return `Schedule "${name}" deleted.`;
   }
 
   /** Remove all schedules for an agent (used when firing). */
@@ -3095,7 +3204,7 @@ export class AgentManager {
       }
 
       // Agent busy — retry in 60s instead of permanently skipping
-      if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done") {
+      if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
         sched.nextRunAt = now + 60_000;
         this.persistSchedules();
         this.broadcast({ type: "schedule", schedule: sched });
@@ -3126,7 +3235,7 @@ export class AgentManager {
   }
 
   private setStatus(rt: AgentRuntime, status: AgentStatus): void {
-    const wasBusy = rt.info.status === "thinking" || rt.info.status === "working";
+    const wasBusy = rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "waiting";
     rt.info.status = status;
     this.updateMood(rt);
     this.session.record("status", { agentId: rt.info.id, agentName: rt.info.name, status });

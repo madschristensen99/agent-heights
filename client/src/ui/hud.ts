@@ -202,6 +202,9 @@ export class Hud {
   private lastHandoffSig = "";
   private lastBoardSig = "";
   private detailMcpListener: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
+  private detailCdpListener: ((msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void) | null = null;
+  private detailCdpPolicyListener: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => void) | null = null;
+  private detailCdpTxHistoryListener: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void) | null = null;
   private _scheduleCreateOpen = false;
   private _renaming = false;
   private _scheduleEditingId: string | null = null;
@@ -257,6 +260,7 @@ export class Hud {
         <div class="meta" id="d-meta"></div>
         <div class="task" id="d-task" hidden></div>
         <div id="d-mcp-section" hidden></div>
+        <div id="d-cdp-section" hidden></div>
         <div class="d-schedules" id="d-schedules" hidden></div>
         <div class="logs" id="logs"></div>
         <textarea id="task-input" rows="4" placeholder="Give them a task…"></textarea>
@@ -1825,7 +1829,7 @@ export class Hud {
     }
     // Parse the agent config JSON — may contain a custom appearance, model,
     // and systemPrompt for premium/curated marketplace agents.
-    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[] } = {};
+    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; cdpSolana?: boolean } = {};
     try {
       if (agent.agent) config = JSON.parse(agent.agent);
     } catch { /* not JSON or missing — fall back to defaults */ }
@@ -1854,6 +1858,7 @@ export class Hud {
       provider: "cline",
       appearance,
       mcpServers: config.mcpServers,
+      cdpSolana: config.cdpSolana,
     };
 
     // Trigger the helicopter delivery animation. The hire WS message is
@@ -2306,6 +2311,196 @@ export class Hud {
     } else {
       mcpSection.hidden = true;
       mcpSection.innerHTML = "";
+    }
+
+    // CDP Solana wallet section
+    const cdpSection = document.getElementById("d-cdp-section")!;
+    if (this.detailCdpListener) {
+      const idx = this.store.cdpWalletListeners.indexOf(this.detailCdpListener);
+      if (idx >= 0) this.store.cdpWalletListeners.splice(idx, 1);
+      this.detailCdpListener = null;
+    }
+    if (this.detailCdpPolicyListener) {
+      const pidx = this.store.cdpPolicyListeners.indexOf(this.detailCdpPolicyListener);
+      if (pidx >= 0) this.store.cdpPolicyListeners.splice(pidx, 1);
+      this.detailCdpPolicyListener = null;
+    }
+    if (this.detailCdpTxHistoryListener) {
+      const tidx = this.store.cdpTxHistoryListeners.indexOf(this.detailCdpTxHistoryListener);
+      if (tidx >= 0) this.store.cdpTxHistoryListeners.splice(tidx, 1);
+      this.detailCdpTxHistoryListener = null;
+    }
+    if (agent.cdpSolana) {
+      cdpSection.hidden = false;
+      cdpSection.innerHTML = `
+        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
+          <div style="font-size:0.75rem; font-weight:600; color:#3a7cb5; margin-bottom:0.4rem;">◎ SOLANA WALLET (CDP)</div>
+          <div id="d-cdp-content" style="font-size:0.7rem; color:#888;">Loading wallet...</div>
+          <button id="d-cdp-refresh" style="margin-top:0.4rem; padding:0.3rem 0.5rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.65rem; cursor:pointer;">↻ Refresh</button>
+        </div>
+      `;
+      const refreshBtn = cdpSection.querySelector("#d-cdp-refresh") as HTMLButtonElement | null;
+      if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => {
+          this.net.send({ type: "get_cdp_wallet", agentId: agent.id });
+          refreshBtn.textContent = "Loading...";
+          setTimeout(() => { refreshBtn.textContent = "↻ Refresh"; }, 2000);
+        });
+      }
+      this.net.send({ type: "get_cdp_wallet", agentId: agent.id });
+      this.detailCdpListener = (msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        const content = cdpSection.querySelector("#d-cdp-content") as HTMLElement | null;
+        if (!content) return;
+        if (msg.error) {
+          content.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          return;
+        }
+        if (!msg.address) {
+          content.innerHTML = `<span style="color:#e05d5d;">⚠ Wallet not available</span>`;
+          return;
+        }
+        const balancesHtml = msg.balances && msg.balances.length > 0
+          ? msg.balances.map((b: { symbol: string; amount: string; usdValue?: string }) => {
+              const usd = b.usdValue ? ` <span style="color:#666;">($${esc(b.usdValue)})</span>` : "";
+              return `<div style="margin-top:0.2rem;">${esc(b.symbol)}: ${esc(b.amount)}${usd}</div>`;
+            }).join("")
+          : `<div style="color:#666; margin-top:0.2rem;">No balances — wallet may need funding</div>`;
+        content.innerHTML = `
+          <div style="color:#e0e0e0; font-family:monospace; font-size:0.65rem; word-break:break-all;">
+            ${esc(msg.address)}
+            <button id="d-cdp-copy" style="margin-left:0.3rem; border:none; background:none; color:#4f9dde; cursor:pointer; font-size:0.6rem;">copy</button>
+          </div>
+          <div style="margin-top:0.3rem;">
+            <a href="https://explorer.solana.com/address/${esc(msg.address)}" target="_blank" style="font-size:0.6rem; color:#4f9dde; text-decoration:none;">View on Solana Explorer →</a>
+          </div>
+          <div style="margin-top:0.4rem; border-top:1px solid #222; padding-top:0.3rem;">
+            <div style="font-size:0.65rem; color:#888; margin-bottom:0.2rem;">Balances:</div>
+            ${balancesHtml}
+          </div>
+        `;
+        const copyBtn = content.querySelector("#d-cdp-copy") as HTMLButtonElement | null;
+        if (copyBtn) {
+          copyBtn.addEventListener("click", () => {
+            navigator.clipboard.writeText(msg.address!);
+            copyBtn.textContent = "✓";
+            setTimeout(() => { copyBtn.textContent = "copy"; }, 1500);
+          });
+        }
+      };
+      this.store.cdpWalletListeners.push(this.detailCdpListener);
+
+      // Policy section
+      cdpSection.innerHTML += `
+        <div id="d-cdp-policy" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+          <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5; margin-bottom:0.3rem;">⚙ SPENDING POLICY</div>
+          <div id="d-cdp-policy-content" style="font-size:0.7rem; color:#888;">Loading policy...</div>
+        </div>
+      `;
+      this.net.send({ type: "get_cdp_policy", agentId: agent.id });
+      this.detailCdpPolicyListener = (msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        const pcontent = cdpSection.querySelector("#d-cdp-policy-content") as HTMLElement | null;
+        if (!pcontent) return;
+        if (msg.error) {
+          pcontent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          return;
+        }
+        const maxSol = msg.maxSolPerTransfer ?? "";
+        const allowed = msg.allowedRecipients?.join(", ") ?? "";
+        const blocked = msg.blockedRecipients?.join(", ") ?? "";
+        pcontent.innerHTML = `
+          <div style="margin-bottom:0.3rem;">
+            <label style="color:#888; font-size:0.65rem;">Max SOL per transfer:</label><br/>
+            <input id="d-cdp-max-sol" type="number" step="0.01" min="0" value="${esc(String(maxSol))}" placeholder="unlimited"
+              style="width:100%; padding:0.2rem; border:1px solid #333; border-radius:0.3rem; background:#111; color:#e0e0e0; font-size:0.65rem;" />
+          </div>
+          <div style="margin-bottom:0.3rem;">
+            <label style="color:#888; font-size:0.65rem;">Allowed recipients (comma-sep, leave empty for any):</label><br/>
+            <input id="d-cdp-allowed" type="text" value="${esc(allowed)}" placeholder="any address"
+              style="width:100%; padding:0.2rem; border:1px solid #333; border-radius:0.3rem; background:#111; color:#e0e0e0; font-size:0.6rem; font-family:monospace;" />
+          </div>
+          <div style="margin-bottom:0.3rem;">
+            <label style="color:#888; font-size:0.65rem;">Blocked recipients (comma-sep):</label><br/>
+            <input id="d-cdp-blocked" type="text" value="${esc(blocked)}" placeholder="none"
+              style="width:100%; padding:0.2rem; border:1px solid #333; border-radius:0.3rem; background:#111; color:#e0e0e0; font-size:0.6rem; font-family:monospace;" />
+          </div>
+          <button id="d-cdp-save-policy" style="padding:0.3rem 0.5rem; border:1px solid #3a7cb5; border-radius:0.3rem; background:#1a2a1a; color:#4f9dde; font-size:0.65rem; cursor:pointer;">Save Policy</button>
+        `;
+        const saveBtn = pcontent.querySelector("#d-cdp-save-policy") as HTMLButtonElement | null;
+        if (saveBtn) {
+          saveBtn.addEventListener("click", () => {
+            const maxSolInput = pcontent.querySelector("#d-cdp-max-sol") as HTMLInputElement | null;
+            const allowedInput = pcontent.querySelector("#d-cdp-allowed") as HTMLInputElement | null;
+            const blockedInput = pcontent.querySelector("#d-cdp-blocked") as HTMLInputElement | null;
+            const maxSolVal = maxSolInput?.value.trim();
+            const allowedVal = allowedInput?.value.trim();
+            const blockedVal = blockedInput?.value.trim();
+            this.net.send({
+              type: "set_cdp_policy",
+              agentId: agent.id,
+              maxSolPerTransfer: maxSolVal ? parseFloat(maxSolVal) : undefined,
+              allowedRecipients: allowedVal ? allowedVal.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+              blockedRecipients: blockedVal ? blockedVal.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+            });
+            saveBtn.textContent = "Saving...";
+            setTimeout(() => { saveBtn.textContent = "Save Policy"; }, 2000);
+          });
+        }
+      };
+      this.store.cdpPolicyListeners.push(this.detailCdpPolicyListener);
+
+      // Transaction history section
+      cdpSection.innerHTML += `
+        <div id="d-cdp-txhistory" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
+            <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5;">📜 TRANSACTION HISTORY</div>
+            <button id="d-cdp-tx-refresh" style="padding:0.2rem 0.4rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.6rem; cursor:pointer;">↻</button>
+          </div>
+          <div id="d-cdp-tx-content" style="font-size:0.7rem; color:#888;">Loading transactions...</div>
+        </div>
+      `;
+      this.net.send({ type: "get_cdp_tx_history", agentId: agent.id });
+      const txRefreshBtn = cdpSection.querySelector("#d-cdp-tx-refresh") as HTMLButtonElement | null;
+      if (txRefreshBtn) {
+        txRefreshBtn.addEventListener("click", () => {
+          this.net.send({ type: "get_cdp_tx_history", agentId: agent.id });
+          txRefreshBtn.textContent = "...";
+          setTimeout(() => { txRefreshBtn.textContent = "↻"; }, 2000);
+        });
+      }
+      this.detailCdpTxHistoryListener = (msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        const txContent = cdpSection.querySelector("#d-cdp-tx-content") as HTMLElement | null;
+        if (!txContent) return;
+        if (msg.error) {
+          txContent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          return;
+        }
+        if (!msg.transactions || msg.transactions.length === 0) {
+          txContent.innerHTML = `<span style="color:#666;">No transactions yet — this wallet may be new</span>`;
+          return;
+        }
+        const isDevnet = agent.cdpSolana;
+        const clusterParam = isDevnet ? "?cluster=devnet" : "";
+        txContent.innerHTML = msg.transactions.map((tx) => {
+          const time = tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "unknown";
+          const statusColor = tx.err ? "#e05d5d" : "#5d9e5d";
+          const statusText = tx.err ? "FAIL" : "OK";
+          const shortSig = tx.signature.slice(0, 8) + "..." + tx.signature.slice(-4);
+          const memo = tx.memo ? ` <span style="color:#666;">${esc(tx.memo)}</span>` : "";
+          return `<div style="margin-top:0.2rem; display:flex; gap:0.3rem; align-items:center;">` +
+            `<span style="color:#666; font-size:0.6rem;">${time}</span>` +
+            `<span style="color:${statusColor}; font-size:0.6rem; font-weight:600;">${statusText}</span>` +
+            `<a href="https://explorer.solana.com/tx/${esc(tx.signature)}${clusterParam}" target="_blank" style="color:#4f9dde; font-size:0.6rem; text-decoration:none; font-family:monospace;">${shortSig}</a>` +
+            memo +
+            `</div>`;
+        }).join("");
+      };
+      this.store.cdpTxHistoryListeners.push(this.detailCdpTxHistoryListener);
+    } else {
+      cdpSection.hidden = true;
+      cdpSection.innerHTML = "";
     }
 
     const logs = this.store.logs.get(agent.id) ?? [];

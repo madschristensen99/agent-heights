@@ -1325,7 +1325,7 @@ export class OfficeScene extends Phaser.Scene {
       const glow = this.monitorGlows[i];
       if (!glow) return;
       const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
-      if (agent && agent.status !== "idle") {
+      if (agent && agent.status !== "idle" && agent.status !== "waiting") {
         const color = STATUS_COLORS[agent.status];
         glow.setPosition(m.x, m.y + 4);
         glow.setFillStyle(color, pulse);
@@ -4420,6 +4420,7 @@ export class OfficeScene extends Phaser.Scene {
         role: "worker",
         appearance: delivery.appearance,
         mcpServers: delivery.mcpServers,
+        cdpSolana: delivery.cdpSolana,
       });
     }
 
@@ -4635,6 +4636,7 @@ export class OfficeScene extends Phaser.Scene {
       const spawnPx = tileOf(exitX, exitY);
       const npc = new AgentNPC(this, this.grid, info, spawnPx, seat, (clicked) =>
         this.walkToAgent(clicked),
+        (agentId) => this.getSeatForAgentId(agentId),
       );
       this.npcs.set(id, npc);
     }
@@ -5929,6 +5931,17 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** Resolve an agent's deskIndex to their seat tile. */
+  private getSeatForAgentId(agentId: string): Tile | null {
+    const info = this.store.agents.get(agentId);
+    if (!info) return null;
+    const overflow = info.deskIndex - this.seats.length;
+    return this.seats[info.deskIndex]
+      ?? this.extraSpots[overflow % Math.max(this.extraSpots.length, 1)]
+      ?? this.spawnTile
+      ?? null;
+  }
+
   private syncAgents(): void {
     for (const [id, info] of this.store.agents) {
       if (id === AGENT_RESOURCES_ID) {
@@ -5968,6 +5981,7 @@ export class OfficeScene extends Phaser.Scene {
           : this.doorTile;
         const npc = new AgentNPC(this, this.grid, info, spawnTile, seat, (clicked) =>
           this.walkToAgent(clicked),
+          (agentId) => this.getSeatForAgentId(agentId),
         );
         this.npcs.set(id, npc);
       }
@@ -5986,8 +6000,8 @@ export class OfficeScene extends Phaser.Scene {
       if (!agent) {
         // Unassigned desk — black screen
         m?.setFrame("2").clearTint();
-      } else if (agent.status === "idle") {
-        // Assigned but idle — code editor look
+      } else if (agent.status === "idle" || agent.status === "waiting") {
+        // Assigned but idle (or waiting at another desk) — code editor look
         m?.setFrame("0").clearTint();
       } else {
         // Working — lit with status color (matrix overlay drawn in update)
@@ -7811,7 +7825,7 @@ export class OfficeScene extends Phaser.Scene {
   private updateMatrixRain(_time: number): void {
     const workingDesks = new Set<number>();
     for (const agent of this.store.agents.values()) {
-      if (agent.deskIndex >= 0 && agent.status !== "idle" && agent.status !== "done" && agent.status !== "error") {
+      if (agent.deskIndex >= 0 && agent.status !== "idle" && agent.status !== "done" && agent.status !== "error" && agent.status !== "waiting") {
         workingDesks.add(agent.deskIndex);
       }
     }

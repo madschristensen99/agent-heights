@@ -12,6 +12,7 @@ import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
 import { loadMCPTools, type OnApiErrorFn } from "./mcp-client.js";
+import { loadCdpSolanaTools } from "./cdp-solana.js";
 import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
 import { browserNavigate, browserScreenshot, browserExtractText, browserClick, browserFill } from "./browser.js";
 
@@ -142,9 +143,14 @@ export async function makeTools(cwd: string, opts?: {
   eventFeedPath?: string;
   submitState?: { called: boolean; verified: boolean; callCount: number };
   mcpServers?: import("../../shared/types.js").MCPServerConfig[];
+  cdpSolana?: boolean;
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
   abortRef?: { signal: AbortSignal };
   onApiError?: OnApiErrorFn;
+  createSelfSchedule?: (name: string, task: string, cronExpression: string) => string;
+  listSelfSchedules?: () => { id: string; name: string; task: string; cronExpression: string; enabled: boolean; nextRunAt: number; runCount: number; lastRunAt: number | null }[];
+  updateSelfSchedule?: (scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }) => string;
+  deleteSelfSchedule?: (scheduleId: string) => string;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -568,10 +574,91 @@ export async function makeTools(cwd: string, opts?: {
 
   const baseWithWorld = [...baseWithMessaging, ...boardTools, ...eventTools];
 
+  // ── Self-scheduling tools ──────────────────────────────────────────
+  const scheduleTools: AgentTool<any, any>[] = [];
+  if (opts?.createSelfSchedule && opts?.agentId) {
+    const createScheduleTool: AgentTool<any, any> = {
+      name: "create_schedule",
+      description: "Create a recurring scheduled task for yourself. The minimum frequency is every 15 minutes. Use cron expressions (5 fields: minute hour day-of-month month day-of-week). Examples: '*/15 * * * *' (every 15 min), '0 * * * *' (hourly), '0 9 * * *' (daily at 9 AM).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "A short name for the schedule (max 100 chars)" },
+          task: { type: "string", description: "The task prompt to run on the schedule (max 4000 chars)" },
+          cronExpression: { type: "string", description: "5-field cron expression. Minimum interval: 15 minutes. Example: '*/15 * * * *'" },
+        },
+        required: ["name", "task", "cronExpression"],
+      },
+      async execute(input: any) {
+        return opts.createSelfSchedule!(String(input.name ?? ""), String(input.task ?? ""), String(input.cronExpression ?? ""));
+      },
+    };
+    scheduleTools.push(createScheduleTool);
+  }
+  if (opts?.listSelfSchedules) {
+    const listSchedulesTool: AgentTool<any, any> = {
+      name: "list_schedules",
+      description: "List all your scheduled tasks with their status, cron expression, run count, and next run time.",
+      inputSchema: { type: "object", properties: {} },
+      async execute() {
+        const schedules = opts.listSelfSchedules!();
+        if (schedules.length === 0) return "You have no scheduled tasks.";
+        return schedules.map((s) =>
+          `[${s.enabled ? "ON" : "OFF"}] ${s.id}: ${s.name} (cron: ${s.cronExpression}, runs: ${s.runCount}, next: ${new Date(s.nextRunAt).toISOString()})`
+        ).join("\n");
+      },
+    };
+    scheduleTools.push(listSchedulesTool);
+  }
+  if (opts?.updateSelfSchedule) {
+    const updateScheduleTool: AgentTool<any, any> = {
+      name: "update_schedule",
+      description: "Update one of your existing scheduled tasks. You can change the name, task prompt, cron expression, or enable/disable it. Only schedules belonging to you can be modified.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          scheduleId: { type: "string", description: "The ID of the schedule to update" },
+          name: { type: "string", description: "New name for the schedule (optional)" },
+          task: { type: "string", description: "New task prompt (optional)" },
+          cronExpression: { type: "string", description: "New cron expression (optional, min 15 min interval)" },
+          enabled: { type: "boolean", description: "Enable or disable the schedule (optional)" },
+        },
+        required: ["scheduleId"],
+      },
+      async execute(input: any) {
+        const updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string } = {};
+        if (input.enabled !== undefined) updates.enabled = Boolean(input.enabled);
+        if (input.name !== undefined) updates.name = String(input.name);
+        if (input.task !== undefined) updates.task = String(input.task);
+        if (input.cronExpression !== undefined) updates.cronExpression = String(input.cronExpression);
+        return opts.updateSelfSchedule!(String(input.scheduleId), updates);
+      },
+    };
+    scheduleTools.push(updateScheduleTool);
+  }
+  if (opts?.deleteSelfSchedule) {
+    const deleteScheduleTool: AgentTool<any, any> = {
+      name: "delete_schedule",
+      description: "Delete one of your scheduled tasks. Only schedules belonging to you can be deleted.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          scheduleId: { type: "string", description: "The ID of the schedule to delete" },
+        },
+        required: ["scheduleId"],
+      },
+      async execute(input: any) {
+        return opts.deleteSelfSchedule!(String(input.scheduleId));
+      },
+    };
+    scheduleTools.push(deleteScheduleTool);
+  }
+  const baseWithSchedules = [...baseWithWorld, ...scheduleTools];
+
   if (opts?.railway) {
     const railwayTools = await wrapRailwayTools();
     if (railwayTools.length > 0) {
-      return [...baseWithWorld, ...railwayTools];
+      return [...baseWithSchedules, ...railwayTools];
     }
   }
 
@@ -579,11 +666,19 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
     const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
     if (mcpTools.length > 0) {
-      return [...baseWithWorld, ...mcpTools];
+      return [...baseWithSchedules, ...mcpTools];
     }
   }
 
-  return baseWithWorld;
+  // Load CDP Solana wallet tools (auto-provisioned, no user credentials needed)
+  if (opts?.cdpSolana && opts?.agentId) {
+    const cdpTools = await loadCdpSolanaTools(opts.agentId);
+    if (cdpTools.length > 0) {
+      return [...baseWithSchedules, ...cdpTools];
+    }
+  }
+
+  return baseWithSchedules;
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
@@ -695,9 +790,14 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         eventFeedPath: ctx.eventFeedPath,
         submitState: isChat ? undefined : submitState,
         mcpServers: ctx.mcpServers,
+        cdpSolana: ctx.cdpSolana,
         onPostMessage: ctx.onPostMessage,
         abortRef,
         onApiError: ctx.onApiError,
+        createSelfSchedule: ctx.createSelfSchedule,
+        listSelfSchedules: ctx.listSelfSchedules,
+        updateSelfSchedule: ctx.updateSelfSchedule,
+        deleteSelfSchedule: ctx.deleteSelfSchedule,
       });
       const maxIter = isChat ? (agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);

@@ -16,6 +16,7 @@ import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, delet
 import { rateLimitAsync } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
+import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory } from "./providers/cdp-solana.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
@@ -761,7 +762,7 @@ wss.on("connection", async (ws, req) => {
       }
 
       // Permission tiers: manage > talk > tour > no_access
-      const MANAGE_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
+      const MANAGE_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "get_cdp_wallet", "get_cdp_policy", "set_cdp_policy", "get_cdp_tx_history", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
       const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
 
       if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
@@ -829,7 +830,7 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         case "hire":
-          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality);
+          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana);
           break;
         case "update_appearance": {
           if (!sess.player) break;
@@ -1275,6 +1276,75 @@ wss.on("connection", async (ws, req) => {
           // Refresh the manager's MCP key cache
           const mcpKeys = await getUserMcpKeys(sess.user.id);
           sess.manager.setMcpKeys(mcpKeys);
+          break;
+        }
+        case "get_cdp_wallet": {
+          try {
+            const address = await getAgentWalletAddress(msg.agentId);
+            if (!address) {
+              sess.broadcast({ type: "cdp_wallet_status", agentId: msg.agentId, address: null, balances: null, error: "CDP not configured or wallet not found" });
+              break;
+            }
+            const balData = await getAgentBalances(msg.agentId);
+            const balances = balData
+              ? (balData.balances as any[]).map((b: any) => ({
+                  symbol: b.symbol ?? b.token ?? "unknown",
+                  amount: String(b.amount ?? b.balance ?? "0"),
+                  usdValue: b.usdValue ? String(b.usdValue) : undefined,
+                }))
+              : [];
+            sess.broadcast({ type: "cdp_wallet_status", agentId: msg.agentId, address, balances });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "cdp_wallet_status", agentId: msg.agentId, address: null, balances: null, error: msg2 });
+          }
+          break;
+        }
+        case "get_cdp_policy": {
+          try {
+            const policy = await getAgentPolicy(msg.agentId);
+            if (!policy) {
+              sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: "CDP not configured" });
+              break;
+            }
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: policy.policyId, maxSolPerTransfer: policy.maxSolPerTransfer, allowedRecipients: policy.allowedRecipients, blockedRecipients: policy.blockedRecipients, network: policy.network });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: msg2 });
+          }
+          break;
+        }
+        case "set_cdp_policy": {
+          try {
+            const policy = await updateAgentPolicy(msg.agentId, {
+              maxSolPerTransfer: msg.maxSolPerTransfer,
+              allowedRecipients: msg.allowedRecipients,
+              blockedRecipients: msg.blockedRecipients,
+            });
+            if (!policy) {
+              sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: "CDP not configured" });
+              break;
+            }
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: policy.policyId, maxSolPerTransfer: policy.maxSolPerTransfer, allowedRecipients: policy.allowedRecipients, blockedRecipients: policy.blockedRecipients, network: policy.network });
+            sess.broadcast({ type: "toast", text: "Spending policy updated." });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: msg2 });
+          }
+          break;
+        }
+        case "get_cdp_tx_history": {
+          try {
+            const history = await getAgentTxHistory(msg.agentId);
+            if (!history) {
+              sess.broadcast({ type: "cdp_tx_history", agentId: msg.agentId, transactions: null, error: "CDP not configured" });
+              break;
+            }
+            sess.broadcast({ type: "cdp_tx_history", agentId: msg.agentId, transactions: history });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "cdp_tx_history", agentId: msg.agentId, transactions: null, error: msg2 });
+          }
           break;
         }
         case "save_outfit": {

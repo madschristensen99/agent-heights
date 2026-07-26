@@ -3789,25 +3789,18 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
   // ── DeFi / Wallet MCPs ────────────────────────────────────────────────
 
   {
-    id: "coinbase-cdp",
-    name: "Coinbase",
-    summary: "Trade crypto, manage portfolios, convert USDC/USD via Coinbase Advanced Trade.",
+    id: "coinbase-cdp-solana",
+    name: "Coinbase Solana Wallet",
+    summary: "Auto-provisioned Solana wallet via Coinbase CDP — transfers, signing, faucet. No user keys needed.",
     description:
-      "Coinbase for Agents MCP server. Create a Secret API Key (ECDSA) in the Coinbase Developer Portal, download the JSON key file, then paste the two values from it. Your agent gets access to crypto trading (market and limit orders), portfolio management, USDC/USD conversions, and real-time market data. Every order supports dry-run preview so agents can inspect fees, slippage, and estimated fill price before committing.",
+      "Native Coinbase Developer Platform (CDP) integration. Each agent gets its own auto-provisioned Solana wallet — no user credentials needed. The server holds CDP API keys and creates wallets on demand via the CDP SDK. Agents can check balances, transfer SOL and SPL tokens, sign and broadcast arbitrary Solana transactions (for DeFi composability), request testnet faucet funds, and sign messages. Wallets are secured in Coinbase's Trusted Execution Environment (TEE) with optional spending policy enforcement. Supports Solana mainnet and devnet.",
     transport: "stdio",
-    authType: "apikey",
+    authType: "open",
     isOfficial: true,
-    category: ["defi", "wallet", "trading", "crypto", "payments"],
+    category: ["defi", "wallet", "trading", "crypto", "solana"],
     icon: "https://cdn.simpleicons.org/coinbase/white",
-    command: "npx",
-    args: ["-y", "@coinbase/coinbase-cli", "mcp"],
-    envVars: [
-      { name: "CDP_KEY_ID", description: "API Key ID — from the JSON key file you downloaded (the 'id' field)", isRequired: true },
-      { name: "CDP_KEY_SECRET", description: "Private Key — from the JSON key file you downloaded (the 'privateKey' field)", isRequired: true },
-    ],
-    keyLabel: "CDP API Key",
-    keyPlaceholder: "Paste API Key ID...",
-    keyHelpUrl: "https://portal.cdp.coinbase.com/api-keys/secret",
+    nativeIntegration: true,
+    nativeIntegrationNote: "Auto-provisioned Solana wallet via Coinbase CDP SDK. Server-side credentials — no user setup needed.",
   },
   {
     id: "talken-agentic-wallet",
@@ -3900,6 +3893,57 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyLabel: "API Key",
     keyPlaceholder: "Paste Runpod API key...",
     keyHelpUrl: "https://docs.runpod.io/get-started/api-keys",
+  },
+
+  // ── Solana Intelligence MCPs ──────────────────────────────────────────
+
+  {
+    id: "santiment-sentiment",
+    name: "Crypto Sentiment (Santiment)",
+    summary: "Social sentiment analysis, mention volume, trending words, and asset dominance for crypto.",
+    description:
+      "Delivers cryptocurrency sentiment analysis by leveraging Santiment's social media and news data. Agents can retrieve sentiment balance (positive vs negative), monitor social volume and detect spikes, measure asset dominance in crypto media, and identify trending words. Pairs well with a Solana wallet agent for sentiment-informed trading decisions.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: false,
+    category: ["crypto", "trading", "analytics", "defi"],
+    icon: "https://cdn.simpleicons.org/santiment/white",
+    command: "uv",
+    args: ["--directory", "path/to/crypto-sentiment-mcp", "run", "main.py"],
+    envVars: [
+      { name: "SANTIMENT_API_KEY", description: "Santiment API Key (free tier available from app.santiment.net)", isRequired: true },
+    ],
+    keyLabel: "Santiment API Key",
+    keyPlaceholder: "Paste Santiment API key...",
+    keyHelpUrl: "https://app.santiment.net/",
+  },
+  {
+    id: "solana-rugcheck",
+    name: "Solana RugCheck",
+    summary: "Deep token security analysis — scam detection, LP locks, holder concentration, authority checks.",
+    description:
+      "Integrates with the RugCheck API to provide deep security analysis for Solana tokens. Checks for honeypots, LP lock status, mint authority, freeze authority, top holder concentration, and social verification. More thorough than Jupiter Shield — use before swapping to unknown tokens. Pairs well with a Solana wallet agent for safe trading.",
+    transport: "stdio",
+    authType: "open",
+    isOfficial: false,
+    category: ["crypto", "trading", "security", "solana", "defi"],
+    icon: "https://cdn.simpleicons.org/solana/white",
+    command: "npx",
+    args: ["-y", "@goat-sdk/goat-mcp"],
+  },
+  {
+    id: "geartrade-ta",
+    name: "GearTrade Technical Analysis",
+    summary: "69 crypto analysis tools — indicators, whale tracking, liquidation levels, market structure, Hyperliquid trading.",
+    description:
+      "Comprehensive cryptocurrency technical analysis MCP server with 69 tools across 5 categories: market data (price, volume, multi-timeframe), order book analysis (depth, volume profile, market regime, patterns, divergence, liquidation levels), position & whale tracking, risk management (position sizing, risk/reward), and 35+ indicators (10 moving averages, 18 oscillators, channels, pivot points). Includes AI memory for logging trades and recalling patterns. Also supports Hyperliquid futures and spot trading execution. Pairs well with a Solana wallet agent for technical-analysis-informed trading.",
+    transport: "stdio",
+    authType: "open",
+    isOfficial: false,
+    category: ["crypto", "trading", "analytics", "defi"],
+    icon: "https://cdn.simpleicons.org/binance/white",
+    command: "bash",
+    args: ["path/to/mcp-technical-analysis/scripts/mcp-auto-start.sh"],
   },
 ];
 

@@ -31,6 +31,7 @@ function statusEmoji(status: AgentStatus): string {
     case "done": return "✅";
     case "error": return "❌";
     case "idle": return "😴";
+    case "waiting": return "⏳";
     default: return "❓";
   }
 }
@@ -42,6 +43,7 @@ function statusColor(status: AgentStatus): string {
     case "done": return "#5c5";
     case "error": return "#e55";
     case "idle": return "#999";
+    case "waiting": return "#b47ec4";
     default: return "#999";
   }
 }

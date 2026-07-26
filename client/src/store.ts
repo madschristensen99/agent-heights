@@ -12,6 +12,7 @@ export interface HelicopterDelivery {
   sprite?: number;
   appearance?: CharAppearance;
   mcpServers?: MCPServerConfig[];
+  cdpSolana?: boolean;
   alreadyHired?: boolean;
 }
 
@@ -85,6 +86,12 @@ export class Store {
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
+  /** Listeners called when server responds with CDP wallet status. */
+  cdpWalletListeners: ((msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void)[] = [];
+  /** Listeners called when server responds with CDP policy status. */
+  cdpPolicyListeners: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => void)[] = [];
+  /** Listeners called when server responds with CDP tx history. */
+  cdpTxHistoryListeners: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void)[] = [];
   entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
@@ -901,6 +908,15 @@ export class Store {
         }
         // Notify any listeners (marketplace/detail panel) so they can update UI
         for (const fn of this.mcpKeysStatusListeners) fn([{ serverUrl: msg.serverUrl, hasKey: msg.success }]);
+        break;
+      case "cdp_wallet_status":
+        for (const fn of this.cdpWalletListeners) fn(msg);
+        break;
+      case "cdp_policy_status":
+        for (const fn of this.cdpPolicyListeners) fn(msg);
+        break;
+      case "cdp_tx_history":
+        for (const fn of this.cdpTxHistoryListeners) fn(msg);
         break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;

@@ -17,6 +17,7 @@ export const STATUS_COLORS: Record<AgentInfo["status"], number> = {
   working: 0x4cb866,
   done: 0x4a9cd8,
   error: 0xe05858,
+  waiting: 0xb47ec4,
 };
 
 export type Dir = "down" | "left" | "right" | "up";
@@ -68,6 +69,10 @@ export class AgentNPC {
   private idleSpot: Tile | null = null;
   private assembleUntil = 0;
   private scene: Phaser.Scene;
+  private getSeatForAgent: ((agentId: string) => Tile | null) | null;
+  private waitingSpot: Tile | null = null;
+  private waitingFaceTile: Tile | null = null;
+  private waitingEmoteAt = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -76,10 +81,12 @@ export class AgentNPC {
     spawn: Tile,
     seat: Tile,
     onClick: (id: string) => void,
+    getSeatForAgent?: (agentId: string) => Tile | null,
   ) {
     this.info = info;
     this.seat = seat;
     this.scene = scene;
+    this.getSeatForAgent = getSeatForAgent ?? null;
 
     const feet = feetOf(spawn);
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
@@ -173,6 +180,27 @@ export class AgentNPC {
       this.pendingBreak = true;
       this.confetti();
     }
+    if (info.status === "waiting" && wasStatus !== "waiting") {
+      // Walk to the target agent's desk and wait there.
+      this.pendingBreak = false;
+      this.breakUntil = 0;
+      this.breakFace = null;
+      this.wanderAt = 0;
+      const targetSeat = info.waitingFor && this.getSeatForAgent ? this.getSeatForAgent(info.waitingFor) : null;
+      if (targetSeat) {
+        this.waitingFaceTile = targetSeat;
+        this.waitingSpot = this.findDeskAdjacentTile(targetSeat);
+        if (this.waitingSpot) {
+          this.path = findPath(this.grid, this.tile(), this.waitingSpot);
+        }
+      }
+    }
+    if (wasStatus === "waiting" && info.status !== "waiting") {
+      // Released from waiting — clear waiting state.
+      this.waitingSpot = null;
+      this.waitingFaceTile = null;
+      this.waitingEmoteAt = 0;
+    }
   }
 
   tile(): Tile {
@@ -248,7 +276,8 @@ export class AgentNPC {
       this.huddling ||
       this.info.status === "thinking" ||
       this.info.status === "done" ||
-      this.info.status === "error"
+      this.info.status === "error" ||
+      this.info.status === "waiting"
     );
     this.bubble.setVisible(showBubble);
     if (showBubble) {
@@ -261,6 +290,9 @@ export class AgentNPC {
       } else if (this.info.status === "error") {
         this.bubble.setTint(0xe05858);
         this.bubble.setFrame(Math.floor(time / 200) % 2 === 0 ? 0 : 2);
+      } else if (this.info.status === "waiting") {
+        this.bubble.setTint(0xb47ec4);
+        this.bubble.setFrame(Math.floor(time / 500) % 3);
       } else {
         this.bubble.clearTint();
         this.bubble.setFrame(Math.floor(time / 350) % 3);
@@ -309,6 +341,40 @@ export class AgentNPC {
           Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
       }
       this.play(`${c}-idle-${this.dir}`);
+      this.container.setDepth(10 + this.container.y);
+      return;
+    }
+
+    // --- waiting at a colleague's desk ---
+    if (this.info.status === "waiting" && !this.busy) {
+      // Show a periodic waiting emote
+      if (this.waitingEmoteAt === 0) this.waitingEmoteAt = time + 2000;
+      if (time >= this.waitingEmoteAt) {
+        this.showEmote("💭", 2500);
+        this.waitingEmoteAt = time + 5000 + Math.random() * 3000;
+      }
+      // If we have a waiting spot, make sure we're heading there
+      if (this.waitingSpot) {
+        const at = this.tile();
+        if (at.x !== this.waitingSpot.x || at.y !== this.waitingSpot.y) {
+          // Not there yet — if no path, try to find one
+          if (this.path.length === 0) {
+            this.path = findPath(this.grid, at, this.waitingSpot);
+          }
+        } else {
+          // At the waiting spot — face the target agent's desk
+          if (this.waitingFaceTile) {
+            const dx = this.waitingFaceTile.x - at.x;
+            const dy = this.waitingFaceTile.y - at.y;
+            this.dir =
+              Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+          }
+          this.play(`${c}-idle-${this.dir}`);
+        }
+      } else {
+        // No waiting spot found — just stand and wait
+        this.play(`${c}-idle-${this.dir}`);
+      }
       this.container.setDepth(10 + this.container.y);
       return;
     }

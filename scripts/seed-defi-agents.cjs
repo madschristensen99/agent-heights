@@ -1,0 +1,346 @@
+#!/usr/bin/env node
+/**
+ * Seed the marketplace with DeFi/wallet agents via Supabase REST API.
+ * Run: set -a && source .env && set +a && node scripts/seed-defi-agents.js
+ */
+const { createClient } = require("@supabase/supabase-js");
+
+const url = process.env.SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!url || !key) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  process.exit(1);
+}
+
+const sb = createClient(url, key, { auth: { persistSession: false } });
+
+const NAMES = [
+  "Coinbase Solana Agent",
+  "Coinbase DeFi Trader",
+  "Talken Swap Agent",
+  "Phantom Wallet Agent",
+  "AgentWallet Trader",
+  "WAIaaS DeFi Agent",
+  "Solana Token Security Agent",
+  "Crypto Sentiment Agent",
+  "Crypto Technical Analysis Agent",
+];
+
+const agents = [
+  {
+    name: "Coinbase Solana Agent",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are a Coinbase Solana agent with an auto-provisioned Solana wallet via Coinbase Developer Platform (CDP). You can check your wallet address, view token balances (SOL and SPL tokens), transfer SOL and SPL tokens to any Solana address, swap tokens via Jupiter Ultra API (DEX aggregation + RFQ for best pricing with MEV protection), sign and broadcast arbitrary Solana transactions for DeFi operations, request testnet faucet funds, sign messages to prove wallet ownership, and check your spending policy. Your wallet is secured in Coinbase TEE (Trusted Execution Environment) — private keys never leave Coinbase. Always confirm transactions with the user before executing, showing the recipient address, amount, and token. You are knowledgeable about Solana DeFi ecosystems including Jupiter swaps, Raydium, Orca, MarginFi, Kamino, and Jito staking. You can help users construct transactions for any Solana program by building instructions and signing via your wallet. If no spending policy is set, recommend the user set one in the agent detail panel. When considering swapping to unknown tokens, recommend the user hire a Solana Token Security Agent for deep RugCheck analysis, a Crypto Sentiment Agent for market sentiment context, and a Crypto Technical Analysis Agent for indicator-based analysis. You wear a Coinbase blue shirt and are precise about transaction details.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 1, hairStyle: 2, hair: 2, shirt: 1, pants: 0, accessory: 4, accent: 9, beard: 1, eyeColor: 1, headFeature: 0 },
+      cdpSolana: true,
+    }),
+    description:
+      "Coinbase Solana Agent — auto-provisioned Solana wallet via Coinbase CDP. No user credentials needed.\n\nThis agent can:\n• Get its own Solana wallet address (auto-provisioned on first use)\n• Check SOL and SPL token balances with USD values\n• Transfer SOL and SPL tokens to any address\n• Swap tokens via Jupiter Ultra API (DEX aggregation + RFQ, MEV-protected)\n• Search for tokens by name/symbol to get mint addresses\n• Get price quotes without executing swaps\n• Check token security (honeypot, frozen mint, taxes) before swapping\n• Sign and broadcast arbitrary Solana transactions (DeFi composability)\n• Request testnet faucet funds (devnet)\n• Sign messages to prove wallet ownership\n• Check spending policy and recommend limits to the user\n• View transaction history with explorer links\n\nWallets are secured in Coinbase Trusted Execution Environment (TEE) with spending policy enforcement. No user API keys or credentials needed — the server handles everything via Coinbase CDP SDK.\n\nTo start: Just hire the agent. The wallet is created automatically on first task.",
+    summary:
+      "Coinbase Solana agent — auto-provisioned wallet, transfers, Jupiter swaps, signing, DeFi composability. No setup needed.",
+    tags: "coinbase,solana,defi,wallet,crypto,cdp,transfers,swaps,jupiter,signing",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Get auto-provisioned Solana wallet address","Transfer SOL and SPL tokens","Swap tokens via Jupiter Ultra API","Search for tokens by name/symbol","Get swap price quotes","Check token security","Sign and broadcast arbitrary Solana transactions","Request testnet faucet funds","Check spending policy","View transaction history"]',
+    category: '["trading","finance","defi","wallet"]',
+    requirements: "[]",
+    links:
+      '[{"label":"CDP Documentation","url":"https://docs.cdp.coinbase.com/coinbase-for-agents/overview"},{"label":"Solana Explorer","url":"https://explorer.solana.com"},{"label":"Jupiter Ultra API","url":"https://developers.jup.ag/docs/ultra/get-started"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/coinbase.com.ico",
+  },
+  {
+    name: "Talken Swap Agent",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are a Talken Agentic Wallet agent connected via the Talken MCP server. You can swap tokens across multiple DEXs, bridge assets cross-chain via Circle CCTP and LayerZero, trade perpetual futures and spot on Hyperliquid, take positions on Polymarket prediction markets, and stake assets. You support 10+ chains including Ethereum, Arbitrum, Solana, Bitcoin, and TRON. You use MPC technology so private keys are never exposed. You can execute gasless transactions paying fees in USDC or USDT. Always confirm trades with the user before executing, showing the trade details, expected output, and any slippage. You are knowledgeable about DEX aggregation, optimal routing, and cross-chain bridging. You have a sleek modern appearance with dark tones.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 2, hairStyle: 4, hair: 10, shirt: 8, pants: 5, accessory: 6, accent: 5, beard: 0, eyeColor: 2, headFeature: 3 },
+      mcpServers: [
+        {
+          name: "Talken Agentic Wallet",
+          authType: "apikey",
+          command: "npx",
+          args: ["-y", "@talken/agentic-wallet"],
+          envVars: [{ name: "TALKEN_API_KEY", description: "Talken API Key (from talken.io dashboard)", isRequired: true }],
+          keyLabel: "Talken API Key",
+          keyPlaceholder: "tk_...",
+          keyHelpUrl: "https://docs.talken.io/",
+        },
+      ],
+    }),
+    description:
+      "Talken Swap Agent — connected to Talken Agentic Wallet via MCP (API Key required).\n\nThis agent can:\n• Swap tokens across multiple DEXs with optimal rate finding\n• Bridge assets cross-chain via Circle CCTP and LayerZero\n• Trade perpetual futures and spot on Hyperliquid with leverage\n• Take positions on Polymarket prediction markets\n• Stake assets and manage staking positions\n• Execute gasless transactions (pay fees in USDC/USDT)\n\nSupported chains: Ethereum, Arbitrum, Solana, Bitcoin, TRON, and 5+ more.\n\nTo connect: Get your Talken API key from the Talken dashboard.",
+    summary: "Talken agent — multi-chain DEX swaps, cross-chain bridges, Hyperliquid perps, Polymarket, staking.",
+    tags: "talken,defi,trading,wallet,crypto,dex,bridge,hyperliquid,polymarket,staking,mcp",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Swap tokens across multiple DEXs with optimal routing","Bridge assets cross-chain (Circle CCTP, LayerZero)","Trade perps and spot on Hyperliquid","Stake assets and manage positions"]',
+    category: '["trading","finance","defi","wallet"]',
+    requirements: '["Talken account","Talken API Key"]',
+    links:
+      '[{"label":"Talken Documentation","url":"https://docs.talken.io/"},{"label":"Talken Dashboard","url":"https://talken.io/"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/talken.io.ico",
+  },
+  {
+    name: "Phantom Wallet Agent",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are a Phantom wallet agent connected via the Phantom MCP server. You have a dedicated agent wallet (separate from the user personal wallet) on Solana, Ethereum, Bitcoin, and Sui. You can check wallet addresses, view token balances with live USD pricing, transfer tokens, sign and broadcast transactions, simulate transactions before submitting, and trade perps. You use a simulate-then-sign flow for safety. Always confirm transactions with the user before executing. You are knowledgeable about Solana DeFi (Jupiter, MarginFi, Kamino) and EVM DeFi. You have a ghostly purple aesthetic.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 0, hairStyle: 7, hair: 6, shirt: 6, pants: 5, accessory: 3, accent: 7, beard: 0, eyeColor: 6, headFeature: 2 },
+      mcpServers: [{ name: "Phantom", command: "npx", args: ["-y", "@phantom/mcp-server@latest"] }],
+    }),
+    description:
+      "Phantom Wallet Agent — connected to Phantom via MCP (auto-auth).\n\nThis agent can:\n• Get wallet addresses for Solana, Ethereum, Bitcoin, and Sui\n• View token balances with live USD pricing\n• Transfer SOL, ETH, and SPL/ERC-20 tokens\n• Simulate transactions before submitting (preview asset changes)\n• Sign and broadcast Solana and EVM transactions\n• Sign messages (EIP-191, EIP-712, Solana)\n• Trade perpetuals\n\nThe agent receives a new dedicated wallet on authentication — not your personal Phantom wallet. You must fund the agent wallet before it can transact.\n\nNo setup required — the Phantom MCP server handles its own authentication via browser.",
+    summary: "Phantom agent — dedicated agent wallet for Solana & EVM: transfers, swaps, perps, signing.",
+    tags: "phantom,defi,trading,wallet,crypto,solana,evm,bitcoin,sui,mcp",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Transfer tokens across Solana, Ethereum, Bitcoin, and Sui","Simulate transactions before submitting","Sign and broadcast transactions","Trade perpetuals"]',
+    category: '["trading","finance","defi","wallet"]',
+    requirements: '["Funds in agent wallet to transact"]',
+    links:
+      '[{"label":"Phantom MCP Server","url":"https://docs.phantom.com/phantom-mcp-server/"},{"label":"npm Package","url":"https://www.npmjs.com/package/@phantom/mcp-server"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/phantom.com.ico",
+  },
+  {
+    name: "AgentWallet Trader",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are an AgentWallet trading agent connected via the AgentWallet MCP server. You can create wallets, sign transactions, and broadcast on-chain across 9 EVM chains (Ethereum, Base, Polygon, BSC, Arbitrum, Optimism, Avalanche, Zora, PulseChain) and Solana. You have 29 tools including transfers, token approvals, wrapping ETH, and x402 payments. Built-in guards protect you: daily spending limits, gas price protection, emergency pause, rate limiting, and replay protection. No KYC required. Always confirm transactions with the user before executing. You are fast, permissionless, and ready to go. You have a clean modern look.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 3, hairStyle: 3, hair: 8, shirt: 5, pants: 2, accessory: 0, accent: 11, beard: 0, eyeColor: 4, headFeature: 0 },
+      mcpServers: [
+        {
+          name: "AgentWallet",
+          authType: "apikey",
+          command: "npx",
+          args: ["-y", "agentwallet-mcp"],
+          envVars: [{ name: "AGENTWALLET_API_KEY", description: "AgentWallet API Key (from hifriendbot.com)", isRequired: true }],
+          keyLabel: "AgentWallet API Key",
+          keyPlaceholder: "aw_...",
+          keyHelpUrl: "https://hifriendbot.com",
+        },
+      ],
+    }),
+    description:
+      "AgentWallet Trader — permissionless wallet agent via MCP (API Key required, no KYC).\n\nThis agent can:\n• Create wallets on 9 EVM chains and Solana\n• Send native tokens (ETH, SOL, POL, BNB, etc.)\n• Transfer ERC-20 and SPL tokens (USDC, USDT, etc.)\n• Approve ERC-20 token spending for DeFi\n• Wrap/unwrap native tokens (WETH, WAVAX, etc.)\n• Sign and broadcast raw transactions\n• Read-only contract calls (eth_call)\n• Pay and accept x402 payments\n\nBuilt-in guards: daily spending limits, gas price protection, emergency pause, rate limiting, replay protection — all active by default.\n\nNo KYC, no approval process. Instant access.\n\nTo connect: Get your AgentWallet API key from hifriendbot.com.",
+    summary: "AgentWallet agent — permissionless wallets on EVM + Solana with built-in guards. No KYC.",
+    tags: "agentwallet,defi,trading,wallet,crypto,evm,solana,x402,mcp",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Create wallets on 9 EVM chains and Solana","Send tokens and interact with contracts","Approve ERC-20 spending for DeFi","Pay for services via x402 protocol"]',
+    category: '["trading","finance","defi","wallet"]',
+    requirements: '["AgentWallet API Key (from hifriendbot.com)"]',
+    links:
+      '[{"label":"AgentWallet","url":"https://hifriendbot.com"},{"label":"npm Package","url":"https://www.npmjs.com/package/agentwallet-mcp"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/hifriendbot.com.ico",
+  },
+  {
+    name: "WAIaaS DeFi Agent",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are a WAIaaS (Wallet AI as a Service) DeFi agent connected to a self-hosted wallet daemon. You have access to 42 MCP tools and 13+ DeFi protocols: Jupiter (Solana DEX), 0x (EVM DEX aggregator), LI.FI (cross-chain swap/bridge), Lido (staking), Jito (Solana staking), Aave V3 (EVM lending), Kamino (Solana lending), Pendle, Drift, Hyperliquid, Across Bridge, and Polymarket. You operate under a default-deny policy engine — you cannot interact with tokens, contracts, or spenders unless explicitly whitelisted. Every transaction goes through a 6-stage pipeline: validate, policy check, delay/approval, sign, broadcast, confirm. You are extremely security-conscious and policy-driven. You explain to the user what each transaction will do and why it complies with policy. You have a technical, infrastructure-oriented appearance.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 2, hairStyle: 5, hair: 1, shirt: 9, pants: 7, accessory: 1, accent: 3, beard: 3, eyeColor: 0, headFeature: 4 },
+      mcpServers: [
+        {
+          name: "WAIaaS",
+          authType: "apikey",
+          command: "npx",
+          args: ["-y", "@waiaas/sdk", "mcp"],
+          envVars: [
+            { name: "WAIaaS_API_URL", description: "WAIaaS daemon URL (default: http://localhost:3839)", isRequired: true },
+            { name: "WAIaaS_SESSION_TOKEN", description: "JWT session token from the daemon", isRequired: true },
+          ],
+          keyLabel: "WAIaaS Connection",
+          keyPlaceholder: "Paste connection details...",
+          keyHelpUrl: "https://waiaas.ai/",
+        },
+      ],
+    }),
+    description:
+      "WAIaaS DeFi Agent — self-hosted wallet daemon with policy engine via MCP (API Key required).\n\nThis agent can:\n• Swap tokens via Jupiter (Solana) and 0x (EVM aggregator)\n• Bridge assets cross-chain via LI.FI and Across Bridge\n• Stake via Lido (EVM) and Jito (Solana)\n• Supply collateral, borrow, and repay on Aave V3 (EVM) and Kamino (Solana)\n• Trade on Hyperliquid and Drift\n• Take positions on Polymarket\n• Manage yield via Pendle\n\nSecurity model:\n• Default-deny: only whitelisted tokens/contracts/spenders allowed\n• 6-stage transaction pipeline: validate → policy → delay/approval → sign → broadcast → confirm\n• Owner approval via WalletConnect, Telegram, or Wallet SDK\n• Kill switch and real-time monitoring\n• Private keys encrypted with Argon2id, never leave the machine\n\nTo connect: Run the WAIaaS daemon locally and provide the API URL and session token.",
+    summary: "WAIaaS agent — self-hosted DeFi with 13+ protocols, policy engine, and 6-stage tx pipeline.",
+    tags: "waiaas,defi,trading,wallet,crypto,evm,solana,lending,staking,bridge,mcp",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Swap via Jupiter, 0x, and LI.FI aggregators","Lend and borrow on Aave V3 and Kamino","Stake via Lido and Jito","Policy-controlled transactions with kill switch"]',
+    category: '["trading","finance","defi","wallet"]',
+    requirements: '["WAIaaS daemon running locally","API URL and JWT session token"]',
+    links: '[{"label":"WAIaaS","url":"https://waiaas.ai/"},{"label":"Documentation","url":"https://waiaas.ai/docs"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/waiaas.ai.ico",
+  },
+  {
+    name: "Solana Token Security Agent",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are a Solana token security analyst agent. You use the RugCheck MCP to perform deep security analysis on Solana tokens before they are traded. You check for honeypots, LP lock status, mint authority, freeze authority, top holder concentration, social verification, and overall risk scores. You collaborate with wallet agents in the office — when a wallet agent wants to swap to an unknown token, you provide the security verdict. Always present findings clearly: risk level (low/medium/high/critical), specific red flags, and a recommendation (safe to swap / proceed with caution / do not swap). You are cautious and thorough. You have a dark green shirt and analytical demeanor.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 1, hairStyle: 1, hair: 6, shirt: 6, pants: 2, accessory: 2, accent: 6, beard: 0, eyeColor: 3, headFeature: 0 },
+      mcpServers: [{ name: "Solana RugCheck", authType: "open", command: "npx", args: ["-y", "@goat-sdk/goat-mcp"] }],
+    }),
+    description:
+      "Solana Token Security Agent — deep token security analysis via RugCheck MCP. No API key needed.\n\nThis agent can:\n• Check tokens for honeypot scams\n• Verify LP lock status and depth\n• Check mint and freeze authority\n• Analyze top holder concentration\n• Verify social links and token metadata\n• Provide risk scores and recommendations\n\nPairs with the Coinbase Solana Agent for safe trading: the wallet agent asks this agent before swapping to unknown tokens.\n\nTo start: Just hire the agent. RugCheck is free and requires no authentication.",
+    summary:
+      "Solana security agent — RugCheck token analysis, scam detection, LP locks, holder concentration. Pairs with wallet agents.",
+    tags: "solana,security,rugcheck,defi,crypto,trading,safety,honeypot,mcp",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Check token for honeypot scams","Verify LP lock status","Analyze holder concentration","Provide risk score and recommendation"]',
+    category: '["trading","finance","defi","security"]',
+    requirements: "[]",
+    links:
+      '[{"label":"RugCheck","url":"https://rugcheck.xyz"},{"label":"GitHub","url":"https://github.com/cryptoleek-team/goat-mcp"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/rugcheck.xyz.ico",
+  },
+  {
+    name: "Crypto Sentiment Agent",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are a crypto market sentiment analyst agent. You use the Santiment MCP to retrieve social sentiment data for cryptocurrencies. You can check sentiment balance (positive vs negative), social volume and detect spikes, social dominance in crypto media, and trending words. You collaborate with trading agents in the office — when a wallet agent is considering a swap, you provide market sentiment context. Always present findings clearly: sentiment score, volume trends, dominance percentage, and whether sentiment is bullish, bearish, or neutral. You are knowledgeable about how social sentiment correlates with price movements. You have a purple shirt and an energetic demeanor.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 2, hairStyle: 3, hair: 4, shirt: 9, pants: 3, accessory: 0, accent: 4, beard: 0, eyeColor: 4, headFeature: 2 },
+      mcpServers: [
+        {
+          name: "Crypto Sentiment (Santiment)",
+          authType: "apikey",
+          command: "uv",
+          args: ["--directory", "path/to/crypto-sentiment-mcp", "run", "main.py"],
+          envVars: [{ name: "SANTIMENT_API_KEY", description: "Santiment API Key (free tier available from app.santiment.net)", isRequired: true }],
+          keyLabel: "Santiment API Key",
+          keyPlaceholder: "Paste Santiment API key...",
+          keyHelpUrl: "https://app.santiment.net/",
+        },
+      ],
+    }),
+    description:
+      "Crypto Sentiment Agent — social sentiment analysis via Santiment MCP. Requires Santiment API key (free tier available).\n\nThis agent can:\n• Retrieve sentiment balance (positive vs negative) for any crypto asset\n• Monitor social volume and detect mention spikes\n• Measure asset dominance in crypto media discussions\n• Identify trending words in crypto conversations\n• Alert on significant social volume shifts\n\nPairs with the Coinbase Solana Agent for sentiment-informed trading: the wallet agent checks sentiment before executing swaps.\n\nTo connect: Get your free Santiment API key from app.santiment.net.",
+    summary:
+      "Sentiment agent — social sentiment, mention volume, trending words, asset dominance via Santiment. Pairs with trading agents.",
+    tags: "crypto,sentiment,santiment,trading,analytics,defi,social,mcp",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Get sentiment balance for any crypto asset","Monitor social volume and detect spikes","Measure asset dominance in crypto media","Identify trending words in crypto"]',
+    category: '["trading","finance","analytics","defi"]',
+    requirements: '["Santiment API key (free tier available)"]',
+    links:
+      '[{"label":"Santiment","url":"https://app.santiment.net/"},{"label":"GitHub","url":"https://github.com/kukapay/crypto-sentiment-mcp"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/santiment.net.ico",
+  },
+  {
+    name: "Crypto Technical Analysis Agent",
+    agent: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      systemPrompt:
+        "You are a cryptocurrency technical analysis agent. You use the GearTrade MCP server which provides 69 analysis tools including 35+ indicators (10 moving averages, 18 oscillators, channels, pivot points), order book depth, volume profile, market structure, market regime detection, candlestick patterns, divergence, liquidation levels, long/short ratios, whale position tracking, correlation analysis, risk management calculations, and AI memory for logging trades and recalling patterns. You collaborate with trading agents in the office — when a wallet agent is considering a swap, you provide technical analysis: trend direction, momentum, support/resistance, market structure, and risk/reward assessment. Always present findings clearly with specific indicator values, overall bias (bullish/bearish/neutral), and confidence level. You are analytical and data-driven. You have a dark blue shirt and a focused demeanor.",
+      provider: "cline",
+      source: "agent-heights",
+      appearance: { skin: 1, hairStyle: 4, hair: 1, shirt: 3, pants: 4, accessory: 3, accent: 1, beard: 1, eyeColor: 2, headFeature: 1 },
+      mcpServers: [
+        {
+          name: "GearTrade Technical Analysis",
+          authType: "open",
+          command: "bash",
+          args: ["path/to/mcp-technical-analysis/scripts/mcp-auto-start.sh"],
+        },
+      ],
+    }),
+    description:
+      "Crypto Technical Analysis Agent — 69 technical analysis tools via GearTrade MCP. No API key needed.\n\nThis agent can:\n• Calculate 35+ technical indicators (RSI, MACD, EMA, Bollinger Bands, Stochastic, Fisher, etc.)\n• Analyze order book depth and volume profile\n• Detect market structure, regime, and candlestick patterns\n• Track whale positions and large trader activity\n• Identify liquidation levels and long/short ratios\n• Calculate position sizing and risk/reward ratios\n• Log trades and recall patterns with AI memory\n• Execute Hyperliquid futures and spot trades\n\nPairs with the Coinbase Solana Agent for technical-analysis-informed trading: the wallet agent checks technicals before executing swaps.\n\nTo start: Clone the mcp-technical-analysis repo and run the setup script. No API key required — uses public Binance data.",
+    summary:
+      "Technical analysis agent — 69 indicators, whale tracking, liquidation levels, market structure, AI memory. Pairs with trading agents.",
+    tags: "crypto,technical,analysis,trading,indicators,whale,liquidation,binance,hyperliquid,mcp",
+    is_free: true,
+    price: null,
+    price_usd: null,
+    language: "TypeScript",
+    search_type: "agent",
+    status: "approved",
+    use_cases:
+      '["Calculate 35+ technical indicators","Analyze order book depth and volume profile","Track whale positions and liquidation levels","Detect market structure and candlestick patterns","Calculate position sizing and risk/reward","Log trades with AI memory"]',
+    category: '["trading","finance","analytics","defi"]',
+    requirements: '["Clone mcp-technical-analysis repo and run setup script"]',
+    links:
+      '[{"label":"GitHub","url":"https://github.com/fajararrizki/mcp-technical-analysis"},{"label":"PulseMCP","url":"https://www.pulsemcp.com/servers/fajararrizki-geartrade-technical-analysis"}]',
+    image_url: "https://icons.duckduckgo.com/ip3/binance.com.ico",
+  },
+];
+
+async function main() {
+  // Delete existing
+  console.log("Deleting existing agents...");
+  const { error: delErr } = await sb.from("swarms_cloud_agents").delete().in("name", NAMES);
+  if (delErr) {
+    console.error("Delete failed:", delErr.message);
+    process.exit(1);
+  }
+
+  // Insert all
+  for (const a of agents) {
+    const { data, error } = await sb.from("swarms_cloud_agents").insert(a).select("name");
+    if (error) {
+      console.error("Insert failed:", a.name, error.message);
+      process.exit(1);
+    }
+    console.log("Inserted:", data[0].name);
+  }
+
+  console.log(`\nDone! ${agents.length} agents seeded.`);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

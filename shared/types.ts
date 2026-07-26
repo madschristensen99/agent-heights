@@ -2,7 +2,7 @@
 
 export type Provider = "cline";
 
-export type AgentStatus = "idle" | "thinking" | "working" | "done" | "error";
+export type AgentStatus = "idle" | "thinking" | "working" | "done" | "error" | "waiting";
 
 /** Workers do tasks; a manager splits a goal into subtasks for the team. */
 export type AgentRole = "worker" | "manager" | "devops";
@@ -231,6 +231,10 @@ export interface AgentInfo {
   mood?: AgentMood;
   /** Per-agent access control — restricts who can chat with this agent. */
   acl?: AgentACL;
+  /** If true, agent gets auto-provisioned Solana wallet tools via Coinbase CDP SDK. */
+  cdpSolana?: boolean;
+  /** Agent ID this agent is waiting at (when status is "waiting"). */
+  waitingFor?: string | null;
 }
 
 /** Access control list for an individual agent.
@@ -392,6 +396,8 @@ export interface PendingTask {
   task: string;
   handoffTo: string | null;
   cardId: string | null;
+  notifyOnComplete?: string | null;
+  waitFor?: string | null;
 }
 
 export interface TaskCard {
@@ -425,6 +431,7 @@ export interface SchedulePreset {
 }
 
 export const SCHEDULE_PRESETS: SchedulePreset[] = [
+  { label: "Every 15 minutes", cron: "*/15 * * * *" },
   { label: "Every 30 minutes", cron: "*/30 * * * *" },
   { label: "Every hour", cron: "0 * * * *" },
   { label: "Every 6 hours", cron: "0 */6 * * *" },
@@ -585,7 +592,7 @@ export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
   | { type: "chat"; agentId: string; text: string }
@@ -608,6 +615,10 @@ export type ClientMsg =
   | { type: "check_mcp_keys"; serverUrls: string[] }
   | { type: "start_mcp_oauth"; serverUrl: string; clientOrigin?: string }
   | { type: "submit_mcp_oauth_code"; serverUrl: string; callbackUrl: string }
+  | { type: "get_cdp_wallet"; agentId: string }
+  | { type: "get_cdp_policy"; agentId: string }
+  | { type: "set_cdp_policy"; agentId: string; maxSolPerTransfer?: number; allowedRecipients?: string[]; blockedRecipients?: string[] }
+  | { type: "get_cdp_tx_history"; agentId: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme; orgId?: string }
   | { type: "join_room"; roomId: string }
@@ -718,6 +729,9 @@ export type ServerMsg =
   | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
   | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
+  | { type: "cdp_wallet_status"; agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }
+  | { type: "cdp_policy_status"; agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }
+  | { type: "cdp_tx_history"; agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }

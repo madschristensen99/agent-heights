@@ -203,6 +203,10 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
       getBoard: ctx.getBoard,
       claimCard: ctx.claimCard,
       eventFeedPath: ctx.eventFeedPath,
+      createSelfSchedule: ctx.createSelfSchedule,
+      listSelfSchedules: ctx.listSelfSchedules,
+      updateSelfSchedule: ctx.updateSelfSchedule,
+      deleteSelfSchedule: ctx.deleteSelfSchedule,
     });
 
     // Build system prompt with tool descriptions

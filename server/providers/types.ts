@@ -33,6 +33,8 @@ export interface RunContext {
   isChat?: boolean;
   /** MCP servers this agent can connect to (e.g. Robinhood Trading MCP). */
   mcpServers?: MCPServerConfig[];
+  /** If true, inject CDP Solana wallet tools (auto-provisioned via Coinbase CDP SDK). */
+  cdpSolana?: boolean;
   /** Persist full conversation messages for an agent (for context restoration across restarts). */
   saveMessages?: (agentId: string, messages: unknown[]) => Promise<void>;
   /** Load persisted conversation messages for an agent (for context restoration across restarts). */
@@ -45,6 +47,14 @@ export interface RunContext {
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
   /** Called when an MCP tool encounters a rate-limit or API funding error. Lets the manager notify Agent Resources, Hermes, and the user. */
   onApiError?: (type: "rate_limit" | "funding", details: { serverLabel: string; toolName: string; message: string }) => void;
+  /** Let an agent create a schedule for itself. Returns a result message (success or error). */
+  createSelfSchedule?: (name: string, task: string, cronExpression: string) => string;
+  /** Let an agent list its own schedules. */
+  listSelfSchedules?: () => { id: string; name: string; task: string; cronExpression: string; enabled: boolean; nextRunAt: number; runCount: number; lastRunAt: number | null }[];
+  /** Let an agent update its own schedule. Returns a result message. */
+  updateSelfSchedule?: (scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }) => string;
+  /** Let an agent delete its own schedule. Returns a result message. */
+  deleteSelfSchedule?: (scheduleId: string) => string;
 }
 
 export type ProviderRunner = (
