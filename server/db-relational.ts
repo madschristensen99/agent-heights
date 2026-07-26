@@ -34,6 +34,7 @@ export class RelationalPersistence {
   private pendingPlayer: boolean = false;
   private pendingWorld: boolean = false;
   private pendingPendingTasks: boolean = false;
+  private pendingPlatformCredentials: boolean = false;
 
   constructor(userId: string) {
     this.userId = userId;
@@ -186,7 +187,7 @@ export class RelationalPersistence {
       // Load world state
       const { data: worldRow } = await supabaseAdmin
         .from("sprite_heights_world_state")
-        .select("seed, fired_agents, chunk_overrides, pending_tasks, vacationed_agents, office_overrides")
+        .select("seed, fired_agents, chunk_overrides, pending_tasks, vacationed_agents, office_overrides, platform_credentials")
         .eq("room_id", this.roomId)
         .maybeSingle();
 
@@ -221,7 +222,18 @@ export class RelationalPersistence {
         timestamp: r.timestamp,
       }));
 
-      this.state = { player, agents, logs, settings, board, schedules, world, pendingTasks: pendingTasksMap, mailEvents };
+      // Load platform credentials (stored as JSONB on world_state)
+      const platformCredentials: Record<string, string> = {};
+      if ((worldRow as any)?.platform_credentials && typeof (worldRow as any).platform_credentials === "object") {
+        for (const [k, v] of Object.entries((worldRow as any).platform_credentials as Record<string, unknown>)) {
+          if (typeof v === "string") platformCredentials[k] = v;
+        }
+      }
+      if (Object.keys(platformCredentials).length > 0) {
+        console.log(`[db-rel] load: platform_credentials for user ${this.userId}: ${Object.keys(platformCredentials).join(", ")}`);
+      }
+
+      this.state = { player, agents, logs, settings, board, schedules, world, pendingTasks: pendingTasksMap, mailEvents, platformCredentials };
       return this.state;
     } catch (err) {
       console.error("[db-rel] load failed:", err);
@@ -288,6 +300,7 @@ export class RelationalPersistence {
 
   setPlatformCredentials(creds: Record<string, string>): void {
     this.state.platformCredentials = creds;
+    this.pendingPlatformCredentials = true;
     this.schedule();
   }
 
@@ -404,6 +417,30 @@ export class RelationalPersistence {
       } catch (err) {
         console.error("[db-rel] setPendingTasks failed:", err);
         this.pendingPendingTasks = true; // Retry on next flush
+      }
+    }
+
+    if (this.pendingPlatformCredentials) {
+      const credKeys = Object.keys(this.state.platformCredentials ?? {});
+      console.log(`[db-rel] flush: writing platform_credentials for user ${this.userId} (${credKeys.join(", ") || "empty"})...`);
+      try {
+        const result = await supabaseAdmin
+          .from("sprite_heights_world_state")
+          .upsert({
+            room_id: this.roomId,
+            owner_id: this.userId,
+            platform_credentials: this.state.platformCredentials ?? {},
+          }, { onConflict: "room_id" });
+        if (result.error) {
+          console.error(`[db-rel] platform_credentials upsert error for user ${this.userId}:`, result.error);
+          this.pendingPlatformCredentials = true;
+        } else {
+          this.pendingPlatformCredentials = false;
+          console.log(`[db-rel] flush: platform_credentials written successfully for user ${this.userId}`);
+        }
+      } catch (err) {
+        console.error("[db-rel] platform_credentials failed:", err);
+        this.pendingPlatformCredentials = true;
       }
     }
 
