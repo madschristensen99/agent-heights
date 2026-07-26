@@ -3,6 +3,14 @@ export interface TaskEvent {
   text: string;
 }
 
+export interface UsageData {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  totalCost?: number;
+}
+
 import type { GameSettings, MCPServerConfig } from "../../shared/types.js";
 
 export interface RunContext {
@@ -31,6 +39,8 @@ export interface RunContext {
   eventFeedPath?: string;
   /** If true, this is a casual chat — no tools, 1 iteration, short timeout. */
   isChat?: boolean;
+  /** If true, start a fresh conversation (don't restore prior messages). A memory summary is injected via systemPrompt instead. */
+  freshStart?: boolean;
   /** MCP servers this agent can connect to (e.g. Robinhood Trading MCP). */
   mcpServers?: MCPServerConfig[];
   /** If true, inject CDP Solana wallet tools (auto-provisioned via Coinbase CDP SDK). */
@@ -55,6 +65,8 @@ export interface RunContext {
   updateSelfSchedule?: (scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }) => string;
   /** Let an agent delete its own schedule. Returns a result message. */
   deleteSelfSchedule?: (scheduleId: string) => string;
+  /** Called after each LLM call with token usage data for spend tracking. */
+  onUsage?: (usage: UsageData) => void;
 }
 
 export type ProviderRunner = (

@@ -36,6 +36,7 @@ import { HermesProcessManager } from "./hermes-process.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
+import { recordUsage, getMonthlySpend, MONTHLY_USAGE_CAP } from "./usage.js";
 import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
@@ -227,6 +228,8 @@ interface QueuedTask {
   notifyOnComplete?: string | null;
   /** Agent to walk to and wait at after completing this task. */
   waitFor?: string | null;
+  /** If true, start a fresh conversation when this queued task runs. */
+  freshStart?: boolean;
 }
 
 interface TaskHistoryEntry {
@@ -267,6 +270,10 @@ interface AgentRuntime {
   notifyOnComplete: string | null;
   /** Agent to walk to and wait at after completing the current task. */
   waitFor: string | null;
+  /** If true, the next runTask starts a fresh conversation (no prior message restore). */
+  freshStart: boolean;
+  /** Summary of prior tasks injected into the system prompt on a fresh start. */
+  memorySummary: string | null;
 }
 
 export class AgentManager {
@@ -343,6 +350,24 @@ export class AgentManager {
         continue;
       }
 
+      // For remote servers with user-provided URL (e.g. n8n), the stored value is
+      // a JSON blob { url, token }. Parse it and inject both the URL and authToken.
+      if (!s.url && !s.command && s.urlPlaceholder) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object" && parsed.url && parsed.token) {
+            console.log(`[mcp-inject] Injecting URL + token for per-instance server ${s.name} → ${parsed.url}`);
+            result.push({ ...s, url: parsed.url, authToken: parsed.token });
+            continue;
+          }
+        } catch {
+          // Not JSON — fall through to treat as a plain token
+        }
+        console.log(`[mcp-inject] No valid URL+token blob for per-instance server ${s.name}`);
+        result.push(s);
+        continue;
+      }
+
       // Remote server: existing OAuth/token flow
       const stored = parseStoredToken(raw);
       let token = stored.access_token;
@@ -394,7 +419,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -556,7 +581,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
     this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -585,7 +610,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -1032,7 +1057,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -1091,6 +1116,63 @@ export class AgentManager {
     this.startTask(rt, cleanTask, handoffTo, cardId, false, scheduleId, reviewContext, notifyOnComplete, waitFor);
   }
 
+  /** Assign a task with a fresh conversation — prior messages are cleared but a
+   *  summary of completed tasks is injected into the system prompt for long-term memory. */
+  assignNew(agentId: string, task: string, handoffTo?: string): void {
+    const rt = this.agents.get(agentId);
+    if (!rt) return;
+    const cleanTask = task.trim();
+    if (!cleanTask) return;
+
+    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
+      const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
+      rt.taskQueue.push({
+        task: cleanTask,
+        handoffTo: target ? target.info.id : null,
+        cardId: null,
+        scheduleId: null,
+        reviewContext: null,
+        notifyOnComplete: null,
+        waitFor: null,
+        isResume: false,
+        freshStart: true,
+      });
+      const pos = rt.taskQueue.length;
+      this.broadcast({ type: "toast", text: `${rt.info.name} is busy — new task queued (#${pos}).` });
+      this.log(rt, "status", `Queued new task (fresh): ${cleanTask}`);
+      return;
+    }
+
+    // Build memory summary from task history before clearing
+    rt.memorySummary = this.buildMemorySummary(rt);
+    rt.freshStart = true;
+
+    // Clear provider memory (Agent instance + message store) but keep logs + taskHistory
+    clearAllMemory(agentId);
+    void this.save.clearMessages(agentId);
+    rt.info.sessionId = null;
+
+    this.log(rt, "status", `New task (fresh start): ${cleanTask}`);
+    this.startTask(rt, cleanTask, handoffTo);
+  }
+
+  /** Build a concise summary of the agent's prior work for injection into a fresh conversation. */
+  private buildMemorySummary(rt: AgentRuntime): string {
+    const parts: string[] = [];
+
+    if (rt.taskHistory.length > 0) {
+      parts.push(`You have completed ${rt.info.tasksDone} task(s) previously. Recent task history:`);
+      for (const h of rt.taskHistory.slice(0, 10)) {
+        const status = h.success ? "✓" : "✗";
+        const time = new Date(h.ts).toLocaleDateString();
+        parts.push(`  ${status} [${time}] ${h.task.slice(0, 120)}${h.task.length > 120 ? "…" : ""} (${(h.durationMs / 1000).toFixed(0)}s)`);
+      }
+    }
+
+    if (parts.length === 0) return "";
+    return `=== PRIOR WORK MEMORY ===\n${parts.join("\n")}\n=== END PRIOR WORK MEMORY ===`;
+  }
+
   /** Begin executing a task immediately (assumes agent is idle). */
   private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null, notifyOnComplete?: string, waitFor?: string): void {
     const cleanTask = task.trim();
@@ -1115,14 +1197,44 @@ export class AgentManager {
     this.log(rt, "status", `New task: ${cleanTask}`);
     if (target) this.log(rt, "status", `Will hand the result to ${target.info.name} when done.`);
     rt.cardId = cardId ?? null;
-    void this.runTask(rt, cleanTask, isResume);
+    void this.runTaskWithUsageCap(rt, cleanTask, isResume);
+  }
+
+  /** Check monthly usage cap before running a task. Blocks with a payment_required message if exceeded. */
+  private async runTaskWithUsageCap(rt: AgentRuntime, task: string, isResume: boolean): Promise<void> {
+    if (this.userId) {
+      const spend = await getMonthlySpend(this.userId);
+      if (spend >= MONTHLY_USAGE_CAP) {
+        this.log(rt, "status", `⚠️ Monthly usage cap reached ($${spend.toFixed(2)} / $${MONTHLY_USAGE_CAP}). Task blocked.`);
+        this.broadcast({
+          type: "payment_required",
+          reason: "usage_cap",
+          message: `You've reached the $${MONTHLY_USAGE_CAP}/month usage cap ($${spend.toFixed(2)} spent). Contact us to upgrade your plan.`,
+          monthlySpend: spend,
+          usageCap: MONTHLY_USAGE_CAP,
+        });
+        this.setStatus(rt, "idle");
+        rt.info.task = null;
+        return;
+      }
+    }
+    return this.runTask(rt, task, isResume);
   }
 
   /** Drain the next queued task after the current one finishes. */
   private drainQueue(rt: AgentRuntime): void {
     if (rt.taskQueue.length === 0) return;
     const next = rt.taskQueue.shift()!;
-    this.log(rt, "status", `Starting queued task: ${next.task}`);
+    if (next.freshStart) {
+      rt.memorySummary = this.buildMemorySummary(rt);
+      rt.freshStart = true;
+      clearAllMemory(rt.info.id);
+      void this.save.clearMessages(rt.info.id);
+      rt.info.sessionId = null;
+      this.log(rt, "status", `Starting queued task (fresh start): ${next.task}`);
+    } else {
+      this.log(rt, "status", `Starting queued task: ${next.task}`);
+    }
     this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null, next.notifyOnComplete ?? undefined, next.waitFor ?? undefined);
   }
 
@@ -1231,6 +1343,9 @@ export class AgentManager {
     }
     rt.logs = [];
     rt.info.sessionId = null;
+    rt.taskHistory = [];
+    rt.freshStart = false;
+    rt.memorySummary = null;
     clearAllMemory(agentId);
     void this.save.clearMessages(agentId);
     void this.save.clearMessages(`${agentId}:chat`);
@@ -1256,6 +1371,9 @@ export class AgentManager {
     for (const rt of free) {
       rt.logs = [];
       rt.info.sessionId = null;
+      rt.taskHistory = [];
+      rt.freshStart = false;
+      rt.memorySummary = null;
       clearAllMemory(rt.info.id);
       void this.save.clearMessages(rt.info.id);
       void this.save.clearMessages(`${rt.info.id}:chat`);
@@ -1444,7 +1562,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1488,7 +1606,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1864,20 +1982,7 @@ export class AgentManager {
       }
     }
 
-    // 3. Social agents: strike up a conversation with a colleague
-    if (p.extraversion > 0.5 && Math.random() < 0.4) {
-      const colleagues = [...this.agents.values()].filter(
-        (a) => a.info.id !== rt.info.id && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID &&
-        a.info.status === "idle",
-      );
-      if (colleagues.length > 0) {
-        const target = pick(colleagues);
-        this.startAgentConversation(rt, target);
-        return;
-      }
-    }
-
-    // 4. Curious agents: show a thinking emote
+    // 3. Curious agents: show a thinking emote
     if (p.openness > 0.6 && Math.random() < 0.3) {
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
       return;
@@ -1893,69 +1998,6 @@ export class AgentManager {
     if (Math.random() < 0.15) {
       const emotes = ["💭", "☕", "📝"];
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: pick(emotes) });
-    }
-  }
-
-  /** Start a lightweight agent-to-agent conversation (visible in the office feed). */
-  private startAgentConversation(from: AgentRuntime, to: AgentRuntime): void {
-    const topics = [
-      `Hey ${to.info.name}, how's it going?`,
-      `${to.info.name}, what are you working on?`,
-      `Nice work on that last task, ${to.info.name}.`,
-      `${to.info.name}, got any tips for debugging?`,
-      `Hey ${to.info.name}, want to collaborate on something?`,
-      `Just taking a break. ${to.info.name}, how's your day?`,
-    ];
-    const topic = pick(topics);
-    this.log(from, "text", `${from.info.name}: ${topic}`);
-    this.broadcast({
-      type: "agent_chat",
-      fromId: from.info.id,
-      toId: to.info.id,
-      fromName: from.info.name,
-      toName: to.info.name,
-      text: topic,
-    });
-    this.broadcast({ type: "emote", agentId: from.info.id, emote: "💬" });
-
-    // Post a message to the target's inbox so they see it next time they work
-    const slug = this.slugFor(to);
-    const inboxPath = join(this.cwdFor(slug, to.info.id), "inbox.jsonl");
-    const entry = JSON.stringify({
-      ts: Date.now(),
-      from: from.info.name,
-      message: topic,
-    }) + "\n";
-    import("node:fs/promises").then(({ appendFile, mkdir }) => {
-      mkdir(dirname(inboxPath), { recursive: true }).then(() =>
-        appendFile(inboxPath, entry, "utf-8").catch(() => {}),
-      );
-    }).catch(() => {});
-
-    // The target might respond (if they're idle and extraverted enough)
-    const targetP = to.info.personality ?? DEFAULT_PERSONALITY;
-    if (targetP.extraversion > 0.3 && Math.random() < 0.5) {
-      setTimeout(() => {
-        if (to.info.status !== "idle") return;
-        const responses = [
-          `Hey ${from.info.name}! Pretty good, just keeping busy.`,
-          `Oh hey ${from.info.name}. Not much right now, waiting for the next task.`,
-          `Thanks ${from.info.name}! Always happy to help.`,
-          `Yeah ${from.info.name}, let me know if you need a hand with anything.`,
-          `Just chilling. You?`,
-        ];
-        const reply = pick(responses);
-        this.log(to, "text", `${to.info.name}: ${reply}`);
-        this.broadcast({
-          type: "agent_chat",
-          fromId: to.info.id,
-          toId: from.info.id,
-          fromName: to.info.name,
-          toName: from.info.name,
-          text: reply,
-        });
-        this.broadcast({ type: "emote", agentId: to.info.id, emote: "💬" });
-      }, 2000 + Math.random() * 3000);
     }
   }
 
@@ -1998,7 +2040,7 @@ export class AgentManager {
       `You are ${rt.info.name}, an agent employed in a pixel-art office game called Agent Heights.`,
       personalityLine,
       `Let your personality color your replies and summaries (but never at the expense of doing the work well).`,
-      `Your boss is ${this.bossName}. This is one ongoing conversation — remember your boss's previous orders and what you did.`,
+      `Your boss is ${this.bossName}. ${rt.freshStart ? "This is a new task in a fresh conversation — a summary of your prior work is provided below if available. Use it for context but don't re-do completed work." : "This is one ongoing conversation — remember your boss's previous orders and what you did."}`,
       `Your workspace directory is ${this.cwdFor(this.slugFor(rt), rt.info.id)}. Work only inside this directory. Use absolute paths when calling tools. Be effective and concise.`,
       sharedLine,
       devopsLine,
@@ -2076,8 +2118,9 @@ export class AgentManager {
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const idleAbort = () => {
       if (!abort.signal.aborted) {
+        abortReason = `No response from model for ${TASK_IDLE_TIMEOUT_MS / 1000}s — aborted (possible rate limit or API hang).`;
         abort.abort();
-        this.log(rt, "error", `No response from model for ${TASK_IDLE_TIMEOUT_MS / 1000}s — aborted (possible rate limit or API hang).`);
+        this.log(rt, "error", abortReason);
       }
     };
     const resetIdleTimer = () => {
@@ -2088,7 +2131,12 @@ export class AgentManager {
 
     const runner: ProviderRunner = pickRunner(rt.info.model);
     const slug = this.slugFor(rt);
-    const systemPrompt = this.buildSystemPrompt(rt);
+    let systemPrompt = this.buildSystemPrompt(rt);
+    // Inject memory summary for fresh-start tasks so the agent has long-term context
+    // without carrying the full prior conversation.
+    if (rt.freshStart && rt.memorySummary) {
+      systemPrompt = `${systemPrompt}\n\n${rt.memorySummary}`;
+    }
     const isManager = rt.info.role === "manager";
 
     // ── Inject unread inbox messages into the prompt ──
@@ -2123,6 +2171,7 @@ export class AgentManager {
     let gotEvents = false;
     let firstErrorText = "";
     let finalText = "";
+    let abortReason = ""; // set when system-initiated abort fires (loop, budget, idle)
     const hadSession = rt.info.sessionId != null;
     try {
       const events = runner(prompt, {
@@ -2134,6 +2183,7 @@ export class AgentManager {
         settings: this.settings,
         agentId: rt.info.id,
         sessionId: rt.info.sessionId ?? null,
+        freshStart: rt.freshStart,
         onSession: (id) => {
           if (rt.info.sessionId !== id) {
             rt.info.sessionId = id;
@@ -2187,6 +2237,23 @@ export class AgentManager {
           if (!sched || sched.agentId !== rt.info.id) return "Schedule not found or does not belong to you.";
           return this.deleteSchedule(scheduleId);
         },
+        onUsage: (usage) => {
+          const providerConfig = getProviderConfig();
+          void recordUsage({
+            userId: this.userId,
+            agentId: rt.info.id,
+            agentName: rt.info.name,
+            model: rt.info.model,
+            provider: providerConfig.name,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadTokens: usage.cacheReadTokens,
+            cacheWriteTokens: usage.cacheWriteTokens,
+            totalCost: usage.totalCost,
+            task: task.slice(0, 500),
+            isChat: false,
+          });
+        },
       });
 
       // Track tool calls to detect redundant loops and budget exhaustion
@@ -2223,16 +2290,22 @@ export class AgentManager {
             const count = (toolCallCounts.get(sig) ?? 0) + 1;
             toolCallCounts.set(sig, count);
             if (count >= MAX_DUPLICATE_TOOL_CALLS) {
-              this.log(rt, "error", `Aborted: tool call repeated ${count} times — possible loop. Call: ${sig.slice(0, 100)}`);
+              abortReason = `Aborted: tool call repeated ${count} times — possible loop. Call: ${sig.slice(0, 100)}`;
+              this.log(rt, "error", abortReason);
               abort.abort();
               return;
+            }
+            // Warn before the hard abort threshold so the user has visibility
+            if (count === MAX_DUPLICATE_TOOL_CALLS - 1) {
+              this.log(rt, "status", `⚠ Repeated tool call detected (${count}x): ${sig.slice(0, 80)}. One more repeat will abort the task.`);
             }
 
             // Track per-tool call counts (catches varied-input loops like calling get_file_contents on 15 different paths)
             const toolCount = (perToolCounts.get(toolName) ?? 0) + 1;
             perToolCounts.set(toolName, toolCount);
             if (toolCount >= MAX_CALLS_PER_TOOL) {
-              this.log(rt, "error", `Aborted: tool "${toolName}" called ${toolCount} times — budget exhausted for this tool.`);
+              abortReason = `Aborted: tool "${toolName}" called ${toolCount} times — budget exhausted for this tool.`;
+              this.log(rt, "error", abortReason);
               abort.abort();
               return;
             }
@@ -2248,7 +2321,8 @@ export class AgentManager {
             if (isMcpTool) {
               mcpToolCallTotal++;
               if (mcpToolCallTotal >= MAX_MCP_TOOL_CALLS) {
-                this.log(rt, "error", `Aborted: ${mcpToolCallTotal} MCP tool calls in one task — API budget exhausted. Use bash (git clone) instead of individual API calls.`);
+                abortReason = `Aborted: ${mcpToolCallTotal} MCP tool calls in one task — API budget exhausted. Use bash (git clone) instead of individual API calls.`;
+                this.log(rt, "error", abortReason);
                 abort.abort();
                 return;
               }
@@ -2323,6 +2397,9 @@ export class AgentManager {
         rt.notifyOnComplete = null;
         rt.waitFor = null;
       }
+      // Reset fresh-start flags — the next task defaults to continuing the conversation
+      rt.freshStart = false;
+      rt.memorySummary = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         const duration = Date.now() - rt.taskStartedAt;
         if (sawError) {
@@ -2360,26 +2437,53 @@ export class AgentManager {
           }
         }
       } else if (abort.signal.aborted && this.agents.has(rt.info.id) && !this.shuttingDown) {
-        // Aborted — either by stop() or idle timeout.
+        // Aborted — either by stop() (user-initiated) or system-initiated (loop, budget, idle).
         // stop() already sets status to idle and clears the queue, so this branch
-        // is a no-op in that case. For idle timeout, the status is still
-        // "working"/"thinking" and needs cleanup to avoid the agent being
-        // permanently stuck and unresponsive to new tasks.
+        // is a no-op in that case. For system-initiated aborts, the status is still
+        // "working"/"thinking" and needs full error handling: notify managers, log
+        // the failure, release waiting agents, and set status to "error".
         // During shutdown, prepareForShutdown handles state saving — skip cleanup
         // to avoid racing with the final persist().
         if (rt.info.status === "thinking" || rt.info.status === "working") {
+          const duration = Date.now() - rt.taskStartedAt;
+          const failReason = abortReason || "Task aborted (unknown reason).";
+
+          // Notify managers about the failure
+          this.notifyManagersOfCompletion(rt, task, failReason, true);
+          this.logEvent("task_error", `${rt.info.name} aborted: "${task.slice(0, 100)}" — ${failReason.slice(0, 100)}`);
+
+          // Record in task history
+          rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
+          if (rt.taskHistory.length > 20) rt.taskHistory.pop();
+
+          // Release any agent that was waiting for this task
+          if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
+
+          // Send failure reply if the task came from a messaging platform
+          if (rt.platformContext) {
+            const { platform, sender } = rt.platformContext;
+            const replyText = `Task failed: ${failReason.slice(0, 500)}`;
+            this.emitPlatformEvent(platform, "outbound", rt.info.name, replyText);
+            if (this.hermesClient) {
+              this.hermesClient.sendMessage(platform, sender, replyText).catch(() => {});
+            }
+          }
+
           if (rt.cardId) {
             this.revertCard(rt.cardId);
             rt.cardId = null;
           }
           this.updateScheduleResult(rt, false);
-          rt.info.task = null;
-          if (rt.taskQueue.length > 0) {
-            this.drainQueue(rt);
-          } else {
-            this.setStatus(rt, "idle");
-            this.persist();
-          }
+          this.setStatus(rt, "error");
+          rt.doneTimer = setTimeout(() => {
+            rt.info.task = null;
+            if (rt.taskQueue.length > 0) {
+              this.drainQueue(rt);
+            } else {
+              this.setStatus(rt, "idle");
+              this.persist();
+            }
+          }, DONE_LINGER_MS);
         }
       }
       // Clear scheduleId after result tracking is done
@@ -2670,6 +2774,22 @@ export class AgentManager {
       void this.runAgentResourcesChat(rt, text);
       return;
     }
+    // Check usage cap before chatting
+    if (this.userId) {
+      const spend = await getMonthlySpend(this.userId);
+      if (spend >= MONTHLY_USAGE_CAP) {
+        this.log(rt, "status", `⚠️ Monthly usage cap reached ($${spend.toFixed(2)} / $${MONTHLY_USAGE_CAP}). Chat blocked.`);
+        this.broadcast({
+          type: "payment_required",
+          reason: "usage_cap",
+          message: `You've reached the $${MONTHLY_USAGE_CAP}/month usage cap ($${spend.toFixed(2)} spent). Contact us to upgrade your plan.`,
+          monthlySpend: spend,
+          usageCap: MONTHLY_USAGE_CAP,
+        });
+        this.setStatus(rt, "idle");
+        return;
+      }
+    }
     await this.runClineChat(rt, text);
   }
 
@@ -2740,6 +2860,23 @@ export class AgentManager {
         saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
         loadMessages: (agentId: string) => this.save.loadMessages(agentId),
         clearMessages: (agentId: string) => this.save.clearMessages(agentId),
+        onUsage: (usage) => {
+          const providerConfig = getProviderConfig();
+          void recordUsage({
+            userId: this.userId,
+            agentId: rt.info.id,
+            agentName: rt.info.name,
+            model: rt.info.model,
+            provider: providerConfig.name,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadTokens: usage.cacheReadTokens,
+            cacheWriteTokens: usage.cacheWriteTokens,
+            totalCost: usage.totalCost,
+            task: text.slice(0, 500),
+            isChat: true,
+          });
+        },
       });
       for await (const ev of events) {
         if (abort.signal.aborted) return;

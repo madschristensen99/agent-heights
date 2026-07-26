@@ -277,6 +277,8 @@ export interface MCPServerConfig {
   sourceUrl?: string;
   /** For stdio servers: credential fields the user must provide (rendered as separate inputs). */
   envVars?: { name: string; description: string; isRequired: boolean }[];
+  /** For remote servers where the URL is per-instance (e.g. n8n). When set, the UI shows a URL input field. */
+  urlPlaceholder?: string;
 }
 
 // ----------------------------------------------------------- Labyrinth ---
@@ -594,6 +596,7 @@ export type ClientMsg =
   | { type: "set_settings"; settings: GameSettings }
   | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
+  | { type: "assign_new"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
   | { type: "chat"; agentId: string; text: string }
   | { type: "stop"; agentId: string }
@@ -760,7 +763,7 @@ export type ServerMsg =
   | { type: "org_created"; org: Organization }
   | { type: "org_error"; message: string }
   | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null }
-  | { type: "payment_required"; reason: "entrance" | "subscription" | "agent_limit"; message: string; tier?: SubscriptionTier | null; agentLimit?: number }
+  | { type: "payment_required"; reason: "entrance" | "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number }
   | { type: "emote"; agentId: string; emote: string }
   | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string }
   | { type: "voice_peer"; userId: string; name: string }

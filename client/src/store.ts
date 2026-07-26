@@ -99,7 +99,7 @@ export class Store {
   agentLimit = 0;
   currentPeriodEnd: number | null = null;
   freeTrialExpiresAt: number | null = null;
-  paymentRequired: { reason: "entrance" | "subscription" | "agent_limit"; message: string; tier?: SubscriptionTier | null; agentLimit?: number } | null = null;
+  paymentRequired: { reason: "entrance" | "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number } | null = null;
   roomId: string | null = null;
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
@@ -928,7 +928,7 @@ export class Store {
         this.freeTrialExpiresAt = msg.freeTrialExpiresAt;
         break;
       case "payment_required":
-        this.paymentRequired = { reason: msg.reason, message: msg.message, tier: msg.tier, agentLimit: msg.agentLimit };
+        this.paymentRequired = { reason: msg.reason, message: msg.message, tier: msg.tier, agentLimit: msg.agentLimit, monthlySpend: msg.monthlySpend, usageCap: msg.usageCap };
         this.toast(msg.message);
         break;
       case "room_state":

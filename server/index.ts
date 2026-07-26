@@ -23,6 +23,7 @@ import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBro
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
+import { getUsageSummary } from "./usage.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
@@ -262,6 +263,38 @@ const server = createServer((req, res) => {
           res.end("Internal server error");
         });
       }
+    });
+    return;
+  }
+
+  // API usage summary — per-user spend tracking
+  if (req.url?.split("?")[0] === "/api/usage" && req.method === "GET") {
+    if (!isSupabaseConfigured) {
+      res.writeHead(503, applySecurityHeaders({ "Content-Type": "application/json" }));
+      res.end(JSON.stringify({ error: "Supabase not configured" }));
+      return;
+    }
+    const authHeader = req.headers["authorization"];
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Authentication required" }));
+      return;
+    }
+    void verifyToken(token).then(async (user) => {
+      if (!user) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid or expired token" }));
+        return;
+      }
+      const params = new URLSearchParams(req.url?.split("?")[1] ?? "");
+      const daysParam = parseInt(params.get("days") ?? "30", 10);
+      const days = isNaN(daysParam) ? 30 : Math.min(daysParam, 365);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      const summary = await getUsageSummary(user.id, startDate);
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "application/json" }));
+      res.end(JSON.stringify(summary ?? { error: "Failed to load usage data" }));
     });
     return;
   }
@@ -762,7 +795,7 @@ wss.on("connection", async (ws, req) => {
       }
 
       // Permission tiers: manage > talk > tour > no_access
-      const MANAGE_ONLY = new Set(["hire", "assign", "assign_all", "stop", "stop_all", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "get_cdp_wallet", "get_cdp_policy", "set_cdp_policy", "get_cdp_tx_history", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
+      const MANAGE_ONLY = new Set(["hire", "assign", "assign_new", "assign_all", "stop", "stop_all", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "get_cdp_wallet", "get_cdp_policy", "set_cdp_policy", "get_cdp_tx_history", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
       const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
 
       if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
@@ -861,6 +894,9 @@ wss.on("connection", async (ws, req) => {
         }
         case "assign":
           activeManager.assign(msg.agentId, msg.task, msg.handoffTo);
+          break;
+        case "assign_new":
+          activeManager.assignNew(msg.agentId, msg.task, msg.handoffTo);
           break;
         case "chat": {
           // Per-agent ACL check

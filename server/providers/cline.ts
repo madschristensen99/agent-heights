@@ -701,9 +701,16 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   // Use a separate agent instance for chat so it doesn't inherit task tools/iterations
   const agentId = isChat ? `${rawAgentId}:chat` : rawAgentId;
 
+  // Fresh start: wipe the existing Agent instance + message store so a new
+  // conversation begins. The manager injects a memory summary via systemPrompt.
+  if (ctx.freshStart && !isChat) {
+    agents.delete(agentId);
+    messageStore.delete(agentId);
+  }
+
   try {
     let agent = agents.get(agentId);
-    const isExisting = !!agent;
+    const isExisting = !!agent && !ctx.freshStart;
     // Mutable abort ref — updated before each run so MCP tools can check abort status
     const abortRef = { signal: ctx.abort.signal };
     if (!agent) {
@@ -828,8 +835,9 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
       // Restore conversation history: try in-memory cache first (same process),
       // then fall back to DB persistence (after server restart).
-      let stored = messageStore.get(agentId);
-      if ((!stored || stored.length === 0) && ctx.loadMessages) {
+      // Skip restore entirely on freshStart — the manager injects a summary via systemPrompt.
+      let stored = ctx.freshStart ? undefined : messageStore.get(agentId);
+      if (!ctx.freshStart && (!stored || stored.length === 0) && ctx.loadMessages) {
         try {
           const dbMessages = await ctx.loadMessages(agentId);
           if (dbMessages.length > 0) {
@@ -978,6 +986,18 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           console.error(`[cline:${agentId}] saveMessages failed:`, err);
         }
       }
+    }
+
+    // Report token usage for spend tracking
+    if (ctx.onUsage && result.usage) {
+      const u = result.usage as any;
+      ctx.onUsage({
+        inputTokens: u.inputTokens ?? 0,
+        outputTokens: u.outputTokens ?? 0,
+        cacheReadTokens: u.cacheReadTokens ?? 0,
+        cacheWriteTokens: u.cacheWriteTokens ?? 0,
+        totalCost: u.totalCost,
+      });
     }
 
     if (result.status === "completed") {

@@ -272,9 +272,10 @@ export class Hud {
           <button class="btn" id="d-say">SAY</button>
         </div>
         <div class="row">
-          <button class="btn primary" id="d-assign">ASSIGN ▶</button>
+          <button class="btn primary" id="d-assign-new" title="Start a fresh conversation — agent keeps a summary of prior work">NEW TASK ▶</button>
+          <button class="btn" id="d-assign" title="Continue the existing conversation — agent remembers everything">CONTINUE ▶</button>
           <button class="btn" id="d-stop">STOP</button>
-          <button class="btn" id="d-clear">NEW CHAT</button>
+          <button class="btn" id="d-clear">FULL RESET</button>
           <button class="btn" id="d-publish">📤 PUBLISH</button>
           <button class="btn" id="d-vacation">VACATION</button>
           <button class="btn danger" id="d-fire">FIRE</button>
@@ -491,6 +492,15 @@ export class Hud {
       handoffSel.value = "";
       achievements.unlock("first_task");
     });
+    document.getElementById("d-assign-new")!.addEventListener("click", () => {
+      const id = this.store.selectedId;
+      const task = input.value.trim();
+      if (!id || !task) return;
+      this.net.send({ type: "assign_new", agentId: id, task, handoffTo: handoffSel.value || undefined });
+      input.value = "";
+      handoffSel.value = "";
+      achievements.unlock("first_task");
+    });
     const chatInput = document.getElementById("d-chat") as HTMLInputElement;
     const sendChat = () => {
       const id = this.store.selectedId;
@@ -506,7 +516,7 @@ export class Hud {
     });
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        (document.getElementById("d-assign") as HTMLButtonElement).click();
+        (document.getElementById("d-assign-new") as HTMLButtonElement).click();
       }
     });
     document.getElementById("d-stop")!.addEventListener("click", () => {
@@ -516,9 +526,9 @@ export class Hud {
       const agent = this.store.selected();
       if (!agent) return;
       inlineConfirm(
-        `New chat with ${agent.name}?`,
-        "They'll forget every previous order. Files in their workspace stay.",
-        "New chat",
+        `Full reset for ${agent.name}?`,
+        "Wipes all conversation memory, task history, and logs. Files in their workspace stay. Use NEW TASK instead if you want them to remember prior work.",
+        "Full reset",
         () => this.net.send({ type: "clear", agentId: agent.id }),
       );
     });
@@ -1388,6 +1398,7 @@ export class Hud {
           <button class="tab active" data-tab="agents">AGENTS</button>
           <button class="tab" data-tab="game">GAME</button>
           <button class="tab" data-tab="api">API KEY</button>
+          <button class="tab" data-tab="spend">SPEND</button>
           <button class="tab" data-tab="billing">BILLING</button>
           <button class="tab" data-tab="controls">CONTROLS</button>
           <button class="tab" data-tab="data">DATA</button>
@@ -1436,6 +1447,14 @@ export class Hud {
             <button class="btn danger" id="s-clear-key" ${this.store.hasApiKey ? "" : "disabled"}>CLEAR KEY</button>
           </div>
         </div>
+        <div class="tabpanel" data-panel="spend" hidden>
+          <div class="sec">API SPEND (30 DAYS)</div>
+          <div id="spend-loading" style="font-size:0.85rem;color:#888;">Loading…</div>
+          <div id="spend-content" hidden></div>
+          <div id="spend-cap-info" style="margin-top:1rem;font-size:0.78rem;color:#888;border-top:1px solid #333;padding-top:0.75rem;">
+            Monthly cap: $30 — exceeded usage moves to a "contact us" plan.
+          </div>
+        </div>
         <div class="tabpanel" data-panel="billing" hidden>
           <div class="sec">SUBSCRIPTION</div>
           <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "#53b86b" : "#e05d5d"};">
@@ -1481,7 +1500,7 @@ export class Hud {
             <div><kbd>,</kbd><span>open settings</span></div>
             <div><kbd>P</kbd><span>show FPS overlay</span></div>
             <div><kbd>ESC</kbd><span>close panels &amp; modals</span></div>
-            <div><kbd>⌘/CTRL</kbd>+<kbd>ENTER</kbd><span>assign the task you're typing</span></div>
+            <div><kbd>⌘/CTRL</kbd>+<kbd>ENTER</kbd><span>start a new task (fresh conversation)</span></div>
           </div>
         </div>
         <div class="tabpanel" data-panel="data" hidden>
@@ -1508,6 +1527,7 @@ export class Hud {
         modal.querySelectorAll<HTMLElement>(".tabpanel").forEach((p) => {
           p.hidden = p.dataset.panel !== tab.dataset.tab;
         });
+        if (tab.dataset.tab === "spend") void this.loadSpendData();
       }),
     );
 
@@ -3745,6 +3765,84 @@ export class Hud {
     el.textContent = text;
     box.appendChild(el);
     setTimeout(() => el.remove(), 4000);
+  }
+
+  private async loadSpendData(): Promise<void> {
+    const loading = document.getElementById("spend-loading");
+    const content = document.getElementById("spend-content");
+    if (!loading || !content) return;
+    loading.hidden = false;
+    content.hidden = true;
+    try {
+      const token = getToken();
+      if (!token) {
+        loading.textContent = "Sign in to view spend data.";
+        return;
+      }
+      const res = await fetch("/api/usage?days=30", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        loading.textContent = `Failed to load (HTTP ${res.status}).`;
+        return;
+      }
+      const data = await res.json();
+      if (data.error) {
+        loading.textContent = data.error;
+        return;
+      }
+      loading.hidden = true;
+      content.hidden = false;
+
+      const fmtCost = (c: number) => `$${c.toFixed(4)}`;
+      const fmtTokens = (t: number) => t >= 1_000_000 ? `${(t / 1_000_000).toFixed(1)}M` : t >= 1000 ? `${(t / 1000).toFixed(1)}K` : String(t);
+
+      let html = `<div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap;">`;
+      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">TOTAL COST</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${fmtCost(data.totalCost)}</div></div>`;
+      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">API CALLS</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${data.totalCalls}</div></div>`;
+      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">INPUT TOKENS</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${fmtTokens(data.totalInputTokens)}</div></div>`;
+      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">OUTPUT TOKENS</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${fmtTokens(data.totalOutputTokens)}</div></div>`;
+      html += `</div>`;
+
+      // Monthly cap progress bar
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const monthSpend = (data.byDay ?? []).filter((d: any) => d.date.startsWith(currentMonth)).reduce((s: number, d: any) => s + d.cost, 0);
+      const capPct = Math.min(100, (monthSpend / 30) * 100);
+      const capColor = monthSpend >= 30 ? "#e05d5d" : monthSpend >= 25 ? "#e8c44a" : "#53b86b";
+      html += `<div class="sec">THIS MONTH — $${monthSpend.toFixed(2)} / $30.00</div>`;
+      html += `<div style="background:#1a1a1a;border-radius:0.4rem;height:20px;overflow:hidden;margin-bottom:1rem;border:1px solid #333;"><div style="width:${capPct}%;height:100%;background:${capColor};border-radius:0.4rem;transition:width 0.3s;"></div></div>`;
+
+      if (data.byModel?.length > 0) {
+        html += `<div class="sec">BY MODEL</div><div style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:1rem;">`;
+        for (const m of data.byModel) {
+          html += `<div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:0.3rem 0.5rem;background:#1a1a1a;border-radius:0.4rem;"><span style="color:#ccc;">${esc(m.model)}</span><span style="color:#888;">${fmtCost(m.cost)} · ${m.calls} calls</span></div>`;
+        }
+        html += `</div>`;
+      }
+
+      if (data.byAgent?.length > 0) {
+        html += `<div class="sec">BY AGENT</div><div style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:1rem;">`;
+        for (const a of data.byAgent) {
+          html += `<div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:0.3rem 0.5rem;background:#1a1a1a;border-radius:0.4rem;"><span style="color:#ccc;">${esc(a.agentName)}</span><span style="color:#888;">${fmtCost(a.cost)} · ${a.calls} calls</span></div>`;
+        }
+        html += `</div>`;
+      }
+
+      if (data.byDay?.length > 0) {
+        html += `<div class="sec">DAILY SPEND</div><div style="display:flex;flex-direction:column;gap:0.2rem;">`;
+        const maxCost = Math.max(...data.byDay.map((d: any) => d.cost), 0.001);
+        for (const d of data.byDay) {
+          const barWidth = Math.max(2, (d.cost / maxCost) * 100);
+          html += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;"><span style="color:#888;min-width:70px;">${d.date}</span><div style="flex:1;background:#1a1a1a;border-radius:0.25rem;height:16px;overflow:hidden;"><div style="width:${barWidth}%;height:100%;background:#c44a4a;border-radius:0.25rem;"></div></div><span style="color:#ccc;min-width:60px;text-align:right;">${fmtCost(d.cost)}</span></div>`;
+        }
+        html += `</div>`;
+      }
+
+      content.innerHTML = html;
+    } catch (err) {
+      loading.textContent = "Failed to load spend data.";
+      console.error("[hud] loadSpendData error:", err);
+    }
   }
 }
 

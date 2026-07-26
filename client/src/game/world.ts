@@ -3799,19 +3799,21 @@ export class WorldLayer {
       // Recall deployed allies
       this.recallAllies();
       // Record nemesis player kills before clearing
+      let promoted = false;
       for (const c of this.creatures) {
         if (c.nemesisId) {
           this.nemesis.recordPlayerKill(c.nemesisId);
           const entry = this.nemesis.get(c.nemesisId);
-          if (entry && entry.playerKills === 1) {
+          if (entry && entry.playerKills === 1 && !promoted) {
             // First kill by this nemesis — promote and toast
             this.nemesis.promote(c.nemesisId);
             this.store.toast(`${entry.name} killed you and was promoted to ${entry.title}!`);
-            this.saveNemesis();
+            promoted = true;
           }
         }
         c.destroy();
       }
+      if (promoted) this.saveNemesis();
       this.creatures = [];
       for (const s of this.stones) s.destroy();
       this.stones = [];

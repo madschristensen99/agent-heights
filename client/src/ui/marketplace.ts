@@ -304,7 +304,7 @@ export class MarketplaceBrowser {
       : "None";
 
     // Parse agent config to detect MCP servers that need auth
-    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey"; keyLabel?: string; keyPlaceholder?: string; keyHelpUrl?: string; envVars?: { name: string; description: string; isRequired: boolean }[] }[] = [];
+    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey"; keyLabel?: string; keyPlaceholder?: string; keyHelpUrl?: string; urlPlaceholder?: string; envVars?: { name: string; description: string; isRequired: boolean }[] }[] = [];
     try {
       const config = agent.agent ? JSON.parse(agent.agent) : {};
       if (config.mcpServers && Array.isArray(config.mcpServers)) {
@@ -328,6 +328,13 @@ export class MarketplaceBrowser {
               ? `<a href="${s.keyHelpUrl}" target="_blank" style="font-size:0.65rem; color:#4f9dde; text-decoration:none; margin-left:0.4rem;">Get key →</a>`
               : "";
             const hasEnvVars = s.envVars && s.envVars.length > 0;
+            const hasUrlInput = !!s.urlPlaceholder;
+            const urlInputHtml = hasUrlInput
+              ? `<div style="margin-bottom:0.35rem;">
+                  <input id="mq-mcp-url-${i}" type="text" placeholder="${this.escape(s.urlPlaceholder ?? "")}" autocomplete="off"
+                    style="width:100%; padding:0.4rem 0.6rem; border-radius:0.375rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.8rem; box-sizing:border-box;" />
+                </div>`
+              : "";
             const inputsHtml = hasEnvVars
               ? s.envVars!.map((ev, j) => `
                   <div style="margin-bottom:0.35rem;">
@@ -351,7 +358,8 @@ export class MarketplaceBrowser {
                       <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save Credentials</button>
                       <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
                     </div>`
-                  : `<div style="display:flex; gap:0.25rem; align-items:center;">
+                  : `${urlInputHtml}
+                    <div style="display:flex; gap:0.25rem; align-items:center;">
                       ${inputsHtml}
                       <button id="mq-mcp-save-${i}" style="padding:0.4rem 0.6rem; border:none; border-radius:0.375rem; background:#333; color:#e0e0e0; font-size:0.75rem; cursor:pointer;">Save</button>
                       <span id="mq-mcp-status-${i}" style="font-size:0.7rem; color:#888; min-width:1.5rem;"></span>
@@ -450,13 +458,26 @@ export class MarketplaceBrowser {
               if (input) input.value = "";
             });
           } else {
-            // Single key input
-            const input = modal.querySelector(`#mq-mcp-key-${i}`) as HTMLInputElement | null;
-            if (!input) return;
-            const key = input.value.trim();
-            if (!key) { input.focus(); return; }
-            this.onSetMcpKey(keyId, key);
-            input.value = "";
+            // Single key input (possibly with a URL input for per-instance servers like n8n)
+            const hasUrlInput = !!s.urlPlaceholder;
+            if (hasUrlInput) {
+              const urlInput = modal.querySelector(`#mq-mcp-url-${i}`) as HTMLInputElement | null;
+              const keyInput = modal.querySelector(`#mq-mcp-key-${i}`) as HTMLInputElement | null;
+              if (!urlInput || !keyInput) return;
+              const url = urlInput.value.trim();
+              const key = keyInput.value.trim();
+              if (!url || !key) { (!url ? urlInput : keyInput).focus(); return; }
+              this.onSetMcpKey(keyId, JSON.stringify({ url, token: key }));
+              urlInput.value = "";
+              keyInput.value = "";
+            } else {
+              const input = modal.querySelector(`#mq-mcp-key-${i}`) as HTMLInputElement | null;
+              if (!input) return;
+              const key = input.value.trim();
+              if (!key) { input.focus(); return; }
+              this.onSetMcpKey(keyId, key);
+              input.value = "";
+            }
           }
           saveBtn.textContent = "✓ Saved";
           setTimeout(() => { saveBtn.textContent = hasEnvVars ? "Save Credentials" : "Save"; }, 2000);

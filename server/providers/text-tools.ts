@@ -26,6 +26,26 @@ export function getAgentConversations(agentId: string): unknown[] {
   return conversations.get(agentId) ?? [];
 }
 
+/** Build a context-aware nudge message when loop detection fires. */
+export function buildLoopNudge(repeatedTools: string[], reason: string): string {
+  const isBrowserLoop = repeatedTools.some(t => t.startsWith("browser_") || t === "browse_url");
+  const isFileLoop = repeatedTools.some(t => t === "read_files" || t === "write_files" || t === "list_files");
+  const isBashLoop = repeatedTools.some(t => t === "bash");
+
+  let suggestion: string;
+  if (isBrowserLoop) {
+    suggestion = "You seem stuck on a browser interaction. Try a different selector, take a screenshot to inspect the page state, or if a modal/overlay is blocking you, try dismissing it first. If the page isn't changing, you may need to navigate to a different URL or accept that the current approach isn't working.";
+  } else if (isFileLoop) {
+    suggestion = "You already have the file contents you need. Move forward: use write_files to create or modify files, bash to run commands, or submit_and_exit if you are done.";
+  } else if (isBashLoop) {
+    suggestion = "You already ran this command and have the output. Move forward with the task using the results you already have, or try a different command.";
+  } else {
+    suggestion = "You already have the results from these tool calls. Move forward with the task: use write_files to create files, bash to run commands, or submit_and_exit if you are done.";
+  }
+
+  return `You are repeating ${reason}. ${suggestion}`;
+}
+
 // ── Tool description injection ────────────────────────────────────────────
 
 const TOOL_OPEN = "<<tool_call";
@@ -186,6 +206,14 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
   const isChat = ctx.isChat ?? false;
   const agentId = isChat ? `${ctx.agentId}:chat` : ctx.agentId;
 
+  // Fresh start: wipe conversation history so a new conversation begins.
+  if (ctx.freshStart && !isChat) {
+    conversations.delete(agentId);
+  }
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
   try {
     // Get or create conversation history
     let history = conversations.get(agentId);
@@ -230,6 +258,7 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
     let submitted = false;
     let lastText = "";
     let lastCallsSig = "";
+    const perToolCallCounts = new Map<string, number>(); // tool name → total count this task
 
     for (let iter = 0; iter < maxIter; iter++) {
       if (ctx.abort.signal.aborted) return;
@@ -252,6 +281,9 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
         yield { kind: "error", text: "Model returned empty response." };
         return;
       }
+
+      totalInputTokens += result.usage.inputTokens;
+      totalOutputTokens += result.usage.outputTokens;
 
       // Add assistant message to history
       history.push({ role: "assistant", content: assistantText });
@@ -291,15 +323,33 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
       const callsSig = calls.map((c) => `${c.name}:${JSON.stringify(c.input)}`).join("|");
       if (callsSig === lastCallsSig) {
         console.log(`[text-tools:${agentId}] loop detected — same tool calls as last iteration`);
-        history.push({
-          role: "user",
-          content:
-            "You are repeating the same tool calls as the previous turn. You already have those results — do not call the same tools again. " +
-            "Move forward with the task: use write_files to create files, bash to run commands, or submit_and_exit if you are done.",
-        });
+        const repeatedTools = [...new Set(calls.map((c) => c.name))];
+        const nudge = buildLoopNudge(repeatedTools, "exact same tool calls as the previous turn");
+        history.push({ role: "user", content: nudge });
+        yield { kind: "text", text: `⚠ Loop detected — nudging model to try a different approach.` };
         continue;
       }
       lastCallsSig = callsSig;
+
+      // Track per-tool-name counts to catch non-consecutive repeats
+      // (e.g. calling browser_extract_text every other turn with different tools in between)
+      let nudgeNeeded = false;
+      const nudgeTools: string[] = [];
+      for (const call of calls) {
+        const tc = (perToolCallCounts.get(call.name) ?? 0) + 1;
+        perToolCallCounts.set(call.name, tc);
+        if (tc >= 3 && !nudgeTools.includes(call.name)) {
+          nudgeTools.push(call.name);
+          nudgeNeeded = true;
+        }
+      }
+      if (nudgeNeeded) {
+        console.log(`[text-tools:${agentId}] loop detected — repeated tool calls: ${nudgeTools.join(", ")}`);
+        const nudge = buildLoopNudge(nudgeTools, `the same tool(s) repeatedly (${nudgeTools.join(", ")} called 3+ times)`);
+        history.push({ role: "user", content: nudge });
+        yield { kind: "text", text: `⚠ Repeated tool calls detected — nudging model to try a different approach.` };
+        continue;
+      }
 
       // Execute tool calls
       for (const call of calls) {
@@ -379,5 +429,15 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
     if (ctx.abort.signal.aborted) return;
     const msg = err instanceof Error ? err.message : String(err);
     yield { kind: "error", text: `Text-tools agent error: ${truncate(msg, 300)}` };
+  } finally {
+    // Report accumulated token usage for spend tracking
+    if (ctx.onUsage && (totalInputTokens > 0 || totalOutputTokens > 0)) {
+      ctx.onUsage({
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      });
+    }
   }
 };

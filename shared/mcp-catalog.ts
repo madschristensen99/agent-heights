@@ -50,6 +50,8 @@ export interface MCPCatalogServer {
   keyPlaceholder?: string;
   /** URL where users can create/obtain their key. Renders as a "Get your key →" link. */
   keyHelpUrl?: string;
+  /** For remote servers where the URL is per-instance (e.g. n8n). When set, the UI shows a URL input field. */
+  urlPlaceholder?: string;
 }
 
 export const MCP_CATALOG: MCPCatalogServer[] = [
@@ -221,17 +223,17 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     name: "n8n",
     summary: "Workflow automation with 525+ integration nodes.",
     description:
-      "Integrates with n8n workflow automation platform to provide conversational access to 525+ nodes including AI-capable ones. Agents can create, trigger, and manage automated workflows.",
+      "Integrates with n8n workflow automation platform to provide conversational access to 525+ nodes including AI-capable ones. Agents can create, trigger, and manage automated workflows. Requires a per-instance MCP server URL from your n8n instance.",
     transport: "remote",
     authType: "apikey",
-    isOfficial: false,
+    isOfficial: true,
     category: ["automation", "productivity"],
     icon: "https://cdn.simpleicons.org/n8n",
     visitorsPerWeek: "122k",
-    url: "https://mcp.n8n.io/sse",
-    keyLabel: "API Key",
-    keyPlaceholder: "n8n_api_...",
-    keyHelpUrl: "https://docs.n8n.io/advanced-features/api/",
+    keyLabel: "MCP Access Token",
+    keyPlaceholder: "Paste your n8n MCP Access Token...",
+    keyHelpUrl: "https://docs.n8n.io/connect/connect-to-n8n-mcp-server",
+    urlPlaceholder: "https://your-n8n-domain/mcp-server/http",
   },
   {
     id: "vercel",
@@ -721,6 +723,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["communication", "productivity"],
     icon: "https://cdn.simpleicons.org/zoom/white",
     url: "https://mcp.zoom.us/mcp/zoom/streamable",
+    keyHelpUrl: "https://marketplace.zoom.us/",
   },
   {
     id: "twilio",
@@ -809,14 +812,29 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
   {
     id: "calendly",
     name: "Calendly",
-    summary: "Scheduling, events, availability.",
-    description: "Manage Calendly scheduling, events, and availability. Agents can create meeting types, check availability, and schedule appointments. Uses OAuth 2.1 with PKCE and Dynamic Client Registration — no API key needed.",
+    summary: "Scheduling, events, availability (OAuth).",
+    description: "Manage Calendly scheduling, events, and availability. Agents can create meeting types, check availability, and schedule appointments. Uses OAuth 2.1 with PKCE and Dynamic Client Registration — no API key needed. Best for multi-user apps.",
     transport: "remote",
     authType: "oauth",
     isOfficial: true,
     category: ["productivity", "scheduling"],
     icon: "https://cdn.simpleicons.org/calendly",
     url: "https://mcp.calendly.com",
+  },
+  {
+    id: "calendly-pat",
+    name: "Calendly (Personal Token)",
+    summary: "Scheduling, events, availability (API Token).",
+    description: "Manage Calendly scheduling, events, and availability using a Personal Access Token. Agents can create meeting types, check availability, schedule appointments, and set up webhook subscriptions for real-time event notifications. Best for internal/single-account apps.",
+    transport: "remote",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["productivity", "scheduling"],
+    icon: "https://cdn.simpleicons.org/calendly",
+    url: "https://mcp.calendly.com",
+    keyLabel: "Personal Access Token",
+    keyPlaceholder: "eyJ...",
+    keyHelpUrl: "https://calendly.com/integrations/api_webhooks",
   },
   {
     id: "cal-com",
@@ -1368,16 +1386,13 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     id: "otter-ai",
     name: "Otter.ai",
     summary: "Unlock your meeting intelligence.",
-    description: "Access Otter.ai's meeting transcription platform. Agents can query transcripts, search meeting content, and extract action items.",
+    description: "Access Otter.ai's meeting transcription platform via OAuth. Agents can fetch specific conversation transcripts by URL, search across all meeting transcripts, and retrieve user info. Three tools available: fetch, search, and get user info.",
     transport: "remote",
-    authType: "apikey",
+    authType: "oauth",
     isOfficial: true,
     category: ["communication", "productivity"],
     icon: "https://cdn.simpleicons.org/otterai/white",
     url: "https://mcp.otter.ai/mcp",
-    keyLabel: "API Key",
-    keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://help.otter.ai/hc/en-us/articles/36130822688279-Otter-ai-Public-API",
   },
   {
     id: "gamma",
@@ -4046,5 +4061,6 @@ export function toMCPServerConfig(server: MCPCatalogServer): import("./types.js"
   if (server.keyHelpUrl) config.keyHelpUrl = server.keyHelpUrl;
   if (server.icon) config.icon = server.icon;
   if (server.envVars) config.envVars = server.envVars;
+  if (server.urlPlaceholder) config.urlPlaceholder = server.urlPlaceholder;
   return config;
 }

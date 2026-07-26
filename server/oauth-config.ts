@@ -17,6 +17,8 @@ export interface KnownOAuthConfig {
   tokenEndpoint: string;
   authorizationEndpoint: string;
   scopes: string[];
+  /** Token endpoint auth method: "client_secret_basic" (default) or "none" (PKCE-only). */
+  tokenEndpointAuthMethod?: "client_secret_basic" | "none";
 }
 
 export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
@@ -49,5 +51,19 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
     authorizationEndpoint: "https://www.expedia.com/oauth/authorize",
     tokenEndpoint: "https://www.expedia.com/oauth/token",
     scopes: [],
+  },
+
+  // Zoom MCP — requires manual client registration (no DCR support).
+  // Register a General app at https://marketplace.zoom.us/ → Develop → Build App
+  // Set OAuth redirect URL to https://your-app-domain/oauth/callback
+  // Add scopes per https://developers.zoom.us/docs/mcp/zoom/
+  // Then fill in clientId and clientSecret below.
+  "https://mcp.zoom.us/mcp/zoom/streamable": {
+    clientId: "",
+    clientSecret: "",
+    authorizationEndpoint: "https://zoom.us/oauth/authorize",
+    tokenEndpoint: "https://zoom.us/oauth/token",
+    scopes: [],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
 };

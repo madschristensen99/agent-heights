@@ -65,6 +65,8 @@ export interface MCPServerConfig {
   name?: string;
   /** GitHub source URL for community MCPs that need agent self-setup. */
   sourceUrl?: string;
+  /** For remote servers where the URL is per-instance (e.g. n8n). When set, the UI shows a URL input field. */
+  urlPlaceholder?: string;
 }
 
 // ── Stdio MCP client (for spawned processes) ────────────────────────────
@@ -234,6 +236,13 @@ class HttpMCPClient {
   private label: string;
   private sessionId: string | null = null;
 
+  // SSE transport support (legacy HTTP+SSE protocol)
+  private useSseTransport = false;
+  private postEndpoint: string | null = null;
+  private sseReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  private sseBuffer = "";
+  private pending = new Map<number, PendingCall>();
+
   constructor(private config: MCPServerConfig) {
     this.label = config.name ?? config.url ?? "http-mcp";
   }
@@ -244,16 +253,124 @@ class HttpMCPClient {
 
   async start(): Promise<void> {
     if (this.initialized) return;
-    // MCP over HTTP: send initialize via POST, expect JSON response
-    const initResult = await this.rpc("initialize", {
-      protocolVersion: "2024-11-05",
+    // Try Streamable HTTP first (POST to baseUrl, response in POST body)
+    try {
+      const initResult = await this.rpcStreamable("initialize", {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "agent-heights", version: "0.1.0" },
+      });
+      console.log(`[mcp:${this.label}] connected (streamable HTTP):`, JSON.stringify((initResult as { capabilities?: unknown })?.capabilities ?? {}));
+      this.notify("notifications/initialized", {}).catch(() => {});
+      this.initialized = true;
+      return;
+    } catch (err) {
+      // If 404 or 405, the server likely uses the older SSE transport
+      if (err instanceof Error && /MCP HTTP (404|405)/.test(err.message)) {
+        console.log(`[mcp:${this.label}] streamable HTTP failed (${err.message.slice(0, 80)}), trying SSE transport...`);
+        await this.startSseTransport();
+        this.initialized = true;
+        return;
+      }
+      throw err;
+    }
+  }
+
+  /** Connect using the legacy HTTP+SSE transport: GET the SSE endpoint, receive POST URL, then POST to it. */
+  private async startSseTransport(): Promise<void> {
+    const headers: Record<string, string> = {
+      "Accept": "text/event-stream",
+      "MCP-Protocol-Version": "2025-03-26",
+    };
+    if (this.config.authToken) headers["Authorization"] = `Bearer ${this.config.authToken}`;
+    if (this.config.headers) Object.assign(headers, this.config.headers);
+
+    console.log(`[mcp:${this.label}] connecting to SSE endpoint: ${this.baseUrl}`);
+    const res = await fetch(this.baseUrl, { headers, signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => res.statusText);
+      throw new Error(`MCP SSE connect failed: ${res.status} ${errBody}`);
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error("No SSE response body");
+    this.sseReader = reader;
+
+    // Read until we get the `endpoint` event with the POST URL
+    this.postEndpoint = await this.waitForSseEndpoint();
+    this.useSseTransport = true;
+    console.log(`[mcp:${this.label}] SSE POST endpoint: ${this.postEndpoint}`);
+
+    // Start background reader that routes SSE responses to pending calls
+    this.readSseResponses().catch((err) => {
+      console.error(`[mcp:${this.label}] SSE background reader error: ${err}`);
+    });
+
+    // Initialize via POST to the endpoint URL
+    const initResult = await this.rpcSse("initialize", {
+      protocolVersion: "2025-03-26",
       capabilities: {},
       clientInfo: { name: "agent-heights", version: "0.1.0" },
     });
-    console.log(`[mcp:${this.label}] connected:`, JSON.stringify((initResult as { capabilities?: unknown })?.capabilities ?? {}));
-    // Send initialized notification (fire-and-forget)
+    console.log(`[mcp:${this.label}] connected (SSE transport):`, JSON.stringify((initResult as { capabilities?: unknown })?.capabilities ?? {}));
     this.notify("notifications/initialized", {}).catch(() => {});
-    this.initialized = true;
+  }
+
+  /** Read the SSE stream until an `endpoint` event is received. */
+  private async waitForSseEndpoint(): Promise<string> {
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await this.sseReader!.read();
+      if (done) throw new Error("SSE stream closed before endpoint event");
+      this.sseBuffer += decoder.decode(value, { stream: true });
+      const events = this.sseBuffer.split("\n\n");
+      this.sseBuffer = events.pop() ?? "";
+      for (const event of events) {
+        const lines = event.split("\n");
+        let eventType = "";
+        let data = "";
+        for (const line of lines) {
+          if (line.startsWith("event:")) eventType = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (eventType === "endpoint" && data) {
+          return new URL(data, this.baseUrl).href;
+        }
+      }
+    }
+  }
+
+  /** Background loop that reads SSE events and resolves/rejects pending RPC calls. */
+  private async readSseResponses(): Promise<void> {
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await this.sseReader!.read();
+      if (done) break;
+      this.sseBuffer += decoder.decode(value, { stream: true });
+      const events = this.sseBuffer.split("\n\n");
+      this.sseBuffer = events.pop() ?? "";
+      for (const event of events) {
+        const dataLines = event.split("\n").filter((l) => l.startsWith("data:"));
+        for (const line of dataLines) {
+          const data = line.slice(5).trim();
+          if (!data) continue;
+          try {
+            const msg: JsonRpcResponse = JSON.parse(data);
+            const pending = this.pending.get(msg.id);
+            if (pending) {
+              this.pending.delete(msg.id);
+              if (msg.error) pending.reject(new Error(msg.error.message));
+              else pending.resolve(msg.result);
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== "Unexpected token") throw e;
+          }
+        }
+      }
+    }
+    // Stream closed — reject all pending calls
+    for (const [, call] of this.pending) call.reject(new Error("SSE stream closed"));
+    this.pending.clear();
   }
 
   async listTools(): Promise<MCPToolDef[]> {
@@ -281,7 +398,14 @@ class HttpMCPClient {
     return result.content.map((c) => (c.type === "text" ? c.text ?? "" : "")).join("\n").trim();
   }
 
+  /** Unified RPC dispatcher — routes to the correct transport. */
   private async rpc(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
+    if (this.useSseTransport) return this.rpcSse(method, params, signal);
+    return this.rpcStreamable(method, params, signal);
+  }
+
+  /** Streamable HTTP transport: POST to baseUrl, response in the POST response body. */
+  private async rpcStreamable(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
     const id = this.nextId++;
     const body: JsonRpcRequest = { jsonrpc: "2.0", id, method, params };
 
@@ -301,16 +425,14 @@ class HttpMCPClient {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2025-03-26",
       };
-      // Inject auth token as Bearer
       if (this.config.authToken) {
         headers["Authorization"] = `Bearer ${this.config.authToken}`;
       }
-      // Merge any custom headers from config
       if (this.config.headers) {
         Object.assign(headers, this.config.headers);
       }
-      // Include session ID for Streamable HTTP transport
       if (this.sessionId) {
         headers["Mcp-Session-Id"] = this.sessionId;
       }
@@ -350,6 +472,67 @@ class HttpMCPClient {
     }
   }
 
+  /** Legacy SSE transport: POST to postEndpoint, response arrives on the SSE stream. */
+  private async rpcSse(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
+    const id = this.nextId++;
+    const body: JsonRpcRequest = { jsonrpc: "2.0", id, method, params };
+
+    return new Promise<unknown>((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "MCP-Protocol-Version": "2025-03-26",
+      };
+      if (this.config.authToken) headers["Authorization"] = `Bearer ${this.config.authToken}`;
+      if (this.config.headers) Object.assign(headers, this.config.headers);
+
+      console.log(`[mcp:${this.label}] rpc ${method} → ${this.postEndpoint} (SSE transport)`);
+
+      fetch(this.postEndpoint!, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      }).then((res) => {
+        if (!res.ok) {
+          this.pending.delete(id);
+          reject(new Error(`MCP SSE POST ${res.status}: ${res.statusText}`));
+        }
+        // Response will arrive through the SSE background reader
+      }).catch((err) => {
+        this.pending.delete(id);
+        reject(err);
+      });
+
+      // Timeout
+      const timeout = setTimeout(() => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+          reject(new Error(`MCP call timed out: ${method} (${this.label})`));
+        }
+      }, 30_000);
+
+      // Abort signal
+      if (signal) {
+        if (signal.aborted) {
+          if (this.pending.has(id)) {
+            this.pending.delete(id);
+            clearTimeout(timeout);
+            reject(new Error(`MCP call aborted: ${method} (${this.label})`));
+          }
+        } else {
+          signal.addEventListener("abort", () => {
+            if (this.pending.has(id)) {
+              this.pending.delete(id);
+              clearTimeout(timeout);
+              reject(new Error(`MCP call aborted: ${method} (${this.label})`));
+            }
+          }, { once: true });
+        }
+      }
+    });
+  }
+
   private async readSSE(res: Response, expectedId: number): Promise<unknown> {
     const reader = res.body?.getReader();
     if (!reader) throw new Error("No response body for SSE stream");
@@ -384,11 +567,15 @@ class HttpMCPClient {
 
   private async notify(method: string, params: unknown): Promise<void> {
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "MCP-Protocol-Version": "2025-03-26",
+      };
       if (this.config.authToken) headers["Authorization"] = `Bearer ${this.config.authToken}`;
       if (this.config.headers) Object.assign(headers, this.config.headers);
       if (this.sessionId) headers["Mcp-Session-Id"] = this.sessionId;
-      await fetch(this.baseUrl, {
+      const url = this.useSseTransport ? this.postEndpoint! : this.baseUrl;
+      await fetch(url, {
         method: "POST",
         headers,
         body: JSON.stringify({ jsonrpc: "2.0", method, params }),
@@ -400,6 +587,15 @@ class HttpMCPClient {
     this.initialized = false;
     this.toolsCache = null;
     this.sessionId = null;
+    if (this.sseReader) {
+      this.sseReader.cancel().catch(() => {});
+      this.sseReader = null;
+    }
+    this.useSseTransport = false;
+    this.postEndpoint = null;
+    this.sseBuffer = "";
+    for (const [, call] of this.pending) call.reject(new Error("MCP client stopped"));
+    this.pending.clear();
   }
 }
 

@@ -36,6 +36,7 @@ export interface StoredToken {
   client_id?: string;
   client_secret?: string;
   token_endpoint?: string;
+  token_endpoint_auth_method?: string;
 }
 
 /** Parse a stored MCP key — might be a plain token (old format) or JSON blob (new format). */
@@ -67,13 +68,20 @@ export async function refreshMcpToken(
       refresh_token: stored.refresh_token,
       client_id: stored.client_id,
     };
-    if (stored.client_secret) {
+
+    const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+
+    // Use client_secret_basic (Basic auth header) if specified, otherwise put secret in body
+    if (stored.client_secret && stored.token_endpoint_auth_method === "client_secret_basic") {
+      const basic = Buffer.from(`${stored.client_id}:${stored.client_secret}`).toString("base64");
+      headers["Authorization"] = `Basic ${basic}`;
+    } else if (stored.client_secret) {
       refreshParams.client_secret = stored.client_secret;
     }
 
     const res = await fetch(stored.token_endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers,
       body: new URLSearchParams(refreshParams),
     });
 
@@ -90,6 +98,7 @@ export async function refreshMcpToken(
       client_id: stored.client_id,
       client_secret: stored.client_secret,
       token_endpoint: stored.token_endpoint,
+      token_endpoint_auth_method: stored.token_endpoint_auth_method,
     });
     await setUserMcpKey(userId, serverUrl, newBlob);
     console.log(`[mcp-oauth] Token refreshed for ${serverUrl}`);
@@ -124,6 +133,7 @@ interface PendingOAuth {
   tokenEndpoint: string;
   redirectUri: string;
   createdAt: number;
+  tokenEndpointAuthMethod?: string;
 }
 
 /** In-memory store of pending OAuth flows, keyed by state (fallback when Redis is not available). */
@@ -299,6 +309,7 @@ export async function startOAuthFlow(
   let tokenEndpoint: string;
   let authorizationEndpoint: string;
   let scopes: string[];
+  let tokenEndpointAuthMethod: string | undefined;
 
   if (known) {
     if (!known.clientId) {
@@ -309,6 +320,7 @@ export async function startOAuthFlow(
     tokenEndpoint = known.tokenEndpoint;
     authorizationEndpoint = known.authorizationEndpoint;
     scopes = known.scopes;
+    tokenEndpointAuthMethod = known.tokenEndpointAuthMethod;
     console.log(`[mcp-oauth] Using known OAuth config for ${serverUrl}`);
   } else if (cached && Date.now() - cached.cachedAt < REGISTRATION_CACHE_MS) {
     clientId = cached.clientId;
@@ -484,6 +496,7 @@ export async function startOAuthFlow(
     tokenEndpoint,
     redirectUri,
     createdAt: Date.now(),
+    tokenEndpointAuthMethod,
   });
 
   return { authUrl: authUrl.toString(), redirectMode: baseUrl ? "auto" : "manual" };
@@ -550,13 +563,20 @@ export async function handleOAuthCallback(
       client_id: flow.clientId,
       code_verifier: flow.codeVerifier,
     };
-    if (flow.clientSecret) {
+
+    const tokenHeaders: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+
+    // Use client_secret_basic (Basic auth header) if specified, otherwise put secret in body
+    if (flow.clientSecret && flow.tokenEndpointAuthMethod === "client_secret_basic") {
+      const basic = Buffer.from(`${flow.clientId}:${flow.clientSecret}`).toString("base64");
+      tokenHeaders["Authorization"] = `Basic ${basic}`;
+    } else if (flow.clientSecret) {
       tokenParams.client_secret = flow.clientSecret;
     }
 
     const tokenRes = await fetch(flow.tokenEndpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: tokenHeaders,
       body: new URLSearchParams(tokenParams),
     });
 
@@ -575,6 +595,7 @@ export async function handleOAuthCallback(
       client_id: flow.clientId,
       client_secret: flow.clientSecret,
       token_endpoint: flow.tokenEndpoint,
+      token_endpoint_auth_method: flow.tokenEndpointAuthMethod,
     });
     const { error } = await setUserMcpKey(flow.userId, flow.serverUrl, tokenBlob);
     if (error) {

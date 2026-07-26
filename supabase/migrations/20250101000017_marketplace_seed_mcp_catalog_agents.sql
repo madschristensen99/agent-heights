@@ -513,7 +513,7 @@ To connect: Get your API Key at https://www.firecrawl.dev/app/api-keys',
   ),
   (
     'n8n Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a n8n agent connected via the n8n MCP at https://mcp.n8n.io/sse. Workflow automation with 525+ integration nodes. You authenticate via an API key — the user will provide their key. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":2,"hair":1,"shirt":4,"pants":1,"accessory":0,"accent":0,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://mcp.n8n.io/sse","name":"n8n","authType":"apikey","keyLabel":"API Key","keyPlaceholder":"n8n_api_...","keyHelpUrl":"https://docs.n8n.io/advanced-features/api/"}]}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a n8n agent connected via the n8n MCP server. Workflow automation with 525+ integration nodes. You authenticate via an MCP Access Token — the user will provide their instance URL and token. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":2,"hair":1,"shirt":4,"pants":1,"accessory":0,"accent":0,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"name":"n8n","authType":"apikey","keyLabel":"MCP Access Token","keyPlaceholder":"Paste your n8n MCP Access Token...","keyHelpUrl":"https://docs.n8n.io/connect/connect-to-n8n-mcp-server","urlPlaceholder":"https://your-n8n-domain/mcp-server/http"}]}',
     'n8n Agent — connected to n8n via MCP (API Key required).
 
 Integrates with n8n workflow automation platform to provide conversational access to 525+ nodes including AI-capable ones. Agents can create, trigger, and manage automated workflows.
@@ -522,8 +522,8 @@ This agent can:
 • Access n8n data and capabilities via MCP
 • Automate n8n workflows from conversation
 
-To connect: Get your API Key at https://docs.n8n.io/advanced-features/api/',
-    'n8n agent — Workflow automation with 525+ integration nodes. (API Key)',
+To connect: Get your MCP Access Token at https://docs.n8n.io/connect/connect-to-n8n-mcp-server',
+    'n8n agent — Workflow automation with 525+ integration nodes. (MCP Access Token)',
     'n8n,n8n,mcp,AI & ML',
     true,
     null,
@@ -533,8 +533,8 @@ To connect: Get your API Key at https://docs.n8n.io/advanced-features/api/',
     'approved',
     '["Access n8n data and capabilities via MCP","Automate n8n workflows from conversation"]',
     '["AI & ML"]',
-    '["API Key (https://docs.n8n.io/advanced-features/api/)"]',
-    '[{"label":"n8n MCP Server","url":"https://mcp.n8n.io/sse"},{"label":"Get your API Key","url":"https://docs.n8n.io/advanced-features/api/"}]',
+    '["MCP Access Token (https://docs.n8n.io/connect/connect-to-n8n-mcp-server)"]',
+    '[{"label":"n8n MCP Docs","url":"https://docs.n8n.io/connect/connect-to-n8n-mcp-server"},{"label":"Get your MCP Access Token","url":"https://docs.n8n.io/connect/connect-to-n8n-mcp-server"}]',
     'https://icons.duckduckgo.com/ip3/n8n.io.ico'
   ),
   (
@@ -2179,17 +2179,18 @@ To connect: Get your API Key at https://app.fireflies.ai/api/webhooks',
   ),
   (
     'Otter.ai Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Otter.ai agent connected via the Otter.ai MCP at https://mcp.otter.ai/mcp. Unlock your meeting intelligence. You authenticate via an API key — the user will provide their key. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":4,"hair":4,"shirt":12,"pants":1,"accessory":0,"accent":9,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://mcp.otter.ai/mcp","name":"otter-ai","authType":"apikey","keyLabel":"API Key","keyPlaceholder":"Paste API key...","keyHelpUrl":"https://otter.ai/api"}]}',
-    'Otter.ai Agent — connected to Otter.ai via MCP (API Key required).
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Otter.ai agent connected via the Otter.ai MCP at https://mcp.otter.ai/mcp. Unlock your meeting intelligence. You authenticate via OAuth — no API key is needed. You have three tools: fetch (query a specific conversation by URL), search (search across all meeting transcripts), and get user info. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":4,"hair":4,"shirt":12,"pants":1,"accessory":0,"accent":9,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://mcp.otter.ai/mcp","name":"otter-ai","authType":"oauth"}]}',
+    'Otter.ai Agent — connected to Otter.ai via MCP (OAuth required).
 
-Access Otter.ai''s meeting transcription platform. Agents can query transcripts, search meeting content, and extract action items.
+Access Otter.ai''s meeting transcription platform via OAuth. Agents can fetch specific conversation transcripts by URL, search across all meeting transcripts, and retrieve user info.
 
 This agent can:
-• Access Otter.ai data and capabilities via MCP
-• Automate Otter.ai workflows from conversation
+• Fetch meeting transcripts by conversation URL
+• Search across all captured meetings
+• Retrieve Otter.ai user info
 
-To connect: Get your API Key at https://otter.ai/api',
-    'Otter.ai agent — Unlock your meeting intelligence. (API Key)',
+To connect: Authenticate with your Otter.ai account via OAuth.',
+    'Otter.ai agent — Unlock your meeting intelligence. (OAuth)',
     'otter-ai,otter.ai,mcp,Communication',
     true,
     null,
@@ -2197,10 +2198,10 @@ To connect: Get your API Key at https://otter.ai/api',
     'TypeScript',
     'agent',
     'approved',
-    '["Access Otter.ai data and capabilities via MCP","Automate Otter.ai workflows from conversation"]',
+    '["Fetch meeting transcripts by conversation URL","Search across all captured meetings","Retrieve Otter.ai user info"]',
     '["Communication"]',
-    '["API Key (https://otter.ai/api)"]',
-    '[{"label":"Otter.ai MCP Server","url":"https://mcp.otter.ai/mcp"},{"label":"Get your API Key","url":"https://otter.ai/api"}]',
+    '["OAuth (https://help.otter.ai/hc/en-us/articles/35287607569687-Otter-MCP-Server)"]',
+    '[{"label":"Otter.ai MCP Server","url":"https://mcp.otter.ai/mcp"},{"label":"Otter MCP Setup Guide","url":"https://help.otter.ai/hc/en-us/articles/35287607569687-Otter-MCP-Server"}]',
     'https://icons.duckduckgo.com/ip3/otter.ai.ico'
   ),
   (

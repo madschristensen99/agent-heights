@@ -4439,7 +4439,7 @@ export class OfficeScene extends Phaser.Scene {
     this.tweens.add({
       targets: heli,
       alpha: 1,
-      duration: 1500,
+      duration: 750,
       ease: "Cubic.in",
     });
 
@@ -4447,11 +4447,11 @@ export class OfficeScene extends Phaser.Scene {
     this.tweens.add({
       targets: heli,
       y: padCy,
-      duration: 5500,
+      duration: 2750,
       ease: "Cubic.out",
       onComplete: () => {
         // landed — pause for rotor spin-down, then unload agent
-        this.time.delayedCall(1000, () => this.heliUnload());
+        this.time.delayedCall(500, () => this.heliUnload());
       },
     });
   }
