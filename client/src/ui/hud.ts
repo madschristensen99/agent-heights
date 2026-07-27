@@ -207,6 +207,10 @@ export class Hud {
   private detailCdpTxHistoryListener: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void) | null = null;
   private detailCdpOnrampListener: ((msg: { agentId: string; url: string | null; error?: string }) => void) | null = null;
   private cdpDetailAgentId: string | null = null;
+  private detailCrossmintListener: ((msg: { agentId: string; address: string | null; chain: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void) | null = null;
+  private detailCrossmintPolicyListener: ((msg: { agentId: string; chain: string | null; spendingLimitUsd: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; description: string | null; error?: string }) => void) | null = null;
+  private detailCrossmintTxHistoryListener: ((msg: { agentId: string; transactions: any[] | null; error?: string }) => void) | null = null;
+  private crossmintDetailAgentId: string | null = null;
   private _scheduleCreateOpen = false;
   private _renaming = false;
   private _scheduleEditingId: string | null = null;
@@ -263,6 +267,7 @@ export class Hud {
         <div class="task" id="d-task" hidden></div>
         <div id="d-mcp-section" hidden></div>
         <div id="d-cdp-section" hidden></div>
+        <div id="d-crossmint-section" hidden></div>
         <div class="d-schedules" id="d-schedules" hidden></div>
         <div class="logs" id="logs"></div>
         <textarea id="task-input" rows="4" placeholder="Give them a task…"></textarea>
@@ -1841,7 +1846,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     }
     // Parse the agent config JSON — may contain a custom appearance, model,
     // and systemPrompt for premium/curated marketplace agents.
-    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; cdpSolana?: boolean } = {};
+    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; cdpSolana?: boolean; crossmintWallet?: boolean } = {};
     try {
       if (agent.agent) config = JSON.parse(agent.agent);
     } catch { /* not JSON or missing — fall back to defaults */ }
@@ -1871,6 +1876,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       appearance,
       mcpServers: config.mcpServers,
       cdpSolana: config.cdpSolana,
+      crossmintWallet: config.crossmintWallet,
     };
 
     // Trigger the helicopter delivery animation. The hire WS message is
@@ -2078,6 +2084,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       panel.hidden = true;
       this.lastSelected = null;
       this.cdpDetailAgentId = null;
+      this.crossmintDetailAgentId = null;
       return;
     }
     panel.hidden = false;
@@ -2337,9 +2344,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             }).join("")
           : `<div style="color:#666; margin-top:0.2rem;">No balances — wallet may need funding</div>`;
         content.innerHTML = `
-          <div style="color:#e0e0e0; font-family:monospace; font-size:0.65rem; word-break:break-all;">
-            ${esc(msg.address)}
-            <button id="d-cdp-copy" style="margin-left:0.3rem; border:none; background:none; color:#4f9dde; cursor:pointer; font-size:0.6rem;">copy</button>
+          <div style="color:#e0e0e0; font-family:monospace; font-size:0.65rem; word-break:break-all; display:flex; align-items:flex-start; gap:0.3rem;">
+            <span>${esc(msg.address)}</span>
+            <button id="d-cdp-copy" title="Copy address" style="border:none; background:none; color:#4f9dde; cursor:pointer; font-size:0.7rem; padding:0; flex-shrink:0;">⧉</button>
+            <button id="d-cdp-qr" title="Show QR code" style="border:none; background:none; color:#4f9dde; cursor:pointer; font-size:0.7rem; padding:0; flex-shrink:0;">⊞</button>
+          </div>
+          <div id="d-cdp-qr-box" style="display:none; margin-top:0.4rem; padding:0.5rem; background:#fff; border-radius:0.3rem; width:fit-content;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(msg.address)}" alt="Wallet QR" style="display:block; width:120px; height:120px;" />
           </div>
           <div style="margin-top:0.3rem;">
             <a href="https://explorer.solana.com/address/${esc(msg.address)}" target="_blank" style="font-size:0.6rem; color:#4f9dde; text-decoration:none;">View on Solana Explorer →</a>
@@ -2354,7 +2365,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           copyBtn.addEventListener("click", () => {
             navigator.clipboard.writeText(msg.address!);
             copyBtn.textContent = "✓";
-            setTimeout(() => { copyBtn.textContent = "copy"; }, 1500);
+            setTimeout(() => { copyBtn.textContent = "⧉"; }, 1500);
+          });
+        }
+        const qrBtn = content.querySelector("#d-cdp-qr") as HTMLButtonElement | null;
+        const qrBox = content.querySelector("#d-cdp-qr-box") as HTMLElement | null;
+        if (qrBtn && qrBox) {
+          qrBtn.addEventListener("click", () => {
+            const visible = qrBox.style.display !== "none";
+            qrBox.style.display = visible ? "none" : "block";
+            qrBtn.textContent = visible ? "⊞" : "⊟";
           });
         }
       };
@@ -2453,6 +2473,174 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       cdpSection.innerHTML = "";
     }
     } // end cdpNeedsInit
+
+    // Crossmint multi-chain wallet section — only rebuild when selected agent changes
+    const crossmintSection = document.getElementById("d-crossmint-section")!;
+    const crossmintNeedsInit = this.crossmintDetailAgentId !== agent.id ||
+      (agent.crossmintWallet && crossmintSection.hidden) ||
+      (!agent.crossmintWallet && !crossmintSection.hidden);
+    if (crossmintNeedsInit) {
+      // Clean up old listeners from previous agent
+      if (this.detailCrossmintListener) {
+        const idx = this.store.crossmintWalletListeners.indexOf(this.detailCrossmintListener);
+        if (idx >= 0) this.store.crossmintWalletListeners.splice(idx, 1);
+        this.detailCrossmintListener = null;
+      }
+      if (this.detailCrossmintPolicyListener) {
+        const pidx = this.store.crossmintPolicyListeners.indexOf(this.detailCrossmintPolicyListener);
+        if (pidx >= 0) this.store.crossmintPolicyListeners.splice(pidx, 1);
+        this.detailCrossmintPolicyListener = null;
+      }
+      if (this.detailCrossmintTxHistoryListener) {
+        const tidx = this.store.crossmintTxHistoryListeners.indexOf(this.detailCrossmintTxHistoryListener);
+        if (tidx >= 0) this.store.crossmintTxHistoryListeners.splice(tidx, 1);
+        this.detailCrossmintTxHistoryListener = null;
+      }
+      this.crossmintDetailAgentId = agent.id;
+    if (agent.crossmintWallet) {
+      crossmintSection.hidden = false;
+      crossmintSection.innerHTML = `
+        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
+          <div style="font-size:0.75rem; font-weight:600; color:#b58a3a; margin-bottom:0.4rem;">⚡ MULTICHAIN WALLET (CROSSMINT)</div>
+          <div id="d-crossmint-content" style="font-size:0.7rem; color:#888;">Loading wallet...</div>
+          <button id="d-crossmint-refresh" style="margin-top:0.4rem; padding:0.3rem 0.5rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.65rem; cursor:pointer;">↻ Refresh</button>
+        </div>
+        <div id="d-crossmint-policy" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+          <div style="font-size:0.65rem; font-weight:600; color:#b58a3a; margin-bottom:0.3rem;">⚙ WALLET POLICY</div>
+          <div id="d-crossmint-policy-content" style="font-size:0.7rem; color:#888;">Loading policy...</div>
+        </div>
+        <div id="d-crossmint-txhistory" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
+            <div style="font-size:0.65rem; font-weight:600; color:#b58a3a;">📜 TRANSACTION HISTORY</div>
+            <button id="d-crossmint-tx-refresh" style="padding:0.2rem 0.4rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.6rem; cursor:pointer;">↻</button>
+          </div>
+          <div id="d-crossmint-tx-content" style="font-size:0.7rem; color:#888;">Loading transactions...</div>
+        </div>
+      `;
+      const xmRefreshBtn = crossmintSection.querySelector("#d-crossmint-refresh") as HTMLButtonElement | null;
+      if (xmRefreshBtn) {
+        xmRefreshBtn.addEventListener("click", () => {
+          this.net.send({ type: "get_crossmint_wallet", agentId: agent.id });
+          xmRefreshBtn.textContent = "Loading...";
+          setTimeout(() => { xmRefreshBtn.textContent = "↻ Refresh"; }, 2000);
+        });
+      }
+      this.net.send({ type: "get_crossmint_wallet", agentId: agent.id });
+      this.detailCrossmintListener = (msg: { agentId: string; address: string | null; chain: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        const content = crossmintSection.querySelector("#d-crossmint-content") as HTMLElement | null;
+        if (!content) return;
+        if (msg.error) {
+          content.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          return;
+        }
+        if (!msg.address) {
+          content.innerHTML = `<span style="color:#e05d5d;">⚠ Wallet not available</span>`;
+          return;
+        }
+        const balancesHtml = msg.balances && msg.balances.length > 0
+          ? msg.balances.map((b: { symbol: string; amount: string; usdValue?: string }) => {
+              const usd = b.usdValue ? ` <span style="color:#666;">($${esc(b.usdValue)})</span>` : "";
+              return `<div style="margin-top:0.2rem;">${esc(b.symbol)}: ${esc(b.amount)}${usd}</div>`;
+            }).join("")
+          : `<div style="color:#666; margin-top:0.2rem;">No balances — wallet may need funding</div>`;
+        const chain = msg.chain ?? "unknown";
+        const explorerBase = chain.includes("solana")
+          ? `https://explorer.solana.com/address/${esc(msg.address)}`
+          : `https://sepolia.basescan.org/address/${esc(msg.address)}`;
+        content.innerHTML = `
+          <div style="color:#e0e0e0; font-family:monospace; font-size:0.65rem; word-break:break-all;">
+            ${esc(msg.address)}
+            <button id="d-crossmint-copy" style="margin-left:0.3rem; border:none; background:none; color:#b58a3a; cursor:pointer; font-size:0.6rem;">copy</button>
+          </div>
+          <div style="margin-top:0.2rem; font-size:0.6rem; color:#666;">Chain: ${esc(chain)} · Gas sponsored</div>
+          <div style="margin-top:0.3rem;">
+            <a href="${explorerBase}" target="_blank" style="font-size:0.6rem; color:#b58a3a; text-decoration:none;">View on Explorer →</a>
+          </div>
+          <div style="margin-top:0.4rem; border-top:1px solid #222; padding-top:0.3rem;">
+            <div style="font-size:0.65rem; color:#888; margin-bottom:0.2rem;">Balances:</div>
+            ${balancesHtml}
+          </div>
+        `;
+        const copyBtn = content.querySelector("#d-crossmint-copy") as HTMLButtonElement | null;
+        if (copyBtn) {
+          copyBtn.addEventListener("click", () => {
+            navigator.clipboard.writeText(msg.address!);
+            copyBtn.textContent = "✓";
+            setTimeout(() => { copyBtn.textContent = "copy"; }, 1500);
+          });
+        }
+      };
+      this.store.crossmintWalletListeners.push(this.detailCrossmintListener);
+
+      this.net.send({ type: "get_crossmint_policy", agentId: agent.id });
+      this.detailCrossmintPolicyListener = (msg: { agentId: string; chain: string | null; spendingLimitUsd: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; description: string | null; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        const pcontent = crossmintSection.querySelector("#d-crossmint-policy-content") as HTMLElement | null;
+        if (!pcontent) return;
+        if (msg.error) {
+          pcontent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          return;
+        }
+        const chain = msg.chain ?? "unknown";
+        const limit = msg.spendingLimitUsd ? `$${msg.spendingLimitUsd}` : "none (unlimited)";
+        const allowed = msg.allowedRecipients?.length ? msg.allowedRecipients.join(", ") : "any";
+        const blocked = msg.blockedRecipients?.length ? msg.blockedRecipients.join(", ") : "none";
+        const desc = msg.description ?? "";
+        pcontent.innerHTML = `
+          <div style="margin-bottom:0.2rem; color:#888; font-size:0.65rem;">${esc(desc)}</div>
+          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Chain:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(chain)}</span></div>
+          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Spending limit:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(limit)}</span></div>
+          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Allowed recipients:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(allowed)}</span></div>
+          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Blocked recipients:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(blocked)}</span></div>
+          <div style="margin-top:0.3rem; color:#5d9e5d; font-size:0.6rem;">⛽ Gas sponsored by Crossmint paymaster</div>
+        `;
+      };
+      this.store.crossmintPolicyListeners.push(this.detailCrossmintPolicyListener);
+
+      this.net.send({ type: "get_crossmint_tx_history", agentId: agent.id });
+      const xmTxRefreshBtn = crossmintSection.querySelector("#d-crossmint-tx-refresh") as HTMLButtonElement | null;
+      if (xmTxRefreshBtn) {
+        xmTxRefreshBtn.addEventListener("click", () => {
+          this.net.send({ type: "get_crossmint_tx_history", agentId: agent.id });
+          xmTxRefreshBtn.textContent = "...";
+          setTimeout(() => { xmTxRefreshBtn.textContent = "↻"; }, 2000);
+        });
+      }
+      this.detailCrossmintTxHistoryListener = (msg: { agentId: string; transactions: any[] | null; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        const txContent = crossmintSection.querySelector("#d-crossmint-tx-content") as HTMLElement | null;
+        if (!txContent) return;
+        if (msg.error) {
+          txContent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          return;
+        }
+        if (!msg.transactions || msg.transactions.length === 0) {
+          txContent.innerHTML = `<span style="color:#666;">No transactions yet — this wallet may be new</span>`;
+          return;
+        }
+        txContent.innerHTML = msg.transactions.slice(0, 10).map((tx: any) => {
+          const id = tx.id ?? tx.txId ?? "unknown";
+          const status = tx.status ?? "unknown";
+          const statusColor = status === "confirmed" || status === "success" ? "#5d9e5d" : status === "failed" ? "#e05d5d" : "#888";
+          const shortId = id.length > 16 ? id.slice(0, 12) + "..." + id.slice(-4) : id;
+          const hash = tx.transactionHash ?? tx.hash ?? "";
+          const amount = tx.amount ?? "";
+          const token = tx.token ?? tx.symbol ?? "";
+          return `<div style="margin-top:0.2rem; display:flex; gap:0.3rem; align-items:center;">` +
+            `<span style="color:${statusColor}; font-size:0.6rem; font-weight:600;">${esc(status)}</span>` +
+            `<span style="color:#aaa; font-size:0.6rem; font-family:monospace;">${esc(shortId)}</span>` +
+            (amount ? `<span style="color:#888; font-size:0.6rem;">${esc(amount)} ${esc(token)}</span>` : "") +
+            (hash ? `<a href="https://sepolia.basescan.org/tx/${esc(hash)}" target="_blank" style="color:#b58a3a; font-size:0.6rem; text-decoration:none;">↗</a>` : "") +
+            `</div>`;
+        }).join("");
+      };
+      this.store.crossmintTxHistoryListeners.push(this.detailCrossmintTxHistoryListener);
+    } else {
+      crossmintSection.hidden = true;
+      crossmintSection.innerHTML = "";
+    }
+    } // end crossmintNeedsInit
 
     const logs = this.store.logs.get(agent.id) ?? [];
     const logsEl = document.getElementById("logs")!;
