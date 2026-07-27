@@ -37,23 +37,23 @@ const githubPayload = {
 };
 
 // Check if GitHub Agent already exists
-const { data: existingGithub } = await sb.from('swarms_cloud_agents').select('id').eq('name', 'GitHub Agent').maybeSingle();
+const { data: existingGithub } = await sb.from('heights_cloud_agents').select('id').eq('name', 'GitHub Agent').maybeSingle();
 let githubResult;
 if (existingGithub?.id) {
-  githubResult = await sb.from('swarms_cloud_agents').update(githubPayload).eq('id', existingGithub.id).select('id,name');
+  githubResult = await sb.from('heights_cloud_agents').update(githubPayload).eq('id', existingGithub.id).select('id,name');
 } else {
-  githubResult = await sb.from('swarms_cloud_agents').insert(githubPayload).select('id,name');
+  githubResult = await sb.from('heights_cloud_agents').insert(githubPayload).select('id,name');
 }
 if (githubResult.error) { console.error('GitHub Agent error:', githubResult.error.message); process.exit(1); }
 console.log('GitHub Agent:', githubResult.data);
 
 // 2. Delete placeholder agents
 const crapNames = ['Code Review Sentinel', 'Data Analyst Pro', 'Research Assistant', 'DevOps Automator', 'Content Writer'];
-const { data: deleted, error: delErr } = await sb.from('swarms_cloud_agents').delete().in('name', crapNames).select('name');
+const { data: deleted, error: delErr } = await sb.from('heights_cloud_agents').delete().in('name', crapNames).select('name');
 if (delErr) { console.error('Delete error:', delErr.message); process.exit(1); }
 console.log('Deleted agents:', deleted?.map(r => r.name) ?? []);
 
 // 3. List what remains
-const { data: remaining } = await sb.from('swarms_cloud_agents').select('name,status').eq('status', 'approved').order('name');
+const { data: remaining } = await sb.from('heights_cloud_agents').select('name,status').eq('status', 'approved').order('name');
 console.log('\nRemaining approved agents:');
 for (const a of remaining ?? []) console.log(`  - ${a.name}`);

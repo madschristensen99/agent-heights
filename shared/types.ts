@@ -811,7 +811,7 @@ export const AGENT_MODELS = [
 
 // --------------------------------------------------- subscription tiers ---
 
-export type SubscriptionTier = "starter" | "pro" | "unlimited";
+export type SubscriptionTier = "starter" | "pro";
 export type BillingPeriod = "monthly" | "annual";
 
 export interface TierInfo {
@@ -846,23 +846,13 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     annualPrice: 4990,
     annualLabel: "$49.90/yr",
   },
-  unlimited: {
-    id: "unlimited",
-    price: 2000,
-    label: "$20/mo",
-    name: "Unlimited",
-    agentLimit: Infinity,
-    description: "Hire and manage unlimited AI agents in your office.",
-    annualPrice: 20000,
-    annualLabel: "$200/yr",
-  },
 };
 
 export const SUBSCRIPTION_TIER_LIST = Object.values(SUBSCRIPTION_TIERS);
 
 /** Determine the tier from a stored string, defaulting to "none". */
 export function parseTier(s: string | null | undefined): SubscriptionTier | null {
-  if (s === "starter" || s === "pro" || s === "unlimited") return s;
+  if (s === "starter" || s === "pro") return s;
   return null;
 }
 

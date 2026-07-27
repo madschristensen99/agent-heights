@@ -276,7 +276,7 @@ sqlParts.push(`-- Each agent connects to a remote MCP server with correct auth c
 sqlParts.push(`-- Skips agents already seeded in earlier migrations (Robinhood, Yahoo Finance, GitHub).`);
 sqlParts.push(``);
 sqlParts.push(`-- Delete any existing agents with these names first (idempotent re-seed)`);
-sqlParts.push(`DELETE FROM public.swarms_cloud_agents`);
+sqlParts.push(`DELETE FROM public.heights_cloud_agents`);
 sqlParts.push(`WHERE name IN (`);
 for (let i = 0; i < newEntries.length; i++) {
   const e = newEntries[i];
@@ -285,7 +285,7 @@ for (let i = 0; i < newEntries.length; i++) {
 }
 sqlParts.push(`);`);
 sqlParts.push(``);
-sqlParts.push(`INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)`);
+sqlParts.push(`INSERT INTO public.heights_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)`);
 sqlParts.push(`VALUES`);
 
 for (let i = 0; i < newEntries.length; i++) {

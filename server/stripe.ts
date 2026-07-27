@@ -56,7 +56,7 @@ export interface PaymentStatus {
 
 export async function getUserPaymentStatus(userId: string): Promise<PaymentStatus> {
   if (!isSupabaseConfigured || !isStripeConfigured) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "unlimited", agentLimit: Infinity, currentPeriodEnd: null, freeTrialExpiresAt: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "pro", agentLimit: SUBSCRIPTION_TIERS.pro.agentLimit, currentPeriodEnd: null, freeTrialExpiresAt: null };
   }
   try {
     // Try full query with subscription_tier (may fail if migration not applied)
@@ -478,7 +478,7 @@ export async function handleStripeRequest(
     try { parsed = JSON.parse(body.toString()); } catch { /* empty body is fine */ }
     const tier = parseTier(parsed.tier);
     if (!tier) {
-      json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro | unlimited" });
+      json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro" });
       return true;
     }
     const billingPeriod: BillingPeriod = parsed.billingPeriod === "monthly" ? "monthly" : "annual";

@@ -80,7 +80,7 @@ export async function handlePublishRequest(
 
   try {
     const { data, error } = await supabaseAdmin
-      .from("swarms_cloud_agents")
+      .from("heights_cloud_agents")
       .insert({
         name: parsed.name.trim().slice(0, 200),
         agent: JSON.stringify(agentConfig),

@@ -118,7 +118,7 @@ export async function handleMarketplaceRequest(
   try {
     if (url === "/api/marketplace/agents" || (url === "/api/marketplace" && type === "agent")) {
       let query = supabaseAdmin
-        .from("swarms_cloud_agents")
+        .from("heights_cloud_agents")
         .select("*")
         .eq("status", "approved")
         .order("created_at", { ascending: false })
@@ -142,7 +142,7 @@ export async function handleMarketplaceRequest(
 
     if (url === "/api/marketplace/prompts" || (url === "/api/marketplace" && type === "prompt")) {
       let query = supabaseAdmin
-        .from("swarms_cloud_prompts")
+        .from("heights_cloud_prompts")
         .select("*")
         .eq("status", "approved")
         .order("created_at", { ascending: false })
@@ -166,7 +166,7 @@ export async function handleMarketplaceRequest(
 
     if (url === "/api/marketplace/tools" || (url === "/api/marketplace" && type === "tool")) {
       let query = supabaseAdmin
-        .from("swarms_cloud_tools")
+        .from("heights_cloud_tools")
         .select("*")
         .eq("status", "approved")
         .order("created_at", { ascending: false })
@@ -193,7 +193,7 @@ export async function handleMarketplaceRequest(
       if (!id) { json(res, 400, { error: "Missing id parameter" }); return true; }
 
       const { data, error } = await supabaseAdmin
-        .from("swarms_cloud_agents")
+        .from("heights_cloud_agents")
         .select("*")
         .eq("id", id)
         .single();

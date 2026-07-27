@@ -1459,13 +1459,13 @@ export class Hud {
           <div class="sec">SUBSCRIPTION</div>
           <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "#53b86b" : "#e05d5d"};">
             ${this.store.subscriptionActive
-              ? `✓ ${this.store.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === this.store.subscriptionTier)?.name : "Active"} — ${this.store.agentLimit === Infinity ? "unlimited" : this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"} available.`
+              ? `✓ ${this.store.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === this.store.subscriptionTier)?.name : "Active"} — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"} available.`
               : "⚠ No active subscription — plans start at $0.99/month."}
           </div>
           ${this.store.subscriptionActive
             ? `<button class="btn" id="s-manage-sub">MANAGE SUBSCRIPTION</button>`
             : `<div style="display:flex;flex-direction:column;gap:0.4rem;">${SUBSCRIPTION_TIER_LIST.map(t => {
-              const agentLabel = t.agentLimit === Infinity ? "unlimited agents" : `${t.agentLimit} agent${t.agentLimit === 1 ? "" : "s"}`;
+              const agentLabel = `${t.agentLimit} agent${t.agentLimit === 1 ? "" : "s"}`;
               return `<button class="btn primary s-subscribe-tier" data-tier="${t.id}" style="text-align:left;padding:0.6rem 0.8rem;font-size:0.85rem;">${t.name} — ${t.label} (${agentLabel})</button>`;
             }).join("")}</div>`}
           <div class="sec" style="margin-top:1rem;">ENTRANCE FEE</div>
@@ -1564,7 +1564,7 @@ export class Hud {
     });
     const subscribeBtn = document.getElementById("s-subscribe");
     if (subscribeBtn) {
-      subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout("unlimited"));
+      subscribeBtn.addEventListener("click", () => void startSubscriptionCheckout("pro"));
     }
     document.querySelectorAll<HTMLButtonElement>(".s-subscribe-tier").forEach(btn => {
       btn.addEventListener("click", () => {

@@ -321,7 +321,7 @@ const agents = [
 async function main() {
   // Delete existing
   console.log("Deleting existing agents...");
-  const { error: delErr } = await sb.from("swarms_cloud_agents").delete().in("name", NAMES);
+  const { error: delErr } = await sb.from("heights_cloud_agents").delete().in("name", NAMES);
   if (delErr) {
     console.error("Delete failed:", delErr.message);
     process.exit(1);
@@ -329,7 +329,7 @@ async function main() {
 
   // Insert all
   for (const a of agents) {
-    const { data, error } = await sb.from("swarms_cloud_agents").insert(a).select("name");
+    const { data, error } = await sb.from("heights_cloud_agents").insert(a).select("name");
     if (error) {
       console.error("Insert failed:", a.name, error.message);
       process.exit(1);

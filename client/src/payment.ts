@@ -259,8 +259,8 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       } else {
         periodInfo.textContent = "Your subscription is active.";
       }
-      // Show upgrade options if not on unlimited
-      if (st.subscriptionTier && st.subscriptionTier !== "unlimited") {
+      // Show upgrade options if not on the highest tier
+      if (st.subscriptionTier && st.subscriptionTier !== "pro") {
         const currentPrice = SUBSCRIPTION_TIER_LIST.find(t => t.id === st.subscriptionTier)!.price;
         const upgrades = SUBSCRIPTION_TIER_LIST.filter(t => t.price > currentPrice);
         if (upgrades.length > 0) {

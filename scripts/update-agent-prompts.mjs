@@ -69,7 +69,7 @@ IMPORTANT RULES:
 - If asked to "show off your capabilities," fetch data for a popular ticker (AAPL) and compute 3-4 indicators with a full analysis.
 - Keep responses concise. Data → math → verdict. No fluff.`;
 
-const yahooResult = await sb.from('swarms_cloud_agents')
+const yahooResult = await sb.from('heights_cloud_agents')
   .update({ agent: JSON.stringify({
     model: "claude-sonnet-4-20250514",
     systemPrompt: yahooPrompt,
@@ -104,7 +104,7 @@ RULES:
 
 You wear a green Robinhood cap and are enthusiastic about managing investments.`;
 
-const robinhoodResult = await sb.from('swarms_cloud_agents')
+const robinhoodResult = await sb.from('heights_cloud_agents')
   .update({ agent: JSON.stringify({
     model: "claude-sonnet-4-20250514",
     systemPrompt: robinhoodPrompt,
