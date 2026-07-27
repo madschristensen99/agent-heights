@@ -1157,6 +1157,7 @@ export class OfficeScene extends Phaser.Scene {
               if (this.ready) this.startHuddle(agentIds);
             });
             this.store.onHelicopter((delivery) => {
+              console.log(`[heli-debug] onHelicopter callback: ready=${this.ready}, heliActive=${this.heliActive}, name=${delivery?.name}`);
               if (this.ready && !this.heliActive) this.triggerHelicopter(delivery);
             });
             this.store.onAssembly((agentIds) => {
@@ -4403,6 +4404,7 @@ export class OfficeScene extends Phaser.Scene {
     const agentName = delivery?.name ?? "Agent";
     this.store.toast(`Helicopter summoned! ${agentName} incoming...`);
     this.heliSound = this.world?.audio.helicopter() ?? null;
+    console.log(`[heli-debug] triggerHelicopter: agentName=${agentName}, world=${!!this.world}, audio=${!!this.world?.audio}, heliSound=${!!this.heliSound}, ready=${this.ready}, heliActive=${this.heliActive}`);
 
     // Send the hire WS message immediately so the agent appears in the
     // sidebar and is interactable right away. The helicopter animation
@@ -4421,6 +4423,7 @@ export class OfficeScene extends Phaser.Scene {
         appearance: delivery.appearance,
         mcpServers: delivery.mcpServers,
         cdpSolana: delivery.cdpSolana,
+        crossmintWallet: delivery.crossmintWallet,
       });
     }
 
@@ -7485,7 +7488,6 @@ export class OfficeScene extends Phaser.Scene {
           </div>
           <div>
             <div style="color:${agent.accent};font-size:1.1rem;font-weight:bold;">${agent.name}</div>
-            <div style="color:#666;font-size:0.7rem;">${agent.model}</div>
           </div>
           <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
             <div style="width:8px;height:8px;border-radius:50%;background:${sc};box-shadow:0 0 6px ${sc};"></div>
