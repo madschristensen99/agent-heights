@@ -2238,7 +2238,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     // CDP Solana wallet section — only rebuild when selected agent changes
     const cdpSection = document.getElementById("d-cdp-section")!;
-    const cdpNeedsInit = this.cdpDetailAgentId !== agent.id;
+    const cdpNeedsInit = this.cdpDetailAgentId !== agent.id ||
+      (agent.cdpSolana && cdpSection.hidden) ||
+      (!agent.cdpSolana && !cdpSection.hidden);
     if (cdpNeedsInit) {
       // Clean up old listeners from previous agent
       if (this.detailCdpListener) {
