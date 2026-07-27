@@ -16,7 +16,7 @@ import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, delet
 import { rateLimitAsync } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
-import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory } from "./providers/cdp-solana.js";
+import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory, createOnrampUrl } from "./providers/cdp-solana.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
@@ -1380,6 +1380,21 @@ wss.on("connection", async (ws, req) => {
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
             sess.broadcast({ type: "cdp_tx_history", agentId: msg.agentId, transactions: null, error: msg2 });
+          }
+          break;
+        }
+        case "create_cdp_onramp": {
+          try {
+            const clientIp = (req.socket.remoteAddress) || undefined;
+            const url = await createOnrampUrl(msg.agentId, clientIp);
+            if (!url) {
+              sess.broadcast({ type: "cdp_onramp_url", agentId: msg.agentId, url: null, error: "CDP not configured" });
+              break;
+            }
+            sess.broadcast({ type: "cdp_onramp_url", agentId: msg.agentId, url });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "cdp_onramp_url", agentId: msg.agentId, url: null, error: msg2 });
           }
           break;
         }

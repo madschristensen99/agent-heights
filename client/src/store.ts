@@ -92,6 +92,7 @@ export class Store {
   cdpPolicyListeners: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => void)[] = [];
   /** Listeners called when server responds with CDP tx history. */
   cdpTxHistoryListeners: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void)[] = [];
+  cdpOnrampListeners: ((msg: { agentId: string; url: string | null; error?: string }) => void)[] = [];
   entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
@@ -917,6 +918,9 @@ export class Store {
         break;
       case "cdp_tx_history":
         for (const fn of this.cdpTxHistoryListeners) fn(msg);
+        break;
+      case "cdp_onramp_url":
+        for (const fn of this.cdpOnrampListeners) fn(msg);
         break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;

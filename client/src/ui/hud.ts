@@ -205,6 +205,7 @@ export class Hud {
   private detailCdpListener: ((msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void) | null = null;
   private detailCdpPolicyListener: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => void) | null = null;
   private detailCdpTxHistoryListener: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void) | null = null;
+  private detailCdpOnrampListener: ((msg: { agentId: string; url: string | null; error?: string }) => void) | null = null;
   private _scheduleCreateOpen = false;
   private _renaming = false;
   private _scheduleEditingId: string | null = null;
@@ -2350,6 +2351,11 @@ export class Hud {
       if (tidx >= 0) this.store.cdpTxHistoryListeners.splice(tidx, 1);
       this.detailCdpTxHistoryListener = null;
     }
+    if (this.detailCdpOnrampListener) {
+      const oidx = this.store.cdpOnrampListeners.indexOf(this.detailCdpOnrampListener);
+      if (oidx >= 0) this.store.cdpOnrampListeners.splice(oidx, 1);
+      this.detailCdpOnrampListener = null;
+    }
     if (agent.cdpSolana) {
       cdpSection.hidden = false;
       cdpSection.innerHTML = `
@@ -2357,6 +2363,7 @@ export class Hud {
           <div style="font-size:0.75rem; font-weight:600; color:#3a7cb5; margin-bottom:0.4rem;">◎ SOLANA WALLET (CDP)</div>
           <div id="d-cdp-content" style="font-size:0.7rem; color:#888;">Loading wallet...</div>
           <button id="d-cdp-refresh" style="margin-top:0.4rem; padding:0.3rem 0.5rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.65rem; cursor:pointer;">↻ Refresh</button>
+          <button id="d-cdp-buy" style="margin-top:0.4rem; margin-left:0.3rem; padding:0.3rem 0.5rem; border:1px solid #3a7cb5; border-radius:0.3rem; background:#1a2a1a; color:#4f9dde; font-size:0.65rem; cursor:pointer;">Buy SOL</button>
         </div>
       `;
       const refreshBtn = cdpSection.querySelector("#d-cdp-refresh") as HTMLButtonElement | null;
@@ -2367,6 +2374,30 @@ export class Hud {
           setTimeout(() => { refreshBtn.textContent = "↻ Refresh"; }, 2000);
         });
       }
+      const buyBtn = cdpSection.querySelector("#d-cdp-buy") as HTMLButtonElement | null;
+      if (buyBtn) {
+        buyBtn.addEventListener("click", () => {
+          this.net.send({ type: "create_cdp_onramp", agentId: agent.id });
+          buyBtn.textContent = "Loading...";
+          buyBtn.disabled = true;
+        });
+      }
+      const onrampListener = (msg: { agentId: string; url: string | null; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        if (buyBtn) {
+          buyBtn.textContent = "Buy SOL";
+          buyBtn.disabled = false;
+        }
+        if (msg.error) {
+          this.store.toast(`Onramp error: ${msg.error}`);
+          return;
+        }
+        if (msg.url) {
+          window.open(msg.url, "_blank", "noopener,noreferrer");
+        }
+      };
+      this.detailCdpOnrampListener = onrampListener;
+      this.store.cdpOnrampListeners.push(onrampListener);
       this.net.send({ type: "get_cdp_wallet", agentId: agent.id });
       this.detailCdpListener = (msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => {
         if (msg.agentId !== agent.id) return;

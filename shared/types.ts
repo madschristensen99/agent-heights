@@ -623,6 +623,7 @@ export type ClientMsg =
   | { type: "get_cdp_policy"; agentId: string }
   | { type: "set_cdp_policy"; agentId: string; maxSolPerTransfer?: number; allowedRecipients?: string[]; blockedRecipients?: string[] }
   | { type: "get_cdp_tx_history"; agentId: string }
+  | { type: "create_cdp_onramp"; agentId: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme; orgId?: string }
   | { type: "join_room"; roomId: string }
@@ -736,6 +737,7 @@ export type ServerMsg =
   | { type: "cdp_wallet_status"; agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }
   | { type: "cdp_policy_status"; agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }
   | { type: "cdp_tx_history"; agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }
+  | { type: "cdp_onramp_url"; agentId: string; url: string | null; error?: string }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }

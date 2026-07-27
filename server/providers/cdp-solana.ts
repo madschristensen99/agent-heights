@@ -1,5 +1,6 @@
 import type { AgentTool } from "@cline/sdk";
 import { CdpClient } from "@coinbase/cdp-sdk";
+import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { LAMPORTS_PER_SOL, Connection, PublicKey } from "@solana/web3.js";
 
 /**
@@ -245,6 +246,62 @@ export async function getAgentTxHistory(agentId: string, limit: number = 10): Pr
     console.error(`[cdp-solana] Failed to get tx history for agent ${agentId}:`, err);
     return null;
   }
+}
+
+/** Create a Coinbase Onramp URL for funding an agent's Solana wallet via fiat.
+ * Generates a session token using the CDP API key, then constructs the Coinbase-hosted onramp URL
+ * with the agent's wallet address as the destination. */
+export async function createOnrampUrl(agentId: string, clientIp?: string): Promise<string | null> {
+  if (!isCdpConfigured()) return null;
+  const apiKeyId = process.env.CDP_API_KEY_ID!;
+  const apiKeySecret = process.env.CDP_API_KEY_SECRET!;
+
+  const account = await getAgentAccount(agentId);
+  const address = account.address;
+
+  const requestMethod = "POST";
+  const requestHost = "api.developer.coinbase.com";
+  const requestPath = "/onramp/v1/token";
+
+  const jwt = await generateJwt({
+    apiKeyId,
+    apiKeySecret,
+    requestMethod,
+    requestHost,
+    requestPath,
+    expiresIn: 120,
+  });
+
+  const body = {
+    addresses: [{ address, blockchains: ["solana"] }],
+    assets: ["SOL", "USDC"],
+    ...(clientIp ? { clientIp } : {}),
+  };
+
+  const res = await fetch(`https://${requestHost}${requestPath}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${jwt}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Onramp token request failed (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json() as any;
+  const token = data.token;
+  if (!token) {
+    throw new Error("Onramp token response missing 'token' field");
+  }
+
+  const url = new URL("https://pay.coinbase.com/buy/select-asset");
+  url.searchParams.set("sessionToken", token);
+  url.searchParams.set("partnerUserRef", `agent-${agentId}`);
+  return url.toString();
 }
 
 /**
