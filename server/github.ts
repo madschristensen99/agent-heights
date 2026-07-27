@@ -8,7 +8,7 @@
 const GITHUB_API = "https://api.github.com";
 const GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/";
 const SOURCE_REPO_OWNER = process.env.GITHUB_SOURCE_OWNER ?? "madschristensen99";
-const SOURCE_REPO_NAME = process.env.GITHUB_SOURCE_REPO ?? "agent-hq";
+const SOURCE_REPO_NAME = process.env.GITHUB_SOURCE_REPO ?? "agent-heights";
 
 /** Info about a forked repo. */
 export interface RepoFork {

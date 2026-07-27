@@ -1459,7 +1459,7 @@ export class OfficeScene extends Phaser.Scene {
       this.scene.restart();
 
       this.cameras.main.fadeIn(600, 10, 10, 30);
-      this.store.toast("Returning to Agent HQ");
+      this.store.toast("Returning to Agent Heights");
     });
   }
 

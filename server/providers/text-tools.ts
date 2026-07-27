@@ -150,7 +150,7 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ── Swarms API call ───────────────────────────────────────────────────────
+// ── LLM API call ────────────────────────────────────────────────────────────
 
 async function callLLM(
   model: string,
@@ -195,13 +195,12 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
   if (!hasApiKey()) {
     yield {
       kind: "error",
-      text: "No API key set. Set KIMI_BACKUP_KEY or SWARMS_API_KEY in your environment.",
+      text: "No API key set. Set KIMI_KEY in your environment.",
     };
     return;
   }
 
-  // When using Kimi, ignore per-user Swarms keys — they won't work with the Kimi API.
-  const apiKey = (ctx.apiKey && providerConfig.name === "swarms") ? ctx.apiKey : providerConfig.apiKey;
+  const apiKey = providerConfig.apiKey;
   const model = resolveModel(ctx.model, providerConfig.name);
   const isChat = ctx.isChat ?? false;
   const agentId = isChat ? `${ctx.agentId}:chat` : ctx.agentId;

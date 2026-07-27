@@ -1,7 +1,7 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig, PersonalityTraits } from "../../../shared/types";
-import { SWARMS_MODELS, OFFICE_THEMES, AGENT_RESOURCES_ID, HERMES_ID, SCHEDULE_PRESETS,
+import { AGENT_MODELS, OFFICE_THEMES, AGENT_RESOURCES_ID, HERMES_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
   randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
@@ -872,7 +872,7 @@ export class Hud {
 
     modal.innerHTML = `
       <div class="modal onboard">
-        <h1>AGENT&nbsp;HQ</h1>
+        <h1>AGENT&nbsp;HEIGHTS</h1>
         <p class="sub">— FIRST DAY ON THE JOB —</p>
         <div class="onboard-layout">
           <div class="onboard-form">
@@ -880,7 +880,7 @@ export class Hud {
               <input id="ob-name" maxlength="24" placeholder="e.g. Kye" autofocus />
             </label>
             <label>WORKSPACE NAME
-              <input id="ob-workspace" maxlength="32" placeholder="e.g. Swarms HQ" />
+              <input id="ob-workspace" maxlength="32" placeholder="e.g. My Office" />
             </label>
           </div>
           <div class="onboard-builder">
@@ -1433,12 +1433,12 @@ export class Hud {
           </label>
         </div>
         <div class="tabpanel" data-panel="api" hidden>
-          <div class="sec">SWARMS API KEY</div>
-          <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">Bring your own key — your agents will use it instead of the server's shared key. Get one at <a href="https://swarms.world/platform/api-keys" target="_blank" style="color:#4f9dde;">swarms.world</a>.</p>
+          <div class="sec">API KEY</div>
+          <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">Bring your own key — your agents will use it instead of the server's shared key.</p>
           <div id="api-key-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.hasApiKey ? "#53b86b" : "#e05d5d"};">
             ${this.store.hasApiKey ? "✓ You have a personal API key set." : "⚠ No personal API key — using the server's shared key."}
           </div>
-          <label>SWARMS API KEY
+          <label>API KEY
             <input id="s-api-key" type="password" placeholder="sk-..." autocomplete="off"
               style="width:100%;padding:0.6rem 0.8rem;border-radius:0.5rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.9rem;" />
           </label>
@@ -1620,7 +1620,7 @@ export class Hud {
   /** One-click hire: random name, default model, worker role. */
   private quickHire(provider: Provider): void {
     const name = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
-    const model = SWARMS_MODELS[0];
+    const model = AGENT_MODELS[0];
     this.net.send({
       type: "hire",
       name,
@@ -1661,7 +1661,7 @@ export class Hud {
     const modal = document.getElementById("hire-modal")!;
     const suggested = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
     const modelOptions = () =>
-      SWARMS_MODELS
+      AGENT_MODELS
         .map((m, i) => `<option value="${m.id}"${i === 0 ? ' selected' : ''}>${m.label}</option>`)
         .join("");
 
@@ -1861,7 +1861,7 @@ export class Hud {
       agent.language ? `\nLanguage: ${agent.language}` : "",
     ].filter(Boolean).join("\n").slice(0, 4000);
 
-    const model = SWARMS_MODELS.find((m) => m.id === config.model) ?? SWARMS_MODELS[0];
+    const model = AGENT_MODELS.find((m) => m.id === config.model) ?? AGENT_MODELS[0];
 
     // Use custom appearance from the agent config if valid, otherwise random.
     let appearance: CharAppearance;
@@ -1930,7 +1930,7 @@ export class Hud {
       <div class="modal hire-modal">
         <h2>PUBLISH TO MARKETPLACE</h2>
         <p style="font-size:0.8rem;color:#888;margin-bottom:0.75rem;">
-          Publish <span style="color:${agent.accent}">${esc(agent.name)}</span> to the Swarms Marketplace.
+          Publish <span style="color:${agent.accent}">${esc(agent.name)}</span> to the marketplace.
           Other users will be able to discover and hire this agent.
         </p>
         <div class="hire-form">

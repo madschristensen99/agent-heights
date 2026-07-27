@@ -97,7 +97,7 @@ export class HermesProcessManager {
       const configPath = join(hermesHome, "config.yaml");
       const envPath = join(hermesHome, ".env");
 
-      const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
+      const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
       console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, kimiKey=${kimiKey ? "set (" + kimiKey.slice(0, 8) + "...)" : "NOT SET"}`);
 
       // Always write config.yaml to ensure correct provider (volume may have stale config from previous deploy)
@@ -272,7 +272,7 @@ export class HermesProcessManager {
       env: {
         ...process.env,
         HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
-        KIMI_API_KEY: process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "",
+        KIMI_API_KEY: process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "",
         GATEWAY_ALLOW_ALL_USERS: "true",
       },
     });
@@ -343,10 +343,10 @@ export class HermesProcessManager {
         ...process.env,
         HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
         // Pass our Kimi key to Hermes under the env var name it expects
-        KIMI_API_KEY: process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "",
+        KIMI_API_KEY: process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "",
       },
     });
-    console.log(`[hermes-process] Env: KIMI_API_KEY=${process.env.KIMI_BACKUP_KEY ? "set" : "NOT SET"}, HERMES_HOME=${process.env.HERMES_HOME ?? join(homedir(), ".hermes")}`);
+    console.log(`[hermes-process] Env: KIMI_API_KEY=${process.env.KIMI_KEY ? "set" : "NOT SET"}, HERMES_HOME=${process.env.HERMES_HOME ?? join(homedir(), ".hermes")}`);
 
     this.child.stdout?.on("data", (data: Buffer) => {
       const lines = data.toString().trim().split("\n");

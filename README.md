@@ -1,6 +1,6 @@
 # Agent Heights
 
-A retro pixel-art office where you hire and manage **real AI agents**. Each employee at a desk is a live coding agent — powered by the [Cline SDK](https://github.com/cline/cline) routed through the [Swarms API](https://swarms.world) — that actually reads, writes, and runs code in its own workspace folder while you watch it work from a top-down Phaser office.
+A retro pixel-art office where you hire and manage **real AI agents**. Each employee at a desk is a live coding agent — powered by the [Cline SDK](https://github.com/cline/cline) routed through the [Kimi API](https://platform.moonshot.cn) — that actually reads, writes, and runs code in its own workspace folder while you watch it work from a top-down Phaser office.
 
 Hire an agent, give it a name and a model, type a task, and watch it walk to its desk and start typing. Speech bubbles and the office feed stream its real tool calls and output in real time.
 
@@ -12,7 +12,7 @@ Hire an agent, give it a name and a model, type a task, and watch it walk to its
 ┌─────────────────────┐        WebSocket         ┌──────────────────────┐
 │  Client (Phaser 3)  │ ◄──── ws://:3001 ─────►  │  Server (Node + ws)  │
 │  office scene, HUD  │                          │  AgentManager        │
-└─────────────────────┘                          │   └─ Cline runner ───┼──► @cline/sdk → Swarms API
+└─────────────────────┘                          │   └─ Cline runner ───┼──► @cline/sdk → Kimi API
                                                  └──────────┬───────────┘
                                                             │ each agent works in
                                                             ▼
@@ -28,10 +28,8 @@ Hire an agent, give it a name and a model, type a task, and watch it walk to its
 
 - **Hire as many agents as you want** — the first 8 get desks, the rest work standing. Each gets a name, a random job title (Code Gremlin, Bug Whisperer, Refactor Goblin…), a sprite, and an optional custom system prompt set at hire time.
 - **Persistent memory** — each agent is one continuous conversation (Cline Agent instance with message history, resumed on every task), so it remembers every order you've given it and everything it did, across server restarts.
-- **One provider, eight models** via Swarms API:
-  - Claude: Sonnet 4 (balanced), 3.7 Sonnet (fast), Opus 4 (deep)
-  - OpenAI: GPT-4o (balanced), GPT-4.1 Mini (fast), GPT-4.1 Nano (cheapest), o3-mini (reasoning)
-  - Google: Gemini 1.5 Pro (fast)
+- **One model** (Kimi K2.5) via Kimi API:
+  - Kimi K2.5
 - **Assign tasks** to one agent or broadcast the same task to everyone who's free ("ASSIGN TO ALL").
 - **Live activity feed** — assistant text, tool calls, results, and errors stream into the office feed and per-agent log panels.
 - **Stop and fire** — abort a running task, or remove an agent entirely (their desk frees up).
@@ -41,7 +39,7 @@ Hire an agent, give it a name and a model, type a task, and watch it walk to its
 
 - Node.js 20+
 - [pnpm](https://pnpm.io)
-- A `SWARMS_API_KEY` in your environment / `.env` (get one at [https://swarms.world/platform/api-keys](https://swarms.world/platform/api-keys)).
+- A `KIMI_KEY` in your environment / `.env` (get one at [https://platform.moonshot.cn](https://platform.moonshot.cn)).
 
 ## Getting started
 
@@ -72,7 +70,7 @@ Then open **http://localhost:5173**. On first launch you'll name yourself and yo
 
 | Variable                | Default | Purpose                                                                                                    |
 | ----------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `SWARMS_API_KEY`        | —       | Auth key for the Swarms API (required)                                                                      |
+| `KIMI_KEY`              | —       | Auth key for the Kimi API (required)                                                                       |
 
 > ⚠️ **Security note:** agents can run shell commands inside their workspace folder. The workspace folder is a *convention* enforced by prompt (`cwd` + instructions), not an OS sandbox. Treat `ag/workspace/` as untrusted output, and disable auto-approve in Settings if you want manual confirmation before each command.
 
@@ -89,7 +87,7 @@ agent-game/
 │   ├── logger.ts             # SessionLogger — append-only session log in ag/logs/
 │   └── providers/
 │       ├── types.ts          # ProviderRunner interface (task → async stream of TaskEvents)
-│       └── cline.ts          # Cline SDK runner (Swarms API + local tools)
+│       └── cline.ts          # Cline SDK runner (Kimi API + local tools)
 ├── client/
 │   ├── index.html
 │   ├── public/assets/        # Generated tileset, character sprites, map
@@ -121,5 +119,5 @@ Providers are pluggable. Implement the `ProviderRunner` signature from `server/p
 - [ws](https://github.com/websockets/ws) — WebSocket server
 - [tsx](https://tsx.is/) — TypeScript execution for the server
 - [@cline/sdk](https://www.npmjs.com/package/@cline/sdk) — open-source agent runtime with local tools and streaming
-- [Swarms API](https://swarms.world) — unified cloud API for LLM providers
+- [Kimi API](https://platform.moonshot.cn) — Moonshot AI's OpenAI-compatible LLM API
 - [pngjs](https://github.com/pngjs/pngjs) — procedural pixel-art generation

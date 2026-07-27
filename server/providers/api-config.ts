@@ -1,14 +1,11 @@
 /**
  * Shared API provider configuration.
  *
- * Kimi (Moonshot AI) is the default provider when KIMI_BACKUP_KEY is set.
- * Swarms is used as a fallback when KIMI_BACKUP_KEY is not set but SWARMS_API_KEY is.
- *
- * Both providers expose an OpenAI-compatible /chat/completions endpoint,
- * but they differ in base URL, auth header, and model names.
+ * Kimi (Moonshot AI) is the LLM provider, using KIMI_KEY.
+ * It exposes an OpenAI-compatible /chat/completions endpoint.
  */
 
-export type ProviderName = "kimi" | "swarms";
+export type ProviderName = "kimi";
 
 export interface ProviderConfig {
   name: ProviderName;
@@ -19,18 +16,11 @@ export interface ProviderConfig {
 }
 
 const KIMI_BASE_URL = "https://api.moonshot.ai/v1";
-const KIMI_API_KEY = process.env.KIMI_BACKUP_KEY ?? "";
+const KIMI_API_KEY = process.env.KIMI_KEY ?? "";
 
-const SWARMS_BASE_URL = "https://api.swarms.world/v1";
-const SWARMS_API_KEY = process.env.SWARMS_API_KEY ?? process.env.MASTER_SWARMS_API_KEY ?? "";
-
-/**
- * Map Swarms model names to Kimi equivalents.
- * When running on Kimi, the model id sent to the API must be a Kimi model.
- */
 const KIMI_DEFAULT_MODEL = "kimi-k2.5";
 
-const SWARMS_TO_KIMI_MODEL: Record<string, string> = {
+const MODEL_TO_KIMI: Record<string, string> = {
   "claude-sonnet-4-20250514": KIMI_DEFAULT_MODEL,
   "claude-3-7-sonnet-latest": KIMI_DEFAULT_MODEL,
   "claude-opus-4": KIMI_DEFAULT_MODEL,
@@ -44,42 +34,29 @@ const SWARMS_TO_KIMI_MODEL: Record<string, string> = {
 
 /**
  * Get the active provider configuration.
- * Kimi is preferred when KIMI_BACKUP_KEY is set; Swarms is the fallback.
  */
 export function getProviderConfig(): ProviderConfig {
-  if (KIMI_API_KEY) {
-    return {
-      name: "kimi",
-      baseUrl: KIMI_BASE_URL,
-      apiKey: KIMI_API_KEY,
-      headers: { Authorization: `Bearer ${KIMI_API_KEY}` },
-    };
-  }
-
   return {
-    name: "swarms",
-    baseUrl: SWARMS_BASE_URL,
-    apiKey: SWARMS_API_KEY,
-    headers: { "x-api-key": SWARMS_API_KEY },
+    name: "kimi",
+    baseUrl: KIMI_BASE_URL,
+    apiKey: KIMI_API_KEY,
+    headers: { Authorization: `Bearer ${KIMI_API_KEY}` },
   };
 }
 
 /**
  * Resolve the model id for the active provider.
- * If we're on Kimi and the model is a Swarms name, map it to the Kimi equivalent.
+ * Maps known model names to Kimi equivalents.
  */
-export function resolveModel(model: string, provider: ProviderName): string {
-  if (provider === "kimi") {
-    return SWARMS_TO_KIMI_MODEL[model] ?? model;
-  }
-  return model;
+export function resolveModel(model: string, _provider: ProviderName): string {
+  return MODEL_TO_KIMI[model] ?? model;
 }
 
 /**
  * Check whether any API key is configured.
  */
 export function hasApiKey(): boolean {
-  return !!KIMI_API_KEY || !!SWARMS_API_KEY;
+  return !!KIMI_API_KEY;
 }
 
 /**
@@ -112,8 +89,7 @@ export function isVisionCapable(model: string): boolean {
 /**
  * If the current provider maps to Kimi (which may not support vision),
  * and the task requires vision, we still send the model as-is — the
- * screenshot tool returns a text description. Vision-capable providers
- * (Swarms with Claude/GPT-4o) will get the actual image in context.
+ * screenshot tool returns a text description.
  *
  * This function is a placeholder for future routing logic — for now,
  * it just returns the resolved model. When per-user API keys support

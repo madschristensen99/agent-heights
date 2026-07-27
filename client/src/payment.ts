@@ -1,5 +1,5 @@
 import { getToken, isAuthEnabled } from "./auth";
-import { SUBSCRIPTION_TIER_LIST, type SubscriptionTier } from "../../shared/types";
+import { SUBSCRIPTION_TIER_LIST, type SubscriptionTier, type BillingPeriod } from "../../shared/types";
 
 export interface PaymentState {
   entrancePaid: boolean;
@@ -66,8 +66,8 @@ export async function startEntranceCheckout(): Promise<void> {
   }
 }
 
-export async function startSubscriptionCheckout(tier: SubscriptionTier): Promise<void> {
-  const result = await stripeApi("/api/stripe/checkout-subscription", "POST", { tier });
+export async function startSubscriptionCheckout(tier: SubscriptionTier, billingPeriod: BillingPeriod = "annual"): Promise<void> {
+  const result = await stripeApi("/api/stripe/checkout-subscription", "POST", { tier, billingPeriod });
   if (typeof result.url === "string") {
     window.location.href = result.url;
   } else {
@@ -136,6 +136,10 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       <div id="payment-subscription-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
         <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">Choose Your Plan</h2>
         <p style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.8rem;line-height:1.4;">Subscribe to hire and manage AI agents in your own private office. Cancel anytime.</p>
+        <div id="billing-toggle" style="display:flex;gap:0.4rem;margin-bottom:0.8rem;background:#1a1e2e;border-radius:8px;padding:0.25rem;border:1px solid #2a2e42;">
+          <button id="billing-monthly-btn" data-period="monthly" style="flex:1;padding:0.5rem;border-radius:6px;border:none;background:transparent;color:#a0a5b4;font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.15s;">Monthly</button>
+          <button id="billing-annual-btn" data-period="annual" style="flex:1;padding:0.5rem;border-radius:6px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:0.82rem;font-weight:700;cursor:pointer;transition:all 0.15s;">Annual <span style="font-size:0.7rem;opacity:0.8;">(2 months free)</span></button>
+        </div>
         <div id="tier-cards" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
       </div>
 
@@ -172,11 +176,14 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   const upgradeSection = overlay.querySelector("#payment-upgrade-section") as HTMLDivElement;
   const upgradeTierCards = overlay.querySelector("#upgrade-tier-cards") as HTMLDivElement;
   const tierCardsContainer = overlay.querySelector("#tier-cards") as HTMLDivElement;
+  const monthlyBtn = overlay.querySelector("#billing-monthly-btn") as HTMLButtonElement;
+  const annualBtn = overlay.querySelector("#billing-annual-btn") as HTMLButtonElement;
   const entranceBtn = overlay.querySelector("#pay-entrance-btn") as HTMLButtonElement;
   const manageBtn = overlay.querySelector("#manage-subscription-btn") as HTMLButtonElement;
   const closeBtn = overlay.querySelector("#payment-close-btn") as HTMLButtonElement;
 
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
+  let selectedBillingPeriod: BillingPeriod = "annual";
 
   function updateCountdown() {
     if (!currentState || !currentState.freeTrialExpiresAt) {
@@ -199,10 +206,11 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
 
   function buildTierCard(tier: typeof SUBSCRIPTION_TIER_LIST[number], isUpgrade: boolean): string {
     const agentLabel = tier.agentLimit === Infinity ? "Unlimited agents" : `${tier.agentLimit} agent${tier.agentLimit === 1 ? "" : "s"}`;
+    const priceLabel = selectedBillingPeriod === "annual" ? tier.annualLabel : tier.label;
     return `
       <div data-tier="${tier.id}" style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;padding:0.8rem 1rem;border-radius:8px;border:1px solid #2a2e42;background:#1a1e2e;cursor:pointer;transition:border-color 0.15s,filter 0.15s;">
         <div style="text-align:left;">
-          <div style="font-size:0.95rem;font-weight:700;color:#e0e0e0;">${tier.name} <span style="color:#58c866;font-weight:600;">${tier.label}</span></div>
+          <div style="font-size:0.95rem;font-weight:700;color:#e0e0e0;">${tier.name} <span style="color:#58c866;font-weight:600;">${priceLabel}</span></div>
           <div style="font-size:0.78rem;color:#a0a5b4;margin-top:0.15rem;">${agentLabel} — ${tier.description}</div>
         </div>
         <button class="tier-select-btn" data-tier="${tier.id}" style="padding:0.5rem 0.9rem;border-radius:6px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:filter 0.15s,transform 0.1s;">
@@ -276,13 +284,39 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   manageBtn.addEventListener("click", () => void openCustomerPortal());
   closeBtn.addEventListener("click", () => { overlay.style.display = "none"; onClose?.(); });
 
+  function setBillingPeriod(period: BillingPeriod) {
+    selectedBillingPeriod = period;
+    if (period === "annual") {
+      annualBtn.style.background = "linear-gradient(180deg,#58c866,#3da64a)";
+      annualBtn.style.color = "#0d0d0d";
+      annualBtn.style.fontWeight = "700";
+      monthlyBtn.style.background = "transparent";
+      monthlyBtn.style.color = "#a0a5b4";
+      monthlyBtn.style.fontWeight = "600";
+    } else {
+      monthlyBtn.style.background = "linear-gradient(180deg,#58c866,#3da64a)";
+      monthlyBtn.style.color = "#0d0d0d";
+      monthlyBtn.style.fontWeight = "700";
+      annualBtn.style.background = "transparent";
+      annualBtn.style.color = "#a0a5b4";
+      annualBtn.style.fontWeight = "600";
+    }
+    // Re-render tier cards with updated pricing
+    if (currentState && currentState.entrancePaid && !currentState.subscriptionActive) {
+      tierCardsContainer.innerHTML = SUBSCRIPTION_TIER_LIST.map(t => buildTierCard(t, false)).join("");
+    }
+  }
+
+  monthlyBtn.addEventListener("click", () => setBillingPeriod("monthly"));
+  annualBtn.addEventListener("click", () => setBillingPeriod("annual"));
+
   // Delegate tier card button clicks
   overlay.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     const btn = target.closest(".tier-select-btn") as HTMLButtonElement | null;
     if (btn) {
       const tier = btn.dataset.tier as SubscriptionTier;
-      if (tier) void startSubscriptionCheckout(tier);
+      if (tier) void startSubscriptionCheckout(tier, selectedBillingPeriod);
     }
   });
 

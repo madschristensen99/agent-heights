@@ -696,7 +696,7 @@ export class AgentManager {
     this.autoReconfigurePlatforms();
 
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
-    const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY;
+    const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY;
     if (kimiKey) {
       // Test direct API connectivity to verify key + network from inside the container
       fetch("https://api.moonshot.ai/v1/models", {
@@ -727,7 +727,7 @@ export class AgentManager {
         console.warn(`[hermes] Model config failed: ${err}`);
       });
     } else {
-      console.warn("[hermes] KIMI_BACKUP_KEY is NOT SET — Hermes agent will not be able to call LLM");
+      console.warn("[hermes] KIMI_KEY is NOT SET — Hermes agent will not be able to call LLM");
     }
 
     // Log current model info for diagnostics
@@ -893,7 +893,7 @@ export class AgentManager {
       }
       if (wroteAny) {
         // Also ensure KIMI_API_KEY is still there (Hermes API might have wiped it)
-        const kimiKey = process.env.KIMI_BACKUP_KEY ?? process.env.KIMI_API_KEY ?? "";
+        const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
         if (kimiKey && !envContent.includes("KIMI_API_KEY=")) {
           envContent += (envContent.endsWith("\n") ? "" : "\n") + `KIMI_API_KEY=${kimiKey}\n`;
           console.log(`[manager] Re-added KIMI_API_KEY to ${envPath}`);
@@ -2815,7 +2815,7 @@ export class AgentManager {
         });
         clearTimeout(to);
         if (res.status === 429) reason = `Rate limited by ${pc.name} API (429) — too many requests`;
-        else if (res.status === 401 || res.status === 403) reason = `Auth error (${res.status}) — check your ${pc.name === "kimi" ? "KIMI_BACKUP_KEY" : "SWARMS_API_KEY"}`;
+        else if (res.status === 401 || res.status === 403) reason = `Auth error (${res.status}) — check your KIMI_KEY`;
         else if (res.ok) reason = "API is up but model is not responding — try a different model";
         else reason = `API returned status ${res.status}`;
       } catch {
@@ -3080,7 +3080,7 @@ export class AgentManager {
       ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
       : "(no task cards)";
 
-    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the Swarms Marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Agent Resources, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
+    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a pixel-art office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Agent Resources, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
 
     // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
     // query, search PulseMCP and inject results into the context.

@@ -805,21 +805,14 @@ export type ServerMsg =
   | { type: "server_restarting"; estimatedSeconds: number }
   | { type: "spectator_chat_relay"; fromName: string; text: string };
 
-export const SWARMS_MODELS = [
-  { id: "openrouter/tencent/hy3:free", label: "Tencent Hy3 (free)" },
-  { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (balanced)" },
-  { id: "claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet (fast)" },
-  { id: "claude-opus-4", label: "Claude Opus 4 (deep)" },
-  { id: "gpt-4o", label: "GPT-4o (balanced)" },
-  { id: "gpt-4.1-mini", label: "GPT-4.1 Mini (fast)" },
-  { id: "gpt-4.1-nano", label: "GPT-4.1 Nano (cheapest)" },
-  { id: "o3-mini", label: "o3-mini (reasoning)" },
-  { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (fast)" },
+export const AGENT_MODELS = [
+  { id: "kimi-k2.5", label: "Kimi K2.5" },
 ] as const;
 
 // --------------------------------------------------- subscription tiers ---
 
 export type SubscriptionTier = "starter" | "pro" | "unlimited";
+export type BillingPeriod = "monthly" | "annual";
 
 export interface TierInfo {
   id: SubscriptionTier;
@@ -828,6 +821,8 @@ export interface TierInfo {
   name: string;        // display name
   agentLimit: number;  // max agents (Infinity for unlimited)
   description: string;
+  annualPrice: number;  // cents per year (10 months — 2 months free)
+  annualLabel: string;  // display label for annual
 }
 
 export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
@@ -838,6 +833,8 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     name: "Starter",
     agentLimit: 1,
     description: "Hire and manage 1 AI agent in your office.",
+    annualPrice: 990,
+    annualLabel: "$9.90/yr",
   },
   pro: {
     id: "pro",
@@ -846,6 +843,8 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     name: "Pro",
     agentLimit: 5,
     description: "Hire and manage up to 5 AI agents in your office.",
+    annualPrice: 4990,
+    annualLabel: "$49.90/yr",
   },
   unlimited: {
     id: "unlimited",
@@ -854,6 +853,8 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     name: "Unlimited",
     agentLimit: Infinity,
     description: "Hire and manage unlimited AI agents in your office.",
+    annualPrice: 20000,
+    annualLabel: "$200/yr",
   },
 };
 

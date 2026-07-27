@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS public.api_usage_records (
   agent_id TEXT,
   agent_name TEXT,
   model TEXT NOT NULL,
-  provider TEXT NOT NULL DEFAULT 'swarms',
+  provider TEXT NOT NULL DEFAULT 'kimi',
   input_tokens INTEGER NOT NULL DEFAULT 0,
   output_tokens INTEGER NOT NULL DEFAULT 0,
   cache_read_tokens INTEGER NOT NULL DEFAULT 0,

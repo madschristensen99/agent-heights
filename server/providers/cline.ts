@@ -685,17 +685,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   if (!hasApiKey()) {
     yield {
       kind: "error",
-      text: "No API key set. Set KIMI_BACKUP_KEY or SWARMS_API_KEY in your environment.",
+      text: "No API key set. Set KIMI_KEY in your environment.",
     };
     return;
   }
 
   const { agentId: rawAgentId } = ctx;
-  // When using Kimi, ignore per-user Swarms keys — they won't work with the Kimi API.
-  if (ctx.apiKey && providerConfig.name === "swarms") {
-    providerConfig.apiKey = ctx.apiKey;
-    providerConfig.headers = { "x-api-key": ctx.apiKey };
-  }
   const model = resolveModel(ctx.model, providerConfig.name);
   const isChat = ctx.isChat ?? false;
   // Use a separate agent instance for chat so it doesn't inherit task tools/iterations

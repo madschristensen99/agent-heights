@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
-import { SUBSCRIPTION_TIERS, parseTier, type SubscriptionTier } from "../shared/types.js";
+import { SUBSCRIPTION_TIERS, parseTier, type SubscriptionTier, type BillingPeriod } from "../shared/types.js";
 
 const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
@@ -221,12 +221,18 @@ export async function createSubscriptionCheckoutSession(
   userId: string,
   email: string,
   tier: SubscriptionTier,
+  billingPeriod: BillingPeriod = "annual",
 ): Promise<{ url: string } | { error: string }> {
   if (!stripe) return { error: "Stripe not configured" };
   if (!APP_URL) return { error: "APP_URL not configured" };
 
   const tierInfo = SUBSCRIPTION_TIERS[tier];
   if (!tierInfo) return { error: `Invalid tier: ${tier}` };
+
+  const isAnnual = billingPeriod === "annual";
+  const unitAmount = isAnnual ? tierInfo.annualPrice : tierInfo.price;
+  const interval = isAnnual ? "year" : "month";
+  const periodLabel = isAnnual ? "Annual" : "Monthly";
 
   try {
     const customerId = await getOrCreateStripeCustomer(userId, email);
@@ -239,17 +245,17 @@ export async function createSubscriptionCheckoutSession(
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: tierInfo.price,
-            recurring: { interval: "month" },
+            unit_amount: unitAmount,
+            recurring: { interval },
             product_data: {
-              name: `Agent Heights — ${tierInfo.name} Subscription`,
-              description: tierInfo.description,
+              name: `Agent Heights — ${tierInfo.name} Subscription (${periodLabel})`,
+              description: isAnnual ? `${tierInfo.description} Billed annually (2 months free).` : tierInfo.description,
             },
           },
         },
       ],
-      metadata: { userId, type: "subscription", tier },
-      subscription_data: { metadata: { userId, tier } },
+      metadata: { userId, type: "subscription", tier, billingPeriod },
+      subscription_data: { metadata: { userId, tier, billingPeriod } },
       success_url: `${APP_URL}/?payment=subscription_success`,
       cancel_url: `${APP_URL}/?payment=subscription_cancel`,
     });
@@ -468,14 +474,15 @@ export async function handleStripeRequest(
   // POST /api/stripe/checkout-subscription — create tiered subscription checkout
   if (url === "/api/stripe/checkout-subscription" && req.method === "POST") {
     const body = await readBodyWithLimit(req, 64 * 1024);
-    let parsed: { tier?: string } = {};
+    let parsed: { tier?: string; billingPeriod?: string } = {};
     try { parsed = JSON.parse(body.toString()); } catch { /* empty body is fine */ }
     const tier = parseTier(parsed.tier);
     if (!tier) {
       json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro | unlimited" });
       return true;
     }
-    const result = await createSubscriptionCheckoutSession(user.id, user.email ?? "", tier);
+    const billingPeriod: BillingPeriod = parsed.billingPeriod === "monthly" ? "monthly" : "annual";
+    const result = await createSubscriptionCheckoutSession(user.id, user.email ?? "", tier, billingPeriod);
     if ("error" in result) {
       json(res, 400, result);
     } else {

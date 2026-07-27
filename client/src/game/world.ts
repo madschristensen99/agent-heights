@@ -3446,7 +3446,7 @@ export class WorldLayer {
         voidShards: this.voidShards,
         ownedWeapons: this.ownedWeapons,
       };
-      localStorage.setItem("agentHQ_nemesis", JSON.stringify(data));
+      localStorage.setItem("agentHeights_nemesis", JSON.stringify(data));
     } catch {
       // localStorage might be full or unavailable
     }
@@ -3455,7 +3455,7 @@ export class WorldLayer {
   /** Load nemesis data + roster from localStorage. */
   loadNemesis(): void {
     try {
-      const raw = localStorage.getItem("agentHQ_nemesis");
+      const raw = localStorage.getItem("agentHeights_nemesis");
       if (!raw) return;
       const data = JSON.parse(raw);
       if (data.nemesis) this.nemesis.deserialize(data.nemesis);

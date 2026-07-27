@@ -50,7 +50,7 @@ function decrypt(payload: string): string {
 }
 
 /**
- * Get a user's decrypted Swarms API key from Supabase.
+ * Get a user's decrypted API key from Supabase.
  * Returns null if the user has no key stored.
  */
 export async function getUserApiKey(userId: string): Promise<string | null> {
@@ -70,7 +70,7 @@ export async function getUserApiKey(userId: string): Promise<string | null> {
 }
 
 /**
- * Store (or update) a user's Swarms API key, encrypted at rest.
+ * Store (or update) a user's API key, encrypted at rest.
  */
 export async function setUserApiKey(userId: string, apiKey: string): Promise<{ error: string | null }> {
   if (!isSupabaseConfigured) return { error: "Database not configured" };

@@ -1010,8 +1010,8 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "github_status", connected: true, login: user.login, error: null });
             // Also try to list branches from the user's fork
             try {
-              const branches = await listBranches(token, user.login, "agent-hq");
-              sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-hq", fullName: `${user.login}/agent-hq`, cloneUrl: `https://github.com/${user.login}/agent-hq.git`, branch: branches[0]?.name ?? "main" }, error: null });
+              const branches = await listBranches(token, user.login, "agent-heights");
+              sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-heights", fullName: `${user.login}/agent-heights`, cloneUrl: `https://github.com/${user.login}/agent-heights.git`, branch: branches[0]?.name ?? "main" }, error: null });
             } catch {
               // Fork might not exist yet — that's OK
               sess.broadcast({ type: "github_data", branches: [], fork: null, error: null });
@@ -1036,7 +1036,7 @@ wss.on("connection", async (ws, req) => {
             }
             // Fork the repo if it doesn't exist yet
             let forkOwner = user.login;
-            let forkName = "agent-hq";
+            let forkName = "agent-heights";
             try {
               await listBranches(token, forkOwner, forkName);
             } catch {
@@ -1070,8 +1070,8 @@ wss.on("connection", async (ws, req) => {
               sess.broadcast({ type: "github_error", error: "Invalid GitHub token." });
               break;
             }
-            const branches = await listBranches(token, user.login, "agent-hq");
-            sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-hq", fullName: `${user.login}/agent-hq`, cloneUrl: `https://github.com/${user.login}/agent-hq.git`, branch: branches[0]?.name ?? "main" }, error: null });
+            const branches = await listBranches(token, user.login, "agent-heights");
+            sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-heights", fullName: `${user.login}/agent-heights`, cloneUrl: `https://github.com/${user.login}/agent-heights.git`, branch: branches[0]?.name ?? "main" }, error: null });
           } catch (err) {
             sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
           }
@@ -1090,10 +1090,10 @@ wss.on("connection", async (ws, req) => {
               sess.broadcast({ type: "github_error", error: "Invalid GitHub token." });
               break;
             }
-            await deleteBranch(token, user.login, "agent-hq", msg.branchName);
+            await deleteBranch(token, user.login, "agent-heights", msg.branchName);
             // Refresh branch list
-            const branches = await listBranches(token, user.login, "agent-hq");
-            sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-hq", fullName: `${user.login}/agent-hq`, cloneUrl: `https://github.com/${user.login}/agent-hq.git`, branch: branches[0]?.name ?? "main" }, error: null });
+            const branches = await listBranches(token, user.login, "agent-heights");
+            sess.broadcast({ type: "github_data", branches: branches.map(b => ({ name: b.name, sha: b.sha })), fork: { owner: user.login, name: "agent-heights", fullName: `${user.login}/agent-heights`, cloneUrl: `https://github.com/${user.login}/agent-heights.git`, branch: branches[0]?.name ?? "main" }, error: null });
           } catch (err) {
             sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
           }
@@ -1142,7 +1142,7 @@ wss.on("connection", async (ws, req) => {
           try {
             const user = await getAuthenticatedUser(token);
             if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
-            const entries = await listRepoDir(token, user.login, "agent-hq", msg.branchName, msg.path);
+            const entries = await listRepoDir(token, user.login, "agent-heights", msg.branchName, msg.path);
             sess.broadcast({ type: "github_dir", branchName: msg.branchName, path: msg.path, entries, error: null });
           } catch (err) {
             sess.broadcast({ type: "github_dir", branchName: msg.branchName, path: msg.path, entries: [], error: err instanceof Error ? err.message : String(err) });
@@ -1156,7 +1156,7 @@ wss.on("connection", async (ws, req) => {
           try {
             const user = await getAuthenticatedUser(token);
             if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
-            const file = await readRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path);
+            const file = await readRepoFile(token, user.login, "agent-heights", msg.branchName, msg.path);
             if (!file) {
               sess.broadcast({ type: "github_file", branchName: msg.branchName, path: msg.path, content: "", sha: "", error: "File not found" });
             } else {
@@ -1174,7 +1174,7 @@ wss.on("connection", async (ws, req) => {
           try {
             const user = await getAuthenticatedUser(token);
             if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
-            await writeRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path, msg.content, msg.sha, msg.commitMessage);
+            await writeRepoFile(token, user.login, "agent-heights", msg.branchName, msg.path, msg.content, msg.sha, msg.commitMessage);
             sess.broadcast({ type: "github_file_saved", branchName: msg.branchName, path: msg.path, message: msg.commitMessage });
           } catch (err) {
             sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
@@ -1188,7 +1188,7 @@ wss.on("connection", async (ws, req) => {
           try {
             const user = await getAuthenticatedUser(token);
             if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
-            await createRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path, msg.content, msg.commitMessage);
+            await createRepoFile(token, user.login, "agent-heights", msg.branchName, msg.path, msg.content, msg.commitMessage);
             sess.broadcast({ type: "github_file_saved", branchName: msg.branchName, path: msg.path, message: msg.commitMessage });
           } catch (err) {
             sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
@@ -1202,7 +1202,7 @@ wss.on("connection", async (ws, req) => {
           try {
             const user = await getAuthenticatedUser(token);
             if (!user) { sess.broadcast({ type: "github_error", error: "Invalid GitHub token." }); break; }
-            await deleteRepoFile(token, user.login, "agent-hq", msg.branchName, msg.path, msg.sha, msg.commitMessage);
+            await deleteRepoFile(token, user.login, "agent-heights", msg.branchName, msg.path, msg.sha, msg.commitMessage);
             sess.broadcast({ type: "github_file_deleted", branchName: msg.branchName, path: msg.path });
           } catch (err) {
             sess.broadcast({ type: "github_error", error: err instanceof Error ? err.message : String(err) });
