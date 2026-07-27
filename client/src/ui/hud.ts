@@ -934,7 +934,7 @@ export class Hud {
       {
         icon: "➕",
         title: "Hire Your First Agent",
-        body: "Click <strong>+ HIRE AGENT</strong> (bottom-left) to create a custom agent from scratch — pick a name, model, role, and personality. Or browse the <strong>🛒 MARKET</strong> (top bar) for pre-built agents with specialized skills like trading, data analysis, or DevOps.",
+        body: "Click <strong>+ HIRE AGENT</strong> (bottom-left) to create a custom agent from scratch — pick a name, role, and personality. Or browse the <strong>🛒 MARKET</strong> (top bar) for pre-built agents with specialized skills like trading, data analysis, or DevOps.",
       },
       {
         icon: "📋",
@@ -1403,7 +1403,7 @@ export class Hud {
           <button class="tab" data-tab="data">DATA</button>
         </div>
         <div class="tabpanel" data-panel="agents">
-          <div class="sec">CLINE AGENT</div>
+          <div class="sec">AGENT ENGINE</div>
           <label>MAX ITERATIONS PER TASK
             <input id="s-turns" type="number" min="1" max="500" value="${s.cline.maxIterations}" />
           </label>
@@ -1628,7 +1628,7 @@ export class Hud {
       systemPrompt: "",
       role: "worker",
     });
-    this.toast(`${name} is on the way in (${model.label}).`);
+    this.toast(`${name} is on the way!`);
   }
 
   /** Download everything the office knows as one JSON file. */
@@ -1659,10 +1659,6 @@ export class Hud {
     }
     const modal = document.getElementById("hire-modal")!;
     const suggested = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
-    const modelOptions = () =>
-      AGENT_MODELS
-        .map((m, i) => `<option value="${m.id}"${i === 0 ? ' selected' : ''}>${m.label}</option>`)
-        .join("");
 
     const builder = new CharBuilder("h", randomAppearance(), () => {});
     const personality = randomPersonality();
@@ -1715,7 +1711,6 @@ export class Hud {
                 <option value="devops">DevOps — manages Railway deployments & infrastructure</option>
               </select>
             </label>
-            <label>MODEL <select id="h-model">${modelOptions()}</select></label>
             <label>SYSTEM PROMPT <span class="opt">(optional)</span>
               <textarea id="h-prompt" rows="3"
                 placeholder="Standing instructions for this agent, e.g. 'You are a senior TypeScript reviewer. Always write tests first.'"></textarea>
@@ -1735,9 +1730,7 @@ export class Hud {
     `;
     builder.mount();
 
-    const modelSel = document.getElementById("h-model") as HTMLSelectElement;
-    modelSel.selectedIndex = 0;
-    document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
+document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidden = true));
     const subscribeBtn2 = document.getElementById("h-subscribe");
     if (subscribeBtn2) {
       subscribeBtn2.addEventListener("click", () => void startSubscriptionCheckout("starter"));
@@ -1830,7 +1823,7 @@ export class Hud {
         type: "hire",
         name,
         provider: "cline",
-        model: modelSel.value,
+        model: AGENT_MODELS[0].id,
         systemPrompt: (document.getElementById("h-prompt") as HTMLTextAreaElement).value,
         role: (document.getElementById("h-role") as HTMLSelectElement).value as AgentRole,
         appearance: builder.getAppearance(),
@@ -1911,7 +1904,7 @@ export class Hud {
     const delivery = {
       name: name.slice(0, 24) || "Agent",
       systemPrompt,
-      model: "claude-sonnet-4-20250514",
+      model: AGENT_MODELS[0].id,
       provider: "cline",
       appearance: randomAppearance(),
       mcpServers: [mcpConfig],
@@ -2128,7 +2121,7 @@ export class Hud {
     }
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
-      ${agent.role === "manager" ? "· 👔 MANAGER " : ""}· ${agent.provider} / ${esc(agent.model)}
+      ${agent.role === "manager" ? "· 👔 MANAGER " : ""}
       · ${agent.id === AGENT_RESOURCES_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
 
     // Agent Resources and Hermes can't be fired or vacationed
@@ -2243,28 +2236,32 @@ export class Hud {
       mcpSection.innerHTML = "";
     }
 
-    // CDP Solana wallet section
+    // CDP Solana wallet section — only rebuild when selected agent changes
     const cdpSection = document.getElementById("d-cdp-section")!;
-    if (this.detailCdpListener) {
-      const idx = this.store.cdpWalletListeners.indexOf(this.detailCdpListener);
-      if (idx >= 0) this.store.cdpWalletListeners.splice(idx, 1);
-      this.detailCdpListener = null;
-    }
-    if (this.detailCdpPolicyListener) {
-      const pidx = this.store.cdpPolicyListeners.indexOf(this.detailCdpPolicyListener);
-      if (pidx >= 0) this.store.cdpPolicyListeners.splice(pidx, 1);
-      this.detailCdpPolicyListener = null;
-    }
-    if (this.detailCdpTxHistoryListener) {
-      const tidx = this.store.cdpTxHistoryListeners.indexOf(this.detailCdpTxHistoryListener);
-      if (tidx >= 0) this.store.cdpTxHistoryListeners.splice(tidx, 1);
-      this.detailCdpTxHistoryListener = null;
-    }
-    if (this.detailCdpOnrampListener) {
-      const oidx = this.store.cdpOnrampListeners.indexOf(this.detailCdpOnrampListener);
-      if (oidx >= 0) this.store.cdpOnrampListeners.splice(oidx, 1);
-      this.detailCdpOnrampListener = null;
-    }
+    const cdpNeedsInit = this.cdpDetailAgentId !== agent.id;
+    if (cdpNeedsInit) {
+      // Clean up old listeners from previous agent
+      if (this.detailCdpListener) {
+        const idx = this.store.cdpWalletListeners.indexOf(this.detailCdpListener);
+        if (idx >= 0) this.store.cdpWalletListeners.splice(idx, 1);
+        this.detailCdpListener = null;
+      }
+      if (this.detailCdpPolicyListener) {
+        const pidx = this.store.cdpPolicyListeners.indexOf(this.detailCdpPolicyListener);
+        if (pidx >= 0) this.store.cdpPolicyListeners.splice(pidx, 1);
+        this.detailCdpPolicyListener = null;
+      }
+      if (this.detailCdpTxHistoryListener) {
+        const tidx = this.store.cdpTxHistoryListeners.indexOf(this.detailCdpTxHistoryListener);
+        if (tidx >= 0) this.store.cdpTxHistoryListeners.splice(tidx, 1);
+        this.detailCdpTxHistoryListener = null;
+      }
+      if (this.detailCdpOnrampListener) {
+        const oidx = this.store.cdpOnrampListeners.indexOf(this.detailCdpOnrampListener);
+        if (oidx >= 0) this.store.cdpOnrampListeners.splice(oidx, 1);
+        this.detailCdpOnrampListener = null;
+      }
+      this.cdpDetailAgentId = agent.id;
     if (agent.cdpSolana) {
       cdpSection.hidden = false;
       cdpSection.innerHTML = `
@@ -2318,11 +2315,7 @@ export class Hud {
       };
       this.detailCdpOnrampListener = onrampListener;
       this.store.cdpOnrampListeners.push(onrampListener);
-      const cdpNeedsInit = this.cdpDetailAgentId !== agent.id;
-      if (cdpNeedsInit) {
-        this.cdpDetailAgentId = agent.id;
-        this.net.send({ type: "get_cdp_wallet", agentId: agent.id });
-      }
+      this.net.send({ type: "get_cdp_wallet", agentId: agent.id });
       this.detailCdpListener = (msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => {
         if (msg.agentId !== agent.id) return;
         const content = cdpSection.querySelector("#d-cdp-content") as HTMLElement | null;
@@ -2365,7 +2358,7 @@ export class Hud {
       };
       this.store.cdpWalletListeners.push(this.detailCdpListener);
 
-      if (cdpNeedsInit) this.net.send({ type: "get_cdp_policy", agentId: agent.id });
+      this.net.send({ type: "get_cdp_policy", agentId: agent.id });
       this.detailCdpPolicyListener = (msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => {
         if (msg.agentId !== agent.id) return;
         const pcontent = cdpSection.querySelector("#d-cdp-policy-content") as HTMLElement | null;
@@ -2418,7 +2411,7 @@ export class Hud {
       };
       this.store.cdpPolicyListeners.push(this.detailCdpPolicyListener);
 
-      if (cdpNeedsInit) this.net.send({ type: "get_cdp_tx_history", agentId: agent.id });
+      this.net.send({ type: "get_cdp_tx_history", agentId: agent.id });
       const txRefreshBtn = cdpSection.querySelector("#d-cdp-tx-refresh") as HTMLButtonElement | null;
       if (txRefreshBtn) {
         txRefreshBtn.addEventListener("click", () => {
@@ -2460,6 +2453,7 @@ export class Hud {
       cdpSection.hidden = true;
       cdpSection.innerHTML = "";
     }
+    } // end cdpNeedsInit
 
     const logs = this.store.logs.get(agent.id) ?? [];
     const logsEl = document.getElementById("logs")!;
@@ -3750,13 +3744,6 @@ export class Hud {
       html += `<div class="sec">THIS MONTH — $${monthSpend.toFixed(2)} / $30.00</div>`;
       html += `<div style="background:#1a1a1a;border-radius:0.4rem;height:20px;overflow:hidden;margin-bottom:1rem;border:1px solid #333;"><div style="width:${capPct}%;height:100%;background:${capColor};border-radius:0.4rem;transition:width 0.3s;"></div></div>`;
 
-      if (data.byModel?.length > 0) {
-        html += `<div class="sec">BY MODEL</div><div style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:1rem;">`;
-        for (const m of data.byModel) {
-          html += `<div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:0.3rem 0.5rem;background:#1a1a1a;border-radius:0.4rem;"><span style="color:#ccc;">${esc(m.model)}</span><span style="color:#888;">${fmtCost(m.cost)} · ${m.calls} calls</span></div>`;
-        }
-        html += `</div>`;
-      }
 
       if (data.byAgent?.length > 0) {
         html += `<div class="sec">BY AGENT</div><div style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:1rem;">`;
