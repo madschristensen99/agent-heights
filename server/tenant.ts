@@ -651,7 +651,7 @@ export class TenantManager {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabaseAdmin
-          .from("sprite_heights_agents")
+          .from("agent_heights_agents")
           .select("owner_id");
 
         if (error || !data) {

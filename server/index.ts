@@ -39,7 +39,7 @@ async function loadOutfits(scope: OutfitScope): Promise<SavedOutfit[]> {
   if (!isSupabaseConfigured) return [];
   try {
     let query = supabaseAdmin
-      .from("sprite_heights_saved_outfits")
+      .from("agent_heights_saved_outfits")
       .select("id, name, appearance, created_at");
     if (scope.type === "user") {
       query = query.eq("user_id", scope.userId).is("org_id", null);
@@ -1397,7 +1397,7 @@ wss.on("connection", async (ws, req) => {
             try {
               const row: Record<string, unknown> = { id, user_id: sess.user.id, name, appearance: msg.appearance, created_at: createdAt };
               if (resolved.scope.type === "org") row.org_id = resolved.scope.orgId;
-              await supabaseAdmin.from("sprite_heights_saved_outfits").insert(row);
+              await supabaseAdmin.from("agent_heights_saved_outfits").insert(row);
             } catch (err) {
               console.error("[outfits] save failed:", err);
             }
@@ -1413,7 +1413,7 @@ wss.on("connection", async (ws, req) => {
           }
           if (isSupabaseConfigured) {
             try {
-              const del = supabaseAdmin.from("sprite_heights_saved_outfits").delete().eq("id", msg.id);
+              const del = supabaseAdmin.from("agent_heights_saved_outfits").delete().eq("id", msg.id);
               if (resolved.scope.type === "org") {
                 del.eq("org_id", resolved.scope.orgId);
               } else {
