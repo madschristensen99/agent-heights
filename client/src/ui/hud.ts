@@ -206,6 +206,7 @@ export class Hud {
   private detailCdpPolicyListener: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => void) | null = null;
   private detailCdpTxHistoryListener: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void) | null = null;
   private detailCdpOnrampListener: ((msg: { agentId: string; url: string | null; error?: string }) => void) | null = null;
+  private cdpDetailAgentId: string | null = null;
   private _scheduleCreateOpen = false;
   private _renaming = false;
   private _scheduleEditingId: string | null = null;
@@ -277,12 +278,10 @@ export class Hud {
           <button class="btn" id="d-assign" title="Continue the existing conversation — agent remembers everything">CONTINUE ▶</button>
           <button class="btn" id="d-stop">STOP</button>
           <button class="btn" id="d-clear">FULL RESET</button>
-          <button class="btn" id="d-publish">📤 PUBLISH</button>
           <button class="btn" id="d-vacation">VACATION</button>
           <button class="btn danger" id="d-fire">FIRE</button>
         </div>
       </div>
-      <div class="modal-backdrop" id="publish-modal" hidden></div>
       <div class="modal-backdrop" id="hire-modal" hidden></div>
       <div class="modal-backdrop" id="settings-modal" hidden></div>
       <div class="modal-backdrop" id="onboard-modal" hidden></div>
@@ -409,7 +408,6 @@ export class Hud {
     this.store.mcpKeysStatusListeners.push(mcpKeysListener);
     document.getElementById("marketplace-btn")!.addEventListener("click", () => mqBrowser.toggle());
 
-    document.getElementById("d-publish")!.addEventListener("click", () => this.openPublishModal());
     this.bindDetail();
     this.bindFeed();
     this.bindBoard();
@@ -1921,96 +1919,6 @@ export class Hud {
     this.store.triggerHelicopter(delivery);
   }
 
-  private openPublishModal(): void {
-    const agent = this.store.selected();
-    if (!agent || agent.id === AGENT_RESOURCES_ID) return;
-
-    const modal = document.getElementById("publish-modal")!;
-    modal.hidden = false;
-    modal.innerHTML = `
-      <div class="modal hire-modal">
-        <h2>PUBLISH TO MARKETPLACE</h2>
-        <p style="font-size:0.8rem;color:#888;margin-bottom:0.75rem;">
-          Publish <span style="color:${agent.accent}">${esc(agent.name)}</span> to the marketplace.
-          Other users will be able to discover and hire this agent.
-        </p>
-        <div class="hire-form">
-          <label>SUMMARY <span class="opt">(shown in browse list)</span>
-            <input id="p-summary" maxlength="120" placeholder="A brief one-line summary of what this agent does" />
-          </label>
-          <label>DESCRIPTION <span class="opt">(full detail page)</span>
-            <textarea id="p-desc" rows="4" placeholder="Detailed description of the agent's capabilities, approach, and best use cases."></textarea>
-          </label>
-          <label>TAGS <span class="opt">(comma-separated)</span>
-            <input id="p-tags" placeholder="typescript, testing, review" />
-          </label>
-          <label>PRICE <span class="opt">(USD, 0 = free)</span>
-            <input id="p-price" type="number" min="0" step="0.01" value="0" style="width:80px;" />
-          </label>
-        </div>
-        <div class="row">
-          <button class="btn" id="p-cancel">CANCEL</button>
-          <button class="btn primary" id="p-ok">PUBLISH ▶</button>
-        </div>
-        <div id="p-status" style="font-size:0.8rem;margin-top:0.5rem;min-height:1.2em;"></div>
-      </div>
-    `;
-
-    const statusEl = modal.querySelector("#p-status") as HTMLDivElement;
-
-    modal.querySelector("#p-cancel")!.addEventListener("click", () => { modal.hidden = true; });
-    modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
-
-    modal.querySelector("#p-ok")!.addEventListener("click", async () => {
-      const summary = (modal.querySelector("#p-summary") as HTMLInputElement).value.trim();
-      const description = (modal.querySelector("#p-desc") as HTMLTextAreaElement).value.trim();
-      const tags = (modal.querySelector("#p-tags") as HTMLInputElement).value.trim();
-      const price = parseFloat((modal.querySelector("#p-price") as HTMLInputElement).value) || 0;
-
-      if (!summary) {
-        statusEl.textContent = "Summary is required.";
-        statusEl.style.color = "#e05d5d";
-        return;
-      }
-
-      statusEl.textContent = "Publishing…";
-      statusEl.style.color = "#888";
-
-      try {
-        const res = await fetch("/api/publish-agent", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-          },
-          body: JSON.stringify({
-            agentId: agent.id,
-            name: agent.name,
-            summary,
-            description,
-            tags,
-            price,
-            model: agent.model,
-            systemPrompt: agent.systemPrompt ?? "",
-          }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: "Request failed" }));
-          throw new Error(err.error ?? res.statusText);
-        }
-
-        statusEl.textContent = "Published! Your agent is now pending approval on the marketplace.";
-        statusEl.style.color = "#53b86b";
-        this.toast(`${agent.name} published to the marketplace!`);
-        setTimeout(() => { modal.hidden = true; }, 2000);
-      } catch (err) {
-        statusEl.textContent = `Error: ${err instanceof Error ? err.message : "unknown"}`;
-        statusEl.style.color = "#e05d5d";
-      }
-    });
-  }
-
   private scheduleRender(): void {
     if (this.renderQueued) return;
     this.renderQueued = true;
@@ -2176,6 +2084,7 @@ export class Hud {
     if (!agent) {
       panel.hidden = true;
       this.lastSelected = null;
+      this.cdpDetailAgentId = null;
       return;
     }
     panel.hidden = false;
@@ -2365,6 +2274,17 @@ export class Hud {
           <button id="d-cdp-refresh" style="margin-top:0.4rem; padding:0.3rem 0.5rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.65rem; cursor:pointer;">↻ Refresh</button>
           <button id="d-cdp-buy" style="margin-top:0.4rem; margin-left:0.3rem; padding:0.3rem 0.5rem; border:1px solid #3a7cb5; border-radius:0.3rem; background:#1a2a1a; color:#4f9dde; font-size:0.65rem; cursor:pointer;">Buy SOL</button>
         </div>
+        <div id="d-cdp-policy" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+          <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5; margin-bottom:0.3rem;">⚙ SPENDING POLICY</div>
+          <div id="d-cdp-policy-content" style="font-size:0.7rem; color:#888;">Loading policy...</div>
+        </div>
+        <div id="d-cdp-txhistory" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
+            <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5;">📜 TRANSACTION HISTORY</div>
+            <button id="d-cdp-tx-refresh" style="padding:0.2rem 0.4rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.6rem; cursor:pointer;">↻</button>
+          </div>
+          <div id="d-cdp-tx-content" style="font-size:0.7rem; color:#888;">Loading transactions...</div>
+        </div>
       `;
       const refreshBtn = cdpSection.querySelector("#d-cdp-refresh") as HTMLButtonElement | null;
       if (refreshBtn) {
@@ -2398,7 +2318,11 @@ export class Hud {
       };
       this.detailCdpOnrampListener = onrampListener;
       this.store.cdpOnrampListeners.push(onrampListener);
-      this.net.send({ type: "get_cdp_wallet", agentId: agent.id });
+      const cdpNeedsInit = this.cdpDetailAgentId !== agent.id;
+      if (cdpNeedsInit) {
+        this.cdpDetailAgentId = agent.id;
+        this.net.send({ type: "get_cdp_wallet", agentId: agent.id });
+      }
       this.detailCdpListener = (msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => {
         if (msg.agentId !== agent.id) return;
         const content = cdpSection.querySelector("#d-cdp-content") as HTMLElement | null;
@@ -2441,14 +2365,7 @@ export class Hud {
       };
       this.store.cdpWalletListeners.push(this.detailCdpListener);
 
-      // Policy section
-      cdpSection.innerHTML += `
-        <div id="d-cdp-policy" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
-          <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5; margin-bottom:0.3rem;">⚙ SPENDING POLICY</div>
-          <div id="d-cdp-policy-content" style="font-size:0.7rem; color:#888;">Loading policy...</div>
-        </div>
-      `;
-      this.net.send({ type: "get_cdp_policy", agentId: agent.id });
+      if (cdpNeedsInit) this.net.send({ type: "get_cdp_policy", agentId: agent.id });
       this.detailCdpPolicyListener = (msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => {
         if (msg.agentId !== agent.id) return;
         const pcontent = cdpSection.querySelector("#d-cdp-policy-content") as HTMLElement | null;
@@ -2501,17 +2418,7 @@ export class Hud {
       };
       this.store.cdpPolicyListeners.push(this.detailCdpPolicyListener);
 
-      // Transaction history section
-      cdpSection.innerHTML += `
-        <div id="d-cdp-txhistory" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
-            <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5;">📜 TRANSACTION HISTORY</div>
-            <button id="d-cdp-tx-refresh" style="padding:0.2rem 0.4rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.6rem; cursor:pointer;">↻</button>
-          </div>
-          <div id="d-cdp-tx-content" style="font-size:0.7rem; color:#888;">Loading transactions...</div>
-        </div>
-      `;
-      this.net.send({ type: "get_cdp_tx_history", agentId: agent.id });
+      if (cdpNeedsInit) this.net.send({ type: "get_cdp_tx_history", agentId: agent.id });
       const txRefreshBtn = cdpSection.querySelector("#d-cdp-tx-refresh") as HTMLButtonElement | null;
       if (txRefreshBtn) {
         txRefreshBtn.addEventListener("click", () => {
