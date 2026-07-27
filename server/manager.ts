@@ -40,7 +40,7 @@ import { recordUsage, getMonthlySpend, MONTHLY_USAGE_CAP } from "./usage.js";
 import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
-import { getAgentAccount } from "./providers/cdp-solana.js";
+import { getAgentAccount, getAgentBalances } from "./providers/cdp-solana.js";
 
 /**
  * Detect if a message to Agent Resources is a question/conversation vs a task command.
@@ -1439,6 +1439,25 @@ export class AgentManager {
     }
     const rt = this.agents.get(agentId);
     if (!rt) return;
+
+    if (rt.info.cdpSolana) {
+      try {
+        const balData = await getAgentBalances(agentId);
+        if (balData && Array.isArray(balData.balances) && balData.balances.length > 0) {
+          const hasFunds = (balData.balances as any[]).some((b) => {
+            const amt = Number(b.amount ?? b.balance ?? 0);
+            return amt > 0;
+          });
+          if (hasFunds) {
+            const addr = balData.address;
+            this.broadcast({ type: "toast", text: `⚠️ ${rt.info.name}'s Solana wallet still holds funds (${addr.slice(0, 8)}...${addr.slice(-4)}). Recruit them back to recover.` });
+          }
+        }
+      } catch (err) {
+        console.error(`[manager] Failed to check CDP balance before firing ${agentId}:`, err);
+      }
+    }
+
     rt.abort?.abort();
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
     rt.taskQueue = [];
