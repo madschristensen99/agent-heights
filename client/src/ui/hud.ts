@@ -2374,21 +2374,18 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const blocked = msg.blockedRecipients?.join(", ") ?? "";
         pcontent.innerHTML = `
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Max SOL per transfer:</label><br/>
-            <input id="d-cdp-max-sol" type="number" step="0.01" min="0" value="${esc(String(maxSol))}" placeholder="unlimited"
-              style="width:100%; padding:0.2rem; border:1px solid #333; border-radius:0.3rem; background:#111; color:#e0e0e0; font-size:0.65rem;" />
+            <label style="color:#888; font-size:0.65rem;">Max SOL per transfer:</label>
+            <input id="d-cdp-max-sol" type="number" step="0.01" min="0" value="${esc(String(maxSol))}" placeholder="unlimited" style="font-size:0.7rem;" />
           </div>
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Allowed recipients (comma-sep, leave empty for any):</label><br/>
-            <input id="d-cdp-allowed" type="text" value="${esc(allowed)}" placeholder="any address"
-              style="width:100%; padding:0.2rem; border:1px solid #333; border-radius:0.3rem; background:#111; color:#e0e0e0; font-size:0.6rem; font-family:monospace;" />
+            <label style="color:#888; font-size:0.65rem;">Allowed recipients (comma-sep, leave empty for any):</label>
+            <input id="d-cdp-allowed" type="text" value="${esc(allowed)}" placeholder="any address" style="font-size:0.7rem; font-family:monospace;" />
           </div>
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Blocked recipients (comma-sep):</label><br/>
-            <input id="d-cdp-blocked" type="text" value="${esc(blocked)}" placeholder="none"
-              style="width:100%; padding:0.2rem; border:1px solid #333; border-radius:0.3rem; background:#111; color:#e0e0e0; font-size:0.6rem; font-family:monospace;" />
+            <label style="color:#888; font-size:0.65rem;">Blocked recipients (comma-sep):</label>
+            <input id="d-cdp-blocked" type="text" value="${esc(blocked)}" placeholder="none" style="font-size:0.7rem; font-family:monospace;" />
           </div>
-          <button id="d-cdp-save-policy" style="padding:0.3rem 0.5rem; border:1px solid #3a7cb5; border-radius:0.3rem; background:#1a2a1a; color:#4f9dde; font-size:0.65rem; cursor:pointer;">Save Policy</button>
+          <button id="d-cdp-save-policy" class="btn" style="padding:0.3rem 0.5rem; font-size:0.65rem;">Save Policy</button>
         `;
         const saveBtn = pcontent.querySelector("#d-cdp-save-policy") as HTMLButtonElement | null;
         if (saveBtn) {

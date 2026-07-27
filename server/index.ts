@@ -1324,13 +1324,7 @@ wss.on("connection", async (ws, req) => {
               break;
             }
             const balData = await getAgentBalances(msg.agentId);
-            const balances = balData
-              ? (balData.balances as any[]).map((b: any) => ({
-                  symbol: b.symbol ?? b.token ?? "unknown",
-                  amount: String(b.amount ?? b.balance ?? "0"),
-                  usdValue: b.usdValue ? String(b.usdValue) : undefined,
-                }))
-              : [];
+            const balances = balData?.balances ?? [];
             console.log(`[cdp-debug] broadcasting cdp_wallet_status agentId=${msg.agentId} address=${address} balances=${balances.length}`);
             sess.broadcast({ type: "cdp_wallet_status", agentId: msg.agentId, address, balances });
           } catch (err) {

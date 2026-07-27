@@ -79,13 +79,19 @@ export async function getAgentWalletAddress(agentId: string): Promise<string | n
 }
 
 /** Get token balances for an agent's wallet. */
-export async function getAgentBalances(agentId: string): Promise<{ address: string; balances: unknown[] } | null> {
+export async function getAgentBalances(agentId: string): Promise<{ address: string; balances: { symbol: string; amount: string; usdValue?: string }[] } | null> {
   if (!isCdpConfigured()) return null;
   try {
     const cdp = getCdpClient();
     const account = await getAgentAccount(agentId);
-    const balances = await cdp.solana.listTokenBalances({ address: account.address });
-    return { address: account.address, balances: balances as unknown as unknown[] };
+    const result = await cdp.solana.listTokenBalances({ address: account.address });
+    const rawBalances = (result as any).balances ?? [];
+    const balances = (rawBalances as any[]).map((b) => ({
+      symbol: b.token?.symbol ?? b.token?.name ?? "unknown",
+      amount: String(b.amount?.amount ?? "0"),
+      usdValue: undefined,
+    }));
+    return { address: account.address, balances };
   } catch (err) {
     console.error(`[cdp-solana] Failed to get balances for agent ${agentId}:`, err);
     return null;

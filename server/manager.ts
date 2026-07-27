@@ -1065,7 +1065,7 @@ export class AgentManager {
     this.broadcast({ type: "agent", agent: info });
     await this.save.flushNow();
     console.log(`[manager] hired ${cleanName} (id=${info.id}) desk=${deskIndex} — broadcast sent to ${this.agents.size} total agents`);
-    this.log(rt, "status", `${cleanName} joined the office. (${provider} / ${model})`);
+    this.log(rt, "status", `${cleanName} joined the office.`);
     this.logEvent("hire", `${cleanName} joined the office.`);
 
     if (cdpSolana) {
@@ -1443,11 +1443,8 @@ export class AgentManager {
     if (rt.info.cdpSolana) {
       try {
         const balData = await getAgentBalances(agentId);
-        if (balData && Array.isArray(balData.balances) && balData.balances.length > 0) {
-          const hasFunds = (balData.balances as any[]).some((b) => {
-            const amt = Number(b.amount ?? b.balance ?? 0);
-            return amt > 0;
-          });
+        if (balData && balData.balances.length > 0) {
+          const hasFunds = balData.balances.some((b) => Number(b.amount) > 0);
           if (hasFunds) {
             const addr = balData.address;
             this.broadcast({ type: "toast", text: `⚠️ ${rt.info.name}'s Solana wallet still holds funds (${addr.slice(0, 8)}...${addr.slice(-4)}). Recruit them back to recover.` });
@@ -2126,7 +2123,7 @@ export class AgentManager {
       free
         .map(
           (rt) =>
-            `- ${rt.info.name} (${rt.info.provider}/${rt.info.model}, ${rt.info.tasksDone} tasks done)`,
+            `- ${rt.info.name} (${rt.info.tasksDone} tasks done)`,
         )
         .join("\n") || "(nobody is free right now)";
     return [
