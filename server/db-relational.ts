@@ -126,6 +126,7 @@ export class RelationalPersistence {
         sessionId: r.session_id,
         tasksDone: r.tasks_done,
         mcpServers: r.mcp_servers ?? undefined,
+        ...(r.extra_fields ?? {}),
       }));
 
       // Load logs (capped at LOG_CAP per agent)
@@ -466,26 +467,30 @@ export class RelationalPersistence {
     const logs = this.state.logs;
 
     // Upsert all agents
-    const rows = agents.map((a) => ({
-      id: a.id,
-      room_id: this.roomId,
-      owner_id: this.userId,
-      name: a.name,
-      title: a.title,
-      provider: a.provider,
-      model: a.model,
-      status: a.status,
-      task: a.task,
-      desk_index: a.deskIndex,
-      sprite: a.sprite,
-      appearance: a.appearance,
-      accent: a.accent,
-      system_prompt: a.systemPrompt,
-      role: a.role,
-      session_id: a.sessionId,
-      tasks_done: a.tasksDone,
-      mcp_servers: a.mcpServers ?? null,
-    }));
+    const rows = agents.map((a) => {
+      const { id, name, title, provider, model, status, task, deskIndex, sprite, appearance, accent, systemPrompt, role, sessionId, tasksDone, mcpServers, ...extra } = a;
+      return {
+        id,
+        room_id: this.roomId,
+        owner_id: this.userId,
+        name,
+        title,
+        provider,
+        model,
+        status,
+        task,
+        desk_index: deskIndex,
+        sprite,
+        appearance,
+        accent,
+        system_prompt: systemPrompt,
+        role,
+        session_id: sessionId,
+        tasks_done: tasksDone,
+        mcp_servers: mcpServers ?? null,
+        extra_fields: extra,
+      };
+    });
 
     if (rows.length > 0) {
       try {
