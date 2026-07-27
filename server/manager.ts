@@ -40,6 +40,7 @@ import { recordUsage, getMonthlySpend, MONTHLY_USAGE_CAP } from "./usage.js";
 import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
+import { getAgentAccount } from "./providers/cdp-solana.js";
 
 /**
  * Detect if a message to Agent Resources is a question/conversation vs a task command.
@@ -1066,6 +1067,14 @@ export class AgentManager {
     console.log(`[manager] hired ${cleanName} (id=${info.id}) desk=${deskIndex} — broadcast sent to ${this.agents.size} total agents`);
     this.log(rt, "status", `${cleanName} joined the office. (${provider} / ${model})`);
     this.logEvent("hire", `${cleanName} joined the office.`);
+
+    if (cdpSolana) {
+      getAgentAccount(info.id).then((account) => {
+        console.log(`[manager] Provisioned Solana wallet for ${cleanName} (id=${info.id}): ${account.address}`);
+      }).catch((err) => {
+        console.error(`[manager] Failed to provision Solana wallet for ${cleanName} (id=${info.id}):`, err);
+      });
+    }
   }
 
   /** Hire an agent from Agent Resources's chat — broadcasts helicopter_delivery to client
@@ -1601,6 +1610,7 @@ export class AgentManager {
       role: fa.role,
       sessionId: fa.sessionId,
       tasksDone: fa.tasksDone,
+      cdpSolana: fa.cdpSolana ?? false,
     };
 
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
@@ -1615,6 +1625,14 @@ export class AgentManager {
     await this.save.flushNow();
     this.log(rt, "status", `${info.name} came back from the Labyrinth and rejoined the office.`);
     this.broadcast({ type: "toast", text: `${info.name} returned from the Labyrinth!` });
+
+    if (info.cdpSolana) {
+      getAgentAccount(info.id).then((account) => {
+        console.log(`[manager] Re-provisioned Solana wallet for ${info.name} (id=${info.id}): ${account.address}`);
+      }).catch((err) => {
+        console.error(`[manager] Failed to re-provision Solana wallet for ${info.name} (id=${info.id}):`, err);
+      });
+    }
   }
 
   // ----------------------------------------------------------- task board ---

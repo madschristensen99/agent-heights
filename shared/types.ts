@@ -306,6 +306,7 @@ export interface FiredAgent {
   worldX: number;
   worldY: number;
   mood: FiredAgentMood;
+  cdpSolana?: boolean;
 }
 
 /** An agent on vacation — temporarily away with all data preserved. */

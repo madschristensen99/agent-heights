@@ -55,7 +55,7 @@ function getRpcUrl(): string {
 const accountCache = new Map<string, Awaited<ReturnType<CdpClient["solana"]["createAccount"]>>>();
 
 /** Get or create a Solana account for an agent. Idempotent via getOrCreateAccount. */
-async function getAgentAccount(agentId: string) {
+export async function getAgentAccount(agentId: string) {
   const cacheKey = `agent-${agentId}`;
   if (accountCache.has(cacheKey)) return accountCache.get(cacheKey)!;
 
