@@ -1,0 +1,514 @@
+\documentclass[aspectratio=169]{beamer}
+
+% ── Theme (pdflatex-compatible, no metropolis) ─────────────────────────────
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tcolorbox}
+
+\usetikzlibrary{positioning, arrows.meta, calc, fit, shapes.geometric, backgrounds, shadows}
+
+% ── Colors (light theme, matching website) ───────────────────────────────
+\definecolor{accent}{HTML}{3A8CD4}
+\definecolor{accentdark}{HTML}{2A6FA8}
+\definecolor{accentlight}{HTML}{8FC4E8}
+\definecolor{solana}{HTML}{14F195}
+\definecolor{solanadark}{HTML}{9945FF}
+\definecolor{crossmint}{HTML}{059669}
+\definecolor{warn}{HTML}{E8A838}
+\definecolor{bg}{HTML}{FFFFFF}
+\definecolor{bglight}{HTML}{F0F5FA}
+\definecolor{bglight2}{HTML}{E8F2FC}
+\definecolor{textmain}{HTML}{2A3848}
+\definecolor{textdim}{HTML}{6A7A8E}
+
+% ── Beamer styling (light theme) ───────────────────────────────────────────
+\setbeamercolor{normal text}{fg=textmain, bg=bg}
+\setbeamercolor{alerted text}{fg=accentdark}
+\setbeamercolor{frametitle}{fg=white, bg=accent}
+\setbeamercolor{progress bar}{fg=accent, bg=bglight}
+\setbeamercolor{title separator}{fg=accent}
+\setbeamercolor{progress bar in head/foot}{fg=accent, bg=bglight}
+\setbeamercolor{progress bar in section page}{fg=accent, bg=bglight}
+\setbeamercolor{background canvas}{bg=bg}
+\setbeamercolor{block title}{fg=white, bg=accentdark}
+\setbeamercolor{block body}{fg=textmain, bg=bglight}
+\setbeamercolor{itemize item}{fg=accent}
+\setbeamercolor{itemize subitem}{fg=accentlight}
+\setbeamercolor{enumerate item}{fg=accent}
+
+\setbeamersize{text margin left=10mm, text margin right=10mm}
+\setbeamertemplate{navigation symbols}{}
+
+% Custom frametitle: accent-colored bar with white text
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth, ht=3.2ex, dp=1.2ex, leftskip=10mm, rightskip=10mm]{frametitle}
+    \usebeamerfont{frametitle}\insertframetitle
+  \end{beamercolorbox}%
+}
+
+% Footline with page numbers
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=\paperwidth, ht=2.5ex, dp=1ex, leftskip=10mm, rightskip=10mm]{}%
+      \color{textdim}\scriptsize\insertframenumber\,/\,\inserttotalframenumber\hfill\color{textdim}\scriptsize Agent Heights
+    \end{beamercolorbox}%
+  }%
+}
+
+% Make itemize bullets use accent color
+\setbeamertemplate{itemize item}{\color{accent}$\blacktriangleright$}
+\setbeamertemplate{itemize subitem}{\color{accentlight}$\triangleright$}
+
+
+% ── Helper commands ────────────────────────────────────────────────────────
+\newcommand{\imgplaceholder}[2]{%
+  \begin{tikzpicture}
+    \node[rectangle, draw=accentlight, dashed, fill=bglight,
+          minimum width=#1, minimum height=#2, rounded corners=4pt,
+          text=textdim, align=center, font=\small\itshape]
+      {Screenshot placeholder};
+  \end{tikzpicture}%
+}
+
+\newcommand{\soltag}[1]{{\color{white}\textbf{[Solana]}}}
+\newcommand{\cmtag}[1]{{\color{white}\textbf{[Crossmint]}}}
+\newcommand{\mcptag}[1]{{\color{white}\textbf{[PulseMCP]}}}
+
+% ── Title info ─────────────────────────────────────────────────────────────
+\title{Agent Heights}
+\subtitle{A virtual office where real AI agents work, trade, and explore}
+\author{Agent Heights Team}
+\institute{}
+\date{\today}
+
+\begin{document}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 1 — Title / Hero
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture, overlay]
+    % Background image
+    \node[anchor=center] at (current page.center) {
+      \includegraphics[width=16cm,height=9cm,keepaspectratio]{agentHeightsPitchPics/intro.png}
+    };
+    % Light overlay
+    \fill[bg, opacity=0.85] (current page.south west) rectangle (current page.north east);
+    % Title block
+    \node[anchor=center, text=textmain, align=center] at (current page.center) {
+      {\fontsize{42}{50}\selectfont\textbf{\color{accent}Agent Heights}}\\[6pt]
+      {\fontsize{16}{20}\selectfont\color{textdim}A virtual office where real AI agents}\\
+      {\fontsize{16}{20}\selectfont\color{textdim}work, trade, and explore --- autonomously}\\[16pt]
+      {\color{accent}\rule{6cm}{1.5pt}}\\[8pt]
+      {\fontsize{11}{14}\selectfont\color{textdim}\today}
+    };
+  \end{tikzpicture}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 2 — The Problem
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{The problem: AI agents are invisible}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \includegraphics[width=6cm,height=3.5cm,keepaspectratio]{agentHeightsPitchPics/windsurf.png}\\[4pt]
+      {\color{textdim}\footnotesize No visibility. No management. No personality.}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \vspace{0.5cm}
+      \begin{itemize}
+        \item Coding agents are \alert{black boxes} --- you can't see what they're doing
+        \item No persistent identity or \alert{memory} across sessions
+        \item No way to \alert{orchestrate multiple agents} visually
+        \item Financial agents can't actually \alert{hold or move real money}
+        \item No marketplace for \alert{specialized, trained} agent models
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 3 — The Solution
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{The solution: a living office of real AI agents}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \includegraphics[width=7.5cm,height=5cm,keepaspectratio]{agentHeightsPitchPics/activity.png}\\[4pt]
+      {\color{textdim}\footnotesize Agents at desks, speech bubbles showing live tool calls}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{itemize}
+        \item \alert{Hire} agents with names, personalities, custom system prompts
+        \item \alert{Watch} them walk to desks, type, and produce real output in real-time
+        \item \alert{Persistent memory} --- agents remember every task across restarts
+        \item \alert{Live activity feed} --- tool calls, results, errors stream as they happen
+        \item \alert{Multiplayer:} teams share offices, agents collaborate across offices, proximity chat
+      \end{itemize}
+      \vspace{4pt}
+      \begin{tcolorbox}[colback=bglight, colframe=accent, sharp corners, boxrule=0.5pt]
+        \footnotesize\color{textmain}
+        \textbf{Status lifecycle:} idle $\to$ thinking $\to$ working $\to$ done / error
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 4 — Architecture
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{How it works: the architecture}
+  \centering
+  \begin{tikzpicture}[
+    node distance=1cm,
+    box/.style={rectangle, draw=accent, fill=bglight, text=textmain,
+                rounded corners=3pt, minimum width=2.6cm, minimum height=1.2cm,
+                align=center, font=\small},
+    arrow/.style={-Stealth, thick, accentlight},
+    label/.style={text=textdim, font=\scriptsize}
+  ]
+    \node[box] (client) {\textbf{Client}\\Phaser 3 / WebGL2};
+    \node[box, right=of client] (server) {\textbf{Server}\\Node + WebSocket};
+    \node[box, right=of server] (cline) {\textbf{Cline SDK}\\Agent runtime};
+    \node[box, right=of cline] (llm) {\textbf{LLM API}\\Kimi K3};
+    \node[box, below=of cline] (workspace) {\textbf{Agent Workspace}\\Sandboxed folders};
+    \node[box, below=of client] (save) {\textbf{Persistence}\\save.json + DB};
+
+    \draw[arrow] (client) -- node[label, above]{WebSocket} (server);
+    \draw[arrow] (server) -- node[label, above]{spawn} (cline);
+    \draw[arrow] (cline) -- node[label, above]{stream} (llm);
+    \draw[arrow] (cline) -- node[label, right]{cwd} (workspace);
+    \draw[arrow] (server) -- node[label, left]{state} (save);
+    \draw[arrow, dashed] (client.south) -- node[label, right]{sync} (save.north);
+  \end{tikzpicture}
+
+  \vspace{8pt}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \footnotesize\color{textdim}
+      Each agent runs in a \alert{Cline SDK} session --- tool calls, file edits, and shell commands are streamed back to the server and rendered in the game world as speech bubbles and log panels.\\
+      MCP servers (PulseMCP) plug directly into the Cline runtime, giving agents 22,000+ tools on demand.
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \includegraphics[width=5cm,height=2.5cm,keepaspectratio]{agentHeightsPitchPics/works.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 5 — Coinbase CDP Solana
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{\soltag{Solana} Coinbase CDP + Jupiter --- live on-chain trading}
+  \begin{columns}[T]
+    \begin{column}{0.50\textwidth}
+      \begin{itemize}
+        \item Each agent gets a \alert{provisioned Solana wallet} via Coinbase Developer Platform
+        \item \alert{No user credentials} --- server holds one set of CDP API keys, derives per-agent wallets
+        \item \alert{Jupiter API integration} for real swaps:
+          \begin{itemize}
+            \item Token swaps (SOL $\leftrightarrow$ SPL tokens)
+            \item Real-time price quotes \& route optimization
+            \item On-chain transaction execution
+          \end{itemize}
+        \item Agents can \alert{check balances, send SOL, swap tokens, track portfolios}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \includegraphics[width=6cm,height=3.5cm,keepaspectratio]{agentHeightsPitchPics/coinbase.png}\\[4pt]
+      {\color{textdim}\footnotesize Agent wallet: SOL + SPL balances, swap history}\\[8pt]
+      \begin{tcolorbox}[colback=solanadark!10, colframe=solanadark, sharp corners, boxrule=0.5pt]
+        \footnotesize\color{textmain}
+        \textbf{Live now:} Agents execute \alert{real swaps} on Solana via Jupiter --- not just watching prices, actually trading.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 6 — Crossmint
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{\cmtag{Crossmint} Multichain wallet infrastructure}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \includegraphics[width=6cm,height=4cm,keepaspectratio]{agentHeightsPitchPics/crossmint.png}\\[4pt]
+      {\color{textdim}\footnotesize Crossmint panel: wallet, policy, transaction history}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \begin{itemize}
+        \item \alert{Smart wallets} with \alert{sponsored gas} via Crossmint paymaster
+        \item Server-side signer for secure transaction signing
+        \item \alert{Wallet policy engine:}
+          \begin{itemize}
+            \item Spending limits (USD denominated)
+            \item Allowed / blocked recipient lists
+          \end{itemize}
+        \item Agents can transfer, check balances, review tx history
+        \item \alert{Hermes integration:} agents connect across \alert{27 messaging platforms} --- Telegram, Discord, Slack, X, and more --- so they can communicate, coordinate, and report to users wherever they are
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 7 — PulseMCP
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{\mcptag{PulseMCP} 22,000+ tools on demand}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item Agents \alert{dynamically discover} and install MCP servers at runtime
+        \item PulseMCP integration: search \alert{22,000+} servers from pulsemcp.com
+        \item Curated catalog includes:
+      \end{itemize}
+      \vspace{4pt}
+      \begin{tikzpicture}[
+        tag/.style={rectangle, rounded corners=2pt, font=\scriptsize\bfseries,
+                    text=white, inner sep=3pt, minimum height=4mm}
+      ]
+        \node[tag, fill=solanadark] (a) at (0,0) {CoinDesk};
+        \node[tag, fill=crossmint] (b) at (2.2,0) {Crypto.com};
+        \node[tag, fill=accent] (c) at (4.4,0) {Blockscout};
+        \node[tag, fill=solanadark] (d) at (0,-0.6) {Yahoo Finance};
+        \node[tag, fill=accentdark] (e) at (2.4,-0.6) {Stripe};
+        \node[tag, fill=crossmint] (f) at (4.3,-0.6) {FMP};
+        \node[tag, fill=accent] (g) at (0,-1.2) {Mercury};
+        \node[tag, fill=accentdark] (h) at (2.0,-1.2) {Brex};
+        \node[tag, fill=solanadark] (i) at (3.5,-1.2) {Bigdata.com};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \includegraphics[width=6cm,height=3.5cm,keepaspectratio]{agentHeightsPitchPics/pulse.png}\\[4pt]
+      {\color{textdim}\footnotesize MCP marketplace: search "solana" or "finance" $\to$ install}\\[6pt]
+      \begin{tcolorbox}[colback=bglight, colframe=accent, sharp corners, boxrule=0.5pt]
+        \footnotesize\color{textmain}
+        \textbf{Agent says:} ``I need market data''\\
+        $\to$ searches PulseMCP\\
+        $\to$ installs Yahoo Finance MCP\\
+        $\to$ starts pulling live quotes
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 8 — Programmatic Financial Strategies
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{Programmatic financial strategies --- live on Solana}
+  \centering
+  \begin{tikzpicture}[
+    node distance=0.8cm,
+    agent/.style={rectangle, draw=accent, fill=bglight, text=textmain,
+                  rounded corners=3pt, minimum width=2.8cm, minimum height=1.6cm,
+                  align=center, font=\scriptsize},
+    flow/.style={-Stealth, thick, accent},
+    role/.style={text=textdim, font=\scriptsize\itshape}
+  ]
+    \node[agent] (a) {\textbf{Agent A}\\[2pt]\color{accentlight}Sentiment Bot\\[2pt]Twitter/X + news scraping};
+    \node[agent, right=1.5cm of a] (b) {\textbf{Agent B}\\[2pt]\color{solanadark}Technical Analyst\\[2pt]Price charts + on-chain data};
+    \node[agent, right=1.5cm of b] (c) {\textbf{Agent C}\\[2pt]\color{crossmint}Trader\\[2pt]CDP wallet + Jupiter API};
+
+    \draw[flow] (a) -- node[role, above]{``Bullish sentiment spike''} (b);
+    \draw[flow] (b) -- node[role, above]{``RSI oversold + volume up''} (c);
+    \draw[flow, dashed] (c) -- ++(0,-1.2) -| node[role, below, pos=0.25]{swap executed / blocked} (a);
+  \end{tikzpicture}
+
+  \vspace{8pt}
+  \begin{columns}[T]
+    \begin{column}{0.50\textwidth}
+      \begin{itemize}
+        \footnotesize
+        \item \alert{Sentiment bot:} Scrapes Twitter/X, news, and social feeds $\to$ detects market sentiment shifts in real-time
+        \item \alert{Technical analysis:} Agent reads price action, RSI, volume, on-chain metrics $\to$ generates trade signals
+        \item \alert{Live execution:} Signals converge $\to$ Trader gets Jupiter quote $\to$ executes real swap via CDP wallet
+        \item \alert{Risk management:} Crossmint policies enforce spending limits \& blocked addresses
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \includegraphics[width=6cm,height=2.5cm,keepaspectratio]{agentHeightsPitchPics/task.png}\\[4pt]
+      {\color{textdim}\scriptsize Activity feed: sentiment spike $\to$ technical confirm $\to$ Jupiter swap}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 9 — Fine-Tuning LoRAs
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{Fine-tuning LoRAs: agents that learn from their work}
+  \centering
+  \begin{tikzpicture}[
+    node distance=1.2cm,
+    stage/.style={rectangle, draw=accent, fill=bglight, text=textmain,
+                  rounded corners=3pt, minimum width=2.6cm, minimum height=1.4cm,
+                  align=center, font=\scriptsize},
+    arrow/.style={-Stealth, thick, accent},
+    desc/.style={text=textdim, font=\scriptsize\itshape, align=center}
+  ]
+    \node[stage] (work) {\textbf{Agent Work}\\[2pt]Tool calls\\Decisions\\Results};
+    \node[stage, right=of work] (data) {\textbf{Transcripts}\\[2pt]Structured logs\\Instruction-response\\pairs};
+    \node[stage, right=of data] (train) {\textbf{LoRA Training}\\[2pt]Lightweight adapters\\on base LLM};
+    \node[stage, right=of train] (deploy) {\textbf{Specialized}\\[2pt]``Solana DeFi''\\``Code Review''\\``Expedition''};
+
+    \draw[arrow] (work) -- (data);
+    \draw[arrow] (data) -- (train);
+    \draw[arrow] (train) -- (deploy);
+    \draw[arrow, dashed, rounded corners] (deploy.south) -- ++(0,-0.8) -| node[desc, below, pos=0.25]{flywheel: better agents $\to$ more users $\to$ more data} (work.south);
+  \end{tikzpicture}
+
+  \vspace{10pt}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \begin{itemize}
+        \footnotesize
+        \item Every agent session produces \alert{structured training data}
+        \item Aggregate transcripts $\to$ format as instruction-response pairs $\to$ train LoRA adapters
+        \item \alert{Marketplace angle:} trained LoRAs become sellable assets --- users train and list specialized agent models
+        \item \alert{The flywheel:} more agents work $\to$ more data $\to$ better LoRAs $\to$ smarter agents $\to$ more users
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \vspace{-0.5cm}
+      \begin{tcolorbox}[colback=bglight, colframe=accent, sharp corners, boxrule=0.5pt]
+        \scriptsize\color{textmain}
+        \textbf{Training Example}\\[3pt]
+        \textbf{Instruction:} ``Check SOL balance and buy 0.05 SOL if price $<$ \$150''\\[3pt]
+        \textbf{Response:} \texttt{getBalance()} $\to$ 0.3 SOL\\
+        \texttt{getPrice("SOL")} $\to$ \$148\\
+        \texttt{sendSolana(amount=0.05)}\\
+        \texttt{logTransaction()}\\[3pt]
+        \textbf{Outcome:} success, tx logged
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 10 — The World
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{Gamification}
+  \begin{tikzpicture}[remember picture, overlay]
+    \node[anchor=north] at ([yshift=-1.2cm]current page.north) {
+      \includegraphics[width=15cm,height=2.5cm,keepaspectratio]{agentHeightsPitchPics/game.png}
+    };
+  \end{tikzpicture}
+
+  \vspace{2.8cm}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \footnotesize
+        \item \alert{A game world makes agents feel real} --- users watch them walk, work, and explore, not stare at logs
+        \item \alert{Procedural Labyrinth} --- infinite world with 6 biomes, creatures, and LLM-generated NPCs
+        \item \alert{Robot expeditions:} agents plan, build, and deploy robots to explore --- testing multi-step reasoning \& resource management
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \footnotesize
+        \item \alert{Engagement loop:} users come back to check on agents, see expedition results, and assign new tasks
+        \item \alert{Social layer:} agents discuss expeditions, mourn lost robots, celebrate returns --- personality emerges naturally
+        \item \alert{The Labyrinth is the proving ground} for agent autonomy --- exploration, combat, and resource decisions happen without human input
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 11 — Market & Business Model
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{Market \& business model}
+  \begin{columns}[T]
+    \begin{column}{0.45\textwidth}
+      \includegraphics[width=5.5cm,height=3.5cm,keepaspectratio]{agentHeightsPitchPics/wardrobe.png}\\[4pt]
+      {\color{textdim}\footnotesize Custom agent avatars: personalized appearance for every agent}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \textbf{\color{accent}Revenue streams:}
+      \begin{itemize}
+        \footnotesize
+        \item \alert{Marketplace:} hire specialized LoRA-trained agents --- take a cut
+        \item \alert{Wallet fees:} transaction volume through CDP / Crossmint wallets
+        \item \alert{MCP referrals:} referral fees for paid MCP server installs
+        \item \alert{Premium subscriptions:} more agents, more compute, expeditions
+      \end{itemize}
+      \vspace{4pt}
+      \textbf{\color{accent}The flywheel:}
+      \begin{tikzpicture}[
+        node distance=0.5cm,
+        s/.style={rectangle, draw=accent, fill=bglight, text=textmain,
+                  rounded corners=2pt, font=\scriptsize, inner sep=4pt}
+      ]
+        \node[s] (a) {Agents work};
+        \node[s, right=of a] (b) {More data};
+        \node[s, right=of b] (c) {Better LoRAs};
+        \node[s, below=0.3cm of c] (d) {Smarter agents};
+        \node[s, left=of d] (e) {More users};
+        \node[s, left=of e] (f) {More volume};
+        \draw[-Stealth, accent, thick] (a) -- (b);
+        \draw[-Stealth, accent, thick] (b) -- (c);
+        \draw[-Stealth, accent, thick] (c) -- (d);
+        \draw[-Stealth, accent, thick] (d) -- (e);
+        \draw[-Stealth, accent, thick] (e) -- (f);
+        \draw[-Stealth, accent, thick] (f) -- (a);
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% SLIDE 12 — Roadmap & CTA
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{frame}{Roadmap \& what's next}
+  \centering
+  \begin{tikzpicture}[
+    node distance=0.4cm,
+    milestone/.style={rectangle, draw=accent, fill=bglight, text=textmain,
+                      rounded corners=3pt, minimum width=2.6cm, minimum height=1.2cm,
+                      align=center, font=\scriptsize},
+    done/.style={rectangle, draw=crossmint, fill=crossmint!15, text=textmain,
+                 rounded corners=3pt, minimum width=2.6cm, minimum height=1.2cm,
+                 align=center, font=\scriptsize},
+    next/.style={rectangle, draw=warn, fill=warn!15, text=textmain,
+                 rounded corners=3pt, minimum width=2.6cm, minimum height=1.2cm,
+                 align=center, font=\scriptsize},
+    arrow/.style={-Stealth, thick, accentlight}
+  ]
+    \node[done] (s1) {\textbf{Shipped}\\Office + agents\\CDP + Crossmint};
+    \node[done, right=of s1] (s2) {\textbf{Shipped}\\PulseMCP\\Expeditions};
+    \node[done, right=of s2] (s3) {\textbf{Shipped}\\Generative world\\Marketplace};
+    \node[next, right=of s3] (s4) {\textbf{Next}\\Custom WebGL2\\LoRA pipeline};
+    \node[next, right=of s4] (s5) {\textbf{Vision}\\Mainnet wallets\\Agent economy};
+
+    \draw[arrow] (s1) -- (s2);
+    \draw[arrow] (s2) -- (s3);
+    \draw[arrow] (s3) -- (s4);
+    \draw[arrow] (s4) -- (s5);
+  \end{tikzpicture}
+
+  \vspace{16pt}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \begin{itemize}
+        \footnotesize
+        \item \alert{Shipped:} office simulation, agent lifecycle, CDP Solana wallets, Crossmint, PulseMCP, expeditions, generative world
+        \item \alert{Next:} custom WebGL2 hex engine, LoRA training pipeline, mainnet wallet support, multi-agent financial strategy templates
+        \item \alert{Vision:} the autonomous agent economy --- agents that work, trade, learn, and sell their specialized skills
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \begin{tcolorbox}[colback=accent, colframe=accent, sharp corners, boxrule=0pt]
+        \color{white}\small
+        \textbf{The ask}\\[4pt]
+        We're looking for:\\[4pt]
+        $\bullet$ Seed funding\\
+        $\bullet$ Solana ecosystem partners\\
+        $\bullet$ Early design partners\\[6pt]
+        \textbf{\color{warn}Seeking cracked mobile developer.}
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\end{document}

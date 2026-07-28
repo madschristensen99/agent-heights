@@ -1,5 +1,7 @@
 import type { AgentTool } from "@cline/sdk";
 import { privateKeyToAccount } from "viem/accounts";
+import { Keypair } from "@solana/web3.js";
+import { ed25519 } from "@noble/curves/ed25519";
 
 /**
  * Crossmint wallet provider — gives agents a multi-chain smart wallet
@@ -64,7 +66,6 @@ function getSolanaSignerAddress(): string {
   const hex = secret.startsWith("0x") ? secret.slice(2) : secret;
   const seed = Buffer.from(hex, "hex");
   if (seed.length !== 32) throw new Error("Signer secret must be 32 bytes (64 hex chars)");
-  const { Keypair } = require("@solana/web3.js");
   const kp = Keypair.fromSeed(seed);
   return kp.publicKey.toBase58();
 }
@@ -237,10 +238,9 @@ async function signApprovalMessage(message: string): Promise<string> {
     // Solana: Ed25519 sign the raw message bytes
     const hex = secret.startsWith("0x") ? secret.slice(2) : secret;
     const seed = Buffer.from(hex, "hex");
-    const { Keypair } = require("@solana/web3.js");
     const kp = Keypair.fromSeed(seed);
     const msgBytes = Buffer.from(message, "utf-8");
-    const sig = kp.sign(msgBytes);
+    const sig = ed25519.sign(msgBytes, kp.secretKey.slice(0, 32));
     return Buffer.from(sig).toString("base64");
   }
 
@@ -521,11 +521,15 @@ export async function createCrossmintOnrampUrl(
     if (!res.ok) {
       const errText = await res.text();
       console.error(`[crossmint] Onramp order failed (${res.status}): ${errText}`);
-      return null;
+      throw new Error(`Onramp order failed (${res.status}): ${errText}`);
     }
 
     const data = (await res.json()) as any;
     const url = data?.paymentIntent?.url ?? data?.url ?? data?.order?.url ?? null;
+    if (!url) {
+      console.error(`[crossmint] Onramp order response missing URL:`, JSON.stringify(data));
+      throw new Error("Onramp order response missing payment URL");
+    }
     return url;
   } catch (err) {
     console.error(`[crossmint] Failed to create onramp order for agent ${agentId}:`, err);

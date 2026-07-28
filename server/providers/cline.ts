@@ -964,6 +964,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     // that doesn't respect the abort signal — awaiting it would hang the generator,
     // preventing the caller's for-await loop from ever checking the abort flag.
     if (ctx.abort.signal.aborted) {
+      // Clear the cached Agent instance — its underlying SDK run may still be
+      // settling (MCP tools often don't respect abort).  Without this, the next
+      // task reuses the same instance and the SDK throws "Agent runtime is
+      // already running".  Messages are preserved in messageStore / DB and will
+      // be restored when a fresh Agent is created for the next task.
+      agents.delete(agentId);
       return;
     }
 
