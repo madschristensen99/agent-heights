@@ -1324,7 +1324,7 @@ export class WorldLayer {
   private captureHint!: Phaser.GameObjects.Text;
   private deployedAllies: DeployedAlly[] = [];
   private lastNemesisSave = 0;
-  private nemesisPanel: Phaser.GameObjects.Container | null = null;
+  private nemesisPanel: HTMLDivElement | null = null;
 
   // --- arrow projectile (crystal bow) ---
   private arrow: Phaser.GameObjects.Image | null = null;
@@ -3470,135 +3470,115 @@ export class WorldLayer {
   /** Toggle the nemesis info panel on/off. */
   toggleNemesisPanel(): void {
     if (this.nemesisPanel) {
-      this.nemesisPanel.destroy();
+      this.nemesisPanel.remove();
       this.nemesisPanel = null;
       return;
     }
 
-    const scene = this.scene;
-    const cam = scene.cameras.main;
-    const panelW = 420;
-    const panelH = 480;
-    const px = cam.scrollX + cam.width / 2 - panelW / 2;
-    const py = cam.scrollY + cam.height / 2 - panelH / 2;
-
-    const panel = scene.add.container(px, py).setDepth(100).setScrollFactor(0);
-
-    // background
-    const bg = scene.add.graphics();
-    bg.fillStyle(0x1a1a22, 0.95);
-    bg.fillRoundedRect(0, 0, panelW, panelH, 12);
-    bg.lineStyle(2, 0x4affa8, 0.6);
-    bg.strokeRoundedRect(0, 0, panelW, panelH, 12);
-    panel.add(bg);
-
-    // title
-    const title = scene.add.text(panelW / 2, 16, "NEMESIS CODEX", {
-      fontFamily: "'M PLUS Rounded 1c', sans-serif",
-      fontSize: "18px",
-      color: "#4affa8",
-      stroke: "#1a1a22",
-      strokeThickness: 3,
-    }).setOrigin(0.5, 0).setResolution(4);
-    panel.add(title);
-
-    let yPos = 48;
-
-    // Active nemeses section
     const active = this.nemesis.active();
-    const activeLabel = scene.add.text(12, yPos, `Active Nemeses (${active.length})`, {
-      fontFamily: "'M PLUS Rounded 1c', sans-serif",
-      fontSize: "13px",
-      color: "#ff6644",
-    }).setResolution(4);
-    panel.add(activeLabel);
-    yPos += 20;
+    const overlay = document.createElement("div");
+    overlay.id = "nemesis-codex-modal";
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.8); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+    `;
 
+    const card = document.createElement("div");
+    card.style.cssText = `
+      background: #1a1a2e; border: 1px solid rgba(74,255,168,0.3); border-radius: 12px;
+      width: 460px; max-height: 85vh; box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+      overflow: hidden; display: flex; flex-direction: column;
+    `;
+
+    // Header
+    const header = document.createElement("div");
+    header.style.cssText = `
+      background: #111128; border-bottom: 1px solid rgba(74,255,168,0.2);
+      padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;
+    `;
+    header.innerHTML = `
+      <span style="font-size:17px;font-weight:bold;color:#4affa8;letter-spacing:1px;">NEMESIS CODEX</span>
+      <button id="nemesis-codex-close" style="padding:4px 14px;border:none;border-radius:6px;background:#333344;color:#ccc;font-size:0.8rem;cursor:pointer;font-family:inherit;">Close</button>
+    `;
+    card.appendChild(header);
+
+    // Content
+    const content = document.createElement("div");
+    content.style.cssText = "flex:1;overflow-y:auto;padding:16px 20px;";
+
+    // Active Nemeses section
+    const activeSection = document.createElement("div");
+    activeSection.style.cssText = "margin-bottom:16px;";
+    activeSection.innerHTML = `<div style="font-size:13px;font-weight:bold;color:#ff6644;margin-bottom:8px;">Active Nemeses (${active.length})</div>`;
     if (active.length === 0) {
-      const empty = scene.add.text(16, yPos, "No active nemeses. Go antagonize some creatures!", {
-        fontFamily: "'M Plus Rounded 1c', sans-serif",
-        fontSize: "11px",
-        color: "#888899",
-      }).setResolution(4);
-      panel.add(empty);
-      yPos += 16;
+      activeSection.innerHTML += `<div style="font-size:12px;color:#888899;padding-left:8px;">No active nemeses. Go antagonize some creatures!</div>`;
     } else {
       for (const entry of active.slice(0, 6)) {
         const traitNames = entry.traitIds.map((id) => this.nemesis.getTrait(id)?.name ?? id).join(", ");
         const weakNames = entry.weaknessIds.map((id) => this.nemesis.getWeakness(id)?.name ?? id).join(", ");
-        const line = scene.add.text(16, yPos,
-          `${entry.name} — ${entry.title}\n` +
-          `  Rank ${entry.rank} | Kills: ${entry.playerKills} | Encounters: ${entry.encounters}\n` +
-          `  Traits: ${traitNames || "none"} | Weakness: ${weakNames || "none"}`,
-          {
-            fontFamily: "'M PLUS Rounded 1c', sans-serif",
-            fontSize: "10px",
-            color: "#ccccee",
-            stroke: "#1a1a22",
-            strokeThickness: 2,
-          },
-        ).setResolution(4);
-        panel.add(line);
-        yPos += 36;
+        const item = document.createElement("div");
+        item.style.cssText = "padding:8px 10px;margin-bottom:6px;background:#0f0f1a;border-radius:8px;border-left:3px solid #ff6644;";
+        item.innerHTML = `
+          <div style="font-size:13px;color:#e0e0f0;font-weight:bold;">${entry.name} <span style="font-weight:normal;color:#aaa;">— ${entry.title}</span></div>
+          <div style="font-size:11px;color:#999;margin-top:3px;">Rank ${entry.rank} · Kills: ${entry.playerKills} · Encounters: ${entry.encounters}</div>
+          <div style="font-size:11px;color:#7799aa;margin-top:2px;">Traits: ${traitNames || "none"} | Weakness: ${weakNames || "none"}</div>
+        `;
+        activeSection.appendChild(item);
       }
     }
+    content.appendChild(activeSection);
 
-    yPos += 8;
-
-    // Captured roster section
-    const rosterLabel = scene.add.text(12, yPos, `Captured Roster (${this.capturedRoster.length})`, {
-      fontFamily: "'M PLUS Rounded 1c', sans-serif",
-      fontSize: "13px",
-      color: "#44ff88",
-    }).setResolution(4);
-    panel.add(rosterLabel);
-    yPos += 20;
-
+    // Captured Roster section
+    const rosterSection = document.createElement("div");
+    rosterSection.style.cssText = "margin-bottom:16px;";
+    rosterSection.innerHTML = `<div style="font-size:13px;font-weight:bold;color:#44ff88;margin-bottom:8px;">Captured Roster (${this.capturedRoster.length})</div>`;
     if (this.capturedRoster.length === 0) {
-      const empty = scene.add.text(16, yPos, "No captured creatures. Weaken them and press E to capture!", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "11px",
-        color: "#888899",
-      }).setResolution(4);
-      panel.add(empty);
-      yPos += 16;
+      rosterSection.innerHTML += `<div style="font-size:12px;color:#888899;padding-left:8px;">No captured creatures. Weaken them and press E to capture!</div>`;
     } else {
       for (const entry of this.capturedRoster.slice(0, 6)) {
-        const line = scene.add.text(16, yPos,
-          `${entry.name} — ${entry.title} (Rank ${entry.rank})`,
-          {
-            fontFamily: "'M PLUS Rounded 1c', sans-serif",
-            fontSize: "10px",
-            color: "#aaccaa",
-            stroke: "#1a1a22",
-            strokeThickness: 2,
-          },
-        ).setResolution(4);
-        panel.add(line);
-        yPos += 16;
+        const item = document.createElement("div");
+        item.style.cssText = "padding:8px 10px;margin-bottom:6px;background:#0f0f1a;border-radius:8px;border-left:3px solid #44ff88;";
+        item.innerHTML = `
+          <div style="font-size:13px;color:#aaccaa;">${entry.name} <span style="color:#888;">— ${entry.title} (Rank ${entry.rank})</span></div>
+        `;
+        rosterSection.appendChild(item);
       }
     }
-
-    yPos += 8;
+    content.appendChild(rosterSection);
 
     // Stats section
-    const statsLabel = scene.add.text(12, yPos, `Void Shards: ${this.voidShards} | Weapons: ${this.ownedWeapons.length}`, {
-      fontFamily: "'M PLUS Rounded 1c', sans-serif",
-      fontSize: "12px",
-      color: "#aa44ff",
-    }).setResolution(4);
-    panel.add(statsLabel);
-    yPos += 20;
+    const statsSection = document.createElement("div");
+    statsSection.style.cssText = "padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);";
+    statsSection.innerHTML = `<div style="font-size:12px;color:#aa44ff;">Void Shards: ${this.voidShards} | Weapons: ${this.ownedWeapons.length}</div>`;
+    content.appendChild(statsSection);
 
-    // Close hint
-    const closeHint = scene.add.text(panelW / 2, panelH - 20, "Press E to close", {
-      fontFamily: "'M PLUS Rounded 1c', sans-serif",
-      fontSize: "10px",
-      color: "#666677",
-    }).setOrigin(0.5, 0.5).setResolution(4);
-    panel.add(closeHint);
+    card.appendChild(content);
 
-    this.nemesisPanel = panel;
+    // Footer
+    const footer = document.createElement("div");
+    footer.style.cssText = "padding:10px 20px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;";
+    footer.innerHTML = `<span style="font-size:11px;color:#666677;">Press E to close</span>`;
+    card.appendChild(footer);
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    // Wire close
+    const closeBtn = overlay.querySelector("#nemesis-codex-close") as HTMLButtonElement;
+    closeBtn.addEventListener("click", () => {
+      overlay.remove();
+      this.nemesisPanel = null;
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        this.nemesisPanel = null;
+      }
+    });
+
+    this.nemesisPanel = overlay;
   }
 
   /** Attempt to capture a weakened creature. */
@@ -3891,6 +3871,8 @@ export class WorldLayer {
     this.friendlies = [];
     this.pendingChunks.clear();
     this.workerRequested.clear();
+    this.nemesisPanel?.remove();
+    this.nemesisPanel = null;
     this.vfx.destroy();
     this.lighting.destroy();
     this.hud.destroy();

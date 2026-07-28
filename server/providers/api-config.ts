@@ -1,7 +1,7 @@
 /**
  * Shared API provider configuration.
  *
- * Kimi (Moonshot AI) is the LLM provider, using KIMI_KEY.
+ * The LLM provider uses KIMI_KEY.
  * It exposes an OpenAI-compatible /chat/completions endpoint.
  */
 

@@ -233,6 +233,8 @@ export interface AgentInfo {
   acl?: AgentACL;
   /** If true, agent gets auto-provisioned Solana wallet tools via Coinbase CDP SDK. */
   cdpSolana?: boolean;
+  /** If true, agent gets auto-provisioned multi-chain smart wallet tools via Crossmint. */
+  crossmintWallet?: boolean;
   /** Agent ID this agent is waiting at (when status is "waiting"). */
   waitingFor?: string | null;
 }
@@ -307,6 +309,7 @@ export interface FiredAgent {
   worldY: number;
   mood: FiredAgentMood;
   cdpSolana?: boolean;
+  crossmintWallet?: boolean;
 }
 
 /** An agent on vacation — temporarily away with all data preserved. */
@@ -595,7 +598,7 @@ export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean; crossmintWallet?: boolean }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_new"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
@@ -624,6 +627,10 @@ export type ClientMsg =
   | { type: "set_cdp_policy"; agentId: string; maxSolPerTransfer?: number; allowedRecipients?: string[]; blockedRecipients?: string[] }
   | { type: "get_cdp_tx_history"; agentId: string }
   | { type: "create_cdp_onramp"; agentId: string }
+  | { type: "get_crossmint_wallet"; agentId: string }
+  | { type: "get_crossmint_balance"; agentId: string }
+  | { type: "get_crossmint_policy"; agentId: string }
+  | { type: "get_crossmint_tx_history"; agentId: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme; orgId?: string }
   | { type: "join_room"; roomId: string }
@@ -738,6 +745,9 @@ export type ServerMsg =
   | { type: "cdp_policy_status"; agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }
   | { type: "cdp_tx_history"; agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }
   | { type: "cdp_onramp_url"; agentId: string; url: string | null; error?: string }
+  | { type: "crossmint_wallet_status"; agentId: string; address: string | null; chain: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }
+  | { type: "crossmint_policy_status"; agentId: string; chain: string | null; spendingLimitUsd: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; description: string | null; error?: string }
+  | { type: "crossmint_tx_history"; agentId: string; transactions: any[] | null; error?: string }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }
@@ -809,7 +819,7 @@ export type ServerMsg =
   | { type: "spectator_chat_relay"; fromName: string; text: string };
 
 export const AGENT_MODELS = [
-  { id: "kimi-k2.5", label: "Kimi K2.5" },
+  { id: "kimi-k2.5", label: "Standard" },
 ] as const;
 
 // --------------------------------------------------- subscription tiers ---

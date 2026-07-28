@@ -40,7 +40,8 @@ import { recordUsage, getMonthlySpend, MONTHLY_USAGE_CAP } from "./usage.js";
 import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
-import { getAgentAccount, getAgentBalances } from "./providers/cdp-solana.js";
+import { getAgentAccount, getAgentBalances as getCdpBalances } from "./providers/cdp-solana.js";
+import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCrossmintBalances } from "./providers/crossmint-wallets.js";
 
 /**
  * Detect if a message to Agent Resources is a question/conversation vs a task command.
@@ -1009,7 +1010,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean): Promise<void> {
+  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean, crossmintWallet?: boolean): Promise<void> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -1051,6 +1052,7 @@ export class AgentManager {
       tasksDone: 0,
       mcpServers: mcpServers?.length ? mcpServers : undefined,
       cdpSolana: cdpSolana ?? false,
+      crossmintWallet: crossmintWallet ?? false,
       personality: traits,
       mood: "content",
     };
@@ -1075,12 +1077,20 @@ export class AgentManager {
         console.error(`[manager] Failed to provision Solana wallet for ${cleanName} (id=${info.id}):`, err);
       });
     }
+
+    if (crossmintWallet) {
+      getCrossmintWallet(info.id).then((wallet) => {
+        if (wallet) console.log(`[manager] Provisioned Crossmint wallet for ${cleanName} (id=${info.id}): ${wallet.address}`);
+      }).catch((err) => {
+        console.error(`[manager] Failed to provision Crossmint wallet for ${cleanName} (id=${info.id}):`, err);
+      });
+    }
   }
 
   /** Hire an agent from Agent Resources's chat — broadcasts helicopter_delivery to client
    *  so the helicopter animation plays, then hires the agent server-side.
    *  Returns the new agent's id. */
-  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean): Promise<string> {
+  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean, crossmintWallet?: boolean): Promise<string> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     // Broadcast helicopter delivery to all clients so the animation plays
     this.broadcast({
@@ -1093,7 +1103,7 @@ export class AgentManager {
       alreadyHired: true,
     });
     // Hire the agent server-side (this creates the agent + broadcasts "agent" msg)
-    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana);
+    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana, crossmintWallet);
     // Find the agent we just hired by name
     const rt = [...this.agents.values()].find((a) => a.info.name === cleanName);
     return rt?.info.id ?? "";
@@ -1442,7 +1452,7 @@ export class AgentManager {
 
     if (rt.info.cdpSolana) {
       try {
-        const balData = await getAgentBalances(agentId);
+        const balData = await getCdpBalances(agentId);
         if (balData && balData.balances.length > 0) {
           const hasFunds = balData.balances.some((b) => Number(b.amount) > 0);
           if (hasFunds) {
@@ -1452,6 +1462,24 @@ export class AgentManager {
         }
       } catch (err) {
         console.error(`[manager] Failed to check CDP balance before firing ${agentId}:`, err);
+      }
+    }
+
+    if (rt.info.crossmintWallet) {
+      try {
+        const balData = await getCrossmintBalances(agentId);
+        if (balData && Array.isArray(balData.balances) && balData.balances.length > 0) {
+          const hasFunds = (balData.balances as any[]).some((b) => {
+            const amt = Number(b.amount ?? b.balance ?? 0);
+            return amt > 0;
+          });
+          if (hasFunds) {
+            const addr = balData.address;
+            this.broadcast({ type: "toast", text: `⚠️ ${rt.info.name}'s Crossmint wallet still holds funds (${addr.slice(0, 8)}...${addr.slice(-4)}). Recruit them back to recover.` });
+          }
+        }
+      } catch (err) {
+        console.error(`[manager] Failed to check Crossmint balance before firing ${agentId}:`, err);
       }
     }
 
@@ -1627,6 +1655,7 @@ export class AgentManager {
       sessionId: fa.sessionId,
       tasksDone: fa.tasksDone,
       cdpSolana: fa.cdpSolana ?? false,
+      crossmintWallet: fa.crossmintWallet ?? false,
     };
 
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
@@ -1647,6 +1676,14 @@ export class AgentManager {
         console.log(`[manager] Re-provisioned Solana wallet for ${info.name} (id=${info.id}): ${account.address}`);
       }).catch((err) => {
         console.error(`[manager] Failed to re-provision Solana wallet for ${info.name} (id=${info.id}):`, err);
+      });
+    }
+
+    if (info.crossmintWallet) {
+      getCrossmintWallet(info.id).then((wallet) => {
+        if (wallet) console.log(`[manager] Re-provisioned Crossmint wallet for ${info.name} (id=${info.id}): ${wallet.address}`);
+      }).catch((err) => {
+        console.error(`[manager] Failed to re-provision Crossmint wallet for ${info.name} (id=${info.id}):`, err);
       });
     }
   }
@@ -2228,6 +2265,7 @@ export class AgentManager {
         apiKey: this.apiKey,
         mcpServers: await this.injectMcpKeys(rt.info.mcpServers),
         cdpSolana: rt.info.cdpSolana ?? false,
+        crossmintWallet: rt.info.crossmintWallet ?? false,
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);

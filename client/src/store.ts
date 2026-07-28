@@ -13,6 +13,7 @@ export interface HelicopterDelivery {
   appearance?: CharAppearance;
   mcpServers?: MCPServerConfig[];
   cdpSolana?: boolean;
+  crossmintWallet?: boolean;
   alreadyHired?: boolean;
 }
 
@@ -93,6 +94,12 @@ export class Store {
   /** Listeners called when server responds with CDP tx history. */
   cdpTxHistoryListeners: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void)[] = [];
   cdpOnrampListeners: ((msg: { agentId: string; url: string | null; error?: string }) => void)[] = [];
+  /** Listeners called when server responds with Crossmint wallet status. */
+  crossmintWalletListeners: ((msg: { agentId: string; address: string | null; chain: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void)[] = [];
+  /** Listeners called when server responds with Crossmint policy status. */
+  crossmintPolicyListeners: ((msg: { agentId: string; chain: string | null; spendingLimitUsd: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; description: string | null; error?: string }) => void)[] = [];
+  /** Listeners called when server responds with Crossmint tx history. */
+  crossmintTxHistoryListeners: ((msg: { agentId: string; transactions: any[] | null; error?: string }) => void)[] = [];
   entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
@@ -921,6 +928,15 @@ export class Store {
         break;
       case "cdp_onramp_url":
         for (const fn of this.cdpOnrampListeners) fn(msg);
+        break;
+      case "crossmint_wallet_status":
+        for (const fn of this.crossmintWalletListeners) fn(msg);
+        break;
+      case "crossmint_policy_status":
+        for (const fn of this.crossmintPolicyListeners) fn(msg);
+        break;
+      case "crossmint_tx_history":
+        for (const fn of this.crossmintTxHistoryListeners) fn(msg);
         break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;

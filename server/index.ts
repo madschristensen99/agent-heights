@@ -17,6 +17,7 @@ import { rateLimitAsync } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory, createOnrampUrl } from "./providers/cdp-solana.js";
+import { getAgentBalances as getCrossmintBalances, getAgentPolicy as getCrossmintPolicy, getAgentTxHistory as getCrossmintTxHistory } from "./providers/crossmint-wallets.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
@@ -863,7 +864,7 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         case "hire":
-          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana);
+          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana, msg.crossmintWallet);
           break;
         case "update_appearance": {
           if (!sess.player) break;
@@ -1393,6 +1394,49 @@ wss.on("connection", async (ws, req) => {
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
             sess.broadcast({ type: "cdp_onramp_url", agentId: msg.agentId, url: null, error: msg2 });
+          }
+          break;
+        }
+        case "get_crossmint_wallet":
+        case "get_crossmint_balance": {
+          try {
+            const balData = await getCrossmintBalances(msg.agentId);
+            if (!balData) {
+              sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: null, chain: null, balances: null, error: "Crossmint not configured" });
+              break;
+            }
+            sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: balData.address, chain: process.env.CROSSMINT_CHAIN ?? "base-sepolia", balances: balData.balances });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: null, chain: null, balances: null, error: msg2 });
+          }
+          break;
+        }
+        case "get_crossmint_policy": {
+          try {
+            const policy = await getCrossmintPolicy(msg.agentId);
+            if (!policy) {
+              sess.broadcast({ type: "crossmint_policy_status", agentId: msg.agentId, chain: null, spendingLimitUsd: null, allowedRecipients: null, blockedRecipients: null, description: null, error: "Crossmint not configured" });
+              break;
+            }
+            sess.broadcast({ type: "crossmint_policy_status", agentId: msg.agentId, chain: policy.chain, spendingLimitUsd: policy.spendingLimitUsd, allowedRecipients: policy.allowedRecipients, blockedRecipients: policy.blockedRecipients, description: policy.description });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "crossmint_policy_status", agentId: msg.agentId, chain: null, spendingLimitUsd: null, allowedRecipients: null, blockedRecipients: null, description: null, error: msg2 });
+          }
+          break;
+        }
+        case "get_crossmint_tx_history": {
+          try {
+            const history = await getCrossmintTxHistory(msg.agentId);
+            if (!history) {
+              sess.broadcast({ type: "crossmint_tx_history", agentId: msg.agentId, transactions: null, error: "Crossmint not configured" });
+              break;
+            }
+            sess.broadcast({ type: "crossmint_tx_history", agentId: msg.agentId, transactions: history });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "crossmint_tx_history", agentId: msg.agentId, transactions: null, error: msg2 });
           }
           break;
         }

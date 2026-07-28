@@ -30,6 +30,7 @@
     "playwright": "^1.61.1",
     "stripe": "^22.3.0",
     "three": "^0.185.1",
+    "viem": "^2.21.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

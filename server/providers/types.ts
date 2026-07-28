@@ -45,6 +45,8 @@ export interface RunContext {
   mcpServers?: MCPServerConfig[];
   /** If true, inject CDP Solana wallet tools (auto-provisioned via Coinbase CDP SDK). */
   cdpSolana?: boolean;
+  /** If true, inject Crossmint multi-chain wallet tools (auto-provisioned, gas sponsored). */
+  crossmintWallet?: boolean;
   /** Persist full conversation messages for an agent (for context restoration across restarts). */
   saveMessages?: (agentId: string, messages: unknown[]) => Promise<void>;
   /** Load persisted conversation messages for an agent (for context restoration across restarts). */

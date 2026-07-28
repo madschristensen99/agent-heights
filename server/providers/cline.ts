@@ -13,6 +13,7 @@ import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
 import { loadMCPTools, type OnApiErrorFn } from "./mcp-client.js";
 import { loadCdpSolanaTools } from "./cdp-solana.js";
+import { loadCrossmintWalletTools } from "./crossmint-wallets.js";
 import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
 import { browserNavigate, browserScreenshot, browserExtractText, browserClick, browserFill } from "./browser.js";
 
@@ -144,6 +145,7 @@ export async function makeTools(cwd: string, opts?: {
   submitState?: { called: boolean; verified: boolean; callCount: number };
   mcpServers?: import("../../shared/types.js").MCPServerConfig[];
   cdpSolana?: boolean;
+  crossmintWallet?: boolean;
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
   abortRef?: { signal: AbortSignal };
   onApiError?: OnApiErrorFn;
@@ -678,6 +680,14 @@ export async function makeTools(cwd: string, opts?: {
     }
   }
 
+  // Load Crossmint multi-chain wallet tools (auto-provisioned, gas sponsored)
+  if (opts?.crossmintWallet && opts?.agentId) {
+    const crossmintTools = await loadCrossmintWalletTools(opts.agentId);
+    if (crossmintTools.length > 0) {
+      return [...baseWithSchedules, ...crossmintTools];
+    }
+  }
+
   return baseWithSchedules;
 }
 
@@ -720,7 +730,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
             type: "object",
             properties: {
               name: { type: "string", description: "Display name for the agent (max 24 chars)" },
-              model: { type: "string", description: "Model ID (e.g. 'claude-sonnet-4-20250514', 'gpt-4o'). Default: 'claude-sonnet-4-20250514'" },
+              model: { type: "string", description: "Model ID for the agent. Defaults to the standard model." },
               systemPrompt: { type: "string", description: "System prompt describing the agent's role and capabilities" },
               mcpServers: {
                 type: "array",
@@ -741,7 +751,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           async execute(input: any) {
             try {
               const name = String(input.name ?? "").slice(0, 24);
-              const model = String(input.model ?? "claude-sonnet-4-20250514");
+              const model = String(input.model ?? "kimi-k2.5");
               const systemPrompt = String(input.systemPrompt ?? "");
               const mcpServers = Array.isArray(input.mcpServers) ? input.mcpServers : undefined;
               const id = await ctx.hireAgent!(name, model, systemPrompt, mcpServers);
@@ -793,6 +803,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         submitState: isChat ? undefined : submitState,
         mcpServers: ctx.mcpServers,
         cdpSolana: ctx.cdpSolana,
+        crossmintWallet: ctx.crossmintWallet,
         onPostMessage: ctx.onPostMessage,
         abortRef,
         onApiError: ctx.onApiError,
@@ -1010,7 +1021,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   } catch (err) {
     if (ctx.abort.signal.aborted) return;
     const msg = err instanceof Error ? err.message : String(err);
-    yield { kind: "error", text: `Cline agent error: ${truncate(msg, 300)}` };
+    yield { kind: "error", text: `Agent error: ${truncate(msg, 300)}` };
   }
 };
 
