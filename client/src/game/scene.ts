@@ -6716,7 +6716,7 @@ export class OfficeScene extends Phaser.Scene {
     modal.id = "agent-view-modal";
     modal.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.8); z-index: 1000;
+      background: rgba(20,50,100,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1000;
       display: flex; align-items: center; justify-content: center;
     `;
     modal.innerHTML = `
@@ -7498,60 +7498,60 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         iconHtml = `<span style="font-size:0.6rem;">🔌</span>`;
       }
-      return `<span style="display:inline-flex;align-items:center;gap:4px;background:#e8f0fb;padding:3px 8px;border-radius:4px;color:#245edb;font-size:0.7rem;border:1px solid #7a96c3;">${iconHtml}${name}</span>`;
+      return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(180,220,250,0.4);padding:3px 10px;border-radius:12px;color:#1a6bb0;font-size:0.7rem;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">${iconHtml}${name}</span>`;
     }).join("");
 
     return `
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a1a2e;font-size:0.8rem;">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a3a5a;font-size:0.8rem;">
         <!-- Header bar -->
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-bottom:1px solid #7a96c3;">
-          <div style="position:relative;width:48px;height:48px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:linear-gradient(to bottom,rgba(120,180,240,0.5),rgba(80,150,220,0.3));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,0.4);">
+          <div style="position:relative;width:48px;height:48px;flex-shrink:0;filter:drop-shadow(0 2px 4px rgba(0,80,160,0.2));">
             <img src="${spriteImg}" style="width:48px;height:48px;object-fit:contain;image-rendering:pixelated;" />
             <div style="position:absolute;bottom:-2px;right:-2px;font-size:1rem;">${mood}</div>
           </div>
           <div>
-            <div style="color:${agent.accent};font-size:1.1rem;font-weight:bold;">${agent.name}</div>
+            <div style="color:${agent.accent};font-size:1.1rem;font-weight:bold;text-shadow:0 1px 2px rgba(255,255,255,0.5);">${agent.name}</div>
           </div>
           <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
-            <div style="width:8px;height:8px;border-radius:50%;background:${sc};box-shadow:0 0 6px ${sc};"></div>
-            <span style="color:${sc};font-size:0.75rem;text-transform:uppercase;">${agent.status}</span>
+            <div style="width:8px;height:8px;border-radius:50%;background:${sc};box-shadow:0 0 8px ${sc};"></div>
+            <span style="color:${sc};font-size:0.75rem;text-transform:uppercase;text-shadow:0 1px 2px rgba(255,255,255,0.3);">${agent.status}</span>
           </div>
         </div>
 
         <!-- Body -->
-        <div style="flex:1;display:flex;gap:1px;background:#7a96c3;">
+        <div style="flex:1;display:flex;gap:1px;background:rgba(180,210,240,0.3);">
           <!-- Left panel: stats -->
-          <div style="flex:1;padding:16px;background:#ffffff;">
-            <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin-bottom:8px;">Performance</div>
+          <div style="flex:1;padding:16px;background:linear-gradient(to bottom,rgba(255,255,255,0.85),rgba(245,250,255,0.75));">
+            <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin-bottom:8px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">Performance</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div style="background:#f0f5fa;padding:10px;border-radius:6px;">
-                <div style="color:#888;font-size:0.65rem;">Tasks Done</div>
-                <div style="color:#2a8c2a;font-size:1.4rem;font-weight:bold;">${agent.tasksDone}</div>
+              <div style="background:rgba(220,240,255,0.5);padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
+                <div style="color:#7aaac0;font-size:0.65rem;">Tasks Done</div>
+                <div style="color:#3aaa3a;font-size:1.4rem;font-weight:bold;text-shadow:0 1px 0 rgba(255,255,255,0.5);">${agent.tasksDone}</div>
               </div>
-              <div style="background:#f0f5fa;padding:10px;border-radius:6px;">
-                <div style="color:#888;font-size:0.65rem;">Role</div>
-                <div style="color:#8855cc;font-size:1rem;font-weight:bold;text-transform:capitalize;">${agent.role}</div>
+              <div style="background:rgba(220,240,255,0.5);padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
+                <div style="color:#7aaac0;font-size:0.65rem;">Role</div>
+                <div style="color:#8855cc;font-size:1rem;font-weight:bold;text-transform:capitalize;text-shadow:0 1px 0 rgba(255,255,255,0.5);">${agent.role}</div>
               </div>
-              <div style="background:#f0f5fa;padding:10px;border-radius:6px;">
-                <div style="color:#888;font-size:0.65rem;">Desk</div>
-                <div style="color:#1a1a2e;font-size:1rem;">#${agent.deskIndex}</div>
+              <div style="background:rgba(220,240,255,0.5);padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
+                <div style="color:#7aaac0;font-size:0.65rem;">Desk</div>
+                <div style="color:#1a3a5a;font-size:1rem;">#${agent.deskIndex}</div>
               </div>
-              <div style="background:#f0f5fa;padding:10px;border-radius:6px;">
-                <div style="color:#888;font-size:0.65rem;">Mood</div>
-                <div style="color:#1a1a2e;font-size:1rem;text-transform:capitalize;">${agent.mood ?? "neutral"}</div>
+              <div style="background:rgba(220,240,255,0.5);padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
+                <div style="color:#7aaac0;font-size:0.65rem;">Mood</div>
+                <div style="color:#1a3a5a;font-size:1rem;text-transform:capitalize;">${agent.mood ?? "neutral"}</div>
               </div>
             </div>
 
-            <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin:16px 0 8px;">MCP Servers (${mcpCount})</div>
+            <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin:16px 0 8px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">MCP Servers (${mcpCount})</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;">
               ${mcpCount > 0
                 ? mcpBadges
-                : `<span style="color:#888;font-size:0.7rem;">No MCP servers configured</span>`}
+                : `<span style="color:#7aaac0;font-size:0.7rem;">No MCP servers configured</span>`}
             </div>
 
             ${agent.personality ? `
-            <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin:16px 0 8px;">Personality</div>
-            <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin:16px 0 8px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">Personality</div>
+            <div style="display:flex;flex-direction:column;gap:5px;">
               ${[
                 ["Openness", agent.personality.openness],
                 ["Conscientiousness", agent.personality.conscientiousness],
@@ -7560,9 +7560,9 @@ export class OfficeScene extends Phaser.Scene {
                 ["Neuroticism", agent.personality.neuroticism],
               ].map(([label, val]) => `
                 <div style="display:flex;align-items:center;gap:8px;">
-                  <span style="color:#888;font-size:0.65rem;width:110px;">${label}</span>
-                  <div style="flex:1;height:6px;background:#e0e8f5;border-radius:3px;overflow:hidden;">
-                    <div style="width:${Math.round((val as number) * 100)}%;height:100%;background:${agent.accent};"></div>
+                  <span style="color:#7aaac0;font-size:0.65rem;width:110px;">${label}</span>
+                  <div style="flex:1;height:8px;background:rgba(220,235,250,0.5);border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.3);box-shadow:inset 0 1px 2px rgba(0,60,140,0.1);">
+                    <div style="width:${Math.round((val as number) * 100)}%;height:100%;background:linear-gradient(to right,${agent.accent},rgba(120,180,240,0.8));border-radius:4px;box-shadow:0 0 4px ${agent.accent}55;"></div>
                   </div>
                 </div>
               `).join("")}
@@ -7570,23 +7570,23 @@ export class OfficeScene extends Phaser.Scene {
           </div>
 
           <!-- Right panel: current task + system prompt -->
-          <div style="flex:1;padding:16px;background:#ffffff;display:flex;flex-direction:column;">
-            <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin-bottom:8px;">Current Task</div>
-            <div style="background:#f0f5fa;padding:12px;border-radius:6px;flex:1;overflow-y:auto;color:#1a1a2e;font-size:0.8rem;line-height:1.4;">
-              ${agent.task ? agent.task : `<span style="color:#888;">No active task — agent is idle and ready for work.</span>`}
+          <div style="flex:1;padding:16px;background:linear-gradient(to bottom,rgba(255,255,255,0.85),rgba(245,250,255,0.75));display:flex;flex-direction:column;">
+            <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin-bottom:8px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">Current Task</div>
+            <div style="background:rgba(220,240,255,0.5);padding:14px;border-radius:8px;flex:1;overflow-y:auto;color:#1a3a5a;font-size:0.8rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);text-shadow:0 1px 0 rgba(255,255,255,0.3);">
+              ${agent.task ? agent.task : `<span style="color:#7aaac0;">No active task — agent is idle and ready for work.</span>`}
             </div>
 
-            <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin:12px 0 8px;">System Prompt</div>
-            <div style="background:#f0f5fa;padding:12px;border-radius:6px;max-height:120px;overflow-y:auto;color:#5a7090;font-size:0.7rem;line-height:1.4;">
-              ${agent.systemPrompt ? agent.systemPrompt.slice(0, 500) + (agent.systemPrompt.length > 500 ? "…" : "") : `<span style="color:#aaa;">No custom system prompt set.</span>`}
+            <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin:12px 0 8px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">System Prompt</div>
+            <div style="background:rgba(220,240,255,0.5);padding:14px;border-radius:8px;max-height:120px;overflow-y:auto;color:#4a7a9a;font-size:0.7rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
+              ${agent.systemPrompt ? agent.systemPrompt.slice(0, 500) + (agent.systemPrompt.length > 500 ? "…" : "") : `<span style="color:#a0c0d8;">No custom system prompt set.</span>`}
             </div>
           </div>
         </div>
 
         <!-- Footer -->
-        <div style="padding:8px 16px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-top:1px solid #7a96c3;display:flex;justify-content:space-between;align-items:center;">
-          <span style="color:#888;font-size:0.65rem;">Agent ID: ${agent.id.slice(0, 8)}…</span>
-          <span style="color:#888;font-size:0.65rem;">Live browser feed will appear here when available</span>
+        <div style="padding:8px 16px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid rgba(255,255,255,0.4);display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:#7aaac0;font-size:0.65rem;">Agent ID: ${agent.id.slice(0, 8)}…</span>
+          <span style="color:#7aaac0;font-size:0.65rem;">Live browser feed will appear here when available</span>
         </div>
       </div>
     `;
