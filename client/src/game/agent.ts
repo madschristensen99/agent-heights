@@ -43,13 +43,72 @@ const BREAK_SPOTS: Array<{ tile: Tile; face: Dir }> = [
 /** Max tiles an idle agent shuffles from their desk. */
 const DESK_SHUFFLE_RADIUS = 2;
 
+// --- Shared name tag factory ---
+
+export interface NameTag {
+  label: Phaser.GameObjects.Text;
+  nameBg: Phaser.GameObjects.Graphics;
+  /** Update status color (accent bar). */
+  setStatus: (status: AgentInfo["status"]) => void;
+  /** Update the name text (redraws background if changed). */
+  setName: (name: string) => void;
+}
+
+/** Create a name tag (label + dark background with status accent bar) for an NPC. */
+function createNameTag(scene: Phaser.Scene, name: string, status: AgentInfo["status"]): NameTag {
+  const label = scene.add
+    .text(0, -108, name, {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "18px",
+      color: "#ffffff",
+      stroke: "#0d1018",
+      strokeThickness: 4,
+    })
+    .setResolution(4)
+    .setOrigin(0.5, 1)
+    .setScale(0.75);
+
+  const nameBg = scene.add.graphics();
+
+  function redraw(status: AgentInfo["status"]): void {
+    const color = STATUS_COLORS[status];
+    const w = label.displayWidth + 22;
+    const h = 22;
+    const x = -w / 2;
+    const y = -126;
+    const r = 5;
+    nameBg.clear();
+    // Dark opaque background for max contrast
+    nameBg.fillStyle(0x0d1018, 0.78);
+    nameBg.fillRoundedRect(x, y, w, h, r);
+    // Status-colored left accent bar
+    nameBg.fillStyle(color, 0.85);
+    nameBg.fillRect(x + 2, y + 3, 3, h - 6);
+    // Subtle border
+    nameBg.lineStyle(1, 0xffffff, 0.18);
+    nameBg.strokeRoundedRect(x, y, w, h, r);
+  }
+
+  redraw(status);
+
+  return {
+    label,
+    nameBg,
+    setStatus: (s) => redraw(s),
+    setName: (n) => {
+      if (label.text !== n) {
+        label.setText(n);
+        redraw(status);
+      }
+    },
+  };
+}
+
 /** A hired agent walking around the office, driven by server state. */
 export class AgentNPC {
   container: Phaser.GameObjects.Container;
   sprite: Phaser.GameObjects.Sprite;
-  private label: Phaser.GameObjects.Text;
-  private nameBg: Phaser.GameObjects.Graphics;
-  private dot: Phaser.GameObjects.Arc;
+  private nameTag: NameTag;
   private bubble: Phaser.GameObjects.Sprite;
   private emoteSprite: Phaser.GameObjects.Sprite;
   private emoteUntil = 0;
@@ -93,20 +152,7 @@ export class AgentNPC {
     this.sprite = scene.add.sprite(0, 0, agentTextureKey(info), 0)
       .setOrigin(0.5, 1)
       .setScale(1);
-    this.nameBg = scene.add.graphics();
-    this.label = scene.add
-      .text(0, -108, info.name, {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "16px",
-        color: "#1d2126",
-        stroke: "#f4f6f8",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7);
-    this.drawNameBg();
-    this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS[info.status]).setStrokeStyle(1, 0x000000, 0.3);
+    this.nameTag = createNameTag(scene, info.name, info.status);
     this.bubble = scene.add.sprite(32, -104, "bubble", 0).setVisible(false);
 
     this.emoteSprite = scene.add.sprite(0, -140, "emote-icons", 0)
@@ -116,13 +162,11 @@ export class AgentNPC {
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
       this.sprite,
-      this.nameBg,
-      this.label,
-      this.dot,
+      this.nameTag.nameBg,
+      this.nameTag.label,
       this.bubble,
       this.emoteSprite,
     ]);
-    this.positionDot();
 
     this.sprite.setInteractive({ useHandCursor: true });
     this.sprite.on("pointerdown", () => onClick(this.info.id));
@@ -134,25 +178,6 @@ export class AgentNPC {
     this.path = idlePath.length > 0 ? idlePath : findPath(grid, spawn, seat);
   }
 
-  private positionDot(): void {
-    this.dot.setPosition(0 - this.label.displayWidth / 2 - 10, -120);
-  }
-
-  /** Draw a rounded background behind the nameplate label. */
-  private drawNameBg(): void {
-    const g = this.nameBg;
-    g.clear();
-    const w = this.label.displayWidth + 16;
-    const h = 18;
-    const x = -w / 2;
-    const y = -122;
-    const r = 4;
-    g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(x, y, w, h, r);
-    g.lineStyle(1, 0xffffff, 0.15);
-    g.strokeRoundedRect(x, y, w, h, r);
-  }
-
   private get busy(): boolean {
     return this.info.status === "thinking" || this.info.status === "working";
   }
@@ -161,12 +186,8 @@ export class AgentNPC {
     const wasBusy = this.busy;
     const wasStatus = this.info.status;
     this.info = info;
-    this.dot.setFillStyle(STATUS_COLORS[info.status]);
-    if (this.label.text !== info.name) {
-      this.label.setText(info.name);
-      this.positionDot();
-      this.drawNameBg();
-    }
+    this.nameTag.setStatus(info.status);
+    this.nameTag.setName(info.name);
     if (this.busy && !wasBusy) {
       // a new task trumps the coffee run
       this.pendingBreak = false;
@@ -537,10 +558,8 @@ type AgentResourcesState = "sitting" | "greeting" | "returning";
 export class AgentResourcesNPC {
   container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite;
-  private label: Phaser.GameObjects.Text;
-  private nameBg: Phaser.GameObjects.Graphics;
+  private nameTag: NameTag;
   private shadow: Phaser.GameObjects.Ellipse;
-  private dot: Phaser.GameObjects.Arc;
 
   info!: AgentInfo;
   private seat: Tile;
@@ -562,27 +581,13 @@ export class AgentResourcesNPC {
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
     this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(1);
-    this.nameBg = scene.add.graphics();
-    this.label = scene.add
-      .text(0, -108, "Agent Resources", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "16px",
-        color: "#1d2126",
-        stroke: "#f4f6f8",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7);
-    this.drawNameBg();
-    this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS.idle).setStrokeStyle(1, 0x000000, 0.3);
+    this.nameTag = createNameTag(scene, "Agent Resources", "idle");
 
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
       this.sprite,
-      this.nameBg,
-      this.label,
-      this.dot,
+      this.nameTag.nameBg,
+      this.nameTag.label,
     ]);
     this.container.setDepth(10 + this.container.y);
     // start sitting at desk, facing left toward the entrance
@@ -596,7 +601,7 @@ export class AgentResourcesNPC {
   /** Update status dot + label from server state. */
   sync(info: AgentInfo): void {
     this.info = info;
-    this.dot.setFillStyle(STATUS_COLORS[info.status]);
+    this.nameTag.setStatus(info.status);
   }
 
   /** Get current state for broadcasting to other clients. */
@@ -619,20 +624,6 @@ export class AgentResourcesNPC {
     const c = "char-agent-resources";
     this.play(`${c}-idle-${this.dir}`);
     this.container.setDepth(10 + this.container.y);
-  }
-
-  private drawNameBg(): void {
-    const g = this.nameBg;
-    g.clear();
-    const w = this.label.displayWidth + 16;
-    const h = 18;
-    const x = -w / 2;
-    const y = -122;
-    const r = 4;
-    g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(x, y, w, h, r);
-    g.lineStyle(1, 0xffffff, 0.15);
-    g.strokeRoundedRect(x, y, w, h, r);
   }
 
   private play(key: string): void {
@@ -734,10 +725,8 @@ type HermesState = "idle" | "sorting" | "delivering" | "collecting";
 export class HermesNPC {
   container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite;
-  private label: Phaser.GameObjects.Text;
-  private nameBg: Phaser.GameObjects.Graphics;
+  private nameTag: NameTag;
   private shadow: Phaser.GameObjects.Ellipse;
-  private dot: Phaser.GameObjects.Arc;
   private emoteSprite: Phaser.GameObjects.Sprite;
   private emoteUntil = 0;
 
@@ -763,20 +752,7 @@ export class HermesNPC {
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 52, 20, 0x000000, 0.15);
     this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(1);
-    this.nameBg = scene.add.graphics();
-    this.label = scene.add
-      .text(0, -108, "Hermes", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "16px",
-        color: "#1d2126",
-        stroke: "#f4f6f8",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7);
-    this.drawNameBg();
-    this.dot = scene.add.circle(0, 0, 5, STATUS_COLORS.idle).setStrokeStyle(1, 0x000000, 0.3);
+    this.nameTag = createNameTag(scene, "Hermes", "idle");
     this.emoteSprite = scene.add.sprite(0, -140, "emote-icons", 0)
       .setVisible(false)
       .setScale(1.5);
@@ -784,9 +760,8 @@ export class HermesNPC {
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
       this.sprite,
-      this.nameBg,
-      this.label,
-      this.dot,
+      this.nameTag.nameBg,
+      this.nameTag.label,
       this.emoteSprite,
     ]);
     this.container.setDepth(10 + this.container.y);
@@ -798,7 +773,7 @@ export class HermesNPC {
 
   sync(info: AgentInfo): void {
     this.info = info;
-    this.dot.setFillStyle(STATUS_COLORS[info.status]);
+    this.nameTag.setStatus(info.status);
   }
 
   /** Get current state for broadcasting to other clients. */
@@ -855,20 +830,6 @@ export class HermesNPC {
 
   private tile(): Tile {
     return tileOf(this.container.x, this.container.y);
-  }
-
-  private drawNameBg(): void {
-    const g = this.nameBg;
-    g.clear();
-    const w = this.label.displayWidth + 16;
-    const h = 18;
-    const x = -w / 2;
-    const y = -122;
-    const r = 4;
-    g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(x, y, w, h, r);
-    g.lineStyle(1, 0xffffff, 0.15);
-    g.strokeRoundedRect(x, y, w, h, r);
   }
 
   update(time: number, dt: number): void {
