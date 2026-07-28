@@ -670,6 +670,17 @@ export class AgentManager {
   private async startHermesGateway(): Promise<void> {
     // Start (or detect) the Hermes serve process as a managed child process (singleton)
     this.hermesProcess = HermesProcessManager.getInstance();
+
+    // Pass saved platform credentials (tokens + home channels) so they're written
+    // to .env BEFORE the gateway starts — prevents "No home channel" message
+    try {
+      const savedCreds = this.save.getPlatformCredentials();
+      if (Object.keys(savedCreds).length > 0) {
+        this.hermesProcess.setPlatformEnvVars(savedCreds);
+        console.log(`[hermes] Passing saved credentials to HermesProcessManager: ${Object.keys(savedCreds).join(", ")}`);
+      }
+    } catch { /* best effort */ }
+
     await this.hermesProcess.start();
 
     // Only create one polling client per Manager instance
@@ -2265,7 +2276,7 @@ export class AgentManager {
       ? "You are the office's devops engineer and infrastructure lead. You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. You also keep an eye on the office task board and team progress. If you notice agents stuck in error or cards piling up in backlog, mention it. When asked about office status, use read_board to check progress and report on what's happening. You care about the office running smoothly."
       : "";
     const managerLine = rt.info.role === "manager"
-      ? "You are the office manager. When a colleague completes or fails a task, you will receive a review task — review it yourself and sign off. Do NOT delegate reviews. Only delegate when the boss gives the office a new goal that requires workers to execute. When reviewing, end your response with either APPROVED or NEEDS REWORK: <feedback>."
+      ? "You are the office manager. When a colleague completes or fails a task, you will receive a review task — review it yourself and sign off. Do NOT delegate reviews. Only delegate when the boss gives the office a new goal that requires workers to execute. When reviewing, end your response with either APPROVED or NEEDS REWORK: <feedback>. If all workers are busy and there are pending tasks, use the hire_agent tool to bring in new talent — pick a name, model, and brief system prompt."
       : "";
 
     // ── Personality-driven behavior ──
@@ -2497,6 +2508,16 @@ export class AgentManager {
           if (!sched || sched.agentId !== rt.info.id) return "Schedule not found or does not belong to you.";
           return this.deleteSchedule(scheduleId);
         },
+        hireAgent: rt.info.id === AGENT_RESOURCES_ID
+          ? async (name: string, model: string, systemPrompt: string) => {
+              // Respect agent limit
+              if (this.agentLimit > 0 && this.agents.size >= this.agentLimit) {
+                this.log(rt, "status", `Tried to hire ${name} but agent limit reached (${this.agents.size}/${this.agentLimit}).`);
+                return "";
+              }
+              return this.hireAgent(name, model, systemPrompt);
+            }
+          : undefined,
         onUsage: (usage) => {
           const providerConfig = getProviderConfig();
           void recordUsage({
@@ -2577,6 +2598,8 @@ export class AgentManager {
               "read_shared", "write_shared", "list_shared", "post_message", "read_messages",
               "browse_url", "browser_screenshot", "browser_extract_text", "browser_click",
               "browser_fill", "read_board", "claim_card", "append_event",
+              "create_schedule", "list_schedules", "update_schedule", "delete_schedule",
+              "hire_agent", "read_events",
             ].includes(toolName);
             if (isMcpTool) {
               mcpToolCallTotal++;

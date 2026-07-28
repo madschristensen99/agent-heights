@@ -153,6 +153,7 @@ export async function makeTools(cwd: string, opts?: {
   listSelfSchedules?: () => { id: string; name: string; task: string; cronExpression: string; enabled: boolean; nextRunAt: number; runCount: number; lastRunAt: number | null }[];
   updateSelfSchedule?: (scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }) => string;
   deleteSelfSchedule?: (scheduleId: string) => string;
+  hireAgent?: (name: string, model: string, systemPrompt: string) => Promise<string>;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -657,10 +658,38 @@ export async function makeTools(cwd: string, opts?: {
   }
   const baseWithSchedules = [...baseWithWorld, ...scheduleTools];
 
+  // ── Agent hiring tool (only for Agent Resources / Yuki) ───────────
+  const hireTools: AgentTool<any, any>[] = [];
+  if (opts?.hireAgent) {
+    const hireAgentTool: AgentTool<any, any> = {
+      name: "hire_agent",
+      description: "Hire a new worker into the office. Use this when the office is understaffed — all current workers are busy and there are pending tasks. Pick a name, model, and brief system prompt for the new agent.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "A short name for the new agent (max 24 chars)" },
+          model: { type: "string", description: "The model to use (e.g. 'claude-sonnet-4-20250514', 'gpt-4o', 'kimi-k2.7-code')" },
+          systemPrompt: { type: "string", description: "A brief system prompt describing the agent's role and expertise (max 2000 chars)" },
+        },
+        required: ["name", "model", "systemPrompt"],
+      },
+      async execute(input: any) {
+        try {
+          const id = await opts.hireAgent!(String(input.name).slice(0, 24), String(input.model), String(input.systemPrompt).slice(0, 2000));
+          return id ? `Hired ${input.name} (id: ${id}). They're now part of the office.` : `Failed to hire ${input.name} — may have reached the agent limit.`;
+        } catch (err) {
+          return `Failed to hire agent: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    };
+    hireTools.push(hireAgentTool);
+  }
+  const baseWithHire = [...baseWithSchedules, ...hireTools];
+
   if (opts?.railway) {
     const railwayTools = await wrapRailwayTools();
     if (railwayTools.length > 0) {
-      return [...baseWithSchedules, ...railwayTools];
+      return [...baseWithHire, ...railwayTools];
     }
   }
 
@@ -668,7 +697,7 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
     const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
     if (mcpTools.length > 0) {
-      return [...baseWithSchedules, ...mcpTools];
+      return [...baseWithHire, ...mcpTools];
     }
   }
 
@@ -676,7 +705,7 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.cdpSolana && opts?.agentId) {
     const cdpTools = await loadCdpSolanaTools(opts.agentId);
     if (cdpTools.length > 0) {
-      return [...baseWithSchedules, ...cdpTools];
+      return [...baseWithHire, ...cdpTools];
     }
   }
 
@@ -684,11 +713,11 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.crossmintWallet && opts?.agentId) {
     const crossmintTools = await loadCrossmintWalletTools(opts.agentId);
     if (crossmintTools.length > 0) {
-      return [...baseWithSchedules, ...crossmintTools];
+      return [...baseWithHire, ...crossmintTools];
     }
   }
 
-  return baseWithSchedules;
+  return baseWithHire;
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
