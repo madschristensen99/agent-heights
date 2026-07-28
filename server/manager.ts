@@ -26,6 +26,7 @@ import type {
   VacationedAgent,
   AgentACL,
   SubscriptionTier,
+  CardType,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
@@ -1202,18 +1203,36 @@ export class AgentManager {
     return rt?.info.id ?? "";
   }
 
+  /** Update an agent's custom system prompt. Takes effect on the next task. */
+  updateSystemPrompt(agentId: string, systemPrompt: string): void {
+    const rt = this.agents.get(agentId);
+    if (!rt) return;
+    // Don't allow editing permanent NPCs
+    if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === HERMES_ID) {
+      this.broadcast({ type: "toast", text: "Built-in agents can't be edited." });
+      return;
+    }
+    rt.info.systemPrompt = systemPrompt.trim().slice(0, 8000);
+    this.persist();
+    this.broadcast({ type: "agent", agent: rt.info });
+    this.broadcast({ type: "toast", text: `${rt.info.name}'s system prompt updated.` });
+  }
+
   assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null, notifyOnComplete?: string, waitFor?: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
+    // Auto-create a board card if none was provided (makes every task visible on the board)
+    const effectiveCardId = cardId ?? this.autoCardFor(agentId, cleanTask, reviewContext ? "review" : "task");
+
     if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
       const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
       rt.taskQueue.push({
         task: cleanTask,
         handoffTo: target ? target.info.id : null,
-        cardId: cardId ?? null,
+        cardId: effectiveCardId,
         scheduleId: scheduleId ?? null,
         reviewContext: reviewContext ?? null,
         notifyOnComplete: notifyOnComplete ?? null,
@@ -1225,7 +1244,7 @@ export class AgentManager {
       return;
     }
 
-    this.startTask(rt, cleanTask, handoffTo, cardId, false, scheduleId, reviewContext, notifyOnComplete, waitFor);
+    this.startTask(rt, cleanTask, handoffTo, effectiveCardId, false, scheduleId, reviewContext, notifyOnComplete, waitFor);
   }
 
   /** Assign a task with a fresh conversation — prior messages are cleared but a
@@ -1236,12 +1255,15 @@ export class AgentManager {
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
+    // Auto-create a board card for the fresh task
+    const effectiveCardId = this.autoCardFor(agentId, cleanTask, "task");
+
     if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
       const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
       rt.taskQueue.push({
         task: cleanTask,
         handoffTo: target ? target.info.id : null,
-        cardId: null,
+        cardId: effectiveCardId,
         scheduleId: null,
         reviewContext: null,
         notifyOnComplete: null,
@@ -1353,24 +1375,54 @@ export class AgentManager {
     this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null, next.notifyOnComplete ?? undefined, next.waitFor ?? undefined);
   }
 
-  /** Hand the same task to every agent that isn't already busy. */
+  /** Hand a goal to the office — Yuki decomposes it into subtasks for the team.
+   *  Falls back to broadcasting the same task to everyone if Yuki is unavailable. */
   assignAll(task: string): void {
     const clean = task.trim();
     if (!clean) return;
     const free = [...this.agents.values()].filter(
       (rt) =>
         rt.info.id !== AGENT_RESOURCES_ID &&
+        rt.info.id !== HERMES_ID &&
         rt.info.status !== "thinking" && rt.info.status !== "working" && rt.info.status !== "waiting",
     );
     if (free.length === 0) {
       this.broadcast({ type: "toast", text: "Everyone is busy (or nobody works here yet)." });
       return;
     }
+
+    // Create a goal card on the board for visibility
+    const goalCard: TaskCard = {
+      id: randomUUID().slice(0, 8),
+      title: clean.length > 80 ? clean.slice(0, 77) + "…" : clean,
+      description: clean,
+      status: "in_progress",
+      assignedAgentId: null,
+      createdAt: Date.now(),
+      type: "goal",
+      progress: 0,
+    };
+    this.board.set(goalCard.id, goalCard);
+    this.persistBoard();
+    this.broadcast({ type: "card", card: goalCard });
+
     this.session.record("assign_all", {
       task: clean,
       agentIds: free.map((rt) => rt.info.id),
     });
-    // everyone gathers around the boss for the briefing first
+
+    // Try to route through Yuki for decomposition
+    const yuki = this.agents.get(AGENT_RESOURCES_ID);
+    if (yuki && yuki.info.status !== "thinking" && yuki.info.status !== "working" && yuki.info.status !== "waiting") {
+      this.log(yuki, "status", `Office goal received — decomposing for the team.`);
+      this.broadcast({ type: "huddle", agentIds: free.map((rt) => rt.info.id) });
+      // Assign to Yuki with the goal card — her managerBrief will handle decomposition
+      this.startTask(yuki, clean, undefined, goalCard.id, false);
+      this.broadcast({ type: "toast", text: `Office goal sent to Yuki for delegation.` });
+      return;
+    }
+
+    // Fallback: broadcast the same task to everyone (old behavior)
     this.broadcast({ type: "huddle", agentIds: free.map((rt) => rt.info.id) });
     for (const rt of free) this.assign(rt.info.id, clean);
     this.broadcast({
@@ -1790,6 +1842,25 @@ export class AgentManager {
     this.save.setBoard([...this.board.values()]);
   }
 
+  /** Create a board card automatically for a task assignment (not manually created by the user). */
+  private autoCardFor(agentId: string, task: string, type: CardType = "task"): string {
+    const title = task.length > 80 ? task.slice(0, 77) + "…" : task;
+    const card: TaskCard = {
+      id: randomUUID().slice(0, 8),
+      title,
+      description: task,
+      status: "in_progress",
+      assignedAgentId: agentId,
+      createdAt: Date.now(),
+      type,
+      progress: 0,
+    };
+    this.board.set(card.id, card);
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+    return card.id;
+  }
+
   createCard(title: string, description?: string): void {
     const cleanTitle = title.trim().slice(0, 200);
     if (!cleanTitle) return;
@@ -2088,8 +2159,8 @@ export class AgentManager {
   private tickThinkLoop(): void {
     const now = Date.now();
     for (const rt of this.agents.values()) {
-      // Skip permanent NPCs, busy agents, and agents on cooldown
-      if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === HERMES_ID) continue;
+      // Skip Agent Resources (handled separately), busy agents, and agents on cooldown
+      if (rt.info.id === AGENT_RESOURCES_ID) continue;
       if (rt.info.status !== "idle") continue;
       if (now < rt.thinkCooldownUntil) continue;
       if (rt.nextThinkAt === 0) {
@@ -2149,6 +2220,27 @@ export class AgentManager {
       }
     }
 
+    // 3. Devops (Hermes): monitor office task health and alert on stuck/error cards
+    if (rt.info.role === "devops") {
+      const errorCards = [...this.board.values()].filter(
+        (c) => c.status === "backlog" && c.assignedAgentId === null && c.type !== "chat" && c.type !== "goal",
+      );
+      const errorAgents = [...this.agents.values()].filter(
+        (a) => a.info.status === "error" && a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID,
+      );
+      if (errorAgents.length > 0 && Math.random() < 0.5) {
+        const errAgent = errorAgents[0];
+        this.log(rt, "status", `Noticed ${errAgent.info.name} is in error state — keeping an eye on it.`);
+        this.broadcast({ type: "emote", agentId: rt.info.id, emote: "🔍" });
+        return;
+      }
+      if (errorCards.length > 2 && Math.random() < 0.3) {
+        this.log(rt, "status", `${errorCards.length} cards stuck in backlog — office might need attention.`);
+        this.broadcast({ type: "emote", agentId: rt.info.id, emote: "📊" });
+        return;
+      }
+    }
+
     // 3. Curious agents: show a thinking emote
     if (p.openness > 0.6 && Math.random() < 0.3) {
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
@@ -2170,7 +2262,7 @@ export class AgentManager {
 
   private buildSystemPrompt(rt: AgentRuntime): string {
     const devopsLine = rt.info.role === "devops"
-      ? "You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. Use them when asked about deployments or infrastructure."
+      ? "You are the office's devops engineer and infrastructure lead. You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. You also keep an eye on the office task board and team progress. If you notice agents stuck in error or cards piling up in backlog, mention it. When asked about office status, use read_board to check progress and report on what's happening. You care about the office running smoothly."
       : "";
     const managerLine = rt.info.role === "manager"
       ? "You are the office manager. When a colleague completes or fails a task, you will receive a review task — review it yourself and sign off. Do NOT delegate reviews. Only delegate when the boss gives the office a new goal that requires workers to execute. When reviewing, end your response with either APPROVED or NEEDS REWORK: <feedback>."
@@ -2910,6 +3002,27 @@ export class AgentManager {
         this.assign(mgr.info.id, reviewTask, undefined, undefined, undefined, { agentId: rt.info.id, agentName: rt.info.name, originalTask: task });
       }
     }
+
+    // Also notify Hermes (devops) via inbox so he has office awareness, but don't assign a review task
+    if (rt.info.id !== HERMES_ID) {
+      const hermes = this.agents.get(HERMES_ID);
+      if (hermes) {
+        const slug = this.slugFor(hermes);
+        const hermesInbox = join(this.cwdFor(slug, HERMES_ID), "inbox.jsonl");
+        const entry = JSON.stringify({
+          ts: Date.now(),
+          from: rt.info.name,
+          message: failed
+            ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}`
+            : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 300)}`,
+        }) + "\n";
+        import("node:fs/promises").then(({ appendFile, mkdir }) => {
+          mkdir(dirname(hermesInbox), { recursive: true }).then(() =>
+            appendFile(hermesInbox, entry, "utf-8").catch(() => {}),
+          );
+        }).catch(() => {});
+      }
+    }
   }
 
   /** The boss walks up for a quick word — same session, but not a work task. */
@@ -2925,6 +3038,9 @@ export class AgentManager {
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
     rt.doneTimer = null;
     rt.info.task = null;
+    // Create a chat card so boss conversations are visible on the board
+    const chatCardId = this.autoCardFor(agentId, `💬 ${clean.slice(0, 77)}`, "chat");
+    rt.cardId = chatCardId;
     this.session.record("chat", { agentId: rt.info.id, agentName: rt.info.name, text: clean });
     this.log(rt, "boss", `${this.bossName}: ${clean}`);
     this.setStatus(rt, "thinking");

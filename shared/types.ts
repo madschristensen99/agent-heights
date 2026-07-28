@@ -406,6 +406,8 @@ export interface PendingTask {
   waitFor?: string | null;
 }
 
+export type CardType = "task" | "chat" | "review" | "goal";
+
 export interface TaskCard {
   id: string;
   title: string;
@@ -413,6 +415,8 @@ export interface TaskCard {
   status: CardStatus;
   assignedAgentId: string | null;
   createdAt: number;
+  type?: CardType;
+  progress?: number; // 0-100
 }
 
 export interface AgentSchedule {
@@ -617,6 +621,7 @@ export type ClientMsg =
   | { type: "recruit"; firedAgentId: string }
   | { type: "railway_query" }
   | { type: "update_appearance"; appearance: CharAppearance }
+  | { type: "update_agent"; agentId: string; systemPrompt?: string }
   | { type: "set_api_key"; apiKey: string }
   | { type: "set_mcp_key"; serverUrl: string; apiKey: string }
   | { type: "check_mcp_keys"; serverUrls: string[] }

@@ -871,6 +871,12 @@ wss.on("connection", async (ws, req) => {
         case "hire":
           await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana, msg.crossmintWallet);
           break;
+        case "update_agent": {
+          if (msg.systemPrompt !== undefined) {
+            activeManager.updateSystemPrompt(msg.agentId, msg.systemPrompt);
+          }
+          break;
+        }
         case "update_appearance": {
           if (!sess.player) break;
           sess.player = { ...sess.player, appearance: msg.appearance };

@@ -6849,7 +6849,7 @@ export class OfficeScene extends Phaser.Scene {
     } else if (this.agentViewTab === "memory") {
       this.renderMemoryTab(agentId, content);
     } else if (this.agentViewTab === "stats") {
-      content.innerHTML = this.renderStatsTab(agent);
+      this.renderStatsTab(agentId, content);
     }
   }
 
@@ -7423,9 +7423,59 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  /** Render the Stats tab — agent info dashboard (reuses old dashboard layout). */
-  private renderStatsTab(agent: AgentInfo): string {
-    return this.renderAgentDashboard(agent);
+  /** Render the Stats tab — agent info dashboard with editable system prompt. */
+  private renderStatsTab(agentId: string, content: HTMLElement): void {
+    const agent = this.store.agents.get(agentId);
+    if (!agent) return;
+    content.innerHTML = this.renderAgentDashboard(agent);
+
+    // Wire up system prompt editing
+    const isBuiltIn = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID;
+    const editBtn = document.getElementById("av-stats-prompt-edit");
+    const saveBtn = document.getElementById("av-stats-prompt-save");
+    const cancelBtn = document.getElementById("av-stats-prompt-cancel");
+    const display = document.getElementById("av-stats-prompt-display");
+    const editor = document.getElementById("av-stats-prompt-editor") as HTMLTextAreaElement | null;
+
+    if (isBuiltIn) {
+      editBtn?.setAttribute("style", "display:none;");
+    }
+
+    editBtn?.addEventListener("click", () => {
+      if (display) display.style.display = "none";
+      if (editor) {
+        editor.style.display = "block";
+        editor.value = agent.systemPrompt || "";
+        editor.focus();
+      }
+      editBtn.style.display = "none";
+      if (saveBtn) saveBtn.style.display = "inline-block";
+      if (cancelBtn) cancelBtn.style.display = "inline-block";
+    });
+
+    saveBtn?.addEventListener("click", () => {
+      if (editor && this.net) {
+        this.net.send({ type: "update_agent", agentId, systemPrompt: editor.value });
+      }
+      if (display) {
+        const newText = editor?.value || "";
+        display.textContent = newText || "No custom system prompt set.";
+        display.style.color = newText ? "#4a7a9a" : "#a0c0d8";
+        display.style.display = "block";
+      }
+      if (editor) editor.style.display = "none";
+      editBtn!.style.display = "inline-block";
+      if (saveBtn) saveBtn.style.display = "none";
+      if (cancelBtn) cancelBtn.style.display = "none";
+    });
+
+    cancelBtn?.addEventListener("click", () => {
+      if (display) display.style.display = "block";
+      if (editor) editor.style.display = "none";
+      editBtn!.style.display = "inline-block";
+      if (saveBtn) saveBtn.style.display = "none";
+      if (cancelBtn) cancelBtn.style.display = "none";
+    });
   }
 
   /** Render the Screen tab — live browser screenshot with dashboard fallback. */
@@ -7582,10 +7632,18 @@ export class OfficeScene extends Phaser.Scene {
               ${agent.task ? agent.task : `<span style="color:#7aaac0;">No active task — agent is idle and ready for work.</span>`}
             </div>
 
-            <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin:12px 0 8px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">System Prompt</div>
-            <div style="background:rgba(220,240,255,0.5);padding:14px;border-radius:8px;max-height:120px;overflow-y:auto;color:#4a7a9a;font-size:0.7rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
+            <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin:12px 0 8px;text-shadow:0 1px 0 rgba(255,255,255,0.5);display:flex;align-items:center;justify-content:space-between;">
+              <span>System Prompt</span>
+              <div style="display:flex;gap:4px;">
+                <button id="av-stats-prompt-edit" style="padding:2px 10px;border:1px solid rgba(255,255,255,0.5);border-radius:12px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#1a6bb0;font-size:0.65rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Edit</button>
+                <button id="av-stats-prompt-save" style="display:none;padding:2px 10px;border:1px solid rgba(255,255,255,0.4);border-radius:12px;background:linear-gradient(to bottom,rgba(120,220,120,0.7),rgba(60,180,80,0.5));color:#fff;font-size:0.65rem;cursor:pointer;text-shadow:0 1px 2px rgba(20,100,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Save</button>
+                <button id="av-stats-prompt-cancel" style="display:none;padding:2px 10px;border:1px solid rgba(255,255,255,0.5);border-radius:12px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.65rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Cancel</button>
+              </div>
+            </div>
+            <div id="av-stats-prompt-display" style="background:rgba(220,240,255,0.5);padding:14px;border-radius:8px;max-height:120px;overflow-y:auto;color:#4a7a9a;font-size:0.7rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
               ${agent.systemPrompt ? agent.systemPrompt.slice(0, 500) + (agent.systemPrompt.length > 500 ? "…" : "") : `<span style="color:#a0c0d8;">No custom system prompt set.</span>`}
             </div>
+            <textarea id="av-stats-prompt-editor" style="display:none;max-height:120px;min-height:80px;padding:14px;background:rgba(255,255,255,0.9);color:#1a3a5a;font-size:0.7rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);border-radius:8px;font-family:'Segoe UI',Tahoma,sans-serif;resize:vertical;outline:none;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);" spellcheck="false" placeholder="Standing instructions for this agent, e.g. 'You are a senior TypeScript reviewer. Always write tests first.'"></textarea>
           </div>
         </div>
 
