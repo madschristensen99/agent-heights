@@ -190,6 +190,10 @@ const ICON = {
     <path d="M2 4l4 4 4-4"/></svg>`,
   open: `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6">
     <path d="M2 8l4-4 4 4"/></svg>`,
+  history: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 5h10"/><path d="M3 8h10"/><path d="M3 11h6"/><path d="M2 2.5h12v11H2z" opacity="0.3"/></svg>`,
+  brain: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 3a2.5 2.5 0 0 0-2.5 2.5v5A2.5 2.5 0 0 0 8 13a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 8 3z"/><path d="M5.5 5.5a2 2 0 0 0-2 2"/><path d="M5.5 10.5a2 2 0 0 0-2-2"/><path d="M10.5 5.5a2 2 0 0 1 2 2"/><path d="M10.5 10.5a2 2 0 0 1 2-2"/><path d="M8 3v10"/></svg>`,
 };
 
 export class Hud {
@@ -269,7 +273,12 @@ export class Hud {
         <div id="d-cdp-section" hidden></div>
         <div id="d-crossmint-section" hidden></div>
         <div class="d-schedules" id="d-schedules" hidden></div>
-        <div class="logs" id="logs"></div>
+        <div class="logs-wrap">
+          <div class="logs" id="logs"></div>
+          <button class="logs-history-btn" id="d-history" title="View conversation history">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+          </button>
+        </div>
         <textarea id="task-input" rows="4" placeholder="Give them a task…"></textarea>
         <div class="handoff">WHEN DONE, HAND OFF TO
           <select id="d-handoff"><option value="">— nobody —</option></select>
@@ -277,7 +286,6 @@ export class Hud {
         <div class="row chat-row">
           <input id="d-chat" placeholder="Say something… (chat, not a task)" />
           <button class="btn" id="d-say">SAY</button>
-          <button class="btn" id="d-history" title="View conversation history">📜</button>
         </div>
         <div class="row">
           <button class="btn primary" id="d-assign-new" title="Start a fresh conversation — agent keeps a summary of prior work">NEW TASK ▶</button>
@@ -2170,26 +2178,26 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       mcpSection.hidden = false;
       const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
       mcpSection.innerHTML = `
-        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
-          <div style="font-size:0.75rem; font-weight:600; color:#c9852c; margin-bottom:0.4rem;">MCP SERVER AUTH</div>
+        <div class="wallet-card">
+          <div class="wallet-title mcp">MCP SERVER AUTH</div>
           ${mcpServers.map((s, i) => {
             const isOAuth = s.authType === "oauth";
             const kLabel = s.keyLabel ?? "API Key";
             const kPlaceholder = s.keyPlaceholder ?? "Paste new API key...";
             const kHelpHtml = s.keyHelpUrl
-              ? `<a href="${s.keyHelpUrl}" target="_blank" style="font-size:0.6rem; color:#4f9dde; text-decoration:none; margin-left:0.4rem;">Get key →</a>`
+              ? `<a href="${s.keyHelpUrl}" target="_blank" class="wallet-link" style="margin-left:0.4rem;">Get key →</a>`
               : "";
             return `
             <div style="margin-bottom:0.4rem;">
-              <div style="font-size:0.7rem; color:#888; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:#4f9dde;font-size:0.6rem;">OAuth</span>' : `<span style="color:#666;font-size:0.6rem;">${esc(kLabel)}</span>${kHelpHtml}`}</div>
+              <div class="wallet-label" style="font-size:0.7rem; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:var(--accent);font-size:0.6rem;">OAuth</span>' : `<span style="font-size:0.6rem;">${esc(kLabel)}</span>${kHelpHtml}`}</div>
               <div style="display:flex; gap:0.25rem; align-items:center;">
                 ${isOAuth
-                  ? `<button id="d-mcp-connect-${i}" style="flex:1; padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#2a4a6a; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">🔗 Reconnect via OAuth</button>`
+                  ? `<button id="d-mcp-connect-${i}" class="btn" style="flex:1; padding:0.35rem 0.5rem; font-size:0.7rem;">🔗 Reconnect via OAuth</button>`
                   : `<input id="d-mcp-key-${i}" type="password" placeholder="${esc(kPlaceholder)}" autocomplete="off"
-                      style="flex:1; padding:0.35rem 0.5rem; border-radius:0.3rem; border:1px solid #333; background:#111; color:#e0e0e0; font-size:0.75rem;" />
-                    <button id="d-mcp-save-${i}" style="padding:0.35rem 0.5rem; border:none; border-radius:0.3rem; background:#333; color:#e0e0e0; font-size:0.7rem; cursor:pointer;">Save</button>`
+                      style="flex:1; padding:0.35rem 0.5rem; font-size:0.75rem;" />
+                    <button id="d-mcp-save-${i}" class="btn" style="padding:0.35rem 0.5rem; font-size:0.7rem;">Save</button>`
                 }
-                <span id="d-mcp-status-${i}" style="font-size:0.65rem; color:#888; min-width:1.5rem;"></span>
+                <span id="d-mcp-status-${i}" style="font-size:0.65rem; color:var(--dim); min-width:1.5rem;"></span>
               </div>
             </div>`;
           }).join("")}
@@ -2237,7 +2245,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             const statusEl = mcpSection.querySelector(`#d-mcp-status-${idx}`) as HTMLSpanElement | null;
             if (statusEl) {
               statusEl.textContent = r.hasKey ? "✓" : "✗";
-              statusEl.style.color = r.hasKey ? "#53b86b" : "#e05d5d";
+              statusEl.style.color = r.hasKey ? "var(--green)" : "var(--red)";
             }
           }
         }
@@ -2279,22 +2287,22 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (agent.cdpSolana) {
       cdpSection.hidden = false;
       cdpSection.innerHTML = `
-        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
-          <div style="font-size:0.75rem; font-weight:600; color:#3a7cb5; margin-bottom:0.4rem;">◎ SOLANA WALLET (CDP)</div>
-          <div id="d-cdp-content" style="font-size:0.7rem; color:#888;">Loading wallet...</div>
-          <button id="d-cdp-refresh" style="margin-top:0.4rem; padding:0.3rem 0.5rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.65rem; cursor:pointer;">↻ Refresh</button>
-          <button id="d-cdp-buy" style="margin-top:0.4rem; margin-left:0.3rem; padding:0.3rem 0.5rem; border:1px solid #3a7cb5; border-radius:0.3rem; background:#1a2a1a; color:#4f9dde; font-size:0.65rem; cursor:pointer;">Buy SOL</button>
+        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid var(--panel-edge-soft); border-radius:0.5rem; background:var(--panel-soft);">
+          <div style="font-size:0.75rem; font-weight:600; color:var(--accent); margin-bottom:0.4rem;">◎ SOLANA WALLET (CDP)</div>
+          <div id="d-cdp-content" style="font-size:0.7rem; color:var(--dim);">Loading wallet...</div>
+          <button id="d-cdp-refresh" style="margin-top:0.4rem; padding:0.3rem 0.5rem; border:1px solid var(--panel-edge-soft); border-radius:0.3rem; background:var(--panel); color:var(--dim); font-size:0.65rem; cursor:pointer;">↻ Refresh</button>
+          <button id="d-cdp-buy" style="margin-top:0.4rem; margin-left:0.3rem; padding:0.3rem 0.5rem; border:1px solid var(--accent); border-radius:0.3rem; background:var(--panel); color:var(--accent); font-size:0.65rem; cursor:pointer;">Buy SOL</button>
         </div>
-        <div id="d-cdp-policy" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
-          <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5; margin-bottom:0.3rem;">⚙ SPENDING POLICY</div>
-          <div id="d-cdp-policy-content" style="font-size:0.7rem; color:#888;">Loading policy...</div>
+        <div id="d-cdp-policy" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid var(--panel-edge-soft);">
+          <div style="font-size:0.65rem; font-weight:600; color:var(--accent); margin-bottom:0.3rem;">⚙ SPENDING POLICY</div>
+          <div id="d-cdp-policy-content" style="font-size:0.7rem; color:var(--dim);">Loading policy...</div>
         </div>
-        <div id="d-cdp-txhistory" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+        <div id="d-cdp-txhistory" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid var(--panel-edge-soft);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
-            <div style="font-size:0.65rem; font-weight:600; color:#3a7cb5;">📜 TRANSACTION HISTORY</div>
-            <button id="d-cdp-tx-refresh" style="padding:0.2rem 0.4rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.6rem; cursor:pointer;">↻</button>
+            <div style="font-size:0.65rem; font-weight:600; color:var(--accent);">📜 TRANSACTION HISTORY</div>
+            <button id="d-cdp-tx-refresh" style="padding:0.2rem 0.4rem; border:1px solid var(--panel-edge-soft); border-radius:0.3rem; background:var(--panel); color:var(--dim); font-size:0.6rem; cursor:pointer;">↻</button>
           </div>
-          <div id="d-cdp-tx-content" style="font-size:0.7rem; color:#888;">Loading transactions...</div>
+          <div id="d-cdp-tx-content" style="font-size:0.7rem; color:var(--dim);">Loading transactions...</div>
         </div>
       `;
       const refreshBtn = cdpSection.querySelector("#d-cdp-refresh") as HTMLButtonElement | null;
@@ -2344,24 +2352,24 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         }
         const balancesHtml = msg.balances && msg.balances.length > 0
           ? msg.balances.map((b: { symbol: string; amount: string; usdValue?: string }) => {
-              const usd = b.usdValue ? ` <span style="color:#666;">($${esc(b.usdValue)})</span>` : "";
+              const usd = b.usdValue ? ` <span style="color:var(--dim);">($${esc(b.usdValue)})</span>` : "";
               return `<div style="margin-top:0.2rem;">${esc(b.symbol)}: ${esc(b.amount)}${usd}</div>`;
             }).join("")
-          : `<div style="color:#666; margin-top:0.2rem;">No balances — wallet may need funding</div>`;
+          : `<div style="color:var(--dim); margin-top:0.2rem;">No balances — wallet may need funding</div>`;
         content.innerHTML = `
-          <div style="color:#e0e0e0; font-family:monospace; font-size:0.65rem; word-break:break-all; display:flex; align-items:flex-start; gap:0.3rem;">
+          <div style="color:var(--text); font-family:monospace; font-size:0.65rem; word-break:break-all; display:flex; align-items:flex-start; gap:0.3rem;">
             <span>${esc(msg.address)}</span>
-            <button id="d-cdp-copy" title="Copy address" style="border:none; background:none; color:#4f9dde; cursor:pointer; font-size:0.7rem; padding:0; flex-shrink:0;">⧉</button>
-            <button id="d-cdp-qr" title="Show QR code" style="border:none; background:none; color:#4f9dde; cursor:pointer; font-size:0.7rem; padding:0; flex-shrink:0;">⊞</button>
+            <button id="d-cdp-copy" title="Copy address" style="border:none; background:none; color:var(--accent); cursor:pointer; font-size:0.7rem; padding:0; flex-shrink:0;">⧉</button>
+            <button id="d-cdp-qr" title="Show QR code" style="border:none; background:none; color:var(--accent); cursor:pointer; font-size:0.7rem; padding:0; flex-shrink:0;">⊞</button>
           </div>
           <div id="d-cdp-qr-box" style="display:none; margin-top:0.4rem; padding:0.5rem; background:#fff; border-radius:0.3rem; width:fit-content;">
             <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(msg.address)}" alt="Wallet QR" style="display:block; width:120px; height:120px;" />
           </div>
           <div style="margin-top:0.3rem;">
-            <a href="https://explorer.solana.com/address/${esc(msg.address)}" target="_blank" style="font-size:0.6rem; color:#4f9dde; text-decoration:none;">View on Solana Explorer →</a>
+            <a href="https://explorer.solana.com/address/${esc(msg.address)}" target="_blank" style="font-size:0.6rem; color:var(--accent); text-decoration:none;">View on Solana Explorer →</a>
           </div>
-          <div style="margin-top:0.4rem; border-top:1px solid #222; padding-top:0.3rem;">
-            <div style="font-size:0.65rem; color:#888; margin-bottom:0.2rem;">Balances:</div>
+          <div style="margin-top:0.4rem; border-top:1px solid var(--panel-edge-soft); padding-top:0.3rem;">
+            <div style="font-size:0.65rem; color:var(--dim); margin-bottom:0.2rem;">Balances:</div>
             ${balancesHtml}
           </div>
         `;
@@ -2401,23 +2409,23 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const blockedMints = msg.blockedTokenMints?.join(", ") ?? "";
         pcontent.innerHTML = `
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Max SOL per transfer:</label>
+            <label style="color:var(--dim); font-size:0.65rem;">Max SOL per transfer:</label>
             <input id="d-cdp-max-sol" type="number" step="0.01" min="0" value="${esc(String(maxSol))}" placeholder="unlimited" style="font-size:0.7rem;" />
           </div>
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Allowed recipients (comma-sep, leave empty for any):</label>
+            <label style="color:var(--dim); font-size:0.65rem;">Allowed recipients (comma-sep, leave empty for any):</label>
             <input id="d-cdp-allowed" type="text" value="${esc(allowed)}" placeholder="any address" style="font-size:0.7rem; font-family:monospace;" />
           </div>
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Blocked recipients (comma-sep):</label>
+            <label style="color:var(--dim); font-size:0.65rem;">Blocked recipients (comma-sep):</label>
             <input id="d-cdp-blocked" type="text" value="${esc(blocked)}" placeholder="none" style="font-size:0.7rem; font-family:monospace;" />
           </div>
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Allowed token mints (comma-sep, leave empty for any):</label>
+            <label style="color:var(--dim); font-size:0.65rem;">Allowed token mints (comma-sep, leave empty for any):</label>
             <input id="d-cdp-allowed-mints" type="text" value="${esc(allowedMints)}" placeholder="any token" style="font-size:0.7rem; font-family:monospace;" />
           </div>
           <div style="margin-bottom:0.3rem;">
-            <label style="color:#888; font-size:0.65rem;">Blocked token mints (comma-sep):</label>
+            <label style="color:var(--dim); font-size:0.65rem;">Blocked token mints (comma-sep):</label>
             <input id="d-cdp-blocked-mints" type="text" value="${esc(blockedMints)}" placeholder="none" style="font-size:0.7rem; font-family:monospace;" />
           </div>
           <button id="d-cdp-save-policy" class="btn" style="padding:0.3rem 0.5rem; font-size:0.65rem;">Save Policy</button>
@@ -2469,7 +2477,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           return;
         }
         if (!msg.transactions || msg.transactions.length === 0) {
-          txContent.innerHTML = `<span style="color:#666;">No transactions yet — this wallet may be new</span>`;
+          txContent.innerHTML = `<span style="color:var(--dim);">No transactions yet — this wallet may be new</span>`;
           return;
         }
         const isDevnet = agent.cdpSolana;
@@ -2479,11 +2487,11 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           const statusColor = tx.err ? "#e05d5d" : "#5d9e5d";
           const statusText = tx.err ? "FAIL" : "OK";
           const shortSig = tx.signature.slice(0, 8) + "..." + tx.signature.slice(-4);
-          const memo = tx.memo ? ` <span style="color:#666;">${esc(tx.memo)}</span>` : "";
+          const memo = tx.memo ? ` <span style="color:var(--dim);">${esc(tx.memo)}</span>` : "";
           return `<div style="margin-top:0.2rem; display:flex; gap:0.3rem; align-items:center;">` +
-            `<span style="color:#666; font-size:0.6rem;">${time}</span>` +
+            `<span style="color:var(--dim); font-size:0.6rem;">${time}</span>` +
             `<span style="color:${statusColor}; font-size:0.6rem; font-weight:600;">${statusText}</span>` +
-            `<a href="https://explorer.solana.com/tx/${esc(tx.signature)}${clusterParam}" target="_blank" style="color:#4f9dde; font-size:0.6rem; text-decoration:none; font-family:monospace;">${shortSig}</a>` +
+            `<a href="https://explorer.solana.com/tx/${esc(tx.signature)}${clusterParam}" target="_blank" style="color:var(--accent); font-size:0.6rem; text-decoration:none; font-family:monospace;">${shortSig}</a>` +
             memo +
             `</div>`;
         }).join("");
@@ -2727,8 +2735,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           <button id="conv-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
         </div>
         <div style="display:flex;gap:2px;padding:0 1rem;background:#15171c;">
-          <button class="conv-tab active" data-tab="activity" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid ${accent};background:transparent;color:${accent};font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;">📜 Activity Log</button>
-          <button class="conv-tab" data-tab="memory" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid transparent;background:transparent;color:#888;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;">🧠 LLM Memory</button>
+          <button class="conv-tab active" data-tab="activity" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid ${accent};background:transparent;color:${accent};font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:0.35rem;">${ICON.history} Activity Log</button>
+          <button class="conv-tab" data-tab="memory" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid transparent;background:transparent;color:#888;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:0.35rem;">${ICON.brain} LLM Memory</button>
         </div>
         <div id="conv-content" style="flex:1;overflow-y:auto;padding:0.75rem 1.5rem;"></div>
       </div>
