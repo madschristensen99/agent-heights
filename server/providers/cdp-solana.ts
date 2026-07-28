@@ -369,16 +369,26 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
       try {
         const cdp = getCdpClient();
         const account = await getAgentAccount(agentId);
-        const balances = await cdp.solana.listTokenBalances({ address: account.address });
-        const balanceList = balances as unknown as any[];
-        if (!balanceList || (Array.isArray(balanceList) && balanceList.length === 0)) {
+        const result = await cdp.solana.listTokenBalances({ address: account.address });
+        const rawBalances = (result as any).balances ?? [];
+        if (!rawBalances || rawBalances.length === 0) {
           return `Wallet ${account.address} has no token balances. The wallet may need to be funded.`;
         }
-        const formatted = balanceList.map((b: any) => {
-          const amount = b.amount ?? b.balance ?? "0";
-          const symbol = b.symbol ?? b.token ?? "unknown";
-          const usd = b.usdValue ? ` ($${b.usdValue})` : "";
-          return `${symbol}: ${amount}${usd}`;
+        const formatted = (rawBalances as any[]).map((b) => {
+          const rawAmount = BigInt(b.amount?.amount ?? 0);
+          const decimals = Number(b.amount?.decimals ?? 0);
+          const symbol = b.token?.symbol ?? b.token?.name ?? "unknown";
+          let amountStr: string;
+          if (decimals <= 0) {
+            amountStr = rawAmount.toString();
+          } else {
+            const divisor = 10n ** BigInt(decimals);
+            const wholePart = rawAmount / divisor;
+            const fracPart = rawAmount % divisor;
+            const fracStr = fracPart.toString().padStart(decimals, "0").replace(/0+$/, "");
+            amountStr = fracStr ? `${wholePart}.${fracStr}` : wholePart.toString();
+          }
+          return `${symbol}: ${amountStr}`;
         });
         return `Balances for ${account.address}:\n${formatted.join("\n")}`;
       } catch (err) {
