@@ -54,7 +54,11 @@ onPaymentChange((state) => {
   }
   if (state && !state.subscriptionActive) {
     const trialActive = state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
-    if (!trialActive && !suppressPaymentOverlay && !paymentOverlayDismissed) {
+    if (!trialActive && !suppressPaymentOverlay) {
+      // Trial expired (or never started) — hard gate, always show
+      paymentOverlay.show();
+    } else if (trialActive && !paymentOverlayDismissed) {
+      // Trial active and user hasn't dismissed — show overlay so they see plans
       paymentOverlay.show();
     } else {
       paymentOverlay.hide();

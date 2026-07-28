@@ -95,14 +95,18 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
     const freeTrialExpiresAt = !subscriptionActive ? getFreeTrialStatus(userId).expiresAt : null;
 
     const tier = parseTier(data.subscription_tier as string | null);
-    const agentLimit = tier ? SUBSCRIPTION_TIERS[tier].agentLimit : 0;
-    const usageCap = tier ? SUBSCRIPTION_TIERS[tier].usageCap : 0;
+    // If subscription is active but tier is NULL (legacy subscription from before
+    // tiered pricing was introduced), default to 'starter' so the user isn't
+    // locked out with agentLimit=0 and usageCap=0.
+    const effectiveTier = tier ?? (subscriptionActive ? "starter" : null);
+    const agentLimit = effectiveTier ? SUBSCRIPTION_TIERS[effectiveTier].agentLimit : 0;
+    const usageCap = effectiveTier ? SUBSCRIPTION_TIERS[effectiveTier].usageCap : 0;
 
     return {
       entrancePaid,
       subscriptionStatus: data.subscription_status ?? "none",
       subscriptionActive,
-      subscriptionTier: tier,
+      subscriptionTier: effectiveTier,
       agentLimit,
       usageCap,
       currentPeriodEnd: data.current_period_end ?? null,
@@ -269,13 +273,13 @@ export async function handleStripeWebhook(
         const tier = parseTier(sub.metadata?.tier);
         await supabaseAdmin
           .from("user_payments")
-          .update({
+          .upsert({
+            user_id: userId,
             subscription_status: sub.status,
             subscription_tier: tier,
             current_period_end: (sub as any).current_period_end ?? null,
             updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", userId);
+          }, { onConflict: "user_id" });
         console.log(`[stripe] subscription updated for user ${userId}, status=${sub.status}, tier=${tier}`);
         break;
       }

@@ -133,7 +133,7 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
 
       <div id="payment-loading" style="color:#7a8090;font-size:0.9rem;text-align:center;">Loading payment status…</div>
 
-      <button id="payment-close-btn" style="margin-top:1rem;padding:0.6rem 1.2rem;border-radius:8px;border:1px solid #2a2e42;background:transparent;color:#7a8090;font-size:0.85rem;cursor:pointer;">
+      <button id="payment-close-btn" style="margin-top:1rem;padding:0.6rem 1.2rem;border-radius:8px;border:1px solid #2a2e42;background:transparent;color:#7a8090;font-size:0.85rem;cursor:pointer;display:none;">
         Close
       </button>
     </div>
@@ -247,6 +247,15 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   }
 
   onPaymentChange(renderState);
+
+  // Show/hide close button based on trial status — hard gate when trial expired
+  onPaymentChange((state) => {
+    const trialActive = state && state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
+    const subActive = state && state.subscriptionActive;
+    // Only show close button during active trial (soft gate)
+    // When trial expired and no subscription, hide it (hard gate)
+    closeBtn.style.display = (trialActive || subActive) ? "block" : "none";
+  });
 
   manageBtn.addEventListener("click", () => void openCustomerPortal());
   closeBtn.addEventListener("click", () => { overlay.style.display = "none"; onClose?.(); });
