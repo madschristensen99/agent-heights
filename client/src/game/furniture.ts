@@ -1729,41 +1729,41 @@ function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: bool
   ctx.fill();
 
   // stand base
-  ctx.fillStyle = shade(0x2a2a30, 0);
+  ctx.fillStyle = shade(0xa0a8b0, 0);
   roundRect(ctx, cx - s * 0.08, s * 0.8, s * 0.16, s * 0.05, 2);
   ctx.fill();
 
   // stand neck — short
-  ctx.fillStyle = shade(0x1a1a20, -5);
+  ctx.fillStyle = shade(0x808898, -5);
   ctx.fillRect(cx - 2, s * 0.62, 4, s * 0.2);
 
   // monitor body — thin profile seen from the side
   // The screen faces RIGHT (toward Agent Resources who sits on the right)
   const bezelGrad = linearGrad(ctx, 0, s * 0.15, 0, s * 0.62, [
-    [0, shade(0x2a2a30, 5)],
-    [0.5, shade(0x1a1a20, 0)],
-    [1, shade(0x0a0a10, -10)],
+    [0, shade(0xd0d8e0, 5)],
+    [0.5, shade(0xb0b8c0, 0)],
+    [1, shade(0x9098a0, -10)],
   ]);
   ctx.fillStyle = bezelGrad;
   // thin vertical slab representing the side profile
   roundRect(ctx, cx - 6, s * 0.15, 12, s * 0.47, 3);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x3a3a40, 0.5);
+  ctx.strokeStyle = hexRGBA(0x808898, 0.5);
   ctx.lineWidth = 1;
   ctx.stroke();
 
   // screen edge glow — on the RIGHT side (facing Agent Resources)
   if (lit) {
-    ctx.fillStyle = hexRGBA(0x4affa8, 0.6);
+    ctx.fillStyle = hexRGBA(0x88bbff, 0.6);
   } else {
-    ctx.fillStyle = hexRGBA(0x0a0a14, 0.8);
+    ctx.fillStyle = hexRGBA(0x2a3a5a, 0.8);
   }
   ctx.fillRect(cx + 3, s * 0.18, 2, s * 0.41);
 
   // power LED
   ctx.beginPath();
   ctx.arc(cx - 3, s * 0.58, 1.5, 0, Math.PI * 2);
-  ctx.fillStyle = hexRGBA(0x44ff44, 0.7);
+  ctx.fillStyle = hexRGBA(0x66ff66, 0.8);
   ctx.fill();
 }
 
@@ -1778,64 +1778,64 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean 
   ctx.fill();
 
   // stand base
-  ctx.fillStyle = shade(0x2a2a30, 0);
+  ctx.fillStyle = shade(0xa0a8b0, 0);
   roundRect(ctx, cx - s * 0.12, s * 0.75, s * 0.24, s * 0.06, 3);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x4a4a50, 0.4);
+  ctx.strokeStyle = hexRGBA(0x808898, 0.5);
   ctx.lineWidth = 1;
   ctx.stroke();
 
   // stand neck
   const neckGrad = linearGrad(ctx, cx - 3, 0, cx + 3, 0, [
-    [0, shade(0x1a1a20, -5)],
-    [0.5, shade(0x3a3a40, 10)],
-    [1, shade(0x1a1a20, -5)],
+    [0, shade(0x808898, -5)],
+    [0.5, shade(0xc0c8d0, 10)],
+    [1, shade(0x808898, -5)],
   ]);
   ctx.fillStyle = neckGrad;
   ctx.fillRect(cx - 3, s * 0.5, 6, s * 0.28);
 
-  // monitor body — slim bezel
+  // monitor body — slim bezel (lighter, Frutiger-style)
   const bezelGrad = linearGrad(ctx, 0, s * 0.1, 0, s * 0.55, [
-    [0, shade(0x2a2a30, 5)],
-    [0.5, shade(0x1a1a20, 0)],
-    [1, shade(0x0a0a10, -10)],
+    [0, shade(0xd0d8e0, 5)],
+    [0.5, shade(0xb0b8c0, 0)],
+    [1, shade(0x9098a0, -10)],
   ]);
   ctx.fillStyle = bezelGrad;
   roundRect(ctx, s * 0.12, s * 0.08, s * 0.76, s * 0.46, 4);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x3a3a40, 0.5);
+  ctx.strokeStyle = hexRGBA(0x808898, 0.5);
   ctx.lineWidth = 1;
   ctx.stroke();
 
   // screen
   if (lit) {
-    ctx.fillStyle = hexRGBA(0xaaccff, 0.5);
+    ctx.fillStyle = hexRGBA(0x88bbff, 0.6);
   } else {
-    ctx.fillStyle = hexRGBA(0x0a0a14, 0.95);
+    ctx.fillStyle = hexRGBA(0x2a3a5a, 0.9);
   }
   roundRect(ctx, s * 0.15, s * 0.11, s * 0.7, s * 0.4, 2);
   ctx.fill();
 
   if (!lit) {
     // screen content — code editor look
-    ctx.fillStyle = hexRGBA(0x4488cc, 0.15);
+    ctx.fillStyle = hexRGBA(0x6699cc, 0.2);
     ctx.fillRect(s * 0.17, s * 0.13, s * 0.66, s * 0.36);
     // code lines
-    const lineColors = [0x4a9acd, 0xcc8844, 0x88cc66, 0x666688];
+    const lineColors = [0x4a9acd, 0xcc8844, 0x66bb44, 0x8866bb];
     for (let i = 0; i < 8; i++) {
       const ly = s * 0.15 + i * (s * 0.045);
       const indent = (i % 3) * s * 0.04;
       const lineW = s * (0.15 + Math.random() * 0.3);
-      ctx.fillStyle = hexRGBA(lineColors[i % lineColors.length], 0.5);
+      ctx.fillStyle = hexRGBA(lineColors[i % lineColors.length], 0.6);
       ctx.fillRect(s * 0.19 + indent, ly, lineW, 2);
     }
   }
 
   // screen glow
   if (lit) {
-    ctx.fillStyle = hexRGBA(0xffffff, 0.1);
+    ctx.fillStyle = hexRGBA(0xffffff, 0.12);
   } else {
-    ctx.fillStyle = hexRGBA(0x4488ff, 0.05);
+    ctx.fillStyle = hexRGBA(0x6699ff, 0.08);
   }
   roundRect(ctx, s * 0.15, s * 0.11, s * 0.7, s * 0.4, 2);
   ctx.fill();
@@ -1843,11 +1843,11 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean 
   // power LED
   ctx.beginPath();
   ctx.arc(s * 0.82, s * 0.52, 1.5, 0, Math.PI * 2);
-  ctx.fillStyle = hexRGBA(0x44ff44, 0.7);
+  ctx.fillStyle = hexRGBA(0x66ff66, 0.8);
   ctx.fill();
 
   // brand text
-  ctx.fillStyle = hexRGBA(0x5a5a60, 0.5);
+  ctx.fillStyle = hexRGBA(0x808898, 0.6);
   ctx.font = "bold 5px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("SYNC", cx, s * 0.54);

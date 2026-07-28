@@ -1,7 +1,7 @@
 import type { AgentTool } from "@cline/sdk";
 import { privateKeyToAccount } from "viem/accounts";
 import { Keypair } from "@solana/web3.js";
-import { ed25519 } from "@noble/curves/ed25519";
+import { createPrivateKey, sign as cryptoSign } from "crypto";
 
 /**
  * Crossmint wallet provider — gives agents a multi-chain smart wallet
@@ -235,13 +235,17 @@ async function signApprovalMessage(message: string): Promise<string> {
   const secret = getSignerSecret()!;
 
   if (chainToType(chain) === "solana") {
-    // Solana: Ed25519 sign the raw message bytes
+    // Solana: Ed25519 sign the raw message bytes using Node.js built-in crypto
     const hex = secret.startsWith("0x") ? secret.slice(2) : secret;
     const seed = Buffer.from(hex, "hex");
     const kp = Keypair.fromSeed(seed);
     const msgBytes = Buffer.from(message, "utf-8");
-    const sig = ed25519.sign(msgBytes, kp.secretKey.slice(0, 32));
-    return Buffer.from(sig).toString("base64");
+    // Build PKCS8 Ed25519 private key from the 32-byte seed
+    const pkcs8Prefix = Buffer.from("302e020100300506032b657004220420", "hex");
+    const pkcs8Key = Buffer.concat([pkcs8Prefix, kp.secretKey.slice(0, 32)]);
+    const keyObj = createPrivateKey({ key: pkcs8Key, format: "der", type: "pkcs8" });
+    const sig = cryptoSign(null, msgBytes, keyObj);
+    return sig.toString("base64");
   }
 
   // EVM: personal_sign on raw hex message
