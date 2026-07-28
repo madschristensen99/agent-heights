@@ -407,6 +407,100 @@ export async function getAgentTxHistory(
   }
 }
 
+/** Fund an agent's wallet with USDXM testnet tokens (staging only). */
+export async function fundAgentWallet(
+  agentId: string,
+  amount: number = 10,
+): Promise<{ success: boolean; message: string } | null> {
+  if (!isCrossmintConfigured()) return null;
+  try {
+    const apiKey = getApiKey()!;
+    const baseUrl = getBaseUrl();
+    const chain = getDefaultChain();
+    const wallet = await getOrCreateAgentWallet(agentId);
+    if (!wallet) return { success: false, message: "Wallet not found" };
+
+    const res = await fetch(
+      `${baseUrl}/v1-alpha2/wallets/${wallet.address}/balances`,
+      {
+        method: "POST",
+        headers: {
+          "X-API-KEY": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: Math.min(Math.max(amount, 1), 100),
+          token: "usdxm",
+          chain,
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      return { success: false, message: `Funding failed (${res.status}): ${errText}` };
+    }
+
+    return { success: true, message: `Funded ${amount} USDXM on ${chain}` };
+  } catch (err) {
+    console.error(`[crossmint] Failed to fund wallet for agent ${agentId}:`, err);
+    return { success: false, message: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+/** Create a Crossmint onramp order and return the payment URL. */
+export async function createCrossmintOnrampUrl(
+  agentId: string,
+): Promise<string | null> {
+  if (!isCrossmintConfigured()) return null;
+  try {
+    const apiKey = getApiKey()!;
+    const baseUrl = getBaseUrl();
+    const chain = getDefaultChain();
+    const wallet = await getOrCreateAgentWallet(agentId);
+    if (!wallet) return null;
+
+    const body: Record<string, unknown> = {
+      payment: {
+        method: "card",
+      },
+      lineItems: [
+        {
+          chain,
+          token: "usdc",
+          quantity: 10,
+        },
+      ],
+      recipient: {
+        address: wallet.address,
+        chain,
+      },
+    };
+
+    const res = await fetch(`${baseUrl}/2022-06-09/orders`, {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[crossmint] Onramp order failed (${res.status}): ${errText}`);
+      return null;
+    }
+
+    const data = (await res.json()) as any;
+    const url = data?.paymentIntent?.url ?? data?.url ?? data?.order?.url ?? null;
+    return url;
+  } catch (err) {
+    console.error(`[crossmint] Failed to create onramp order for agent ${agentId}:`, err);
+    return null;
+  }
+}
+
 /**
  * Load Crossmint wallet tools for an agent. Returns an array of AgentTool objects
  * that can be used by the Cline provider alongside MCP tools.

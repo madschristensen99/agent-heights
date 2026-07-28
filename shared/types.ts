@@ -631,6 +631,8 @@ export type ClientMsg =
   | { type: "get_crossmint_balance"; agentId: string }
   | { type: "get_crossmint_policy"; agentId: string }
   | { type: "get_crossmint_tx_history"; agentId: string }
+  | { type: "fund_crossmint_wallet"; agentId: string; amount?: number }
+  | { type: "create_crossmint_onramp"; agentId: string }
   | { type: "renew_token"; token: string }
   | { type: "create_room"; name: string; theme?: OfficeTheme; orgId?: string }
   | { type: "join_room"; roomId: string }
@@ -748,6 +750,8 @@ export type ServerMsg =
   | { type: "crossmint_wallet_status"; agentId: string; address: string | null; chain: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }
   | { type: "crossmint_policy_status"; agentId: string; chain: string | null; spendingLimitUsd: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; description: string | null; error?: string }
   | { type: "crossmint_tx_history"; agentId: string; transactions: any[] | null; error?: string }
+  | { type: "crossmint_fund_result"; agentId: string; success: boolean; message: string }
+  | { type: "crossmint_onramp_url"; agentId: string; url: string | null; error?: string }
   | { type: "refresh_token" }
   | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }

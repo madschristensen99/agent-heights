@@ -214,6 +214,8 @@ export class Hud {
   private detailCrossmintListener: ((msg: { agentId: string; address: string | null; chain: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void) | null = null;
   private detailCrossmintPolicyListener: ((msg: { agentId: string; chain: string | null; spendingLimitUsd: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; description: string | null; error?: string }) => void) | null = null;
   private detailCrossmintTxHistoryListener: ((msg: { agentId: string; transactions: any[] | null; error?: string }) => void) | null = null;
+  private detailCrossmintFundListener: ((msg: { agentId: string; success: boolean; message: string }) => void) | null = null;
+  private detailCrossmintOnrampListener: ((msg: { agentId: string; url: string | null; error?: string }) => void) | null = null;
   private crossmintDetailAgentId: string | null = null;
   private _scheduleCreateOpen = false;
   private _renaming = false;
@@ -2096,6 +2098,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (!agent) {
       panel.hidden = true;
       this.lastSelected = null;
+      this.lastSchedulesSig = "";
       this.cdpDetailAgentId = null;
       this.crossmintDetailAgentId = null;
       return;
@@ -2175,7 +2178,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     }
     const mcpServers = agent.mcpServers;
     if (mcpServers && mcpServers.length > 0) {
-      mcpSection.hidden = false;
+      mcpSection.hidden = true;
       const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
       mcpSection.innerHTML = `
         <div class="wallet-card">
@@ -2239,6 +2242,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       });
       // Listen for key status response
       this.detailMcpListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
+        let anyMissing = false;
         for (const r of results) {
           const idx = serverUrls.indexOf(r.serverUrl);
           if (idx >= 0) {
@@ -2247,8 +2251,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               statusEl.textContent = r.hasKey ? "✓" : "✗";
               statusEl.style.color = r.hasKey ? "var(--green)" : "var(--red)";
             }
+            if (!r.hasKey) anyMissing = true;
           }
         }
+        mcpSection.hidden = !anyMissing;
       };
       this.store.mcpKeysStatusListeners.push(this.detailMcpListener);
     } else {
@@ -2525,6 +2531,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         if (tidx >= 0) this.store.crossmintTxHistoryListeners.splice(tidx, 1);
         this.detailCrossmintTxHistoryListener = null;
       }
+      if (this.detailCrossmintFundListener) {
+        const fidx = this.store.crossmintFundListeners.indexOf(this.detailCrossmintFundListener);
+        if (fidx >= 0) this.store.crossmintFundListeners.splice(fidx, 1);
+        this.detailCrossmintFundListener = null;
+      }
+      if (this.detailCrossmintOnrampListener) {
+        const oidx = this.store.crossmintOnrampListeners.indexOf(this.detailCrossmintOnrampListener);
+        if (oidx >= 0) this.store.crossmintOnrampListeners.splice(oidx, 1);
+        this.detailCrossmintOnrampListener = null;
+      }
       this.crossmintDetailAgentId = agent.id;
     if (agent.crossmintWallet) {
       crossmintSection.hidden = false;
@@ -2533,6 +2549,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           <div class="wallet-title crossmint">⚡ MULTICHAIN WALLET (CROSSMINT)</div>
           <div id="d-crossmint-content" class="wallet-content">Loading wallet...</div>
           <button id="d-crossmint-refresh" class="wallet-btn-sm">↻ Refresh</button>
+          <button id="d-crossmint-fund" class="wallet-btn-sm" style="margin-left:0.3rem; border-color:var(--green); color:var(--green);">⛽ Fund (USDXM)</button>
+          <button id="d-crossmint-buy" class="wallet-btn-sm" style="margin-left:0.3rem; border-color:var(--amber); color:var(--amber);">Buy Crypto</button>
         </div>
         <div id="d-crossmint-policy" class="wallet-subsection">
           <div class="wallet-subsection-title">⚙ WALLET POLICY</div>
@@ -2665,6 +2683,48 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         }).join("");
       };
       this.store.crossmintTxHistoryListeners.push(this.detailCrossmintTxHistoryListener);
+
+      // Fund (staging faucet) button
+      const xmFundBtn = crossmintSection.querySelector("#d-crossmint-fund") as HTMLButtonElement | null;
+      if (xmFundBtn) {
+        xmFundBtn.addEventListener("click", () => {
+          this.net.send({ type: "fund_crossmint_wallet", agentId: agent.id, amount: 10 });
+          xmFundBtn.textContent = "Funding...";
+          xmFundBtn.disabled = true;
+        });
+      }
+      this.detailCrossmintFundListener = (msg: { agentId: string; success: boolean; message: string }) => {
+        if (msg.agentId !== agent.id) return;
+        if (xmFundBtn) {
+          xmFundBtn.textContent = "⛽ Fund (USDXM)";
+          xmFundBtn.disabled = false;
+        }
+        this.store.toast(msg.success ? `✓ ${msg.message}` : `⚠ ${msg.message}`);
+      };
+      this.store.crossmintFundListeners.push(this.detailCrossmintFundListener);
+
+      // Onramp (card purchase) button
+      const xmBuyBtn = crossmintSection.querySelector("#d-crossmint-buy") as HTMLButtonElement | null;
+      if (xmBuyBtn) {
+        xmBuyBtn.addEventListener("click", () => {
+          this.net.send({ type: "create_crossmint_onramp", agentId: agent.id });
+          xmBuyBtn.textContent = "Loading...";
+          xmBuyBtn.disabled = true;
+        });
+      }
+      this.detailCrossmintOnrampListener = (msg: { agentId: string; url: string | null; error?: string }) => {
+        if (msg.agentId !== agent.id) return;
+        if (xmBuyBtn) {
+          xmBuyBtn.textContent = "Buy Crypto";
+          xmBuyBtn.disabled = false;
+        }
+        if (msg.error || !msg.url) {
+          this.store.toast(`Onramp error: ${msg.error ?? "Could not create order"}`);
+          return;
+        }
+        window.open(msg.url, "_blank", "noopener,noreferrer");
+      };
+      this.store.crossmintOnrampListeners.push(this.detailCrossmintOnrampListener);
     } else {
       crossmintSection.hidden = true;
       crossmintSection.innerHTML = "";
@@ -2690,6 +2750,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       logsEl.insertAdjacentHTML("beforeend", logs.slice(this.lastLogCount).map(logHtml).join(""));
       if (stick) logsEl.scrollTop = logsEl.scrollHeight;
     }
+    const agentChanged = this.lastSelected !== agent.id;
     this.lastSelected = agent.id;
     this.lastLogCount = logs.length;
     this.lastLogTail = logs.length ? logs[logs.length - 1] : null;
@@ -2710,7 +2771,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         .filter((s) => s.agentId === agent.id)
         .map((s) => `${s.id}:${s.enabled}:${s.nextRunAt}:${s.lastRunAt}:${s.runCount}:${s.name}:${s.task}:${s.cronExpression}:${s.handoffTo}`)
         .join("|");
-      if (sig !== this.lastSchedulesSig) {
+      if (agentChanged || sig !== this.lastSchedulesSig) {
         this.lastSchedulesSig = sig;
         this.renderSchedules(agent.id);
       }

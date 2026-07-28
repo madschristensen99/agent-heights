@@ -100,6 +100,8 @@ export class Store {
   crossmintPolicyListeners: ((msg: { agentId: string; chain: string | null; spendingLimitUsd: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; description: string | null; error?: string }) => void)[] = [];
   /** Listeners called when server responds with Crossmint tx history. */
   crossmintTxHistoryListeners: ((msg: { agentId: string; transactions: any[] | null; error?: string }) => void)[] = [];
+  crossmintFundListeners: ((msg: { agentId: string; success: boolean; message: string }) => void)[] = [];
+  crossmintOnrampListeners: ((msg: { agentId: string; url: string | null; error?: string }) => void)[] = [];
   entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
@@ -937,6 +939,12 @@ export class Store {
         break;
       case "crossmint_tx_history":
         for (const fn of this.crossmintTxHistoryListeners) fn(msg);
+        break;
+      case "crossmint_fund_result":
+        for (const fn of this.crossmintFundListeners) fn(msg);
+        break;
+      case "crossmint_onramp_url":
+        for (const fn of this.crossmintOnrampListeners) fn(msg);
         break;
       case "payment_status":
         this.entrancePaid = msg.entrancePaid;

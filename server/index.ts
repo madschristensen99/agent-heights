@@ -17,7 +17,7 @@ import { rateLimitAsync } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory, createOnrampUrl } from "./providers/cdp-solana.js";
-import { getAgentBalances as getCrossmintBalances, getAgentPolicy as getCrossmintPolicy, getAgentTxHistory as getCrossmintTxHistory } from "./providers/crossmint-wallets.js";
+import { getAgentBalances as getCrossmintBalances, getAgentPolicy as getCrossmintPolicy, getAgentTxHistory as getCrossmintTxHistory, fundAgentWallet, createCrossmintOnrampUrl } from "./providers/crossmint-wallets.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
@@ -1439,6 +1439,37 @@ wss.on("connection", async (ws, req) => {
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
             sess.broadcast({ type: "crossmint_tx_history", agentId: msg.agentId, transactions: null, error: msg2 });
+          }
+          break;
+        }
+        case "fund_crossmint_wallet": {
+          try {
+            const result = await fundAgentWallet(msg.agentId, msg.amount ?? 10);
+            if (!result) {
+              sess.broadcast({ type: "crossmint_fund_result", agentId: msg.agentId, success: false, message: "Crossmint not configured" });
+              break;
+            }
+            sess.broadcast({ type: "crossmint_fund_result", agentId: msg.agentId, success: result.success, message: result.message });
+            // Auto-refresh balances after funding
+            if (result.success) {
+              const balData = await getCrossmintBalances(msg.agentId);
+              if (balData) {
+                sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: balData.address, chain: process.env.CROSSMINT_CHAIN ?? "base-sepolia", balances: balData.balances });
+              }
+            }
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "crossmint_fund_result", agentId: msg.agentId, success: false, message: msg2 });
+          }
+          break;
+        }
+        case "create_crossmint_onramp": {
+          try {
+            const url = await createCrossmintOnrampUrl(msg.agentId);
+            sess.broadcast({ type: "crossmint_onramp_url", agentId: msg.agentId, url });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            sess.broadcast({ type: "crossmint_onramp_url", agentId: msg.agentId, url: null, error: msg2 });
           }
           break;
         }
