@@ -2343,11 +2343,11 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const content = cdpSection.querySelector("#d-cdp-content") as HTMLElement | null;
         if (!content) return;
         if (msg.error) {
-          content.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          content.innerHTML = `<span class="wallet-error">⚠ ${esc(msg.error)}</span>`;
           return;
         }
         if (!msg.address) {
-          content.innerHTML = `<span style="color:#e05d5d;">⚠ Wallet not available</span>`;
+          content.innerHTML = `<span class="wallet-error">⚠ Wallet not available</span>`;
           return;
         }
         const balancesHtml = msg.balances && msg.balances.length > 0
@@ -2399,7 +2399,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const pcontent = cdpSection.querySelector("#d-cdp-policy-content") as HTMLElement | null;
         if (!pcontent) return;
         if (msg.error) {
-          pcontent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          pcontent.innerHTML = `<span class="wallet-error">⚠ ${esc(msg.error)}</span>`;
           return;
         }
         const maxSol = msg.maxSolPerTransfer ?? "";
@@ -2473,7 +2473,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const txContent = cdpSection.querySelector("#d-cdp-tx-content") as HTMLElement | null;
         if (!txContent) return;
         if (msg.error) {
-          txContent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          txContent.innerHTML = `<span class="wallet-error">⚠ ${esc(msg.error)}</span>`;
           return;
         }
         if (!msg.transactions || msg.transactions.length === 0) {
@@ -2484,7 +2484,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const clusterParam = isDevnet ? "?cluster=devnet" : "";
         txContent.innerHTML = msg.transactions.map((tx) => {
           const time = tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "unknown";
-          const statusColor = tx.err ? "#e05d5d" : "#5d9e5d";
+          const statusColor = tx.err ? "var(--red)" : "var(--green)";
           const statusText = tx.err ? "FAIL" : "OK";
           const shortSig = tx.signature.slice(0, 8) + "..." + tx.signature.slice(-4);
           const memo = tx.memo ? ` <span style="color:var(--dim);">${esc(tx.memo)}</span>` : "";
@@ -2529,21 +2529,21 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (agent.crossmintWallet) {
       crossmintSection.hidden = false;
       crossmintSection.innerHTML = `
-        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
-          <div style="font-size:0.75rem; font-weight:600; color:#b58a3a; margin-bottom:0.4rem;">⚡ MULTICHAIN WALLET (CROSSMINT)</div>
-          <div id="d-crossmint-content" style="font-size:0.7rem; color:#888;">Loading wallet...</div>
-          <button id="d-crossmint-refresh" style="margin-top:0.4rem; padding:0.3rem 0.5rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.65rem; cursor:pointer;">↻ Refresh</button>
+        <div class="wallet-card">
+          <div class="wallet-title crossmint">⚡ MULTICHAIN WALLET (CROSSMINT)</div>
+          <div id="d-crossmint-content" class="wallet-content">Loading wallet...</div>
+          <button id="d-crossmint-refresh" class="wallet-btn-sm">↻ Refresh</button>
         </div>
-        <div id="d-crossmint-policy" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
-          <div style="font-size:0.65rem; font-weight:600; color:#b58a3a; margin-bottom:0.3rem;">⚙ WALLET POLICY</div>
-          <div id="d-crossmint-policy-content" style="font-size:0.7rem; color:#888;">Loading policy...</div>
+        <div id="d-crossmint-policy" class="wallet-subsection">
+          <div class="wallet-subsection-title">⚙ WALLET POLICY</div>
+          <div id="d-crossmint-policy-content" class="wallet-content">Loading policy...</div>
         </div>
-        <div id="d-crossmint-txhistory" style="margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid #222;">
+        <div id="d-crossmint-txhistory" class="wallet-subsection">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
-            <div style="font-size:0.65rem; font-weight:600; color:#b58a3a;">📜 TRANSACTION HISTORY</div>
-            <button id="d-crossmint-tx-refresh" style="padding:0.2rem 0.4rem; border:1px solid #333; border-radius:0.3rem; background:#1a1a1a; color:#888; font-size:0.6rem; cursor:pointer;">↻</button>
+            <div class="wallet-subsection-title" style="margin-bottom:0;">📜 TRANSACTION HISTORY</div>
+            <button id="d-crossmint-tx-refresh" class="wallet-btn-sm" style="margin-top:0; padding:0.2rem 0.4rem; font-size:0.6rem;">↻</button>
           </div>
-          <div id="d-crossmint-tx-content" style="font-size:0.7rem; color:#888;">Loading transactions...</div>
+          <div id="d-crossmint-tx-content" class="wallet-content">Loading transactions...</div>
         </div>
       `;
       const xmRefreshBtn = crossmintSection.querySelector("#d-crossmint-refresh") as HTMLButtonElement | null;
@@ -2560,34 +2560,34 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const content = crossmintSection.querySelector("#d-crossmint-content") as HTMLElement | null;
         if (!content) return;
         if (msg.error) {
-          content.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          content.innerHTML = `<span class="wallet-error">⚠ ${esc(msg.error)}</span>`;
           return;
         }
         if (!msg.address) {
-          content.innerHTML = `<span style="color:#e05d5d;">⚠ Wallet not available</span>`;
+          content.innerHTML = `<span class="wallet-error">⚠ Wallet not available</span>`;
           return;
         }
         const balancesHtml = msg.balances && msg.balances.length > 0
           ? msg.balances.map((b: { symbol: string; amount: string; usdValue?: string }) => {
-              const usd = b.usdValue ? ` <span style="color:#666;">($${esc(b.usdValue)})</span>` : "";
+              const usd = b.usdValue ? ` <span class="wallet-label">($${esc(b.usdValue)})</span>` : "";
               return `<div style="margin-top:0.2rem;">${esc(b.symbol)}: ${esc(b.amount)}${usd}</div>`;
             }).join("")
-          : `<div style="color:#666; margin-top:0.2rem;">No balances — wallet may need funding</div>`;
+          : `<div class="wallet-label" style="margin-top:0.2rem;">No balances — wallet may need funding</div>`;
         const chain = msg.chain ?? "unknown";
         const explorerBase = chain.includes("solana")
           ? `https://explorer.solana.com/address/${esc(msg.address)}`
           : `https://sepolia.basescan.org/address/${esc(msg.address)}`;
         content.innerHTML = `
-          <div style="color:#e0e0e0; font-family:monospace; font-size:0.65rem; word-break:break-all;">
+          <div class="wallet-addr">
             ${esc(msg.address)}
-            <button id="d-crossmint-copy" style="margin-left:0.3rem; border:none; background:none; color:#b58a3a; cursor:pointer; font-size:0.6rem;">copy</button>
+            <button id="d-crossmint-copy" class="wallet-copy-btn" style="margin-left:0.3rem; font-size:0.6rem;">copy</button>
           </div>
-          <div style="margin-top:0.2rem; font-size:0.6rem; color:#666;">Chain: ${esc(chain)} · Gas sponsored</div>
+          <div class="wallet-label" style="margin-top:0.2rem;">Chain: ${esc(chain)} · Gas sponsored</div>
           <div style="margin-top:0.3rem;">
-            <a href="${explorerBase}" target="_blank" style="font-size:0.6rem; color:#b58a3a; text-decoration:none;">View on Explorer →</a>
+            <a href="${explorerBase}" target="_blank" class="wallet-link">View on Explorer →</a>
           </div>
-          <div style="margin-top:0.4rem; border-top:1px solid #222; padding-top:0.3rem;">
-            <div style="font-size:0.65rem; color:#888; margin-bottom:0.2rem;">Balances:</div>
+          <div class="wallet-divider">
+            <div class="wallet-label" style="margin-bottom:0.2rem;">Balances:</div>
             ${balancesHtml}
           </div>
         `;
@@ -2608,7 +2608,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const pcontent = crossmintSection.querySelector("#d-crossmint-policy-content") as HTMLElement | null;
         if (!pcontent) return;
         if (msg.error) {
-          pcontent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          pcontent.innerHTML = `<span class="wallet-error">⚠ ${esc(msg.error)}</span>`;
           return;
         }
         const chain = msg.chain ?? "unknown";
@@ -2617,12 +2617,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const blocked = msg.blockedRecipients?.length ? msg.blockedRecipients.join(", ") : "none";
         const desc = msg.description ?? "";
         pcontent.innerHTML = `
-          <div style="margin-bottom:0.2rem; color:#888; font-size:0.65rem;">${esc(desc)}</div>
-          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Chain:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(chain)}</span></div>
-          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Spending limit:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(limit)}</span></div>
-          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Allowed recipients:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(allowed)}</span></div>
-          <div style="margin-bottom:0.2rem;"><span style="color:#666; font-size:0.65rem;">Blocked recipients:</span> <span style="color:#aaa; font-size:0.65rem;">${esc(blocked)}</span></div>
-          <div style="margin-top:0.3rem; color:#5d9e5d; font-size:0.6rem;">⛽ Gas sponsored by Crossmint paymaster</div>
+          <div class="wallet-label" style="margin-bottom:0.2rem;">${esc(desc)}</div>
+          <div style="margin-bottom:0.2rem;"><span class="wallet-label">Chain:</span> <span class="wallet-value">${esc(chain)}</span></div>
+          <div style="margin-bottom:0.2rem;"><span class="wallet-label">Spending limit:</span> <span class="wallet-value">${esc(limit)}</span></div>
+          <div style="margin-bottom:0.2rem;"><span class="wallet-label">Allowed recipients:</span> <span class="wallet-value">${esc(allowed)}</span></div>
+          <div style="margin-bottom:0.2rem;"><span class="wallet-label">Blocked recipients:</span> <span class="wallet-value">${esc(blocked)}</span></div>
+          <div class="wallet-success" style="margin-top:0.3rem; font-size:0.6rem;">⛽ Gas sponsored by Crossmint paymaster</div>
         `;
       };
       this.store.crossmintPolicyListeners.push(this.detailCrossmintPolicyListener);
@@ -2641,26 +2641,26 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const txContent = crossmintSection.querySelector("#d-crossmint-tx-content") as HTMLElement | null;
         if (!txContent) return;
         if (msg.error) {
-          txContent.innerHTML = `<span style="color:#e05d5d;">⚠ ${esc(msg.error)}</span>`;
+          txContent.innerHTML = `<span class="wallet-error">⚠ ${esc(msg.error)}</span>`;
           return;
         }
         if (!msg.transactions || msg.transactions.length === 0) {
-          txContent.innerHTML = `<span style="color:#666;">No transactions yet — this wallet may be new</span>`;
+          txContent.innerHTML = `<span class="wallet-label">No transactions yet — this wallet may be new</span>`;
           return;
         }
         txContent.innerHTML = msg.transactions.slice(0, 10).map((tx: any) => {
           const id = tx.id ?? tx.txId ?? "unknown";
           const status = tx.status ?? "unknown";
-          const statusColor = status === "confirmed" || status === "success" ? "#5d9e5d" : status === "failed" ? "#e05d5d" : "#888";
+          const statusColor = status === "confirmed" || status === "success" ? "var(--green)" : status === "failed" ? "var(--red)" : "var(--dim)";
           const shortId = id.length > 16 ? id.slice(0, 12) + "..." + id.slice(-4) : id;
           const hash = tx.transactionHash ?? tx.hash ?? "";
           const amount = tx.amount ?? "";
           const token = tx.token ?? tx.symbol ?? "";
           return `<div style="margin-top:0.2rem; display:flex; gap:0.3rem; align-items:center;">` +
             `<span style="color:${statusColor}; font-size:0.6rem; font-weight:600;">${esc(status)}</span>` +
-            `<span style="color:#aaa; font-size:0.6rem; font-family:monospace;">${esc(shortId)}</span>` +
-            (amount ? `<span style="color:#888; font-size:0.6rem;">${esc(amount)} ${esc(token)}</span>` : "") +
-            (hash ? `<a href="https://sepolia.basescan.org/tx/${esc(hash)}" target="_blank" style="color:#b58a3a; font-size:0.6rem; text-decoration:none;">↗</a>` : "") +
+            `<span class="wallet-value" style="font-family:var(--font-mono); font-size:0.6rem;">${esc(shortId)}</span>` +
+            (amount ? `<span class="wallet-label" style="font-size:0.6rem;">${esc(amount)} ${esc(token)}</span>` : "") +
+            (hash ? `<a href="https://sepolia.basescan.org/tx/${esc(hash)}" target="_blank" class="wallet-link">↗</a>` : "") +
             `</div>`;
         }).join("");
       };
@@ -2726,19 +2726,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
 
     overlay.innerHTML = `
-      <div style="background:#1a1d24;border-radius:12px;padding:0;width:640px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;box-shadow:0 12px 48px rgba(0,0,0,0.5);">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid #333;">
+      <div class="conv-modal">
+        <div class="conv-header">
           <div style="display:flex;align-items:center;gap:0.5rem;">
-            <span style="font-size:1.1rem;font-weight:800;color:${accent};">${esc(agentName)}</span>
-            <span style="font-size:0.75rem;color:#888;">Conversation History</span>
+            <span class="conv-name" style="color:${accent};">${esc(agentName)}</span>
+            <span class="conv-subtitle">Conversation History</span>
           </div>
-          <button id="conv-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+          <button id="conv-close" class="conv-close">✕</button>
         </div>
-        <div style="display:flex;gap:2px;padding:0 1rem;background:#15171c;">
-          <button class="conv-tab active" data-tab="activity" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid ${accent};background:transparent;color:${accent};font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:0.35rem;">${ICON.history} Activity Log</button>
-          <button class="conv-tab" data-tab="memory" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid transparent;background:transparent;color:#888;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:0.35rem;">${ICON.brain} LLM Memory</button>
+        <div class="conv-tabs">
+          <button class="conv-tab active" data-tab="activity" style="border-bottom-color:${accent};color:${accent};display:flex;align-items:center;gap:0.35rem;">${ICON.history} Activity Log</button>
+          <button class="conv-tab" data-tab="memory" style="display:flex;align-items:center;gap:0.35rem;">${ICON.brain} LLM Memory</button>
         </div>
-        <div id="conv-content" style="flex:1;overflow-y:auto;padding:0.75rem 1.5rem;"></div>
+        <div id="conv-content" class="conv-content"></div>
       </div>
     `;
     document.body.appendChild(overlay);
@@ -2756,16 +2756,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const renderActivityLog = () => {
       const logs = this.store.logs.get(agentId) ?? [];
       if (logs.length === 0) {
-        contentEl.innerHTML = `<div style="text-align:center;color:#888;font-size:0.85rem;padding:2rem;">No activity logged yet.</div>`;
+        contentEl.innerHTML = `<div class="conv-empty">No activity logged yet.</div>`;
         return;
       }
       const kindColors: Record<string, string> = {
-        status: "#888",
-        text: "#44cc66",
-        tool: "#cc8844",
-        result: "#4f9dde",
-        error: "#e05d5d",
-        boss: "#6aaadf",
+        status: "var(--dim)",
+        text: "var(--green)",
+        tool: "var(--amber)",
+        result: "var(--accent)",
+        error: "var(--red)",
+        boss: "var(--accent)",
       };
       const kindLabels: Record<string, string> = {
         status: "STATUS",
@@ -2776,13 +2776,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         boss: "BOSS",
       };
       contentEl.innerHTML = logs.map(l => {
-        const color = kindColors[l.kind] ?? "#888";
+        const color = kindColors[l.kind] ?? "var(--dim)";
         const label = kindLabels[l.kind] ?? l.kind.toUpperCase();
         const time = new Date(l.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         const html = renderEntry(l);
-        return `<div style="display:flex;gap:0.6rem;padding:0.4rem 0;border-bottom:1px solid #1e2028;">
-          <span style="color:#555;font-size:0.65rem;min-width:3.5rem;flex-shrink:0;padding-top:0.1rem;">${time}</span>
-          <span style="color:${color};font-size:0.6rem;font-weight:700;min-width:3rem;flex-shrink:0;padding-top:0.15rem;">${label}</span>
+        return `<div class="conv-entry" style="display:flex;gap:0.6rem;padding:0.4rem 0;border-bottom:1px solid var(--panel-edge-soft);">
+          <span class="conv-entry-time" style="min-width:3.5rem;flex-shrink:0;padding-top:0.1rem;">${time}</span>
+          <span class="conv-entry-label" style="color:${color};min-width:3rem;flex-shrink:0;padding-top:0.15rem;">${label}</span>
           <span style="font-size:0.78rem;line-height:1.4;word-break:break-word;flex:1;">${html}</span>
         </div>`;
       }).join("");
@@ -2792,9 +2792,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     // ── LLM Memory tab ──
     const renderMemoryTab = () => {
       contentEl.innerHTML = `
-        <div style="text-align:center;color:#888;font-size:0.85rem;padding:2rem;">
+        <div class="conv-empty" style="text-align:left;">
           <div id="conv-mem-loading">Loading conversation memory…</div>
-          <div id="conv-mem-list" style="text-align:left;"></div>
+          <div id="conv-mem-list"></div>
         </div>
       `;
       this.net.send({ type: "agent_memory_request", agentId });
@@ -2807,16 +2807,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         if (!listEl) return;
 
         if (messages.length === 0) {
-          listEl.innerHTML = `<div style="text-align:center;color:#888;font-size:0.85rem;padding:1rem;">No conversation history. The agent hasn't been given any tasks yet.</div>`;
+          listEl.innerHTML = `<div class="conv-empty" style="padding:1rem;">No conversation history. The agent hasn't been given any tasks yet.</div>`;
           return;
         }
 
         const roleColors: Record<string, string> = {
-          system: "#666",
-          user: "#6aaadf",
-          assistant: "#44cc66",
-          tool: "#cc8844",
-          unknown: "#888",
+          system: "var(--dim)",
+          user: "var(--accent)",
+          assistant: "var(--green)",
+          tool: "var(--amber)",
+          unknown: "var(--dim)",
         };
         const roleLabels: Record<string, string> = {
           system: "SYSTEM",
@@ -2826,14 +2826,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           unknown: "???",
         };
 
-        listEl.innerHTML = `<div style="font-size:0.7rem;color:#888;margin-bottom:0.5rem;">${messages.length} messages</div>` + messages.map(m => {
-          const color = roleColors[m.role] ?? "#888";
+        listEl.innerHTML = `<div class="wallet-label" style="font-size:0.7rem;margin-bottom:0.5rem;">${messages.length} messages</div>` + messages.map(m => {
+          const color = roleColors[m.role] ?? "var(--dim)";
           const label = roleLabels[m.role] ?? m.role.toUpperCase();
           const isLong = m.content.length > 800;
           const displayContent = isLong ? m.content.slice(0, 800) + "…" : m.content;
-          return `<div style="background:#0d0d18;border-left:3px solid ${color};padding:0.5rem 0.75rem;border-radius:0 4px 4px 0;margin-bottom:0.4rem;">
+          return `<div style="background:var(--panel-soft);border-left:3px solid ${color};padding:0.5rem 0.75rem;border-radius:0 var(--radius-sm) var(--radius-sm) 0;margin-bottom:0.4rem;">
             <div style="color:${color};font-size:0.6rem;font-weight:700;margin-bottom:0.25rem;">${label}</div>
-            <div style="color:#c0c0d0;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-word;">${esc(displayContent)}</div>
+            <div style="color:var(--text);font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-word;">${esc(displayContent)}</div>
           </div>`;
         }).join("");
       };
@@ -2853,7 +2853,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             b.style.color = accent;
           } else {
             b.style.borderBottomColor = "transparent";
-            b.style.color = "#888";
+            b.style.color = "var(--dim)";
           }
         });
         const tab = btn.dataset.tab;

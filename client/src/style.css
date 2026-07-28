@@ -378,9 +378,43 @@ body {
   margin-bottom: 8px;
 }
 
-.detail .logs {
+.detail .logs-wrap {
   flex: 1;
   min-height: 60px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail .logs-wrap .logs {
+  flex: 1;
+  min-height: 0;
+}
+
+.logs-history-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius-sm);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--dim);
+  padding: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  z-index: 1;
+}
+
+.logs-history-btn:hover {
+  opacity: 1;
+  color: var(--accent);
 }
 
 .detail #task-input {
@@ -2637,6 +2671,230 @@ kbd {
   font-size: 0.7rem;
   padding: 0.35rem;
   border-style: dashed;
+}
+
+/* --------------------------------------------------- wallet sections */
+
+.wallet-card {
+  margin: 0.5rem 0;
+  padding: 0.6rem;
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+}
+
+.wallet-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.wallet-title.cdp { color: var(--accent); }
+.wallet-title.crossmint { color: var(--amber); }
+.wallet-title.mcp { color: var(--amber); }
+
+.wallet-content {
+  font-size: 0.7rem;
+  color: var(--dim);
+}
+
+.wallet-subsection {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--panel-edge-soft);
+}
+
+.wallet-subsection-title {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--dim);
+  margin-bottom: 0.3rem;
+}
+
+.wallet-btn-sm {
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--dim);
+  font-size: 0.65rem;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.wallet-btn-sm:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.wallet-btn-sm + .wallet-btn-sm {
+  margin-left: 0.3rem;
+}
+
+.wallet-link {
+  font-size: 0.6rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.wallet-link:hover {
+  text-decoration: underline;
+}
+
+.wallet-addr {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  word-break: break-all;
+}
+
+.wallet-copy-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.wallet-label {
+  color: var(--dim);
+  font-size: 0.65rem;
+}
+
+.wallet-value {
+  color: var(--text);
+  font-size: 0.65rem;
+}
+
+.wallet-error {
+  color: var(--red);
+}
+
+.wallet-success {
+  color: var(--green);
+}
+
+.wallet-divider {
+  margin-top: 0.4rem;
+  border-top: 1px solid var(--panel-edge-soft);
+  padding-top: 0.3rem;
+}
+
+.wallet-input {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+}
+
+/* --------------------------------------------------- conversation modal */
+
+.conv-modal {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  width: 640px;
+  max-width: 92vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  font-family: var(--font-body);
+  box-shadow: var(--shadow-lg);
+}
+
+.conv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--panel-edge-soft);
+}
+
+.conv-name {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.conv-subtitle {
+  font-size: 0.75rem;
+  color: var(--dim);
+}
+
+.conv-close {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.conv-close:hover {
+  color: var(--red);
+}
+
+.conv-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 1rem;
+  background: var(--panel-soft);
+  border-bottom: 1px solid var(--panel-edge-soft);
+}
+
+.conv-tab {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--dim);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.conv-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.conv-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1.5rem;
+}
+
+.conv-empty {
+  text-align: center;
+  color: var(--dim);
+  font-size: 0.85rem;
+  padding: 2rem;
+}
+
+.conv-entry {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.conv-entry-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-right: 0.4rem;
+}
+
+.conv-entry-time {
+  color: var(--dim);
+  font-size: 0.6rem;
+  margin-right: 0.4rem;
 }
 
 /* --------------------------------------------------- intro guide */
