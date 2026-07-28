@@ -4977,6 +4977,12 @@ export class OfficeScene extends Phaser.Scene {
       g.fillStyle(0xffffff, 0.15);
       g.fillRoundedRect(nx, n.y, 24, 4, 2);
     }
+
+    // Invisible interactive zone so clicking the board opens it
+    const boardZone = this.add.zone(bx, by + bh / 2, bw + 12, bh + 12);
+    boardZone.setDepth(3);
+    boardZone.setInteractive({ useHandCursor: true });
+    boardZone.on("pointerdown", () => this.store.toggleBoard(true));
   }
 
   /** Draw a trophy case on the wall — a wooden cabinet with empty cavities that fill with trophies. */

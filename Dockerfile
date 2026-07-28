@@ -28,10 +28,11 @@ RUN npx playwright install chromium
 COPY . .
 RUN pnpm build
 
-# Create data directories for agent workspaces / logs / saves
-# Persist Hermes config (credentials, .env, config.yaml) inside the ag volume so they survive redeploy
+# Create data directory for agent workspaces / logs / saves
+# All persistent data lives under /app/ag — mount it as a volume in Railway
+# Persist Hermes config (credentials, .env, config.yaml) inside the ag volume so they survive redeploys
 # rm -rf first because pip install may have created /root/.hermes as a real directory
-RUN mkdir -p /app/ag /app/workspace /app/ag/hermes && \
+RUN mkdir -p /app/ag /app/ag/hermes && \
     rm -rf /root/.hermes && \
     ln -s /app/ag/hermes /root/.hermes
 
