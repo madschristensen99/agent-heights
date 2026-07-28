@@ -120,6 +120,8 @@ export interface CdpPolicyInfo {
   maxSolPerTransfer: number | null;
   allowedRecipients: string[] | null;
   blockedRecipients: string[] | null;
+  allowedTokenMints: string[] | null;
+  blockedTokenMints: string[] | null;
   network: string;
 }
 
@@ -133,12 +135,14 @@ export async function getAgentPolicy(agentId: string): Promise<CdpPolicyInfo | n
     const account = await getAgentAccount(agentId);
     const policyIds = account.policies ?? [];
     if (policyIds.length === 0) {
-      return { policyId: null, description: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: getNetwork() };
+      return { policyId: null, description: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, allowedTokenMints: null, blockedTokenMints: null, network: getNetwork() };
     }
     const policy = await cdp.policies.getPolicyById({ id: policyIds[0] });
     let maxSol: number | null = null;
     let allowed: string[] = [];
     let blocked: string[] = [];
+    let allowedMints: string[] = [];
+    let blockedMints: string[] = [];
     for (const rule of policy.rules ?? []) {
       if (rule.action === "reject" && rule.operation === "signSolTransaction") {
         for (const c of rule.criteria ?? []) {
@@ -151,6 +155,12 @@ export async function getAgentPolicy(agentId: string): Promise<CdpPolicyInfo | n
           if (c.type === "solAddress" && c.operator === "not in") {
             allowed = c.addresses ?? [];
           }
+          if (c.type === "mintAddress" && c.operator === "in") {
+            blockedMints = c.addresses ?? [];
+          }
+          if (c.type === "mintAddress" && c.operator === "not in") {
+            allowedMints = c.addresses ?? [];
+          }
         }
       }
     }
@@ -160,6 +170,8 @@ export async function getAgentPolicy(agentId: string): Promise<CdpPolicyInfo | n
       maxSolPerTransfer: maxSol,
       allowedRecipients: allowed.length > 0 ? allowed : null,
       blockedRecipients: blocked.length > 0 ? blocked : null,
+      allowedTokenMints: allowedMints.length > 0 ? allowedMints : null,
+      blockedTokenMints: blockedMints.length > 0 ? blockedMints : null,
       network: getNetwork(),
     };
   } catch (err) {
@@ -173,7 +185,7 @@ export async function getAgentPolicy(agentId: string): Promise<CdpPolicyInfo | n
  * we create a project-scoped policy with rules scoped to the agent's wallet address. */
 export async function updateAgentPolicy(
   agentId: string,
-  opts: { maxSolPerTransfer?: number; allowedRecipients?: string[]; blockedRecipients?: string[] }
+  opts: { maxSolPerTransfer?: number; allowedRecipients?: string[]; blockedRecipients?: string[]; allowedTokenMints?: string[]; blockedTokenMints?: string[] }
 ): Promise<CdpPolicyInfo | null> {
   if (!isCdpConfigured()) return null;
   try {
@@ -218,6 +230,39 @@ export async function updateAgentPolicy(
           {
             type: "solAddress",
             addresses: opts.blockedRecipients,
+            operator: "in",
+          },
+          {
+            type: "splAddress",
+            addresses: opts.blockedRecipients,
+            operator: "in",
+          },
+        ],
+      });
+    }
+
+    if (opts.allowedTokenMints && opts.allowedTokenMints.length > 0) {
+      rules.push({
+        action: "reject",
+        operation: "signSolTransaction",
+        criteria: [
+          {
+            type: "mintAddress",
+            addresses: opts.allowedTokenMints,
+            operator: "not in",
+          },
+        ],
+      });
+    }
+
+    if (opts.blockedTokenMints && opts.blockedTokenMints.length > 0) {
+      rules.push({
+        action: "reject",
+        operation: "signSolTransaction",
+        criteria: [
+          {
+            type: "mintAddress",
+            addresses: opts.blockedTokenMints,
             operator: "in",
           },
         ],
@@ -588,7 +633,7 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
   const getPolicyTool: AgentTool<any, any> = {
     name: "solana_get_policy",
     description:
-      "Check your wallet's spending policy — max SOL per transfer, allowed/blocked recipients. " +
+      "Check your wallet's spending policy — max SOL per transfer, allowed/blocked recipients, allowed/blocked token mints. " +
       "If no policy is set, tell the user they should set spending limits in the agent detail panel " +
       "(click the agent → Solana Wallet section → Policy). " +
       "Recommend specific limits based on the task if appropriate.",
@@ -612,6 +657,15 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
         if (!policy.allowedRecipients && !policy.blockedRecipients) {
           lines.push(`Recipient restrictions: none (can send to any address)`);
         }
+        if (policy.allowedTokenMints && policy.allowedTokenMints.length > 0) {
+          lines.push(`Allowed token mints only: ${policy.allowedTokenMints.join(', ')}`);
+        }
+        if (policy.blockedTokenMints && policy.blockedTokenMints.length > 0) {
+          lines.push(`Blocked token mints: ${policy.blockedTokenMints.join(', ')}`);
+        }
+        if (!policy.allowedTokenMints && !policy.blockedTokenMints) {
+          lines.push(`Token restrictions: none (can transfer any SPL token)`);
+        }
         lines.push(`Network: ${policy.network}`);
         return lines.join('\n');
       } catch (err) {
@@ -628,6 +682,7 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
       "Provide input token mint, output token mint, and amount in human-readable units. " +
       "The swap is signed with your CDP wallet and executed via Jupiter's relay for MEV protection. " +
       "Common mints: SOL=So11111111111111111111111111111111111111112, USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v. " +
+      "Use solana_jupiter_search to look up mint addresses and decimals for any token. " +
       `Network: ${network}.`,
     inputSchema: {
       type: "object",
@@ -642,7 +697,11 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
         },
         amount: {
           type: "number",
-          description: "Amount to swap in human-readable units (e.g. 0.5 for 0.5 SOL)",
+          description: "Amount to swap in human-readable units (e.g. 0.5 for 0.5 SOL, 100 for 100 USDC)",
+        },
+        inputDecimals: {
+          type: "number",
+          description: "Decimals of the input token (SOL=9, USDC=6, BONK=5, etc.). If omitted, will be looked up automatically via Jupiter search.",
         },
         slippageBps: {
           type: "number",
@@ -656,10 +715,37 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
       try {
         const account = await getAgentAccount(agentId);
         const slippageBps = input.slippageBps ?? 100;
-
-        // Determine decimals — SOL uses 9, most SPL tokens use 6. For unknown tokens, assume 6.
         const isSol = input.inputMint === "So11111111111111111111111111111111111111112";
-        const decimals = isSol ? 9 : 6;
+
+        // Determine input token decimals
+        let decimals: number;
+        if (input.inputDecimals !== undefined) {
+          decimals = input.inputDecimals;
+        } else if (isSol) {
+          decimals = 9;
+        } else {
+          // Look up decimals via Jupiter search
+          try {
+            const searchUrl = new URL("https://lite-api.jup.ag/ultra/v1/search");
+            searchUrl.searchParams.set("query", input.inputMint);
+            const searchRes = await fetch(searchUrl.toString());
+            if (searchRes.ok) {
+              const searchData = await searchRes.json() as any;
+              const tokens = Array.isArray(searchData) ? searchData : (searchData.tokens ?? searchData.result ?? []);
+              const found = (tokens as any[]).find((t) => (t.mint ?? t.address ?? t.id) === input.inputMint);
+              if (found) {
+                decimals = Number(found.decimals ?? found.tokenDecimals ?? 6);
+              } else {
+                return `Could not determine decimals for input token ${input.inputMint}. Please provide "inputDecimals" parameter. Use solana_jupiter_search to look it up.`;
+              }
+            } else {
+              return `Could not determine decimals for input token ${input.inputMint}. Please provide "inputDecimals" parameter.`;
+            }
+          } catch {
+            return `Could not determine decimals for input token ${input.inputMint}. Please provide "inputDecimals" parameter.`;
+          }
+        }
+
         const rawAmount = String(Math.floor(input.amount * Math.pow(10, decimals)));
 
         // Step 1: Get swap order from Jupiter Ultra API
@@ -782,7 +868,8 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
       "Get a swap price quote from Jupiter Ultra API without executing a swap. " +
       "Returns expected input amount, output amount, price impact, and estimated output. " +
       "Use this to show the user the current price before they decide to swap. " +
-      "Common mints: SOL=So11111111111111111111111111111111111111112, USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v.",
+      "Common mints: SOL=So11111111111111111111111111111111111111112, USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v. " +
+      "Use solana_jupiter_search to look up decimals for any token.",
     inputSchema: {
       type: "object",
       properties: {
@@ -796,7 +883,15 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
         },
         amount: {
           type: "number",
-          description: "Amount to quote in human-readable units (e.g. 0.5 for 0.5 SOL)",
+          description: "Amount to quote in human-readable units (e.g. 0.5 for 0.5 SOL, 100 for 100 USDC)",
+        },
+        inputDecimals: {
+          type: "number",
+          description: "Decimals of the input token (SOL=9, USDC=6, BONK=5, etc.). If omitted, will be looked up automatically.",
+        },
+        outputDecimals: {
+          type: "number",
+          description: "Decimals of the output token. If omitted, will be looked up automatically.",
         },
         slippageBps: {
           type: "number",
@@ -810,8 +905,29 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
       try {
         const slippageBps = input.slippageBps ?? 100;
         const isSol = input.inputMint === "So11111111111111111111111111111111111111112";
-        const decimals = isSol ? 9 : 6;
-        const rawAmount = String(Math.floor(input.amount * Math.pow(10, decimals)));
+        const isOutSol = input.outputMint === "So11111111111111111111111111111111111111112";
+
+        // Determine input decimals
+        let inDecimals: number;
+        if (input.inputDecimals !== undefined) {
+          inDecimals = input.inputDecimals;
+        } else if (isSol) {
+          inDecimals = 9;
+        } else {
+          return `Please provide "inputDecimals" for token ${input.inputMint}. Use solana_jupiter_search to look it up.`;
+        }
+
+        // Determine output decimals
+        let outDecimals: number;
+        if (input.outputDecimals !== undefined) {
+          outDecimals = input.outputDecimals;
+        } else if (isOutSol) {
+          outDecimals = 9;
+        } else {
+          return `Please provide "outputDecimals" for token ${input.outputMint}. Use solana_jupiter_search to look it up.`;
+        }
+
+        const rawAmount = String(Math.floor(input.amount * Math.pow(10, inDecimals)));
 
         const orderUrl = new URL("https://lite-api.jup.ag/ultra/v1/order");
         orderUrl.searchParams.set("inputMint", input.inputMint);
@@ -832,11 +948,10 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
           return `No quote available. Response: ${JSON.stringify(order).slice(0, 500)}`;
         }
 
-        const outDecimals = input.outputMint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" ? 6 : 9;
         const outHuman = (Number(order.outAmount) / Math.pow(10, outDecimals)).toFixed(6);
         const priceImpact = order.priceImpact ?? "unknown";
         const inSymbol = isSol ? "SOL" : input.inputMint.slice(0, 8);
-        const outSymbol = input.outputMint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" ? "USDC" : input.outputMint.slice(0, 8);
+        const outSymbol = isOutSol ? "SOL" : input.outputMint.slice(0, 8);
 
         return `Quote for ${input.amount} ${inSymbol} → ${outSymbol}:\n` +
           `Expected output: ${outHuman} ${outSymbol}\n` +

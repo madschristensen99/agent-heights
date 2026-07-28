@@ -624,7 +624,7 @@ export type ClientMsg =
   | { type: "submit_mcp_oauth_code"; serverUrl: string; callbackUrl: string }
   | { type: "get_cdp_wallet"; agentId: string }
   | { type: "get_cdp_policy"; agentId: string }
-  | { type: "set_cdp_policy"; agentId: string; maxSolPerTransfer?: number; allowedRecipients?: string[]; blockedRecipients?: string[] }
+  | { type: "set_cdp_policy"; agentId: string; maxSolPerTransfer?: number; allowedRecipients?: string[]; blockedRecipients?: string[]; allowedTokenMints?: string[]; blockedTokenMints?: string[] }
   | { type: "get_cdp_tx_history"; agentId: string }
   | { type: "create_cdp_onramp"; agentId: string }
   | { type: "get_crossmint_wallet"; agentId: string }
@@ -742,7 +742,7 @@ export type ServerMsg =
   | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "cdp_wallet_status"; agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }
-  | { type: "cdp_policy_status"; agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }
+  | { type: "cdp_policy_status"; agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; allowedTokenMints: string[] | null; blockedTokenMints: string[] | null; network: string; error?: string }
   | { type: "cdp_tx_history"; agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }
   | { type: "cdp_onramp_url"; agentId: string; url: string | null; error?: string }
   | { type: "crossmint_wallet_status"; agentId: string; address: string | null; chain: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }

@@ -203,7 +203,7 @@ export class Hud {
   private lastBoardSig = "";
   private detailMcpListener: ((results: { serverUrl: string; hasKey: boolean }[]) => void) | null = null;
   private detailCdpListener: ((msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void) | null = null;
-  private detailCdpPolicyListener: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => void) | null = null;
+  private detailCdpPolicyListener: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; allowedTokenMints: string[] | null; blockedTokenMints: string[] | null; network: string; error?: string }) => void) | null = null;
   private detailCdpTxHistoryListener: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void) | null = null;
   private detailCdpOnrampListener: ((msg: { agentId: string; url: string | null; error?: string }) => void) | null = null;
   private cdpDetailAgentId: string | null = null;
@@ -2386,7 +2386,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       this.store.cdpWalletListeners.push(this.detailCdpListener);
 
       this.net.send({ type: "get_cdp_policy", agentId: agent.id });
-      this.detailCdpPolicyListener = (msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => {
+      this.detailCdpPolicyListener = (msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; allowedTokenMints: string[] | null; blockedTokenMints: string[] | null; network: string; error?: string }) => {
         if (msg.agentId !== agent.id) return;
         const pcontent = cdpSection.querySelector("#d-cdp-policy-content") as HTMLElement | null;
         if (!pcontent) return;
@@ -2397,6 +2397,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const maxSol = msg.maxSolPerTransfer ?? "";
         const allowed = msg.allowedRecipients?.join(", ") ?? "";
         const blocked = msg.blockedRecipients?.join(", ") ?? "";
+        const allowedMints = msg.allowedTokenMints?.join(", ") ?? "";
+        const blockedMints = msg.blockedTokenMints?.join(", ") ?? "";
         pcontent.innerHTML = `
           <div style="margin-bottom:0.3rem;">
             <label style="color:#888; font-size:0.65rem;">Max SOL per transfer:</label>
@@ -2410,6 +2412,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             <label style="color:#888; font-size:0.65rem;">Blocked recipients (comma-sep):</label>
             <input id="d-cdp-blocked" type="text" value="${esc(blocked)}" placeholder="none" style="font-size:0.7rem; font-family:monospace;" />
           </div>
+          <div style="margin-bottom:0.3rem;">
+            <label style="color:#888; font-size:0.65rem;">Allowed token mints (comma-sep, leave empty for any):</label>
+            <input id="d-cdp-allowed-mints" type="text" value="${esc(allowedMints)}" placeholder="any token" style="font-size:0.7rem; font-family:monospace;" />
+          </div>
+          <div style="margin-bottom:0.3rem;">
+            <label style="color:#888; font-size:0.65rem;">Blocked token mints (comma-sep):</label>
+            <input id="d-cdp-blocked-mints" type="text" value="${esc(blockedMints)}" placeholder="none" style="font-size:0.7rem; font-family:monospace;" />
+          </div>
           <button id="d-cdp-save-policy" class="btn" style="padding:0.3rem 0.5rem; font-size:0.65rem;">Save Policy</button>
         `;
         const saveBtn = pcontent.querySelector("#d-cdp-save-policy") as HTMLButtonElement | null;
@@ -2418,15 +2428,21 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             const maxSolInput = pcontent.querySelector("#d-cdp-max-sol") as HTMLInputElement | null;
             const allowedInput = pcontent.querySelector("#d-cdp-allowed") as HTMLInputElement | null;
             const blockedInput = pcontent.querySelector("#d-cdp-blocked") as HTMLInputElement | null;
+            const allowedMintsInput = pcontent.querySelector("#d-cdp-allowed-mints") as HTMLInputElement | null;
+            const blockedMintsInput = pcontent.querySelector("#d-cdp-blocked-mints") as HTMLInputElement | null;
             const maxSolVal = maxSolInput?.value.trim();
             const allowedVal = allowedInput?.value.trim();
             const blockedVal = blockedInput?.value.trim();
+            const allowedMintsVal = allowedMintsInput?.value.trim();
+            const blockedMintsVal = blockedMintsInput?.value.trim();
             this.net.send({
               type: "set_cdp_policy",
               agentId: agent.id,
               maxSolPerTransfer: maxSolVal ? parseFloat(maxSolVal) : undefined,
               allowedRecipients: allowedVal ? allowedVal.split(",").map(s => s.trim()).filter(Boolean) : undefined,
               blockedRecipients: blockedVal ? blockedVal.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+              allowedTokenMints: allowedMintsVal ? allowedMintsVal.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+              blockedTokenMints: blockedMintsVal ? blockedMintsVal.split(",").map(s => s.trim()).filter(Boolean) : undefined,
             });
             saveBtn.textContent = "Saving...";
             setTimeout(() => { saveBtn.textContent = "Save Policy"; }, 2000);

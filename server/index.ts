@@ -1339,13 +1339,13 @@ wss.on("connection", async (ws, req) => {
           try {
             const policy = await getAgentPolicy(msg.agentId);
             if (!policy) {
-              sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: "CDP not configured" });
+              sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, allowedTokenMints: null, blockedTokenMints: null, network: "unknown", error: "CDP not configured" });
               break;
             }
-            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: policy.policyId, maxSolPerTransfer: policy.maxSolPerTransfer, allowedRecipients: policy.allowedRecipients, blockedRecipients: policy.blockedRecipients, network: policy.network });
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: policy.policyId, maxSolPerTransfer: policy.maxSolPerTransfer, allowedRecipients: policy.allowedRecipients, blockedRecipients: policy.blockedRecipients, allowedTokenMints: policy.allowedTokenMints, blockedTokenMints: policy.blockedTokenMints, network: policy.network });
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
-            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: msg2 });
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, allowedTokenMints: null, blockedTokenMints: null, network: "unknown", error: msg2 });
           }
           break;
         }
@@ -1355,16 +1355,18 @@ wss.on("connection", async (ws, req) => {
               maxSolPerTransfer: msg.maxSolPerTransfer,
               allowedRecipients: msg.allowedRecipients,
               blockedRecipients: msg.blockedRecipients,
+              allowedTokenMints: msg.allowedTokenMints,
+              blockedTokenMints: msg.blockedTokenMints,
             });
             if (!policy) {
-              sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: "CDP not configured" });
+              sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, allowedTokenMints: null, blockedTokenMints: null, network: "unknown", error: "CDP not configured" });
               break;
             }
-            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: policy.policyId, maxSolPerTransfer: policy.maxSolPerTransfer, allowedRecipients: policy.allowedRecipients, blockedRecipients: policy.blockedRecipients, network: policy.network });
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: policy.policyId, maxSolPerTransfer: policy.maxSolPerTransfer, allowedRecipients: policy.allowedRecipients, blockedRecipients: policy.blockedRecipients, allowedTokenMints: policy.allowedTokenMints, blockedTokenMints: policy.blockedTokenMints, network: policy.network });
             sess.broadcast({ type: "toast", text: "Spending policy updated." });
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
-            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, network: "unknown", error: msg2 });
+            sess.broadcast({ type: "cdp_policy_status", agentId: msg.agentId, policyId: null, maxSolPerTransfer: null, allowedRecipients: null, blockedRecipients: null, allowedTokenMints: null, blockedTokenMints: null, network: "unknown", error: msg2 });
           }
           break;
         }

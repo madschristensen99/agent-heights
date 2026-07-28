@@ -90,7 +90,7 @@ export class Store {
   /** Listeners called when server responds with CDP wallet status. */
   cdpWalletListeners: ((msg: { agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }) => void)[] = [];
   /** Listeners called when server responds with CDP policy status. */
-  cdpPolicyListeners: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; network: string; error?: string }) => void)[] = [];
+  cdpPolicyListeners: ((msg: { agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; allowedTokenMints: string[] | null; blockedTokenMints: string[] | null; network: string; error?: string }) => void)[] = [];
   /** Listeners called when server responds with CDP tx history. */
   cdpTxHistoryListeners: ((msg: { agentId: string; transactions: { signature: string; slot: number; blockTime: number | null; err: boolean | null; memo: string | null }[] | null; error?: string }) => void)[] = [];
   cdpOnrampListeners: ((msg: { agentId: string; url: string | null; error?: string }) => void)[] = [];
