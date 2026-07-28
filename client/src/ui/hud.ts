@@ -3155,7 +3155,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     // signature: board open state + card data + agent roster (for dropdowns)
     const sig =
       this.store.boardOpen + "|" +
-      cards.map((c) => c.id + c.status + c.assignedAgentId + c.title).join(",") + "|" +
+      cards.map((c) => c.id + c.status + c.assignedAgentId + c.title + (c.type ?? "") + (c.progress ?? 0)).join(",") + "|" +
       agents.map((a) => a.id + a.name + a.status).join(",");
     if (sig === this.lastBoardSig) return;
     this.lastBoardSig = sig;
@@ -3196,10 +3196,17 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           ? `<button class="btn mini" data-move="${c.id}" data-status="done">✓ DONE</button>`
           : "";
 
+      const typeIcon: Record<string, string> = { task: "📋", chat: "💬", review: "🔍", goal: "🎯" };
+      const typeBadge = c.type ? `<span class="card-type-badge">${typeIcon[c.type] ?? "📋"}</span>` : "";
+      const progressBar = (c.type === "goal" && c.progress != null && c.progress > 0)
+        ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${c.progress}%"></div></div>`
+        : "";
+
       return `
         <div class="board-card" data-card-id="${c.id}">
-          <div class="card-title">${esc(c.title)}</div>
+          <div class="card-title">${typeBadge} ${esc(c.title)}</div>
           ${c.description ? `<div class="card-desc">${esc(c.description)}</div>` : ""}
+          ${progressBar}
           <div class="card-footer">
             ${assignee}
             <select class="card-assign-select" data-assign="${c.id}">${agentOptions}</select>

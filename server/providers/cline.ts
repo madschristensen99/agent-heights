@@ -840,6 +840,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         listSelfSchedules: ctx.listSelfSchedules,
         updateSelfSchedule: ctx.updateSelfSchedule,
         deleteSelfSchedule: ctx.deleteSelfSchedule,
+        hireAgent: ctx.hireAgent,
       });
       const maxIter = isChat ? (agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
