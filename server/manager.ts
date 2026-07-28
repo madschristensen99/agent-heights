@@ -683,6 +683,27 @@ export class AgentManager {
       (event) => {
         // Real inbound message from a platform via Hermes
         this.emitPlatformEvent(event.platform, event.direction, event.sender, event.text);
+        // Persist home channel for Telegram so /sethome survives redeploys
+        if (event.direction === "inbound" && event.platform.toLowerCase() === "telegram" && event.chatId) {
+          const existing = this.save.getPlatformCredentials();
+          if (existing.TELEGRAM_HOME_CHANNEL !== event.chatId) {
+            const merged = { ...existing, TELEGRAM_HOME_CHANNEL: event.chatId };
+            this.save.setPlatformCredentials(merged);
+            void this.save.flushNow();
+            console.log(`[manager] Saved TELEGRAM_HOME_CHANNEL=${event.chatId} to platform credentials`);
+            // Also write to Hermes .env immediately so it takes effect without restart
+            try {
+              const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+              const envPath = join(hermesHome, ".env");
+              if (existsSync(envPath)) {
+                let envContent = readFileSync(envPath, "utf-8");
+                const lines = envContent.split("\n").filter((l) => !l.startsWith("TELEGRAM_HOME_CHANNEL="));
+                lines.push(`TELEGRAM_HOME_CHANNEL=${event.chatId}`);
+                writeFileSync(envPath, lines.join("\n"), "utf-8");
+              }
+            } catch { /* best effort */ }
+          }
+        }
         if (event.direction === "inbound") {
           this.routePlatformEvent(event.platform, event.sender, event.text);
         }
@@ -759,17 +780,20 @@ export class AgentManager {
       }
 
       // Write saved credentials to Hermes .env so the gateway can use them
+      // Also write home channel env vars so /sethome persists across redeploys
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       const envPath = join(hermesHome, ".env");
       let envContent = "";
       if (existsSync(envPath)) {
         envContent = readFileSync(envPath, "utf-8");
       }
+      // Write all saved credentials (tokens + home channel IDs)
       for (const [varName, value] of Object.entries(savedCreds)) {
-        if (!envContent.includes(`${varName}=`)) {
-          envContent += (envContent && !envContent.endsWith("\n") ? "\n" : "") + `${varName}=${value}\n`;
-          console.log(`[hermes] autoReconfigurePlatforms: wrote ${varName} to .env from save.json`);
-        }
+        // Remove any existing line with this var name, then append fresh value
+        const lines = envContent.split("\n").filter((l) => !l.startsWith(`${varName}=`));
+        lines.push(`${varName}=${value}`);
+        envContent = lines.join("\n");
+        console.log(`[hermes] autoReconfigurePlatforms: wrote ${varName} to .env from save.json`);
       }
       writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
 
@@ -782,7 +806,7 @@ export class AgentManager {
           this.hermesClient?.configurePlatform(platform, { bot_token: savedCreds.TELEGRAM_BOT_TOKEN }).then((result) => {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Telegram re-enabled successfully`);
-              this.hermesProcess?.restartGateway();
+              // configurePlatform already restarts the gateway — no need for explicit restartGateway()
             } else {
               console.warn(`[hermes] autoReconfigurePlatforms: Telegram re-enable failed: ${result.error}`);
             }
@@ -792,7 +816,6 @@ export class AgentManager {
           this.hermesClient?.configurePlatform(platform, { bot_token: savedCreds.DISCORD_BOT_TOKEN }).then((result) => {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Discord re-enabled successfully`);
-              this.hermesProcess?.restartGateway();
             }
           }).catch(() => {});
         } else if (lower === "slack" && savedCreds.SLACK_BOT_TOKEN) {
@@ -802,7 +825,6 @@ export class AgentManager {
           this.hermesClient?.configurePlatform(platform, creds).then((result) => {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Slack re-enabled successfully`);
-              this.hermesProcess?.restartGateway();
             }
           }).catch(() => {});
         }
@@ -899,6 +921,14 @@ export class AgentManager {
         if (kimiKey && !envContent.includes("KIMI_API_KEY=")) {
           envContent += (envContent.endsWith("\n") ? "" : "\n") + `KIMI_API_KEY=${kimiKey}\n`;
           console.log(`[manager] Re-added KIMI_API_KEY to ${envPath}`);
+        }
+        // Restore home channel from saved credentials (Hermes API may have wiped it)
+        const savedCreds = this.save.getPlatformCredentials();
+        for (const [varName, value] of Object.entries(savedCreds)) {
+          if (varName.endsWith("_HOME_CHANNEL") && !envContent.includes(`${varName}=`)) {
+            envContent += (envContent.endsWith("\n") ? "" : "\n") + `${varName}=${value}\n`;
+            console.log(`[manager] Restored ${varName} to ${envPath} from saved credentials`);
+          }
         }
         writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
         // Log final .env keys for debugging

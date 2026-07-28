@@ -228,6 +228,7 @@ export class HermesClient {
                 sender: replyTarget,
                 text,
                 timestamp: msg.timestamp ?? Date.now(),
+                chatId: chatId ?? undefined,
               });
             }
           }

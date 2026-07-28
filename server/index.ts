@@ -1407,7 +1407,7 @@ wss.on("connection", async (ws, req) => {
               sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: null, chain: null, balances: null, error: "Crossmint not configured" });
               break;
             }
-            sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: balData.address, chain: process.env.CROSSMINT_CHAIN ?? "base-sepolia", balances: balData.balances });
+            sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: balData.address, chain: process.env.CROSSMINT_CHAIN ?? "solana", balances: balData.balances });
           } catch (err) {
             const msg2 = err instanceof Error ? err.message : String(err);
             sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: null, chain: null, balances: null, error: msg2 });
@@ -1454,7 +1454,7 @@ wss.on("connection", async (ws, req) => {
             if (result.success) {
               const balData = await getCrossmintBalances(msg.agentId);
               if (balData) {
-                sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: balData.address, chain: process.env.CROSSMINT_CHAIN ?? "base-sepolia", balances: balData.balances });
+                sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: balData.address, chain: process.env.CROSSMINT_CHAIN ?? "solana", balances: balData.balances });
               }
             }
           } catch (err) {

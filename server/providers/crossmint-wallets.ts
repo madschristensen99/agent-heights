@@ -38,7 +38,7 @@ function getSignerSecret(): string | null {
 }
 
 function getDefaultChain(): string {
-  return process.env.CROSSMINT_CHAIN ?? "base-sepolia";
+  return process.env.CROSSMINT_CHAIN ?? "solana";
 }
 
 export function isCrossmintConfigured(): boolean {
@@ -49,12 +49,30 @@ export function isCrossmintConfigured(): boolean {
 const walletCache = new Map<string, { address: string; chainType: string }>();
 
 /** Derive the server signer's EVM address from the secret. */
-function getSignerAddress(): string {
+function getEvmSignerAddress(): string {
   const secret = getSignerSecret();
   if (!secret) throw new Error("CROSSMINT_SERVER_SIGNER_SECRET not set");
   const pk = secret.startsWith("0x") ? secret : `0x${secret}`;
   const account = privateKeyToAccount(pk as `0x${string}`);
   return account.address;
+}
+
+/** Derive the server signer's Solana address from the secret. */
+function getSolanaSignerAddress(): string {
+  const secret = getSignerSecret();
+  if (!secret) throw new Error("CROSSMINT_SERVER_SIGNER_SECRET not set");
+  const hex = secret.startsWith("0x") ? secret.slice(2) : secret;
+  const seed = Buffer.from(hex, "hex");
+  if (seed.length !== 32) throw new Error("Signer secret must be 32 bytes (64 hex chars)");
+  const { Keypair } = require("@solana/web3.js");
+  const kp = Keypair.fromSeed(seed);
+  return kp.publicKey.toBase58();
+}
+
+/** Get the signer address for the current default chain. */
+function getSignerAddress(): string {
+  const chain = getDefaultChain();
+  return chainToType(chain) === "solana" ? getSolanaSignerAddress() : getEvmSignerAddress();
 }
 
 /** Get the chain type from a chain identifier. */
@@ -158,7 +176,7 @@ export async function getAgentBalances(
     if (!wallet) return null;
 
     const chain = getDefaultChain();
-    const tokenList = tokens ?? ["usdc", "eth", "sol"];
+    const tokenList = tokens ?? ["sol", "usdc"];
     const locator = agentWalletLocator(agentId, chain);
 
     const url = new URL(
@@ -210,9 +228,23 @@ export async function getAgentBalances(
   }
 }
 
-/** Sign an EVM message with the server signer key. */
+/** Sign an approval message with the server signer key (EVM or Solana). */
 async function signApprovalMessage(message: string): Promise<string> {
+  const chain = getDefaultChain();
   const secret = getSignerSecret()!;
+
+  if (chainToType(chain) === "solana") {
+    // Solana: Ed25519 sign the raw message bytes
+    const hex = secret.startsWith("0x") ? secret.slice(2) : secret;
+    const seed = Buffer.from(hex, "hex");
+    const { Keypair } = require("@solana/web3.js");
+    const kp = Keypair.fromSeed(seed);
+    const msgBytes = Buffer.from(message, "utf-8");
+    const sig = kp.sign(msgBytes);
+    return Buffer.from(sig).toString("base64");
+  }
+
+  // EVM: personal_sign on raw hex message
   const pk = secret.startsWith("0x") ? secret : `0x${secret}`;
   const account = privateKeyToAccount(pk as `0x${string}`);
   const signature = await account.signMessage({
@@ -467,7 +499,7 @@ export async function createCrossmintOnrampUrl(
       lineItems: [
         {
           chain,
-          token: "usdc",
+          token: "sol",
           quantity: 10,
         },
       ],
@@ -558,7 +590,7 @@ export async function loadCrossmintWalletTools(
       properties: {
         tokens: {
           type: "string",
-          description: "Comma-separated token symbols to check (e.g. 'usdc,eth'). Default: 'usdc,eth,sol'",
+          description: "Comma-separated token symbols to check (e.g. 'sol,usdc'). Default: 'sol,usdc'",
         },
       },
     },
@@ -603,8 +635,8 @@ export async function loadCrossmintWalletTools(
         },
         token: {
           type: "string",
-          description: 'Token symbol to transfer (e.g. "usdc", "eth", "sol"). Default: "usdc"',
-          default: "usdc",
+          description: 'Token symbol to transfer (e.g. "sol", "usdc"). Default: "sol"',
+          default: "sol",
         },
         chain: {
           type: "string",
@@ -615,7 +647,7 @@ export async function loadCrossmintWalletTools(
     },
     async execute(input: any) {
       try {
-        const token = input.token ?? "usdc";
+        const token = input.token ?? "sol";
         const useChain = input.chain ?? chain;
         const result = await transferAgentTokens(agentId, input.to, input.amount, token, useChain);
         if (!result) return "Transfer failed: could not complete transaction.";

@@ -1166,6 +1166,8 @@ export interface PlatformEvent {
   sender: string;
   text: string;
   timestamp: number;
+  /** Chat/channel ID from the platform (used for persisting home channel) */
+  chatId?: string;
 }
 
 /** Connection state for a messaging platform (mirrors Hermes Agent gateway status). */

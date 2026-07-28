@@ -2678,7 +2678,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             `<span style="color:${statusColor}; font-size:0.6rem; font-weight:600;">${esc(status)}</span>` +
             `<span class="wallet-value" style="font-family:var(--font-mono); font-size:0.6rem;">${esc(shortId)}</span>` +
             (amount ? `<span class="wallet-label" style="font-size:0.6rem;">${esc(amount)} ${esc(token)}</span>` : "") +
-            (hash ? `<a href="https://sepolia.basescan.org/tx/${esc(hash)}" target="_blank" class="wallet-link">↗</a>` : "") +
+            (hash ? `<a href="https://explorer.solana.com/tx/${esc(hash)}" target="_blank" class="wallet-link">↗</a>` : "") +
             `</div>`;
         }).join("");
       };
