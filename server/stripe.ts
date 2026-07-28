@@ -11,11 +11,11 @@ export const stripe: Stripe | null = isStripeConfigured
   ? new Stripe(secretKey)
   : null;
 
-const ENTRANCE_FEE = 100;
 const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
 
-// ── Free trial: 2 minutes per day for authed users who haven't paid entrance ──
-const FREE_TRIAL_DURATION_MS = 2 * 60 * 1000;
+// ── Free trial: 5 minutes per day for authed users without a subscription ──
+// Users can look around and hire agents but cannot run inference (tasks/chat)
+const FREE_TRIAL_DURATION_MS = 5 * 60 * 1000;
 const freeTrialMap = new Map<string, { date: string; expiresAt: number }>();
 
 function todayKey(): string {
@@ -45,18 +45,19 @@ export function startFreeTrial(userId: string): number | null {
 }
 
 export interface PaymentStatus {
-  entrancePaid: boolean;
+  entrancePaid: boolean; // always true now — entrance fee removed
   subscriptionStatus: string;
   subscriptionActive: boolean;
   subscriptionTier: SubscriptionTier | null;
   agentLimit: number;
+  usageCap: number; // monthly usage cap in cents (80% of tier price)
   currentPeriodEnd: number | null;
   freeTrialExpiresAt: number | null;
 }
 
 export async function getUserPaymentStatus(userId: string): Promise<PaymentStatus> {
   if (!isSupabaseConfigured || !isStripeConfigured) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "pro", agentLimit: SUBSCRIPTION_TIERS.pro.agentLimit, currentPeriodEnd: null, freeTrialExpiresAt: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "pro", agentLimit: SUBSCRIPTION_TIERS.pro.agentLimit, usageCap: SUBSCRIPTION_TIERS.pro.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null };
   }
   try {
     // Try full query with subscription_tier (may fail if migration not applied)
@@ -80,40 +81,10 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
 
     if (error || !data) {
       const trial = getFreeTrialStatus(userId);
-      return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
+      return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
     }
 
-    let entrancePaid = data.entrance_paid ?? false;
-
-    // Fallback: if entrance_paid is false but the user has a Stripe customer,
-    // check for recent completed entrance checkout sessions (webhook may have missed)
-    if (!entrancePaid && data.stripe_customer_id && stripe) {
-      try {
-        const sessions = await stripe.checkout.sessions.list({
-          customer: data.stripe_customer_id,
-          limit: 10,
-        });
-        const hasEntrancePayment = sessions.data.some(
-          (s) => s.metadata?.type === "entrance" &&
-                 s.metadata?.userId === userId &&
-                 s.payment_status === "paid"
-        );
-        if (hasEntrancePayment) {
-          console.log(`[stripe] fallback: found completed entrance checkout for user ${userId}, updating DB`);
-          entrancePaid = true;
-          await supabaseAdmin
-            .from("user_payments")
-            .update({
-              entrance_paid: true,
-              entrance_paid_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("user_id", userId);
-        }
-      } catch (fallbackErr) {
-        console.error("[stripe] fallback entrance check failed:", fallbackErr);
-      }
-    }
+    const entrancePaid = true; // Entrance fee removed — always true
 
     const now = Math.floor(Date.now() / 1000);
     const subscriptionActive =
@@ -121,10 +92,11 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
       (data.subscription_status === "trialing") ||
       (data.subscription_status === "past_due" && data.current_period_end && data.current_period_end > now);
 
-    const freeTrialExpiresAt = entrancePaid ? null : getFreeTrialStatus(userId).expiresAt;
+    const freeTrialExpiresAt = !subscriptionActive ? getFreeTrialStatus(userId).expiresAt : null;
 
     const tier = parseTier(data.subscription_tier as string | null);
     const agentLimit = tier ? SUBSCRIPTION_TIERS[tier].agentLimit : 0;
+    const usageCap = tier ? SUBSCRIPTION_TIERS[tier].usageCap : 0;
 
     return {
       entrancePaid,
@@ -132,12 +104,13 @@ export async function getUserPaymentStatus(userId: string): Promise<PaymentStatu
       subscriptionActive,
       subscriptionTier: tier,
       agentLimit,
+      usageCap,
       currentPeriodEnd: data.current_period_end ?? null,
       freeTrialExpiresAt,
     };
   } catch {
     const trial = getFreeTrialStatus(userId);
-    return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
+    return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
   }
 }
 
@@ -164,58 +137,7 @@ async function getOrCreateStripeCustomer(userId: string, email: string): Promise
   return customer.id;
 }
 
-// Check if entrance fee is already paid — used to prevent duplicate charges
-async function isEntrancePaid(userId: string): Promise<boolean> {
-  const { data } = await supabaseAdmin
-    .from("user_payments")
-    .select("entrance_paid")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return data?.entrance_paid ?? false;
-}
-
-export async function createEntranceCheckoutSession(
-  userId: string,
-  email: string,
-): Promise<{ url: string } | { error: string }> {
-  if (!stripe) return { error: "Stripe not configured" };
-  if (!APP_URL) return { error: "APP_URL not configured" };
-
-  // Prevent duplicate entrance fee charges
-  if (await isEntrancePaid(userId)) {
-    return { error: "Entrance fee already paid" };
-  }
-
-  try {
-    const customerId = await getOrCreateStripeCustomer(userId, email);
-
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: "payment",
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: ENTRANCE_FEE,
-            product_data: {
-              name: "Agent Heights — World Entrance Fee",
-              description: "One-time fee to enter the Agent Heights world",
-            },
-          },
-        },
-      ],
-      metadata: { userId, type: "entrance" },
-      success_url: `${APP_URL}/?payment=entrance_success`,
-      cancel_url: `${APP_URL}/?payment=entrance_cancel`,
-    });
-
-    return { url: session.url! };
-  } catch (err) {
-    console.error("[stripe] entrance checkout error:", err);
-    return { error: err instanceof Error ? err.message : "Failed to create checkout session" };
-  }
-}
+// ── Entrance fee removed — checkout-entrance route deleted ──
 
 export async function createSubscriptionCheckoutSession(
   userId: string,
@@ -317,15 +239,8 @@ export async function handleStripeWebhook(
         if (!userId) break;
 
         if (session.metadata?.type === "entrance") {
-          await supabaseAdmin
-            .from("user_payments")
-            .upsert({
-              user_id: userId,
-              entrance_paid: true,
-              entrance_paid_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }, { onConflict: "user_id" });
-          console.log(`[stripe] entrance fee paid for user ${userId}`);
+          // Entrance fee removed — no-op, but keep for backward compat
+          console.log(`[stripe] legacy entrance fee payment for user ${userId} — entrance fee removed, ignoring`);
         }
 
         if (session.metadata?.type === "subscription" && session.subscription) {
@@ -456,20 +371,7 @@ export async function handleStripeRequest(
     return true;
   }
 
-  // POST /api/stripe/checkout-entrance — create $1 entrance fee checkout
-  if (url === "/api/stripe/checkout-entrance" && req.method === "POST") {
-    const result = await createEntranceCheckoutSession(user.id, user.email ?? "");
-    if ("error" in result) {
-      if (result.error === "Entrance fee already paid") {
-        json(res, 200, { alreadyPaid: true });
-      } else {
-        json(res, 400, result);
-      }
-    } else {
-      json(res, 200, result);
-    }
-    return true;
-  }
+  // ── Entrance fee route removed ──
 
   // POST /api/stripe/checkout-subscription — create tiered subscription checkout
   if (url === "/api/stripe/checkout-subscription" && req.method === "POST") {
@@ -478,7 +380,7 @@ export async function handleStripeRequest(
     try { parsed = JSON.parse(body.toString()); } catch { /* empty body is fine */ }
     const tier = parseTier(parsed.tier);
     if (!tier) {
-      json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro" });
+      json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro | business" });
       return true;
     }
     const billingPeriod: BillingPeriod = parsed.billingPeriod === "monthly" ? "monthly" : "annual";

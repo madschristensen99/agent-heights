@@ -241,6 +241,20 @@ export class HermesClient {
     }
   }
 
+  /** Fetch recent sessions (raw data) for proactive home channel capture. */
+  async getRecentSessions(): Promise<any[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/sessions?limit=20`, {
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return [];
+      return await res.json() as any[];
+    } catch {
+      return [];
+    }
+  }
+
   /** Send a message to a platform via `hermes send` CLI (no REST endpoint exists for this). */
   async sendMessage(platform: string, target: string, text: string): Promise<boolean> {
     try {

@@ -651,17 +651,21 @@ wss.on("connection", async (ws, req) => {
   // Send saved outfits
   void sendOutfits(ws, sess);
 
-  // Send payment status so the client can gate UI (entrance fee + subscription)
+  // Send payment status so the client can gate UI (subscription + free trial)
   let freeTrialTimer: ReturnType<typeof setTimeout> | null = null;
   if (isSupabaseConfigured && isStripeConfigured) {
     try {
       const payStatus = await getUserPaymentStatus(user.id);
 
-      // Start a free trial for authed users who haven't paid the entrance fee
+      // Start a free trial for authed users without a subscription
       let freeTrialExpiresAt = payStatus.freeTrialExpiresAt;
-      if (!payStatus.entrancePaid && !freeTrialExpiresAt) {
+      if (!payStatus.subscriptionActive && !freeTrialExpiresAt) {
         freeTrialExpiresAt = startFreeTrial(user.id);
       }
+
+      // Update the manager with subscription info
+      sess.manager.subscriptionTier = payStatus.subscriptionTier;
+      sess.manager.agentLimit = payStatus.agentLimit;
 
       ws.send(JSON.stringify({
         type: "payment_status",
@@ -670,6 +674,7 @@ wss.on("connection", async (ws, req) => {
         subscriptionStatus: payStatus.subscriptionStatus,
         subscriptionTier: payStatus.subscriptionTier,
         agentLimit: payStatus.agentLimit,
+        usageCap: payStatus.usageCap,
         currentPeriodEnd: payStatus.currentPeriodEnd,
         freeTrialExpiresAt,
       } satisfies ServerMsg));
@@ -682,8 +687,8 @@ wss.on("connection", async (ws, req) => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({
                 type: "payment_required",
-                reason: "entrance",
-                message: "Your 2-minute free trial has ended. Pay the $1 entrance fee to keep playing.",
+                reason: "subscription",
+                message: "Your 5-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
               } satisfies ServerMsg));
             }
           }, msUntilExpiry);
@@ -691,8 +696,8 @@ wss.on("connection", async (ws, req) => {
           // Already expired
           ws.send(JSON.stringify({
             type: "payment_required",
-            reason: "entrance",
-            message: "Your 2-minute free trial has ended. Pay the $1 entrance fee to keep playing.",
+            reason: "subscription",
+            message: "Your 5-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
           } satisfies ServerMsg));
         }
       }
@@ -900,6 +905,11 @@ wss.on("connection", async (ws, req) => {
           activeManager.assignNew(msg.agentId, msg.task, msg.handoffTo);
           break;
         case "chat": {
+          // Subscription gate: block inference for users without an active subscription
+          if (!activeManager.subscriptionTier) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to chat with your agents." });
+            break;
+          }
           // Per-agent ACL check
           const agentInfo = activeManager.getAgentInfo(msg.agentId);
           if (agentInfo?.acl) {
@@ -2314,6 +2324,11 @@ wss.on("connection", async (ws, req) => {
         }
         // ── Agent task injection + task info ──────────────────────────────
         case "agent_inject_task": {
+          // Subscription gate: block inference for users without an active subscription
+          if (!activeManager.subscriptionTier) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to assign tasks to your agents." });
+            break;
+          }
           activeManager.assign(msg.agentId, msg.task, msg.handoffTo);
           // Send back updated task info
           const info = activeManager.getTaskInfo(msg.agentId);

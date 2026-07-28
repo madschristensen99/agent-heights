@@ -1,5 +1,6 @@
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import { calculateCost } from "./providers/pricing.js";
+import { SUBSCRIPTION_TIERS, type SubscriptionTier } from "../shared/types.js";
 
 export interface UsageRecord {
   userId: string;
@@ -153,5 +154,8 @@ export async function getMonthlySpend(userId: string): Promise<number> {
   }
 }
 
-/** Monthly usage cap in USD. Users exceeding this are blocked until the next month. */
-export const MONTHLY_USAGE_CAP = 30;
+/** Get the monthly usage cap in USD for a subscription tier. Returns 0 for no subscription. */
+export function getUsageCap(tier: SubscriptionTier | null): number {
+  if (!tier) return 0;
+  return SUBSCRIPTION_TIERS[tier].usageCap / 100; // convert cents to dollars
+}

@@ -15,11 +15,11 @@ store.sendFn = (msg) => net.send(msg);
 net.onMessage = (msg) => {
   if (msg.type === "payment_status") {
     updatePaymentState({
-      entrancePaid: msg.entrancePaid,
       subscriptionActive: msg.subscriptionActive,
       subscriptionStatus: msg.subscriptionStatus,
       subscriptionTier: msg.subscriptionTier,
       agentLimit: msg.agentLimit,
+      usageCap: msg.usageCap,
       currentPeriodEnd: msg.currentPeriodEnd,
       freeTrialExpiresAt: msg.freeTrialExpiresAt,
     });
@@ -44,15 +44,15 @@ const paymentOverlay = createPaymentOverlay(() => { paymentOverlayDismissed = tr
 // from a successful Stripe checkout and the webhook may not have processed yet.
 let suppressPaymentOverlay = false;
 
-// Auto-show/hide payment overlay based on entrance fee + free trial status
+// Auto-show/hide payment overlay based on subscription + free trial status
 onPaymentChange((state) => {
-  if (state && state.entrancePaid) {
+  if (state && state.subscriptionActive) {
     suppressPaymentOverlay = false;
     paymentOverlayDismissed = false;
     paymentOverlay.hide();
     return;
   }
-  if (state && !state.entrancePaid) {
+  if (state && !state.subscriptionActive) {
     const trialActive = state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
     if (!trialActive && !suppressPaymentOverlay && !paymentOverlayDismissed) {
       paymentOverlay.show();

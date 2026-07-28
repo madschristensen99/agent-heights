@@ -779,8 +779,8 @@ export type ServerMsg =
   | { type: "org_members"; orgId: string; members: OrgMember[] }
   | { type: "org_created"; org: Organization }
   | { type: "org_error"; message: string }
-  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null }
-  | { type: "payment_required"; reason: "entrance" | "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number }
+  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; usageCap: number; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null }
+  | { type: "payment_required"; reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number }
   | { type: "emote"; agentId: string; emote: string }
   | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string }
   | { type: "voice_peer"; userId: string; name: string }
@@ -828,7 +828,7 @@ export const AGENT_MODELS = [
 
 // --------------------------------------------------- subscription tiers ---
 
-export type SubscriptionTier = "starter" | "pro";
+export type SubscriptionTier = "starter" | "pro" | "business";
 export type BillingPeriod = "monthly" | "annual";
 
 export interface TierInfo {
@@ -837,6 +837,7 @@ export interface TierInfo {
   label: string;       // display label
   name: string;        // display name
   agentLimit: number;  // max agents (Infinity for unlimited)
+  usageCap: number;     // max monthly spend in cents (80% of price)
   description: string;
   annualPrice: number;  // cents per year (10 months — 2 months free)
   annualLabel: string;  // display label for annual
@@ -848,8 +849,9 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     price: 99,
     label: "$0.99/mo",
     name: "Starter",
-    agentLimit: 1,
-    description: "Hire and manage 1 AI agent in your office.",
+    agentLimit: 4,
+    usageCap: 80,
+    description: "Hire and manage up to 4 AI agents in your office.",
     annualPrice: 990,
     annualLabel: "$9.90/yr",
   },
@@ -858,10 +860,22 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     price: 499,
     label: "$4.99/mo",
     name: "Pro",
-    agentLimit: 5,
-    description: "Hire and manage up to 5 AI agents in your office.",
+    agentLimit: 6,
+    usageCap: 400,
+    description: "Hire and manage up to 6 AI agents in your office.",
     annualPrice: 4990,
     annualLabel: "$49.90/yr",
+  },
+  business: {
+    id: "business",
+    price: 1999,
+    label: "$19.99/mo",
+    name: "Business",
+    agentLimit: 8,
+    usageCap: 1600,
+    description: "Hire and manage up to 8 AI agents in your office.",
+    annualPrice: 19990,
+    annualLabel: "$199.90/yr",
   },
 };
 
@@ -869,7 +883,7 @@ export const SUBSCRIPTION_TIER_LIST = Object.values(SUBSCRIPTION_TIERS);
 
 /** Determine the tier from a stored string, defaulting to "none". */
 export function parseTier(s: string | null | undefined): SubscriptionTier | null {
-  if (s === "starter" || s === "pro") return s;
+  if (s === "starter" || s === "pro" || s === "business") return s;
   return null;
 }
 

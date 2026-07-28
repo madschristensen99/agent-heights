@@ -25,6 +25,7 @@ import type {
   PlatformConnectionState,
   VacationedAgent,
   AgentACL,
+  SubscriptionTier,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
@@ -36,7 +37,7 @@ import { HermesProcessManager } from "./hermes-process.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
-import { recordUsage, getMonthlySpend, MONTHLY_USAGE_CAP } from "./usage.js";
+import { recordUsage, getMonthlySpend, getUsageCap } from "./usage.js";
 import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
@@ -305,6 +306,10 @@ export class AgentManager {
   /** Undelivered mail waiting for an idle agent. */
   private mailQueue: { platform: string; sender: string; text: string; ts: number; retries: number }[] = [];
   private shuttingDown = false;
+  /** Current subscription tier — set by server when payment status is loaded. */
+  subscriptionTier: SubscriptionTier | null = null;
+  /** Max agents allowed for this user's tier. */
+  agentLimit = 0;
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
   setApiKey(key: string | null): void {
@@ -807,6 +812,10 @@ export class AgentManager {
             if (result.success) {
               console.log(`[hermes] autoReconfigurePlatforms: Telegram re-enabled successfully`);
               // configurePlatform already restarts the gateway — no need for explicit restartGateway()
+              // If we don't have TELEGRAM_HOME_CHANNEL yet, try to get it from recent sessions
+              if (!savedCreds.TELEGRAM_HOME_CHANNEL) {
+                setTimeout(() => this.proactivelyCaptureHomeChannel("telegram"), 5000);
+              }
             } else {
               console.warn(`[hermes] autoReconfigurePlatforms: Telegram re-enable failed: ${result.error}`);
             }
@@ -831,6 +840,48 @@ export class AgentManager {
       }
     } catch (err) {
       console.warn(`[hermes] autoReconfigurePlatforms: error: ${err}`);
+    }
+  }
+
+  /** Query Hermes sessions API to find a chat ID for the given platform and save it as home channel. */
+  private async proactivelyCaptureHomeChannel(platform: string): Promise<void> {
+    try {
+      const sessions = await this.hermesClient?.getRecentSessions();
+      if (!sessions || sessions.length === 0) {
+        console.log(`[hermes] proactivelyCaptureHomeChannel: no sessions found for ${platform}`);
+        return;
+      }
+      for (const sess of sessions) {
+        const sessPlatform = (sess.platform ?? sess.source ?? "").toLowerCase();
+        if (sessPlatform !== platform) continue;
+        const chatId = sess.chat_id ?? sess.chatId ?? sess.channel_id ?? null;
+        if (chatId) {
+          const envVar = `${platform.toUpperCase()}_HOME_CHANNEL`;
+          const existing = this.save.getPlatformCredentials();
+          if (existing[envVar] !== chatId) {
+            const merged = { ...existing, [envVar]: chatId };
+            this.save.setPlatformCredentials(merged);
+            void this.save.flushNow();
+            console.log(`[hermes] proactivelyCaptureHomeChannel: captured ${envVar}=${chatId} from sessions`);
+            // Write to .env so it takes effect on next gateway restart
+            const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+            const envPath = join(hermesHome, ".env");
+            if (existsSync(envPath)) {
+              let envContent = readFileSync(envPath, "utf-8");
+              const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
+              lines.push(`${envVar}=${chatId}`);
+              writeFileSync(envPath, lines.join("\n"), "utf-8");
+              console.log(`[hermes] proactivelyCaptureHomeChannel: wrote ${envVar} to .env`);
+            }
+          } else {
+            console.log(`[hermes] proactivelyCaptureHomeChannel: ${envVar} already set to ${chatId}`);
+          }
+          return;
+        }
+      }
+      console.log(`[hermes] proactivelyCaptureHomeChannel: no ${platform} chat ID found in sessions`);
+    } catch (err) {
+      console.warn(`[hermes] proactivelyCaptureHomeChannel: error: ${err}`);
     }
   }
 
@@ -1044,6 +1095,18 @@ export class AgentManager {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
+    // Enforce agent limit based on subscription tier
+    if (this.agentLimit > 0 && this.agents.size >= this.agentLimit) {
+      console.log(`[manager] hire blocked: agent limit reached (${this.agents.size}/${this.agentLimit})`);
+      this.broadcast({
+        type: "payment_required",
+        reason: "agent_limit",
+        message: `You've reached your agent limit (${this.agentLimit}). Upgrade your plan to hire more agents.`,
+        agentLimit: this.agentLimit,
+      });
+      return;
+    }
+
     const usedDesks = new Set([...this.agents.values()].map((a) => a.info.deskIndex));
     let deskIndex = 0;
     while (usedDesks.has(deskIndex)) deskIndex++;
@@ -1252,19 +1315,22 @@ export class AgentManager {
   /** Check monthly usage cap before running a task. Blocks with a payment_required message if exceeded. */
   private async runTaskWithUsageCap(rt: AgentRuntime, task: string, isResume: boolean): Promise<void> {
     if (this.userId) {
-      const spend = await getMonthlySpend(this.userId);
-      if (spend >= MONTHLY_USAGE_CAP) {
-        this.log(rt, "status", `⚠️ Monthly usage cap reached ($${spend.toFixed(2)} / $${MONTHLY_USAGE_CAP}). Task blocked.`);
-        this.broadcast({
-          type: "payment_required",
-          reason: "usage_cap",
-          message: `You've reached the $${MONTHLY_USAGE_CAP}/month usage cap ($${spend.toFixed(2)} spent). Contact us to upgrade your plan.`,
-          monthlySpend: spend,
-          usageCap: MONTHLY_USAGE_CAP,
-        });
-        this.setStatus(rt, "idle");
-        rt.info.task = null;
-        return;
+      const cap = getUsageCap(this.subscriptionTier);
+      if (cap > 0) {
+        const spend = await getMonthlySpend(this.userId);
+        if (spend >= cap) {
+          this.log(rt, "status", `⚠️ Monthly usage cap reached ($${spend.toFixed(2)} / $${cap}). Task blocked.`);
+          this.broadcast({
+            type: "payment_required",
+            reason: "usage_cap",
+            message: `You've reached the $${cap.toFixed(2)}/month usage cap ($${spend.toFixed(2)} spent). Upgrade your plan to continue.`,
+            monthlySpend: spend,
+            usageCap: cap,
+          });
+          this.setStatus(rt, "idle");
+          rt.info.task = null;
+          return;
+        }
       }
     }
     return this.runTask(rt, task, isResume);
@@ -2878,18 +2944,21 @@ export class AgentManager {
     }
     // Check usage cap before chatting
     if (this.userId) {
-      const spend = await getMonthlySpend(this.userId);
-      if (spend >= MONTHLY_USAGE_CAP) {
-        this.log(rt, "status", `⚠️ Monthly usage cap reached ($${spend.toFixed(2)} / $${MONTHLY_USAGE_CAP}). Chat blocked.`);
-        this.broadcast({
-          type: "payment_required",
-          reason: "usage_cap",
-          message: `You've reached the $${MONTHLY_USAGE_CAP}/month usage cap ($${spend.toFixed(2)} spent). Contact us to upgrade your plan.`,
-          monthlySpend: spend,
-          usageCap: MONTHLY_USAGE_CAP,
-        });
-        this.setStatus(rt, "idle");
-        return;
+      const cap = getUsageCap(this.subscriptionTier);
+      if (cap > 0) {
+        const spend = await getMonthlySpend(this.userId);
+        if (spend >= cap) {
+          this.log(rt, "status", `⚠️ Monthly usage cap reached ($${spend.toFixed(2)} / $${cap}). Chat blocked.`);
+          this.broadcast({
+            type: "payment_required",
+            reason: "usage_cap",
+            message: `You've reached the $${cap.toFixed(2)}/month usage cap ($${spend.toFixed(2)} spent). Upgrade your plan to continue.`,
+            monthlySpend: spend,
+            usageCap: cap,
+          });
+          this.setStatus(rt, "idle");
+          return;
+        }
       }
     }
     await this.runClineChat(rt, text);

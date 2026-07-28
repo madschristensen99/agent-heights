@@ -2,11 +2,11 @@ import { getToken, isAuthEnabled } from "./auth";
 import { SUBSCRIPTION_TIER_LIST, type SubscriptionTier, type BillingPeriod } from "../../shared/types";
 
 export interface PaymentState {
-  entrancePaid: boolean;
   subscriptionActive: boolean;
   subscriptionStatus: string;
   subscriptionTier: SubscriptionTier | null;
   agentLimit: number;
+  usageCap: number;
   currentPeriodEnd: number | null;
   freeTrialExpiresAt: number | null;
 }
@@ -50,22 +50,6 @@ async function stripeApi(path: string, method = "POST", body?: Record<string, un
   }
 }
 
-export async function startEntranceCheckout(): Promise<void> {
-  const result = await stripeApi("/api/stripe/checkout-entrance");
-  if (typeof result.url === "string") {
-    window.location.href = result.url;
-  } else if (result.alreadyPaid || result.error === "Entrance fee already paid") {
-    // Force-update state to entrancePaid=true so the overlay hides immediately
-    if (currentState) {
-      updatePaymentState({ ...currentState, entrancePaid: true });
-    }
-    await refreshPaymentStatus();
-  } else {
-    console.error("[payment] entrance checkout failed:", result.error);
-    alert((result.error as string) ?? "Failed to start checkout");
-  }
-}
-
 export async function startSubscriptionCheckout(tier: SubscriptionTier, billingPeriod: BillingPeriod = "annual"): Promise<void> {
   const result = await stripeApi("/api/stripe/checkout-subscription", "POST", { tier, billingPeriod });
   if (typeof result.url === "string") {
@@ -89,11 +73,11 @@ export async function refreshPaymentStatus(): Promise<void> {
   const result = await stripeApi("/api/stripe/status", "GET");
   if (result && !result.error) {
     updatePaymentState({
-      entrancePaid: result.entrancePaid as boolean,
       subscriptionActive: result.subscriptionActive as boolean,
       subscriptionStatus: result.subscriptionStatus as string,
       subscriptionTier: (result.subscriptionTier as SubscriptionTier | null) ?? null,
       agentLimit: (result.agentLimit as number) ?? 0,
+      usageCap: (result.usageCap as number) ?? 0,
       currentPeriodEnd: (result.currentPeriodEnd as number | null) ?? null,
       freeTrialExpiresAt: (result.freeTrialExpiresAt as number | null) ?? null,
     });
@@ -115,22 +99,13 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   overlay.innerHTML = `
     <div style="position:relative;z-index:1;text-align:center;max-width:440px;width:90vw;">
       <h1 style="font-size:2.2rem;font-weight:800;margin:0 0 0.5rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HEIGHTS</h1>
-      <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 1.5rem;letter-spacing:0.15em;text-transform:uppercase;">World Access & Agent Subscription</p>
+      <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 1.5rem;letter-spacing:0.15em;text-transform:uppercase;">Agent Subscription Plans</p>
 
       <div id="payment-trial-section" style="display:none;flex-direction:column;gap:0.5rem;background:rgba(88,200,102,0.1);border:1px solid #3da64a;border-radius:12px;padding:1.2rem;margin-bottom:1rem;">
         <h2 style="font-size:1rem;color:#58c866;margin:0;">Free Trial Active</h2>
-        <p style="color:#a0a5b4;font-size:0.85rem;margin:0;line-height:1.4;">You're playing for free! Time remaining:</p>
-        <p id="trial-countdown" style="font-size:1.6rem;font-weight:800;color:#58c866;margin:0;letter-spacing:0.05em;">2:00</p>
-        <p style="color:#7a8090;font-size:0.75rem;margin:0.3rem 0 0;line-height:1.3;">Pay the $1 entrance fee to keep playing after the trial ends.</p>
-      </div>
-
-      <div id="payment-entrance-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
-        <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">World Entrance Fee — $1</h2>
-        <p style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.5rem;line-height:1.4;">A one-time fee to enter the Agent Heights world and join the multiplayer lobby.</p>
-        <button id="pay-entrance-btn"
-          style="padding:0.8rem 1rem;border-radius:8px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.03em;transition:filter 0.15s,transform 0.1s;">
-          Pay $1 Entrance Fee
-        </button>
+        <p style="color:#a0a5b4;font-size:0.85rem;margin:0;line-height:1.4;">You're looking around for free! Time remaining:</p>
+        <p id="trial-countdown" style="font-size:1.6rem;font-weight:800;color:#58c866;margin:0;letter-spacing:0.05em;">5:00</p>
+        <p style="color:#7a8090;font-size:0.75rem;margin:0.3rem 0 0;line-height:1.3;">Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.</p>
       </div>
 
       <div id="payment-subscription-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
@@ -165,7 +140,6 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   `;
   document.body.appendChild(overlay);
 
-  const entranceSection = overlay.querySelector("#payment-entrance-section") as HTMLDivElement;
   const subscriptionSection = overlay.querySelector("#payment-subscription-section") as HTMLDivElement;
   const activeSection = overlay.querySelector("#payment-active-section") as HTMLDivElement;
   const trialSection = overlay.querySelector("#payment-trial-section") as HTMLDivElement;
@@ -178,7 +152,6 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   const tierCardsContainer = overlay.querySelector("#tier-cards") as HTMLDivElement;
   const monthlyBtn = overlay.querySelector("#billing-monthly-btn") as HTMLButtonElement;
   const annualBtn = overlay.querySelector("#billing-annual-btn") as HTMLButtonElement;
-  const entranceBtn = overlay.querySelector("#pay-entrance-btn") as HTMLButtonElement;
   const manageBtn = overlay.querySelector("#manage-subscription-btn") as HTMLButtonElement;
   const closeBtn = overlay.querySelector("#payment-close-btn") as HTMLButtonElement;
 
@@ -222,7 +195,6 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   function renderState() {
     if (!currentState) {
       loadingEl.style.display = "block";
-      entranceSection.style.display = "none";
       subscriptionSection.style.display = "none";
       activeSection.style.display = "none";
       trialSection.style.display = "none";
@@ -242,12 +214,11 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
     }
 
-    entranceSection.style.display = currentState.entrancePaid ? "none" : "flex";
-    if (currentState.entrancePaid && !currentState.subscriptionActive) {
+    if (!currentState.subscriptionActive) {
       subscriptionSection.style.display = "flex";
       activeSection.style.display = "none";
       tierCardsContainer.innerHTML = SUBSCRIPTION_TIER_LIST.map(t => buildTierCard(t, false)).join("");
-    } else if (currentState.entrancePaid && currentState.subscriptionActive) {
+    } else {
       subscriptionSection.style.display = "none";
       activeSection.style.display = "flex";
       const st = currentState;
@@ -260,7 +231,7 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
         periodInfo.textContent = "Your subscription is active.";
       }
       // Show upgrade options if not on the highest tier
-      if (st.subscriptionTier && st.subscriptionTier !== "pro") {
+      if (st.subscriptionTier && st.subscriptionTier !== "business") {
         const currentPrice = SUBSCRIPTION_TIER_LIST.find(t => t.id === st.subscriptionTier)!.price;
         const upgrades = SUBSCRIPTION_TIER_LIST.filter(t => t.price > currentPrice);
         if (upgrades.length > 0) {
@@ -272,15 +243,11 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       } else {
         upgradeSection.style.display = "none";
       }
-    } else {
-      subscriptionSection.style.display = "none";
-      activeSection.style.display = "none";
     }
   }
 
   onPaymentChange(renderState);
 
-  entranceBtn.addEventListener("click", () => void startEntranceCheckout());
   manageBtn.addEventListener("click", () => void openCustomerPortal());
   closeBtn.addEventListener("click", () => { overlay.style.display = "none"; onClose?.(); });
 
@@ -302,7 +269,7 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       annualBtn.style.fontWeight = "600";
     }
     // Re-render tier cards with updated pricing
-    if (currentState && currentState.entrancePaid && !currentState.subscriptionActive) {
+    if (currentState && !currentState.subscriptionActive) {
       tierCardsContainer.innerHTML = SUBSCRIPTION_TIER_LIST.map(t => buildTierCard(t, false)).join("");
     }
   }
@@ -321,10 +288,6 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   });
 
   // Hover effects
-  entranceBtn.addEventListener("mouseenter", () => { entranceBtn.style.filter = "brightness(1.1)"; });
-  entranceBtn.addEventListener("mouseleave", () => { entranceBtn.style.filter = "none"; });
-  entranceBtn.addEventListener("mousedown", () => { entranceBtn.style.transform = "scale(0.97)"; });
-  entranceBtn.addEventListener("mouseup", () => { entranceBtn.style.transform = "scale(1)"; });
   manageBtn.addEventListener("mouseenter", () => { manageBtn.style.borderColor = "#58c866"; });
   manageBtn.addEventListener("mouseleave", () => { manageBtn.style.borderColor = "#2a2e42"; });
 

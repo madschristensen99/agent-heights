@@ -6720,29 +6720,29 @@ export class OfficeScene extends Phaser.Scene {
       display: flex; align-items: center; justify-content: center;
     `;
     modal.innerHTML = `
-      <div style="background: linear-gradient(to bottom, #e8f0fb, #d4e4f7); border: 1px solid #7a96c3; border-radius: 10px; padding: 0; max-width: 90vw; max-height: 90vh; position: relative; display:flex; flex-direction:column; box-shadow: 0 8px 32px rgba(36,94,219,0.25);">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: linear-gradient(to bottom, #2a6df0, #245edb 50%, #1a4fb0); border-radius: 9px 9px 0 0;">
+      <div style="background: linear-gradient(to bottom, rgba(235,245,255,0.95), rgba(200,225,250,0.9)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.6); border-radius: 14px; padding: 0; max-width: 90vw; max-height: 90vh; position: relative; display:flex; flex-direction:column; box-shadow: 0 12px 48px rgba(0,80,180,0.2), inset 0 1px 0 rgba(255,255,255,0.8);">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: linear-gradient(to bottom, rgba(120,180,240,0.7), rgba(80,140,220,0.5)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 13px 13px 0 0; border-bottom: 1px solid rgba(255,255,255,0.4);">
           <div>
-            <span style="color: #ffffff; font-weight: bold; font-size: 1.1rem; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${agent.name}</span>
-            <span style="color: #b8d4f5; font-size: 0.8rem; margin-left: 8px;">${agent.status.toUpperCase()}</span>
+            <span style="color: #ffffff; font-weight: bold; font-size: 1.1rem; text-shadow: 0 1px 3px rgba(0,60,140,0.4);">${agent.name}</span>
+            <span style="color: rgba(255,255,255,0.8); font-size: 0.8rem; margin-left: 8px; text-shadow: 0 1px 2px rgba(0,60,140,0.3);">${agent.status.toUpperCase()}</span>
           </div>
           <div style="display: flex; gap: 6px;">
-            <button id="agent-view-broadcast" style="padding: 4px 12px; border: 1px solid #1a4fb0; border-radius: 4px; background: linear-gradient(to bottom, #4a8df5, #2a6df0); color: #fff; font-size: 0.8rem; cursor: pointer; text-shadow: 0 1px 1px rgba(0,0,0,0.2);">Broadcast to Projector</button>
-            <button id="agent-view-close" style="padding: 4px 12px; border: 1px solid #c62828; border-radius: 4px; background: linear-gradient(to bottom, #f57070, #e03838); color: #fff; font-size: 0.8rem; cursor: pointer; text-shadow: 0 1px 1px rgba(0,0,0,0.2);">Close</button>
+            <button id="agent-view-broadcast" style="padding: 5px 14px; border: 1px solid rgba(255,255,255,0.4); border-radius: 16px; background: linear-gradient(to bottom, rgba(140,200,255,0.8), rgba(80,150,230,0.6)); color: #fff; font-size: 0.8rem; cursor: pointer; text-shadow: 0 1px 2px rgba(0,60,140,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);">Broadcast to Projector</button>
+            <button id="agent-view-close" style="padding: 5px 14px; border: 1px solid rgba(255,180,180,0.5); border-radius: 16px; background: linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5)); color: #fff; font-size: 0.8rem; cursor: pointer; text-shadow: 0 1px 2px rgba(140,30,30,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);">Close</button>
           </div>
         </div>
-        <div id="agent-view-tabs" style="display:flex;gap:2px;padding: 0 8px; background: linear-gradient(to bottom, #d4e4f7, #c0d6f0); border-bottom: 1px solid #7a96c3;">
-          <button class="av-tab" data-tab="screen" style="padding:6px 16px;border:1px solid #7a96c3;border-bottom:none;border-radius:6px 6px 0 0;background:linear-gradient(to bottom,#ffffff,#e8f0fb);color:#245edb;font-size:0.8rem;cursor:pointer;font-weight:bold;">Screen</button>
-          <button class="av-tab" data-tab="files" style="padding:6px 16px;border:1px solid #7a96c3;border-bottom:none;border-radius:6px 6px 0 0;background:linear-gradient(to bottom,#e0e8f5,#cdd9ee);color:#5a7090;font-size:0.8rem;cursor:pointer;">Files</button>
-          <button class="av-tab" data-tab="terminal" style="padding:6px 16px;border:1px solid #7a96c3;border-bottom:none;border-radius:6px 6px 0 0;background:linear-gradient(to bottom,#e0e8f5,#cdd9ee);color:#5a7090;font-size:0.8rem;cursor:pointer;">Terminal</button>
-          <button class="av-tab" data-tab="tasks" style="padding:6px 16px;border:1px solid #7a96c3;border-bottom:none;border-radius:6px 6px 0 0;background:linear-gradient(to bottom,#e0e8f5,#cdd9ee);color:#5a7090;font-size:0.8rem;cursor:pointer;">Tasks</button>
-          <button class="av-tab" data-tab="chat" style="padding:6px 16px;border:1px solid #7a96c3;border-bottom:none;border-radius:6px 6px 0 0;background:linear-gradient(to bottom,#e0e8f5,#cdd9ee);color:#5a7090;font-size:0.8rem;cursor:pointer;">Chat</button>
-          <button class="av-tab" data-tab="memory" style="padding:6px 16px;border:1px solid #7a96c3;border-bottom:none;border-radius:6px 6px 0 0;background:linear-gradient(to bottom,#e0e8f5,#cdd9ee);color:#5a7090;font-size:0.8rem;cursor:pointer;">Memory</button>
-          <button class="av-tab" data-tab="stats" style="padding:6px 16px;border:1px solid #7a96c3;border-bottom:none;border-radius:6px 6px 0 0;background:linear-gradient(to bottom,#e0e8f5,#cdd9ee);color:#5a7090;font-size:0.8rem;cursor:pointer;">Stats</button>
+        <div id="agent-view-tabs" style="display:flex;gap:3px;padding: 4px 10px; background: linear-gradient(to bottom, rgba(220,235,250,0.6), rgba(200,220,245,0.4)); border-bottom: 1px solid rgba(255,255,255,0.3);">
+          <button class="av-tab" data-tab="screen" style="padding:6px 18px;border:1px solid rgba(255,255,255,0.5);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(220,240,255,0.7));color:#1a6bb0;font-size:0.8rem;cursor:pointer;font-weight:bold;text-shadow:0 1px 0 rgba(255,255,255,0.8);box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Screen</button>
+          <button class="av-tab" data-tab="files" style="padding:6px 18px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.8rem;cursor:pointer;">Files</button>
+          <button class="av-tab" data-tab="terminal" style="padding:6px 18px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.8rem;cursor:pointer;">Terminal</button>
+          <button class="av-tab" data-tab="tasks" style="padding:6px 18px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.8rem;cursor:pointer;">Tasks</button>
+          <button class="av-tab" data-tab="chat" style="padding:6px 18px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.8rem;cursor:pointer;">Chat</button>
+          <button class="av-tab" data-tab="memory" style="padding:6px 18px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.8rem;cursor:pointer;">Memory</button>
+          <button class="av-tab" data-tab="stats" style="padding:6px 18px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.8rem;cursor:pointer;">Stats</button>
         </div>
-        <div id="agent-view-content" style="width: 900px; height: 560px; background: #ffffff; border-radius: 0 0 8px 8px; overflow: hidden;">
+        <div id="agent-view-content" style="width: 900px; height: 560px; background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(240,248,255,0.9)); border-radius: 0 0 12px 12px; overflow: hidden;">
         </div>
-        ${agent.task ? `<div style="color: #5a7090; font-size: 0.75rem; margin: 6px 12px 8px;">Task: ${agent.task}</div>` : ""}
+        ${agent.task ? `<div style="color: #4a7a9a; font-size: 0.75rem; margin: 6px 14px 10px; text-shadow: 0 1px 0 rgba(255,255,255,0.5);">Task: ${agent.task}</div>` : ""}
       </div>
     `;
     document.body.appendChild(modal);
@@ -6758,17 +6758,17 @@ export class OfficeScene extends Phaser.Scene {
       if (this.agentBroadcastAgentId === agent.id) {
         if (this.net) this.net.send({ type: "agent_broadcast_stop" });
         broadcastBtn.textContent = "Broadcast to Projector";
-        (broadcastBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, #4a8df5, #2a6df0)";
+        (broadcastBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, rgba(140,200,255,0.8), rgba(80,150,230,0.6))";
       } else {
         if (this.net) this.net.send({ type: "agent_broadcast_start", agentId: agent.id });
         broadcastBtn.textContent = "Stop Broadcast";
-        (broadcastBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, #f57070, #e03838)";
+        (broadcastBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5))";
       }
     });
 
     if (this.agentBroadcastAgentId === agent.id) {
       broadcastBtn.textContent = "Stop Broadcast";
-      (broadcastBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, #f57070, #e03838)";
+      (broadcastBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5))";
     }
 
     // Wire tab buttons
@@ -6797,13 +6797,15 @@ export class OfficeScene extends Phaser.Scene {
       modal.querySelectorAll(".av-tab").forEach(btn => {
         const isActive = (btn as HTMLElement).dataset.tab === tab;
         if (isActive) {
-          (btn as HTMLElement).style.background = "linear-gradient(to bottom,#ffffff,#e8f0fb)";
-          (btn as HTMLElement).style.color = "#245edb";
+          (btn as HTMLElement).style.background = "linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(220,240,255,0.7))";
+          (btn as HTMLElement).style.color = "#1a6bb0";
           (btn as HTMLElement).style.fontWeight = "bold";
+          (btn as HTMLElement).style.textShadow = "0 1px 0 rgba(255,255,255,0.8)";
         } else {
-          (btn as HTMLElement).style.background = "linear-gradient(to bottom,#e0e8f5,#cdd9ee)";
-          (btn as HTMLElement).style.color = "#5a7090";
+          (btn as HTMLElement).style.background = "linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3))";
+          (btn as HTMLElement).style.color = "#4a7a9a";
           (btn as HTMLElement).style.fontWeight = "normal";
+          (btn as HTMLElement).style.textShadow = "";
         }
       });
     }
@@ -6848,29 +6850,29 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the Files tab — file browser with upload/download/delete. */
   private renderFilesTab(agentId: string, content: HTMLElement): void {
     content.innerHTML = `
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a1a2e;font-size:0.8rem;">
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-bottom:1px solid #7a96c3;">
-          <span style="color:#5a7090;font-size:0.7rem;">Path:</span>
-          <span id="av-fs-path" style="color:#245edb;flex:1;font-weight:bold;">${this.agentFsPath}</span>
-          <button id="av-fs-up" style="padding:2px 8px;border:1px solid #7a96c3;border-radius:4px;background:linear-gradient(to bottom,#ffffff,#e8f0fb);color:#245edb;font-size:0.7rem;cursor:pointer;">Up</button>
-          <label style="padding:2px 8px;border:1px solid #7a96c3;border-radius:4px;background:linear-gradient(to bottom,#4a8df5,#2a6df0);color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,0.2);">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a3a5a;font-size:0.8rem;">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,0.4);">
+          <span style="color:#4a7a9a;font-size:0.7rem;">Path:</span>
+          <span id="av-fs-path" style="color:#1a6bb0;flex:1;font-weight:bold;text-shadow:0 1px 0 rgba(255,255,255,0.5);">${this.agentFsPath}</span>
+          <button id="av-fs-up" style="padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#1a6bb0;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Up</button>
+          <label style="padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,180,240,0.7),rgba(80,150,220,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(0,60,140,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">
             Upload
             <input id="av-fs-upload-input" type="file" style="display:none;" />
           </label>
         </div>
-        <div id="av-fs-listing" style="flex:1;overflow-y:auto;padding:4px 0;background:#ffffff;"></div>
-        <div id="av-fs-viewer" style="display:none;flex:1;overflow:hidden;border-top:1px solid #7a96c3;flex-direction:column;">
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);">
-            <span id="av-fs-filename" style="color:#245edb;font-size:0.75rem;flex:1;font-weight:bold;"></span>
-            <button id="av-fs-edit" style="padding:2px 8px;border:1px solid #2a8c2a;border-radius:4px;background:linear-gradient(to bottom,#5dd55d,#2a8c2a);color:#fff;font-size:0.7rem;cursor:pointer;">Edit</button>
-            <button id="av-fs-save" style="display:none;padding:2px 8px;border:1px solid #2a8c2a;border-radius:4px;background:linear-gradient(to bottom,#5dd55d,#2a8c2a);color:#fff;font-size:0.7rem;cursor:pointer;">Save</button>
-            <button id="av-fs-cancel-edit" style="display:none;padding:2px 8px;border:1px solid #7a96c3;border-radius:4px;background:linear-gradient(to bottom,#ffffff,#e8f0fb);color:#5a7090;font-size:0.7rem;cursor:pointer;">Cancel</button>
-            <button id="av-fs-download" style="padding:2px 8px;border:1px solid #1a4fb0;border-radius:4px;background:linear-gradient(to bottom,#4a8df5,#2a6df0);color:#fff;font-size:0.7rem;cursor:pointer;">Download</button>
-            <button id="av-fs-delete" style="padding:2px 8px;border:1px solid #c62828;border-radius:4px;background:linear-gradient(to bottom,#f57070,#e03838);color:#fff;font-size:0.7rem;cursor:pointer;">Delete</button>
-            <button id="av-fs-close-viewer" style="padding:2px 8px;border:1px solid #7a96c3;border-radius:4px;background:linear-gradient(to bottom,#ffffff,#e8f0fb);color:#5a7090;font-size:0.7rem;cursor:pointer;">Back</button>
+        <div id="av-fs-listing" style="flex:1;overflow-y:auto;padding:4px 0;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));"></div>
+        <div id="av-fs-viewer" style="display:none;flex:1;overflow:hidden;border-top:1px solid rgba(255,255,255,0.4);flex-direction:column;">
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+            <span id="av-fs-filename" style="color:#1a6bb0;font-size:0.75rem;flex:1;font-weight:bold;text-shadow:0 1px 0 rgba(255,255,255,0.5);"></span>
+            <button id="av-fs-edit" style="padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,220,120,0.7),rgba(60,180,80,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(20,100,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Edit</button>
+            <button id="av-fs-save" style="display:none;padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,220,120,0.7),rgba(60,180,80,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(20,100,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Save</button>
+            <button id="av-fs-cancel-edit" style="display:none;padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Cancel</button>
+            <button id="av-fs-download" style="padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,180,240,0.7),rgba(80,150,220,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(0,60,140,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">Download</button>
+            <button id="av-fs-delete" style="padding:3px 12px;border:1px solid rgba(255,180,180,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,150,150,0.7),rgba(230,100,100,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(140,30,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Delete</button>
+            <button id="av-fs-close-viewer" style="padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Back</button>
           </div>
-          <pre id="av-fs-content" style="flex:1;overflow:auto;margin:0;padding:12px;background:#ffffff;color:#1a1a2e;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-all;"></pre>
-          <textarea id="av-fs-editor" style="display:none;flex:1;margin:0;padding:12px;background:#ffffff;color:#1a1a2e;font-size:0.75rem;line-height:1.4;border:none;border-top:1px solid #7a96c3;font-family:'Consolas',monospace;resize:none;outline:none;" spellcheck="false"></textarea>
+          <pre id="av-fs-content" style="flex:1;overflow:auto;margin:0;padding:14px;background:rgba(255,255,255,0.85);color:#1a3a5a;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-all;"></pre>
+          <textarea id="av-fs-editor" style="display:none;flex:1;margin:0;padding:14px;background:rgba(255,255,255,0.9);color:#1a3a5a;font-size:0.75rem;line-height:1.4;border:none;border-top:1px solid rgba(255,255,255,0.4);font-family:'Consolas',monospace;resize:none;outline:none;" spellcheck="false"></textarea>
         </div>
       </div>
     `;
@@ -6884,18 +6886,18 @@ export class OfficeScene extends Phaser.Scene {
       const listingEl = document.getElementById("av-fs-listing");
       if (!listingEl) return;
       if (entries.length === 0) {
-        listingEl.innerHTML = `<div style="padding:16px;color:#5a7090;text-align:center;">Empty directory</div>`;
+        listingEl.innerHTML = `<div style="padding:16px;color:#7aaac0;text-align:center;">Empty directory</div>`;
         return;
       }
       listingEl.innerHTML = entries.map(e => {
         const icon = e.isDir ? "📁" : "📄";
         const sizeStr = e.isDir ? "" : this.formatFileSize(e.size);
         const timeStr = new Date(e.mtime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        return `<div class="av-fs-item" data-name="${e.name}" data-dir="${e.isDir}" style="display:flex;align-items:center;gap:8px;padding:4px 12px;cursor:pointer;border-bottom:1px solid #e0e8f5;">
-          <span style="font-size:0.9rem;">${icon}</span>
-          <span style="flex:1;color:${e.isDir ? "#245edb" : "#1a1a2e"};">${e.name}</span>
-          <span style="color:#888;font-size:0.65rem;">${sizeStr}</span>
-          <span style="color:#aaa;font-size:0.65rem;">${timeStr}</span>
+        return `<div class="av-fs-item" data-name="${e.name}" data-dir="${e.isDir}" style="display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;border-bottom:1px solid rgba(220,235,250,0.5);transition:background 0.15s;">
+          <span style="font-size:0.9rem;filter:drop-shadow(0 1px 2px rgba(0,80,160,0.15));">${icon}</span>
+          <span style="flex:1;color:${e.isDir ? "#1a6bb0" : "#1a3a5a"};text-shadow:0 1px 0 rgba(255,255,255,0.5);">${e.name}</span>
+          <span style="color:#7aaac0;font-size:0.65rem;">${sizeStr}</span>
+          <span style="color:#a0c0d8;font-size:0.65rem;">${timeStr}</span>
         </div>`;
       }).join("");
 
@@ -6939,10 +6941,10 @@ export class OfficeScene extends Phaser.Scene {
         this.agentFsRawContent = fileContent;
         if (path.endsWith(".md")) {
           contentEl.innerHTML = md(fileContent);
-          contentEl.style.color = "#1a1a2e";
+          contentEl.style.color = "#1a3a5a";
         } else {
           contentEl.textContent = fileContent;
-          contentEl.style.color = "#1a1a2e";
+          contentEl.style.color = "#1a3a5a";
         }
       }
     };
@@ -7082,24 +7084,24 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the Terminal tab — live log stream. */
   private renderTerminalTab(agentId: string, content: HTMLElement): void {
     content.innerHTML = `
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Courier New',monospace;color:#c0c0d0;font-size:0.78rem;">
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-bottom:1px solid #7a96c3;flex-wrap:wrap;">
-          <span style="color:#5a7090;font-size:0.7rem;">Live Log Stream</span>
-          <span id="av-term-status" style="color:#2a8c2a;font-size:0.65rem;">● connected</span>
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Courier New',monospace;color:#c0d0e0;font-size:0.78rem;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,0.4);flex-wrap:wrap;">
+          <span style="color:#4a7a9a;font-size:0.7rem;">Live Log Stream</span>
+          <span id="av-term-status" style="color:#3aaa3a;font-size:0.65rem;text-shadow:0 0 4px rgba(60,200,60,0.3);">● connected</span>
           <div style="display:flex;gap:4px;margin-left:8px;">
-            <label style="display:flex;align-items:center;gap:2px;color:#5a7090;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="status" checked /> status</label>
-            <label style="display:flex;align-items:center;gap:2px;color:#5a7090;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="text" checked /> text</label>
-            <label style="display:flex;align-items:center;gap:2px;color:#5a7090;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="tool" checked /> tool</label>
-            <label style="display:flex;align-items:center;gap:2px;color:#5a7090;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="result" checked /> result</label>
-            <label style="display:flex;align-items:center;gap:2px;color:#5a7090;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="error" checked /> error</label>
-            <label style="display:flex;align-items:center;gap:2px;color:#5a7090;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="boss" checked /> boss</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#4a7a9a;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="status" checked /> status</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#4a7a9a;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="text" checked /> text</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#4a7a9a;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="tool" checked /> tool</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#4a7a9a;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="result" checked /> result</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#4a7a9a;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="error" checked /> error</label>
+            <label style="display:flex;align-items:center;gap:2px;color:#4a7a9a;font-size:0.65rem;cursor:pointer;"><input class="av-term-filter" type="checkbox" value="boss" checked /> boss</label>
           </div>
-          <button id="av-term-clear" style="margin-left:auto;padding:2px 8px;border:1px solid #7a96c3;border-radius:4px;background:linear-gradient(to bottom,#ffffff,#e8f0fb);color:#5a7090;font-size:0.7rem;cursor:pointer;">Clear</button>
-          <label style="display:flex;align-items:center;gap:4px;color:#5a7090;font-size:0.7rem;cursor:pointer;">
+          <button id="av-term-clear" style="margin-left:auto;padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Clear</button>
+          <label style="display:flex;align-items:center;gap:4px;color:#4a7a9a;font-size:0.7rem;cursor:pointer;">
             <input id="av-term-autoscroll" type="checkbox" checked /> Auto-scroll
           </label>
         </div>
-        <div id="av-terminal-log" style="flex:1;overflow-y:auto;padding:8px 12px;background:#0c0c14;"></div>
+        <div id="av-terminal-log" style="flex:1;overflow-y:auto;padding:8px 14px;background:linear-gradient(to bottom,#0a1525,#0d1a30);"></div>
       </div>
     `;
 
@@ -7198,15 +7200,15 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the Tasks tab — current task, queue, history, and inject controls. */
   private renderTasksTab(agentId: string, content: HTMLElement): void {
     content.innerHTML = `
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a1a2e;font-size:0.8rem;">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a3a5a;font-size:0.8rem;">
         <!-- Task injection bar -->
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-bottom:1px solid #7a96c3;">
-          <input id="av-task-input" type="text" placeholder="Inject a task..." style="flex:1;padding:6px 10px;border:1px solid #7a96c3;border-radius:4px;background:#ffffff;color:#1a1a2e;font-size:0.8rem;font-family:'Segoe UI',Tahoma,sans-serif;" />
-          <button id="av-task-send" style="padding:6px 14px;border:1px solid #1a4fb0;border-radius:4px;background:linear-gradient(to bottom,#4a8df5,#2a6df0);color:#fff;font-size:0.8rem;cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,0.2);">Assign</button>
-          <button id="av-task-stop" style="padding:6px 14px;border:1px solid #c62828;border-radius:4px;background:linear-gradient(to bottom,#f57070,#e03838);color:#fff;font-size:0.8rem;cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,0.2);">Stop</button>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,0.4);">
+          <input id="av-task-input" type="text" placeholder="Inject a task..." style="flex:1;padding:6px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:8px;background:rgba(255,255,255,0.7);color:#1a3a5a;font-size:0.8rem;font-family:'Segoe UI',Tahoma,sans-serif;box-shadow:inset 0 1px 2px rgba(0,60,140,0.1);" />
+          <button id="av-task-send" style="padding:5px 16px;border:1px solid rgba(255,255,255,0.4);border-radius:16px;background:linear-gradient(to bottom,rgba(120,180,240,0.7),rgba(80,150,220,0.5));color:#fff;font-size:0.8rem;cursor:pointer;text-shadow:0 1px 2px rgba(0,60,140,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">Assign</button>
+          <button id="av-task-stop" style="padding:5px 16px;border:1px solid rgba(255,180,180,0.5);border-radius:16px;background:linear-gradient(to bottom,rgba(255,150,150,0.7),rgba(230,100,100,0.5));color:#fff;font-size:0.8rem;cursor:pointer;text-shadow:0 1px 2px rgba(140,30,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Stop</button>
         </div>
         <!-- Task info display -->
-        <div id="av-task-info" style="flex:1;overflow-y:auto;padding:12px;background:#ffffff;"></div>
+        <div id="av-task-info" style="flex:1;overflow-y:auto;padding:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));"></div>
       </div>
     `;
 
@@ -7250,32 +7252,32 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the task info content (current task, queue, history). */
   private renderTaskInfoContent(el: HTMLElement, currentTask: string | null, queue: { task: string; handoffTo: string | null }[], history: { task: string; success: boolean; ts: number; durationMs: number }[]): void {
     const queueHtml = queue.length > 0
-      ? queue.map((q, i) => `<div style="padding:6px 12px;background:#f0f5fa;border-left:3px solid #245edb;margin-bottom:4px;"><span style="color:#888;font-size:0.65rem;">#${i + 1}</span> <span style="color:#1a1a2e;">${this.escapeHtml(q.task)}</span>${q.handoffTo ? ` <span style="color:#5a7090;font-size:0.65rem;">→ ${q.handoffTo}</span>` : ""}</div>`).join("")
-      : `<div style="color:#888;font-size:0.7rem;padding:8px 0;">No queued tasks</div>`;
+      ? queue.map((q, i) => `<div style="padding:8px 14px;background:rgba(220,240,255,0.5);border-left:3px solid #1a6bb0;margin-bottom:6px;border-radius:0 8px 8px 0;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);"><span style="color:#7aaac0;font-size:0.65rem;">#${i + 1}</span> <span style="color:#1a3a5a;text-shadow:0 1px 0 rgba(255,255,255,0.5);">${this.escapeHtml(q.task)}</span>${q.handoffTo ? ` <span style="color:#4a7a9a;font-size:0.65rem;">→ ${q.handoffTo}</span>` : ""}</div>`).join("")
+      : `<div style="color:#7aaac0;font-size:0.7rem;padding:8px 0;">No queued tasks</div>`;
 
     const historyHtml = history.length > 0
       ? history.slice(0, 10).map(h => {
           const status = h.success ? "✓" : "✗";
-          const color = h.success ? "#2a8c2a" : "#c62828";
+          const color = h.success ? "#3aaa3a" : "#e04848";
           const duration = h.durationMs < 1000 ? `${h.durationMs}ms` : `${(h.durationMs / 1000).toFixed(1)}s`;
           const time = new Date(h.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-          return `<div style="padding:4px 12px;border-bottom:1px solid #e0e8f5;"><span style="color:${color};">${status}</span> <span style="color:#888;font-size:0.65rem;">[${time}]</span> <span style="color:#1a1a2e;">${this.escapeHtml(h.task.slice(0, 80))}${h.task.length > 80 ? "…" : ""}</span> <span style="color:#aaa;font-size:0.65rem;">${duration}</span></div>`;
+          return `<div style="padding:5px 14px;border-bottom:1px solid rgba(220,235,250,0.5);"><span style="color:${color};text-shadow:0 0 4px ${color}55;">${status}</span> <span style="color:#7aaac0;font-size:0.65rem;">[${time}]</span> <span style="color:#1a3a5a;text-shadow:0 1px 0 rgba(255,255,255,0.5);">${this.escapeHtml(h.task.slice(0, 80))}${h.task.length > 80 ? "…" : ""}</span> <span style="color:#a0c0d8;font-size:0.65rem;">${duration}</span></div>`;
         }).join("")
-      : `<div style="color:#888;font-size:0.7rem;padding:8px 0;">No task history yet</div>`;
+      : `<div style="color:#7aaac0;font-size:0.7rem;padding:8px 0;">No task history yet</div>`;
 
     el.innerHTML = `
       <div style="margin-bottom:16px;">
-        <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;">Current Task</div>
-        <div style="background:#f0f5fa;padding:12px;border-radius:6px;color:#1a1a2e;font-size:0.8rem;line-height:1.4;">
-          ${currentTask ? this.escapeHtml(currentTask) : '<span style="color:#888;">No active task — agent is idle</span>'}
+        <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">Current Task</div>
+        <div style="background:rgba(220,240,255,0.5);padding:14px;border-radius:8px;color:#1a3a5a;font-size:0.8rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
+          ${currentTask ? this.escapeHtml(currentTask) : '<span style="color:#7aaac0;">No active task — agent is idle</span>'}
         </div>
       </div>
       <div style="margin-bottom:16px;">
-        <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;">Task Queue (${queue.length})</div>
+        <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">Task Queue (${queue.length})</div>
         ${queueHtml}
       </div>
       <div>
-        <div style="color:#5a7090;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;">Recent History</div>
+        <div style="color:#4a7a9a;font-size:0.65rem;text-transform:uppercase;margin-bottom:6px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">Recent History</div>
         ${historyHtml}
       </div>
     `;
@@ -7284,11 +7286,11 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the Chat tab — boss-to-agent chat using existing chat message + log entries. */
   private renderChatTab(agentId: string, content: HTMLElement): void {
     content.innerHTML = `
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a1a2e;font-size:0.8rem;">
-        <div id="av-chat-log" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#ffffff;"></div>
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-top:1px solid #7a96c3;">
-          <input id="av-chat-input" type="text" placeholder="Say something to the agent..." style="flex:1;padding:8px 12px;border:1px solid #7a96c3;border-radius:4px;background:#ffffff;color:#1a1a2e;font-size:0.8rem;font-family:'Segoe UI',Tahoma,sans-serif;" />
-          <button id="av-chat-send" style="padding:8px 16px;border:1px solid #1a4fb0;border-radius:4px;background:linear-gradient(to bottom,#4a8df5,#2a6df0);color:#fff;font-size:0.8rem;cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,0.2);">Send</button>
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a3a5a;font-size:0.8rem;">
+        <div id="av-chat-log" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));"></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid rgba(255,255,255,0.4);">
+          <input id="av-chat-input" type="text" placeholder="Say something to the agent..." style="flex:1;padding:8px 14px;border:1px solid rgba(255,255,255,0.5);border-radius:20px;background:rgba(255,255,255,0.7);color:#1a3a5a;font-size:0.8rem;font-family:'Segoe UI',Tahoma,sans-serif;box-shadow:inset 0 1px 2px rgba(0,60,140,0.1);" />
+          <button id="av-chat-send" style="padding:8px 18px;border:1px solid rgba(255,255,255,0.4);border-radius:18px;background:linear-gradient(to bottom,rgba(120,180,240,0.7),rgba(80,150,220,0.5));color:#fff;font-size:0.8rem;cursor:pointer;text-shadow:0 1px 2px rgba(0,60,140,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">Send</button>
         </div>
       </div>
     `;
@@ -7305,11 +7307,11 @@ export class OfficeScene extends Phaser.Scene {
         const time = new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         const name = isBoss ? (this.store.player?.name ?? "Boss") : (agent?.name ?? "Agent");
         const align = isBoss ? "flex-end" : "flex-start";
-        const bg = isBoss ? "#c7e8f5" : "#e8f5e8";
-        const color = isBoss ? "#245edb" : "#2a6a2a";
+        const bg = isBoss ? "rgba(180,220,250,0.6)" : "rgba(200,240,200,0.5)";
+        const color = isBoss ? "#1a6bb0" : "#2a8a3a";
         return `<div style="align-self:${align};max-width:75%;display:flex;flex-direction:column;gap:2px;">
-          <span style="color:#888;font-size:0.6rem;padding:0 8px;">${name} · ${time}</span>
-          <div style="background:${bg};padding:8px 12px;border-radius:8px;color:${color};font-size:0.8rem;line-height:1.4;">${this.escapeHtml(e.text)}</div>
+          <span style="color:#7aaac0;font-size:0.6rem;padding:0 10px;">${name} · ${time}</span>
+          <div style="background:${bg};padding:10px 14px;border-radius:14px;color:${color};font-size:0.8rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);text-shadow:0 1px 0 rgba(255,255,255,0.3);">${this.escapeHtml(e.text)}</div>
         </div>`;
       }).join("");
       chatLogEl.scrollTop = chatLogEl.scrollHeight;
@@ -7324,11 +7326,11 @@ export class OfficeScene extends Phaser.Scene {
       const time = new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const name = isBoss ? (this.store.player?.name ?? "Boss") : (agent?.name ?? "Agent");
       const align = isBoss ? "flex-end" : "flex-start";
-      const bg = isBoss ? "#c7e8f5" : "#e8f5e8";
-      const color = isBoss ? "#245edb" : "#2a6a2a";
+      const bg = isBoss ? "rgba(180,220,250,0.6)" : "rgba(200,240,200,0.5)";
+      const color = isBoss ? "#1a6bb0" : "#2a8a3a";
       chatLogEl.insertAdjacentHTML("beforeend", `<div style="align-self:${align};max-width:75%;display:flex;flex-direction:column;gap:2px;">
-        <span style="color:#888;font-size:0.6rem;padding:0 8px;">${name} · ${time}</span>
-        <div style="background:${bg};padding:8px 12px;border-radius:8px;color:${color};font-size:0.8rem;line-height:1.4;">${this.escapeHtml(entry.text)}</div>
+        <span style="color:#7aaac0;font-size:0.6rem;padding:0 10px;">${name} · ${time}</span>
+        <div style="background:${bg};padding:10px 14px;border-radius:14px;color:${color};font-size:0.8rem;line-height:1.4;border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);text-shadow:0 1px 0 rgba(255,255,255,0.3);">${this.escapeHtml(entry.text)}</div>
       </div>`);
       chatLogEl.scrollTop = chatLogEl.scrollHeight;
     };
@@ -7352,14 +7354,14 @@ export class OfficeScene extends Phaser.Scene {
   /** Render the Memory tab — view agent's conversation history with the LLM. */
   private renderMemoryTab(agentId: string, content: HTMLElement): void {
     content.innerHTML = `
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a1a2e;font-size:0.78rem;">
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-bottom:1px solid #7a96c3;">
-          <span style="color:#5a7090;font-size:0.7rem;">Conversation Memory</span>
-          <span id="av-mem-count" style="color:#888;font-size:0.65rem;"></span>
-          <button id="av-mem-refresh" style="margin-left:auto;padding:2px 8px;border:1px solid #7a96c3;border-radius:4px;background:linear-gradient(to bottom,#ffffff,#e8f0fb);color:#5a7090;font-size:0.7rem;cursor:pointer;">Refresh</button>
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a3a5a;font-size:0.78rem;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,0.4);">
+          <span style="color:#4a7a9a;font-size:0.7rem;">Conversation Memory</span>
+          <span id="av-mem-count" style="color:#7aaac0;font-size:0.65rem;"></span>
+          <button id="av-mem-refresh" style="margin-left:auto;padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Refresh</button>
         </div>
-        <div id="av-mem-list" style="flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px;background:#ffffff;">
-          <div style="color:#888;font-size:0.7rem;padding:20px;text-align:center;">Loading conversation history...</div>
+        <div id="av-mem-list" style="flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));">
+          <div style="color:#7aaac0;font-size:0.7rem;padding:20px;text-align:center;">Loading conversation history...</div>
         </div>
       </div>
     `;
@@ -7376,16 +7378,16 @@ export class OfficeScene extends Phaser.Scene {
       countEl.textContent = `${messages.length} messages`;
 
       if (messages.length === 0) {
-        listEl.innerHTML = `<div style="color:#888;font-size:0.7rem;padding:20px;text-align:center;">No conversation history. The agent hasn't been given any tasks yet.</div>`;
+        listEl.innerHTML = `<div style="color:#7aaac0;font-size:0.7rem;padding:20px;text-align:center;">No conversation history. The agent hasn't been given any tasks yet.</div>`;
         return;
       }
 
       const roleColors: Record<string, string> = {
-        system: "#888",
-        user: "#245edb",
-        assistant: "#2a8c2a",
+        system: "#7aaac0",
+        user: "#1a6bb0",
+        assistant: "#2a8a3a",
         tool: "#cc8844",
-        unknown: "#aaa",
+        unknown: "#a0c0d8",
       };
       const roleLabels: Record<string, string> = {
         system: "SYSTEM",
@@ -7400,9 +7402,9 @@ export class OfficeScene extends Phaser.Scene {
         const label = roleLabels[m.role] ?? m.role.toUpperCase();
         const isLong = m.content.length > 500;
         const displayContent = isLong ? m.content.slice(0, 500) + "..." : m.content;
-        return `<div style="background:#f0f5fa;border-left:3px solid ${color};padding:8px 12px;border-radius:0 4px 4px 0;">
-          <div style="color:${color};font-size:0.6rem;font-weight:bold;margin-bottom:4px;">${label}</div>
-          <div style="color:#1a1a2e;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-word;">${this.escapeHtml(displayContent)}</div>
+        return `<div style="background:rgba(220,240,255,0.4);border-left:3px solid ${color};padding:10px 14px;border-radius:0 8px 8px 0;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
+          <div style="color:${color};font-size:0.6rem;font-weight:bold;margin-bottom:4px;text-shadow:0 1px 0 rgba(255,255,255,0.5);">${label}</div>
+          <div style="color:#1a3a5a;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-word;text-shadow:0 1px 0 rgba(255,255,255,0.3);">${this.escapeHtml(displayContent)}</div>
         </div>`;
       }).join("");
     };
@@ -7426,22 +7428,22 @@ export class OfficeScene extends Phaser.Scene {
     const authToken = getToken();
     const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : "";
     return `
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a1a2e;font-size:0.8rem;">
-        <div style="flex:1;position:relative;background:linear-gradient(to bottom,#c7e8f5,#a8d8f0);overflow:hidden;">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a3a5a;font-size:0.8rem;">
+        <div style="flex:1;position:relative;background:linear-gradient(to bottom,#b8e0f8,#7ec8ee,#5fb8e8);overflow:hidden;">
           <img id="agent-view-screen-img" src="${serverOrigin}/api/agent-screenshot/${agent.id}?t=${Date.now()}${tokenParam}"
             style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:auto;"
             onerror="this.style.display='none';document.getElementById('agent-view-screen-placeholder').style.display='flex';"
             onload="this.style.display='block';document.getElementById('agent-view-screen-placeholder').style.display='none';"
           />
-          <div id="agent-view-screen-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#245edb;gap:8px;">
-            <div style="font-size:2rem;">🖥️</div>
-            <div style="font-size:0.85rem;color:#3a6ea5;">Waiting for ${agent.name} to open a browser…</div>
-            <div style="font-size:0.7rem;color:#5a8cb8;">The agent can use the <code style="color:#245edb;background:#e0e8f5;padding:1px 4px;border-radius:3px;">browse_url</code> tool to navigate to websites.</div>
+          <div id="agent-view-screen-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#1a6bb0;gap:10px;text-shadow:0 1px 2px rgba(255,255,255,0.6);">
+            <div style="font-size:2.5rem;filter:drop-shadow(0 2px 4px rgba(0,80,160,0.2));">🖥️</div>
+            <div style="font-size:0.85rem;color:#1a6bb0;">Waiting for ${agent.name} to open a browser…</div>
+            <div style="font-size:0.7rem;color:#3a8cb8;">The agent can use the <code style="color:#1a6bb0;background:rgba(255,255,255,0.5);padding:2px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.6);">browse_url</code> tool to navigate to websites.</div>
           </div>
         </div>
-        <div style="padding:6px 12px;background:linear-gradient(to bottom,#e8f0fb,#d4e4f7);border-top:1px solid #7a96c3;display:flex;align-items:center;gap:8px;">
-          <span style="color:#5a7090;font-size:0.7rem;">URL:</span>
-          <span id="agent-view-url" style="color:#245edb;font-size:0.7rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</span>
+        <div style="padding:6px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid rgba(255,255,255,0.4);display:flex;align-items:center;gap:8px;">
+          <span style="color:#4a7a9a;font-size:0.7rem;">URL:</span>
+          <span id="agent-view-url" style="color:#1a6bb0;font-size:0.7rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</span>
         </div>
       </div>
     `;

@@ -102,14 +102,14 @@ export class Store {
   crossmintTxHistoryListeners: ((msg: { agentId: string; transactions: any[] | null; error?: string }) => void)[] = [];
   crossmintFundListeners: ((msg: { agentId: string; success: boolean; message: string }) => void)[] = [];
   crossmintOnrampListeners: ((msg: { agentId: string; url: string | null; error?: string }) => void)[] = [];
-  entrancePaid = true;
   subscriptionActive = true;
   subscriptionStatus = "none";
   subscriptionTier: SubscriptionTier | null = null;
   agentLimit = 0;
+  usageCap = 0;
   currentPeriodEnd: number | null = null;
   freeTrialExpiresAt: number | null = null;
-  paymentRequired: { reason: "entrance" | "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number } | null = null;
+  paymentRequired: { reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number } | null = null;
   roomId: string | null = null;
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
@@ -204,11 +204,11 @@ export class Store {
     this.orgsList = [];
     this.orgMembers = null;
     this.hasApiKey = false;
-    this.entrancePaid = true;
     this.subscriptionActive = true;
     this.subscriptionStatus = "none";
     this.subscriptionTier = null;
     this.agentLimit = 0;
+    this.usageCap = 0;
     this.currentPeriodEnd = null;
     this.freeTrialExpiresAt = null;
     this.paymentRequired = null;
@@ -947,11 +947,11 @@ export class Store {
         for (const fn of this.crossmintOnrampListeners) fn(msg);
         break;
       case "payment_status":
-        this.entrancePaid = msg.entrancePaid;
         this.subscriptionActive = msg.subscriptionActive;
         this.subscriptionStatus = msg.subscriptionStatus;
         this.subscriptionTier = msg.subscriptionTier;
         this.agentLimit = msg.agentLimit;
+        this.usageCap = msg.usageCap;
         this.currentPeriodEnd = msg.currentPeriodEnd;
         this.freeTrialExpiresAt = msg.freeTrialExpiresAt;
         break;

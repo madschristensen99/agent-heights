@@ -1471,7 +1471,7 @@ export class Hud {
           <div id="spend-loading" style="font-size:0.85rem;color:#888;">Loading…</div>
           <div id="spend-content" hidden></div>
           <div id="spend-cap-info" style="margin-top:1rem;font-size:0.78rem;color:#888;border-top:1px solid #333;padding-top:0.75rem;">
-            Monthly cap: $30 — exceeded usage moves to a "contact us" plan.
+            Monthly cap: ${this.store.usageCap > 0 ? `$${(this.store.usageCap / 100).toFixed(2)}` : "—"} — upgrade your plan to increase.
           </div>
         </div>
         <div class="tabpanel" data-panel="billing" hidden>
@@ -1487,14 +1487,6 @@ export class Hud {
               const agentLabel = `${t.agentLimit} agent${t.agentLimit === 1 ? "" : "s"}`;
               return `<button class="btn primary s-subscribe-tier" data-tier="${t.id}" style="text-align:left;padding:0.6rem 0.8rem;font-size:0.85rem;">${t.name} — ${t.label} (${agentLabel})</button>`;
             }).join("")}</div>`}
-          <div class="sec" style="margin-top:1rem;">ENTRANCE FEE</div>
-          <div style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.entrancePaid ? "#53b86b" : this.store.freeTrialExpiresAt && this.store.freeTrialExpiresAt > Date.now() ? "#e8c44a" : "#e05d5d"};">
-            ${this.store.entrancePaid
-              ? "✓ Paid — you have access to the world."
-              : this.store.freeTrialExpiresAt && this.store.freeTrialExpiresAt > Date.now()
-                ? "⏳ Free trial active — 2 min/day. Pay $1 to keep playing."
-                : "⚠ Not paid — $1 one-time fee required."}
-          </div>
         </div>
         <div class="tabpanel" data-panel="controls" hidden>
           <div class="sec">QUICK COMMANDS</div>
