@@ -86,11 +86,26 @@ export async function getAgentBalances(agentId: string): Promise<{ address: stri
     const account = await getAgentAccount(agentId);
     const result = await cdp.solana.listTokenBalances({ address: account.address });
     const rawBalances = (result as any).balances ?? [];
-    const balances = (rawBalances as any[]).map((b) => ({
-      symbol: b.token?.symbol ?? b.token?.name ?? "unknown",
-      amount: String(b.amount?.amount ?? "0"),
-      usdValue: undefined,
-    }));
+    const balances = (rawBalances as any[]).map((b) => {
+      const rawAmount = BigInt(b.amount?.amount ?? 0);
+      const decimals = Number(b.amount?.decimals ?? 0);
+      const symbol = b.token?.symbol ?? b.token?.name ?? "unknown";
+      // Convert raw units to human-readable string with proper decimals
+      let amountStr: string;
+      if (decimals <= 0) {
+        amountStr = rawAmount.toString();
+      } else {
+        const negative = rawAmount < 0n;
+        const absVal = negative ? -rawAmount : rawAmount;
+        const divisor = 10n ** BigInt(decimals);
+        const wholePart = absVal / divisor;
+        const fracPart = absVal % divisor;
+        const fracStr = fracPart.toString().padStart(decimals, "0").replace(/0+$/, "");
+        amountStr = fracStr ? `${wholePart}.${fracStr}` : wholePart.toString();
+        if (negative) amountStr = `-${amountStr}`;
+      }
+      return { symbol, amount: amountStr, usdValue: undefined };
+    });
     return { address: account.address, balances };
   } catch (err) {
     console.error(`[cdp-solana] Failed to get balances for agent ${agentId}:`, err);
