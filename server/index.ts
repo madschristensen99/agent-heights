@@ -1402,6 +1402,7 @@ wss.on("connection", async (ws, req) => {
         case "get_crossmint_wallet":
         case "get_crossmint_balance": {
           try {
+            console.log(`[crossmint] get_crossmint_wallet called — API_KEY=${process.env.CROSSMINT_API_KEY ? "set (" + process.env.CROSSMINT_API_KEY.slice(0, 12) + "...)" : "NOT SET"}, SIGNER_SECRET=${process.env.CROSSMINT_SERVER_SIGNER_SECRET ? "set (" + process.env.CROSSMINT_SERVER_SIGNER_SECRET.slice(0, 8) + "...)" : "NOT SET"}, CHAIN=${process.env.CROSSMINT_CHAIN ?? "not set"}`);
             const balData = await getCrossmintBalances(msg.agentId);
             if (!balData) {
               sess.broadcast({ type: "crossmint_wallet_status", agentId: msg.agentId, address: null, chain: null, balances: null, error: "Crossmint not configured" });
