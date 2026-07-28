@@ -21,7 +21,7 @@ lets the audience participate.
 
 **What makes this unique:**
 
-- **Not AI slop.** Pixel-art office, agents walking around, emotes,
+- **Not AI slop.** Virtual office, agents walking around, emotes,
   helicopter deliveries, task boards. It looks like a game because it
   is one. No voiceover, no stock footage, no generated images.
 - **Generative content.** The office builds itself. New agents bring

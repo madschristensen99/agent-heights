@@ -277,12 +277,13 @@ export class Hud {
         <div class="row chat-row">
           <input id="d-chat" placeholder="Say something… (chat, not a task)" />
           <button class="btn" id="d-say">SAY</button>
+          <button class="btn" id="d-history" title="View conversation history">📜</button>
         </div>
         <div class="row">
           <button class="btn primary" id="d-assign-new" title="Start a fresh conversation — agent keeps a summary of prior work">NEW TASK ▶</button>
           <button class="btn" id="d-assign" title="Continue the existing conversation — agent remembers everything">CONTINUE ▶</button>
           <button class="btn" id="d-stop">STOP</button>
-          <button class="btn" id="d-clear">FULL RESET</button>
+          <button class="btn" id="d-clear">CLEAR</button>
           <button class="btn" id="d-vacation">VACATION</button>
           <button class="btn danger" id="d-fire">FIRE</button>
         </div>
@@ -515,6 +516,10 @@ export class Hud {
       achievements.unlock("chat_with_agent");
     };
     document.getElementById("d-say")!.addEventListener("click", sendChat);
+    document.getElementById("d-history")!.addEventListener("click", () => {
+      const agent = this.store.selected();
+      if (agent) this.openConversationModal(agent.id, agent.name, agent.accent);
+    });
     chatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendChat();
     });
@@ -530,9 +535,9 @@ export class Hud {
       const agent = this.store.selected();
       if (!agent) return;
       inlineConfirm(
-        `Full reset for ${agent.name}?`,
+        `Clear ${agent.name}?`,
         "Wipes all conversation memory, task history, and logs. Files in their workspace stay. Use NEW TASK instead if you want them to remember prior work.",
-        "Full reset",
+        "Clear",
         () => this.net.send({ type: "clear", agentId: agent.id }),
       );
     });
@@ -934,7 +939,7 @@ export class Hud {
       {
         icon: "🏢",
         title: "Welcome to Agent Heights",
-        body: "You're the boss of a pixel-art office full of <strong>real AI agents</strong>. Each employee at a desk is a live coding agent that reads, writes, and runs code in its own workspace. Your job: hire them, give them tasks, and watch them work.",
+        body: "You're the boss of a virtual office full of <strong>real AI agents</strong>. Each employee at a desk is a live coding agent that reads, writes, and runs code in its own workspace. Your job: hire them, give them tasks, and watch them work.",
       },
       {
         icon: "➕",
@@ -2686,6 +2691,155 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         this.renderSchedules(agent.id);
       }
     }
+  }
+
+  private openConversationModal(agentId: string, agentName: string, accent: string): void {
+    const existing = document.getElementById("conv-history-overlay");
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "conv-history-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+
+    overlay.innerHTML = `
+      <div style="background:#1a1d24;border-radius:12px;padding:0;width:640px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;box-shadow:0 12px 48px rgba(0,0,0,0.5);">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid #333;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span style="font-size:1.1rem;font-weight:800;color:${accent};">${esc(agentName)}</span>
+            <span style="font-size:0.75rem;color:#888;">Conversation History</span>
+          </div>
+          <button id="conv-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+        <div style="display:flex;gap:2px;padding:0 1rem;background:#15171c;">
+          <button class="conv-tab active" data-tab="activity" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid ${accent};background:transparent;color:${accent};font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;">📜 Activity Log</button>
+          <button class="conv-tab" data-tab="memory" style="padding:0.5rem 1rem;border:none;border-bottom:2px solid transparent;background:transparent;color:#888;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;">🧠 LLM Memory</button>
+        </div>
+        <div id="conv-content" style="flex:1;overflow-y:auto;padding:0.75rem 1.5rem;"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    const cleanups: (() => void)[] = [];
+    const closeWithCleanup = () => { cleanups.forEach(fn => fn()); close(); };
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeWithCleanup(); });
+    document.getElementById("conv-close")!.addEventListener("click", closeWithCleanup);
+
+    const contentEl = document.getElementById("conv-content")!;
+    const tabBtns = overlay.querySelectorAll<HTMLButtonElement>(".conv-tab");
+
+    // ── Activity Log tab ──
+    const renderActivityLog = () => {
+      const logs = this.store.logs.get(agentId) ?? [];
+      if (logs.length === 0) {
+        contentEl.innerHTML = `<div style="text-align:center;color:#888;font-size:0.85rem;padding:2rem;">No activity logged yet.</div>`;
+        return;
+      }
+      const kindColors: Record<string, string> = {
+        status: "#888",
+        text: "#44cc66",
+        tool: "#cc8844",
+        result: "#4f9dde",
+        error: "#e05d5d",
+        boss: "#6aaadf",
+      };
+      const kindLabels: Record<string, string> = {
+        status: "STATUS",
+        text: "TEXT",
+        tool: "TOOL",
+        result: "RESULT",
+        error: "ERROR",
+        boss: "BOSS",
+      };
+      contentEl.innerHTML = logs.map(l => {
+        const color = kindColors[l.kind] ?? "#888";
+        const label = kindLabels[l.kind] ?? l.kind.toUpperCase();
+        const time = new Date(l.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const html = renderEntry(l);
+        return `<div style="display:flex;gap:0.6rem;padding:0.4rem 0;border-bottom:1px solid #1e2028;">
+          <span style="color:#555;font-size:0.65rem;min-width:3.5rem;flex-shrink:0;padding-top:0.1rem;">${time}</span>
+          <span style="color:${color};font-size:0.6rem;font-weight:700;min-width:3rem;flex-shrink:0;padding-top:0.15rem;">${label}</span>
+          <span style="font-size:0.78rem;line-height:1.4;word-break:break-word;flex:1;">${html}</span>
+        </div>`;
+      }).join("");
+      contentEl.scrollTop = contentEl.scrollHeight;
+    };
+
+    // ── LLM Memory tab ──
+    const renderMemoryTab = () => {
+      contentEl.innerHTML = `
+        <div style="text-align:center;color:#888;font-size:0.85rem;padding:2rem;">
+          <div id="conv-mem-loading">Loading conversation memory…</div>
+          <div id="conv-mem-list" style="text-align:left;"></div>
+        </div>
+      `;
+      this.net.send({ type: "agent_memory_request", agentId });
+
+      const onMemory = (respAgentId: string, messages: { role: string; content: string }[]) => {
+        if (respAgentId !== agentId) return;
+        const loadingEl = document.getElementById("conv-mem-loading");
+        if (loadingEl) loadingEl.style.display = "none";
+        const listEl = document.getElementById("conv-mem-list");
+        if (!listEl) return;
+
+        if (messages.length === 0) {
+          listEl.innerHTML = `<div style="text-align:center;color:#888;font-size:0.85rem;padding:1rem;">No conversation history. The agent hasn't been given any tasks yet.</div>`;
+          return;
+        }
+
+        const roleColors: Record<string, string> = {
+          system: "#666",
+          user: "#6aaadf",
+          assistant: "#44cc66",
+          tool: "#cc8844",
+          unknown: "#888",
+        };
+        const roleLabels: Record<string, string> = {
+          system: "SYSTEM",
+          user: "USER",
+          assistant: "ASSISTANT",
+          tool: "TOOL",
+          unknown: "???",
+        };
+
+        listEl.innerHTML = `<div style="font-size:0.7rem;color:#888;margin-bottom:0.5rem;">${messages.length} messages</div>` + messages.map(m => {
+          const color = roleColors[m.role] ?? "#888";
+          const label = roleLabels[m.role] ?? m.role.toUpperCase();
+          const isLong = m.content.length > 800;
+          const displayContent = isLong ? m.content.slice(0, 800) + "…" : m.content;
+          return `<div style="background:#0d0d18;border-left:3px solid ${color};padding:0.5rem 0.75rem;border-radius:0 4px 4px 0;margin-bottom:0.4rem;">
+            <div style="color:${color};font-size:0.6rem;font-weight:700;margin-bottom:0.25rem;">${label}</div>
+            <div style="color:#c0c0d0;font-size:0.75rem;line-height:1.4;white-space:pre-wrap;word-break:break-word;">${esc(displayContent)}</div>
+          </div>`;
+        }).join("");
+      };
+
+      this.store.onAgentMemory(onMemory);
+      cleanups.push(() => this.store.offAgentMemory(onMemory));
+    };
+
+    // ── Tab switching ──
+    tabBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        tabBtns.forEach(b => {
+          const isActive = b === btn;
+          b.classList.toggle("active", isActive);
+          if (isActive) {
+            b.style.borderBottomColor = accent;
+            b.style.color = accent;
+          } else {
+            b.style.borderBottomColor = "transparent";
+            b.style.color = "#888";
+          }
+        });
+        const tab = btn.dataset.tab;
+        if (tab === "activity") renderActivityLog();
+        else if (tab === "memory") renderMemoryTab();
+      });
+    });
+
+    // Render initial tab
+    renderActivityLog();
   }
 
   private renderSchedules(agentId: string): void {

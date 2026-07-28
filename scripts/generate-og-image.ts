@@ -166,7 +166,7 @@ drawText(img, title, titleX + 4, titleY + 4, titleScale, 8, 10, 16);
 drawText(img, title, titleX, titleY, titleScale, 88, 200, 102);
 
 // ── Subtitle ──────────────────────────────────────────────────────────────
-const subtitle = "MANAGE AI AGENTS IN A PIXEL-ART OFFICE";
+const subtitle = "MANAGE AI AGENTS IN A VIRTUAL OFFICE";
 const subScale = 4;
 const subW = textWidth(subtitle, subScale);
 const subX = Math.floor((W - subW) / 2);

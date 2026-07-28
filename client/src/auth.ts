@@ -173,7 +173,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   overlay.innerHTML = `
     <div style="position:relative;z-index:1;text-align:center;max-width:400px;width:90vw;">
       <h1 style="font-size:2.6rem;font-weight:800;margin:0 0 0.3rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HEIGHTS</h1>
-      <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 0.5rem;letter-spacing:0.15em;text-transform:uppercase;">Manage AI Agents in a Pixel-Art Office</p>
+      <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 0.5rem;letter-spacing:0.15em;text-transform:uppercase;">Manage AI Agents in a Virtual Office</p>
       <div id="auth-sprites"></div>
       <p id="auth-welcome" style="color:#7a8090;font-size:0.9rem;margin:0 0 1.5rem;">Welcome! Sign in to enter your office.</p>
       <div id="auth-form" style="display:flex;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;">

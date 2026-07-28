@@ -19,7 +19,7 @@ function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string
 
   return `## Agent Heights Context
 
-The user is currently in Agent Heights — a pixel-art office where they manage real AI agents.
+The user is currently in Agent Heights — a virtual office where they manage real AI agents.
 Their name is "${bossName}".
 
 ### Current Office Roster

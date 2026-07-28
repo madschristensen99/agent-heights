@@ -1,6 +1,6 @@
 # Agent Heights
 
-A retro pixel-art office where you hire and manage **real AI agents**. Each employee at a desk is a live coding agent that actually reads, writes, and runs code in its own workspace folder while you watch it work from a top-down Phaser office.
+A virtual office where you hire and manage **real AI agents**. Each employee at a desk is a live coding agent that actually reads, writes, and runs code in its own workspace folder while you watch it work from a top-down Phaser office.
 
 Hire an agent, give it a name, type a task, and watch it walk to its desk and start typing. Speech bubbles and the office feed stream its real tool calls and output in real time.
 

@@ -413,12 +413,16 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
         },
         amount: {
           type: "number",
-          description: "Amount to transfer (in human-readable units, e.g. 0.5 for 0.5 SOL)",
+          description: "Amount to transfer (in human-readable units, e.g. 0.5 for 0.5 SOL, 10 for 10 USDC)",
         },
         token: {
           type: "string",
           description: 'Token to transfer: "sol" for native SOL, or an SPL token mint address',
           default: "sol",
+        },
+        decimals: {
+          type: "number",
+          description: "Token decimals (SOL=9, USDC=6, etc.). If omitted, will be looked up automatically. Use solana_jupiter_search to find decimals for unknown tokens.",
         },
       },
       required: ["to", "amount"],
@@ -427,16 +431,56 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
       try {
         const account = await getAgentAccount(agentId);
         const token = input.token ?? "sol";
-        const lamports = BigInt(Math.floor(input.amount * LAMPORTS_PER_SOL));
+
+        // Determine decimals for the token
+        let decimals: number;
+        if (token === "sol") {
+          decimals = 9;
+        } else if (input.decimals !== undefined) {
+          decimals = input.decimals;
+        } else {
+          // Try to find decimals from the wallet's existing balances
+          const cdp = getCdpClient();
+          const result = await cdp.solana.listTokenBalances({ address: account.address });
+          const balances = (result as any).balances ?? [];
+          const match = (balances as any[]).find((b) => b.token?.mintAddress === token);
+          if (match) {
+            decimals = Number(match.amount?.decimals ?? 6);
+          } else {
+            // Token not in wallet — try Jupiter search
+            try {
+              const searchUrl = new URL("https://lite-api.jup.ag/ultra/v1/search");
+              searchUrl.searchParams.set("query", token);
+              const searchRes = await fetch(searchUrl.toString());
+              if (searchRes.ok) {
+                const searchData = await searchRes.json() as any;
+                const tokens = Array.isArray(searchData) ? searchData : (searchData.tokens ?? searchData.result ?? []);
+                const found = (tokens as any[]).find((t) => (t.mint ?? t.address ?? t.id) === token);
+                if (found) {
+                  decimals = Number(found.decimals ?? found.tokenDecimals ?? 6);
+                } else {
+                  return `Could not determine decimals for token ${token}. Please provide the "decimals" parameter (e.g. 6 for USDC, 9 for SOL, 5 for BONK). Use solana_jupiter_search to look it up.`;
+                }
+              } else {
+                return `Could not determine decimals for token ${token}. Please provide the "decimals" parameter.`;
+              }
+            } catch {
+              return `Could not determine decimals for token ${token}. Please provide the "decimals" parameter.`;
+            }
+          }
+        }
+
+        const rawAmount = BigInt(Math.floor(input.amount * Math.pow(10, decimals)));
         const { signature } = await account.transfer({
           to: input.to,
-          amount: lamports,
+          amount: rawAmount,
           token,
           network: network as any,
         });
         const explorerUrl = `https://explorer.solana.com/tx/${signature}` +
           (network.includes("devnet") ? `?cluster=devnet` : "");
-        return `Transfer successful!\nAmount: ${input.amount} ${token === "sol" ? "SOL" : token}\nTo: ${input.to}\nSignature: ${signature}\nExplorer: ${explorerUrl}`;
+        const tokenLabel = token === "sol" ? "SOL" : token.slice(0, 8) + "...";
+        return `Transfer successful!\nAmount: ${input.amount} ${tokenLabel}\nTo: ${input.to}\nSignature: ${signature}\nExplorer: ${explorerUrl}`;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return `Transfer failed: ${msg}`;
