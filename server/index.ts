@@ -26,6 +26,7 @@ import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
 import { getUsageSummary } from "./usage.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
+import { scheduleDeletion, cancelDeletion, getDeletionStatus, processExpiredDeletions, GRACE_PERIOD_DAYS } from "./account.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
@@ -746,6 +747,18 @@ wss.on("connection", async (ws, req) => {
     }
   }
 
+  // Send deletion status if the user has a pending deletion request
+  if (isSupabaseConfigured) {
+    try {
+      const { scheduledDeletionAt } = await getDeletionStatus(user.id);
+      if (scheduledDeletionAt) {
+        ws.send(JSON.stringify({ type: "deletion_scheduled", scheduledDeletionAt } satisfies ServerMsg));
+      }
+    } catch (err) {
+      console.error("[server] failed to get deletion status:", err);
+    }
+  }
+
   // Helper: send the user's list of rooms they own or have joined
   const sendRoomsList = () => {
     const rooms = tenants.getRoomsForUser(sess.user.id).map(r => ({ roomId: r.id, name: r.name, isPrivate: r.isPrivate, roomType: r.roomType, orgId: r.orgId }));
@@ -836,6 +849,30 @@ wss.on("connection", async (ws, req) => {
           rateLimitToastMap.set(rlKey, now);
           const data = JSON.stringify({ type: "toast", text: "Too many requests — slow down." });
           if (ws.readyState === WebSocket.OPEN) ws.send(data);
+        }
+        return;
+      }
+
+      // Account-level actions — bypass room permission checks
+      if (msg.type === "delete_account") {
+        const result = await scheduleDeletion(sess.user.id);
+        if (result.error) {
+          sess.broadcast({ type: "toast", text: `Failed to schedule deletion: ${result.error}` });
+        } else if (result.scheduledDeletionAt) {
+          // Stop all running agents — data preserved during grace period
+          manager.stopAll();
+          sess.broadcast({ type: "deletion_scheduled", scheduledDeletionAt: result.scheduledDeletionAt });
+          sess.broadcast({ type: "toast", text: `Account scheduled for deletion in ${GRACE_PERIOD_DAYS} days. Sign in anytime to cancel.` });
+        }
+        return;
+      }
+      if (msg.type === "cancel_deletion") {
+        const result = await cancelDeletion(sess.user.id);
+        if (result.error) {
+          sess.broadcast({ type: "toast", text: `Failed to cancel deletion: ${result.error}` });
+        } else {
+          sess.broadcast({ type: "deletion_cancelled" });
+          sess.broadcast({ type: "toast", text: "Account deletion cancelled — welcome back!" });
         }
         return;
       }
@@ -2744,6 +2781,11 @@ const logMaintenanceInterval = startLogMaintenance();
 // Periodically clean up idle agent browser contexts (every 5 minutes)
 const browserCleanupInterval = setInterval(() => { void cleanupIdleBrowsers(); }, 5 * 60 * 1000);
 
+// Periodically process expired account deletion requests (every 1 hour)
+const deletionCleanupInterval = setInterval(() => { void processExpiredDeletions(); }, 60 * 60 * 1000);
+// Also run once on startup
+void processExpiredDeletions();
+
 server.listen(SERVER_PORT, () => {
   console.log(`[agent-heights] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);
   if (isSupabaseConfigured) {
@@ -2798,6 +2840,7 @@ async function shutdown(): Promise<void> {
   stopRedis();
   clearInterval(logMaintenanceInterval);
   clearInterval(browserCleanupInterval);
+  clearInterval(deletionCleanupInterval);
   screenshots.destroy();
   await destroyAllBrowsers();
 

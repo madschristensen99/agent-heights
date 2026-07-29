@@ -1,5 +1,6 @@
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import type { MCPServerConfig } from "../../../shared/types";
+import { getToken } from "../auth.js";
 
 export interface MarketplaceResult {
   agents?: MarketplaceAgent[];
@@ -550,7 +551,14 @@ export class MarketplaceBrowser {
     this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Searching PulseMCP for "${this.escape(search)}"…</div>`;
 
     try {
-      const res = await fetch(`/api/pulsemcp-search?search=${encodeURIComponent(search)}`);
+      const token = getToken();
+      if (!token) {
+        this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Sign in to search community MCP servers.</div>`;
+        return;
+      }
+      const res = await fetch(`/api/pulsemcp-search?search=${encodeURIComponent(search)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: { results: CommunityMCPResult[]; count: number } = await res.json();
 

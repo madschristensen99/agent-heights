@@ -1530,6 +1530,16 @@ export class Hud {
           <div class="row">
             <button class="btn danger" id="s-reset">RESET PROFILE</button>
           </div>
+          <div id="s-deletion-warning" hidden style="margin-top:1rem;padding:0.75rem;border:1px solid #c44a4a;border-radius:0.5rem;background:rgba(196,74,74,0.1);">
+            <div style="font-size:0.85rem;color:#e05d5d;margin-bottom:0.5rem;">⚠ Your account is scheduled for deletion on <span id="s-deletion-date"></span>.</div>
+            <div style="font-size:0.78rem;color:#888;margin-bottom:0.75rem;">All agents are stopped. Your data will be permanently erased after this date. Sign in anytime before then to cancel.</div>
+            <button class="btn" id="s-cancel-deletion">CANCEL DELETION</button>
+          </div>
+          <div id="s-delete-account-section" style="margin-top:1rem;border-top:1px solid #333;padding-top:1rem;">
+            <div class="sec" style="color:#c44a4a;">DANGER ZONE</div>
+            <p style="font-size:0.78rem;color:#888;margin-bottom:0.5rem;">Permanently delete your account and all associated data. A 30-day grace period applies — you can cancel by signing back in.</p>
+            <button class="btn danger" id="s-delete-account">🗑 DELETE ACCOUNT</button>
+          </div>
         </div>
         <div class="row footer">
           <button class="btn" id="s-cancel">CANCEL</button>
@@ -1630,6 +1640,42 @@ export class Hud {
         "You'll go through onboarding again. Agents and logs are kept.",
         "Reset",
         () => { localStorage.removeItem(PLAYER_KEY); location.reload(); },
+      );
+    });
+
+    // Show deletion warning if account is scheduled for deletion
+    const deletionWarning = document.getElementById("s-deletion-warning")!;
+    const deleteAccountSection = document.getElementById("s-delete-account-section")!;
+    if (this.store.scheduledDeletionAt) {
+      deletionWarning.hidden = false;
+      deleteAccountSection.hidden = true;
+      const dateStr = new Date(this.store.scheduledDeletionAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      (document.getElementById("s-deletion-date") as HTMLSpanElement).textContent = dateStr;
+    } else {
+      deletionWarning.hidden = true;
+      deleteAccountSection.hidden = false;
+    }
+
+    document.getElementById("s-delete-account")!.addEventListener("click", () => {
+      inlineConfirm(
+        "Delete your account?",
+        "Your account will be scheduled for permanent deletion in 30 days. All agents will be stopped. You can cancel by signing back in anytime before the deletion date.",
+        "Delete account",
+        () => {
+          this.net.send({ type: "delete_account" });
+          modal.hidden = true;
+        },
+      );
+    });
+    document.getElementById("s-cancel-deletion")!.addEventListener("click", () => {
+      inlineConfirm(
+        "Cancel account deletion?",
+        "Your account will be restored and your agents can resume working.",
+        "Cancel deletion",
+        () => {
+          this.net.send({ type: "cancel_deletion" });
+          modal.hidden = true;
+        },
       );
     });
   }

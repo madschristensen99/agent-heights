@@ -739,7 +739,9 @@ export type ClientMsg =
   | { type: "spectator_join" }
   | { type: "spectator_chat"; fromName: string; text: string }
   | { type: "list_office_mcp" }
-  | { type: "unregister_mcp_server"; serverId: string };
+  | { type: "unregister_mcp_server"; serverId: string }
+  | { type: "delete_account" }
+  | { type: "cancel_deletion" };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -858,7 +860,9 @@ export type ServerMsg =
   | { type: "office_mcp_list"; servers: OfficeMCPServer[] }
   | { type: "office_mcp_update"; server: OfficeMCPServer }
   | { type: "office_mcp_removed"; serverId: string }
-  | { type: "mcp_build_log"; serverId: string; line: string; stream: "stdout" | "stderr" };
+  | { type: "mcp_build_log"; serverId: string; line: string; stream: "stdout" | "stderr" }
+  | { type: "deletion_scheduled"; scheduledDeletionAt: number }
+  | { type: "deletion_cancelled" };
 
 export const AGENT_MODELS = [
   { id: "kimi-k2.5", label: "Standard" },
