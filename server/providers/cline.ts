@@ -153,7 +153,9 @@ export async function makeTools(cwd: string, opts?: {
   listSelfSchedules?: () => { id: string; name: string; task: string; cronExpression: string; enabled: boolean; nextRunAt: number; runCount: number; lastRunAt: number | null }[];
   updateSelfSchedule?: (scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }) => string;
   deleteSelfSchedule?: (scheduleId: string) => string;
-  hireAgent?: (name: string, model: string, systemPrompt: string) => Promise<string>;
+  hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: import("../../shared/types.js").MCPServerConfig[]) => Promise<string>;
+  officeState?: import("../office-state.js").OfficeState;
+  agentName?: string;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -575,7 +577,177 @@ export async function makeTools(cwd: string, opts?: {
     eventTools.push(readEventsTool);
   }
 
-  const baseWithWorld = [...baseWithMessaging, ...boardTools, ...eventTools];
+  // ── Office state tools (shared coordination graph) ──────────────────
+  const stateTools: AgentTool<any, any>[] = [];
+  if (opts?.officeState && opts?.agentId) {
+    const state = opts.officeState;
+    const aid = opts.agentId;
+    const aname = opts.agentName ?? aid;
+
+    stateTools.push({
+      name: "post_decision",
+      description:
+        "Record an architectural or strategic decision in the shared office state graph. " +
+        "All agents can see active decisions via query_office_state. " +
+        "Use this when you make a choice that affects the whole project (e.g. tech selection, pattern choice, API design). " +
+        "If this decision supersedes a previous one, set supersedesId to the old decision's ID.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "A concise summary of the decision (max 500 chars)" },
+          rationale: { type: "string", description: "Why this decision was made" },
+          supersedesId: { type: "string", description: "ID of a previous decision this one replaces (optional)" },
+        },
+        required: ["title"],
+      },
+      async execute(input: any) {
+        const node = state.addNode("decision", String(input.title), aid, aname, "active", input.rationale ? { rationale: String(input.rationale).slice(0, 1000) } : undefined);
+        if (input.supersedesId) {
+          const oldId = String(input.supersedesId);
+          state.addEdge(node.id, oldId, "contradicts");
+          state.updateNode(oldId, { status: "superseded" });
+        }
+        return `Decision recorded: [${node.id}] "${node.title}". Visible to all agents via query_office_state.`;
+      },
+    });
+
+    stateTools.push({
+      name: "post_blocker",
+      description:
+        "Report a blocker impeding progress. This is visible to all agents and the manager. " +
+        "If you know which task it blocks, provide its ID — otherwise just describe the blocker.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "What is blocking you? (max 500 chars)" },
+          blocksTaskId: { type: "string", description: "ID of the task this blocker prevents (optional)" },
+        },
+        required: ["title"],
+      },
+      async execute(input: any) {
+        const node = state.addNode("blocker", String(input.title), aid, aname, "active");
+        if (input.blocksTaskId) {
+          const ok = state.addEdge(node.id, String(input.blocksTaskId), "blocks");
+          if (!ok) return `Blocker recorded as [${node.id}] but could not link to task ${input.blocksTaskId} — task not found.`;
+        }
+        return `Blocker posted: [${node.id}] "${node.title}". The manager and colleagues can see this.`;
+      },
+    });
+
+    stateTools.push({
+      name: "post_observation",
+      description:
+        "Share a finding, discovery, or note with the office. Observations are visible to all agents. " +
+        "Use this for things like: API rate limits, codebase quirks, environment details, or research results.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "The observation (max 500 chars)" },
+        },
+        required: ["title"],
+      },
+      async execute(input: any) {
+        const node = state.addNode("observation", String(input.title), aid, aname, "active");
+        return `Observation posted: [${node.id}] "${node.title}". Visible to all agents.`;
+      },
+    });
+
+    stateTools.push({
+      name: "query_office_state",
+      description:
+        "Query the shared office state graph. Returns a structured summary of: " +
+        "active tasks, pending tasks, blocked tasks, active blockers (and what they block), " +
+        "active decisions, and recent observations. Use this before starting work to understand " +
+        "the current office situation and avoid duplicating effort.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          filter: {
+            type: "string",
+            description: "Optional filter: 'blockers', 'decisions', 'tasks', 'observations', or omit for full summary",
+          },
+        },
+      },
+      async execute(input: any) {
+        const filter = String(input.filter ?? "");
+        if (filter === "blockers") {
+          const blockers = state.findBlockers();
+          if (blockers.length === 0) return "No active blockers in the office.";
+          return blockers.map(({ blocker, blocks }) => {
+            const blockedTitles = blocks.map((b) => `[${b.id}] ${b.title}`).join(", ");
+            return `[${blocker.id}] ${blocker.title} (${blocker.agentName})${blockedTitles ? ` → blocking: ${blockedTitles}` : ""}`;
+          }).join("\n");
+        }
+        if (filter === "decisions") {
+          const decisions = state.getRecentDecisions(20);
+          if (decisions.length === 0) return "No decisions recorded yet.";
+          return decisions.map((d) => `[${d.id}] [${d.status}] ${d.title} (${d.agentName})`).join("\n");
+        }
+        if (filter === "tasks") {
+          const tasks = state.listNodes({ type: "task", limit: 30 });
+          if (tasks.length === 0) return "No tasks in the state graph.";
+          return tasks.map((t) => `[${t.id}] [${t.status}] ${t.title} (${t.agentName})`).join("\n");
+        }
+        if (filter === "observations") {
+          const obs = state.listNodes({ type: "observation", status: "active", limit: 20 });
+          if (obs.length === 0) return "No active observations.";
+          return obs.map((o) => `[${o.id}] ${o.title} (${o.agentName})`).join("\n");
+        }
+        return state.getSummary();
+      },
+    });
+
+    stateTools.push({
+      name: "resolve_blocker",
+      description:
+        "Mark a blocker as resolved. Use this when you've overcome an obstacle that was previously posted.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          blockerId: { type: "string", description: "The ID of the blocker to resolve" },
+          resolution: { type: "string", description: "How it was resolved (optional)" },
+        },
+        required: ["blockerId"],
+      },
+      async execute(input: any) {
+        const id = String(input.blockerId);
+        const node = state.getNode(id);
+        if (!node || node.type !== "blocker") return `No blocker found with ID ${id}.`;
+        if (node.status === "resolved") return `Blocker [${id}] is already resolved.`;
+        state.updateNode(id, {
+          status: "resolved",
+          metadata: input.resolution ? { resolution: String(input.resolution).slice(0, 500) } : {},
+        });
+        return `Blocker [${id}] "${node.title}" marked as resolved.`;
+      },
+    });
+
+    stateTools.push({
+      name: "get_decision_trail",
+      description:
+        "Trace the history of a decision — see what decisions it superseded and the chain of changes. " +
+        "Use this to understand why a particular architectural choice was made.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          decisionId: { type: "string", description: "The ID of the decision to trace" },
+        },
+        required: ["decisionId"],
+      },
+      async execute(input: any) {
+        const id = String(input.decisionId);
+        const trail = state.getDecisionTrail(id);
+        if (trail.length === 0) return `No decision found with ID ${id}.`;
+        return trail.map((d, i) => {
+          const prefix = i === 0 ? "CURRENT" : "SUPERSEDED";
+          const rationale = d.metadata?.rationale ? ` — ${d.metadata.rationale.slice(0, 200)}` : "";
+          return `[${prefix}] [${d.id}] ${d.title} (${d.agentName}, ${new Date(d.ts).toLocaleDateString()})${rationale}`;
+        }).join("\n");
+      },
+    });
+  }
+
+  const baseWithWorld = [...baseWithMessaging, ...boardTools, ...eventTools, ...stateTools];
 
   // ── Self-scheduling tools ──────────────────────────────────────────
   const scheduleTools: AgentTool<any, any>[] = [];
@@ -841,6 +1013,8 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         updateSelfSchedule: ctx.updateSelfSchedule,
         deleteSelfSchedule: ctx.deleteSelfSchedule,
         hireAgent: ctx.hireAgent,
+        officeState: ctx.officeState,
+        agentName: ctx.agentName,
       });
       const maxIter = isChat ? (agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);

@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, PendingTask, TaskCard, WorldState, PlatformEvent } from "../shared/types.js";
+import type { OfficeStateJSON } from "./office-state.js";
 
 export interface SaveState {
   player: PlayerInfo | null;
@@ -18,6 +19,8 @@ export interface SaveState {
   mailEvents?: PlatformEvent[];
   /** Per-user platform credentials (e.g. TELEGRAM_BOT_TOKEN) that survive redeploys. */
   platformCredentials?: Record<string, string>;
+  /** Shared office state graph (decisions, blockers, observations, task dependencies). */
+  officeState?: OfficeStateJSON;
 }
 
 export interface Persistence {
@@ -33,6 +36,7 @@ export interface Persistence {
   clearPendingTasks(): void;
   setPlatformCredentials(creds: Record<string, string>): void;
   getPlatformCredentials(): Record<string, string>;
+  setOfficeState(state: OfficeStateJSON): void;
   flushNow(): void | Promise<void>;
   saveMessages(agentId: string, messages: unknown[]): Promise<void>;
   loadMessages(agentId: string): Promise<unknown[]>;
@@ -195,6 +199,11 @@ export class SaveFile implements Persistence {
 
   getPlatformCredentials(): Record<string, string> {
     return this.state.platformCredentials ?? {};
+  }
+
+  setOfficeState(state: OfficeStateJSON): void {
+    this.state.officeState = state;
+    this.schedule();
   }
 
   async insertMailEvent(_ev: PlatformEvent): Promise<void> {

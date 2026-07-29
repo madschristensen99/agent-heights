@@ -12,6 +12,7 @@ export interface UsageData {
 }
 
 import type { GameSettings, MCPServerConfig } from "../../shared/types.js";
+import type { OfficeState } from "../office-state.js";
 
 export interface RunContext {
   cwd: string;
@@ -69,6 +70,10 @@ export interface RunContext {
   deleteSelfSchedule?: (scheduleId: string) => string;
   /** Called after each LLM call with token usage data for spend tracking. */
   onUsage?: (usage: UsageData) => void;
+  /** Shared office state graph — enables structured cross-agent coordination. */
+  officeState?: OfficeState;
+  /** Agent display name — used for attributing state graph nodes. */
+  agentName?: string;
 }
 
 export type ProviderRunner = (

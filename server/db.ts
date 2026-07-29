@@ -1,5 +1,6 @@
 import type { AgentInfo, GameSettings, LogEntry, PlayerInfo, TaskCard, WorldState } from "../shared/types.js";
 import type { SaveState } from "./persistence.js";
+import type { OfficeStateJSON } from "./office-state.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 /**
@@ -109,6 +110,11 @@ export class DbPersistence {
 
   setPlatformCredentials(creds: Record<string, string>): void {
     this.state.platformCredentials = creds;
+    this.schedule();
+  }
+
+  setOfficeState(state: OfficeStateJSON): void {
+    this.state.officeState = state;
     this.schedule();
   }
 

@@ -3960,6 +3960,49 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     command: "bash",
     args: ["path/to/mcp-technical-analysis/scripts/mcp-auto-start.sh"],
   },
+  {
+    id: "massive",
+    name: "Massive",
+    summary: "Real-time web access — fetch any URL, search Google, query AI chatbots with JS rendering and captcha solving.",
+    description:
+      "Official MCP server for the Massive Web Render API. Gives agents real-time web access — fetch any URL (with JS rendering, captcha solving, 195+ country geo-targeting), search Google with structured results, and query AI chatbots (ChatGPT, Gemini, Perplexity, Copilot). Returns markdown by default for optimal LLM consumption. Credit-based pricing — account_status tool checks remaining credits for free.",
+    transport: "stdio",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["search", "web", "data"],
+    icon: "<svg viewBox='0 0 24 24' fill='none' stroke='#e0e0e0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='2' y1='12' x2='22' y2='12'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg>",
+    visitorsPerWeek: "—",
+    command: "npx",
+    args: ["-y", "@joinmassive/mcp-server"],
+    envVars: [
+      { name: "MASSIVE_TOKEN", description: "Massive API token from joinmassive.com", isRequired: true },
+    ],
+    keyLabel: "API Token",
+    keyPlaceholder: "mst_...",
+    keyHelpUrl: "https://joinmassive.com",
+    nativeIntegration: true,
+    nativeIntegrationNote:
+      "Web browser station: show fetched page content rendering on the agent's monitor. Search results appear as a list. Geo-targeting dropdown visible in the UI.",
+  },
+  {
+    id: "google-maps-scraper",
+    name: "Google Maps Scraper",
+    summary: "Search Google Maps businesses, fetch reviews, and retrieve photos via one secure MCP endpoint.",
+    description:
+      "Remote MCP server by gmapsextractor.com that gives agents live Google Maps data — search businesses (name, address, phone, website, rating, review count), retrieve public reviews with filtering, and fetch public business photos. Uses Streamable HTTP transport with Bearer token auth. Free monthly requests available; paid plans for higher volume. Ideal for prospecting research, local market analysis, and listing enrichment.",
+    transport: "remote",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["search", "web", "data"],
+    icon: "https://cdn.simpleicons.org/googlemaps/white",
+    url: "https://cloud.gmapsextractor.com/api/mcp",
+    keyLabel: "API Key",
+    keyPlaceholder: "Paste your gmapsextractor.com API key...",
+    keyHelpUrl: "https://gmapsextractor.com/google-maps-scraper-mcp",
+    nativeIntegration: true,
+    nativeIntegrationNote:
+      "Map station: show a mini Google Maps view on the agent's monitor with pins for search results. Reviews scroll as cards. Photos appear in a gallery sidebar.",
+  },
 ];
 
 // ── Helper functions ───────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import type { AgentInfo, AgentSchedule, GameSettings, LogEntry, PlayerInfo, PendingTask, TaskCard, WorldState, AgentStatus, AgentRole, OfficeTheme, PlatformEvent } from "../shared/types.js";
 import type { SaveState } from "./persistence.js";
+import type { OfficeStateJSON } from "./office-state.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 /**
@@ -307,6 +308,11 @@ export class RelationalPersistence {
 
   getPlatformCredentials(): Record<string, string> {
     return this.state.platformCredentials ?? {};
+  }
+
+  setOfficeState(state: OfficeStateJSON): void {
+    this.state.officeState = state;
+    this.schedule();
   }
 
   flushNow(): Promise<void> {

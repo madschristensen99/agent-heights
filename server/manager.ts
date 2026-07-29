@@ -44,6 +44,7 @@ import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./puls
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 import { getAgentAccount, getAgentBalances as getCdpBalances } from "./providers/cdp-solana.js";
 import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCrossmintBalances } from "./providers/crossmint-wallets.js";
+import { OfficeState } from "./office-state.js";
 
 /**
  * Detect if a message to Agent Resources is a question/conversation vs a task command.
@@ -307,6 +308,8 @@ export class AgentManager {
   /** Undelivered mail waiting for an idle agent. */
   private mailQueue: { platform: string; sender: string; text: string; ts: number; retries: number }[] = [];
   private shuttingDown = false;
+  /** Shared office state graph — structured cross-agent coordination. */
+  private officeState = new OfficeState();
   /** Current subscription tier — set by server when payment status is loaded. */
   subscriptionTier: SubscriptionTier | null = null;
   /** Max agents allowed for this user's tier. */
@@ -351,10 +354,10 @@ export class AgentManager {
         } catch {
           // Not JSON — fall through to treat as a plain token
         }
-        // Plain string: inject as a single env var if the server has envVars defined,
-        // otherwise inject as authToken (backward compat)
-        console.log(`[mcp-inject] Injecting plain key for stdio server ${s.name}`);
-        result.push({ ...s, env: { ...s.env, MCP_API_KEY: raw } });
+        // Plain string: inject using the first envVar name if defined, otherwise MCP_API_KEY
+        const envVarName = s.envVars?.[0]?.name ?? "MCP_API_KEY";
+        console.log(`[mcp-inject] Injecting plain key as ${envVarName} for stdio server ${s.name}`);
+        result.push({ ...s, env: { ...s.env, [envVarName]: raw } });
         continue;
       }
 
@@ -470,6 +473,11 @@ export class AgentManager {
     }
     if (this.board.size > 0) {
       console.log(`[agent-heights] restored ${this.board.size} task card(s) from save`);
+    }
+    // restore the office state graph from the save file
+    if (saved?.officeState) {
+      this.officeState.fromJSON(saved.officeState);
+      console.log(`[agent-heights] restored office state graph: ${this.officeState.toJSON().nodes.length} nodes`);
     }
     // reload schedules from the save file — skip orphaned schedules whose agent was fired/removed
     let orphanedScheduleCount = 0;
@@ -1022,6 +1030,7 @@ export class AgentManager {
   private persist(): void {
     const snap = this.snapshot();
     this.save.setAgents(snap.agents, snap.logs);
+    this.save.setOfficeState(this.officeState.toJSON());
     this.persistPendingTasks();
   }
 
@@ -1301,10 +1310,17 @@ export class AgentManager {
     this.startTask(rt, cleanTask, handoffTo);
   }
 
-  /** Build a concise summary of the agent's prior work for injection into a fresh conversation. */
+  /** Build a concise summary of the agent's prior work + office context for injection into a fresh conversation. */
   private buildMemorySummary(rt: AgentRuntime): string {
     const parts: string[] = [];
 
+    // Office state graph context (decisions, blockers, observations, dependencies)
+    const officeCtx = this.officeState.getAgentContext(rt.info.id, rt.info.name);
+    if (officeCtx && !officeCtx.includes("No prior office context")) {
+      parts.push(officeCtx);
+    }
+
+    // Task history (flat list — still useful for quick reference)
     if (rt.taskHistory.length > 0) {
       parts.push(`You have completed ${rt.info.tasksDone} task(s) previously. Recent task history:`);
       for (const h of rt.taskHistory.slice(0, 10)) {
@@ -1315,7 +1331,7 @@ export class AgentManager {
     }
 
     if (parts.length === 0) return "";
-    return `=== PRIOR WORK MEMORY ===\n${parts.join("\n")}\n=== END PRIOR WORK MEMORY ===`;
+    return parts.join("\n\n");
   }
 
   /** Begin executing a task immediately (assumes agent is idle). */
@@ -2306,6 +2322,21 @@ export class AgentManager {
     // ── Shared workspace ──
     const sharedLine = `\nThere is a shared workspace at ${join(this.workspaceRoot, "shared")} where you can collaborate with other agents on shared files.`;
 
+    // ── Office state graph (active blockers + decisions) ──
+    const activeBlockers = this.officeState.findBlockers();
+    const activeDecisions = this.officeState.getRecentDecisions(5).filter((d) => d.status === "active");
+    const stateLine = (activeBlockers.length > 0 || activeDecisions.length > 0)
+      ? `\nOffice state:\n${[
+          ...(activeBlockers.length > 0 ? [`  Active blockers:`] : []),
+          ...activeBlockers.map(({ blocker, blocks }) => {
+            const blockedTitles = blocks.map((b) => b.title).join(", ");
+            return `    • ${blocker.title}${blockedTitles ? ` → blocking: ${blockedTitles}` : ""} (${blocker.agentName})`;
+          }),
+          ...(activeDecisions.length > 0 ? [`  Active decisions:`] : []),
+          ...activeDecisions.map((d) => `    • ${d.title} (${d.agentName})`),
+        ].join("\n")}\nUse query_office_state for the full picture, post_decision to record decisions, post_blocker to report obstacles, and post_observation to share findings.`
+      : "";
+
     return [
       `You are ${rt.info.name}, an agent employed in a virtual office game called Agent Heights.`,
       personalityLine,
@@ -2317,6 +2348,7 @@ export class AgentManager {
       managerLine,
       rosterLine,
       boardLine,
+      stateLine,
       `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
       `You have a built-in browser! Use browse_url to navigate to any website, browser_screenshot to take a screenshot and visually inspect the page, browser_extract_text to read page content, browser_click to click elements, and browser_fill to fill input fields. When asked to look at, review, or test a website, use these tools.`,
       `=== API & TOOL BUDGET RULES (READ CAREFULLY) ===`,
@@ -2465,6 +2497,8 @@ export class AgentManager {
         mcpServers: await this.injectMcpKeys(rt.info.mcpServers),
         cdpSolana: rt.info.cdpSolana ?? false,
         crossmintWallet: rt.info.crossmintWallet ?? false,
+        officeState: this.officeState,
+        agentName: rt.info.name,
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);
@@ -2688,6 +2722,8 @@ export class AgentManager {
         if (sawError) {
           rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
+          // Auto-record task failure in the office state graph
+          this.officeState.addNode("task", task.slice(0, 200), rt.info.id, rt.info.name, "failed");
           this.setStatus(rt, "error");
           if (rt.cardId) this.revertCard(rt.cardId);
           rt.cardId = null;
@@ -2705,6 +2741,8 @@ export class AgentManager {
           rt.info.tasksDone += 1;
           rt.taskHistory.unshift({ task, success: true, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
+          // Auto-record task completion in the office state graph
+          this.officeState.addNode("task", task.slice(0, 200), rt.info.id, rt.info.name, "done");
           this.setStatus(rt, "done");
           if (rt.cardId) this.completeCard(rt.cardId);
           rt.cardId = null;
