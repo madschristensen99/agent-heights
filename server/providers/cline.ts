@@ -156,6 +156,8 @@ export async function makeTools(cwd: string, opts?: {
   hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: import("../../shared/types.js").MCPServerConfig[]) => Promise<string>;
   officeState?: import("../office-state.js").OfficeState;
   agentName?: string;
+  registerMcpServer?: (opts: { name: string; description: string; runtime: "node" | "python"; entryFile: string }) => Promise<{ id: string; tools: { name: string; description: string }[] }>;
+  listOfficeMcp?: () => { id: string; name: string; description: string; tools: { name: string; description: string }[]; builtByName: string; status: string }[];
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -878,12 +880,65 @@ export async function makeTools(cwd: string, opts?: {
     };
     hireTools.push(hireAgentTool);
   }
-  const baseWithHire = [...baseWithSchedules, ...hireTools];
+  // ── MCP Forge tools (self-built MCP servers) ─────────────────────────
+  const forgeTools: AgentTool<any, any>[] = [];
+  if (opts?.registerMcpServer) {
+    forgeTools.push({
+      name: "register_mcp_server",
+      description:
+        "Register an MCP server you built in your workspace. The server must speak the Model Context Protocol over stdio (JSON-RPC). " +
+        "Write the server file first using write_files, then call this tool to register it. Once registered, its tools become available " +
+        "to ALL agents in the office. Use 'node' runtime for JavaScript/TypeScript files, 'python' for Python files. " +
+        "The entry file must be inside your workspace directory.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Short name for the server (e.g. 'weather-api', 'stock-fetcher')" },
+          description: { type: "string", description: "What the server does and what tools it provides" },
+          runtime: { type: "string", enum: ["node", "python"], description: "Runtime to execute the entry file" },
+          entryFile: { type: "string", description: "Path to the entry file (relative to your workspace, e.g. 'mcp-servers/weather.js')" },
+        },
+        required: ["name", "description", "runtime", "entryFile"],
+      },
+      async execute(input: any) {
+        try {
+          const name = String(input.name ?? "").trim();
+          const description = String(input.description ?? "").trim();
+          const runtime = String(input.runtime ?? "node") as "node" | "python";
+          const entryFile = String(input.entryFile ?? "").trim();
+          if (!name || !entryFile) return "Missing required fields: name and entryFile are required.";
+          const result = await opts!.registerMcpServer!({ name, description, runtime, entryFile });
+          return `Successfully registered MCP server '${name}' (id: ${result.id}). ` +
+            `Discovered ${result.tools.length} tool(s): ${result.tools.map((t) => t.name).join(", ")}. ` +
+            `These tools are now available to all agents in the office.`;
+        } catch (err) {
+          return `Failed to register MCP server: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    });
+  }
+  if (opts?.listOfficeMcp) {
+    forgeTools.push({
+      name: "list_office_tools",
+      description:
+        "List all MCP servers built by agents in this office, including their tools and status. " +
+        "Use this before building a new MCP server to avoid duplicating existing capabilities.",
+      inputSchema: { type: "object", properties: {} },
+      async execute() {
+        const servers = opts!.listOfficeMcp!();
+        if (servers.length === 0) return "No MCP servers have been built in this office yet.";
+        return servers.map((s) =>
+          `[${s.status}] ${s.name} (built by ${s.builtByName}): ${s.description}\n  Tools: ${s.tools.map((t) => t.name).join(", ") || "(none)"}`
+        ).join("\n\n");
+      },
+    });
+  }
+  const baseWithForge = [...baseWithSchedules, ...hireTools, ...forgeTools];
 
   if (opts?.railway) {
     const railwayTools = await wrapRailwayTools();
     if (railwayTools.length > 0) {
-      return [...baseWithHire, ...railwayTools];
+      return [...baseWithForge, ...railwayTools];
     }
   }
 
@@ -891,7 +946,7 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
     const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
     if (mcpTools.length > 0) {
-      return [...baseWithHire, ...mcpTools];
+      return [...baseWithForge, ...mcpTools];
     }
   }
 
@@ -899,7 +954,7 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.cdpSolana && opts?.agentId) {
     const cdpTools = await loadCdpSolanaTools(opts.agentId);
     if (cdpTools.length > 0) {
-      return [...baseWithHire, ...cdpTools];
+      return [...baseWithForge, ...cdpTools];
     }
   }
 
@@ -907,11 +962,11 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.crossmintWallet && opts?.agentId) {
     const crossmintTools = await loadCrossmintWalletTools(opts.agentId);
     if (crossmintTools.length > 0) {
-      return [...baseWithHire, ...crossmintTools];
+      return [...baseWithForge, ...crossmintTools];
     }
   }
 
-  return baseWithHire;
+  return baseWithForge;
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
@@ -1037,6 +1092,8 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         hireAgent: ctx.hireAgent,
         officeState: ctx.officeState,
         agentName: ctx.agentName,
+        registerMcpServer: ctx.registerMcpServer,
+        listOfficeMcp: ctx.listOfficeMcp,
       });
       const maxIter = isChat ? (agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);

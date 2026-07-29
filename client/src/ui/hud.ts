@@ -308,6 +308,7 @@ export class Hud {
       <div class="modal-backdrop" id="code-editor-modal" hidden></div>
       <div class="modal-backdrop" id="worlds-modal" hidden></div>
       <div class="modal-backdrop" id="wardrobe-modal" hidden></div>
+      <div class="modal-backdrop" id="forge-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
@@ -432,11 +433,13 @@ export class Hud {
     this.bindGitHubPanel();
     this.bindCodeEditorPanel();
     this.bindWorldsPanel();
+    this.bindForgePanel();
     this.bindShortcuts();
     this.bindMobileControls();
     // agents stream many messages per second — coalesce to one render per frame
     // so DOM work never starves the game loop
     store.subscribe(() => this.scheduleRender());
+    store.onForgeUpdate(() => this.scheduleRender());
     store.onToast((text) => this.toast(text));
     achievements.onUnlock((def) => {
       this.toast(`🏆 ${def.name} — ${def.desc}`);
@@ -683,6 +686,7 @@ export class Hud {
       const codeEditor = document.getElementById("code-editor-modal")!;
       const worlds = document.getElementById("worlds-modal")!;
       const wardrobe = document.getElementById("wardrobe-modal")!;
+      const forge = document.getElementById("forge-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
         settings.hidden = true;
@@ -693,6 +697,7 @@ export class Hud {
         codeEditor.hidden = true;
         worlds.hidden = true;
         wardrobe.hidden = true;
+        forge.hidden = true;
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
         this.store.toggleWardrobe(false);
@@ -704,7 +709,7 @@ export class Hud {
       if (active?.isContentEditable) return;
       const tag = active?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden || !railway.hidden || !github.hidden || !codeEditor.hidden || !worlds.hidden) return;
+      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden || !railway.hidden || !github.hidden || !codeEditor.hidden || !worlds.hidden || !forge.hidden) return;
       switch (e.key.toLowerCase()) {
         case "h":
           e.preventDefault();
@@ -1967,6 +1972,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     this.renderCodeEditor();
     this.renderWorldsPanel();
     this.renderWardrobe();
+    this.renderForgePanel();
   }
 
   private renderTourBanner(): void {
@@ -3469,6 +3475,74 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     modal.addEventListener("click", (e) => {
       if (e.target === modal) this.store.toggleGitHubPanel(false);
     });
+  }
+
+  private bindForgePanel(): void {
+    const modal = document.getElementById("forge-modal")!;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) this.store.forgePanelOpen = false;
+    });
+  }
+
+  private renderForgePanel(): void {
+    const modal = document.getElementById("forge-modal")!;
+    if (!this.store.forgePanelOpen) {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      return;
+    }
+    modal.hidden = false;
+
+    const servers = this.store.forgeServers;
+    let html = `<div class="railway-modal-content" style="max-width:600px;">`;
+    html += `<div class="railway-modal-header">`;
+    html += `<span class="railway-modal-title">🔨 MCP FORGE</span>`;
+    html += `<button class="x" id="forge-close">✕</button>`;
+    html += `</div>`;
+    html += `<div style="padding:1rem;max-height:70vh;overflow-y:auto;">`;
+
+    if (servers.length === 0) {
+      html += `<p style="color:#888;font-size:0.85rem;text-align:center;padding:2rem 0;">No MCP servers forged yet. Agents can build and register MCP servers using the <code>register_mcp_server</code> tool.</p>`;
+    } else {
+      for (const s of servers) {
+        const statusColor = s.status === "running" ? "#4caf50" : s.status === "error" ? "#f44336" : "#888";
+        html += `<div style="background:#1a1a2e;border:1px solid #333;border-radius:0.5rem;padding:0.8rem;margin-bottom:0.6rem;">`;
+        html += `<div style="display:flex;justify-content:space-between;align-items:start;">`;
+        html += `<div><strong style="color:#e0e0e0;">${s.name}</strong> <span style="color:${statusColor};font-size:0.75rem;">● ${s.status}</span></div>`;
+        html += `<button class="btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;" data-forge-unregister="${s.id}">Remove</button>`;
+        html += `</div>`;
+        if (s.description) {
+          html += `<p style="color:#888;font-size:0.78rem;margin:0.3rem 0;">${s.description}</p>`;
+        }
+        html += `<p style="color:#666;font-size:0.72rem;margin:0.2rem 0;">Built by ${s.builtByName} · ${s.runtime} · ${s.entryFile}</p>`;
+        if (s.error) {
+          html += `<p style="color:#f44336;font-size:0.72rem;margin:0.2rem 0;">${s.error}</p>`;
+        }
+        if (s.tools.length > 0) {
+          html += `<div style="margin-top:0.4rem;">`;
+          for (const t of s.tools) {
+            html += `<span style="display:inline-block;background:#2a2a4a;border:1px solid #444;border-radius:0.3rem;padding:0.15rem 0.5rem;margin:0.15rem 0.15rem 0 0;font-size:0.72rem;color:#8fc9f0;">${t.name}</span>`;
+          }
+          html += `</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    html += `</div></div>`;
+    modal.innerHTML = html;
+
+    const closeBtn = document.getElementById("forge-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => { this.store.forgePanelOpen = false; });
+    }
+    for (const btn of modal.querySelectorAll("[data-forge-unregister]")) {
+      const el = btn as HTMLElement;
+      el.addEventListener("click", () => {
+        const id = el.getAttribute("data-forge-unregister")!;
+        this.store.unregisterForgeServer(id);
+      });
+    }
   }
 
   private renderGitHubPanel(): void {

@@ -239,13 +239,13 @@ export class OfficeScene extends Phaser.Scene {
   private portalZone: Phaser.GameObjects.Arc | null = null;
   private portalHint!: Phaser.GameObjects.Text;
 
-  // --- expedition workshop (break room) ---
+  // --- MCP Forge (break room) ---
   // Each tile is the center of the multi-tile piece for proximity checks.
-  private warTableTile: Tile = { x: 26, y: 15 };   // 2×2 at (25,14)
-  private scrapBinTile: Tile = { x: 28, y: 18 };   // 1×2 at (28,17)
-  private radioTile: Tile = { x: 28, y: 14 };      // 1×1 at (28,14)
-  private workbenchTile: Tile = { x: 24, y: 18 };  // 2×1 at (23,18)
-  private researchTile: Tile = { x: 23, y: 14 };   // 2×1 at (22,14)
+  private warTableTile: Tile = { x: 26, y: 15 };   // 2×2 at (25,14) — forge station
+  private scrapBinTile: Tile = { x: 28, y: 18 };   // 1×2 at (28,17) — tool rack
+  private radioTile: Tile = { x: 28, y: 14 };      // 1×1 at (28,14) — status monitor
+  private workbenchTile: Tile = { x: 24, y: 18 };  // 2×1 at (23,18) — code terminal
+  private researchTile: Tile = { x: 23, y: 14 };   // 2×1 at (22,14) — blueprint desk
   private warTableHint!: Phaser.GameObjects.Text;
   private scrapBinHint!: Phaser.GameObjects.Text;
   private radioHint!: Phaser.GameObjects.Text;
@@ -3271,38 +3271,42 @@ export class OfficeScene extends Phaser.Scene {
       return true;
     }
 
-    // ── Expedition Workshop (before plants — plants at (26,16) overlap war table) ──
+    // ── MCP Forge (before plants — plants at (26,16) overlap forge station) ──
     const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y) < 144) {
-      this.store.toast("The war table is empty. No expedition being planned.");
+      this.store.forgePanelOpen = true;
+      this.store.requestForgeList();
       this.world.audio.uiClick();
       return true;
     }
 
     const sbPx = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, sbPx.x, sbPx.y) < 144) {
-      this.store.toast("Scrap pool: 0. Not enough for any robot tier.");
+      const toolCount = this.store.forgeServers.reduce((n, s) => n + s.tools.length, 0);
+      this.store.toast(`Tool rack: ${toolCount} MCP tool(s) across ${this.store.forgeServers.length} server(s).`);
       this.world.audio.uiClick();
       return true;
     }
 
     const rdPx = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rdPx.x, rdPx.y) < 144) {
-      this.store.toast("The radio is silent. No robot deployed.");
+      const running = this.store.forgeServers.filter(s => s.status === "running").length;
+      const errored = this.store.forgeServers.filter(s => s.status === "error").length;
+      this.store.toast(`MCP Status: ${running} running, ${errored} error(s), ${this.store.forgeServers.length} total.`);
       this.world.audio.uiClick();
       return true;
     }
 
     const wbPx = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wbPx.x, wbPx.y) < 144) {
-      this.store.toast("The workbench is clear. No robot in production.");
+      this.store.toast("Code terminal ready. Agents can write MCP servers here.");
       this.world.audio.uiClick();
       return true;
     }
 
     const rsPx = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, rsPx.x, rsPx.y) < 144) {
-      this.store.toast("Knowledge level: 0. No expedition data yet.");
+      this.store.toast("Blueprint desk: MCP server architecture and tool schemas.");
       this.world.audio.uiClick();
       return true;
     }
@@ -3522,34 +3526,34 @@ export class OfficeScene extends Phaser.Scene {
       add(this.nemesisTerminalHint, px.x, px.y, 144, "E: NEMESIS CODEX", px.x, px.y + 64);
     }
 
-    // War Table
+    // Forge Station
     {
       const px = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
-      add(this.warTableHint, px.x, px.y, 144, "E: WAR TABLE", px.x, px.y + 64);
+      add(this.warTableHint, px.x, px.y, 144, "E: MCP FORGE", px.x, px.y + 64);
     }
 
-    // Scrap Bin
+    // Tool Rack
     {
       const px = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
-      add(this.scrapBinHint, px.x, px.y, 144, "E: SCRAP BIN", px.x, px.y + 64);
+      add(this.scrapBinHint, px.x, px.y, 144, "E: TOOL RACK", px.x, px.y + 64);
     }
 
-    // Radio
+    // Status Monitor
     {
       const px = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
-      add(this.radioHint, px.x, px.y, 144, "E: RADIO", px.x, px.y + 64);
+      add(this.radioHint, px.x, px.y, 144, "E: STATUS", px.x, px.y + 64);
     }
 
-    // Workbench
+    // Code Terminal
     {
       const px = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
-      add(this.workbenchHint, px.x, px.y, 144, "E: WORKBENCH", px.x, px.y + 64);
+      add(this.workbenchHint, px.x, px.y, 144, "E: TERMINAL", px.x, px.y + 64);
     }
 
-    // Research
+    // Blueprint Desk
     {
       const px = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
-      add(this.researchHint, px.x, px.y, 144, "E: RESEARCH", px.x, px.y + 64);
+      add(this.researchHint, px.x, px.y, 144, "E: BLUEPRINT", px.x, px.y + 64);
     }
 
     // Plants — check nearest

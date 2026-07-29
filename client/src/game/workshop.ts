@@ -1,12 +1,12 @@
 /**
- * Expedition Workshop Furniture
+ * MCP Forge Furniture
  *
  * Procedurally drawn furniture for the break room's transformation into
- * the Expedition Workshop — a laboratory, armory, and factory rolled into one.
- * See docs/EXPEDITIONS.md §16 for the full design spec.
+ * the MCP Forge — a workshop where agents build, test, and register
+ * their own MCP servers. Replaces the old Expedition Workshop.
  *
  * Pieces are multi-tile (2×2, 2×1, 1×2) for visual impact — clearly
- * recognizable robots, holographic projections, and expedition gear.
+ * recognizable server racks, terminals, and forge equipment.
  */
 
 import Phaser from "phaser";
@@ -49,19 +49,18 @@ function linearGrad(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: n
   return g;
 }
 
-/* ---------- workshop furniture drawing functions ---------- */
+/* ---------- forge furniture drawing functions ---------- */
 
 /**
- * War table — 2×2 tiles (128×128px)
- * Big tactical table with a large holographic robot hovering above it,
- * route map on the table surface, and glowing emitter.
+ * Forge station — 2×2 tiles (128×128px)
+ * Large server rack with a holographic MCP server floating above it,
+ * tool registration display on the rack surface, and glowing emitters.
  */
-function drawWarTable(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+function drawForgeStation(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   const cx = w / 2;
-  const s = TILE_PX; // reference tile size for proportions
+  const s = TILE_PX;
 
-  // ── holographic robot projection (top half) ──
-  // glowing cone from table to ceiling
+  // ── holographic MCP server projection (top half) ──
   const holoGrad = ctx.createLinearGradient(cx, s * 1.0, cx, 0);
   holoGrad.addColorStop(0, hexRGBA(0x44aaff, 0.35));
   holoGrad.addColorStop(0.4, hexRGBA(0x44aaff, 0.12));
@@ -75,68 +74,50 @@ function drawWarTable(ctx: CanvasRenderingContext2D, w: number, h: number): void
   ctx.closePath();
   ctx.fill();
 
-  // holographic robot — clearly visible silhouette
-  const robotY = s * 0.35;
-  const robotScale = 1.4;
+  // holographic server box — floating cube
+  const srvY = s * 0.35;
+  const srvW = 40;
+  const srvH = 48;
 
-  // robot body — rounded torso
-  ctx.fillStyle = hexRGBA(0x66ccff, 0.35);
-  roundRect(ctx, cx - 16 * robotScale, robotY - 8 * robotScale, 32 * robotScale, 24 * robotScale, 6);
+  // server body — translucent cube
+  ctx.fillStyle = hexRGBA(0x66ccff, 0.3);
+  roundRect(ctx, cx - srvW / 2, srvY - srvH / 2, srvW, srvH, 4);
   ctx.fill();
   ctx.strokeStyle = hexRGBA(0x88ddff, 0.5);
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // robot head — sphere
-  ctx.fillStyle = hexRGBA(0x66ccff, 0.35);
-  ctx.beginPath();
-  ctx.arc(cx, robotY - 16 * robotScale, 10 * robotScale, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // robot eyes — two glowing optics
-  ctx.fillStyle = hexRGBA(0xaaffff, 0.7);
-  ctx.beginPath();
-  ctx.arc(cx - 5 * robotScale, robotY - 17 * robotScale, 2.5, 0, Math.PI * 2);
-  ctx.arc(cx + 5 * robotScale, robotY - 17 * robotScale, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // robot antenna
-  ctx.strokeStyle = hexRGBA(0x88ddff, 0.5);
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(cx, robotY - 26 * robotScale);
-  ctx.lineTo(cx, robotY - 34 * robotScale);
-  ctx.stroke();
-  ctx.fillStyle = hexRGBA(0xff4444, 0.6);
-  ctx.beginPath();
-  ctx.arc(cx, robotY - 34 * robotScale, 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // robot arms — segmented
-  for (const side of [-1, 1]) {
-    ctx.strokeStyle = hexRGBA(0x88ddff, 0.45);
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(cx + side * 16 * robotScale, robotY - 4 * robotScale);
-    ctx.lineTo(cx + side * 24 * robotScale, robotY + 6 * robotScale);
-    ctx.lineTo(cx + side * 20 * robotScale, robotY + 16 * robotScale);
-    ctx.stroke();
-    // claw/hand
-    ctx.fillStyle = hexRGBA(0x66ccff, 0.35);
-    ctx.beginPath();
-    ctx.arc(cx + side * 20 * robotScale, robotY + 16 * robotScale, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+  // server LED strips — vertical rows of blinking lights
+  for (let col = 0; col < 3; col++) {
+    for (let row = 0; row < 6; row++) {
+      const lx = cx - srvW / 2 + 6 + col * 10;
+      const ly = srvY - srvH / 2 + 6 + row * 7;
+      const on = (col + row) % 3 === 0;
+      ctx.fillStyle = on ? hexRGBA(0x44ff44, 0.7) : hexRGBA(0x44aaff, 0.3);
+      ctx.fillRect(lx, ly, 4, 3);
+    }
   }
 
-  // robot legs
-  for (const side of [-1, 1]) {
-    ctx.strokeStyle = hexRGBA(0x88ddff, 0.45);
-    ctx.lineWidth = 3;
+  // "MCP" label on server
+  ctx.fillStyle = hexRGBA(0xaaffff, 0.6);
+  ctx.font = "bold 8px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("MCP", cx, srvY + srvH / 2 - 4);
+
+  // tool badges orbiting the server
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2 + 0.3;
+    const ox = cx + Math.cos(angle) * 28;
+    const oy = srvY + Math.sin(angle) * 22;
+    ctx.fillStyle = hexRGBA(0xffdd44, 0.5);
     ctx.beginPath();
-    ctx.moveTo(cx + side * 8 * robotScale, robotY + 16 * robotScale);
-    ctx.lineTo(cx + side * 10 * robotScale, robotY + 28 * robotScale);
+    ctx.arc(ox, oy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = hexRGBA(0xffdd44, 0.3);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, srvY);
+    ctx.lineTo(ox, oy);
     ctx.stroke();
   }
 
@@ -151,8 +132,8 @@ function drawWarTable(ctx: CanvasRenderingContext2D, w: number, h: number): void
     ctx.stroke();
   }
 
-  // ── table surface (bottom half) ──
-  const tableY = s * 1.05;
+  // ── server rack base (bottom half) ──
+  const rackY = s * 1.05;
 
   // shadow
   ctx.fillStyle = hexRGBA(0x000000, 0.25);
@@ -160,109 +141,101 @@ function drawWarTable(ctx: CanvasRenderingContext2D, w: number, h: number): void
   ctx.ellipse(cx, h - 8, s * 0.85, s * 0.08, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // table base — heavy industrial
-  const baseGrad = linearGrad(ctx, 0, tableY, 0, h - 4, [
-    [0, shade(0x3a4a5a, 15)],
-    [0.5, shade(0x2a3a4a, 0)],
-    [1, shade(0x1a2a3a, -15)],
+  // rack base — dark metal
+  const baseGrad = linearGrad(ctx, 0, rackY, 0, h - 4, [
+    [0, shade(0x2a3a4a, 15)],
+    [0.5, shade(0x1a2a3a, 0)],
+    [1, shade(0x0a1a2a, -15)],
   ]);
   ctx.fillStyle = baseGrad;
-  roundRect(ctx, s * 0.2, tableY, w - s * 0.4, h - tableY - 8, 6);
+  roundRect(ctx, s * 0.2, rackY, w - s * 0.4, h - rackY - 8, 6);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.4);
+  ctx.strokeStyle = hexRGBA(0x3a5a7a, 0.4);
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // table legs
+  // rack legs
   ctx.fillStyle = shade(0x1a1a20, 0);
   ctx.fillRect(s * 0.3, h - 16, 8, 12);
   ctx.fillRect(w - s * 0.3 - 8, h - 16, 8, 12);
 
-  // table surface — dark metallic top with tactical grid
-  const surfGrad = linearGrad(ctx, 0, tableY, 0, tableY + s * 0.3, [
-    [0, shade(0x4a5a6a, 20)],
-    [0.5, shade(0x3a4a5a, 5)],
-    [1, shade(0x2a3a4a, -10)],
+  // rack surface — dark metallic with grid
+  const surfGrad = linearGrad(ctx, 0, rackY, 0, rackY + s * 0.3, [
+    [0, shade(0x3a5a7a, 20)],
+    [0.5, shade(0x2a4a6a, 5)],
+    [1, shade(0x1a3a5a, -10)],
   ]);
   ctx.fillStyle = surfGrad;
-  roundRect(ctx, s * 0.15, tableY, w - s * 0.3, s * 0.28, 4);
+  roundRect(ctx, s * 0.15, rackY, w - s * 0.3, s * 0.28, 4);
   ctx.fill();
 
-  // tactical grid lines
-  ctx.strokeStyle = hexRGBA(0x5a7a9a, 0.25);
+  // grid lines
+  ctx.strokeStyle = hexRGBA(0x4a7aaa, 0.25);
   ctx.lineWidth = 0.8;
   for (let i = 1; i < 8; i++) {
     const gx = s * 0.15 + i * ((w - s * 0.3) / 8);
     ctx.beginPath();
-    ctx.moveTo(gx, tableY + 4);
-    ctx.lineTo(gx, tableY + s * 0.26);
+    ctx.moveTo(gx, rackY + 4);
+    ctx.lineTo(gx, rackY + s * 0.26);
     ctx.stroke();
   }
   for (let i = 1; i < 4; i++) {
-    const gy = tableY + i * (s * 0.28 / 4);
+    const gy = rackY + i * (s * 0.28 / 4);
     ctx.beginPath();
     ctx.moveTo(s * 0.2, gy);
     ctx.lineTo(w - s * 0.2, gy);
     ctx.stroke();
   }
 
-  // route dotted line on table — from center to upper-right
+  // data flow lines — from center outward
   ctx.strokeStyle = hexRGBA(0xaaffff, 0.6);
   ctx.lineWidth = 2;
   ctx.setLineDash([4, 3]);
   ctx.beginPath();
-  ctx.moveTo(cx, tableY + s * 0.14);
-  ctx.lineTo(cx + s * 0.35, tableY + s * 0.06);
+  ctx.moveTo(cx, rackY + s * 0.14);
+  ctx.lineTo(cx + s * 0.35, rackY + s * 0.06);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // destination marker — gold glowing dot
+  // registered tool marker — gold dot
   ctx.fillStyle = hexRGBA(0xffdd44, 0.7);
   ctx.beginPath();
-  ctx.arc(cx + s * 0.35, tableY + s * 0.06, 4, 0, Math.PI * 2);
+  ctx.arc(cx + s * 0.35, rackY + s * 0.06, 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = hexRGBA(0xffdd44, 0.3);
   ctx.beginPath();
-  ctx.arc(cx + s * 0.35, tableY + s * 0.06, 8, 0, Math.PI * 2);
+  ctx.arc(cx + s * 0.35, rackY + s * 0.06, 8, 0, Math.PI * 2);
   ctx.fill();
 
-  // origin marker — office icon
-  ctx.fillStyle = hexRGBA(0x44ff44, 0.6);
-  ctx.fillRect(cx - 5, tableY + s * 0.12, 10, 8);
-  ctx.strokeStyle = hexRGBA(0x44ff44, 0.4);
-  ctx.lineWidth = 1;
-  ctx.strokeRect(cx - 5, tableY + s * 0.12, 10, 8);
-
-  // emitter glow on table center
+  // forge icon — anvil shape at center
   ctx.fillStyle = hexRGBA(0x44aaff, 0.6);
   ctx.beginPath();
-  ctx.arc(cx, tableY + s * 0.14, 6, 0, Math.PI * 2);
+  ctx.arc(cx, rackY + s * 0.14, 6, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = hexRGBA(0x88ddff, 0.3);
   ctx.beginPath();
-  ctx.arc(cx, tableY + s * 0.14, 12, 0, Math.PI * 2);
+  ctx.arc(cx, rackY + s * 0.14, 12, 0, Math.PI * 2);
   ctx.fill();
 
-  // threat markers — red X's along route
+  // status indicators — green checkmarks
   for (let i = 0; i < 2; i++) {
     const tx = cx + s * (0.12 + i * 0.1);
-    const ty = tableY + s * (0.1 - i * 0.02);
-    ctx.strokeStyle = hexRGBA(0xff4444, 0.5);
+    const ty = rackY + s * (0.1 - i * 0.02);
+    ctx.strokeStyle = hexRGBA(0x44ff44, 0.5);
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(tx - 3, ty - 3);
-    ctx.lineTo(tx + 3, ty + 3);
-    ctx.moveTo(tx + 3, ty - 3);
-    ctx.lineTo(tx - 3, ty + 3);
+    ctx.moveTo(tx - 3, ty);
+    ctx.lineTo(tx - 1, ty + 2);
+    ctx.lineTo(tx + 3, ty - 2);
     ctx.stroke();
   }
 }
 
 /**
- * Robot workbench — 2×1 tiles (128×64px)
- * Wide workbench with a clearly visible robot being assembled on top.
+ * Code terminal — 2×1 tiles (128×64px)
+ * Wide desk with dual monitors showing code, keyboard, and MCP SDK docs.
  */
-function drawWorkbench(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+function drawCodeTerminal(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   const cx = w / 2;
   const s = TILE_PX;
 
@@ -272,168 +245,123 @@ function drawWorkbench(ctx: CanvasRenderingContext2D, w: number, h: number): voi
   ctx.ellipse(cx, h - 6, s * 0.9, s * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // workbench legs
+  // desk legs
   ctx.fillStyle = shade(0x2a2a30, 0);
   ctx.fillRect(s * 0.15, s * 0.5, 6, s * 0.42);
   ctx.fillRect(w - s * 0.15 - 6, s * 0.5, 6, s * 0.42);
-  // cross-brace
   ctx.fillRect(s * 0.15, s * 0.72, w - s * 0.3, 4);
 
-  // workbench surface — thick wooden top
+  // desk surface — dark metallic
   const surfGrad = linearGrad(ctx, 0, s * 0.3, 0, s * 0.52, [
-    [0, shade(0x6a5a3a, 20)],
-    [0.5, shade(0x5a4a2a, 5)],
-    [1, shade(0x4a3a1a, -15)],
+    [0, shade(0x3a3a4a, 20)],
+    [0.5, shade(0x2a2a3a, 5)],
+    [1, shade(0x1a1a2a, -15)],
   ]);
   ctx.fillStyle = surfGrad;
   roundRect(ctx, s * 0.08, s * 0.3, w - s * 0.16, s * 0.22, 4);
   ctx.fill();
-  // wood grain
-  ctx.strokeStyle = hexRGBA(0x3a2a1a, 0.2);
-  ctx.lineWidth = 0.6;
+
+  // ── left monitor — code editor ──
+  const mon1X = s * 0.12;
+  const mon1W = s * 0.55;
+  const mon1H = s * 0.28;
+  const mon1Y = s * 0.04;
+
+  ctx.fillStyle = shade(0x1a1a20, 5);
+  roundRect(ctx, mon1X, mon1Y, mon1W, mon1H, 3);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x3a3a40, 0.5);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // screen — dark with code
+  ctx.fillStyle = hexRGBA(0x0a0a14, 0.92);
+  roundRect(ctx, mon1X + 3, mon1Y + 3, mon1W - 6, mon1H - 6, 2);
+  ctx.fill();
+
+  // code lines — syntax highlighted
+  const codeColors = [0x4a9a5a, 0x4a8aaa, 0xaa8a4a, 0x4a9a5a, 0x8a6aaa, 0x4a9a5a, 0xaa6a6a];
+  for (let i = 0; i < 7; i++) {
+    const ly = mon1Y + 6 + i * 3;
+    const lineLen = (mon1W - 12) * (0.3 + (i * 37 % 60) / 100);
+    ctx.fillStyle = hexRGBA(codeColors[i % codeColors.length], 0.6);
+    ctx.fillRect(mon1X + 6, ly, lineLen, 1.5);
+  }
+
+  // ── right monitor — MCP SDK docs ──
+  const mon2X = cx + s * 0.1;
+  const mon2W = s * 0.55;
+  const mon2H = s * 0.28;
+  const mon2Y = s * 0.04;
+
+  ctx.fillStyle = shade(0x1a1a20, 5);
+  roundRect(ctx, mon2X, mon2Y, mon2W, mon2H, 3);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x3a3a40, 0.5);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = hexRGBA(0x0a0a14, 0.92);
+  roundRect(ctx, mon2X + 3, mon2Y + 3, mon2W - 6, mon2H - 6, 2);
+  ctx.fill();
+
+  // doc content — headers and paragraphs
+  ctx.fillStyle = hexRGBA(0x44aaff, 0.6);
+  ctx.fillRect(mon2X + 6, mon2Y + 6, mon2W * 0.4, 2);
+  ctx.fillStyle = hexRGBA(0x888888, 0.5);
   for (let i = 0; i < 5; i++) {
-    const ly = s * 0.33 + i * (s * 0.04);
+    const ly = mon2Y + 12 + i * 3;
+    const lineLen = (mon2W - 12) * (0.5 + (i * 29 % 40) / 100);
+    ctx.fillRect(mon2X + 6, ly, lineLen, 1.5);
+  }
+
+  // power LEDs on both monitors
+  for (const mx of [mon1X + mon1W - 5, mon2X + mon2W - 5]) {
+    ctx.fillStyle = hexRGBA(0x44ff44, 0.7);
     ctx.beginPath();
-    ctx.moveTo(s * 0.12, ly);
-    ctx.bezierCurveTo(s * 0.4, ly + 1, s * 0.8, ly - 1, w - s * 0.12, ly + 0.5);
-    ctx.stroke();
+    ctx.arc(mx, mon1Y + mon1H - 4, 1.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // ── robot being assembled on bench ──
-  const robotCx = cx;
-  const robotBaseY = s * 0.3; // robot sits on bench surface
-
-  // robot torso frame — clearly visible chassis
-  ctx.fillStyle = shade(0x8a8a90, 15);
-  roundRect(ctx, robotCx - 18, robotBaseY - 22, 36, 26, 4);
+  // ── keyboard ──
+  ctx.fillStyle = shade(0x2a2a30, 5);
+  roundRect(ctx, cx - s * 0.25, s * 0.34, s * 0.5, s * 0.08, 2);
   ctx.fill();
-  ctx.strokeStyle = shade(0x5a5a60, 0);
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = hexRGBA(0x4a4a50, 0.4);
+  ctx.lineWidth = 0.5;
   ctx.stroke();
-
-  // chest panel — circuitry and power core
-  ctx.fillStyle = hexRGBA(0x1a2a1a, 0.6);
-  roundRect(ctx, robotCx - 14, robotBaseY - 18, 28, 18, 2);
-  ctx.fill();
-  // power core — glowing center
-  ctx.fillStyle = hexRGBA(0x44ff44, 0.7);
-  ctx.beginPath();
-  ctx.arc(robotCx, robotBaseY - 9, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = hexRGBA(0x88ff88, 0.4);
-  ctx.beginPath();
-  ctx.arc(robotCx, robotBaseY - 9, 8, 0, Math.PI * 2);
-  ctx.fill();
-  // circuit lines from core
-  ctx.strokeStyle = hexRGBA(0x44ff44, 0.4);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(robotCx, robotBaseY - 14);
-  ctx.lineTo(robotCx, robotBaseY - 18);
-  ctx.moveTo(robotCx - 8, robotBaseY - 9);
-  ctx.lineTo(robotCx - 14, robotBaseY - 9);
-  ctx.moveTo(robotCx + 8, robotBaseY - 9);
-  ctx.lineTo(robotCx + 14, robotBaseY - 9);
-  ctx.stroke();
-
-  // robot head — big and clearly visible
-  ctx.fillStyle = shade(0x9a9aa0, 18);
-  ctx.beginPath();
-  ctx.arc(robotCx, robotBaseY - 34, 12, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = shade(0x6a6a70, 0);
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // robot eyes — large glowing visor
-  ctx.fillStyle = hexRGBA(0x1a1a20, 0.8);
-  roundRect(ctx, robotCx - 9, robotBaseY - 38, 18, 5, 2);
-  ctx.fill();
-  ctx.fillStyle = hexRGBA(0x44aaff, 0.8);
-  ctx.fillRect(robotCx - 8, robotBaseY - 37, 7, 3);
-  ctx.fillRect(robotCx + 1, robotBaseY - 37, 7, 3);
-
-  // antenna
-  ctx.strokeStyle = shade(0x5a5a60, 0);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(robotCx, robotBaseY - 46);
-  ctx.lineTo(robotCx, robotBaseY - 54);
-  ctx.stroke();
-  ctx.fillStyle = hexRGBA(0xff4444, 0.7);
-  ctx.beginPath();
-  ctx.arc(robotCx, robotBaseY - 54, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // robot arm — lying on bench, detached
-  ctx.fillStyle = shade(0x7a7a80, 10);
-  roundRect(ctx, robotCx + 24, robotBaseY - 12, 18, 8, 3);
-  ctx.fill();
-  ctx.strokeStyle = shade(0x5a5a60, 0);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  // arm joint
-  ctx.fillStyle = shade(0x5a5a60, 5);
-  ctx.beginPath();
-  ctx.arc(robotCx + 42, robotBaseY - 8, 4, 0, Math.PI * 2);
-  ctx.fill();
-  // claw
-  ctx.fillStyle = shade(0x6a6a70, 0);
-  roundRect(ctx, robotCx + 44, robotBaseY - 12, 8, 10, 2);
-  ctx.fill();
-
-  // robot leg — lying on bench, detached
-  ctx.fillStyle = shade(0x7a7a80, 8);
-  roundRect(ctx, robotCx - 42, robotBaseY - 10, 10, 18, 3);
-  ctx.fill();
-  ctx.strokeStyle = shade(0x5a5a60, 0);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  // foot
-  ctx.fillStyle = shade(0x5a5a60, 0);
-  roundRect(ctx, robotCx - 44, robotBaseY + 4, 14, 6, 2);
-  ctx.fill();
-
-  // ── tools ──
-  // wrench — big and visible
-  ctx.strokeStyle = shade(0x4a4a50, 0);
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(s * 0.15, s * 0.45);
-  ctx.lineTo(s * 0.3, s * 0.38);
-  ctx.stroke();
-  ctx.fillStyle = shade(0x5a5a60, 0);
-  ctx.beginPath();
-  ctx.arc(s * 0.3, s * 0.38, 4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // screwdriver
-  ctx.strokeStyle = shade(0x4a8a4a, 0);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(w - s * 0.2, s * 0.42);
-  ctx.lineTo(w - s * 0.1, s * 0.36);
-  ctx.stroke();
-
-  // welding sparks — bright and visible
-  for (let i = 0; i < 8; i++) {
-    const sx = robotCx - 10 + (i * 17) % 24;
-    const sy = robotBaseY - 6 + (i * 11) % 8;
-    ctx.fillStyle = hexRGBA(i % 2 ? 0xffaa44 : 0xffdd66, 0.7);
-    ctx.fillRect(sx, sy, 2, 2);
+  // key grid
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 10; col++) {
+      ctx.fillStyle = hexRGBA(0x3a3a40, 0.5);
+      ctx.fillRect(cx - s * 0.23 + col * (s * 0.046), s * 0.36 + row * (s * 0.02), s * 0.035, s * 0.014);
+    }
   }
-  // spark glow
-  ctx.fillStyle = hexRGBA(0xffaa44, 0.2);
+
+  // ── coffee mug ──
+  ctx.fillStyle = hexRGBA(0x4a6a8a, 0.6);
   ctx.beginPath();
-  ctx.arc(robotCx, robotBaseY - 4, 10, 0, Math.PI * 2);
+  ctx.arc(w - s * 0.2, s * 0.4, 5, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x4a6a8a, 0.4);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(w - s * 0.17, s * 0.4, 3, -Math.PI / 2, Math.PI / 2);
+  ctx.stroke();
+  // steam
+  ctx.strokeStyle = hexRGBA(0xaaaaaa, 0.2);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w - s * 0.2, s * 0.33);
+  ctx.bezierCurveTo(w - s * 0.19, s * 0.3, w - s * 0.21, s * 0.28, w - s * 0.2, s * 0.25);
+  ctx.stroke();
 }
 
 /**
- * Scrap recycling bin — 1×2 tiles (64×128px)
- * Tall industrial bin with visible scrap, recycling symbol, and overflow.
+ * Tool rack — 1×2 tiles (64×128px)
+ * Tall rack holding MCP tool libraries, with glowing connectors and cables.
  */
-function drawScrapBin(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+function drawToolRack(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   const cx = w / 2;
   const s = TILE_PX;
 
@@ -443,12 +371,12 @@ function drawScrapBin(ctx: CanvasRenderingContext2D, w: number, h: number): void
   ctx.ellipse(cx, h - 6, s * 0.32, s * 0.05, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // bin body — tall industrial metal, tapered
+  // rack body — tall industrial metal shelving
   const bodyGrad = linearGrad(ctx, cx - s * 0.28, 0, cx + s * 0.28, 0, [
-    [0, shade(0x4a5a4a, -10)],
-    [0.3, shade(0x6a7a6a, 15)],
-    [0.7, shade(0x5a6a5a, 0)],
-    [1, shade(0x3a4a3a, -20)],
+    [0, shade(0x2a3a4a, -10)],
+    [0.3, shade(0x3a5a6a, 15)],
+    [0.7, shade(0x2a4a5a, 0)],
+    [1, shade(0x1a2a3a, -20)],
   ]);
   ctx.fillStyle = bodyGrad;
   ctx.beginPath();
@@ -459,76 +387,53 @@ function drawScrapBin(ctx: CanvasRenderingContext2D, w: number, h: number): void
   ctx.closePath();
   ctx.fill();
 
-  // panel seams
-  ctx.strokeStyle = hexRGBA(0x3a4a3a, 0.4);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cx - s * 0.24, s * 0.55);
-  ctx.lineTo(cx + s * 0.24, s * 0.55);
-  ctx.stroke();
+  // shelf dividers — 3 shelves
+  ctx.strokeStyle = hexRGBA(0x3a5a7a, 0.5);
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 3; i++) {
+    const sy = s * 0.35 + i * s * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.24, sy);
+    ctx.lineTo(cx + s * 0.24, sy);
+    ctx.stroke();
+  }
 
-  // bin rim — thick
-  ctx.fillStyle = shade(0x4a5a4a, 8);
+  // rack rim
+  ctx.fillStyle = shade(0x2a4a5a, 8);
   roundRect(ctx, cx - s * 0.26, s * 0.22, s * 0.52, s * 0.06, 3);
   ctx.fill();
 
-  // bin interior — dark opening
-  ctx.fillStyle = hexRGBA(0x0a0a08, 0.85);
-  ctx.beginPath();
-  ctx.ellipse(cx, s * 0.25, s * 0.22, s * 0.05, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // scrap debris inside — metallic bits, robot parts
-  const scrapColors = [0x8a8a8a, 0x6a6a6a, 0x9a7a4a, 0x7a6a5a, 0xaaaaaa, 0x5a7a5a];
-  for (let i = 0; i < 14; i++) {
-    const sx = cx - s * 0.18 + (i * 37) % (s * 0.36);
-    const sy = s * 0.28 + (i * 23) % (s * 0.12);
-    ctx.fillStyle = hexRGBA(scrapColors[i % scrapColors.length], 0.8);
-    ctx.fillRect(sx, sy, 3 + (i % 2), 2 + (i % 3));
-  }
-  // a robot arm sticking out of the bin
-  ctx.fillStyle = shade(0x7a7a80, 10);
-  roundRect(ctx, cx + s * 0.05, s * 0.2, 12, 5, 2);
-  ctx.fill();
-  ctx.strokeStyle = shade(0x5a5a60, 0);
-  ctx.lineWidth = 0.8;
-  ctx.stroke();
-  // robot eye lens in scrap
-  ctx.fillStyle = hexRGBA(0x44aaff, 0.6);
-  ctx.beginPath();
-  ctx.arc(cx - s * 0.1, s * 0.32, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // recycling symbol — big and prominent
-  ctx.strokeStyle = hexRGBA(0x4acb4a, 0.6);
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.arc(cx, s * 0.75, 12, 0.3, Math.PI * 1.8);
-  ctx.stroke();
-  for (let i = 0; i < 3; i++) {
-    const a = 0.3 + i * (Math.PI * 2 / 3);
-    const ax = cx + Math.cos(a) * 12;
-    const ay = s * 0.75 + Math.sin(a) * 12;
-    ctx.fillStyle = hexRGBA(0x4acb4a, 0.6);
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(ax + Math.cos(a + 0.5) * 6, ay + Math.sin(a + 0.5) * 6);
-    ctx.lineTo(ax + Math.cos(a - 0.3) * 4, ay + Math.sin(a - 0.3) * 4);
-    ctx.closePath();
-    ctx.fill();
+  // ── MCP tool modules on shelves ──
+  const toolColors = [0x4a9a6a, 0x4a6aaa, 0xaa6a4a, 0x6a4aaa, 0x4aaa8a, 0xaa4a6a];
+  for (let shelf = 0; shelf < 3; shelf++) {
+    const sy = s * 0.3 + shelf * s * 0.22;
+    for (let slot = 0; slot < 3; slot++) {
+      const sx = cx - s * 0.18 + slot * s * 0.13;
+      const color = toolColors[(shelf * 3 + slot) % toolColors.length];
+      // tool module — small box with glowing connector
+      ctx.fillStyle = hexRGBA(color, 0.5);
+      roundRect(ctx, sx, sy, s * 0.1, s * 0.14, 2);
+      ctx.fill();
+      ctx.strokeStyle = hexRGBA(color, 0.3);
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      // glowing connector LED
+      ctx.fillStyle = hexRGBA(0x44ff44, 0.6);
+      ctx.beginPath();
+      ctx.arc(sx + s * 0.05, sy + 3, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  // rust streaks
-  ctx.strokeStyle = hexRGBA(0x8a5a3a, 0.25);
-  ctx.lineWidth = 1;
+  // cable from top shelf to side — data connection
+  ctx.strokeStyle = hexRGBA(0x44aaff, 0.4);
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([2, 2]);
   ctx.beginPath();
-  ctx.moveTo(cx - s * 0.15, s * 0.35);
-  ctx.lineTo(cx - s * 0.12, s * 0.7);
+  ctx.moveTo(cx + s * 0.2, s * 0.35);
+  ctx.bezierCurveTo(cx + s * 0.3, s * 0.5, cx + s * 0.15, s * 0.7, cx + s * 0.22, s * 0.85);
   ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx + s * 0.12, s * 0.3);
-  ctx.lineTo(cx + s * 0.1, s * 0.6);
-  ctx.stroke();
+  ctx.setLineDash([]);
 
   // warning stripes at bottom
   for (let i = 0; i < 4; i++) {
@@ -538,10 +443,10 @@ function drawScrapBin(ctx: CanvasRenderingContext2D, w: number, h: number): void
 }
 
 /**
- * Telemetry radio — 1×1 tile (64×64px) but drawn large
- * Wall-mounted field radio with big screen showing robot status.
+ * Status monitor — 1×1 tile (64×64px)
+ * Wall-mounted monitor showing MCP server status and tool counts.
  */
-function drawTelemetryRadio(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+function drawStatusMonitor(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   const cx = w / 2;
   const s = TILE_PX;
 
@@ -549,123 +454,78 @@ function drawTelemetryRadio(ctx: CanvasRenderingContext2D, w: number, h: number)
   ctx.fillStyle = shade(0x3a3a40, -5);
   ctx.fillRect(cx - 4, 0, 8, s * 0.08);
 
-  // radio body — vintage military field radio, bigger
+  // monitor body — dark frame
   const bodyGrad = linearGrad(ctx, 0, s * 0.08, 0, s * 0.72, [
-    [0, shade(0x4a5a3a, 15)],
-    [0.5, shade(0x3a4a2a, 0)],
-    [1, shade(0x2a3a1a, -15)],
+    [0, shade(0x2a2a30, 15)],
+    [0.5, shade(0x1a1a20, 0)],
+    [1, shade(0x0a0a10, -15)],
   ]);
   ctx.fillStyle = bodyGrad;
   roundRect(ctx, s * 0.06, s * 0.08, w - s * 0.12, s * 0.64, 5);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x5a6a4a, 0.5);
+  ctx.strokeStyle = hexRGBA(0x3a3a40, 0.5);
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // speaker grille — horizontal slats
-  ctx.fillStyle = hexRGBA(0x1a1a14, 0.85);
-  roundRect(ctx, s * 0.12, s * 0.14, w - s * 0.24, s * 0.16, 3);
+  // screen — dark with status grid
+  ctx.fillStyle = hexRGBA(0x0a0a14, 0.92);
+  roundRect(ctx, s * 0.12, s * 0.14, w - s * 0.24, s * 0.5, 3);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x5a6a4a, 0.3);
-  ctx.lineWidth = 0.8;
+
+  // header bar
+  ctx.fillStyle = hexRGBA(0x44aaff, 0.5);
+  ctx.fillRect(s * 0.14, s * 0.16, w - s * 0.28, 2);
+
+  // server status rows — green/yellow/red dots with lines
+  const statusColors = [0x44ff44, 0x44ff44, 0xffaa44, 0x44ff44, 0xff4444];
   for (let i = 0; i < 5; i++) {
-    const ly = s * 0.17 + i * (s * 0.025);
+    const ry = s * 0.22 + i * (s * 0.07);
+    // status dot
+    ctx.fillStyle = hexRGBA(statusColors[i], 0.7);
     ctx.beginPath();
-    ctx.moveTo(s * 0.14, ly);
-    ctx.lineTo(w - s * 0.14, ly);
-    ctx.stroke();
-  }
-
-  // signal screen — big CRT with robot status
-  ctx.fillStyle = hexRGBA(0x0a0a08, 0.9);
-  roundRect(ctx, s * 0.12, s * 0.34, w - s * 0.24, s * 0.26, 3);
-  ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x3a3a30, 0.6);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // robot icon on screen
-  ctx.fillStyle = hexRGBA(0x44ff44, 0.5);
-  roundRect(ctx, cx - 5, s * 0.38, 10, 8, 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, s * 0.36, 4, 0, Math.PI * 2);
-  ctx.fill();
-  // robot eyes on screen
-  ctx.fillStyle = hexRGBA(0xaaffaa, 0.7);
-  ctx.fillRect(cx - 3, s * 0.355, 2, 1.5);
-  ctx.fillRect(cx + 1, s * 0.355, 2, 1.5);
-
-  // signal waveform
-  ctx.strokeStyle = hexRGBA(0x44ff44, 0.5);
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  for (let i = 0; i < 24; i++) {
-    const px = s * 0.14 + i * ((w - s * 0.28) / 24);
-    const py = s * 0.52 + Math.sin(i * 0.7) * 3;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.stroke();
-
-  // signal bars — bigger
-  ctx.fillStyle = hexRGBA(0x44ff44, 0.6);
-  for (let i = 0; i < 5; i++) {
-    const bh = 3 + i * 2.5;
-    ctx.fillRect(s * 0.14 + i * 5, s * 0.58 - bh, 4, bh);
-  }
-
-  // control knobs
-  for (let i = 0; i < 2; i++) {
-    const kx = s * 0.18 + i * (w - s * 0.36);
-    const ky = s * 0.66;
-    ctx.fillStyle = shade(0x2a2a20, 0);
-    ctx.beginPath();
-    ctx.arc(kx, ky, 5, 0, Math.PI * 2);
+    ctx.arc(s * 0.17, ry, 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = hexRGBA(0x5a5a4a, 0.5);
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    ctx.strokeStyle = hexRGBA(0xddddaa, 0.6);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(kx, ky);
-    ctx.lineTo(kx + 3, ky - 3);
-    ctx.stroke();
+    // server name line
+    ctx.fillStyle = hexRGBA(0x888888, 0.5);
+    ctx.fillRect(s * 0.22, ry - 1, s * 0.2, 1.5);
+    // tool count bar
+    ctx.fillStyle = hexRGBA(0x44aaff, 0.4);
+    ctx.fillRect(s * 0.22, ry + 1.5, s * 0.15 + (i * 7 % 10), 1);
   }
 
-  // antenna — tall and prominent
+  // bottom status bar
+  ctx.fillStyle = hexRGBA(0x44ff44, 0.6);
+  ctx.fillRect(s * 0.14, s * 0.58, s * 0.3, 2);
+  ctx.fillStyle = hexRGBA(0x888888, 0.4);
+  ctx.font = "bold 6px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("MCP STATUS", cx, s * 0.64);
+
+  // power LED
+  ctx.fillStyle = hexRGBA(0x44ff44, 0.7);
+  ctx.beginPath();
+  ctx.arc(w - s * 0.1, s * 0.68, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // antenna — small
   ctx.strokeStyle = shade(0x2a2a20, 0);
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(cx, s * 0.08);
-  ctx.lineTo(cx + s * 0.18, 0);
+  ctx.lineTo(cx + s * 0.1, 0);
   ctx.stroke();
-  ctx.fillStyle = hexRGBA(0xff4444, 0.8);
+  ctx.fillStyle = hexRGBA(0x44aaff, 0.7);
   ctx.beginPath();
-  ctx.arc(cx + s * 0.18, 0, 3, 0, Math.PI * 2);
+  ctx.arc(cx + s * 0.1, 0, 2, 0, Math.PI * 2);
   ctx.fill();
-  // antenna glow
-  ctx.fillStyle = hexRGBA(0xff4444, 0.3);
-  ctx.beginPath();
-  ctx.arc(cx + s * 0.18, 0, 6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // bottom panel with LED switches
-  ctx.fillStyle = shade(0x2a3a1a, -5);
-  roundRect(ctx, s * 0.12, s * 0.72, w - s * 0.24, s * 0.06, 2);
-  ctx.fill();
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = i === 1 ? hexRGBA(0xff4444, 0.7) : hexRGBA(0x44ff44, 0.5);
-    ctx.fillRect(s * 0.16 + i * (s * 0.1), s * 0.74, 5, 4);
-  }
 }
 
 /**
- * Research station — 2×1 tiles (128×64px)
- * Wide desk with big monitor showing biome data, microscope, and samples.
+ * Blueprint desk — 2×1 tiles (128×64px)
+ * Wide desk with big monitor showing MCP server architecture diagrams,
+ * design documents, and tool schemas.
  */
-function drawResearchStation(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+function drawBlueprintDesk(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   const cx = w / 2;
   const s = TILE_PX;
 
@@ -677,19 +537,19 @@ function drawResearchStation(ctx: CanvasRenderingContext2D, w: number, h: number
 
   // desk surface
   const deskGrad = linearGrad(ctx, 0, s * 0.4, 0, s * 0.65, [
-    [0, shade(0x7a7a8a, 15)],
-    [0.5, shade(0x6a6a7a, 0)],
-    [1, shade(0x5a5a6a, -15)],
+    [0, shade(0x3a3a4a, 15)],
+    [0.5, shade(0x2a2a3a, 0)],
+    [1, shade(0x1a1a2a, -15)],
   ]);
   ctx.fillStyle = deskGrad;
   roundRect(ctx, s * 0.04, s * 0.4, w - s * 0.08, s * 0.25, 4);
   ctx.fill();
   // desk front panel
-  ctx.fillStyle = shade(0x4a4a5a, -5);
+  ctx.fillStyle = shade(0x1a1a2a, -5);
   roundRect(ctx, s * 0.04, s * 0.62, w - s * 0.08, s * 0.2, 4);
   ctx.fill();
 
-  // ── big research monitor (right side) ──
+  // ── big architecture monitor (right side) ──
   const monX = cx + s * 0.15;
   const monW = s * 0.7;
   const monH = s * 0.34;
@@ -708,39 +568,50 @@ function drawResearchStation(ctx: CanvasRenderingContext2D, w: number, h: number
   roundRect(ctx, monX + 4, monY + 4, monW - 8, monH - 8, 2);
   ctx.fill();
 
-  // biome map on screen — colored regions
-  ctx.fillStyle = hexRGBA(0x2a5a2a, 0.5);
-  ctx.beginPath();
-  ctx.ellipse(monX + monW * 0.3, monY + monH * 0.4, 12, 8, 0, 0, Math.PI * 2);
+  // architecture diagram — boxes and connections
+  // central server box
+  ctx.fillStyle = hexRGBA(0x44aaff, 0.4);
+  roundRect(ctx, monX + monW * 0.35, monY + monH * 0.3, 16, 12, 2);
   ctx.fill();
-  ctx.fillStyle = hexRGBA(0x5a4a2a, 0.5);
-  ctx.beginPath();
-  ctx.ellipse(monX + monW * 0.6, monY + monH * 0.5, 14, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = hexRGBA(0x4a2a4a, 0.5);
-  ctx.beginPath();
-  ctx.ellipse(monX + monW * 0.8, monY + monH * 0.3, 10, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x44aaff, 0.6);
+  ctx.lineWidth = 1;
+  ctx.stroke();
 
-  // expedition route on map
-  ctx.strokeStyle = hexRGBA(0xffdd44, 0.6);
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([3, 2]);
+  // connected tool boxes
+  for (let i = 0; i < 3; i++) {
+    const tx = monX + 8 + i * (monW * 0.25);
+    const ty = monY + monH * 0.65;
+    ctx.fillStyle = hexRGBA(0xffdd44, 0.35);
+    roundRect(ctx, tx, ty, 12, 8, 2);
+    ctx.fill();
+    // connection line to central box
+    ctx.strokeStyle = hexRGBA(0x88ddff, 0.4);
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(monX + monW * 0.43, monY + monH * 0.42);
+    ctx.lineTo(tx + 6, ty);
+    ctx.stroke();
+  }
+
+  // data flow arrows
+  ctx.strokeStyle = hexRGBA(0x44ff66, 0.5);
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 2]);
   ctx.beginPath();
-  ctx.moveTo(monX + 8, monY + monH * 0.7);
-  ctx.lineTo(monX + monW * 0.6, monY + monH * 0.5);
+  ctx.moveTo(monX + 8, monY + monH * 0.2);
+  ctx.lineTo(monX + monW * 0.35, monY + monH * 0.35);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // data readout lines
-  const dataColors = [0x44ff66, 0x44ddff, 0xffaa44, 0x44ff66, 0xff66aa];
+  // schema lines — JSON-like structure
+  const schemaColors = [0x44ff66, 0x44ddff, 0xffaa44, 0x44ff66, 0xff66aa];
   for (let i = 0; i < 5; i++) {
     const ly = monY + monH - 18 + i * 3;
-    ctx.fillStyle = hexRGBA(dataColors[i % dataColors.length], 0.5);
+    ctx.fillStyle = hexRGBA(schemaColors[i % schemaColors.length], 0.5);
     ctx.fillRect(monX + 6, ly, monW * (0.3 + (i % 3) * 0.15), 1.5);
   }
 
-  // knowledge bar chart
+  // tool count bar chart
   ctx.fillStyle = hexRGBA(0x44aaff, 0.5);
   for (let i = 0; i < 5; i++) {
     const bh = 4 + i * 3.5;
@@ -758,79 +629,78 @@ function drawResearchStation(ctx: CanvasRenderingContext2D, w: number, h: number
   ctx.fillRect(monX + monW * 0.4, monY + monH, 5, s * 0.06);
   ctx.fillRect(monX + monW * 0.25, monY + monH + s * 0.05, monW * 0.5, 4);
 
-  // ── microscope (left side) ──
-  const micX = cx - s * 0.35;
-  // base
-  ctx.fillStyle = shade(0x2a2a30, 0);
-  roundRect(ctx, micX - 8, s * 0.3, 16, 8, 2);
-  ctx.fill();
-  // arm
-  ctx.fillStyle = shade(0x3a3a40, 5);
-  ctx.fillRect(micX - 2, s * 0.12, 5, s * 0.2);
-  // eyepiece
-  ctx.fillStyle = shade(0x1a1a20, 0);
-  roundRect(ctx, micX - 5, s * 0.06, 10, 8, 2);
-  ctx.fill();
-  // lens — glowing
-  ctx.fillStyle = hexRGBA(0x44aaff, 0.4);
-  ctx.beginPath();
-  ctx.arc(micX, s * 0.3, 4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = hexRGBA(0x88ddff, 0.2);
-  ctx.beginPath();
-  ctx.arc(micX, s * 0.3, 7, 0, Math.PI * 2);
-  ctx.fill();
-  // stage
-  ctx.fillStyle = shade(0x5a5a60, 0);
-  ctx.fillRect(micX - 6, s * 0.26, 12, 2);
+  // ── blueprint document (left side) ──
+  const bpX = cx - s * 0.4;
+  const bpY = s * 0.1;
+  const bpW = s * 0.5;
+  const bpH = s * 0.28;
 
-  // ── sample jars on desk ──
-  for (let i = 0; i < 3; i++) {
-    const jx = cx - s * 0.1 + i * 12;
-    const jy = s * 0.34;
-    // jar glass
-    const jarColors = [0x4a8a4a, 0x8a4a4a, 0x4a4a8a];
-    ctx.fillStyle = hexRGBA(jarColors[i], 0.35);
-    roundRect(ctx, jx, jy, 8, 10, 1);
-    ctx.fill();
-    ctx.strokeStyle = hexRGBA(jarColors[i] + 0x202020, 0.5);
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-    // lid
-    ctx.fillStyle = shade(0x5a5a50, 0);
-    ctx.fillRect(jx - 1, jy - 2, 10, 3);
-    // glow inside
-    ctx.fillStyle = hexRGBA(jarColors[i], 0.2);
-    ctx.beginPath();
-    ctx.arc(jx + 4, jy + 5, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // open field report book
-  ctx.fillStyle = "#f0f0e8";
-  roundRect(ctx, cx + s * 0.05, s * 0.4, s * 0.12, s * 0.06, 1);
+  // blueprint paper — blue background
+  ctx.fillStyle = hexRGBA(0x1a3a5a, 0.7);
+  roundRect(ctx, bpX, bpY, bpW, bpH, 2);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x9a9a90, 0.4);
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(cx + s * 0.11, s * 0.4);
-  ctx.lineTo(cx + s * 0.11, s * 0.46);
+  ctx.strokeStyle = hexRGBA(0x4a7aaa, 0.5);
+  ctx.lineWidth = 1;
   ctx.stroke();
-  // text lines
-  ctx.fillStyle = hexRGBA(0x6a6a70, 0.4);
-  for (let i = 0; i < 3; i++) {
-    ctx.fillRect(cx + s * 0.07, s * 0.41 + i * 2, s * 0.03, 0.8);
-    ctx.fillRect(cx + s * 0.12, s * 0.41 + i * 2, s * 0.03, 0.8);
+
+  // blueprint grid
+  ctx.strokeStyle = hexRGBA(0x4a7aaa, 0.2);
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 6; i++) {
+    const gx = bpX + i * (bpW / 6);
+    ctx.beginPath();
+    ctx.moveTo(gx, bpY + 2);
+    ctx.lineTo(gx, bpY + bpH - 2);
+    ctx.stroke();
   }
+  for (let i = 1; i < 4; i++) {
+    const gy = bpY + i * (bpH / 4);
+    ctx.beginPath();
+    ctx.moveTo(bpX + 2, gy);
+    ctx.lineTo(bpX + bpW - 2, gy);
+    ctx.stroke();
+  }
+
+  // blueprint content — server architecture sketch
+  ctx.strokeStyle = hexRGBA(0x88ddff, 0.6);
+  ctx.lineWidth = 1.2;
+  // central box
+  ctx.strokeRect(bpX + bpW * 0.3, bpY + bpH * 0.3, bpW * 0.4, bpH * 0.25);
+  // connection lines
+  ctx.beginPath();
+  ctx.moveTo(bpX + bpW * 0.1, bpY + bpH * 0.15);
+  ctx.lineTo(bpX + bpW * 0.3, bpY + bpH * 0.35);
+  ctx.moveTo(bpX + bpW * 0.9, bpY + bpH * 0.15);
+  ctx.lineTo(bpX + bpW * 0.7, bpY + bpH * 0.35);
+  ctx.moveTo(bpX + bpW * 0.5, bpY + bpH * 0.55);
+  ctx.lineTo(bpX + bpW * 0.5, bpY + bpH * 0.8);
+  ctx.stroke();
+  // small boxes at endpoints
+  ctx.strokeRect(bpX + bpW * 0.05, bpY + bpH * 0.08, bpW * 0.15, bpH * 0.12);
+  ctx.strokeRect(bpX + bpW * 0.8, bpY + bpH * 0.08, bpW * 0.15, bpH * 0.12);
+  ctx.strokeRect(bpX + bpW * 0.35, bpY + bpH * 0.75, bpW * 0.3, bpH * 0.15);
+
+  // ── MCP SDK reference book on desk ──
+  ctx.fillStyle = hexRGBA(0x4a6a8a, 0.6);
+  roundRect(ctx, cx - s * 0.05, s * 0.4, s * 0.12, s * 0.06, 1);
+  ctx.fill();
+  ctx.strokeStyle = hexRGBA(0x6a8aaa, 0.4);
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+  // book label
+  ctx.fillStyle = hexRGBA(0xaaccff, 0.5);
+  ctx.font = "bold 4px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("SDK", cx + s * 0.01, s * 0.44);
 }
 
 /* ---------- texture generation ---------- */
 
-export const WORKSHOP_TEX_WAR_TABLE = "workshop-war-table";
-export const WORKSHOP_TEX_SCRAP_BIN = "workshop-scrap-bin";
-export const WORKSHOP_TEX_TELEMETRY_RADIO = "workshop-telemetry-radio";
-export const WORKSHOP_TEX_WORKBENCH = "workshop-workbench";
-export const WORKSHOP_TEX_RESEARCH_STATION = "workshop-research-station";
+export const WORKSHOP_TEX_WAR_TABLE = "workshop-forge-station";
+export const WORKSHOP_TEX_SCRAP_BIN = "workshop-tool-rack";
+export const WORKSHOP_TEX_TELEMETRY_RADIO = "workshop-status-monitor";
+export const WORKSHOP_TEX_WORKBENCH = "workshop-code-terminal";
+export const WORKSHOP_TEX_RESEARCH_STATION = "workshop-blueprint-desk";
 
 interface WorkshopPiece {
   key: string;
@@ -840,11 +710,11 @@ interface WorkshopPiece {
 }
 
 const WORKSHOP_PIECES: WorkshopPiece[] = [
-  { key: WORKSHOP_TEX_WAR_TABLE, texW: TILE_PX * 2, texH: TILE_PX * 2, draw: drawWarTable },
-  { key: WORKSHOP_TEX_WORKBENCH, texW: TILE_PX * 2, texH: TILE_PX, draw: drawWorkbench },
-  { key: WORKSHOP_TEX_SCRAP_BIN, texW: TILE_PX, texH: TILE_PX * 2, draw: drawScrapBin },
-  { key: WORKSHOP_TEX_TELEMETRY_RADIO, texW: TILE_PX, texH: TILE_PX, draw: drawTelemetryRadio },
-  { key: WORKSHOP_TEX_RESEARCH_STATION, texW: TILE_PX * 2, texH: TILE_PX, draw: drawResearchStation },
+  { key: WORKSHOP_TEX_WAR_TABLE, texW: TILE_PX * 2, texH: TILE_PX * 2, draw: drawForgeStation },
+  { key: WORKSHOP_TEX_WORKBENCH, texW: TILE_PX * 2, texH: TILE_PX, draw: drawCodeTerminal },
+  { key: WORKSHOP_TEX_SCRAP_BIN, texW: TILE_PX, texH: TILE_PX * 2, draw: drawToolRack },
+  { key: WORKSHOP_TEX_TELEMETRY_RADIO, texW: TILE_PX, texH: TILE_PX, draw: drawStatusMonitor },
+  { key: WORKSHOP_TEX_RESEARCH_STATION, texW: TILE_PX * 2, texH: TILE_PX, draw: drawBlueprintDesk },
 ];
 
 /** Tile coordinates (top-left) and pixel dimensions for each workshop piece.

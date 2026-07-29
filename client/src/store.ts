@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -175,6 +175,11 @@ export class Store {
   private mailDigestListeners = new Set<(digest: { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }) => void>();
   private platformConnectionListeners = new Set<(states: PlatformConnectionState[]) => void>();
   private platformConfigResultListeners = new Set<(platform: string, success: boolean, error?: string) => void>();
+  /** MCP Forge: self-built servers created by agents. */
+  forgeServers: OfficeMCPServer[] = [];
+  forgePanelOpen = false;
+  private forgeUpdateListeners = new Set<() => void>();
+  private forgeBuildLogListeners = new Set<(serverId: string, line: string, stream: "stdout" | "stderr") => void>();
 
   /** Platform connection states from Hermes Agent gateway */
   platformStates: PlatformConnectionState[] = [];
@@ -442,6 +447,32 @@ export class Store {
 
   offPlatformConfigResult(fn: (platform: string, success: boolean, error?: string) => void): void {
     this.platformConfigResultListeners.delete(fn);
+  }
+
+  onForgeUpdate(fn: () => void): void {
+    this.forgeUpdateListeners.add(fn);
+  }
+
+  offForgeUpdate(fn: () => void): void {
+    this.forgeUpdateListeners.delete(fn);
+  }
+
+  onForgeBuildLog(fn: (serverId: string, line: string, stream: "stdout" | "stderr") => void): void {
+    this.forgeBuildLogListeners.add(fn);
+  }
+
+  offForgeBuildLog(fn: (serverId: string, line: string, stream: "stdout" | "stderr") => void): void {
+    this.forgeBuildLogListeners.delete(fn);
+  }
+
+  /** Request the current forge server list from the server. */
+  requestForgeList(): void {
+    this.sendFn?.({ type: "list_office_mcp" });
+  }
+
+  /** Unregister a forge server. */
+  unregisterForgeServer(serverId: string): void {
+    this.sendFn?.({ type: "unregister_mcp_server", serverId });
   }
 
   /** Check if a platform is connected via Hermes Agent gateway */
@@ -1186,6 +1217,30 @@ export class Store {
       }
       case "platform_config_result": {
         for (const fn of this.platformConfigResultListeners) fn(msg.platform, msg.success, msg.error);
+        return;
+      }
+      case "office_mcp_list": {
+        this.forgeServers = msg.servers;
+        for (const fn of this.forgeUpdateListeners) fn();
+        return;
+      }
+      case "office_mcp_update": {
+        const idx = this.forgeServers.findIndex((s) => s.id === msg.server.id);
+        if (idx >= 0) {
+          this.forgeServers[idx] = msg.server;
+        } else {
+          this.forgeServers.push(msg.server);
+        }
+        for (const fn of this.forgeUpdateListeners) fn();
+        return;
+      }
+      case "office_mcp_removed": {
+        this.forgeServers = this.forgeServers.filter((s) => s.id !== msg.serverId);
+        for (const fn of this.forgeUpdateListeners) fn();
+        return;
+      }
+      case "mcp_build_log": {
+        for (const fn of this.forgeBuildLogListeners) fn(msg.serverId, msg.line, msg.stream);
         return;
       }
     }

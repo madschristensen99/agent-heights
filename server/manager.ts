@@ -27,6 +27,7 @@ import type {
   AgentACL,
   SubscriptionTier,
   CardType,
+  OfficeMCPServer,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
@@ -45,6 +46,7 @@ import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 import { getAgentAccount, getAgentBalances as getCdpBalances } from "./providers/cdp-solana.js";
 import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCrossmintBalances } from "./providers/crossmint-wallets.js";
 import { OfficeState } from "./office-state.js";
+import { registerServer, listServers, getServerConfigs, unregisterServer, loadServers, restartServer } from "./mcp-forge.js";
 
 /**
  * Detect if a message to Agent Resources is a question/conversation vs a task command.
@@ -544,6 +546,9 @@ export class AgentManager {
     if (!resumedAny && saved) {
       this.save.clearPendingTasks();
     }
+
+    // Load persisted forge servers (self-built MCP servers)
+    void this.loadForgeServers();
   }
 
   setSettings(s: GameSettings, announce = true): void {
@@ -2182,6 +2187,33 @@ export class AgentManager {
     }
   }
 
+  /** Load persisted forge servers on startup. */
+  async loadForgeServers(): Promise<void> {
+    const servers = await loadServers(this.userId, this.broadcast.bind(this));
+    if (servers.length > 0) {
+      console.log(`[forge] loaded ${servers.length} persisted server(s) for user ${this.userId}`);
+      // Try to restart servers whose builders are still in the office
+      for (const server of servers) {
+        const builder = this.agents.get(server.builtBy);
+        if (builder) {
+          const slug = this.slugFor(builder);
+          const workspaceDir = this.cwdFor(slug, builder.info.id);
+          await restartServer(this.userId, server.id, workspaceDir, this.broadcast.bind(this));
+        }
+      }
+    }
+  }
+
+  /** Get all forge servers for the WS list handler. */
+  getForgeServers(): OfficeMCPServer[] {
+    return listServers(this.userId);
+  }
+
+  /** Unregister a forge server (WS handler). */
+  async unregisterForgeServer(serverId: string): Promise<boolean> {
+    return unregisterServer(this.userId, serverId, this.broadcast.bind(this));
+  }
+
   /** One tick of the think loop — check each idle agent for autonomous action. */
   private tickThinkLoop(): void {
     const now = Date.now();
@@ -2494,7 +2526,10 @@ export class AgentManager {
         },
         railway: this.settings.railway.enabled && rt.info.role === "devops",
         apiKey: this.apiKey,
-        mcpServers: await this.injectMcpKeys(rt.info.mcpServers),
+        mcpServers: [
+          ...(await this.injectMcpKeys(rt.info.mcpServers) ?? []),
+          ...getServerConfigs(this.userId),
+        ],
         cdpSolana: rt.info.cdpSolana ?? false,
         crossmintWallet: rt.info.crossmintWallet ?? false,
         officeState: this.officeState,
@@ -2552,6 +2587,21 @@ export class AgentManager {
               return this.hireAgent(name, model, systemPrompt);
             }
           : undefined,
+        registerMcpServer: async (opts: { name: string; description: string; runtime: "node" | "python"; entryFile: string }) => {
+          const workspaceDir = this.cwdFor(slug, rt.info.id);
+          const server = await registerServer(this.userId, {
+            ...opts,
+            builtBy: rt.info.id,
+            builtByName: rt.info.name,
+            workspaceDir,
+          }, this.broadcast.bind(this));
+          this.log(rt, "status", `Forged MCP server '${server.name}' with ${server.tools.length} tool(s): ${server.tools.map(t => t.name).join(", ")}`);
+          return { id: server.id, tools: server.tools };
+        },
+        listOfficeMcp: () => listServers(this.userId).map(s => ({
+          id: s.id, name: s.name, description: s.description,
+          tools: s.tools, builtByName: s.builtByName, status: s.status,
+        })),
         onUsage: (usage) => {
           const providerConfig = getProviderConfig();
           void recordUsage({

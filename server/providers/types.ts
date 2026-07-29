@@ -74,6 +74,15 @@ export interface RunContext {
   officeState?: OfficeState;
   /** Agent display name — used for attributing state graph nodes. */
   agentName?: string;
+  /** Register a self-built MCP server in the office forge. Returns the server object or throws. */
+  registerMcpServer?: (opts: {
+    name: string;
+    description: string;
+    runtime: "node" | "python";
+    entryFile: string;
+  }) => Promise<{ id: string; tools: { name: string; description: string }[] }>;
+  /** List all MCP servers registered in the office forge (self-built by any agent). */
+  listOfficeMcp?: () => { id: string; name: string; description: string; tools: { name: string; description: string }[]; builtByName: string; status: string }[];
 }
 
 export type ProviderRunner = (

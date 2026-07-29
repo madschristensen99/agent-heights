@@ -598,6 +598,33 @@ export interface SavedOutfit {
   createdAt: number;
 }
 
+// --------------------------------------------------- MCP Forge ---
+
+/** An MCP server built by an agent in the office, available to all agents. */
+export interface OfficeMCPServer {
+  id: string;
+  /** Display name for the server (agent-chosen). */
+  name: string;
+  /** Description of what the server does. */
+  description: string;
+  /** Runtime: "node" or "python". */
+  runtime: "node" | "python";
+  /** Entry file path relative to the builder agent's workspace. */
+  entryFile: string;
+  /** Agent ID that built this server. */
+  builtBy: string;
+  /** Agent name that built this server. */
+  builtByName: string;
+  /** Timestamp of registration. */
+  createdAt: number;
+  /** Current status of the server process. */
+  status: "running" | "stopped" | "error";
+  /** Tools exposed by this server (populated after tools/list). */
+  tools: { name: string; description: string }[];
+  /** Error message if status is "error". */
+  error?: string;
+}
+
 export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
@@ -710,7 +737,9 @@ export type ClientMsg =
   | { type: "delete_schedule"; scheduleId: string }
   | { type: "rename"; agentId: string; name: string }
   | { type: "spectator_join" }
-  | { type: "spectator_chat"; fromName: string; text: string };
+  | { type: "spectator_chat"; fromName: string; text: string }
+  | { type: "list_office_mcp" }
+  | { type: "unregister_mcp_server"; serverId: string };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -825,7 +854,11 @@ export type ServerMsg =
   | { type: "schedule_removed"; scheduleId: string }
   | { type: "helicopter_delivery"; name: string; model: string; provider: string; systemPrompt: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; alreadyHired?: boolean }
   | { type: "server_restarting"; estimatedSeconds: number }
-  | { type: "spectator_chat_relay"; fromName: string; text: string };
+  | { type: "spectator_chat_relay"; fromName: string; text: string }
+  | { type: "office_mcp_list"; servers: OfficeMCPServer[] }
+  | { type: "office_mcp_update"; server: OfficeMCPServer }
+  | { type: "office_mcp_removed"; serverId: string }
+  | { type: "mcp_build_log"; serverId: string; line: string; stream: "stdout" | "stderr" };
 
 export const AGENT_MODELS = [
   { id: "kimi-k2.5", label: "Standard" },

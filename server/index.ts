@@ -2640,6 +2640,19 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         }
+        // ── MCP Forge ────────────────────────────────────────────────────
+        case "list_office_mcp": {
+          const servers = manager.getForgeServers();
+          sess.broadcast({ type: "office_mcp_list", servers });
+          break;
+        }
+        case "unregister_mcp_server": {
+          const ok = await manager.unregisterForgeServer(msg.serverId);
+          if (!ok) {
+            sess.broadcast({ type: "toast", text: "MCP server not found or already removed." });
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error("[server] error handling message:", err);

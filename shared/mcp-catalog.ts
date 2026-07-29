@@ -4080,7 +4080,8 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Phantom Wallet Agent: Solana & EVM wallet agent — transfers, swaps, perps via Phantom MCP (stdio, auto-auth). Dedicated agent wallet, fund before transacting.
 - AgentWallet Trader: Permissionless wallet agent — create wallets, send tokens, x402 payments on 9 EVM chains + Solana. No KYC. Requires AgentWallet API key.
 - WAIaaS DeFi Agent: Self-hosted DeFi agent — 13+ protocols (Jupiter, 0x, Aave V3, Lido, etc.) with policy engine and 6-stage tx pipeline. Requires local daemon + session token.
-- Runpod GPU Agent: Cloud infrastructure agent — launch GPU Pods, deploy serverless endpoints, manage storage via Runpod MCP. Requires Runpod API key.`;
+- Runpod GPU Agent: Cloud infrastructure agent — launch GPU Pods, deploy serverless endpoints, manage storage via Runpod MCP. Requires Runpod API key.
+- Massive Web Scraper: Premium web scraping agent — captcha solving, JS rendering, geo-targeting (195+ countries), Google search with structured results via Massive MCP. For sites that block standard browsers. Requires Massive API token.`;
 
 
 /** Convert a catalog entry to an MCPServerConfig for agent assignment. */
