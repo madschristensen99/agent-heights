@@ -182,8 +182,14 @@ export async function makeTools(cwd: string, opts?: {
   // Override bash executor with bubblewrap sandboxing
   const allowNetwork = !!(opts?.railway) || !!(opts?.mcpServers && opts.mcpServers.length > 0);
 
-  // Build env with MCP auth tokens so agents can use them in bash (e.g. git clone)
-  const sandboxEnv = { ...process.env };
+  // Build a minimal env for sandboxed agent shells — never leak server secrets.
+  // Only include PATH, HOME, locale, and explicitly-allowed MCP tokens.
+  const sandboxEnv: Record<string, string> = {
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    HOME: cwd,
+    LANG: "C.UTF-8",
+    TERM: "dumb",
+  };
   if (opts?.mcpServers) {
     for (const s of opts.mcpServers) {
       if (s.authToken) {
@@ -198,18 +204,23 @@ export async function makeTools(cwd: string, opts?: {
   }
 
   const useBwrap = await checkBwrap();
+  const isProduction = process.env.NODE_ENV === "production";
+  if (!useBwrap && isProduction) {
+    console.error("[security] FATAL: bubblewrap (bwrap) is not available in production — refusing to run agent commands without sandboxing.");
+  }
   const originalBash = executors.bash;
   (executors as any).bash = async (input: any, ctxCwd: string, context: any) => {
     const cmd = typeof input === "string" ? input : input.command;
     const abortSignal: AbortSignal | undefined = context?.signal ?? context?.abortSignal;
     if (useBwrap) {
-      const roBinds = allowNetwork && workspaceRoot !== cwd ? [workspaceRoot] : [];
+      const roBinds: string[] = [];
       const { executable, args } = bwrapCommand(cmd, cwd, allowNetwork, roBinds);
       try {
         const { stdout, stderr } = await execFileAsync(executable, args, {
           cwd,
           maxBuffer: 10 * 1024 * 1024,
           signal: abortSignal,
+          timeout: 120_000,
           env: sandboxEnv,
         });
         return stderr ? `${stdout}\n[stderr]\n${stderr}` : stdout;
@@ -218,7 +229,10 @@ export async function makeTools(cwd: string, opts?: {
         return `[Command failed: ${err.message}]\n${err.stdout ?? ""}\n${err.stderr ?? ""}`;
       }
     }
-    // Fallback: use the original executor when bwrap is not available
+    // In production, refuse to run without bwrap. In dev, fall back to the original executor.
+    if (isProduction) {
+      return "[Security: sandbox (bubblewrap) is not available — command execution is disabled in production.]";
+    }
     return originalBash?.(input, ctxCwd, { ...context, env: sandboxEnv }) ?? "[No bash executor available]";
   };
 
@@ -486,13 +500,21 @@ export async function makeTools(cwd: string, opts?: {
       required: ["to", "message"],
     },
     async execute(input: any) {
-      const recipientInbox = resolve(workspaceRoot, input.to, "inbox.jsonl");
+      const recipient = String(input.to ?? "").trim();
+      if (!recipient || /[/\\]/.test(recipient) || recipient.startsWith(".")) {
+        return `Invalid recipient: "${recipient}" — must be a single workspace directory name.`;
+      }
+      const recipientInbox = resolve(workspaceRoot, recipient, "inbox.jsonl");
+      const relCheck = relative(workspaceRoot, recipientInbox);
+      if (relCheck.startsWith("..")) {
+        return `Invalid recipient: path escapes workspace root.`;
+      }
       const fromFolder = cwd.split("/").pop() ?? "";
       const entry = JSON.stringify({ ts: Date.now(), from: fromFolder, message: input.message }) + "\n";
       await mkdir(dirname(recipientInbox), { recursive: true });
       await appendFile(recipientInbox, entry, "utf-8");
-      opts?.onPostMessage?.(input.to, fromFolder, input.message);
-      return `Message sent to ${input.to}`;
+      opts?.onPostMessage?.(recipient, fromFolder, input.message);
+      return `Message sent to ${recipient}`;
     },
   };
 

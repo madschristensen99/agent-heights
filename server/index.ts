@@ -216,12 +216,14 @@ const screenshots = new ScreenshotManager();
 const server = createServer((req, res) => {
   // Agent Resources chat proxy — needs HQ context from the session
   if (req.url?.split("?")[0] === "/api/agent-resources") {
-    void handleAgentResourcesRequest(req, res, () => {
-      // In dev mode, use the dev session; in auth mode, find by token
+    void handleAgentResourcesRequest(req, res, async () => {
       if (isSupabaseConfigured) {
-        // Extract token from the request to find the session
-        // For now, use the first session (single-user for Agent Resources context)
-        const sess = tenants.values().next().value;
+        const authHeader = req.headers["authorization"];
+        const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+        if (!token) return null;
+        const user = await verifyToken(token);
+        if (!user) return null;
+        const sess = tenants.get(user.id);
         if (!sess) return null;
         const snap = sess.manager.snapshot();
         return { agents: snap.agents, board: snap.board, bossName: sess.manager.bossName };
@@ -407,6 +409,37 @@ const server = createServer((req, res) => {
 
   // PulseMCP community search — search 22k+ community MCP servers
   if (req.url?.split("?")[0] === "/api/pulsemcp-search") {
+    if (isSupabaseConfigured) {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (!token) {
+        res.writeHead(401, applySecurityHeaders({ "Content-Type": "application/json" }));
+        res.end(JSON.stringify({ error: "Authentication required" }));
+        return;
+      }
+      void verifyToken(token).then((user) => {
+        if (!user) {
+          res.writeHead(403, applySecurityHeaders({ "Content-Type": "application/json" }));
+          res.end(JSON.stringify({ error: "Invalid or expired token" }));
+          return;
+        }
+        const params = new URLSearchParams(req.url?.split("?")[1] ?? "");
+        const search = params.get("search") ?? "";
+        if (!search) {
+          res.writeHead(400, applySecurityHeaders({ "Content-Type": "application/json" }));
+          res.end(JSON.stringify({ error: "Missing search parameter" }));
+          return;
+        }
+        searchPulseMCPStructured(search, 20).then((results) => {
+          res.writeHead(200, applySecurityHeaders({ "Content-Type": "application/json" }));
+          res.end(JSON.stringify({ results, count: results.length }));
+        }).catch(() => {
+          res.writeHead(500, applySecurityHeaders({ "Content-Type": "application/json" }));
+          res.end(JSON.stringify({ error: "Search failed" }));
+        });
+      });
+      return;
+    }
     const params = new URLSearchParams(req.url?.split("?")[1] ?? "");
     const search = params.get("search") ?? "";
     if (!search) {
@@ -497,9 +530,16 @@ wss.on("connection", async (ws, req) => {
 
   const url = new URL(req.url ?? "", "http://localhost");
 
-  // ── Spectator connection (read-only, no auth) ───────────────────────
+  // ── Spectator connection (read-only) ───────────────────────────────
+  // Spectator mode is only allowed when LIVESTREAM_USER_ID is explicitly set.
+  // In production, we also require it to not be "dev" to avoid leaking dev data.
   if (url.searchParams.get("spectator") === "1") {
-    const livestreamUserId = process.env.LIVESTREAM_USER_ID ?? "dev";
+    const livestreamUserId = process.env.LIVESTREAM_USER_ID ?? "";
+    const isProd = process.env.NODE_ENV === "production";
+    if (!livestreamUserId || (isProd && livestreamUserId === "dev")) {
+      ws.close(4003, "Spectator mode is not enabled");
+      return;
+    }
 
     // Ensure the observed session exists
     let sess: UserSession;
@@ -2222,14 +2262,28 @@ wss.on("connection", async (ws, req) => {
             break;
           }
 
-          // Symlink protection — reject if the resolved path is a symlink
-          // or if any parent directory in the workspace is a symlink
+          // Symlink protection — reject if the resolved path or any parent
+          // directory in the workspace is a symlink
           try {
+            // Check the target itself
             const linkInfo = await lstat(safePath).catch(() => null);
             if (linkInfo?.isSymbolicLink()) {
               sess.broadcast({ type: "toast", text: "Symlinks are not allowed." });
               break;
             }
+            // Walk all parent directories from workspace root to target
+            let checkDir = safePath;
+            const wsRoot = resolve(agentWs);
+            while (checkDir !== wsRoot && checkDir !== dirname(checkDir)) {
+              const dirLink = await lstat(checkDir).catch(() => null);
+              if (dirLink?.isSymbolicLink()) {
+                sess.broadcast({ type: "toast", text: "Symlinks are not allowed." });
+                break;
+              }
+              checkDir = dirname(checkDir);
+            }
+            // Check if we broke out of the loop via symlink detection
+            if (checkDir !== wsRoot && checkDir !== dirname(checkDir)) break;
           } catch { /* file doesn't exist yet — fine for write/upload */ }
 
           // File size limit for write/upload (10MB)

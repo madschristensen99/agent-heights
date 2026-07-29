@@ -67,7 +67,7 @@ the relevant MCP server on a new or existing agent.`;
 export async function handleAgentResourcesRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  getHqContext: () => { agents: AgentInfo[]; board: TaskCard[]; bossName: string } | null,
+  getHqContext: () => Promise<{ agents: AgentInfo[]; board: TaskCard[]; bossName: string } | null>,
 ): Promise<boolean> {
   const url = req.url?.split("?")[0] ?? "";
   if (url !== "/api/agent-resources") return false;
@@ -104,7 +104,7 @@ export async function handleAgentResourcesRequest(
   }
 
   // Build HQ context (curated knowledge is baked in)
-  const hqCtx = getHqContext();
+  const hqCtx = await getHqContext();
   let hqContextStr = hqCtx ? buildHqContext(hqCtx.agents, hqCtx.board, hqCtx.bossName) : undefined;
 
   // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding

@@ -29,6 +29,9 @@ async function getBrowser(): Promise<Browser> {
   if (browserInstance && browserInstance.isConnected()) return browserInstance;
   browserInstance = await chromium.launch({
     headless: true,
+    // --no-sandbox is required because the container runs as root.
+    // TODO: Create a non-root user in the Dockerfile and remove --no-sandbox
+    // to enable Chromium's built-in sandbox for defense-in-depth.
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
   });
   console.log("[browser] launched headless Chromium");
@@ -63,8 +66,49 @@ export async function getAgentBrowser(agentId: string): Promise<AgentBrowser> {
   return ab;
 }
 
+/** Check if a URL is safe for agent navigation (blocks SSRF to internal services). */
+function isUrlSafe(rawUrl: string): { safe: boolean; reason?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return { safe: false, reason: "Invalid URL" };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { safe: false, reason: `Protocol '${parsed.protocol}' not allowed` };
+  }
+  const host = parsed.hostname.toLowerCase();
+  // Block loopback
+  if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1") {
+    return { safe: false, reason: "Loopback addresses are blocked" };
+  }
+  // Block cloud metadata endpoints
+  if (host === "169.254.169.254" || host === "169.254.170.2") {
+    return { safe: false, reason: "Cloud metadata endpoints are blocked" };
+  }
+  // Block private IP ranges (IPv4)
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const [, a, b] = ipv4Match.map(Number) as number[];
+    if (a === 10) return { safe: false, reason: "Private IP range blocked" };
+    if (a === 172 && b >= 16 && b <= 31) return { safe: false, reason: "Private IP range blocked" };
+    if (a === 192 && b === 168) return { safe: false, reason: "Private IP range blocked" };
+    if (a === 127) return { safe: false, reason: "Loopback addresses are blocked" };
+    if (a === 169 && b === 254) return { safe: false, reason: "Link-local addresses are blocked" };
+  }
+  // Block IPv6 unique local addresses
+  if (host.startsWith("fc") || host.startsWith("fd")) {
+    return { safe: false, reason: "IPv6 unique local addresses are blocked" };
+  }
+  return { safe: true };
+}
+
 /** Navigate the agent's browser to a URL. Returns page title + URL. */
 export async function browserNavigate(agentId: string, url: string): Promise<string> {
+  const check = isUrlSafe(url);
+  if (!check.safe) {
+    return `Navigation blocked: ${check.reason}`;
+  }
   const ab = await getAgentBrowser(agentId);
   await ab.page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
   ab.currentUrl = ab.page.url();
