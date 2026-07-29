@@ -194,7 +194,7 @@ export class OfficeScene extends Phaser.Scene {
   private wardrobeGfx!: Phaser.GameObjects.Graphics;
 
   // --- nemesis terminal (break room) ---
-  private nemesisTerminalTile: Tile = { x: 20, y: 15 };
+  private nemesisTerminalTile: Tile = { x: 20, y: 14 };
   private nemesisTerminalHint!: Phaser.GameObjects.Text;
   private nemesisTerminalGfx!: Phaser.GameObjects.Graphics;
 
@@ -3274,7 +3274,7 @@ export class OfficeScene extends Phaser.Scene {
     // ── MCP Forge (before plants — plants at (26,16) overlap forge station) ──
     const wtPx = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wtPx.x, wtPx.y) < 144) {
-      this.store.forgePanelOpen = true;
+      this.store.toggleForgePanel(true);
       this.store.requestForgeList();
       this.world.audio.uiClick();
       return true;

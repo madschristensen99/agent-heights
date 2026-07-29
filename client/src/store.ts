@@ -465,6 +465,12 @@ export class Store {
     this.forgeBuildLogListeners.delete(fn);
   }
 
+  /** Toggle the MCP Forge panel open/closed. */
+  toggleForgePanel(open?: boolean): void {
+    this.forgePanelOpen = open ?? !this.forgePanelOpen;
+    this.emit();
+  }
+
   /** Request the current forge server list from the server. */
   requestForgeList(): void {
     this.sendFn?.({ type: "list_office_mcp" });

@@ -698,6 +698,7 @@ export class Hud {
         worlds.hidden = true;
         wardrobe.hidden = true;
         forge.hidden = true;
+        this.store.toggleForgePanel(false);
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
         this.store.toggleWardrobe(false);
@@ -3480,7 +3481,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
   private bindForgePanel(): void {
     const modal = document.getElementById("forge-modal")!;
     modal.addEventListener("click", (e) => {
-      if (e.target === modal) this.store.forgePanelOpen = false;
+      if (e.target === modal) this.store.toggleForgePanel(false);
     });
   }
 
@@ -3534,7 +3535,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     const closeBtn = document.getElementById("forge-close");
     if (closeBtn) {
-      closeBtn.addEventListener("click", () => { this.store.forgePanelOpen = false; });
+      closeBtn.addEventListener("click", () => { this.store.toggleForgePanel(false); });
     }
     for (const btn of modal.querySelectorAll("[data-forge-unregister]")) {
       const el = btn as HTMLElement;
