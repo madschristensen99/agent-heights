@@ -178,15 +178,12 @@ export async function getAgentBalances(
 
     const chain = getDefaultChain();
     const tokenList = tokens ?? ["sol", "usdc", "usdxm"];
-    const locator = agentWalletLocator(agentId, chain);
 
     const url = new URL(
-      `${baseUrl}/${API_VERSION}/wallets/${locator}/balances`,
+      `${baseUrl}/${API_VERSION}/wallets/${wallet.address}/balances`,
     );
     url.searchParams.set("tokens", tokenList.join(","));
-    if (wallet.chainType === "evm") {
-      url.searchParams.set("chains", chain);
-    }
+    url.searchParams.set("chains", chain);
 
     const res = await fetch(url.toString(), {
       headers: { "X-API-KEY": apiKey },
@@ -199,27 +196,41 @@ export async function getAgentBalances(
     }
 
     const data = (await res.json()) as any;
+    console.log(`[crossmint] Balance response for ${agentId}:`, JSON.stringify(data).slice(0, 500));
     const balances: any[] = [];
 
-    if (data.nativeToken) {
+    // Handle native token (SOL, ETH, etc.)
+    const native = data.nativeToken ?? data.native ?? data.nativeBalance;
+    if (native) {
       balances.push({
-        symbol: data.nativeToken.symbol ?? "NATIVE",
-        amount: data.nativeToken.balance ?? "0",
-        usdValue: data.nativeToken.balanceUSD,
-        decimals: data.nativeToken.decimals,
+        symbol: native.symbol ?? (chainToType(chain) === "solana" ? "SOL" : "ETH"),
+        amount: native.balance ?? native.amount ?? "0",
+        usdValue: native.balanceUSD ?? native.usdValue,
+        decimals: native.decimals,
       });
     }
 
-    if (data.tokens && Array.isArray(data.tokens)) {
-      for (const t of data.tokens) {
+    // Handle token array (various possible response shapes)
+    const tokenArr = data.tokens ?? data.tokenBalances ?? data.balances;
+    if (tokenArr && Array.isArray(tokenArr)) {
+      for (const t of tokenArr) {
         balances.push({
           symbol: t.symbol ?? "unknown",
-          amount: t.balance ?? "0",
-          usdValue: t.balanceUSD,
+          amount: t.balance ?? t.amount ?? "0",
+          usdValue: t.balanceUSD ?? t.usdValue,
           decimals: t.decimals,
-          address: t.address,
+          address: t.address ?? t.mint,
         });
       }
+    }
+
+    // If no native token was in the response but balance > 0 in a top-level field, handle that
+    if (balances.length === 0 && data.balance) {
+      balances.push({
+        symbol: data.symbol ?? (chainToType(chain) === "solana" ? "SOL" : "ETH"),
+        amount: String(data.balance),
+        usdValue: data.balanceUSD,
+      });
     }
 
     return { address: wallet.address, balances };
