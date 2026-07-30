@@ -177,7 +177,7 @@ export async function getAgentBalances(
     if (!wallet) return null;
 
     const chain = getDefaultChain();
-    const tokenList = tokens ?? ["sol", "usdc"];
+    const tokenList = tokens ?? ["sol", "usdc", "usdxm"];
     const locator = agentWalletLocator(agentId, chain);
 
     const url = new URL(
@@ -598,7 +598,7 @@ export async function loadCrossmintWalletTools(
       properties: {
         tokens: {
           type: "string",
-          description: "Comma-separated token symbols to check (e.g. 'sol,usdc'). Default: 'sol,usdc'",
+          description: "Comma-separated token symbols to check (e.g. 'sol,usdc,usdxm'). Default: 'sol,usdc,usdxm'",
         },
       },
     },
