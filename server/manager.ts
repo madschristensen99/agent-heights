@@ -289,6 +289,14 @@ export class AgentManager {
 
   /** Number of active agents in this office. */
   get agentCount(): number { return this.agents.size; }
+  /** Number of hireable agents (excludes permanent NPCs Agent Resources & Hermes). */
+  get hireableAgentCount(): number {
+    let n = 0;
+    for (const id of this.agents.keys()) {
+      if (id !== AGENT_RESOURCES_ID && id !== HERMES_ID) n++;
+    }
+    return n;
+  }
   private schedules = new Map<string, AgentSchedule>();
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private firedAgents = new Map<string, FiredAgent>();
@@ -1121,9 +1129,9 @@ export class AgentManager {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
-    // Enforce agent limit based on subscription tier
-    if (this.agentLimit > 0 && this.agents.size >= this.agentLimit) {
-      console.log(`[manager] hire blocked: agent limit reached (${this.agents.size}/${this.agentLimit})`);
+    // Enforce agent limit based on subscription tier (exclude permanent NPCs)
+    if (this.agentLimit > 0 && this.hireableAgentCount >= this.agentLimit) {
+      console.log(`[manager] hire blocked: agent limit reached (${this.hireableAgentCount}/${this.agentLimit})`);
       this.broadcast({
         type: "payment_required",
         reason: "agent_limit",
@@ -2579,9 +2587,9 @@ export class AgentManager {
         },
         hireAgent: rt.info.id === AGENT_RESOURCES_ID
           ? async (name: string, model: string, systemPrompt: string) => {
-              // Respect agent limit
-              if (this.agentLimit > 0 && this.agents.size >= this.agentLimit) {
-                this.log(rt, "status", `Tried to hire ${name} but agent limit reached (${this.agents.size}/${this.agentLimit}).`);
+              // Respect agent limit (exclude permanent NPCs)
+              if (this.agentLimit > 0 && this.hireableAgentCount >= this.agentLimit) {
+                this.log(rt, "status", `Tried to hire ${name} but agent limit reached (${this.hireableAgentCount}/${this.agentLimit}).`);
                 return "";
               }
               return this.hireAgent(name, model, systemPrompt);

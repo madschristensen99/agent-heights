@@ -2644,6 +2644,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           <div class="wallet-addr">
             ${esc(msg.address)}
             <button id="d-crossmint-copy" class="wallet-copy-btn" style="margin-left:0.3rem; font-size:0.6rem;">copy</button>
+            <button id="d-crossmint-qr" class="wallet-copy-btn" style="margin-left:0.2rem; font-size:0.6rem;" title="Show QR code">⊞</button>
+          </div>
+          <div id="d-crossmint-qr-box" style="display:none; margin-top:0.4rem; padding:0.5rem; background:#fff; border-radius:0.3rem; width:fit-content;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(msg.address)}" alt="Wallet QR" style="display:block; width:120px; height:120px;" />
           </div>
           <div class="wallet-label" style="margin-top:0.2rem;">Chain: ${esc(chain)} · Gas sponsored</div>
           <div style="margin-top:0.3rem;">
@@ -2660,6 +2664,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             navigator.clipboard.writeText(msg.address!);
             copyBtn.textContent = "✓";
             setTimeout(() => { copyBtn.textContent = "copy"; }, 1500);
+          });
+        }
+        const qrBtn = content.querySelector("#d-crossmint-qr") as HTMLButtonElement | null;
+        const qrBox = content.querySelector("#d-crossmint-qr-box") as HTMLElement | null;
+        if (qrBtn && qrBox) {
+          qrBtn.addEventListener("click", () => {
+            const visible = qrBox.style.display !== "none";
+            qrBox.style.display = visible ? "none" : "block";
+            qrBtn.textContent = visible ? "⊞" : "⊟";
           });
         }
       };
