@@ -90,7 +90,10 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   overlay.style.cssText = `
     position: fixed; inset: 0; z-index: 9998;
     display: none; flex-direction: column; align-items: center; justify-content: center;
-    background: linear-gradient(180deg, #121420 0%, #1a1e32 100%);
+    background-image: linear-gradient(180deg, rgba(18,20,32,0.90) 0%, rgba(26,30,50,0.92) 100%), url(/assets/gameplay.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     color: #e0e0e0;
     font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
     overflow-y: auto; padding: 2rem 1rem;

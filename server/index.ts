@@ -726,19 +726,43 @@ wss.on("connection", async (ws, req) => {
         if (msUntilExpiry > 0) {
           freeTrialTimer = setTimeout(() => {
             if (ws.readyState === WebSocket.OPEN) {
+              // Send updated payment_status with expired trial so the client
+              // shows the payment overlay as a hard gate (no close button)
+              ws.send(JSON.stringify({
+                type: "payment_status",
+                entrancePaid: true,
+                subscriptionActive: false,
+                subscriptionStatus: "none",
+                subscriptionTier: null,
+                agentLimit: 0,
+                usageCap: 0,
+                currentPeriodEnd: null,
+                freeTrialExpiresAt: Date.now(),
+              } satisfies ServerMsg));
               ws.send(JSON.stringify({
                 type: "payment_required",
                 reason: "subscription",
-                message: "Your 5-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
+                message: "Your 2-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
               } satisfies ServerMsg));
             }
           }, msUntilExpiry);
         } else {
           // Already expired
           ws.send(JSON.stringify({
+            type: "payment_status",
+            entrancePaid: true,
+            subscriptionActive: false,
+            subscriptionStatus: "none",
+            subscriptionTier: null,
+            agentLimit: 0,
+            usageCap: 0,
+            currentPeriodEnd: null,
+            freeTrialExpiresAt: Date.now(),
+          } satisfies ServerMsg));
+          ws.send(JSON.stringify({
             type: "payment_required",
             reason: "subscription",
-            message: "Your 5-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
+            message: "Your 2-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
           } satisfies ServerMsg));
         }
       }
