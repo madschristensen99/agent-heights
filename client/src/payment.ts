@@ -102,7 +102,8 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   overlay.innerHTML = `
     <div style="position:relative;z-index:1;text-align:center;max-width:440px;width:90vw;">
       <h1 style="font-size:2.2rem;font-weight:800;margin:0 0 0.5rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HEIGHTS</h1>
-      <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 1.5rem;letter-spacing:0.15em;text-transform:uppercase;">Agent Subscription Plans</p>
+      <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 0.5rem;letter-spacing:0.15em;text-transform:uppercase;">Agent Subscription Plans</p>
+      <div id="payment-sprites" style="display:flex;gap:12px;justify-content:center;margin-bottom:1.2rem;position:relative;z-index:1;"></div>
 
       <div id="payment-trial-section" style="display:none;flex-direction:column;gap:0.5rem;background:rgba(88,200,102,0.1);border:1px solid #3da64a;border-radius:12px;padding:1.2rem;margin-bottom:1rem;">
         <h2 style="font-size:1rem;color:#58c866;margin:0;">Free Trial Active</h2>
@@ -147,6 +148,24 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
     </div>
   `;
   document.body.appendChild(overlay);
+
+  // Character sprites row (matches auth screen: char-0 through char-3)
+  const spritesContainer = overlay.querySelector("#payment-sprites") as HTMLDivElement;
+  if (spritesContainer) {
+    for (let i = 0; i < 4; i++) {
+      const sprite = document.createElement("div");
+      sprite.style.cssText = `
+        width: 56px; height: 84px;
+        background-image: url(/assets/characters/char-${i}.png);
+        background-size: 448px 336px;
+        background-position: 0 0;
+        background-repeat: no-repeat;
+        image-rendering: pixelated;
+        filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
+      `;
+      spritesContainer.appendChild(sprite);
+    }
+  }
 
   const subscriptionSection = overlay.querySelector("#payment-subscription-section") as HTMLDivElement;
   const activeSection = overlay.querySelector("#payment-active-section") as HTMLDivElement;
