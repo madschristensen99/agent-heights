@@ -13,9 +13,9 @@ export const stripe: Stripe | null = isStripeConfigured
 
 const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
 
-// ── Free trial: 5 minutes per day for authed users without a subscription ──
+// ── Free trial: 2 minutes per day for authed users without a subscription ──
 // Users can look around and hire agents but cannot run inference (tasks/chat)
-const FREE_TRIAL_DURATION_MS = 5 * 60 * 1000;
+const FREE_TRIAL_DURATION_MS = 2 * 60 * 1000;
 const freeTrialMap = new Map<string, { date: string; expiresAt: number }>();
 
 function todayKey(): string {
