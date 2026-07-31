@@ -252,7 +252,7 @@ export class AgentNPC {
       .setOrigin(0.5, 1)
       .setScale(1);
     this.nameTag = createNameTag(scene, info.name, info.status);
-    this.bubble = scene.add.sprite(32, -104, "bubble", 0).setVisible(false);
+    this.bubble = scene.add.sprite(-32, -104, "bubble", 0).setVisible(false).setFlipX(true);
 
     this.emoteSprite = scene.add.sprite(0, -140, "emote-icons", 0)
       .setVisible(false)
