@@ -134,12 +134,18 @@ export class BootScene extends Phaser.Scene {
       this.bar.fillRoundedRect(barX, barY, barW * progress, barH, 6);
     };
 
-    // Process steps one per frame so the bar visibly progresses
-    let stepIndex = 0;
+    // Process steps in batches so the bar visibly progresses.
+    // Heavy steps (Creatures, Beasts, Friendly, World objects) run individually;
+    // light steps (Effects, Glows, Items, Tennis, Emotes, Animations) batch into one frame.
+    const heavyNames = new Set(["Creatures", "Beasts", "Friendly creatures", "World objects"]);
+    const heavySteps = texSteps.filter((s) => heavyNames.has(s.name));
+    const lightSteps = texSteps.filter((s) => !heavyNames.has(s.name));
     const allSteps: Array<{ name: string; fn: () => void }> = [
-      ...texSteps,
+      ...heavySteps,
+      { name: "Effects & items", fn: () => { for (const s of lightSteps) s.fn(); } },
       { name: "Animations", fn: () => this.createAnimations() },
     ];
+    let stepIndex = 0;
 
     const processNextStep = () => {
       if (stepIndex >= allSteps.length) {

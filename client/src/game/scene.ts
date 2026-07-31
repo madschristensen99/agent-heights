@@ -648,6 +648,8 @@ export class OfficeScene extends Phaser.Scene {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
                 if (!wt) continue;
+                // Skip door tiles (index 13-14 in Tiled = door/door frame)
+                if (wt.index === 13 || wt.index === 14) continue;
                 let wallKey: string | null = null;
                 if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
                 else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
@@ -1057,7 +1059,7 @@ export class OfficeScene extends Phaser.Scene {
       },
       ...chunkPhases,
       {
-        name: "world cleanup & vfx",
+        name: "world cleanup & lighting",
         fn: () => {
           this.world.finishDoorPreload();
 
@@ -1068,11 +1070,7 @@ export class OfficeScene extends Phaser.Scene {
           // compiled shader stays cached in Phaser's shader manager.
           this.world.vfx.startAmbient("meadow");
           this.time.delayedCall(200, () => this.world.vfx.stopAmbient());
-        },
-      },
-      {
-        name: "lighting & input",
-        fn: () => {
+
           // flower beds flanking the front door
           const doorPxX = this.spawnTile.x * TILE_PX + TILE_PX / 2;
           const doorPxY = map.heightInPixels;
