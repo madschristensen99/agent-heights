@@ -145,7 +145,116 @@ export function saveSvg(filePath: string, svgContent: string): void {
   writeFileSync(filePath, svgContent, "utf-8");
 }
 
-// --------------------------------------------------------------- upload helper
+// ------------------------------------------------------------- upload helper
+
+/**
+ * Slice a grid sprite sheet into individual frame buffers.
+ * Uses content-aware detection: scans for transparent column/row gaps
+ * to find frame boundaries. Falls back to uniform slicing if detection fails.
+ *
+ * @param input     Grid image buffer (PNG, already background-removed)
+ * @param cols      Number of columns in the grid
+ * @param rows      Number of rows in the grid
+ * @param frameSize Target frame size (each frame is resized to frameSize × frameSize)
+ * @returns Array of frame buffers in row-major order (left-to-right, top-to-bottom)
+ */
+export async function sliceGrid(
+  input: Buffer,
+  cols: number,
+  rows: number,
+  frameSize: number,
+): Promise<Buffer[]> {
+  const image = sharp(input);
+  const meta = await image.metadata();
+  const w = meta.width!;
+  const h = meta.height!;
+  const hasAlpha = meta.channels === 4;
+
+  // Try content-aware slicing: find transparent column/row boundaries
+  let frameBounds: { x: number; y: number; w: number; h: number }[] | null = null;
+
+  if (hasAlpha) {
+    const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
+
+    // Find column boundaries: a column is "empty" if all its pixels are transparent
+    const colEmpty = new Array(w).fill(true);
+    for (let x = 0; x < w; x++) {
+      for (let y = 0; y < h; y++) {
+        const idx = (y * w + x) * info.channels;
+        if (data[idx + 3] > 16) { colEmpty[x] = false; break; }
+      }
+    }
+
+    // Find row boundaries similarly
+    const rowEmpty = new Array(h).fill(true);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * info.channels;
+        if (data[idx + 3] > 16) { rowEmpty[y] = false; break; }
+      }
+    }
+
+    // Find content column ranges (non-empty runs)
+    const colRanges: { start: number; end: number }[] = [];
+    let inRange = false;
+    let rangeStart = 0;
+    for (let x = 0; x <= w; x++) {
+      const empty = x < w ? colEmpty[x] : true;
+      if (!empty && !inRange) { inRange = true; rangeStart = x; }
+      else if (empty && inRange) { inRange = false; colRanges.push({ start: rangeStart, end: x }); }
+    }
+
+    // Find content row ranges
+    const rowRanges: { start: number; end: number }[] = [];
+    inRange = false;
+    rangeStart = 0;
+    for (let y = 0; y <= h; y++) {
+      const empty = y < h ? rowEmpty[y] : true;
+      if (!empty && !inRange) { inRange = true; rangeStart = y; }
+      else if (empty && inRange) { inRange = false; rowRanges.push({ start: rangeStart, end: y }); }
+    }
+
+    // If we found the right number of ranges, use content-aware bounds
+    if (colRanges.length === cols && rowRanges.length === rows) {
+      frameBounds = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          frameBounds.push({
+            x: colRanges[c].start,
+            y: rowRanges[r].start,
+            w: colRanges[c].end - colRanges[c].start,
+            h: rowRanges[r].end - rowRanges[r].start,
+          });
+        }
+      }
+    }
+  }
+
+  // Fallback: uniform slicing
+  if (!frameBounds) {
+    const cellW = Math.floor(w / cols);
+    const cellH = Math.floor(h / rows);
+    frameBounds = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        frameBounds.push({ x: c * cellW, y: r * cellH, w: cellW, h: cellH });
+      }
+    }
+  }
+
+  // Extract and resize each frame
+  const frames: Buffer[] = [];
+  for (const fb of frameBounds) {
+    const frame = await sharp(input)
+      .extract({ left: fb.x, top: fb.y, width: fb.w, height: fb.h })
+      .resize(frameSize, frameSize, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+    frames.push(frame);
+  }
+
+  return frames;
+}
 
 /**
  * Upload a buffer to fal.ai storage and return the URL.

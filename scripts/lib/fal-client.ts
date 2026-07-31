@@ -182,6 +182,45 @@ export async function nanoBanana2(
   return { url: img.url, width: img.width, height: img.height };
 }
 
+// ----------------------------------------------------- Nano Banana 2 Edit (i2i)
+
+/**
+ * Edit/generate an image from a reference image using Nano Banana 2 Edit.
+ * Pass up to 14 reference image URLs + a text prompt describing the edit.
+ * The model maintains character/subject consistency across generations.
+ *
+ * Cost: ~$0.08 per image (same as text-to-image).
+ */
+export async function nanoBanana2Edit(
+  prompt: string,
+  imageUrls: string[],
+  opts: {
+    seed?: number;
+    aspectRatio?: string;
+    resolution?: string;
+    numImages?: number;
+  } = {},
+): Promise<ImageResult> {
+  const result = await fal.subscribe("fal-ai/nano-banana-2/edit", {
+    input: {
+      prompt,
+      image_urls: imageUrls,
+      seed: opts.seed,
+      num_images: opts.numImages ?? 1,
+      aspect_ratio: (opts.aspectRatio ?? "1:1") as any,
+      resolution: (opts.resolution ?? "1K") as any,
+      output_format: "png",
+      enable_safety_checker: false,
+    } as any,
+  });
+
+  const images = (result.data as { images: Array<{ url: string; width: number; height: number }> }).images;
+  const img = images[0];
+  if (!img) throw new Error("Nano Banana 2 Edit returned no images");
+
+  return { url: img.url, width: img.width, height: img.height };
+}
+
 // ------------------------------------------------------------- Bria bg remove
 
 /**

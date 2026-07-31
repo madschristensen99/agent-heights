@@ -27,29 +27,29 @@ function aiItemKey(tex: Phaser.Textures.TextureManager, procKey: string): string
   return null;
 }
 
-/** Check if an AI-generated texture exists for a creature spritesheet key, return AI key or null. */
-function aiCreatureKey(tex: Phaser.Textures.TextureManager, procKey: string): string | null {
-  const aiKey = AI_CREATURE_TEXTURES[procKey];
-  if (aiKey && tex.exists(aiKey)) return aiKey;
+/** Check if AI-generated per-frame textures exist for a creature spritesheet key, return array of keys or null. */
+function aiCreatureKey(tex: Phaser.Textures.TextureManager, procKey: string): string[] | null {
+  const aiKeys = AI_CREATURE_TEXTURES[procKey];
+  if (aiKeys && aiKeys.every((k) => tex.exists(k))) return aiKeys;
   return null;
 }
 
 /**
- * Build a spritesheet from a single AI sprite by drawing it into all frame slots.
- * The animation system will cycle through identical frames (static appearance).
+ * Build a spritesheet from per-frame AI sprites by drawing each into its frame slot.
+ * Each frame contains a distinct image (idle, walk1, walk2, attack) for animation.
  */
 function buildAiSpritesheet(
   tex: Phaser.Textures.TextureManager,
   sheetKey: string,
-  aiKey: string,
+  aiKeys: string[],
   frameCount: number,
   frameSize: number,
 ): void {
   if (tex.exists(sheetKey)) return;
-  const sourceImg = tex.get(aiKey).getSourceImage() as HTMLImageElement;
   const canvasTex = createCanvasTexture(tex, sheetKey, frameSize * frameCount, frameSize);
   const ctx = canvasTex.getContext();
   for (let f = 0; f < frameCount; f++) {
+    const sourceImg = tex.get(aiKeys[f]).getSourceImage() as HTMLImageElement;
     ctx.drawImage(sourceImg, f * frameSize, 0, frameSize, frameSize);
   }
   canvasTex.refresh();

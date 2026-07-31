@@ -61,7 +61,7 @@ const ITEM_KEYS = [
   "tennis_ball", "tennis_net",
 ];
 
-const CREATURE_KEYS = [
+const CREATURE_BASE_KEYS = [
   "creature_slime", "creature_wolf", "creature_skeleton",
   "creature_imp", "creature_wraith", "creature_fire_elemental",
   "beast_groveheart", "beast_stone_colossus", "beast_ash_wyrm",
@@ -69,6 +69,11 @@ const CREATURE_KEYS = [
   "friendly_unicorn", "friendly_fairy_bunny",
   "friendly_baby_dragon", "friendly_crystal_fox",
 ];
+
+// Per-frame creature keys (4 frames each: _0 idle, _1 walk1, _2 walk2, _3 attack)
+const CREATURE_KEYS: string[] = CREATURE_BASE_KEYS.flatMap((key) =>
+  [0, 1, 2, 3].map((i) => `${key}_${i}`),
+);
 
 // ── Shelf packer ──────────────────────────────────────────────────────────
 

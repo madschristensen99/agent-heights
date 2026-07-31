@@ -130,28 +130,28 @@ export function resolveItemTex(scene: Phaser.Scene, procKey: string): string {
 /**
  * Maps creature/beast/friendly spritesheet keys to AI-generated sprite texture keys.
  * Creatures use Nano Banana 2 + Bria RMBG (transparent PNG).
- * The AI sprite is used as the base for all animation frames.
+ * Each entry maps to 4 per-frame textures: [idle, walk1, walk2, attack].
  */
-export const AI_CREATURE_TEXTURES: Record<string, string> = {
-  "creature-slime": "ai-fur-creature_slime",
-  "creature-wolf": "ai-fur-creature_wolf",
-  "creature-skeleton": "ai-fur-creature_skeleton",
-  "creature-imp": "ai-fur-creature_imp",
-  "creature-wraith": "ai-fur-creature_wraith",
-  "creature-fire-elemental": "ai-fur-creature_fire_elemental",
-  "beast-groveheart": "ai-fur-beast_groveheart",
-  "beast-stone-colossus": "ai-fur-beast_stone_colossus",
-  "beast-ash-wyrm": "ai-fur-beast_ash_wyrm",
-  "beast-void-leviathan": "ai-fur-beast_void_leviathan",
-  "beast-infernal-sovereign": "ai-fur-beast_infernal_sovereign",
-  "friendly-unicorn": "ai-fur-friendly_unicorn",
-  "friendly-fairy-bunny": "ai-fur-friendly_fairy_bunny",
-  "friendly-baby-dragon": "ai-fur-friendly_baby_dragon",
-  "friendly-crystal-fox": "ai-fur-friendly_crystal_fox",
+export const AI_CREATURE_TEXTURES: Record<string, string[]> = {
+  "creature-slime": ["ai-fur-creature_slime_0", "ai-fur-creature_slime_1", "ai-fur-creature_slime_2", "ai-fur-creature_slime_3"],
+  "creature-wolf": ["ai-fur-creature_wolf_0", "ai-fur-creature_wolf_1", "ai-fur-creature_wolf_2", "ai-fur-creature_wolf_3"],
+  "creature-skeleton": ["ai-fur-creature_skeleton_0", "ai-fur-creature_skeleton_1", "ai-fur-creature_skeleton_2", "ai-fur-creature_skeleton_3"],
+  "creature-imp": ["ai-fur-creature_imp_0", "ai-fur-creature_imp_1", "ai-fur-creature_imp_2", "ai-fur-creature_imp_3"],
+  "creature-wraith": ["ai-fur-creature_wraith_0", "ai-fur-creature_wraith_1", "ai-fur-creature_wraith_2", "ai-fur-creature_wraith_3"],
+  "creature-fire-elemental": ["ai-fur-creature_fire_elemental_0", "ai-fur-creature_fire_elemental_1", "ai-fur-creature_fire_elemental_2", "ai-fur-creature_fire_elemental_3"],
+  "beast-groveheart": ["ai-fur-beast_groveheart_0", "ai-fur-beast_groveheart_1", "ai-fur-beast_groveheart_2", "ai-fur-beast_groveheart_3"],
+  "beast-stone-colossus": ["ai-fur-beast_stone_colossus_0", "ai-fur-beast_stone_colossus_1", "ai-fur-beast_stone_colossus_2", "ai-fur-beast_stone_colossus_3"],
+  "beast-ash-wyrm": ["ai-fur-beast_ash_wyrm_0", "ai-fur-beast_ash_wyrm_1", "ai-fur-beast_ash_wyrm_2", "ai-fur-beast_ash_wyrm_3"],
+  "beast-void-leviathan": ["ai-fur-beast_void_leviathan_0", "ai-fur-beast_void_leviathan_1", "ai-fur-beast_void_leviathan_2", "ai-fur-beast_void_leviathan_3"],
+  "beast-infernal-sovereign": ["ai-fur-beast_infernal_sovereign_0", "ai-fur-beast_infernal_sovereign_1", "ai-fur-beast_infernal_sovereign_2", "ai-fur-beast_infernal_sovereign_3"],
+  "friendly-unicorn": ["ai-fur-friendly_unicorn_0", "ai-fur-friendly_unicorn_1", "ai-fur-friendly_unicorn_2", "ai-fur-friendly_unicorn_3"],
+  "friendly-fairy-bunny": ["ai-fur-friendly_fairy_bunny_0", "ai-fur-friendly_fairy_bunny_1", "ai-fur-friendly_fairy_bunny_2", "ai-fur-friendly_fairy_bunny_3"],
+  "friendly-baby-dragon": ["ai-fur-friendly_baby_dragon_0", "ai-fur-friendly_baby_dragon_1", "ai-fur-friendly_baby_dragon_2", "ai-fur-friendly_baby_dragon_3"],
+  "friendly-crystal-fox": ["ai-fur-friendly_crystal_fox_0", "ai-fur-friendly_crystal_fox_1", "ai-fur-friendly_crystal_fox_2", "ai-fur-friendly_crystal_fox_3"],
 };
 
 /** Creature asset keys (without prefix) for loading from furniture/ directory. */
-export const AI_CREATURE_KEYS: string[] = Object.values(AI_CREATURE_TEXTURES).map((k) => k.replace(/^ai-fur-/, ""));
+export const AI_CREATURE_KEYS: string[] = Object.values(AI_CREATURE_TEXTURES).flat().map((k) => k.replace(/^ai-fur-/, ""));
 
 /**
  * Character texture patch keys for AI-generated tileable textures.

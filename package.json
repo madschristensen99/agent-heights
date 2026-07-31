@@ -16,6 +16,7 @@
     "start": "tsx --env-file=.env server/index.ts",
     "assets": "tsx scripts/generate-assets.ts",
     "ai-assets": "tsx scripts/generate-ai-assets.ts",
+    "creature-sprites": "tsx scripts/generate-creature-sprites.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
