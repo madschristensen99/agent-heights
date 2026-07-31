@@ -2018,15 +2018,20 @@ export class WorldLayer {
 
     // Render static tiles to a persistent canvas texture (survives scene restarts).
     // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
+    // Supersample at 4x (SS=4) so AI textures draw at full 256x256 resolution,
+    // then the display image is scaled down by the GPU for clean filtering.
+    const SS = 4;
+    const ssPxSize = chunkPxSize * SS;
+    const ssTilePx = TILE_PX * SS;
     if (!this.scene.textures.exists(texKey)) {
-      const canvasTex = this.scene.textures.createCanvas(texKey, chunkPxSize, chunkPxSize);
+      const canvasTex = this.scene.textures.createCanvas(texKey, ssPxSize, ssPxSize);
       if (canvasTex) {
         const ctx = canvasTex.getContext();
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
         const worldTilesTex = this.scene.textures.get("world-tiles");
 
-        const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = TILE_PX, h: number = TILE_PX) => {
+        const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = ssTilePx, h: number = ssTilePx) => {
           if (!this.scene.textures.exists(textureKey)) return;
           const tex = this.scene.textures.get(textureKey);
           const fr = tex.get(0);
@@ -2043,8 +2048,8 @@ export class WorldLayer {
         for (let y = 0; y < CHUNK_SIZE; y++) {
           for (let x = 0; x < CHUNK_SIZE; x++) {
             const tile = chunk.tiles[y * CHUNK_SIZE + x];
-            const px = x * TILE_PX;
-            const py = y * TILE_PX;
+            const px = x * ssTilePx;
+            const py = y * ssTilePx;
             const worldTileX = chunk.cx * CHUNK_SIZE + x;
             const worldTileY = chunk.cy * CHUNK_SIZE + y;
             // Position hash for variant — deterministic per world tile
@@ -2063,7 +2068,7 @@ export class WorldLayer {
                 ctx.drawImage(
                   fr.source.image as CanvasImageSource,
                   fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-                  px, py, TILE_PX, TILE_PX,
+                  px, py, ssTilePx, ssTilePx,
                 );
               }
             }
@@ -2081,7 +2086,7 @@ export class WorldLayer {
               if (this.scene.textures.exists(overlayKey)) {
                 if (tile === TILE.LEPRECHAUN) {
                   // leprechaun rendered at 2x scale, centered on tile
-                  drawTexToCanvas(overlayKey, px - TILE_PX / 2, py - TILE_PX / 2, TILE_PX * 2, TILE_PX * 2);
+                  drawTexToCanvas(overlayKey, px - ssTilePx / 2, py - ssTilePx / 2, ssTilePx * 2, ssTilePx * 2);
                 } else {
                   drawTexToCanvas(overlayKey, px, py);
                 }
@@ -2097,10 +2102,11 @@ export class WorldLayer {
             const edgeColor = edgeTileColors[tile];
             if (!edgeColor) continue;
 
-            const px = x * TILE_PX;
-            const py = y * TILE_PX;
+            const px = x * ssTilePx;
+            const py = y * ssTilePx;
             const worldTileX = chunk.cx * CHUNK_SIZE + x;
             const worldTileY = chunk.cy * CHUNK_SIZE + y;
+            const ssEdge = EDGE_WIDTH * SS;
 
             // Check 4 cardinal neighbors (use chunk data for interior, cross-chunk for borders)
             const nTile = y > 0
@@ -2118,10 +2124,10 @@ export class WorldLayer {
 
             ctx.fillStyle = edgeColor;
             // Draw edge band on sides facing different terrain (skip if neighbor not loaded = -1)
-            if (nTile >= 0 && nTile !== tile) ctx.fillRect(px, py, TILE_PX, EDGE_WIDTH);
-            if (sTile >= 0 && sTile !== tile) ctx.fillRect(px, py + TILE_PX - EDGE_WIDTH, TILE_PX, EDGE_WIDTH);
-            if (wTile >= 0 && wTile !== tile) ctx.fillRect(px, py, EDGE_WIDTH, TILE_PX);
-            if (eTile >= 0 && eTile !== tile) ctx.fillRect(px + TILE_PX - EDGE_WIDTH, py, EDGE_WIDTH, TILE_PX);
+            if (nTile >= 0 && nTile !== tile) ctx.fillRect(px, py, ssTilePx, ssEdge);
+            if (sTile >= 0 && sTile !== tile) ctx.fillRect(px, py + ssTilePx - ssEdge, ssTilePx, ssEdge);
+            if (wTile >= 0 && wTile !== tile) ctx.fillRect(px, py, ssEdge, ssTilePx);
+            if (eTile >= 0 && eTile !== tile) ctx.fillRect(px + ssTilePx - ssEdge, py, ssEdge, ssTilePx);
           }
         }
 
@@ -2130,8 +2136,10 @@ export class WorldLayer {
     }
 
     // Create an Image from the (now cached) canvas texture — one GPU draw call
+    // The supersampled canvas (4x) is scaled down to normal size for display.
     const img = this.scene.add.image(ox, oy, texKey);
     img.setOrigin(0, 0);
+    img.setScale(1 / SS);
     container.add(img);
 
     // Water animation sprites and light sources are dynamic — always recreated.

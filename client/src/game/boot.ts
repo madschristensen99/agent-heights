@@ -55,8 +55,9 @@ export class BootScene extends Phaser.Scene {
     });
 
     // AI-generated PBR surface textures
+    const aiVer = "?v=256";
     for (const key of AI_TILE_KEYS) {
-      this.load.image(`ai-${key}`, `assets/ai/tiles/${key}_basecolor.webp`);
+      this.load.image(`ai-${key}`, `assets/ai/tiles/${key}_basecolor.webp${aiVer}`);
     }
 
     // AI-generated world object sprites (Nano Banana 2 + Bria RMBG → transparent PNG)

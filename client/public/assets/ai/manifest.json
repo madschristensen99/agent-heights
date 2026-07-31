@@ -1078,5 +1078,60 @@
     "size": 256,
     "hasPBR": true,
     "hasSvg": false
+  },
+  {
+    "key": "big_tree",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/big_tree.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "palm_tree",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/palm_tree.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "mystic_tree",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/mystic_tree.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "big_rock",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/big_rock.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "crystal",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/crystal.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
   }
 ]

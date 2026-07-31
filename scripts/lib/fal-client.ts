@@ -197,8 +197,20 @@ export async function removeBackground(imageUrl: string): Promise<string> {
     },
   });
 
-  const images = (result.data as { images: Array<{ url: string }> }).images;
-  return images[0]?.url ?? imageUrl;
+  console.log(`  [Bria RMBG] Response:`, JSON.stringify(result.data).slice(0, 500));
+
+  const data = result.data as Record<string, unknown>;
+  // Bria may return { images: [{ url }] } or { image: { url } } or { result_url }
+  if (Array.isArray(data.images) && data.images[0]) {
+    return (data.images[0] as { url: string }).url;
+  }
+  if (data.image && typeof data.image === "object" && "url" in data.image) {
+    return (data.image as { url: string }).url;
+  }
+  if (typeof data.result_url === "string") {
+    return data.result_url;
+  }
+  throw new Error(`Unexpected Bria RMBG response: ${JSON.stringify(data).slice(0, 300)}`);
 }
 
 // --------------------------------------------------------------- URL → buffer
