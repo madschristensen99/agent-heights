@@ -2098,7 +2098,38 @@ export class WorldLayer {
             // Prefer AI-generated object sprites when available, fall back to procedural
             const aiObjKey = AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]];
             const overlayKey = aiObjKey ?? overlayTextures[tile];
-            if (overlayKey) {
+
+            // For tee box tiles: draw grass base, only show sign on center tile of cluster
+            if (tile === TILE.TEE_BOX) {
+              // Draw grass base under tee box
+              const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
+              if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
+                drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
+              } else {
+                const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
+                if (grassFrame) {
+                  ctx.drawImage(
+                    grassFrame.source.image as CanvasImageSource,
+                    grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
+                    px, py, ssTilePx, ssTilePx,
+                  );
+                }
+              }
+              // Only show the sign on the center tile (surrounded by 8 tee box neighbors)
+              let teeNeighbors = 0;
+              for (let ndy = -1; ndy <= 1; ndy++) {
+                for (let ndx = -1; ndx <= 1; ndx++) {
+                  if (ndx === 0 && ndy === 0) continue;
+                  const nTile = this.getTileAtLoaded(worldTileX + ndx, worldTileY + ndy);
+                  if (nTile === TILE.TEE_BOX) teeNeighbors++;
+                }
+              }
+              if (teeNeighbors === 8 && overlayKey && this.scene.textures.exists(overlayKey)) {
+                const signSize = ssTilePx * 0.75;
+                const signOff = ssTilePx * 0.125;
+                drawTexToCanvas(overlayKey, px + signOff, py + signOff, signSize, signSize);
+              }
+            } else if (overlayKey) {
               if (this.scene.textures.exists(overlayKey)) {
                 if (tile === TILE.LEPRECHAUN) {
                   // leprechaun rendered at 2x scale, centered on tile

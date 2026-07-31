@@ -103,6 +103,7 @@ export const AI_ITEM_TEXTURES: Record<string, string> = {
   "golf-club": "ai-fur-golf_club",
   "golf-ball": "ai-fur-golf_ball",
   "axe": "ai-fur-axe",
+  "tee-box": "ai-fur-tee_box",
   "leprechaun": "ai-fur-leprechaun",
   "tennis-court": "ai-fur-tennis_court",
   "tennis-wall": "ai-fur-tennis_wall",
