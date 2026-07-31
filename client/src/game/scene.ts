@@ -633,24 +633,6 @@ export class OfficeScene extends Phaser.Scene {
           walls.setCollisionByProperty({ solid: true });
           furniture.setCollisionByProperty({ solid: true });
 
-          // Apply AI wall texture as a subtle blend on top of wall tiles
-          const aiWallKey = this.theme === "agentHeights"
-            ? AI_OFFICE_TEXTURES.wallAgentHeights
-            : AI_OFFICE_TEXTURES.wallClassic;
-          if (this.textures.exists(aiWallKey)) {
-            for (let y = 0; y < map.height; y++) {
-              for (let x = 0; x < map.width; x++) {
-                const wt = walls.getTileAt(x, y);
-                if (!wt) continue;
-                const ws = this.add.image(x * TILE_PX, y * TILE_PX, aiWallKey)
-                  .setOrigin(0, 0)
-                  .setDepth(1.05)
-                  .setAlpha(0.5);
-                ws.setDisplaySize(TILE_PX, TILE_PX);
-              }
-            }
-          }
-
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
           upgradeFurniture(this, furniture);
           upgradeWorkshop(this);
