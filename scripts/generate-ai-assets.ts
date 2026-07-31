@@ -273,7 +273,7 @@ const ASSETS: AssetDef[] = [
   furniture("desk_monitor_black", "top-down view of a modern slim-bezel computer monitor seen from front, completely black powered-off screen, stand base and neck, realistic office equipment, game sprite, isolated on white background", 3030),
   furniture("desk_monitor_side_off", "side view of a thin computer monitor profile, dark screen edge, stand base and neck, power LED, realistic office equipment, game sprite, isolated on white background", 3031),
   furniture("desk_monitor_side_lit", "side view of a thin computer monitor profile with glowing blue screen edge, stand base and neck, power LED, realistic office equipment, game sprite, isolated on white background", 3032),
-  furniture("helicopter_top", "top-down view of a green and yellow helicopter seen from directly above, spinning rotor blades blurred as a disc, landing skids visible, cockpit windshield, tail boom extending to the right, helicopter centered in frame with empty space around all edges, realistic aircraft, game sprite, isolated on white background", 3033),
+  furniture("helicopter_top", "3/4 aerial perspective view of a green and yellow helicopter, seen from above and slightly to the side, full helicopter visible including complete tail boom and tail rotor, landing skids visible, spinning rotor blades blurred as a disc, cockpit windshield, tail boom extending to the right with tail fin and tail rotor fully shown, helicopter small and centered with generous empty space around all edges, realistic aircraft, game sprite, isolated on white background", 3033),
 
   // ------------------------------------------------------- Tier 4: World items & props (Nano Banana 2 + Bria RMBG)
 
