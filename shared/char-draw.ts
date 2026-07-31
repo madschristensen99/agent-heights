@@ -94,7 +94,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   const hairDk = mix(pal.hair, "#000000", 0.25);
   const hairRim = mix(pal.hair, "#ffffff", 0.50);
   const shirtLi = mix(pal.shirt, "#ffffff", 0.22);
-  const shirtMid = mix(pal.shirt, "#ffffff", 0.08);
   const shirtDk = pal.shirtShade;
   const pantsLi = mix(pal.pants, "#ffffff", 0.15);
   const pantsMid = mix(pal.pants, "#ffffff", 0.05);
@@ -128,6 +127,48 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   const rrO = (x: number, y: number, w: number, h: number, r: number, fill: string) => {
     s.fillRoundedRect(x - 1, y - 1, w + 2, h + 2, r + 1, mix(fill, "#000000", 0.55));
     s.fillRoundedRect(x, y, w, h, r, fill);
+  };
+
+  // ===== GRADIENT HELPERS — per-pixel gradient fills within shape regions =====
+
+  /** Vertical gradient inside a rounded rect (top→bottom). */
+  const vGradRR = (x: number, y: number, w: number, h: number, r: number, top: string, bot: string) => {
+    const rc = Math.min(r, Math.floor(w / 2), Math.floor(h / 2));
+    for (let yy = 0; yy < h; yy++) {
+      const c = mix(top, bot, yy / Math.max(h - 1, 1));
+      for (let xx = 0; xx < w; xx++) {
+        if (xx >= rc && xx < w - rc) { s.set(x + xx, y + yy, c); continue; }
+        if (yy >= rc && yy < h - rc) { s.set(x + xx, y + yy, c); continue; }
+        const cxs = xx < rc ? rc : w - 1 - rc;
+        const cys = yy < rc ? rc : h - 1 - rc;
+        const dx = xx - cxs, dy = yy - cys;
+        if (dx * dx + dy * dy <= rc * rc) s.set(x + xx, y + yy, c);
+      }
+    }
+  };
+
+  /** Horizontal gradient inside an ellipse (left→right). */
+  const hGradEl = (cx: number, cy: number, rx: number, ry: number, left: string, right: string) => {
+    for (let yy = -ry; yy <= ry; yy++) {
+      const w = Math.floor(rx * Math.sqrt(1 - (yy * yy) / (ry * ry)));
+      for (let xx = -w; xx <= w; xx++) {
+        const t = (xx + w) / Math.max(2 * w, 1);
+        s.set(cx + xx, cy + yy, mix(left, right, t));
+      }
+    }
+  };
+
+  /** Radial gradient inside a circle (inner→outer), with optional highlight offset. */
+  const rGradCi = (cx: number, cy: number, r: number, inner: string, outer: string, offX = 0, offY = 0) => {
+    for (let yy = -r; yy <= r; yy++) {
+      const w = Math.floor(Math.sqrt(r * r - yy * yy));
+      for (let xx = -w; xx <= w; xx++) {
+        const dx = xx - offX, dy = yy - offY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const t = Math.min(1, dist / r);
+        s.set(cx + xx, cy + yy, mix(inner, outer, t));
+      }
+    }
   };
 
   // ===== HAIR STYLES =====
@@ -599,6 +640,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   if (d === "down") {
     // ---- HEAD: round dome with dynamic outline ----
     ciO(hx(32), hy(18), 17, pal.skin);
+    rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(32), hy(22), 13, 12, pal.skin);
     drawHairDown();
     drawHeadFeature("down");
@@ -650,13 +692,10 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO with gradient shading ----
     const tw = isFat ? (breathing ? 30 : 28) : (breathing ? 24 : 22);
     const tx = isFat ? (breathing ? 17 : 18) : (breathing ? 20 : 21);
-    rr(bx(tx), by(38), tw, 18, 5, pal.shirt);
-    // 3-tone shirt
-    rr(bx(tx + 2), by(38), tw - 4, 3, 3, shirtLi);
-    rr(bx(tx + 4), by(38), tw - 8, 2, 2, shirtMid);
-    rr(bx(tx), by(38), 2, 18, 2, shirtLi);
-    rr(bx(tx + 3), by(38), 2, 18, 2, shirtMid);
-    rr(bx(tx + tw - 2), by(38), 2, 18, 2, shirtDk);
+    vGradRR(bx(tx), by(38), tw, 18, 5, shirtLi, shirtDk);
+    // Edge highlights
+    s.rect(bx(tx), by(38), 2, 18, shirtLi);
+    s.rect(bx(tx + tw - 2), by(38), 2, 18, shirtDk);
     // Soft top glow
     for (let xx = tx + 2; xx < tx + tw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
     // Collar V-neck
@@ -679,10 +718,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const armLX = isFat ? 14 : 17;
     const armRX = isFat ? 48 : 45;
     elO(bx(armLX + armSwingL), by(45), 4, 7, pal.shirt);
-    el(bx(armLX - 1 + armSwingL), by(43), 2, 3, shirtLi);
-    el(bx(armLX + armSwingL), by(44), 2, 4, shirtMid);
+    hGradEl(bx(armLX + armSwingL), by(45), 4, 7, shirtLi, shirtDk);
     elO(bx(armRX + armSwingR), by(45), 4, 7, pal.shirt);
-    el(bx(armRX + 1 + armSwingR), by(48), 2, 3, shirtDk);
+    hGradEl(bx(armRX + armSwingR), by(45), 4, 7, shirtLi, shirtDk);
     ciO(bx(armLX + armSwingL), by(53), 3, pal.skin);
     s.set(bx(armLX - 1 + armSwingL), by(52), skinLi);
     ciO(bx(armRX + armSwingR), by(53), 3, pal.skin);
@@ -694,8 +732,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const fx = leftUp ? 33 : 23;
       const rx2 = leftUp ? 23 : 33;
       rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
-      rr(lx(fx), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(fx + 3), ly(58), 2, 14, 2, pantsMid);
+      vGradRR(lx(fx), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(fx), ly(58), 2, 14, pantsLi);
       el(lx(fx + 4), ly(74), 6, 4, SHOE);
       s.set(lx(fx + 2), ly(73), shoeLi);
       s.set(lx(fx + 3), ly(73), shoeMid);
@@ -708,11 +746,11 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const legRX = isFat ? 35 : 33;
       const legW = isFat ? 9 : 8;
       rrO(lx(legLX), ly(58), legW, 14, 3, pal.pants);
+      vGradRR(lx(legLX), ly(58), legW, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(legLX), ly(58), 2, 14, pantsLi);
       rrO(lx(legRX), ly(58), legW, 14, 3, pal.pants);
-      rr(lx(legLX), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(legLX) + 3, ly(58), 2, 14, 2, pantsMid);
-      rr(lx(legRX), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(legRX) + 3, ly(58), 2, 14, 2, pantsMid);
+      vGradRR(lx(legRX), ly(58), legW, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(legRX), ly(58), 2, 14, pantsLi);
       el(lx(legLX + 4), ly(74), 6, 4, SHOE);
       el(lx(legRX + 4), ly(74), 6, 4, SHOE);
       s.set(lx(legLX + 2), ly(73), shoeLi);
@@ -726,6 +764,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   } else if (d === "up") {
     // ---- HEAD: all hair ----
     ciO(hx(32), hy(18), 17, pal.hair);
+    rGradCi(hx(32), hy(18), 17, hairLi, hairDk, -4, -4);
     drawHairUp();
     drawHeadFeature("up");
     drawAccessory("up");
@@ -742,12 +781,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO (back) ----
     const utw = isFat ? 28 : 22;
     const utx = isFat ? 18 : 21;
-    rr(bx(utx), by(38), utw, 18, 5, pal.shirt);
-    rr(bx(utx + 2), by(38), utw - 4, 3, 3, shirtLi);
-    rr(bx(utx + 4), by(38), utw - 8, 2, 2, shirtMid);
-    rr(bx(utx), by(38), 2, 18, 2, shirtLi);
-    rr(bx(utx + 2), by(38), 2, 18, 2, shirtMid);
-    rr(bx(utx + utw - 2), by(38), 2, 18, 2, shirtDk);
+    vGradRR(bx(utx), by(38), utw, 18, 5, shirtLi, shirtDk);
+    s.rect(bx(utx), by(38), 2, 18, shirtLi);
+    s.rect(bx(utx + utw - 2), by(38), 2, 18, shirtDk);
     // Soft top glow
     for (let xx = utx + 2; xx < utx + utw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
     // Back seam
@@ -761,10 +797,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const uarmLX = isFat ? 14 : 17;
     const uarmRX = isFat ? 48 : 45;
     elO(bx(uarmLX + armSwingL), by(45), 4, 7, pal.shirt);
+    hGradEl(bx(uarmLX + armSwingL), by(45), 4, 7, shirtLi, shirtDk);
     elO(bx(uarmRX + armSwingR), by(45), 4, 7, pal.shirt);
-    el(bx(uarmLX - 1 + armSwingL), by(43), 2, 3, shirtLi);
-    el(bx(uarmLX + armSwingL), by(44), 2, 4, shirtMid);
-    el(bx(uarmRX + 1 + armSwingR), by(48), 2, 3, shirtDk);
+    hGradEl(bx(uarmRX + armSwingR), by(45), 4, 7, shirtLi, shirtDk);
     ciO(bx(uarmLX + armSwingL), by(53), 3, pal.skin);
     ciO(bx(uarmRX + armSwingR), by(53), 3, pal.skin);
     s.set(bx(uarmRX + 1 + armSwingR), by(54), skinDk);
@@ -775,8 +810,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const fx = leftUp ? 33 : 23;
       const rx2 = leftUp ? 23 : 33;
       rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
-      rr(lx(fx), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(fx + 3), ly(58), 2, 14, 2, pantsMid);
+      vGradRR(lx(fx), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(fx), ly(58), 2, 14, pantsLi);
       el(lx(fx + 4), ly(74), 6, 4, SHOE);
       s.set(lx(fx + 2), ly(73), shoeLi);
       s.set(lx(fx + 3), ly(73), shoeMid);
@@ -786,11 +821,11 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
       rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
+      vGradRR(lx(23), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(23), ly(58), 2, 14, pantsLi);
       rrO(lx(33), ly(58), 8, 14, 3, pal.pants);
-      rr(lx(23), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(23) + 3, ly(58), 2, 14, 2, pantsMid);
-      rr(lx(33), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(33) + 3, ly(58), 2, 14, 2, pantsMid);
+      vGradRR(lx(33), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(33), ly(58), 2, 14, pantsLi);
       el(lx(27), ly(74), 6, 4, SHOE);
       el(lx(37), ly(74), 6, 4, SHOE);
       s.set(lx(25), ly(73), shoeLi);
@@ -804,6 +839,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   } else {
     // ---- RIGHT PROFILE ----
     ciO(hx(32), hy(18), 17, pal.skin);
+    rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(35), hy(24), 11, 9, pal.skin);
     drawHairRight();
     drawHeadFeature("right");
@@ -856,12 +892,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO (profile) ----
     const rtw = isFat ? 22 : 18;
     const rtx = isFat ? 21 : 23;
-    rr(bx(rtx), by(38), rtw, 18, 5, pal.shirt);
-    rr(bx(rtx + 2), by(38), rtw - 4, 3, 3, shirtLi);
-    rr(bx(rtx + 4), by(38), rtw - 8, 2, 2, shirtMid);
-    rr(bx(rtx), by(38), 2, 18, 2, shirtLi);
-    rr(bx(rtx + 2), by(38), 2, 18, 2, shirtMid);
-    rr(bx(rtx + rtw - 2), by(38), 2, 18, 2, shirtDk);
+    vGradRR(bx(rtx), by(38), rtw, 18, 5, shirtLi, shirtDk);
+    s.rect(bx(rtx), by(38), 2, 18, shirtLi);
+    s.rect(bx(rtx + rtw - 2), by(38), 2, 18, shirtDk);
     // Soft top glow
     for (let xx = rtx + 2; xx < rtx + rtw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
     // Collar
@@ -873,8 +906,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- ARM ----
     const rarmX = 35;
     elO(bx(rarmX + armSwing), by(45), 4, 8, pal.shirt);
-    el(bx(rarmX - 1 + armSwing), by(43), 2, 3, shirtLi);
-    el(bx(rarmX + armSwing), by(44), 2, 4, shirtMid);
+    hGradEl(bx(rarmX + armSwing), by(45), 4, 8, shirtLi, shirtDk);
     ciO(bx(rarmX + armSwing), by(54), 3, pal.skin);
     s.set(bx(rarmX - 1 + armSwing), by(53), skinLi);
     s.set(bx(rarmX + 1 + armSwing), by(55), skinDk);
@@ -886,8 +918,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const frontX = leftUp ? 29 : 25;
       const backX = leftUp ? 25 : 29;
       rrO(lx(frontX), ly(58), rlegW, 14, 3, pal.pants);
-      rr(lx(frontX), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(frontX) + 3, ly(58), 2, 14, 2, pantsMid);
+      vGradRR(lx(frontX), ly(58), rlegW, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(frontX), ly(58), 2, 14, pantsLi);
       el(lx(frontX + 4), ly(74), 6, 4, SHOE);
       s.set(lx(frontX + 2), ly(73), shoeLi);
       s.set(lx(frontX + 3), ly(73), shoeMid);
@@ -897,9 +929,10 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       el(lx(backX + 4), ly(72), 6, 4, shoeDk);
     } else {
       rrO(lx(25), ly(58), rlegW, 14, 3, pal.pants);
+      vGradRR(lx(25), ly(58), rlegW, 14, 3, pantsLi, pantsDk);
+      s.rect(lx(25), ly(58), 2, 14, pantsLi);
       rrO(lx(33), ly(58), rlegW, 14, 3, pantsDk);
-      rr(lx(25), ly(58), 2, 14, 2, pantsLi);
-      rr(lx(25) + 3, ly(58), 2, 14, 2, pantsMid);
+      vGradRR(lx(33), ly(58), rlegW, 14, 3, pantsMid, pantsDk);
       el(lx(29), ly(74), 6, 4, SHOE);
       el(lx(37), ly(74), 6, 4, shoeDk);
       s.set(lx(27), ly(73), shoeLi);

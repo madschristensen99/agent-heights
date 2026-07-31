@@ -606,7 +606,10 @@ export class OfficeScene extends Phaser.Scene {
             ? AI_OFFICE_TEXTURES.floorAgentHeights
             : AI_OFFICE_TEXTURES.floorClassic;
           if (this.textures.exists(aiFloorKey)) {
-            this.add.tileSprite(0, 0, map.widthInPixels, map.heightInPixels, aiFloorKey).setDepth(-1).setOrigin(0, 0);
+            const floorSprite = this.add.tileSprite(0, 0, map.widthInPixels, map.heightInPixels, aiFloorKey).setDepth(-1).setOrigin(0, 0);
+            // Texture is 256x256 but each office tile is 64x64 — scale down to match
+            floorSprite.tileScaleX = TILE_PX / 256;
+            floorSprite.tileScaleY = TILE_PX / 256;
           } else {
             const bg = this.add.graphics().setDepth(-1);
             bg.fillStyle(floorColor, 1);
