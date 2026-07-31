@@ -4020,87 +4020,87 @@ export class OfficeScene extends Phaser.Scene {
     padPoly(0.99, 3);
     g.fillPath();
 
-    // Top surface — AI helipad texture if available, else fallback to procedural
-    const helipadKey = AI_OFFICE_TEXTURES.helipad;
-    if (this.textures.exists(helipadKey)) {
-      // Use AI texture — scaled to cover the pad area, clipped to ellipse
-      const padW = padRX * 2;
-      const padH = padRY * 2;
-      const padImg = this.add.image(cx, padCY, helipadKey)
-        .setOrigin(0.5, 0.5)
-        .setDepth(-0.48)
-        .setDisplaySize(padW, padH);
-      // Create elliptical mask to clip the rectangular texture to the pad shape
-      const maskG = this.make.graphics({}, false);
-      maskG.fillStyle(0xffffff, 1);
-      maskG.fillEllipse(cx, padCY, padW * 0.98, padH * 0.98);
-      padImg.setMask(maskG.createGeometryMask());
-    } else {
-      // Fallback: procedural asphalt surface
-      g.fillStyle(0x383840, 1);
-      padPoly(1, 0);
-      g.fillPath();
-      g.fillStyle(0x44444e, 0.5);
-      padPoly(0.7, padRY * 0.3);
-      g.fillPath();
-      g.fillStyle(0x4c4c56, 0.3);
-      for (let i = 0; i < 45; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = Math.random() * 0.82;
-        const p = padPoint(a, r, r);
-        g.fillRect(p.x, p.y, 2, 2);
-      }
-      // Safety rings + H marker
-      g.lineStyle(3.5, 0xf0f0f0, 0.92);
-      const ringSegs = 48;
+    // Top surface — procedural asphalt that follows the skewed ellipse
+    g.fillStyle(0x383840, 1);
+    padPoly(1, 0);
+    g.fillPath();
+
+    // Surface gradient — lighter near the front (closer to viewer)
+    g.fillStyle(0x44444e, 0.5);
+    padPoly(0.7, padRY * 0.3);
+    g.fillPath();
+
+    // Texture speckles
+    g.fillStyle(0x4c4c56, 0.3);
+    for (let i = 0; i < 45; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 0.82;
+      const p = padPoint(a, r, r);
+      g.fillRect(p.x, p.y, 2, 2);
+    }
+
+    // ── PAD MARKINGS (all follow the skewed ellipse) ──
+
+    // Outer safety ring — solid white, thick
+    g.lineStyle(3.5, 0xf0f0f0, 0.92);
+    const ringSegs = 48;
+    g.beginPath();
+    for (let i = 0; i <= ringSegs; i++) {
+      const p = padPoint((i / ringSegs) * Math.PI * 2, (padRX - 12) / padRX, (padRY - 8) / padRY);
+      if (i === 0) g.moveTo(p.x, p.y);
+      else g.lineTo(p.x, p.y);
+    }
+    g.closePath();
+    g.strokePath();
+
+    // Dashed inner ring
+    const dashCount = 32;
+    g.lineStyle(2.5, 0xf0f0f0, 0.6);
+    for (let i = 0; i < dashCount; i++) {
+      if (i % 2 !== 0) continue;
+      const a0 = (i / dashCount) * Math.PI * 2;
+      const a1 = ((i + 1) / dashCount) * Math.PI * 2;
+      const segs = 5;
       g.beginPath();
-      for (let i = 0; i <= ringSegs; i++) {
-        const p = padPoint((i / ringSegs) * Math.PI * 2, (padRX - 12) / padRX, (padRY - 8) / padRY);
-        if (i === 0) g.moveTo(p.x, p.y);
+      for (let s = 0; s <= segs; s++) {
+        const a = a0 + (a1 - a0) * (s / segs);
+        const p = padPoint(a, (padRX - 28) / padRX, (padRY - 12) / padRY);
+        if (s === 0) g.moveTo(p.x, p.y);
         else g.lineTo(p.x, p.y);
       }
-      g.closePath();
       g.strokePath();
-      const dashCount = 32;
-      g.lineStyle(2.5, 0xf0f0f0, 0.6);
-      for (let i = 0; i < dashCount; i++) {
-        if (i % 2 !== 0) continue;
-        const a0 = (i / dashCount) * Math.PI * 2;
-        const a1 = ((i + 1) / dashCount) * Math.PI * 2;
-        const segs = 5;
-        g.beginPath();
-        for (let s = 0; s <= segs; s++) {
-          const a = a0 + (a1 - a0) * (s / segs);
-          const p = padPoint(a, (padRX - 28) / padRX, (padRY - 12) / padRY);
-          if (s === 0) g.moveTo(p.x, p.y);
-          else g.lineTo(p.x, p.y);
-        }
-        g.strokePath();
-      }
-      const hW = 84, hH = 24, hT = 12, hSkew = 9;
-      g.fillStyle(0xf0f0f0, 1);
-      g.beginPath();
-      g.moveTo(cx - hW / 2 - hSkew, padCY - hH / 2);
-      g.lineTo(cx - hW / 2 + hT - hSkew, padCY - hH / 2);
-      g.lineTo(cx - hW / 2 + hT + hSkew, padCY + hH / 2);
-      g.lineTo(cx - hW / 2 + hSkew, padCY + hH / 2);
-      g.closePath();
-      g.fillPath();
-      g.beginPath();
-      g.moveTo(cx + hW / 2 - hT - hSkew, padCY - hH / 2);
-      g.lineTo(cx + hW / 2 - hSkew, padCY - hH / 2);
-      g.lineTo(cx + hW / 2 + hSkew, padCY + hH / 2);
-      g.lineTo(cx + hW / 2 - hT + hSkew, padCY + hH / 2);
-      g.closePath();
-      g.fillPath();
-      g.beginPath();
-      g.moveTo(cx - hW / 2 - hSkew, padCY - hT / 2);
-      g.lineTo(cx + hW / 2 - hSkew, padCY - hT / 2);
-      g.lineTo(cx + hW / 2 + hSkew, padCY + hT / 2);
-      g.lineTo(cx - hW / 2 + hSkew, padCY + hT / 2);
-      g.closePath();
-      g.fillPath();
     }
+
+    // H marker — foreshortened and skewed to lie flat on the angled pad
+    const hW = 84;
+    const hH = 24;
+    const hT = 12;
+    const hSkew = 9;
+    g.fillStyle(0xf0f0f0, 1);
+    // left leg (skewed)
+    g.beginPath();
+    g.moveTo(cx - hW / 2 - hSkew, padCY - hH / 2);
+    g.lineTo(cx - hW / 2 + hT - hSkew, padCY - hH / 2);
+    g.lineTo(cx - hW / 2 + hT + hSkew, padCY + hH / 2);
+    g.lineTo(cx - hW / 2 + hSkew, padCY + hH / 2);
+    g.closePath();
+    g.fillPath();
+    // right leg (skewed)
+    g.beginPath();
+    g.moveTo(cx + hW / 2 - hT - hSkew, padCY - hH / 2);
+    g.lineTo(cx + hW / 2 - hSkew, padCY - hH / 2);
+    g.lineTo(cx + hW / 2 + hSkew, padCY + hH / 2);
+    g.lineTo(cx + hW / 2 - hT + hSkew, padCY + hH / 2);
+    g.closePath();
+    g.fillPath();
+    // crossbar (skewed parallelogram)
+    g.beginPath();
+    g.moveTo(cx - hW / 2 - hSkew, padCY - hT / 2);
+    g.lineTo(cx + hW / 2 - hSkew, padCY - hT / 2);
+    g.lineTo(cx + hW / 2 + hSkew, padCY + hT / 2);
+    g.lineTo(cx - hW / 2 + hSkew, padCY + hT / 2);
+    g.closePath();
+    g.fillPath();
 
     // ── CORNER APPROACH LIGHTS ── glowing yellow with halo
     for (const c of colAngles) {
