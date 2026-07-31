@@ -642,14 +642,8 @@ export class OfficeScene extends Phaser.Scene {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
                 if (!wt) continue;
-                const ws = this.add.image(x * TILE_PX, y * TILE_PX, aiWallKey).setOrigin(0, 0).setDepth(0.9);
+                const ws = this.add.image(x * TILE_PX, y * TILE_PX, aiWallKey).setOrigin(0, 0).setDepth(1.1);
                 ws.setDisplaySize(TILE_PX, TILE_PX);
-                // Tint based on tile position for subtle variation
-                const hash = (x * 2246822519 + y * 3266489917) | 0;
-                const variant = Math.abs(hash) % 4;
-                if (variant === 0) ws.setTint(0xe8e8e8);
-                else if (variant === 1) ws.setTint(0xd0d0d0);
-                else if (variant === 2) ws.setTint(0xc0c0c0);
               }
             }
           }

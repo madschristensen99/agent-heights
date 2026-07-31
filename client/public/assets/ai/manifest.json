@@ -1005,66 +1005,6 @@
     "hasSvg": false
   },
   {
-    "key": "office_wall_0",
-    "category": "tiles",
-    "model": "patina-material",
-    "files": {
-      "basecolor": "tiles/office_wall_0_basecolor.webp",
-      "normal": "tiles/office_wall_0_normal.webp",
-      "roughness": "tiles/office_wall_0_roughness.webp",
-      "metalness": "tiles/office_wall_0_metalness.webp",
-      "height": "tiles/office_wall_0_height.webp"
-    },
-    "size": 256,
-    "hasPBR": true,
-    "hasSvg": false
-  },
-  {
-    "key": "office_wall_1",
-    "category": "tiles",
-    "model": "patina-material",
-    "files": {
-      "basecolor": "tiles/office_wall_1_basecolor.webp",
-      "normal": "tiles/office_wall_1_normal.webp",
-      "roughness": "tiles/office_wall_1_roughness.webp",
-      "metalness": "tiles/office_wall_1_metalness.webp",
-      "height": "tiles/office_wall_1_height.webp"
-    },
-    "size": 256,
-    "hasPBR": true,
-    "hasSvg": false
-  },
-  {
-    "key": "office_wall_2",
-    "category": "tiles",
-    "model": "patina-material",
-    "files": {
-      "basecolor": "tiles/office_wall_2_basecolor.webp",
-      "normal": "tiles/office_wall_2_normal.webp",
-      "roughness": "tiles/office_wall_2_roughness.webp",
-      "metalness": "tiles/office_wall_2_metalness.webp",
-      "height": "tiles/office_wall_2_height.webp"
-    },
-    "size": 256,
-    "hasPBR": true,
-    "hasSvg": false
-  },
-  {
-    "key": "office_wall_3",
-    "category": "tiles",
-    "model": "patina-material",
-    "files": {
-      "basecolor": "tiles/office_wall_3_basecolor.webp",
-      "normal": "tiles/office_wall_3_normal.webp",
-      "roughness": "tiles/office_wall_3_roughness.webp",
-      "metalness": "tiles/office_wall_3_metalness.webp",
-      "height": "tiles/office_wall_3_height.webp"
-    },
-    "size": 256,
-    "hasPBR": true,
-    "hasSvg": false
-  },
-  {
     "key": "kitchen_counter",
     "category": "tiles",
     "model": "patina-material",
@@ -1881,6 +1821,66 @@
       "height": "tiles/char_leather_height.webp"
     },
     "size": 32,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_0_basecolor.webp",
+      "normal": "tiles/office_wall_0_normal.webp",
+      "roughness": "tiles/office_wall_0_roughness.webp",
+      "metalness": "tiles/office_wall_0_metalness.webp",
+      "height": "tiles/office_wall_0_height.webp"
+    },
+    "size": 256,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_1_basecolor.webp",
+      "normal": "tiles/office_wall_1_normal.webp",
+      "roughness": "tiles/office_wall_1_roughness.webp",
+      "metalness": "tiles/office_wall_1_metalness.webp",
+      "height": "tiles/office_wall_1_height.webp"
+    },
+    "size": 256,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_2_basecolor.webp",
+      "normal": "tiles/office_wall_2_normal.webp",
+      "roughness": "tiles/office_wall_2_roughness.webp",
+      "metalness": "tiles/office_wall_2_metalness.webp",
+      "height": "tiles/office_wall_2_height.webp"
+    },
+    "size": 256,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_3_basecolor.webp",
+      "normal": "tiles/office_wall_3_normal.webp",
+      "roughness": "tiles/office_wall_3_roughness.webp",
+      "metalness": "tiles/office_wall_3_metalness.webp",
+      "height": "tiles/office_wall_3_height.webp"
+    },
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   }
