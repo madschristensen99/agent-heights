@@ -1133,5 +1133,38 @@
     "size": 128,
     "hasPBR": false,
     "hasSvg": false
+  },
+  {
+    "key": "flower",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/flower.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "bush",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/bush.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "tree",
+    "category": "objects",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "objects/tree.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
   }
 ]

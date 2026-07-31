@@ -180,6 +180,9 @@ const ASSETS: AssetDef[] = [
   object("mystic_tree", "top-down view of a dark gnarled mystical tree, twisted black branches, dark purple-black canopy with glowing orange eyes embedded in trunk, eerie fantasy game sprite, isolated on white background", 2003, 128),
   object("big_rock", "top-down view of a large granite boulder, gray stone with mineral grain texture, moss patches, cracks and fissures, realistic rock texture, game sprite, isolated on white background", 2004, 128),
   object("crystal", "top-down view of a large glowing blue crystal formation, faceted gemstone with light refraction, crystalline shards radiating outward, magical glow, fantasy game sprite, isolated on white background", 2005, 128),
+  object("tree", "top-down view of a small oak tree, round green canopy seen from above, visible leaf clusters with depth shading, thin brown trunk at center, realistic texture, game sprite, isolated on white background", 2006, 128),
+  object("flower", "top-down view of a cluster of wildflowers, mixed colors red yellow and white, green leaves around base, realistic texture, game sprite, isolated on white background", 2007, 128),
+  object("bush", "top-down view of a dense green bush, rounded shrub with visible individual leaves, slight variation in green tones, realistic texture, game sprite, isolated on white background", 2008, 128),
 
 
   // ------------------------------------------------------- Tier 2: Office tiles

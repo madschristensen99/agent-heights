@@ -2059,8 +2059,25 @@ export class WorldLayer {
             const frame = tileToFrame(tile, variant);
 
             // Draw base tile — use AI texture if available, else spritesheet
+            // For object tiles (tree, flower, bush, etc.) with AI overlays, draw grass as base
+            const aiObjKeyForBase = AI_OBJECT_TEXTURES[tile];
             const aiTextures = AI_TILE_TEXTURES[tile];
-            if (aiTextures && this.scene.textures.exists(aiTextures[variant % aiTextures.length])) {
+            if (aiObjKeyForBase && this.scene.textures.exists(aiObjKeyForBase)) {
+              // Draw grass base under AI object sprite
+              const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
+              if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
+                drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
+              } else {
+                const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
+                if (grassFrame) {
+                  ctx.drawImage(
+                    grassFrame.source.image as CanvasImageSource,
+                    grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
+                    px, py, ssTilePx, ssTilePx,
+                  );
+                }
+              }
+            } else if (aiTextures && this.scene.textures.exists(aiTextures[variant % aiTextures.length])) {
               drawTexToCanvas(aiTextures[variant % aiTextures.length], px, py);
             } else {
               const fr = worldTilesTex.get(frame);

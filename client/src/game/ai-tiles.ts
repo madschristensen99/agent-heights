@@ -44,6 +44,9 @@ export const AI_OBJECT_TEXTURES: Record<number, string> = {
   [TILE.MYSTIC_TREE]: "ai-obj-mystic_tree",
   [TILE.BIG_ROCK]: "ai-obj-big_rock",
   [TILE.CRYSTAL]: "ai-obj-crystal",
+  [TILE.TREE]: "ai-obj-tree",
+  [TILE.FLOWER]: "ai-obj-flower",
+  [TILE.BUSH]: "ai-obj-bush",
 };
 
 /** Object asset keys (without prefix) for loading from objects/ directory. */
