@@ -378,36 +378,78 @@ export class HUDSystem {
     let container = this.hints.get(key);
     if (!container) {
       const bg = this.scene.add.graphics().setDepth(99);
+      const keyBg = this.scene.add.graphics().setDepth(100);
+      const keyLabel = this.scene.add
+        .text(0, 0, "E", {
+          fontFamily: "'M PLUS Rounded 1c', sans-serif",
+          fontSize: "13px",
+          fontStyle: "bold",
+          color: "#ffffff",
+        })
+        .setResolution(4)
+        .setOrigin(0.5, 0.5)
+        .setScale(0.7)
+        .setDepth(100);
       const label = this.scene.add
         .text(0, 0, "", {
           fontFamily: "'M PLUS Rounded 1c', sans-serif",
-          fontSize: "14px",
-          color: "#1d2126",
-          stroke: "#f4f6f8",
+          fontSize: "16px",
+          color: "#ffffff",
+          stroke: "#0d1018",
           strokeThickness: 3,
         })
-        .setResolution(3)
-        .setOrigin(0.5, 1)
-        .setScale(0.8)
+        .setResolution(4)
+        .setOrigin(0.5, 0.5)
+        .setScale(0.7)
         .setDepth(100);
 
-      container = this.scene.add.container(0, 0, [bg, label]).setDepth(99);
+      container = this.scene.add.container(0, 0, [bg, keyBg, keyLabel, label]).setDepth(99);
       this.hints.set(key, container);
     }
 
     const bg = container.getAt(0) as Phaser.GameObjects.Graphics;
-    const label = container.getAt(1) as Phaser.GameObjects.Text;
-    label.setText(text);
-    container.setPosition(x, y).setVisible(true);
+    const keyBg = container.getAt(1) as Phaser.GameObjects.Graphics;
+    const keyLabel = container.getAt(2) as Phaser.GameObjects.Text;
+    const label = container.getAt(3) as Phaser.GameObjects.Text;
 
-    // draw tooltip background
+    // Parse key prefix: "E: ..." or "TAP ..."
+    const match = text.match(/^(E:\s*|TAP\s+)/);
+    const hasKey = !!match;
+    const keyStr = match ? match[0].trim().replace(/:$/, "") : "";
+    const actionText = hasKey ? text.slice(match![0].length) : text;
+
+    label.setText(actionText);
+    keyLabel.setVisible(hasKey);
+
+    const labelW = label.displayWidth;
+    const keyW = hasKey ? (keyStr === "E" ? 22 : 38) : 0;
+    const gap = hasKey ? 8 : 0;
+    const padding = 12;
+    const totalW = keyW + gap + labelW + padding * 2;
+    const h = 24;
+    const r = 5;
+
     bg.clear();
-    const w = label.width * 0.8 + 16;
-    const h = 20;
-    bg.fillStyle(0x000000, 0.5);
-    bg.fillRoundedRect(-w / 2, -h, w, h, 4);
-    bg.lineStyle(1, 0xffffff, 0.15);
-    bg.strokeRoundedRect(-w / 2, -h, w, h, 4);
+    bg.fillStyle(0x0d1018, 0.78);
+    bg.fillRoundedRect(-totalW / 2, -h, totalW, h, r);
+    bg.lineStyle(1, 0xffffff, 0.18);
+    bg.strokeRoundedRect(-totalW / 2, -h, totalW, h, r);
+
+    keyBg.clear();
+    if (hasKey) {
+      const badgeX = -totalW / 2 + padding;
+      keyBg.fillStyle(0x3a8cd4, 0.9);
+      keyBg.fillRoundedRect(badgeX, -h + 5, keyW, h - 10, 3);
+      keyLabel.setText(keyStr === "E" ? "E" : "TAP");
+      keyLabel.setPosition(badgeX + keyW / 2, -h / 2);
+    }
+
+    label.setPosition(
+      -totalW / 2 + padding + keyW + gap + labelW / 2,
+      -h / 2,
+    );
+
+    container.setPosition(x, y).setVisible(true);
   }
 
   hideHint(key: string): void {

@@ -4,7 +4,7 @@ import type { FiredAgent } from "../../../shared/types";
 import type { Store } from "../store";
 import type { Net } from "../net";
 import { isTouchDevice } from "../touch";
-import { TILE_PX, type Dir } from "./agent";
+import { TILE_PX, createHintTag, type HintTag, type Dir } from "./agent";
 import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
@@ -1256,7 +1256,7 @@ export class WorldLayer {
   private pendingChunks = new Map<string, Chunk>();
   private workerRequested = new Set<string>();
 
-  private ghostDialog!: Phaser.GameObjects.Text;
+  private ghostDialog!: HintTag;
   private recruitedHint!: Phaser.GameObjects.Text;
   private damageFlash!: Phaser.GameObjects.Rectangle;
   creatures: Creature[] = [];
@@ -1277,7 +1277,7 @@ export class WorldLayer {
   private golfBallVx = 0;
   private golfBallVy = 0;
   private golfBallActive = false;
-  private golfHint!: Phaser.GameObjects.Text;
+  private golfHint!: HintTag;
   private golfPowerBar!: Phaser.GameObjects.Graphics;
   private golfPower = 0; // 0..1 oscillating
   private golfPowerDir = 1; // direction of oscillation
@@ -1294,7 +1294,7 @@ export class WorldLayer {
   private tennisBallVx = 0;
   private tennisBallVy = 0;
   private tennisBallActive = false;
-  private tennisHint!: Phaser.GameObjects.Text;
+  private tennisHint!: HintTag;
   private tennisPowerBar!: Phaser.GameObjects.Graphics;
   private tennisPower = 0;
   private tennisPowerDir = 1;
@@ -1306,7 +1306,7 @@ export class WorldLayer {
 
   // --- axe / leprechaun / big tree state ---
   private hasAxe = false;
-  private axeHint!: Phaser.GameObjects.Text;
+  private axeHint!: HintTag;
   private bigTreesChopped = 0;
 
   // --- weapon / combat state ---
@@ -1322,7 +1322,7 @@ export class WorldLayer {
   // --- nemesis registry ---
   nemesis = new NemesisRegistry();
   private capturedRoster: NemesisEntry[] = [];
-  private captureHint!: Phaser.GameObjects.Text;
+  private captureHint!: HintTag;
   private deployedAllies: DeployedAlly[] = [];
   private lastNemesisSave = 0;
   private nemesisPanel: HTMLDivElement | null = null;
@@ -1337,7 +1337,7 @@ export class WorldLayer {
 
   // --- flower picking state ---
   private flowers = 0;
-  private flowerHint!: Phaser.GameObjects.Text;
+  private flowerHint!: HintTag;
 
   /** Current player HP (read-only access for achievement checks). */
   get playerHp(): number { return this.hp; }
@@ -1365,21 +1365,7 @@ export class WorldLayer {
     // Load persisted nemesis/roster data
     this.loadNemesis();
 
-    this.ghostDialog = scene.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "14px",
-        color: "#ccccdd",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-        backgroundColor: "#1a1a22",
-        padding: { x: 8, y: 6 },
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.8)
-      .setDepth(400)
-      .setVisible(false);
+    this.ghostDialog = createHintTag(scene);
 
     this.recruitedHint = scene.add
       .text(0, 0, "", {
@@ -1403,98 +1389,28 @@ export class WorldLayer {
       .setScrollFactor(0);
 
     // golf interaction hint
-    this.golfHint = scene.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "14px",
-        color: "#ffffff",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-        backgroundColor: "#1a1a22",
-        padding: { x: 8, y: 6 },
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.8)
-      .setDepth(400)
-      .setVisible(false);
+    this.golfHint = createHintTag(scene);
 
     // golf power bar — oscillating charge bar above player's head
     this.golfPowerBar = scene.add.graphics().setDepth(410).setVisible(false);
 
     // tennis interaction hint
-    this.tennisHint = scene.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "14px",
-        color: "#ffffff",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-        backgroundColor: "#1a1a22",
-        padding: { x: 8, y: 6 },
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.8)
-      .setDepth(400)
-      .setVisible(false);
+    this.tennisHint = createHintTag(scene);
 
     // tennis power bar
     this.tennisPowerBar = scene.add.graphics().setDepth(410).setVisible(false);
 
     // flower picking hint
-    this.flowerHint = scene.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "14px",
-        color: "#ffffff",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-        backgroundColor: "#1a1a22",
-        padding: { x: 8, y: 6 },
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.8)
-      .setDepth(400)
-      .setVisible(false);
+    this.flowerHint = createHintTag(scene);
 
     // axe / leprechaun / big tree interaction hint
-    this.axeHint = scene.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "14px",
-        color: "#ffffff",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-        backgroundColor: "#1a1a22",
-        padding: { x: 8, y: 6 },
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.8)
-      .setDepth(400)
-      .setVisible(false);
+    this.axeHint = createHintTag(scene);
 
     // weapon cooldown bar — shows above player while on cooldown
     this.weaponCooldownBar = scene.add.graphics().setDepth(410).setVisible(false);
 
     // capture hint — shows above weakened creatures
-    this.captureHint = scene.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "14px",
-        color: "#44ff88",
-        stroke: "#1a1a22",
-        strokeThickness: 3,
-        backgroundColor: "#1a1a22",
-        padding: { x: 8, y: 6 },
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.8)
-      .setDepth(400)
-      .setVisible(false);
+    this.captureHint = createHintTag(scene);
 
     // Spawn the background worker for chunk generation
     try {

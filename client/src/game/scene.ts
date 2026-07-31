@@ -6601,15 +6601,15 @@ export class OfficeScene extends Phaser.Scene {
         const nameBg = this.add.graphics().setAlpha(0);
         const label = this.add
           .text(0, 0, p.name.toUpperCase(), {
-            fontFamily: "'M Plus Rounded 1c', sans-serif",
-            fontSize: "16px",
-            color: "#1d2126",
-            stroke: "#f4f6f8",
-            strokeThickness: 3,
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            fontSize: "18px",
+            color: "#ffffff",
+            stroke: "#0d1018",
+            strokeThickness: 4,
           })
           .setResolution(4)
           .setOrigin(0.5, 1)
-          .setScale(0.7)
+          .setScale(0.75)
           .setAlpha(0)
           .setDepth(10 + p.y + 0.1);
         entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null };
@@ -6679,6 +6679,19 @@ export class OfficeScene extends Phaser.Scene {
         .clear()
         .setPosition(target.x, target.y - 108)
         .setDepth(10 + target.y);
+      {
+        const w = entry.label.displayWidth + 22;
+        const h = 22;
+        const r = 5;
+        const x = -w / 2;
+        const y = -18;
+        entry.nameBg.fillStyle(0x0d1018, 0.78);
+        entry.nameBg.fillRoundedRect(x, y, w, h, r);
+        entry.nameBg.fillStyle(0x4cb866, 0.85);
+        entry.nameBg.fillRect(x + 2, y + 3, 3, h - 6);
+        entry.nameBg.lineStyle(1, 0xffffff, 0.18);
+        entry.nameBg.strokeRoundedRect(x, y, w, h, r);
+      }
 
       // Update speaking indicator position
       const speakIcon = this.speakingIcons.get(userId);
