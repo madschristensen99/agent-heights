@@ -104,6 +104,105 @@ function createNameTag(scene: Phaser.Scene, name: string, status: AgentInfo["sta
   };
 }
 
+// --- Shared interaction hint factory ---
+
+export interface HintTag {
+  /** Set the label text (parses "E:" / "TAP" prefix into a key badge). */
+  setText: (text: string) => HintTag;
+  /** Set the world position. */
+  setPosition: (x: number, y: number) => HintTag;
+  /** Toggle visibility. */
+  setVisible: (visible: boolean) => HintTag;
+}
+
+/** Create a polished interaction hint with dark bg, key badge, and white text. */
+export function createHintTag(scene: Phaser.Scene): HintTag {
+  const label = scene.add
+    .text(0, 0, "", {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "16px",
+      color: "#ffffff",
+      stroke: "#0d1018",
+      strokeThickness: 3,
+    })
+    .setResolution(4)
+    .setOrigin(0.5, 0.5)
+    .setScale(0.7);
+
+  const keyLabel = scene.add
+    .text(0, 0, "E", {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "13px",
+      fontStyle: "bold",
+      color: "#ffffff",
+    })
+    .setResolution(4)
+    .setOrigin(0.5, 0.5)
+    .setScale(0.7);
+
+  const bg = scene.add.graphics();
+  const keyBg = scene.add.graphics();
+
+  const container = scene.add
+    .container(0, 0, [bg, keyBg, keyLabel, label])
+    .setDepth(100)
+    .setVisible(false);
+
+  function redraw(text: string): void {
+    // Parse key prefix: "E: ..." or "TAP ..."
+    const match = text.match(/^(E:\s*|TAP\s+)/);
+    const hasKey = !!match;
+    const keyStr = match ? match[0].trim().replace(/:$/, "") : "";
+    const actionText = hasKey ? text.slice(match![0].length) : text;
+
+    label.setText(actionText);
+    keyLabel.setVisible(hasKey);
+
+    const labelW = label.displayWidth;
+    const keyW = hasKey ? (keyStr === "E" ? 22 : 38) : 0;
+    const gap = hasKey ? 8 : 0;
+    const padding = 12;
+    const totalW = keyW + gap + labelW + padding * 2;
+    const h = 24;
+    const r = 5;
+
+    bg.clear();
+    bg.fillStyle(0x0d1018, 0.78);
+    bg.fillRoundedRect(-totalW / 2, -h, totalW, h, r);
+    bg.lineStyle(1, 0xffffff, 0.18);
+    bg.strokeRoundedRect(-totalW / 2, -h, totalW, h, r);
+
+    keyBg.clear();
+    if (hasKey) {
+      const badgeX = -totalW / 2 + padding;
+      keyBg.fillStyle(0x3a8cd4, 0.9);
+      keyBg.fillRoundedRect(badgeX, -h + 5, keyW, h - 10, 3);
+      keyLabel.setText(keyStr === "E" ? "E" : "TAP");
+      keyLabel.setPosition(badgeX + keyW / 2, -h / 2);
+    }
+
+    label.setPosition(
+      -totalW / 2 + padding + keyW + gap + labelW / 2,
+      -h / 2,
+    );
+  }
+
+  return {
+    setText(text: string) {
+      redraw(text);
+      return this;
+    },
+    setPosition(x: number, y: number) {
+      container.setPosition(x, y);
+      return this;
+    },
+    setVisible(visible: boolean) {
+      container.setVisible(visible);
+      return this;
+    },
+  };
+}
+
 /** A hired agent walking around the office, driven by server state. */
 export class AgentNPC {
   container: Phaser.GameObjects.Container;
