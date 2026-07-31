@@ -1906,7 +1906,7 @@
     "files": {
       "sprite": "furniture/helicopter_top.png"
     },
-    "size": 256,
+    "size": 1024,
     "hasPBR": false,
     "hasSvg": false
   }
