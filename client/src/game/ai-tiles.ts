@@ -32,6 +32,7 @@ export const AI_OFFICE_TEXTURES = {
   wallAgentHeights: "ai-office_wall_1",
   wallBeige: "ai-office_wall_2",
   wallBlue: "ai-office_wall_3",
+  helipad: "ai-office_helipad",
   kitchenCounter: "ai-kitchen_counter",
 } as const;
 
@@ -94,6 +95,7 @@ export const AI_FURNITURE_KEYS: string[] = [
   ...Object.values(AI_FURNITURE_CHAIRS),
   ...Object.values(AI_FURNITURE_MONITORS),
   ...Object.values(AI_FURNITURE_MONITORS_SIDE),
+  "helicopter_top",
 ].map((k) => k.replace(/^ai-fur-/, ""));
 
 /**

@@ -237,6 +237,7 @@ const ASSETS: AssetDef[] = [
   tile("office_wall_2", "beige painted wall with subtle texture, faint wainscoting lines, office interior, top-down, tileable", 1107, 2),
   tile("office_wall_3", "single large glass window pane filling entire frame, blue tinted glass, subtle reflection, metal frame around edges only, top-down view, tileable, seamless", 1108, 2),
   tile("kitchen_counter", "granite countertop, black speckled, top-down", 1109, 2),
+  tile("office_helipad", "top-down helicopter landing pad, dark asphalt surface with large white H marker in center, white safety circle ring, yellow corner approach lights, weathered concrete, tileable", 1110, 2),
 
   // ------------------------------------------------------- Tier 3: Office furniture (Nano Banana 2 + Bria RMBG)
 
@@ -272,6 +273,7 @@ const ASSETS: AssetDef[] = [
   furniture("desk_monitor_black", "top-down view of a modern slim-bezel computer monitor seen from front, completely black powered-off screen, stand base and neck, realistic office equipment, game sprite, isolated on white background", 3030),
   furniture("desk_monitor_side_off", "side view of a thin computer monitor profile, dark screen edge, stand base and neck, power LED, realistic office equipment, game sprite, isolated on white background", 3031),
   furniture("desk_monitor_side_lit", "side view of a thin computer monitor profile with glowing blue screen edge, stand base and neck, power LED, realistic office equipment, game sprite, isolated on white background", 3032),
+  furniture("helicopter_top", "top-down view of a green and yellow helicopter seen from directly above, spinning rotor blades blurred as a disc, landing skids visible, cockpit windshield, tail boom extending to the right, realistic aircraft, game sprite, isolated on white background", 3033),
 
   // ------------------------------------------------------- Tier 4: World items & props (Nano Banana 2 + Bria RMBG)
 

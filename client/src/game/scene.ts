@@ -4020,88 +4020,84 @@ export class OfficeScene extends Phaser.Scene {
     padPoly(0.99, 3);
     g.fillPath();
 
-    // Top asphalt surface
-    g.fillStyle(0x383840, 1);
-    padPoly(1, 0);
-    g.fillPath();
-
-    // Surface gradient — lighter near the front (closer to viewer)
-    g.fillStyle(0x44444e, 0.5);
-    padPoly(0.7, padRY * 0.3);
-    g.fillPath();
-
-    // Texture speckles
-    g.fillStyle(0x4c4c56, 0.3);
-    for (let i = 0; i < 45; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * 0.82;
-      const p = padPoint(a, r, r);
-      g.fillRect(p.x, p.y, 2, 2);
-    }
-
-    // ── PAD MARKINGS (all follow the skewed ellipse) ──
-
-    // Outer safety ring — solid white, thick
-    g.lineStyle(3.5, 0xf0f0f0, 0.92);
-    const ringSegs = 48;
-    g.beginPath();
-    for (let i = 0; i <= ringSegs; i++) {
-      const p = padPoint((i / ringSegs) * Math.PI * 2, (padRX - 12) / padRX, (padRY - 8) / padRY);
-      if (i === 0) g.moveTo(p.x, p.y);
-      else g.lineTo(p.x, p.y);
-    }
-    g.closePath();
-    g.strokePath();
-
-    // Dashed inner ring
-    const dashCount = 32;
-    g.lineStyle(2.5, 0xf0f0f0, 0.6);
-    for (let i = 0; i < dashCount; i++) {
-      if (i % 2 !== 0) continue;
-      const a0 = (i / dashCount) * Math.PI * 2;
-      const a1 = ((i + 1) / dashCount) * Math.PI * 2;
-      const segs = 5;
+    // Top surface — AI helipad texture if available, else fallback to procedural
+    const helipadKey = AI_OFFICE_TEXTURES.helipad;
+    if (this.textures.exists(helipadKey)) {
+      // Use AI texture — scaled to cover the pad area
+      const padW = padRX * 2;
+      const padH = padRY * 2;
+      const padImg = this.add.image(cx, padCY, helipadKey)
+        .setOrigin(0.5, 0.5)
+        .setDepth(-0.45)
+        .setDisplaySize(padW, padH);
+      // Skew the texture slightly to match the 3/4 perspective
+      padImg.setAngle(0);
+    } else {
+      // Fallback: procedural asphalt surface
+      g.fillStyle(0x383840, 1);
+      padPoly(1, 0);
+      g.fillPath();
+      g.fillStyle(0x44444e, 0.5);
+      padPoly(0.7, padRY * 0.3);
+      g.fillPath();
+      g.fillStyle(0x4c4c56, 0.3);
+      for (let i = 0; i < 45; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 0.82;
+        const p = padPoint(a, r, r);
+        g.fillRect(p.x, p.y, 2, 2);
+      }
+      // Safety rings + H marker
+      g.lineStyle(3.5, 0xf0f0f0, 0.92);
+      const ringSegs = 48;
       g.beginPath();
-      for (let s = 0; s <= segs; s++) {
-        const a = a0 + (a1 - a0) * (s / segs);
-        const p = padPoint(a, (padRX - 28) / padRX, (padRY - 12) / padRY);
-        if (s === 0) g.moveTo(p.x, p.y);
+      for (let i = 0; i <= ringSegs; i++) {
+        const p = padPoint((i / ringSegs) * Math.PI * 2, (padRX - 12) / padRX, (padRY - 8) / padRY);
+        if (i === 0) g.moveTo(p.x, p.y);
         else g.lineTo(p.x, p.y);
       }
+      g.closePath();
       g.strokePath();
+      const dashCount = 32;
+      g.lineStyle(2.5, 0xf0f0f0, 0.6);
+      for (let i = 0; i < dashCount; i++) {
+        if (i % 2 !== 0) continue;
+        const a0 = (i / dashCount) * Math.PI * 2;
+        const a1 = ((i + 1) / dashCount) * Math.PI * 2;
+        const segs = 5;
+        g.beginPath();
+        for (let s = 0; s <= segs; s++) {
+          const a = a0 + (a1 - a0) * (s / segs);
+          const p = padPoint(a, (padRX - 28) / padRX, (padRY - 12) / padRY);
+          if (s === 0) g.moveTo(p.x, p.y);
+          else g.lineTo(p.x, p.y);
+        }
+        g.strokePath();
+      }
+      const hW = 84, hH = 24, hT = 12, hSkew = 9;
+      g.fillStyle(0xf0f0f0, 1);
+      g.beginPath();
+      g.moveTo(cx - hW / 2 - hSkew, padCY - hH / 2);
+      g.lineTo(cx - hW / 2 + hT - hSkew, padCY - hH / 2);
+      g.lineTo(cx - hW / 2 + hT + hSkew, padCY + hH / 2);
+      g.lineTo(cx - hW / 2 + hSkew, padCY + hH / 2);
+      g.closePath();
+      g.fillPath();
+      g.beginPath();
+      g.moveTo(cx + hW / 2 - hT - hSkew, padCY - hH / 2);
+      g.lineTo(cx + hW / 2 - hSkew, padCY - hH / 2);
+      g.lineTo(cx + hW / 2 + hSkew, padCY + hH / 2);
+      g.lineTo(cx + hW / 2 - hT + hSkew, padCY + hH / 2);
+      g.closePath();
+      g.fillPath();
+      g.beginPath();
+      g.moveTo(cx - hW / 2 - hSkew, padCY - hT / 2);
+      g.lineTo(cx + hW / 2 - hSkew, padCY - hT / 2);
+      g.lineTo(cx + hW / 2 + hSkew, padCY + hT / 2);
+      g.lineTo(cx - hW / 2 + hSkew, padCY + hT / 2);
+      g.closePath();
+      g.fillPath();
     }
-
-    // H marker — foreshortened and skewed to lie flat on the angled pad
-    const hW = 84;
-    const hH = 24;
-    const hT = 12;
-    // skew the H slightly to match the pad's diagonal
-    const hSkew = 9;
-    g.fillStyle(0xf0f0f0, 1);
-    // left leg (skewed)
-    g.beginPath();
-    g.moveTo(cx - hW / 2 - hSkew, padCY - hH / 2);
-    g.lineTo(cx - hW / 2 + hT - hSkew, padCY - hH / 2);
-    g.lineTo(cx - hW / 2 + hT + hSkew, padCY + hH / 2);
-    g.lineTo(cx - hW / 2 + hSkew, padCY + hH / 2);
-    g.closePath();
-    g.fillPath();
-    // right leg (skewed)
-    g.beginPath();
-    g.moveTo(cx + hW / 2 - hT - hSkew, padCY - hH / 2);
-    g.lineTo(cx + hW / 2 - hSkew, padCY - hH / 2);
-    g.lineTo(cx + hW / 2 + hSkew, padCY + hH / 2);
-    g.lineTo(cx + hW / 2 - hT + hSkew, padCY + hH / 2);
-    g.closePath();
-    g.fillPath();
-    // crossbar (skewed parallelogram)
-    g.beginPath();
-    g.moveTo(cx - hW / 2 - hSkew, padCY - hT / 2);
-    g.lineTo(cx + hW / 2 - hSkew, padCY - hT / 2);
-    g.lineTo(cx + hW / 2 + hSkew, padCY + hT / 2);
-    g.lineTo(cx - hW / 2 + hSkew, padCY + hT / 2);
-    g.closePath();
-    g.fillPath();
 
     // ── CORNER APPROACH LIGHTS ── glowing yellow with halo
     for (const c of colAngles) {
@@ -4346,6 +4342,43 @@ export class OfficeScene extends Phaser.Scene {
    *  The rotor is a separate graphics positioned at (0, -30) so its
    *  rotation spins the blades in-place above the body. */
   private drawHelicopter(): Phaser.GameObjects.Container {
+    const heliKey = "ai-fur-helicopter_top";
+
+    if (this.textures.exists(heliKey)) {
+      // --- AI sprite version ---
+      // Shadow under the helicopter
+      const shadow = this.add.graphics();
+      shadow.fillStyle(0x000000, 0.2);
+      shadow.fillEllipse(0, 26, 90, 14);
+
+      // AI helicopter sprite — centered at origin
+      const bodyImg = this.add.image(0, 0, heliKey)
+        .setOrigin(0.5, 0.5)
+        .setDisplaySize(120, 120);
+
+      // --- rotor (top layer, positioned above body so rotation spins in-place) ---
+      const rotor = this.add.graphics();
+      rotor.setPosition(0, -30);
+      // rotor hub
+      rotor.fillStyle(0x555555, 1);
+      rotor.fillCircle(0, 0, 5);
+      // rotor blades — drawn centered at (0,0) so rotation spins them in place
+      rotor.lineStyle(4, 0x222222, 1);
+      rotor.beginPath();
+      rotor.moveTo(-48, 0);
+      rotor.lineTo(48, 0);
+      rotor.strokePath();
+      rotor.lineStyle(2, 0x333333, 0.6);
+      rotor.beginPath();
+      rotor.moveTo(-30, 0);
+      rotor.lineTo(30, 0);
+      rotor.strokePath();
+
+      this.heliRotor = rotor;
+      return this.add.container(0, 0, [shadow, bodyImg, rotor]);
+    }
+
+    // --- Fallback: procedural helicopter ---
     // --- landing skids (bottom layer) ---
     const skids = this.add.graphics();
     skids.fillStyle(0x000000, 0.2);

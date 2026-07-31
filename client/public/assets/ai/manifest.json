@@ -1883,5 +1883,31 @@
     "size": 256,
     "hasPBR": true,
     "hasSvg": false
+  },
+  {
+    "key": "office_helipad",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_helipad_basecolor.webp",
+      "normal": "tiles/office_helipad_normal.webp",
+      "roughness": "tiles/office_helipad_roughness.webp",
+      "metalness": "tiles/office_helipad_metalness.webp",
+      "height": "tiles/office_helipad_height.webp"
+    },
+    "size": 256,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "helicopter_top",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/helicopter_top.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
   }
 ]
