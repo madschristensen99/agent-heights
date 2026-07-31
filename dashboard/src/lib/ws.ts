@@ -1,0 +1,105 @@
+import type { ClientMsg, ServerMsg } from "../../shared/types";
+
+export class WSClient {
+  private ws: WebSocket | null = null;
+  private retryMs = 500;
+  private queue: ClientMsg[] = [];
+  private token: string | null = null;
+  private manuallyDisconnected = false;
+  onMessage: (msg: ServerMsg) => void = () => {};
+  onStatus: (connected: boolean) => void = () => {};
+  onRefreshToken: () => Promise<string | null> = async () => null;
+
+  setToken(token: string | null): void {
+    this.token = token;
+  }
+
+  connect(): void {
+    this.manuallyDisconnected = false;
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const runtimeEnv = (typeof window !== "undefined" && (window as any).__ENV__) || {};
+    const wsHost = (runtimeEnv.VITE_WS_HOST ?? import.meta.env.VITE_WS_HOST) as string | undefined;
+    const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    const effectiveWsHost = wsHost && (!wsHost.includes("localhost") || isLocal) ? wsHost : undefined;
+    const fallback = effectiveWsHost || (isLocal && location.port !== "3001"
+      ? "localhost:3001"
+      : location.host);
+    const url = `${proto}://${fallback}`;
+    console.log(`[ws] connecting to ${url}`);
+    const ws = new WebSocket(url);
+    this.ws = ws;
+
+    ws.onopen = () => {
+      console.log(`[ws] OPEN — flushing ${this.queue.length} queued messages`);
+      this.retryMs = 500;
+      if (this.token) {
+        ws.send(JSON.stringify({ type: "auth", token: this.token }));
+      }
+      this.onStatus(true);
+      for (const msg of this.queue.splice(0)) {
+        ws.send(JSON.stringify(msg));
+      }
+    };
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data) as ServerMsg;
+        if (msg.type === "refresh_token") {
+          void this.handleRefreshToken();
+          return;
+        }
+        this.onMessage(msg);
+      } catch {
+        // ignore malformed frames
+      }
+    };
+    ws.onclose = (ev) => {
+      console.log(`[ws] CLOSED: code=${ev.code} — retrying in ${this.retryMs}ms`);
+      this.onStatus(false);
+      if (this.manuallyDisconnected) return;
+      if (ev.code === 4003) {
+        void this.onRefreshToken().then((newToken) => {
+          if (newToken) {
+            this.token = newToken;
+            this.retryMs = 500;
+            setTimeout(() => this.connect(), this.retryMs);
+          } else {
+            location.reload();
+          }
+        });
+        return;
+      }
+      this.retryMs = Math.min(this.retryMs * 2, 8000);
+      setTimeout(() => this.connect(), this.retryMs);
+    };
+    ws.onerror = () => {
+      ws.close();
+    };
+  }
+
+  private async handleRefreshToken(): Promise<void> {
+    const newToken = await this.onRefreshToken();
+    if (newToken && this.ws?.readyState === WebSocket.OPEN) {
+      this.token = newToken;
+      this.send({ type: "renew_token", token: newToken });
+    }
+  }
+
+  disconnect(): void {
+    this.manuallyDisconnected = true;
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+      this.onStatus(false);
+    }
+  }
+
+  send(msg: ClientMsg): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg));
+    } else {
+      this.queue.push(msg);
+    }
+  }
+}

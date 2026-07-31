@@ -27,7 +27,7 @@ RUN npx playwright install chromium
 
 # Copy source and build the client
 COPY . .
-RUN pnpm build
+RUN pnpm build:all
 
 # Create data directory for agent workspaces / logs / saves
 # All persistent data lives under /app/ag — mount it as a volume in Railway

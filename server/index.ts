@@ -91,6 +91,7 @@ async function sendOutfits(ws: WebSocket, sess: UserSession): Promise<void> {
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
+const distDashboardDir = join(rootDir, "dist-dashboard");
 
 // ── Global error handlers ────────────────────────────────────────────────
 // Stray promise rejections from the Cline SDK or fetch calls should not
@@ -162,6 +163,50 @@ async function injectMeta(html: string, req: IncomingMessage): Promise<string> {
     // og-image.png missing — leave relative URLs as-is
   }
   return result;
+}
+
+async function serveDashboard(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let urlPath = req.url?.split("?")[0] ?? "/dashboard";
+  // Strip the /dashboard prefix so we can map to dist-dashboard/
+  const subPath = urlPath === "/dashboard" ? "/index.html" : urlPath.replace(/^\/dashboard\//, "/");
+
+  const filePath = normalize(join(distDashboardDir, subPath));
+  if (!filePath.startsWith(distDashboardDir)) {
+    res.writeHead(403, applySecurityHeaders());
+    res.end("Forbidden");
+    return;
+  }
+
+  try {
+    const info = await stat(filePath);
+    if (info.isDirectory()) throw new Error("is directory");
+    const data = await readFile(filePath);
+    const mime = MIME[extname(filePath)] ?? "application/octet-stream";
+    const headers: Record<string, string> = applySecurityHeaders({ "Content-Type": mime });
+    headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    if (subPath === "/index.html") {
+      const html = data.toString("utf-8");
+      const injected = await injectMeta(html, req);
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8" }));
+      res.end(Buffer.from(injected, "utf-8"));
+      return;
+    }
+    res.writeHead(200, headers);
+    res.end(data);
+  } catch {
+    // SPA fallback — serve index.html for any unmatched route under /dashboard
+    try {
+      const indexPath = join(distDashboardDir, "index.html");
+      const data = await readFile(indexPath);
+      const html = data.toString("utf-8");
+      const injected = await injectMeta(html, req);
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8" }));
+      res.end(Buffer.from(injected, "utf-8"));
+    } catch {
+      res.writeHead(404, applySecurityHeaders());
+      res.end("Dashboard not built. Run: cd dashboard && pnpm install && pnpm build");
+    }
+  }
 }
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -454,6 +499,16 @@ const server = createServer((req, res) => {
     }).catch(() => {
       res.writeHead(500, applySecurityHeaders({ "Content-Type": "application/json" }));
       res.end(JSON.stringify({ error: "Search failed" }));
+    });
+    return;
+  }
+
+  // Dashboard routes — serve from dist-dashboard/
+  const urlPath = req.url?.split("?")[0] ?? "/";
+  if (urlPath === "/dashboard" || urlPath.startsWith("/dashboard/")) {
+    serveDashboard(req, res).catch(() => {
+      res.writeHead(500, applySecurityHeaders());
+      res.end("Internal server error");
     });
     return;
   }
