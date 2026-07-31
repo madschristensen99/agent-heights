@@ -183,7 +183,11 @@ async function serveDashboard(req: IncomingMessage, res: ServerResponse): Promis
     const data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
     const headers: Record<string, string> = applySecurityHeaders({ "Content-Type": mime });
-    headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    if (subPath === "/index.html") {
+      headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    } else {
+      headers["Cache-Control"] = "public, max-age=31536000, immutable";
+    }
     if (subPath === "/index.html") {
       const html = data.toString("utf-8");
       const injected = await injectMeta(html, req);
@@ -226,8 +230,13 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     let data = await readFile(filePath);
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
     const headers: Record<string, string> = applySecurityHeaders({ "Content-Type": mime });
-    // Force no-cache on everything during OAuth debugging
-    headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    // Cache static assets aggressively (cache-busting via ?v= query params);
+    // keep index.html fresh so env injection picks up new values.
+    if (urlPath === "/index.html" || urlPath === "/") {
+      headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    } else {
+      headers["Cache-Control"] = "public, max-age=31536000, immutable";
+    }
     // Inject runtime env vars and absolute OG image URLs into index.html
     if (urlPath === "/index.html" || urlPath === "/") {
       const html = data.toString("utf-8");

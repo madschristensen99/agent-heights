@@ -2018,9 +2018,8 @@ export class WorldLayer {
 
     // Render static tiles to a persistent canvas texture (survives scene restarts).
     // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
-    // Supersample at 4x (SS=4) so AI textures draw at full 256x256 resolution,
-    // then the display image is scaled down by the GPU for clean filtering.
-    const SS = 4;
+    // Supersample at 2x (SS=2) for crisp rendering without excessive pixel cost.
+    const SS = 2;
     const ssPxSize = chunkPxSize * SS;
     const ssTilePx = TILE_PX * SS;
     if (!this.scene.textures.exists(texKey)) {
@@ -2220,27 +2219,14 @@ export class WorldLayer {
           }
         }
 
-        // Pass 4: subtle blur to soften tile seams — draw canvas onto itself with blur
-        // Only applies a tiny blur in supersampled space (~0.5px in display space)
-        const blurRadius = SS; // 4px in SS space = 1px display
-        const tmpCanvas = document.createElement("canvas");
-        tmpCanvas.width = ssPxSize;
-        tmpCanvas.height = ssPxSize;
-        const tmpCtx = tmpCanvas.getContext("2d")!;
-        tmpCtx.filter = `blur(${blurRadius}px)`;
-        tmpCtx.drawImage(canvasTex.canvas, 0, 0);
-        // Blend blurred version back at low alpha for soft seam reduction
-        ctx.save();
-        ctx.globalAlpha = 0.35;
-        ctx.drawImage(tmpCanvas, 0, 0);
-        ctx.restore();
-
+        // Pass 4: skip expensive canvas blur — at 2x SS tile seams are barely visible
+        // and the per-tile color jitter already breaks up grid patterns.
         canvasTex.refresh();
       }
     }
 
     // Create an Image from the (now cached) canvas texture — one GPU draw call
-    // The supersampled canvas (4x) is scaled down to normal size for display.
+    // The supersampled canvas (2x) is scaled down to normal size for display.
     const img = this.scene.add.image(ox, oy, texKey);
     img.setOrigin(0, 0);
     img.setScale(1 / SS);

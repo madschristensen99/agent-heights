@@ -633,22 +633,32 @@ export class OfficeScene extends Phaser.Scene {
           walls.setCollisionByProperty({ solid: true });
           furniture.setCollisionByProperty({ solid: true });
 
-          // Apply AI wall textures — cycle through all 8 variants (4 office + 4 world) for variety
-          const wallKeys = [
-            "ai-office_wall_0", "ai-office_wall_1", "ai-office_wall_2", "ai-office_wall_3",
-            "ai-wall_0", "ai-wall_1", "ai-wall_2", "ai-wall_3",
-          ].filter(k => this.textures.exists(k));
-          if (wallKeys.length > 0) {
+          // Apply AI wall textures — specific texture per wall side, full opacity
+          const tex = this.textures;
+          const brickKey = "ai-wall_2";       // red brick — left wall
+          const stoneKey = "ai-wall_0";       // gray stone — bottom wall
+          const lightStoneKey = "ai-wall_1";  // light stone — right wall
+          const drywallKey = "ai-office_wall_0"; // interior drywall — top wall
+          const hasBrick = tex.exists(brickKey);
+          const hasStone = tex.exists(stoneKey);
+          const hasLightStone = tex.exists(lightStoneKey);
+          const hasDrywall = tex.exists(drywallKey);
+          if (hasBrick || hasStone || hasLightStone || hasDrywall) {
             for (let y = 0; y < map.height; y++) {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
                 if (!wt) continue;
-                const wallKey = wallKeys[(x + y) % wallKeys.length];
-                const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
-                  .setOrigin(0, 0)
-                  .setDepth(1.05)
-                  .setAlpha(0.6);
-                ws.setDisplaySize(TILE_PX, TILE_PX);
+                let wallKey: string | null = null;
+                if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
+                else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
+                else if (x === map.width - 1 && hasLightStone) wallKey = lightStoneKey; // right wall = light stone
+                else if (y <= 1 && hasDrywall) wallKey = drywallKey;   // top wall = interior drywall
+                if (wallKey) {
+                  const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
+                    .setOrigin(0, 0)
+                    .setDepth(1.05);
+                  ws.setDisplaySize(TILE_PX, TILE_PX);
+                }
               }
             }
           }
