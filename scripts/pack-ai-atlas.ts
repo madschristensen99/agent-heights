@@ -179,7 +179,7 @@ async function buildAtlas(
     },
   })
     .composite(composites)
-    .webp({ quality: 90 })
+    .webp({ lossless: true })
     .toFile(webpPath);
 
   const json = {

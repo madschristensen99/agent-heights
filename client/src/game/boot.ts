@@ -57,7 +57,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     // AI texture atlases (replaces 124+ individual requests with 4)
-    const atlasVer = "?v=265";
+    const atlasVer = "?v=266";
     this.load.image("ai-tiles-atlas", `assets/atlases/ai-tiles-atlas.webp${atlasVer}`);
     this.load.json("ai-tiles-atlas-meta", `assets/atlases/ai-tiles-atlas.json${atlasVer}`);
     this.load.image("ai-sprites-atlas", `assets/atlases/ai-sprites-atlas.webp${atlasVer}`);
@@ -212,7 +212,9 @@ export class BootScene extends Phaser.Scene {
     this.time.delayedCall(0, processNextStep);
   }
 
-  /** Unpack a texture atlas into individual Phaser canvas textures. */
+  /** Unpack a texture atlas into individual Phaser image textures.
+   *  Uses addImage (not createCanvas) so WebGL mipmaps are generated,
+   *  preserving full detail at 4:1 minification (256px→64px tiles). */
   private unpackAtlas(atlasKey: string, metaKey: string): void {
     if (!this.textures.exists(atlasKey)) return;
     const meta = this.cache.json.get(metaKey) as
@@ -222,12 +224,12 @@ export class BootScene extends Phaser.Scene {
     const atlasImage = this.textures.get(atlasKey).getSourceImage() as CanvasImageSource;
     for (const [texKey, frame] of Object.entries(meta.frames)) {
       if (this.textures.exists(texKey)) continue;
-      const canvasTex = this.textures.createCanvas(texKey, frame.w, frame.h);
-      if (canvasTex) {
-        const ctx = canvasTex.getContext();
-        ctx.drawImage(atlasImage, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
-        canvasTex.refresh();
-      }
+      const off = document.createElement("canvas");
+      off.width = frame.w;
+      off.height = frame.h;
+      const ctx = off.getContext("2d")!;
+      ctx.drawImage(atlasImage, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+      this.textures.addImage(texKey, off as unknown as HTMLImageElement);
     }
   }
 
