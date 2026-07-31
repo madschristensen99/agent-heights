@@ -270,13 +270,29 @@ async function extractHairComponent(input: Buffer): Promise<Buffer> {
     // If green is dominant by 30+ points → body → transparent
     if (g > r + 30 && g > b + 30) {
       data[i + 3] = 0;
-    } else {
-      // Convert to grayscale (luminance formula)
-      const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-      data[i] = gray;
-      data[i + 1] = gray;
-      data[i + 2] = gray;
+      continue;
     }
+
+    // Convert to grayscale (luminance formula)
+    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+
+    // Remove dark noise artifacts — hair is white/light gray, not black
+    // Anything darker than 100 is AI background noise, not hair
+    if (gray < 100) {
+      data[i + 3] = 0;
+      continue;
+    }
+
+    // Remove semi-transparent noise at edges (alpha < 128 is likely artifact)
+    if (a < 128) {
+      data[i + 3] = 0;
+      continue;
+    }
+
+    data[i] = gray;
+    data[i + 1] = gray;
+    data[i + 2] = gray;
+    data[i + 3] = 255;
   }
 
   return sharp(data, {
