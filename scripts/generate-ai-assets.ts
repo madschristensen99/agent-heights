@@ -91,7 +91,7 @@ function tile(
   prompt: string,
   seed: number,
   tier: 1 | 2 | 6 = 1,
-  size = 256,
+  size = 512,
 ): AssetDef {
   return { key, category: "tiles", model: "patina-material", prompt, size, pbr: true, seed, tier };
 }

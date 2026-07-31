@@ -203,7 +203,7 @@ async function main() {
     makeItem(`ai-${key}`, join(AI_DIR, "tiles", `${key}_basecolor.webp`)),
   );
 
-  await buildAtlas("ai-tiles-atlas", tileItems, 4096, 4096);
+  await buildAtlas("ai-tiles-atlas", tileItems, 8192, 8192);
 
   // Sprite atlas: objects + furniture + items + creatures
   const spriteItems: PackItem[] = [

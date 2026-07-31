@@ -38,7 +38,7 @@ export async function resizeToWebP(
 ): Promise<Buffer> {
   return sharp(input)
     .resize(width, height, { fit: "fill" })
-    .webp({ quality: 90 })
+    .webp({ lossless: true })
     .toBuffer();
 }
 
