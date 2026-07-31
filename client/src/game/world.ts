@@ -2112,7 +2112,8 @@ export class WorldLayer {
           }
         }
 
-        // Pass 2: edge autotiling — draw borders where liquid/hazard tiles meet different terrain
+        // Pass 2: edge autotiling — soft gradient borders where terrain types meet
+        const ssEdge = EDGE_WIDTH * SS;
         for (let y = 0; y < CHUNK_SIZE; y++) {
           for (let x = 0; x < CHUNK_SIZE; x++) {
             const tile = chunk.tiles[y * CHUNK_SIZE + x];
@@ -2123,7 +2124,6 @@ export class WorldLayer {
             const py = y * ssTilePx;
             const worldTileX = chunk.cx * CHUNK_SIZE + x;
             const worldTileY = chunk.cy * CHUNK_SIZE + y;
-            const ssEdge = EDGE_WIDTH * SS;
 
             // Check 4 cardinal neighbors (use chunk data for interior, cross-chunk for borders)
             const nTile = y > 0
@@ -2139,14 +2139,71 @@ export class WorldLayer {
               ? chunk.tiles[y * CHUNK_SIZE + (x + 1)]
               : this.getTileAtLoaded(worldTileX + 1, worldTileY);
 
-            ctx.fillStyle = edgeColor;
-            // Draw edge band on sides facing different terrain (skip if neighbor not loaded = -1)
-            if (nTile >= 0 && nTile !== tile) ctx.fillRect(px, py, ssTilePx, ssEdge);
-            if (sTile >= 0 && sTile !== tile) ctx.fillRect(px, py + ssTilePx - ssEdge, ssTilePx, ssEdge);
-            if (wTile >= 0 && wTile !== tile) ctx.fillRect(px, py, ssEdge, ssTilePx);
-            if (eTile >= 0 && eTile !== tile) ctx.fillRect(px + ssTilePx - ssEdge, py, ssEdge, ssTilePx);
+            // Soft gradient edges — fade from edge color to transparent for natural blending
+            if (nTile >= 0 && nTile !== tile) {
+              const grad = ctx.createLinearGradient(0, py, 0, py + ssEdge);
+              grad.addColorStop(0, edgeColor);
+              grad.addColorStop(1, "rgba(0,0,0,0)");
+              ctx.fillStyle = grad;
+              ctx.fillRect(px, py, ssTilePx, ssEdge);
+            }
+            if (sTile >= 0 && sTile !== tile) {
+              const grad = ctx.createLinearGradient(0, py + ssTilePx - ssEdge, 0, py + ssTilePx);
+              grad.addColorStop(0, "rgba(0,0,0,0)");
+              grad.addColorStop(1, edgeColor);
+              ctx.fillStyle = grad;
+              ctx.fillRect(px, py + ssTilePx - ssEdge, ssTilePx, ssEdge);
+            }
+            if (wTile >= 0 && wTile !== tile) {
+              const grad = ctx.createLinearGradient(px, 0, px + ssEdge, 0);
+              grad.addColorStop(0, edgeColor);
+              grad.addColorStop(1, "rgba(0,0,0,0)");
+              ctx.fillStyle = grad;
+              ctx.fillRect(px, py, ssEdge, ssTilePx);
+            }
+            if (eTile >= 0 && eTile !== tile) {
+              const grad = ctx.createLinearGradient(px + ssTilePx - ssEdge, 0, px + ssTilePx, 0);
+              grad.addColorStop(0, "rgba(0,0,0,0)");
+              grad.addColorStop(1, edgeColor);
+              ctx.fillStyle = grad;
+              ctx.fillRect(px + ssTilePx - ssEdge, py, ssEdge, ssTilePx);
+            }
           }
         }
+
+        // Pass 3: per-tile subtle color jitter to break up grid pattern
+        // Uses the same position hash as variant selection for determinism
+        for (let y = 0; y < CHUNK_SIZE; y++) {
+          for (let x = 0; x < CHUNK_SIZE; x++) {
+            const worldTileX = chunk.cx * CHUNK_SIZE + x;
+            const worldTileY = chunk.cy * CHUNK_SIZE + y;
+            let h2 = (worldTileX * 2246822519 + worldTileY * 3266489917) | 0;
+            h2 = (h2 ^ (h2 >>> 16)) | 0;
+            // Subtle brightness variation: ±8 brightness on a 4% opacity overlay
+            const brightness = ((h2 & 0x1f) - 16); // -16..+15
+            const px = x * ssTilePx;
+            const py = y * ssTilePx;
+            ctx.fillStyle = brightness > 0
+              ? `rgba(255,255,255,${brightness / 400})`
+              : `rgba(0,0,0,${-brightness / 400})`;
+            ctx.fillRect(px, py, ssTilePx, ssTilePx);
+          }
+        }
+
+        // Pass 4: subtle blur to soften tile seams — draw canvas onto itself with blur
+        // Only applies a tiny blur in supersampled space (~0.5px in display space)
+        const blurRadius = SS; // 4px in SS space = 1px display
+        const tmpCanvas = document.createElement("canvas");
+        tmpCanvas.width = ssPxSize;
+        tmpCanvas.height = ssPxSize;
+        const tmpCtx = tmpCanvas.getContext("2d")!;
+        tmpCtx.filter = `blur(${blurRadius}px)`;
+        tmpCtx.drawImage(canvasTex.canvas, 0, 0);
+        // Blend blurred version back at low alpha for soft seam reduction
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.drawImage(tmpCanvas, 0, 0);
+        ctx.restore();
 
         canvasTex.refresh();
       }
