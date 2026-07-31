@@ -2341,11 +2341,11 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
       // Per-tile-ID overrides for visual fit.
       const scaleMap: Record<number, { w: number; h: number; ox?: number; oy?: number }> = {
         25: { w: 48, h: 48, ox: 8, oy: 8 },   // water cooler — smaller, centered
-        28: { w: 44, h: 44, ox: 10, oy: 10 }, // microwave — smaller, centered
-        27: { w: 48, h: 48, ox: 8, oy: 8 },   // kitchen sink — smaller, centered
+        28: { w: 56, h: 56, ox: 4, oy: 4 },   // microwave — full-ish size, centered
+        27: { w: 60, h: 60, ox: 2, oy: 2 },   // kitchen sink — bigger
         29: { w: 56, h: 56, ox: 4, oy: 4 },   // sofa left — slightly smaller
         30: { w: 56, h: 56, ox: 4, oy: 4 },   // sofa right — slightly smaller
-        26: { w: 80, h: 80, ox: -8, oy: -8 }, // kitchen counter — bigger
+        26: { w: 96, h: 96, ox: -16, oy: -16 }, // kitchen counter — much bigger
         22: { w: 48, h: 48, ox: 8, oy: 8 },   // small plant — smaller
         31: { w: 56, h: 56, ox: 4, oy: 4 },   // large plant — slightly smaller
         32: { w: 48, h: 48, ox: 8, oy: 8 },   // toaster — smaller

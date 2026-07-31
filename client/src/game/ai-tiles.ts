@@ -77,26 +77,14 @@ export const AI_FURNITURE_TEXTURES: Record<number, string> = {
   37: "ai-fur-chimney",
 };
 
-/** AI furniture chair textures (4 directions). */
-export const AI_FURNITURE_CHAIRS: Record<string, string> = {
-  "chair-down": "ai-fur-office_chair_down",
-  "chair-up": "ai-fur-office_chair_up",
-  "chair-left": "ai-fur-office_chair_left",
-  "chair-right": "ai-fur-office_chair_right",
-};
+/** AI furniture chair textures (4 directions). Reverted to procedural — AI chairs looked worse. */
+export const AI_FURNITURE_CHAIRS: Record<string, string> = {};
 
-/** AI furniture monitor textures (3 frames: off / lit / black). */
-export const AI_FURNITURE_MONITORS: Record<string, string> = {
-  off: "ai-fur-desk_monitor_off",
-  lit: "ai-fur-desk_monitor_lit",
-  black: "ai-fur-desk_monitor_black",
-};
+/** AI furniture monitor textures (3 frames: off / lit / black). Reverted to procedural. */
+export const AI_FURNITURE_MONITORS: Record<string, string> = {};
 
-/** AI furniture side monitor textures (2 frames: off / lit). */
-export const AI_FURNITURE_MONITORS_SIDE: Record<string, string> = {
-  off: "ai-fur-desk_monitor_side_off",
-  lit: "ai-fur-desk_monitor_side_lit",
-};
+/** AI furniture side monitor textures (2 frames: off / lit). Reverted to procedural. */
+export const AI_FURNITURE_MONITORS_SIDE: Record<string, string> = {};
 
 /** Furniture asset keys (without prefix) for loading from furniture/ directory. */
 export const AI_FURNITURE_KEYS: string[] = [
