@@ -203,7 +203,7 @@ const HAIR_DESCRIPTIONS: Record<string, string> = {
   curly: "voluminous curly hair with rounded bouncy curls",
   bun: "hair tied in a neat top bun knot on the crown",
   balding: "thinning balding hair with side remnants and receding hairline",
-  mohawk: "tall mohawk stripe of hair down the center of the head",
+  mohawk: "tall mohawk stripe of hair down the center of the head. When viewed from the front (down), the mohawk is a vertical stripe going straight up from the top of the head. When viewed from the side (right), the mohawk is a horizontal ridge along the top of the head going from front to back. When viewed from behind (up), the mohawk is a vertical stripe in the center",
   afro: "round fluffy afro, full and rounded all around the head",
   braids: "hair styled in long braids with visible plait details",
   pigtails: "hair in twin pigtails, one on each side of the head",
