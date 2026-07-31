@@ -108,7 +108,7 @@ export class OfficeScene extends Phaser.Scene {
   private doorTile: Tile = { x: 14, y: 17 };
   private boardTile: Tile = { x: 14, y: 2 };
   private boardHint!: Phaser.GameObjects.Text;
-  private coffeeTile: Tile = { x: 23, y: 2 };
+  private coffeeTile: Tile = { x: 26, y: 2 };
   private coffeeUntil = 0;
   private coffeeHint!: Phaser.GameObjects.Text;
 
@@ -126,8 +126,8 @@ export class OfficeScene extends Phaser.Scene {
   ];
 
   // --- new office interactables ---
-  private fridgeTile: Tile = { x: 26, y: 2 };
-  private coolerTile: Tile = { x: 28, y: 4 };
+  private fridgeTile: Tile = { x: 24, y: 2 };
+  private coolerTile: Tile = { x: 22, y: 2 };
   private clockTile: Tile = { x: 1, y: 3 };
   private vendingTile: Tile | null = null;
 
