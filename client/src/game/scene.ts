@@ -4384,10 +4384,10 @@ export class OfficeScene extends Phaser.Scene {
       shadow.fillStyle(0x000000, 0.2);
       shadow.fillEllipse(0, 26, 90, 14);
 
-      // AI helicopter sprite — centered at origin, sized to show full helicopter with padding
+      // AI helicopter sprite — centered at origin, native size to avoid scaling blur
       const bodyImg = this.add.image(0, 0, heliKey)
         .setOrigin(0.5, 0.5)
-        .setDisplaySize(180, 180);
+        .setDisplaySize(256, 256);
 
       // --- rotor (top layer, positioned above body so rotation spins in-place) ---
       const rotor = this.add.graphics();
@@ -4521,7 +4521,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // create helicopter high above the pad (same x, well above)
     const heli = this.drawHelicopter();
-    heli.setScale(1.5);
+    heli.setScale(1.0);
     heli.setPosition(padCx, padCy - 600);
     heli.setDepth(-0.4);
     heli.setAlpha(0);
