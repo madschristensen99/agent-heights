@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, AgentResourcesNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, type Dir } from "./agent";
+import { AgentNPC, AgentResourcesNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
 import { AGENT_RESOURCES_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer, LOAD_RADIUS } from "./world";
@@ -107,14 +107,14 @@ export class OfficeScene extends Phaser.Scene {
   private spawnTile: Tile = { x: 14, y: 16 };
   private doorTile: Tile = { x: 14, y: 17 };
   private boardTile: Tile = { x: 14, y: 2 };
-  private boardHint!: Phaser.GameObjects.Text;
+  private boardHint!: HintTag;
   private coffeeTile: Tile = { x: 26, y: 2 };
   private coffeeUntil = 0;
-  private coffeeHint!: Phaser.GameObjects.Text;
+  private coffeeHint!: HintTag;
 
   // --- projector screen (top-left wall) ---
   private projectorTile: Tile = { x: 6, y: 0 };
-  private projectorHint!: Phaser.GameObjects.Text;
+  private projectorHint!: HintTag;
   private projectorGfx!: Phaser.GameObjects.Graphics;
   private projectorIframe: HTMLIFrameElement | null = null;
   private projectorVideoId: string | null = null;
@@ -134,18 +134,18 @@ export class OfficeScene extends Phaser.Scene {
   // --- projector control panel + speaker (where clock used to be) ---
   private projectorControlTile: Tile = { x: 6, y: 1 };
   private projectorSpeakerTile: Tile = { x: 7, y: 1 };
-  private projectorControlHint!: Phaser.GameObjects.Text;
-  private projectorSpeakerHint!: Phaser.GameObjects.Text;
+  private projectorControlHint!: HintTag;
+  private projectorSpeakerHint!: HintTag;
   private projectorControlGfx!: Phaser.GameObjects.Graphics;
   private projectorSpeakerGfx!: Phaser.GameObjects.Graphics;
   private projectorMuted = true;
   private screenShareTile: Tile = { x: 5, y: 1 };
-  private screenShareHint!: Phaser.GameObjects.Text;
+  private screenShareHint!: HintTag;
   private screenShareGfx!: Phaser.GameObjects.Graphics;
 
   // --- phone booth (webcam broadcast) ---
   private phoneBoothTile: Tile = { x: 3, y: 2 };
-  private phoneBoothHint!: Phaser.GameObjects.Text;
+  private phoneBoothHint!: HintTag;
   private phoneBoothGfx!: Phaser.GameObjects.Graphics;
   private phoneBoothLight!: Phaser.GameObjects.Graphics;
   private webcam: WebcamManager | null = null;
@@ -168,7 +168,7 @@ export class OfficeScene extends Phaser.Scene {
   private sofaUntil = 0; // cooldown for sofa
 
   private mailboxGfx!: Phaser.GameObjects.Graphics;
-  private mailboxHint!: Phaser.GameObjects.Text;
+  private mailboxHint!: HintTag;
   private mailboxUntil = 0; // cooldown for checking mail
   private mailboxHasMail = false;
   private mailboxNextMail = 0; // timestamp when next mail arrives
@@ -176,43 +176,43 @@ export class OfficeScene extends Phaser.Scene {
 
   // --- platform mailboxes (mail room) ---
   private platformMailboxGfx!: Phaser.GameObjects.Graphics;
-  private platformMailboxHint!: Phaser.GameObjects.Text;
+  private platformMailboxHint!: HintTag;
   private platformMailboxes: PlatformMailbox[] = [];
   private mailDigestRequested = false;
 
-  private fridgeHint!: Phaser.GameObjects.Text;
-  private coolerHint!: Phaser.GameObjects.Text;
-  private clockHint!: Phaser.GameObjects.Text;
-  private vendingHint!: Phaser.GameObjects.Text;
-  private sofaHint!: Phaser.GameObjects.Text;
-  private filingHint!: Phaser.GameObjects.Text;
-  private plantHint!: Phaser.GameObjects.Text;
+  private fridgeHint!: HintTag;
+  private coolerHint!: HintTag;
+  private clockHint!: HintTag;
+  private vendingHint!: HintTag;
+  private sofaHint!: HintTag;
+  private filingHint!: HintTag;
+  private plantHint!: HintTag;
   // mailboxHint declared above with mailbox fields
 
   // --- wardrobe (break room) ---
   private wardrobeTile: Tile = { x: 21, y: 18 };
-  private wardrobeHint!: Phaser.GameObjects.Text;
+  private wardrobeHint!: HintTag;
   private wardrobeGfx!: Phaser.GameObjects.Graphics;
 
   // --- nemesis terminal (break room) ---
   private nemesisTerminalTile: Tile = { x: 20, y: 14 };
-  private nemesisTerminalHint!: Phaser.GameObjects.Text;
+  private nemesisTerminalHint!: HintTag;
   private nemesisTerminalGfx!: Phaser.GameObjects.Graphics;
 
   private trophyTile: Tile = { x: 1, y: 8 };
-  private trophyHint!: Phaser.GameObjects.Text;
+  private trophyHint!: HintTag;
   private trophyGfx!: Phaser.GameObjects.Graphics;
   private trophyAchCount = -1;
   private sceneStart = 0;
 
   private hallOfFameTile: Tile = { x: 1, y: 5 };
-  private hallOfFameHint!: Phaser.GameObjects.Text;
+  private hallOfFameHint!: HintTag;
   private hallOfFameGfx!: Phaser.GameObjects.Graphics;
   private chimneyGfx!: Phaser.GameObjects.Graphics;
 
   // --- helicopter / red button ---
   private redButtonTile: Tile = { x: 25, y: 7 };
-  private redButtonHint!: Phaser.GameObjects.Text;
+  private redButtonHint!: HintTag;
   private redButtonUntil = 0;
   private padCenter = { x: 1200, y: -195 };
   private padFrontPx = { x: 1158, y: -138 };
@@ -232,7 +232,7 @@ export class OfficeScene extends Phaser.Scene {
   private chimneyPositions: { x: number; y: number }[] = [];
   /** Server rack tile positions for E-interaction. */
   private serverRackTiles: Tile[] = [];
-  private serverRackHint!: Phaser.GameObjects.Text;
+  private serverRackHint!: HintTag;
 
   // --- world portal (near server racks) ---
   private portalContainer: Phaser.GameObjects.Container | null = null;
@@ -247,12 +247,12 @@ export class OfficeScene extends Phaser.Scene {
   private radioTile: Tile = { x: 28, y: 14 };      // 1×1 at (28,14) — status monitor
   private workbenchTile: Tile = { x: 24, y: 18 };  // 2×1 at (23,18) — code terminal
   private researchTile: Tile = { x: 23, y: 14 };   // 2×1 at (22,14) — blueprint desk
-  private warTableHint!: Phaser.GameObjects.Text;
-  private scrapBinHint!: Phaser.GameObjects.Text;
-  private radioHint!: Phaser.GameObjects.Text;
-  private workbenchHint!: Phaser.GameObjects.Text;
-  private researchHint!: Phaser.GameObjects.Text;
-  private allHints: Phaser.GameObjects.Text[] = [];
+  private warTableHint!: HintTag;
+  private scrapBinHint!: HintTag;
+  private radioHint!: HintTag;
+  private workbenchHint!: HintTag;
+  private researchHint!: HintTag;
+  private allHints: HintTag[] = [];
 
   /** Store listeners are registered once; they survive scene restarts. */
   private wired = false;
@@ -836,15 +836,15 @@ export class OfficeScene extends Phaser.Scene {
           this.playerLabel = this.add
             .text(0, 0, "BOSS", {
               fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              fontSize: "16px",
-              color: "#1d2126",
-              stroke: "#f4f6f8",
-              strokeThickness: 3,
+              fontSize: "18px",
+              color: "#ffffff",
+              stroke: "#0d1018",
+              strokeThickness: 4,
             })
             .setResolution(4)
             .setOrigin(0.5, 1)
-            .setScale(0.7);
-          this.drawPlayerNameBg();
+            .setScale(0.75);
+          this.drawPlayerNameBg(0x3a8cd4);
 
           this.selectRing = this.add
             .ellipse(0, 0, 56, 24)
@@ -867,19 +867,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawRedButton();
           this.drawWardrobe();
           this.drawNemesisTerminal();
-          this.boardHint = this.add
-            .text(0, 0, "", {
-              fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              fontSize: "16px",
-              color: "#1d2126",
-              stroke: "#f4f6f8",
-              strokeThickness: 3,
-            })
-            .setResolution(4)
-            .setOrigin(0.5, 1)
-            .setScale(0.7)
-            .setDepth(100)
-            .setVisible(false);
+          this.boardHint = this.makeHint();
 
           this.coffeeHint = this.makeHint();
           this.fridgeHint = this.makeHint();
@@ -1336,17 +1324,21 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  /** Draw rounded background behind player nameplate. */
-  private drawPlayerNameBg(): void {
+  /** Draw rounded background behind player nameplate with accent bar. */
+  private drawPlayerNameBg(accentColor: number = 0x3a8cd4): void {
     const g = this.playerNameBg;
     g.clear();
-    const w = this.playerLabel.displayWidth + 16;
-    const h = 18;
-    const r = 4;
-    g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(-w / 2, -14, w, h, r);
-    g.lineStyle(1, 0xffffff, 0.15);
-    g.strokeRoundedRect(-w / 2, -14, w, h, r);
+    const w = this.playerLabel.displayWidth + 22;
+    const h = 22;
+    const r = 5;
+    const x = -w / 2;
+    const y = -18;
+    g.fillStyle(0x0d1018, 0.78);
+    g.fillRoundedRect(x, y, w, h, r);
+    g.fillStyle(accentColor, 0.85);
+    g.fillRect(x + 2, y + 3, 3, h - 6);
+    g.lineStyle(1, 0xffffff, 0.18);
+    g.strokeRoundedRect(x, y, w, h, r);
   }
 
   /** Draw the vignette overlay — disabled (was causing visible black frame). */
@@ -2028,21 +2020,9 @@ export class OfficeScene extends Phaser.Scene {
     return true;
   }
 
-  /** Create a standard proximity hint text object. */
-  private makeHint(): Phaser.GameObjects.Text {
-    return this.add
-      .text(0, 0, "", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "16px",
-        color: "#1d2126",
-        stroke: "#f4f6f8",
-        strokeThickness: 3,
-      })
-      .setResolution(4)
-      .setOrigin(0.5, 1)
-      .setScale(0.7)
-      .setDepth(100)
-      .setVisible(false);
+  /** Create a standard proximity hint with dark bg, key badge, and white text. */
+  private makeHint(): HintTag {
+    return createHintTag(this);
   }
 
   /** Set interactable tile positions based on the current theme. */
@@ -3485,7 +3465,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Update proximity hints — show only the closest interactable. */
   private updateAllHints(time: number): void {
     interface Candidate {
-      hint: Phaser.GameObjects.Text;
+      hint: HintTag;
       dist: number;
       label: string;
       hx: number;
@@ -3493,7 +3473,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     const candidates: Candidate[] = [];
     const add = (
-      hint: Phaser.GameObjects.Text,
+      hint: HintTag,
       cx: number, cy: number, radius: number,
       label: string, hx: number, hy: number,
     ): void => {
@@ -6268,15 +6248,15 @@ export class OfficeScene extends Phaser.Scene {
     const playerName = (this.store.player?.name ?? "BOSS").toUpperCase();
     if (this.playerLabel.text !== playerName) {
       this.playerLabel.setText(playerName);
-      this.drawPlayerNameBg();
     }
+    const accentColor = time < this.coffeeUntil ? 0xb0741f : time < this.sofaUntil ? 0x9a7acb : 0x3a8cd4;
+    this.drawPlayerNameBg(accentColor);
     this.playerLabel
       .setPosition(this.player.x, this.player.y - 108)
       .setDepth(10 + this.player.y);
     this.playerNameBg
       .setPosition(this.player.x, this.player.y - 108)
       .setDepth(10 + this.player.y - 0.1);
-    this.playerLabel.setColor(time < this.coffeeUntil ? "#b0741f" : time < this.sofaUntil ? "#9a7acb" : "#1d2126");
     } // end else (not in phone booth)
 
     // E: grab coffee, talk to the nearest agent, open the task board, or recruit a ghost
