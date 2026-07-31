@@ -8,6 +8,7 @@
  */
 import sharp from "sharp";
 import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -132,6 +133,13 @@ async function buildAtlas(
   atlasH: number,
 ): Promise<void> {
   console.log(`\n Packing ${name} (${items.length} images)...`);
+
+  // Filter out items whose source files don't exist yet
+  const missing = items.filter((i) => !existsSync(i.file));
+  if (missing.length > 0) {
+    console.warn(`  Skipping ${missing.length} missing files (e.g. ${missing[0].key})`);
+  }
+  items = items.filter((i) => existsSync(i.file));
 
   // Read dimensions
   for (const item of items) {
