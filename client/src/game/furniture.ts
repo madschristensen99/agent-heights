@@ -2345,7 +2345,7 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
         27: { w: 60, h: 60, ox: 2, oy: 2 },   // kitchen sink — bigger
         29: { w: 56, h: 56, ox: 4, oy: 4 },   // sofa left — slightly smaller
         30: { w: 56, h: 56, ox: 4, oy: 4 },   // sofa right — slightly smaller
-        26: { w: 112, h: 112, ox: -24, oy: -24 }, // kitchen counter — much bigger, spans ~2 tiles
+        26: { w: 160, h: 160, ox: -48, oy: -48 }, // kitchen counter — bigger, spans ~2.5 tiles
         22: { w: 48, h: 48, ox: 8, oy: 8 },   // small plant — smaller
         31: { w: 56, h: 56, ox: 4, oy: 4 },   // large plant — slightly smaller
         32: { w: 48, h: 48, ox: 8, oy: 8 },   // toaster — smaller
