@@ -1880,7 +1880,7 @@ export class WorldLayer {
 
   /** Texture cache key for a chunk's static tile rendering. */
   private chunkTexKey(cx: number, cy: number): string {
-    return `chunk-rt-v3-${this.store.worldSeed}:${cx},${cy}`;
+    return `chunk-rt-v4-${this.store.worldSeed}:${cx},${cy}`;
   }
 
   /** Remove a cached chunk canvas texture so the next renderChunk redraws it. */
@@ -1934,8 +1934,9 @@ export class WorldLayer {
 
     // Render static tiles to a persistent canvas texture (survives scene restarts).
     // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
-    // Supersample at 2x (SS=2) for crisp rendering without excessive pixel cost.
-    const SS = 2;
+    // Supersample at 4x (SS=4) so AI textures draw at full 256x256 resolution,
+    // then the display image is scaled down by the GPU for clean filtering.
+    const SS = 4;
     const ssPxSize = chunkPxSize * SS;
     const ssTilePx = TILE_PX * SS;
     if (!this.scene.textures.exists(texKey)) {
