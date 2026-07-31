@@ -648,8 +648,8 @@ export class OfficeScene extends Phaser.Scene {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
                 if (!wt) continue;
-                // Skip door tiles (index 13-14 in Tiled = door/door frame)
-                if (wt.index === 13 || wt.index === 14) continue;
+                // Skip door tiles (index 13-14) and window tiles (index 10) so they remain visible
+                if (wt.index === 13 || wt.index === 14 || wt.index === 10) continue;
                 let wallKey: string | null = null;
                 if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
                 else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
