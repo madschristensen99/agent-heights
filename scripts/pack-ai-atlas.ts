@@ -36,7 +36,7 @@ const TILE_KEYS = [
   "hedge_0", "hedge_1", "hedge_2", "hedge_3",
   "water_0", "water_1", "water_2",
   "office_floor_0", "office_floor_1",
-  "office_wall_0", "office_wall_1",
+  "office_wall_0", "office_wall_1", "office_wall_2", "office_wall_3",
   "kitchen_counter",
   "char_skin", "char_shirt_fabric", "char_pants_fabric",
   "char_hair_straight", "char_hair_curly", "char_leather",

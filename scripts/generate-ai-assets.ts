@@ -235,7 +235,7 @@ const ASSETS: AssetDef[] = [
   tile("office_wall_0", "white painted drywall wall texture with subtle brush strokes, light reflections, faint plaster grain, top-down, tileable", 1105, 2),
   tile("office_wall_1", "light gray painted concrete wall with hairline cracks, subtle stains, industrial office, top-down, tileable", 1106, 2),
   tile("office_wall_2", "beige painted wall with subtle texture, faint wainscoting lines, office interior, top-down, tileable", 1107, 2),
-  tile("office_wall_3", "blue accent wall with vertical stripes pattern, office wallpaper, subtle texture, top-down, tileable", 1108, 2),
+  tile("office_wall_3", "modern glass office building facade, floor-to-ceiling windows with blue tint, subtle reflections, metal window frames, top-down, tileable", 1108, 2),
   tile("kitchen_counter", "granite countertop, black speckled, top-down", 1109, 2),
 
   // ------------------------------------------------------- Tier 3: Office furniture (Nano Banana 2 + Bria RMBG)
