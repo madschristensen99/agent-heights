@@ -9,6 +9,7 @@ import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
 import { creatureKey, beastKey, beastDesignName, friendlyCreatureKey, FRIENDLY_CREATURE_COUNT } from "./textures";
+import { AI_TILE_TEXTURES } from "./ai-tiles";
 import { VFXManager } from "./effects";
 import { LightingSystem, type LightSource } from "./lighting";
 import { AudioSystem } from "./audio";
@@ -2050,14 +2051,19 @@ export class WorldLayer {
             const variant = (h & 0x7fffffff) % WORLD_VARIANTS;
             const frame = tileToFrame(tile, variant);
 
-            // Draw base tile
-            const fr = worldTilesTex.get(frame);
-            if (fr) {
-              ctx.drawImage(
-                fr.source.image as CanvasImageSource,
-                fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-                px, py, TILE_PX, TILE_PX,
-              );
+            // Draw base tile — use AI texture if available, else spritesheet
+            const aiTextures = AI_TILE_TEXTURES[tile];
+            if (aiTextures && this.scene.textures.exists(aiTextures[variant % aiTextures.length])) {
+              drawTexToCanvas(aiTextures[variant % aiTextures.length], px, py);
+            } else {
+              const fr = worldTilesTex.get(frame);
+              if (fr) {
+                ctx.drawImage(
+                  fr.source.image as CanvasImageSource,
+                  fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+                  px, py, TILE_PX, TILE_PX,
+                );
+              }
             }
 
             // Tennis objects (ball/racket/net) sit on court surface, not grass

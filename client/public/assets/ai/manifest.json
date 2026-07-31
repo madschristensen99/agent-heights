@@ -1,0 +1,1082 @@
+[
+  {
+    "key": "grass_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/grass_0_basecolor.webp",
+      "normal": "tiles/grass_0_normal.webp",
+      "roughness": "tiles/grass_0_roughness.webp",
+      "metalness": "tiles/grass_0_metalness.webp",
+      "height": "tiles/grass_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "grass_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/grass_1_basecolor.webp",
+      "normal": "tiles/grass_1_normal.webp",
+      "roughness": "tiles/grass_1_roughness.webp",
+      "metalness": "tiles/grass_1_metalness.webp",
+      "height": "tiles/grass_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "grass_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/grass_2_basecolor.webp",
+      "normal": "tiles/grass_2_normal.webp",
+      "roughness": "tiles/grass_2_roughness.webp",
+      "metalness": "tiles/grass_2_metalness.webp",
+      "height": "tiles/grass_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "grass_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/grass_3_basecolor.webp",
+      "normal": "tiles/grass_3_normal.webp",
+      "roughness": "tiles/grass_3_roughness.webp",
+      "metalness": "tiles/grass_3_metalness.webp",
+      "height": "tiles/grass_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "path_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/path_0_basecolor.webp",
+      "normal": "tiles/path_0_normal.webp",
+      "roughness": "tiles/path_0_roughness.webp",
+      "metalness": "tiles/path_0_metalness.webp",
+      "height": "tiles/path_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "path_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/path_1_basecolor.webp",
+      "normal": "tiles/path_1_normal.webp",
+      "roughness": "tiles/path_1_roughness.webp",
+      "metalness": "tiles/path_1_metalness.webp",
+      "height": "tiles/path_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "path_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/path_2_basecolor.webp",
+      "normal": "tiles/path_2_normal.webp",
+      "roughness": "tiles/path_2_roughness.webp",
+      "metalness": "tiles/path_2_metalness.webp",
+      "height": "tiles/path_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "path_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/path_3_basecolor.webp",
+      "normal": "tiles/path_3_normal.webp",
+      "roughness": "tiles/path_3_roughness.webp",
+      "metalness": "tiles/path_3_metalness.webp",
+      "height": "tiles/path_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_0_basecolor.webp",
+      "normal": "tiles/sand_0_normal.webp",
+      "roughness": "tiles/sand_0_roughness.webp",
+      "metalness": "tiles/sand_0_metalness.webp",
+      "height": "tiles/sand_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_1_basecolor.webp",
+      "normal": "tiles/sand_1_normal.webp",
+      "roughness": "tiles/sand_1_roughness.webp",
+      "metalness": "tiles/sand_1_metalness.webp",
+      "height": "tiles/sand_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_2_basecolor.webp",
+      "normal": "tiles/sand_2_normal.webp",
+      "roughness": "tiles/sand_2_roughness.webp",
+      "metalness": "tiles/sand_2_metalness.webp",
+      "height": "tiles/sand_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_3_basecolor.webp",
+      "normal": "tiles/sand_3_normal.webp",
+      "roughness": "tiles/sand_3_roughness.webp",
+      "metalness": "tiles/sand_3_metalness.webp",
+      "height": "tiles/sand_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "snow_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/snow_0_basecolor.webp",
+      "normal": "tiles/snow_0_normal.webp",
+      "roughness": "tiles/snow_0_roughness.webp",
+      "metalness": "tiles/snow_0_metalness.webp",
+      "height": "tiles/snow_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "snow_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/snow_1_basecolor.webp",
+      "normal": "tiles/snow_1_normal.webp",
+      "roughness": "tiles/snow_1_roughness.webp",
+      "metalness": "tiles/snow_1_metalness.webp",
+      "height": "tiles/snow_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "snow_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/snow_2_basecolor.webp",
+      "normal": "tiles/snow_2_normal.webp",
+      "roughness": "tiles/snow_2_roughness.webp",
+      "metalness": "tiles/snow_2_metalness.webp",
+      "height": "tiles/snow_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "snow_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/snow_3_basecolor.webp",
+      "normal": "tiles/snow_3_normal.webp",
+      "roughness": "tiles/snow_3_roughness.webp",
+      "metalness": "tiles/snow_3_metalness.webp",
+      "height": "tiles/snow_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "wall_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/wall_0_basecolor.webp",
+      "normal": "tiles/wall_0_normal.webp",
+      "roughness": "tiles/wall_0_roughness.webp",
+      "metalness": "tiles/wall_0_metalness.webp",
+      "height": "tiles/wall_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "wall_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/wall_1_basecolor.webp",
+      "normal": "tiles/wall_1_normal.webp",
+      "roughness": "tiles/wall_1_roughness.webp",
+      "metalness": "tiles/wall_1_metalness.webp",
+      "height": "tiles/wall_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "wall_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/wall_2_basecolor.webp",
+      "normal": "tiles/wall_2_normal.webp",
+      "roughness": "tiles/wall_2_roughness.webp",
+      "metalness": "tiles/wall_2_metalness.webp",
+      "height": "tiles/wall_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "wall_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/wall_3_basecolor.webp",
+      "normal": "tiles/wall_3_normal.webp",
+      "roughness": "tiles/wall_3_roughness.webp",
+      "metalness": "tiles/wall_3_metalness.webp",
+      "height": "tiles/wall_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "water_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/water_0_basecolor.webp",
+      "normal": "tiles/water_0_normal.webp",
+      "roughness": "tiles/water_0_roughness.webp",
+      "metalness": "tiles/water_0_metalness.webp",
+      "height": "tiles/water_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "water_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/water_1_basecolor.webp",
+      "normal": "tiles/water_1_normal.webp",
+      "roughness": "tiles/water_1_roughness.webp",
+      "metalness": "tiles/water_1_metalness.webp",
+      "height": "tiles/water_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "water_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/water_2_basecolor.webp",
+      "normal": "tiles/water_2_normal.webp",
+      "roughness": "tiles/water_2_roughness.webp",
+      "metalness": "tiles/water_2_metalness.webp",
+      "height": "tiles/water_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "lava_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/lava_0_basecolor.webp",
+      "normal": "tiles/lava_0_normal.webp",
+      "roughness": "tiles/lava_0_roughness.webp",
+      "metalness": "tiles/lava_0_metalness.webp",
+      "height": "tiles/lava_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "lava_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/lava_1_basecolor.webp",
+      "normal": "tiles/lava_1_normal.webp",
+      "roughness": "tiles/lava_1_roughness.webp",
+      "metalness": "tiles/lava_1_metalness.webp",
+      "height": "tiles/lava_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "lava_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/lava_2_basecolor.webp",
+      "normal": "tiles/lava_2_normal.webp",
+      "roughness": "tiles/lava_2_roughness.webp",
+      "metalness": "tiles/lava_2_metalness.webp",
+      "height": "tiles/lava_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "lava_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/lava_3_basecolor.webp",
+      "normal": "tiles/lava_3_normal.webp",
+      "roughness": "tiles/lava_3_roughness.webp",
+      "metalness": "tiles/lava_3_metalness.webp",
+      "height": "tiles/lava_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "acid_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/acid_0_basecolor.webp",
+      "normal": "tiles/acid_0_normal.webp",
+      "roughness": "tiles/acid_0_roughness.webp",
+      "metalness": "tiles/acid_0_metalness.webp",
+      "height": "tiles/acid_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "acid_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/acid_1_basecolor.webp",
+      "normal": "tiles/acid_1_normal.webp",
+      "roughness": "tiles/acid_1_roughness.webp",
+      "metalness": "tiles/acid_1_metalness.webp",
+      "height": "tiles/acid_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "acid_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/acid_2_basecolor.webp",
+      "normal": "tiles/acid_2_normal.webp",
+      "roughness": "tiles/acid_2_roughness.webp",
+      "metalness": "tiles/acid_2_metalness.webp",
+      "height": "tiles/acid_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "acid_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/acid_3_basecolor.webp",
+      "normal": "tiles/acid_3_normal.webp",
+      "roughness": "tiles/acid_3_roughness.webp",
+      "metalness": "tiles/acid_3_metalness.webp",
+      "height": "tiles/acid_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "void_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/void_0_basecolor.webp",
+      "normal": "tiles/void_0_normal.webp",
+      "roughness": "tiles/void_0_roughness.webp",
+      "metalness": "tiles/void_0_metalness.webp",
+      "height": "tiles/void_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "void_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/void_1_basecolor.webp",
+      "normal": "tiles/void_1_normal.webp",
+      "roughness": "tiles/void_1_roughness.webp",
+      "metalness": "tiles/void_1_metalness.webp",
+      "height": "tiles/void_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "void_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/void_2_basecolor.webp",
+      "normal": "tiles/void_2_normal.webp",
+      "roughness": "tiles/void_2_roughness.webp",
+      "metalness": "tiles/void_2_metalness.webp",
+      "height": "tiles/void_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "void_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/void_3_basecolor.webp",
+      "normal": "tiles/void_3_normal.webp",
+      "roughness": "tiles/void_3_roughness.webp",
+      "metalness": "tiles/void_3_metalness.webp",
+      "height": "tiles/void_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "ruin_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/ruin_0_basecolor.webp",
+      "normal": "tiles/ruin_0_normal.webp",
+      "roughness": "tiles/ruin_0_roughness.webp",
+      "metalness": "tiles/ruin_0_metalness.webp",
+      "height": "tiles/ruin_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "ruin_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/ruin_1_basecolor.webp",
+      "normal": "tiles/ruin_1_normal.webp",
+      "roughness": "tiles/ruin_1_roughness.webp",
+      "metalness": "tiles/ruin_1_metalness.webp",
+      "height": "tiles/ruin_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "ruin_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/ruin_2_basecolor.webp",
+      "normal": "tiles/ruin_2_normal.webp",
+      "roughness": "tiles/ruin_2_roughness.webp",
+      "metalness": "tiles/ruin_2_metalness.webp",
+      "height": "tiles/ruin_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "ruin_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/ruin_3_basecolor.webp",
+      "normal": "tiles/ruin_3_normal.webp",
+      "roughness": "tiles/ruin_3_roughness.webp",
+      "metalness": "tiles/ruin_3_metalness.webp",
+      "height": "tiles/ruin_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "castle_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/castle_0_basecolor.webp",
+      "normal": "tiles/castle_0_normal.webp",
+      "roughness": "tiles/castle_0_roughness.webp",
+      "metalness": "tiles/castle_0_metalness.webp",
+      "height": "tiles/castle_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "castle_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/castle_1_basecolor.webp",
+      "normal": "tiles/castle_1_normal.webp",
+      "roughness": "tiles/castle_1_roughness.webp",
+      "metalness": "tiles/castle_1_metalness.webp",
+      "height": "tiles/castle_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "castle_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/castle_2_basecolor.webp",
+      "normal": "tiles/castle_2_normal.webp",
+      "roughness": "tiles/castle_2_roughness.webp",
+      "metalness": "tiles/castle_2_metalness.webp",
+      "height": "tiles/castle_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "castle_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/castle_3_basecolor.webp",
+      "normal": "tiles/castle_3_normal.webp",
+      "roughness": "tiles/castle_3_roughness.webp",
+      "metalness": "tiles/castle_3_metalness.webp",
+      "height": "tiles/castle_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "fairway_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/fairway_0_basecolor.webp",
+      "normal": "tiles/fairway_0_normal.webp",
+      "roughness": "tiles/fairway_0_roughness.webp",
+      "metalness": "tiles/fairway_0_metalness.webp",
+      "height": "tiles/fairway_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "fairway_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/fairway_1_basecolor.webp",
+      "normal": "tiles/fairway_1_normal.webp",
+      "roughness": "tiles/fairway_1_roughness.webp",
+      "metalness": "tiles/fairway_1_metalness.webp",
+      "height": "tiles/fairway_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "fairway_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/fairway_2_basecolor.webp",
+      "normal": "tiles/fairway_2_normal.webp",
+      "roughness": "tiles/fairway_2_roughness.webp",
+      "metalness": "tiles/fairway_2_metalness.webp",
+      "height": "tiles/fairway_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "fairway_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/fairway_3_basecolor.webp",
+      "normal": "tiles/fairway_3_normal.webp",
+      "roughness": "tiles/fairway_3_roughness.webp",
+      "metalness": "tiles/fairway_3_metalness.webp",
+      "height": "tiles/fairway_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_trap_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_trap_0_basecolor.webp",
+      "normal": "tiles/sand_trap_0_normal.webp",
+      "roughness": "tiles/sand_trap_0_roughness.webp",
+      "metalness": "tiles/sand_trap_0_metalness.webp",
+      "height": "tiles/sand_trap_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_trap_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_trap_1_basecolor.webp",
+      "normal": "tiles/sand_trap_1_normal.webp",
+      "roughness": "tiles/sand_trap_1_roughness.webp",
+      "metalness": "tiles/sand_trap_1_metalness.webp",
+      "height": "tiles/sand_trap_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_trap_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_trap_2_basecolor.webp",
+      "normal": "tiles/sand_trap_2_normal.webp",
+      "roughness": "tiles/sand_trap_2_roughness.webp",
+      "metalness": "tiles/sand_trap_2_metalness.webp",
+      "height": "tiles/sand_trap_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "sand_trap_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/sand_trap_3_basecolor.webp",
+      "normal": "tiles/sand_trap_3_normal.webp",
+      "roughness": "tiles/sand_trap_3_roughness.webp",
+      "metalness": "tiles/sand_trap_3_metalness.webp",
+      "height": "tiles/sand_trap_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "pond_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/pond_0_basecolor.webp",
+      "normal": "tiles/pond_0_normal.webp",
+      "roughness": "tiles/pond_0_roughness.webp",
+      "metalness": "tiles/pond_0_metalness.webp",
+      "height": "tiles/pond_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "pond_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/pond_1_basecolor.webp",
+      "normal": "tiles/pond_1_normal.webp",
+      "roughness": "tiles/pond_1_roughness.webp",
+      "metalness": "tiles/pond_1_metalness.webp",
+      "height": "tiles/pond_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "pond_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/pond_2_basecolor.webp",
+      "normal": "tiles/pond_2_normal.webp",
+      "roughness": "tiles/pond_2_roughness.webp",
+      "metalness": "tiles/pond_2_metalness.webp",
+      "height": "tiles/pond_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "pond_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/pond_3_basecolor.webp",
+      "normal": "tiles/pond_3_normal.webp",
+      "roughness": "tiles/pond_3_roughness.webp",
+      "metalness": "tiles/pond_3_metalness.webp",
+      "height": "tiles/pond_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "hedge_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/hedge_0_basecolor.webp",
+      "normal": "tiles/hedge_0_normal.webp",
+      "roughness": "tiles/hedge_0_roughness.webp",
+      "metalness": "tiles/hedge_0_metalness.webp",
+      "height": "tiles/hedge_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "hedge_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/hedge_1_basecolor.webp",
+      "normal": "tiles/hedge_1_normal.webp",
+      "roughness": "tiles/hedge_1_roughness.webp",
+      "metalness": "tiles/hedge_1_metalness.webp",
+      "height": "tiles/hedge_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "hedge_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/hedge_2_basecolor.webp",
+      "normal": "tiles/hedge_2_normal.webp",
+      "roughness": "tiles/hedge_2_roughness.webp",
+      "metalness": "tiles/hedge_2_metalness.webp",
+      "height": "tiles/hedge_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "hedge_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/hedge_3_basecolor.webp",
+      "normal": "tiles/hedge_3_normal.webp",
+      "roughness": "tiles/hedge_3_roughness.webp",
+      "metalness": "tiles/hedge_3_metalness.webp",
+      "height": "tiles/hedge_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "rock_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/rock_0_basecolor.webp",
+      "normal": "tiles/rock_0_normal.webp",
+      "roughness": "tiles/rock_0_roughness.webp",
+      "metalness": "tiles/rock_0_metalness.webp",
+      "height": "tiles/rock_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "rock_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/rock_1_basecolor.webp",
+      "normal": "tiles/rock_1_normal.webp",
+      "roughness": "tiles/rock_1_roughness.webp",
+      "metalness": "tiles/rock_1_metalness.webp",
+      "height": "tiles/rock_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "rock_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/rock_2_basecolor.webp",
+      "normal": "tiles/rock_2_normal.webp",
+      "roughness": "tiles/rock_2_roughness.webp",
+      "metalness": "tiles/rock_2_metalness.webp",
+      "height": "tiles/rock_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "rock_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/rock_3_basecolor.webp",
+      "normal": "tiles/rock_3_normal.webp",
+      "roughness": "tiles/rock_3_roughness.webp",
+      "metalness": "tiles/rock_3_metalness.webp",
+      "height": "tiles/rock_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_floor_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_floor_0_basecolor.webp",
+      "normal": "tiles/office_floor_0_normal.webp",
+      "roughness": "tiles/office_floor_0_roughness.webp",
+      "metalness": "tiles/office_floor_0_metalness.webp",
+      "height": "tiles/office_floor_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_floor_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_floor_1_basecolor.webp",
+      "normal": "tiles/office_floor_1_normal.webp",
+      "roughness": "tiles/office_floor_1_roughness.webp",
+      "metalness": "tiles/office_floor_1_metalness.webp",
+      "height": "tiles/office_floor_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_floor_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_floor_2_basecolor.webp",
+      "normal": "tiles/office_floor_2_normal.webp",
+      "roughness": "tiles/office_floor_2_roughness.webp",
+      "metalness": "tiles/office_floor_2_metalness.webp",
+      "height": "tiles/office_floor_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_floor_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_floor_3_basecolor.webp",
+      "normal": "tiles/office_floor_3_normal.webp",
+      "roughness": "tiles/office_floor_3_roughness.webp",
+      "metalness": "tiles/office_floor_3_metalness.webp",
+      "height": "tiles/office_floor_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_0",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_0_basecolor.webp",
+      "normal": "tiles/office_wall_0_normal.webp",
+      "roughness": "tiles/office_wall_0_roughness.webp",
+      "metalness": "tiles/office_wall_0_metalness.webp",
+      "height": "tiles/office_wall_0_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_1",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_1_basecolor.webp",
+      "normal": "tiles/office_wall_1_normal.webp",
+      "roughness": "tiles/office_wall_1_roughness.webp",
+      "metalness": "tiles/office_wall_1_metalness.webp",
+      "height": "tiles/office_wall_1_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_2",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_2_basecolor.webp",
+      "normal": "tiles/office_wall_2_normal.webp",
+      "roughness": "tiles/office_wall_2_roughness.webp",
+      "metalness": "tiles/office_wall_2_metalness.webp",
+      "height": "tiles/office_wall_2_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "office_wall_3",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_wall_3_basecolor.webp",
+      "normal": "tiles/office_wall_3_normal.webp",
+      "roughness": "tiles/office_wall_3_roughness.webp",
+      "metalness": "tiles/office_wall_3_metalness.webp",
+      "height": "tiles/office_wall_3_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "kitchen_counter",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/kitchen_counter_basecolor.webp",
+      "normal": "tiles/kitchen_counter_normal.webp",
+      "roughness": "tiles/kitchen_counter_roughness.webp",
+      "metalness": "tiles/kitchen_counter_metalness.webp",
+      "height": "tiles/kitchen_counter_height.webp"
+    },
+    "size": 64,
+    "hasPBR": true,
+    "hasSvg": false
+  }
+]
