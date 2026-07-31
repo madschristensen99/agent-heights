@@ -21,11 +21,14 @@ import { resolve } from "node:path";
 
 import {
   patinaMaterial,
+  nanoBanana2,
+  removeBackground,
   downloadUrl,
 } from "./lib/fal-client.js";
 
 import {
   resizeToWebP,
+  resizeToPNG,
   saveBuffer,
 } from "./lib/post-process.js";
 
@@ -48,7 +51,7 @@ try {
 
 // =================================================================== types
 
-type Model = "patina-material";
+type Model = "patina-material" | "nano-banana-2";
 
 interface AssetDef {
   /** Unique key, e.g. "grass_0", "desk_left", "health_icon". */
@@ -90,6 +93,16 @@ function tile(
   size = 256,
 ): AssetDef {
   return { key, category: "tiles", model: "patina-material", prompt, size, pbr: true, seed, tier };
+}
+
+// Helper to create world object sprite assets (Nano Banana 2 + Bria RMBG)
+function object(
+  key: string,
+  prompt: string,
+  seed: number,
+  size = 128,
+): AssetDef {
+  return { key, category: "objects", model: "nano-banana-2", prompt, size, pbr: false, seed, tier: 1 };
 }
 
 // ----------------------------------------------------------- Tier 1: World tiles
@@ -159,6 +172,13 @@ const ASSETS: AssetDef[] = [
   tile("rock_1", "weathered stone surface, top-down", 1061),
   tile("rock_2", "mossy rock surface, top-down", 1062),
   tile("rock_3", "cracked stone surface, top-down", 1063),
+
+  // ------------------------------------------------------- Tier 1: World objects (Nano Banana 2)
+  object("big_tree", "top-down view of a large oak tree, full lush canopy seen from above, individual leaves visible with depth and shading, thick brown bark trunk visible at center, realistic texture, game sprite, isolated on white background", 2001, 128),
+  object("palm_tree", "top-down view of a palm tree, green fronds radiating from center, textured brown trunk with ring segments, coconuts visible, realistic tropical texture, game sprite, isolated on white background", 2002, 128),
+  object("mystic_tree", "top-down view of a dark gnarled mystical tree, twisted black branches, dark purple-black canopy with glowing orange eyes embedded in trunk, eerie fantasy game sprite, isolated on white background", 2003, 128),
+  object("big_rock", "top-down view of a large granite boulder, gray stone with mineral grain texture, moss patches, cracks and fissures, realistic rock texture, game sprite, isolated on white background", 2004, 128),
+  object("crystal", "top-down view of a large glowing blue crystal formation, faceted gemstone with light refraction, crystalline shards radiating outward, magical glow, fantasy game sprite, isolated on white background", 2005, 128),
 
 
   // ------------------------------------------------------- Tier 2: Office tiles
@@ -257,6 +277,42 @@ async function generatePatinaMaterial(
   };
 }
 
+// --------------------------------------------------- per-model generation
+
+async function generateNanoBananaObject(
+  asset: AssetDef,
+  outDir: string,
+): Promise<ManifestEntry> {
+  console.log(`  [Nano Banana 2] ${asset.key}: "${asset.prompt}"`);
+
+  // 1. Generate raster image
+  const imgResult = await nanoBanana2(asset.prompt, { seed: asset.seed });
+
+  // 2. Remove background (Bria RMBG)
+  console.log(`  [Bria RMBG] Removing background for ${asset.key}…`);
+  const transparentUrl = await removeBackground(imgResult.url);
+
+  // 3. Download transparent image and resize to target size as PNG
+  const buf = await downloadUrl(transparentUrl);
+  const resized = await resizeToPNG(buf, asset.size, asset.size);
+  const filePath = join(outDir, `${asset.key}.png`);
+  saveBuffer(filePath, resized);
+
+  const files: { [name: string]: string } = {
+    sprite: `${asset.category}/${asset.key}.png`,
+  };
+
+  return {
+    key: asset.key,
+    category: asset.category,
+    model: asset.model,
+    files,
+    size: asset.size,
+    hasPBR: false,
+    hasSvg: false,
+  };
+}
+
 // ================================================================ main
 
 async function main() {
@@ -305,7 +361,12 @@ async function main() {
     try {
       console.log(`\n${label} ${asset.key}`);
 
-      const entry = await generatePatinaMaterial(asset, outDir);
+      let entry: ManifestEntry;
+      if (asset.model === "nano-banana-2") {
+        entry = await generateNanoBananaObject(asset, outDir);
+      } else {
+        entry = await generatePatinaMaterial(asset, outDir);
+      }
 
       manifest.push(entry);
       succeeded++;

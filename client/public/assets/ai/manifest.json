@@ -10,7 +10,7 @@
       "metalness": "tiles/grass_0_metalness.webp",
       "height": "tiles/grass_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -25,7 +25,7 @@
       "metalness": "tiles/grass_1_metalness.webp",
       "height": "tiles/grass_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -40,7 +40,7 @@
       "metalness": "tiles/grass_2_metalness.webp",
       "height": "tiles/grass_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -55,7 +55,7 @@
       "metalness": "tiles/grass_3_metalness.webp",
       "height": "tiles/grass_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -70,7 +70,7 @@
       "metalness": "tiles/path_0_metalness.webp",
       "height": "tiles/path_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -85,7 +85,7 @@
       "metalness": "tiles/path_1_metalness.webp",
       "height": "tiles/path_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -100,7 +100,7 @@
       "metalness": "tiles/path_2_metalness.webp",
       "height": "tiles/path_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -115,7 +115,7 @@
       "metalness": "tiles/path_3_metalness.webp",
       "height": "tiles/path_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -130,7 +130,7 @@
       "metalness": "tiles/sand_0_metalness.webp",
       "height": "tiles/sand_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -145,7 +145,7 @@
       "metalness": "tiles/sand_1_metalness.webp",
       "height": "tiles/sand_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -160,7 +160,7 @@
       "metalness": "tiles/sand_2_metalness.webp",
       "height": "tiles/sand_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -175,7 +175,7 @@
       "metalness": "tiles/sand_3_metalness.webp",
       "height": "tiles/sand_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -190,7 +190,7 @@
       "metalness": "tiles/snow_0_metalness.webp",
       "height": "tiles/snow_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -205,7 +205,7 @@
       "metalness": "tiles/snow_1_metalness.webp",
       "height": "tiles/snow_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -220,7 +220,7 @@
       "metalness": "tiles/snow_2_metalness.webp",
       "height": "tiles/snow_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -235,7 +235,7 @@
       "metalness": "tiles/snow_3_metalness.webp",
       "height": "tiles/snow_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -250,7 +250,7 @@
       "metalness": "tiles/wall_0_metalness.webp",
       "height": "tiles/wall_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -265,7 +265,7 @@
       "metalness": "tiles/wall_1_metalness.webp",
       "height": "tiles/wall_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -280,7 +280,7 @@
       "metalness": "tiles/wall_2_metalness.webp",
       "height": "tiles/wall_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -295,7 +295,7 @@
       "metalness": "tiles/wall_3_metalness.webp",
       "height": "tiles/wall_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -310,7 +310,7 @@
       "metalness": "tiles/water_0_metalness.webp",
       "height": "tiles/water_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -325,7 +325,7 @@
       "metalness": "tiles/water_1_metalness.webp",
       "height": "tiles/water_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -340,7 +340,7 @@
       "metalness": "tiles/water_2_metalness.webp",
       "height": "tiles/water_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -355,7 +355,7 @@
       "metalness": "tiles/lava_0_metalness.webp",
       "height": "tiles/lava_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -370,7 +370,7 @@
       "metalness": "tiles/lava_1_metalness.webp",
       "height": "tiles/lava_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -385,7 +385,7 @@
       "metalness": "tiles/lava_2_metalness.webp",
       "height": "tiles/lava_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -400,7 +400,7 @@
       "metalness": "tiles/lava_3_metalness.webp",
       "height": "tiles/lava_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -415,7 +415,7 @@
       "metalness": "tiles/acid_0_metalness.webp",
       "height": "tiles/acid_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -430,7 +430,7 @@
       "metalness": "tiles/acid_1_metalness.webp",
       "height": "tiles/acid_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -445,7 +445,7 @@
       "metalness": "tiles/acid_2_metalness.webp",
       "height": "tiles/acid_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -460,7 +460,7 @@
       "metalness": "tiles/acid_3_metalness.webp",
       "height": "tiles/acid_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -475,7 +475,7 @@
       "metalness": "tiles/void_0_metalness.webp",
       "height": "tiles/void_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -490,7 +490,7 @@
       "metalness": "tiles/void_1_metalness.webp",
       "height": "tiles/void_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -505,7 +505,7 @@
       "metalness": "tiles/void_2_metalness.webp",
       "height": "tiles/void_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -520,7 +520,7 @@
       "metalness": "tiles/void_3_metalness.webp",
       "height": "tiles/void_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -535,7 +535,7 @@
       "metalness": "tiles/ruin_0_metalness.webp",
       "height": "tiles/ruin_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -550,7 +550,7 @@
       "metalness": "tiles/ruin_1_metalness.webp",
       "height": "tiles/ruin_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -565,7 +565,7 @@
       "metalness": "tiles/ruin_2_metalness.webp",
       "height": "tiles/ruin_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -580,7 +580,7 @@
       "metalness": "tiles/ruin_3_metalness.webp",
       "height": "tiles/ruin_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -595,7 +595,7 @@
       "metalness": "tiles/castle_0_metalness.webp",
       "height": "tiles/castle_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -610,7 +610,7 @@
       "metalness": "tiles/castle_1_metalness.webp",
       "height": "tiles/castle_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -625,7 +625,7 @@
       "metalness": "tiles/castle_2_metalness.webp",
       "height": "tiles/castle_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -640,7 +640,7 @@
       "metalness": "tiles/castle_3_metalness.webp",
       "height": "tiles/castle_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -655,7 +655,7 @@
       "metalness": "tiles/fairway_0_metalness.webp",
       "height": "tiles/fairway_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -670,7 +670,7 @@
       "metalness": "tiles/fairway_1_metalness.webp",
       "height": "tiles/fairway_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -685,7 +685,7 @@
       "metalness": "tiles/fairway_2_metalness.webp",
       "height": "tiles/fairway_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -700,7 +700,7 @@
       "metalness": "tiles/fairway_3_metalness.webp",
       "height": "tiles/fairway_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -715,7 +715,7 @@
       "metalness": "tiles/sand_trap_0_metalness.webp",
       "height": "tiles/sand_trap_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -730,7 +730,7 @@
       "metalness": "tiles/sand_trap_1_metalness.webp",
       "height": "tiles/sand_trap_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -745,7 +745,7 @@
       "metalness": "tiles/sand_trap_2_metalness.webp",
       "height": "tiles/sand_trap_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -760,7 +760,7 @@
       "metalness": "tiles/sand_trap_3_metalness.webp",
       "height": "tiles/sand_trap_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -775,7 +775,7 @@
       "metalness": "tiles/pond_0_metalness.webp",
       "height": "tiles/pond_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -790,7 +790,7 @@
       "metalness": "tiles/pond_1_metalness.webp",
       "height": "tiles/pond_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -805,7 +805,7 @@
       "metalness": "tiles/pond_2_metalness.webp",
       "height": "tiles/pond_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -820,7 +820,7 @@
       "metalness": "tiles/pond_3_metalness.webp",
       "height": "tiles/pond_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -835,7 +835,7 @@
       "metalness": "tiles/hedge_0_metalness.webp",
       "height": "tiles/hedge_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -850,7 +850,7 @@
       "metalness": "tiles/hedge_1_metalness.webp",
       "height": "tiles/hedge_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -865,7 +865,7 @@
       "metalness": "tiles/hedge_2_metalness.webp",
       "height": "tiles/hedge_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -880,7 +880,7 @@
       "metalness": "tiles/hedge_3_metalness.webp",
       "height": "tiles/hedge_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -895,7 +895,7 @@
       "metalness": "tiles/rock_0_metalness.webp",
       "height": "tiles/rock_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -910,7 +910,7 @@
       "metalness": "tiles/rock_1_metalness.webp",
       "height": "tiles/rock_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -925,7 +925,7 @@
       "metalness": "tiles/rock_2_metalness.webp",
       "height": "tiles/rock_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -940,7 +940,7 @@
       "metalness": "tiles/rock_3_metalness.webp",
       "height": "tiles/rock_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -955,7 +955,7 @@
       "metalness": "tiles/office_floor_0_metalness.webp",
       "height": "tiles/office_floor_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -970,7 +970,7 @@
       "metalness": "tiles/office_floor_1_metalness.webp",
       "height": "tiles/office_floor_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -985,7 +985,7 @@
       "metalness": "tiles/office_floor_2_metalness.webp",
       "height": "tiles/office_floor_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -1000,7 +1000,7 @@
       "metalness": "tiles/office_floor_3_metalness.webp",
       "height": "tiles/office_floor_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -1015,7 +1015,7 @@
       "metalness": "tiles/office_wall_0_metalness.webp",
       "height": "tiles/office_wall_0_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -1030,7 +1030,7 @@
       "metalness": "tiles/office_wall_1_metalness.webp",
       "height": "tiles/office_wall_1_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -1045,7 +1045,7 @@
       "metalness": "tiles/office_wall_2_metalness.webp",
       "height": "tiles/office_wall_2_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -1060,7 +1060,7 @@
       "metalness": "tiles/office_wall_3_metalness.webp",
       "height": "tiles/office_wall_3_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   },
@@ -1075,7 +1075,7 @@
       "metalness": "tiles/kitchen_counter_metalness.webp",
       "height": "tiles/kitchen_counter_height.webp"
     },
-    "size": 64,
+    "size": 256,
     "hasPBR": true,
     "hasSvg": false
   }

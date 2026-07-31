@@ -5,7 +5,7 @@ import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 import { Store } from "../store";
-import { AI_ASSET_KEYS } from "./ai-tiles";
+import { AI_ASSET_KEYS, AI_OBJECT_TEXTURES } from "./ai-tiles";
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
@@ -57,6 +57,12 @@ export class BootScene extends Phaser.Scene {
     // AI-generated PBR surface textures
     for (const key of AI_ASSET_KEYS) {
       this.load.image(`ai-${key}`, `assets/ai/tiles/${key}_basecolor.webp`);
+    }
+
+    // AI-generated world object sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
+    for (const texKey of Object.values(AI_OBJECT_TEXTURES)) {
+      const fileKey = texKey.replace(/^ai-obj-/, "");
+      this.load.image(texKey, `assets/ai/objects/${fileKey}.png`);
     }
 
     const w = this.scale.width;

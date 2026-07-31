@@ -33,8 +33,22 @@ export const AI_OFFICE_TEXTURES = {
   kitchenCounter: "ai-kitchen_counter",
 } as const;
 
+/**
+ * Maps world TILE types to AI-generated object sprite texture keys.
+ * Objects use Nano Banana 2 + Bria RMBG (transparent PNG).
+ * Tiles not listed here use the procedural canvas textures.
+ */
+export const AI_OBJECT_TEXTURES: Record<number, string> = {
+  [TILE.BIG_TREE]: "ai-obj-big_tree",
+  [TILE.PALM_TREE]: "ai-obj-palm_tree",
+  [TILE.MYSTIC_TREE]: "ai-obj-mystic_tree",
+  [TILE.BIG_ROCK]: "ai-obj-big_rock",
+  [TILE.CRYSTAL]: "ai-obj-crystal",
+};
+
 /** Flat list of all AI asset keys (without the "ai-" prefix) for loading. */
 export const AI_ASSET_KEYS: string[] = [
   ...Object.values(AI_TILE_TEXTURES).flat().map((k) => k.replace(/^ai-/, "")),
   ...Object.values(AI_OFFICE_TEXTURES).map((k) => k.replace(/^ai-/, "")),
+  ...Object.values(AI_OBJECT_TEXTURES).map((k) => k.replace(/^ai-obj-/, "")),
 ];

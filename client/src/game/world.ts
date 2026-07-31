@@ -2022,6 +2022,7 @@ export class WorldLayer {
       const canvasTex = this.scene.textures.createCanvas(texKey, chunkPxSize, chunkPxSize);
       if (canvasTex) {
         const ctx = canvasTex.getContext();
+        ctx.imageSmoothingEnabled = false;
         const worldTilesTex = this.scene.textures.get("world-tiles");
 
         const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = TILE_PX, h: number = TILE_PX) => {
