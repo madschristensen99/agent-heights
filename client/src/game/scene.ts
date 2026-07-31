@@ -637,8 +637,8 @@ export class OfficeScene extends Phaser.Scene {
           const tex = this.textures;
           const brickKey = "ai-wall_2";       // red brick — left wall
           const stoneKey = "ai-wall_0";       // gray stone — bottom wall
-          const lightStoneKey = "ai-wall_1";  // light stone — right wall
-          const drywallKey = "ai-office_wall_0"; // interior drywall — top wall
+          const lightStoneKey = "ai-wall_1";  // light stone — top wall
+          const drywallKey = "ai-office_wall_0"; // interior drywall — right wall
           const hasBrick = tex.exists(brickKey);
           const hasStone = tex.exists(stoneKey);
           const hasLightStone = tex.exists(lightStoneKey);
@@ -651,8 +651,8 @@ export class OfficeScene extends Phaser.Scene {
                 let wallKey: string | null = null;
                 if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
                 else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
-                else if (x === map.width - 1 && hasLightStone) wallKey = lightStoneKey; // right wall = light stone
-                else if (y <= 1 && hasDrywall) wallKey = drywallKey;   // top wall = interior drywall
+                else if (x === map.width - 1 && hasDrywall) wallKey = drywallKey; // right wall = drywall
+                else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
                 if (wallKey) {
                   const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
                     .setOrigin(0, 0)
