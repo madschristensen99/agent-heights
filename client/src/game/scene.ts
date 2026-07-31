@@ -638,7 +638,7 @@ export class OfficeScene extends Phaser.Scene {
           const brickKey = "ai-wall_2";       // red brick — left wall
           const stoneKey = "ai-wall_0";       // gray stone — bottom wall
           const lightStoneKey = "ai-wall_1";  // light stone — top wall
-          const drywallKey = "ai-office_wall_3"; // blue accent wall — right wall
+          const drywallKey = AI_OFFICE_TEXTURES.wallBlue; // blue accent wall — right wall
           const hasBrick = tex.exists(brickKey);
           const hasStone = tex.exists(stoneKey);
           const hasLightStone = tex.exists(lightStoneKey);

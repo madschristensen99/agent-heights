@@ -5,7 +5,7 @@ import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 import { Store } from "../store";
-import { AI_TILE_KEYS, AI_OBJECT_TEXTURES, AI_FURNITURE_KEYS, AI_ITEM_KEYS, AI_CREATURE_KEYS, AI_CHAR_TEXTURES } from "./ai-tiles";
+import { AI_CHAR_TEXTURES } from "./ai-tiles";
 import { setCharTextureProvider } from "./chargen";
 import type { CharTextureProvider } from "../../../shared/char-draw";
 
@@ -56,32 +56,12 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 64,
     });
 
-    // AI-generated PBR surface textures
-    const aiVer = "?v=257";
-    for (const key of AI_TILE_KEYS) {
-      this.load.image(`ai-${key}`, `assets/ai/tiles/${key}_basecolor.webp${aiVer}`);
-    }
-
-    // AI-generated world object sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
-    for (const texKey of Object.values(AI_OBJECT_TEXTURES)) {
-      const fileKey = texKey.replace(/^ai-obj-/, "");
-      this.load.image(texKey, `assets/ai/objects/${fileKey}.png`);
-    }
-
-    // AI-generated furniture sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
-    for (const fileKey of AI_FURNITURE_KEYS) {
-      this.load.image(`ai-fur-${fileKey}`, `assets/ai/furniture/${fileKey}.png`);
-    }
-
-    // AI-generated world item sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
-    for (const fileKey of AI_ITEM_KEYS) {
-      this.load.image(`ai-fur-${fileKey}`, `assets/ai/furniture/${fileKey}.png`);
-    }
-
-    // AI-generated creature sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
-    for (const fileKey of AI_CREATURE_KEYS) {
-      this.load.image(`ai-fur-${fileKey}`, `assets/ai/furniture/${fileKey}.png`);
-    }
+    // AI texture atlases (replaces 124+ individual requests with 4)
+    const atlasVer = "?v=1";
+    this.load.image("ai-tiles-atlas", `assets/atlases/ai-tiles-atlas.webp${atlasVer}`);
+    this.load.json("ai-tiles-atlas-meta", `assets/atlases/ai-tiles-atlas.json${atlasVer}`);
+    this.load.image("ai-sprites-atlas", `assets/atlases/ai-sprites-atlas.webp${atlasVer}`);
+    this.load.json("ai-sprites-atlas-meta", `assets/atlases/ai-sprites-atlas.json${atlasVer}`);
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -117,6 +97,11 @@ export class BootScene extends Phaser.Scene {
     const barY = h / 2;
     const barW = 320;
     const barH = 24;
+
+    // Unpack AI texture atlases into individual Phaser textures so existing
+    // code that references keys like "ai-grass_0" works without changes.
+    this.unpackAtlas("ai-tiles-atlas", "ai-tiles-atlas-meta");
+    this.unpackAtlas("ai-sprites-atlas", "ai-sprites-atlas-meta");
 
     // Extract ImageData from loaded AI char texture patches for character generation
     const provider: CharTextureProvider = {};
@@ -219,6 +204,25 @@ export class BootScene extends Phaser.Scene {
 
     // Start processing on the next frame so "Generating…" text renders first
     this.time.delayedCall(0, processNextStep);
+  }
+
+  /** Unpack a texture atlas into individual Phaser canvas textures. */
+  private unpackAtlas(atlasKey: string, metaKey: string): void {
+    if (!this.textures.exists(atlasKey)) return;
+    const meta = this.cache.json.get(metaKey) as
+      | { frames: Record<string, { x: number; y: number; w: number; h: number }> }
+      | undefined;
+    if (!meta?.frames) return;
+    const atlasImage = this.textures.get(atlasKey).getSourceImage() as CanvasImageSource;
+    for (const [texKey, frame] of Object.entries(meta.frames)) {
+      if (this.textures.exists(texKey)) continue;
+      const canvasTex = this.textures.createCanvas(texKey, frame.w, frame.h);
+      if (canvasTex) {
+        const ctx = canvasTex.getContext();
+        ctx.drawImage(atlasImage, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+        canvasTex.refresh();
+      }
+    }
   }
 
   private createAnimations(): void {

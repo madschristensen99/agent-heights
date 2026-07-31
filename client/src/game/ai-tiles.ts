@@ -30,6 +30,8 @@ export const AI_OFFICE_TEXTURES = {
   floorAgentHeights: "ai-office_floor_1",
   wallClassic: "ai-office_wall_0",
   wallAgentHeights: "ai-office_wall_1",
+  wallBeige: "ai-office_wall_2",
+  wallBlue: "ai-office_wall_3",
   kitchenCounter: "ai-kitchen_counter",
 } as const;
 
