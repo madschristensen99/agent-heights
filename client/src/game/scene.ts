@@ -4354,10 +4354,10 @@ export class OfficeScene extends Phaser.Scene {
       shadow.fillStyle(0x000000, 0.2);
       shadow.fillEllipse(0, 26, 90, 14);
 
-      // AI helicopter sprite — centered at origin
+      // AI helicopter sprite — centered at origin, native size to avoid edge clipping
       const bodyImg = this.add.image(0, 0, heliKey)
         .setOrigin(0.5, 0.5)
-        .setDisplaySize(120, 120);
+        .setDisplaySize(140, 140);
 
       // --- rotor (top layer, positioned above body so rotation spins in-place) ---
       const rotor = this.add.graphics();
