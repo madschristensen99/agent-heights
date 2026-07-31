@@ -197,7 +197,7 @@ const HAIR_DESCRIPTIONS: Record<string, string> = {
   short: "short neat hair with subtle waves and a side part",
   spiky: "spiky punk hair with sharp pointed strands sticking up",
   long: "long flowing hair past the shoulders, smooth and straight",
-  ponytail: "hair tied in a ponytail with a tail hanging down the back",
+  ponytail: "hair tied in a ponytail. When viewed from the front (down), the tail hangs on the RIGHT side of the head. When viewed from the side (right), the tail hangs BEHIND the head on the LEFT side of the frame. When viewed from behind (up), the tail hangs on the RIGHT side. The tail is a distinct strand hanging down from the top of the head",
   buzz: "buzz cut, very short cropped hair close to the scalp",
   swept: "swept side hair with a dramatic side part and fringe",
   curly: "voluminous curly hair with rounded bouncy curls",
@@ -335,8 +335,9 @@ CRITICAL INSTRUCTIONS:
 - The character's body, skin, face, and clothes are colored bright GREEN (#00ff00) — you MUST keep them green, do not change the body color at all
 - Only enhance the WHITE hair: add detailed strands, shading, highlights, texture, and depth to the hair
 - The hair style is: ${desc}
-- Keep the hair in the same position and overall shape as the reference
+- Keep the hair in the EXACT same position and shape as the reference — the white hair pixels in the reference show where hair should be, do not move or mirror the hair to a different position
 - Do not add any new elements, accessories, or change the hair style
+- Do not add dark outlines around the hair edges — use smooth shading only
 - Use a clean pixel art style with proper shading
 - The background must be solid flat white`;
 }
