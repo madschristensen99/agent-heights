@@ -1898,5 +1898,16 @@
     "size": 256,
     "hasPBR": true,
     "hasSvg": false
+  },
+  {
+    "key": "helicopter_top",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/helicopter_top.png"
+    },
+    "size": 256,
+    "hasPBR": false,
+    "hasSvg": false
   }
 ]
