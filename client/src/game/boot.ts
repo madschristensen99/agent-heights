@@ -57,7 +57,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     // AI texture atlases (replaces 124+ individual requests with 4)
-    const atlasVer = "?v=271";
+    const atlasVer = "?v=272";
     this.load.image("ai-tiles-atlas", `assets/atlases/ai-tiles-atlas.webp${atlasVer}`);
     this.load.json("ai-tiles-atlas-meta", `assets/atlases/ai-tiles-atlas.json${atlasVer}`);
     this.load.image("ai-sprites-atlas", `assets/atlases/ai-sprites-atlas.webp${atlasVer}`);
