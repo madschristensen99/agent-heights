@@ -9,7 +9,7 @@ import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
 import { creatureKey, beastKey, beastDesignName, friendlyCreatureKey, FRIENDLY_CREATURE_COUNT } from "./textures";
-import { AI_TILE_TEXTURES } from "./ai-tiles";
+import { AI_TILE_TEXTURES, AI_OBJECT_TEXTURES } from "./ai-tiles";
 import { VFXManager } from "./effects";
 import { LightingSystem, type LightSource } from "./lighting";
 import { AudioSystem } from "./audio";
@@ -2022,7 +2022,8 @@ export class WorldLayer {
       const canvasTex = this.scene.textures.createCanvas(texKey, chunkPxSize, chunkPxSize);
       if (canvasTex) {
         const ctx = canvasTex.getContext();
-        ctx.imageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         const worldTilesTex = this.scene.textures.get("world-tiles");
 
         const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = TILE_PX, h: number = TILE_PX) => {
@@ -2073,13 +2074,17 @@ export class WorldLayer {
             }
 
             // Draw overlay textures (golf items, trees, etc.)
-            const overlayKey = overlayTextures[tile];
+            // Prefer AI-generated object sprites when available, fall back to procedural
+            const aiObjKey = AI_OBJECT_TEXTURES[tile];
+            const overlayKey = aiObjKey ?? overlayTextures[tile];
             if (overlayKey) {
-              if (tile === TILE.LEPRECHAUN) {
-                // leprechaun rendered at 2x scale, centered on tile
-                drawTexToCanvas(overlayKey, px - TILE_PX / 2, py - TILE_PX / 2, TILE_PX * 2, TILE_PX * 2);
-              } else {
-                drawTexToCanvas(overlayKey, px, py);
+              if (this.scene.textures.exists(overlayKey)) {
+                if (tile === TILE.LEPRECHAUN) {
+                  // leprechaun rendered at 2x scale, centered on tile
+                  drawTexToCanvas(overlayKey, px - TILE_PX / 2, py - TILE_PX / 2, TILE_PX * 2, TILE_PX * 2);
+                } else {
+                  drawTexToCanvas(overlayKey, px, py);
+                }
               }
             }
           }

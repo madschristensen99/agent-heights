@@ -5,7 +5,7 @@ import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 import { Store } from "../store";
-import { AI_ASSET_KEYS, AI_OBJECT_TEXTURES } from "./ai-tiles";
+import { AI_TILE_KEYS, AI_OBJECT_TEXTURES } from "./ai-tiles";
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
@@ -55,7 +55,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     // AI-generated PBR surface textures
-    for (const key of AI_ASSET_KEYS) {
+    for (const key of AI_TILE_KEYS) {
       this.load.image(`ai-${key}`, `assets/ai/tiles/${key}_basecolor.webp`);
     }
 

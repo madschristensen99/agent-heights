@@ -46,9 +46,14 @@ export const AI_OBJECT_TEXTURES: Record<number, string> = {
   [TILE.CRYSTAL]: "ai-obj-crystal",
 };
 
-/** Flat list of all AI asset keys (without the "ai-" prefix) for loading. */
-export const AI_ASSET_KEYS: string[] = [
+/** Object asset keys (without prefix) for loading from objects/ directory. */
+export const AI_OBJECT_KEYS: string[] = Object.values(AI_OBJECT_TEXTURES).map((k) => k.replace(/^ai-obj-/, ""));
+
+/** Tile + office asset keys (without prefix) for loading from tiles/ directory. */
+export const AI_TILE_KEYS: string[] = [
   ...Object.values(AI_TILE_TEXTURES).flat().map((k) => k.replace(/^ai-/, "")),
   ...Object.values(AI_OFFICE_TEXTURES).map((k) => k.replace(/^ai-/, "")),
-  ...Object.values(AI_OBJECT_TEXTURES).map((k) => k.replace(/^ai-obj-/, "")),
 ];
+
+/** Flat list of all AI asset keys (kept for backwards compatibility). */
+export const AI_ASSET_KEYS: string[] = [...AI_TILE_KEYS, ...AI_OBJECT_KEYS];

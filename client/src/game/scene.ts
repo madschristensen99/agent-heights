@@ -626,7 +626,7 @@ export class OfficeScene extends Phaser.Scene {
             bg.strokePath();
           }
 
-          map.createLayer("Ground", tiles)!.setDepth(0);
+          map.createLayer("Ground", tiles)!.setDepth(0).setAlpha(0);
 
           const walls = map.createLayer("Walls", tiles)!.setDepth(1);
           const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
