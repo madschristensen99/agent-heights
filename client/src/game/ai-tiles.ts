@@ -214,7 +214,7 @@ export function hairFrameKey(style: string, dir: string, pose: number): string {
  * e.g. ("spiky", "down", 3) → "ai/char/hair/spiky/spiky_down_3.png"
  */
 export function hairFrameUrl(style: string, dir: string, pose: number): string {
-  return `assets/ai/char/hair/${style}/${style}_${dir}_${pose}.png?v=10`;
+  return `assets/ai/char/hair/${style}/${style}_${dir}_${pose}.png?v=11`;
 }
 
 /**
