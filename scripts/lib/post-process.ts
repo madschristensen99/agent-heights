@@ -56,6 +56,28 @@ export async function resizeToPNG(
     .toBuffer();
 }
 
+/**
+ * Center-crop an image to square, then resize to target size as PNG.
+ * Better for game sprites where source aspect ratio may not be square.
+ */
+export async function resizeSquarePNG(
+  input: Buffer,
+  size: number,
+): Promise<Buffer> {
+  const image = sharp(input);
+  const meta = await image.metadata();
+  const w = meta.width ?? size;
+  const h = meta.height ?? size;
+  const minDim = Math.min(w, h);
+  const left = Math.floor((w - minDim) / 2);
+  const top = Math.floor((h - minDim) / 2);
+  return sharp(input)
+    .extract({ left, top, width: minDim, height: minDim })
+    .resize(size, size, { fit: "fill" })
+    .png()
+    .toBuffer();
+}
+
 // ------------------------------------------------------- chroma key bg remove
 
 /**

@@ -197,8 +197,6 @@ export async function removeBackground(imageUrl: string): Promise<string> {
     },
   });
 
-  console.log(`  [Bria RMBG] Response:`, JSON.stringify(result.data).slice(0, 500));
-
   const data = result.data as Record<string, unknown>;
   // Bria may return { images: [{ url }] } or { image: { url } } or { result_url }
   if (Array.isArray(data.images) && data.images[0]) {

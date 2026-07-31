@@ -29,6 +29,7 @@ import {
 import {
   resizeToWebP,
   resizeToPNG,
+  resizeSquarePNG,
   saveBuffer,
 } from "./lib/post-process.js";
 
@@ -294,7 +295,7 @@ async function generateNanoBananaObject(
 
   // 3. Download transparent image and resize to target size as PNG
   const buf = await downloadUrl(transparentUrl);
-  const resized = await resizeToPNG(buf, asset.size, asset.size);
+  const resized = await resizeSquarePNG(buf, asset.size);
   const filePath = join(outDir, `${asset.key}.png`);
   saveBuffer(filePath, resized);
 
