@@ -57,7 +57,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     // AI-generated PBR surface textures
-    const aiVer = "?v=256";
+    const aiVer = "?v=257";
     for (const key of AI_TILE_KEYS) {
       this.load.image(`ai-${key}`, `assets/ai/tiles/${key}_basecolor.webp${aiVer}`);
     }
@@ -103,6 +103,10 @@ export class BootScene extends Phaser.Scene {
       this.bar.fillRoundedRect(w / 2 - 160, h / 2, 320, 24, 6);
       this.bar.fillStyle(0x3a8cd4, 1);
       this.bar.fillRoundedRect(w / 2 - 160, h / 2, 320 * value, 24, 6);
+    });
+
+    this.load.on("loaderror", (file: Phaser.Loader.File) => {
+      console.warn("[Asset Load Error]", file.key, file.url);
     });
   }
 
