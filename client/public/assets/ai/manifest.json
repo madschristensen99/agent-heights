@@ -1166,5 +1166,722 @@
     "size": 128,
     "hasPBR": false,
     "hasSvg": false
+  },
+  {
+    "key": "desk_left",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_left.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_right",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_right.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_side_top",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_side_top.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_side_bottom",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_side_bottom.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_side_top_mirror",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_side_top_mirror.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_side_bottom_mirror",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_side_bottom_mirror.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "office_chair_down",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/office_chair_down.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "office_chair_up",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/office_chair_up.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "office_chair_left",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/office_chair_left.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "office_chair_right",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/office_chair_right.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "filing_cabinet",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/filing_cabinet.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "server_rack",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/server_rack.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "server_screen",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/server_screen.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "coffee_machine_top",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/coffee_machine_top.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "coffee_machine_bottom",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/coffee_machine_bottom.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "water_cooler",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/water_cooler.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "microwave",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/microwave.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "toaster",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/toaster.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "small_plant",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/small_plant.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "large_plant",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/large_plant.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "sofa_left",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/sofa_left.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "sofa_right",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/sofa_right.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "wall_picture",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/wall_picture.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "window",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/window.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "kitchen_counter_furniture",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/kitchen_counter_furniture.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "kitchen_sink",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/kitchen_sink.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "chimney",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/chimney.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_monitor_off",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_monitor_off.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_monitor_lit",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_monitor_lit.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_monitor_black",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_monitor_black.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_monitor_side_off",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_monitor_side_off.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "desk_monitor_side_lit",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/desk_monitor_side_lit.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "golf_club",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/golf_club.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "golf_ball",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/golf_ball.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "axe",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/axe.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "tee_box",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/tee_box.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "leprechaun",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/leprechaun.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "tennis_court",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/tennis_court.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "tennis_wall",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/tennis_wall.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "tennis_racket",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/tennis_racket.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "tennis_ball",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/tennis_ball.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "tennis_net",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/tennis_net.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "creature_slime",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/creature_slime.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "creature_wolf",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/creature_wolf.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "creature_skeleton",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/creature_skeleton.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "creature_imp",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/creature_imp.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "creature_wraith",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/creature_wraith.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "creature_fire_elemental",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/creature_fire_elemental.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "beast_groveheart",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/beast_groveheart.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "beast_stone_colossus",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/beast_stone_colossus.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "beast_ash_wyrm",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/beast_ash_wyrm.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "beast_void_leviathan",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/beast_void_leviathan.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "beast_infernal_sovereign",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/beast_infernal_sovereign.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "friendly_unicorn",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/friendly_unicorn.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "friendly_fairy_bunny",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/friendly_fairy_bunny.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "friendly_baby_dragon",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/friendly_baby_dragon.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "friendly_crystal_fox",
+    "category": "furniture",
+    "model": "nano-banana-2",
+    "files": {
+      "sprite": "furniture/friendly_crystal_fox.png"
+    },
+    "size": 128,
+    "hasPBR": false,
+    "hasSvg": false
+  },
+  {
+    "key": "char_skin",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/char_skin_basecolor.webp",
+      "normal": "tiles/char_skin_normal.webp",
+      "roughness": "tiles/char_skin_roughness.webp",
+      "metalness": "tiles/char_skin_metalness.webp",
+      "height": "tiles/char_skin_height.webp"
+    },
+    "size": 32,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "char_shirt_fabric",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/char_shirt_fabric_basecolor.webp",
+      "normal": "tiles/char_shirt_fabric_normal.webp",
+      "roughness": "tiles/char_shirt_fabric_roughness.webp",
+      "metalness": "tiles/char_shirt_fabric_metalness.webp",
+      "height": "tiles/char_shirt_fabric_height.webp"
+    },
+    "size": 32,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "char_pants_fabric",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/char_pants_fabric_basecolor.webp",
+      "normal": "tiles/char_pants_fabric_normal.webp",
+      "roughness": "tiles/char_pants_fabric_roughness.webp",
+      "metalness": "tiles/char_pants_fabric_metalness.webp",
+      "height": "tiles/char_pants_fabric_height.webp"
+    },
+    "size": 32,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "char_hair_straight",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/char_hair_straight_basecolor.webp",
+      "normal": "tiles/char_hair_straight_normal.webp",
+      "roughness": "tiles/char_hair_straight_roughness.webp",
+      "metalness": "tiles/char_hair_straight_metalness.webp",
+      "height": "tiles/char_hair_straight_height.webp"
+    },
+    "size": 32,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "char_hair_curly",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/char_hair_curly_basecolor.webp",
+      "normal": "tiles/char_hair_curly_normal.webp",
+      "roughness": "tiles/char_hair_curly_roughness.webp",
+      "metalness": "tiles/char_hair_curly_metalness.webp",
+      "height": "tiles/char_hair_curly_height.webp"
+    },
+    "size": 32,
+    "hasPBR": true,
+    "hasSvg": false
+  },
+  {
+    "key": "char_leather",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/char_leather_basecolor.webp",
+      "normal": "tiles/char_leather_normal.webp",
+      "roughness": "tiles/char_leather_roughness.webp",
+      "metalness": "tiles/char_leather_metalness.webp",
+      "height": "tiles/char_leather_height.webp"
+    },
+    "size": 32,
+    "hasPBR": true,
+    "hasSvg": false
   }
 ]

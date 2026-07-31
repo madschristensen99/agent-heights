@@ -9,7 +9,7 @@ import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getServerByUrl } from "../../../shared/mcp-catalog";
-import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
+import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX, resolveChairTex } from "./furniture";
 import { upgradeWorkshop } from "./workshop";
 import { AI_OFFICE_TEXTURES } from "./ai-tiles";
 import { achievements, ACHIEVEMENTS } from "./achievements";
@@ -703,7 +703,7 @@ export class OfficeScene extends Phaser.Scene {
               const cx = tx * TILE_PX + TILE_PX / 2;
               const cy = ty * TILE_PX + TILE_PX / 2;
               const chair = this.add
-                .sprite(cx, cy, CHAIR_TEX_DOWN)
+                .sprite(cx, cy, resolveChairTex(this, CHAIR_TEX_DOWN))
                 .setDepth(5 + ty * TILE_PX + 1);
               this.chairs[idx] = chair;
             } else if (obj.name.startsWith("monitor-")) {
@@ -741,7 +741,7 @@ export class OfficeScene extends Phaser.Scene {
             const ycx = this.agentResourcesSeat.x * TILE_PX + TILE_PX / 2;
             const ycy = this.agentResourcesSeat.y * TILE_PX + TILE_PX / 2;
             this.add
-              .sprite(ycx, ycy, CHAIR_TEX_LEFT)
+              .sprite(ycx, ycy, resolveChairTex(this, CHAIR_TEX_LEFT))
               .setDepth(5 + this.agentResourcesSeat.y * TILE_PX + 1);
 
             this.agentResources = new AgentResourcesNPC(this, this.grid, this.agentResourcesSeat, (clicked) =>
@@ -764,7 +764,7 @@ export class OfficeScene extends Phaser.Scene {
             const hcx = this.hermesSeat.x * TILE_PX + TILE_PX / 2;
             const hcy = this.hermesSeat.y * TILE_PX + TILE_PX / 2;
             this.add
-              .sprite(hcx, hcy, CHAIR_TEX_RIGHT)
+              .sprite(hcx, hcy, resolveChairTex(this, CHAIR_TEX_RIGHT))
               .setDepth(5 + this.hermesSeat.y * TILE_PX + 1);
 
             this.hermes = new HermesNPC(this, this.grid, this.hermesSeat, (clicked) =>
@@ -6039,9 +6039,9 @@ export class OfficeScene extends Phaser.Scene {
       if (!chair) return;
       const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
       if (agent) {
-        chair.setTexture(CHAIR_TEX_UP);
+        chair.setTexture(resolveChairTex(this, CHAIR_TEX_UP));
       } else {
-        chair.setTexture(CHAIR_TEX_DOWN);
+        chair.setTexture(resolveChairTex(this, CHAIR_TEX_DOWN));
       }
     });
 

@@ -7,6 +7,12 @@
  */
 
 import Phaser from "phaser";
+import {
+  AI_FURNITURE_TEXTURES,
+  AI_FURNITURE_CHAIRS,
+  AI_FURNITURE_MONITORS,
+  AI_FURNITURE_MONITORS_SIDE,
+} from "./ai-tiles";
 
 const TILE_PX = 64;
 
@@ -2133,6 +2139,16 @@ export const CHAIR_TEX_RIGHT = "chair-right";
 export const MONITOR_TEX = "monitor-proc";
 export const MONITOR_SIDE_TEX = "monitor-side-proc";
 
+/**
+ * Resolve the effective chair texture key, preferring AI-generated textures
+ * when they have been loaded. Falls back to procedural canvas keys.
+ */
+export function resolveChairTex(scene: Phaser.Scene, proceduralKey: string): string {
+  const aiKey = AI_FURNITURE_CHAIRS[proceduralKey];
+  if (aiKey && scene.textures.exists(aiKey)) return aiKey;
+  return proceduralKey;
+}
+
 const CHAIR_TILE_IDS = new Set([19, 33, 42]);
 
 /**
@@ -2143,12 +2159,17 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
   const tex = scene.textures;
   const map = furnitureLayer.tilemap;
 
-  // Generate canvas textures for each furniture type
+  // Generate canvas textures for each furniture type (procedural fallback)
   for (const ft of FURNITURE_TYPES) {
     for (const tileId of ft.tileIds) {
       const key = `furniture-${tileId}`;
       if (tex.exists(key)) continue;
 
+      // If an AI-generated texture exists for this tile ID, skip procedural generation
+      const aiKey = AI_FURNITURE_TEXTURES[tileId];
+      if (aiKey && tex.exists(aiKey)) continue;
+
+      // Fall back to procedural canvas drawing
       const canvasTex = tex.createCanvas(key, TILE_PX, TILE_PX);
       if (!canvasTex) continue;
       const ctx = canvasTex.getContext();
@@ -2158,7 +2179,7 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
     }
   }
 
-  // Generate chair direction textures
+  // Generate chair direction textures (procedural fallback)
   const chairDraws: Array<[string, (ctx: CanvasRenderingContext2D, s: number) => void]> = [
     [CHAIR_TEX_DOWN, drawOfficeChair],
     [CHAIR_TEX_UP, drawOfficeChairUp],
@@ -2167,6 +2188,12 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
   ];
   for (const [key, drawFn] of chairDraws) {
     if (tex.exists(key)) continue;
+
+    // Use AI chair texture if available — skip procedural generation
+    const aiChairKey = AI_FURNITURE_CHAIRS[key];
+    if (aiChairKey && tex.exists(aiChairKey)) continue;
+
+    // Fall back to procedural canvas drawing
     const canvasTex = tex.createCanvas(key, TILE_PX, TILE_PX);
     if (!canvasTex) continue;
     const ctx = canvasTex.getContext();
@@ -2177,60 +2204,110 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
 
   // Generate procedural monitor texture (3 frames: off / on / black)
   // Force regenerate if old 2-frame version exists without frame "2"
-  if (tex.exists(MONITOR_TEX) && !tex.get(MONITOR_TEX).has("2")) {
-    tex.remove(MONITOR_TEX);
-  }
-  if (!tex.exists(MONITOR_TEX)) {
-    const canvasTex = tex.createCanvas(MONITOR_TEX, TILE_PX * 3, TILE_PX);
-    if (canvasTex) {
-      const ctx = canvasTex.getContext();
-      // Frame 0: off — code editor look (idle agent)
-      ctx.clearRect(0, 0, TILE_PX, TILE_PX);
-      drawDeskMonitor(ctx, TILE_PX, false);
-      // Frame 1: on — lit blue (legacy, kept for compatibility)
-      ctx.save();
-      ctx.translate(TILE_PX, 0);
-      drawDeskMonitor(ctx, TILE_PX, true);
-      ctx.restore();
-      // Frame 2: black — unassigned desk (no agent)
-      ctx.save();
-      ctx.translate(TILE_PX * 2, 0);
-      drawDeskMonitor(ctx, TILE_PX, false);
-      ctx.restore();
-      // Overwrite frame 2 screen area with pure black
-      ctx.save();
-      ctx.translate(TILE_PX * 2, 0);
-      ctx.fillStyle = "rgba(0,0,0,1)";
-      ctx.fillRect(TILE_PX * 0.15, TILE_PX * 0.11, TILE_PX * 0.7, TILE_PX * 0.4);
-      // No power LED on unassigned
-      ctx.fillStyle = "rgba(0,0,0,1)";
-      ctx.beginPath();
-      ctx.arc(TILE_PX * 0.82, TILE_PX * 0.52, 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      canvasTex.refresh();
-      const texture = tex.get(MONITOR_TEX);
-      texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
-      texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
-      texture.add("2", 0, TILE_PX * 2, 0, TILE_PX, TILE_PX);
+  // Skip if AI monitor textures are available
+  const aiMonOff = AI_FURNITURE_MONITORS.off;
+  const aiMonLit = AI_FURNITURE_MONITORS.lit;
+  const aiMonBlack = AI_FURNITURE_MONITORS.black;
+  const hasAiMonitors = !!(aiMonOff && tex.exists(aiMonOff) && aiMonLit && tex.exists(aiMonLit) && aiMonBlack && tex.exists(aiMonBlack));
+
+  if (hasAiMonitors) {
+    // Build a spritesheet from 3 separate AI monitor textures
+    if (tex.exists(MONITOR_TEX) && !tex.get(MONITOR_TEX).has("2")) {
+      tex.remove(MONITOR_TEX);
+    }
+    if (!tex.exists(MONITOR_TEX)) {
+      const canvasTex = tex.createCanvas(MONITOR_TEX, TILE_PX * 3, TILE_PX);
+      if (canvasTex) {
+        const ctx = canvasTex.getContext();
+        for (const [frameKey, slot] of [[aiMonOff, 0], [aiMonLit, 1], [aiMonBlack, 2]] as const) {
+          const sourceImg = tex.get(frameKey).getSourceImage() as HTMLImageElement;
+          ctx.drawImage(sourceImg, slot * TILE_PX, 0, TILE_PX, TILE_PX);
+        }
+        canvasTex.refresh();
+        const texture = tex.get(MONITOR_TEX);
+        texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
+        texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+        texture.add("2", 0, TILE_PX * 2, 0, TILE_PX, TILE_PX);
+      }
+    }
+  } else {
+    if (tex.exists(MONITOR_TEX) && !tex.get(MONITOR_TEX).has("2")) {
+      tex.remove(MONITOR_TEX);
+    }
+    if (!tex.exists(MONITOR_TEX)) {
+      const canvasTex = tex.createCanvas(MONITOR_TEX, TILE_PX * 3, TILE_PX);
+      if (canvasTex) {
+        const ctx = canvasTex.getContext();
+        // Frame 0: off — code editor look (idle agent)
+        ctx.clearRect(0, 0, TILE_PX, TILE_PX);
+        drawDeskMonitor(ctx, TILE_PX, false);
+        // Frame 1: on — lit blue (legacy, kept for compatibility)
+        ctx.save();
+        ctx.translate(TILE_PX, 0);
+        drawDeskMonitor(ctx, TILE_PX, true);
+        ctx.restore();
+        // Frame 2: black — unassigned desk (no agent)
+        ctx.save();
+        ctx.translate(TILE_PX * 2, 0);
+        drawDeskMonitor(ctx, TILE_PX, false);
+        ctx.restore();
+        // Overwrite frame 2 screen area with pure black
+        ctx.save();
+        ctx.translate(TILE_PX * 2, 0);
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        ctx.fillRect(TILE_PX * 0.15, TILE_PX * 0.11, TILE_PX * 0.7, TILE_PX * 0.4);
+        // No power LED on unassigned
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        ctx.beginPath();
+        ctx.arc(TILE_PX * 0.82, TILE_PX * 0.52, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        canvasTex.refresh();
+        const texture = tex.get(MONITOR_TEX);
+        texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
+        texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+        texture.add("2", 0, TILE_PX * 2, 0, TILE_PX, TILE_PX);
+      }
     }
   }
 
-  // Generate side-view monitor texture (2 frames: off / on) — for Agent Resources's desk
-  if (!tex.exists(MONITOR_SIDE_TEX)) {
-    const canvasTex = tex.createCanvas(MONITOR_SIDE_TEX, TILE_PX * 2, TILE_PX);
-    if (canvasTex) {
-      const ctx = canvasTex.getContext();
-      ctx.clearRect(0, 0, TILE_PX, TILE_PX);
-      drawDeskMonitorSide(ctx, TILE_PX, false);
-      ctx.save();
-      ctx.translate(TILE_PX, 0);
-      drawDeskMonitorSide(ctx, TILE_PX, true);
-      ctx.restore();
-      canvasTex.refresh();
-      const texture = tex.get(MONITOR_SIDE_TEX);
-      texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
-      texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+  // Generate side-view monitor texture (2 frames: off / on)
+  // Skip if AI side monitor textures are available
+  const aiMonSideOff = AI_FURNITURE_MONITORS_SIDE.off;
+  const aiMonSideLit = AI_FURNITURE_MONITORS_SIDE.lit;
+  const hasAiSideMonitors = !!(aiMonSideOff && tex.exists(aiMonSideOff) && aiMonSideLit && tex.exists(aiMonSideLit));
+
+  if (hasAiSideMonitors) {
+    if (!tex.exists(MONITOR_SIDE_TEX)) {
+      const canvasTex = tex.createCanvas(MONITOR_SIDE_TEX, TILE_PX * 2, TILE_PX);
+      if (canvasTex) {
+        const ctx = canvasTex.getContext();
+        const offImg = tex.get(aiMonSideOff).getSourceImage() as HTMLImageElement;
+        const litImg = tex.get(aiMonSideLit).getSourceImage() as HTMLImageElement;
+        ctx.drawImage(offImg, 0, 0, TILE_PX, TILE_PX);
+        ctx.drawImage(litImg, TILE_PX, 0, TILE_PX, TILE_PX);
+        canvasTex.refresh();
+        const texture = tex.get(MONITOR_SIDE_TEX);
+        texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
+        texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+      }
+    }
+  } else {
+    if (!tex.exists(MONITOR_SIDE_TEX)) {
+      const canvasTex = tex.createCanvas(MONITOR_SIDE_TEX, TILE_PX * 2, TILE_PX);
+      if (canvasTex) {
+        const ctx = canvasTex.getContext();
+        ctx.clearRect(0, 0, TILE_PX, TILE_PX);
+        drawDeskMonitorSide(ctx, TILE_PX, false);
+        ctx.save();
+        ctx.translate(TILE_PX, 0);
+        drawDeskMonitorSide(ctx, TILE_PX, true);
+        ctx.restore();
+        canvasTex.refresh();
+        const texture = tex.get(MONITOR_SIDE_TEX);
+        texture.add("0", 0, 0, 0, TILE_PX, TILE_PX);
+        texture.add("1", 0, TILE_PX, 0, TILE_PX, TILE_PX);
+      }
     }
   }
 
@@ -2247,7 +2324,9 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
         continue;
       }
 
-      const key = `furniture-${tileId}`;
+      // Use AI texture if available, otherwise procedural fallback
+      const aiKey = AI_FURNITURE_TEXTURES[tileId];
+      const key = (aiKey && tex.exists(aiKey)) ? aiKey : `furniture-${tileId}`;
       if (!tex.exists(key)) continue;
 
       // Hide the underlying tile to prevent double rendering

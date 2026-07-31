@@ -5,7 +5,9 @@ import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 import { Store } from "../store";
-import { AI_TILE_KEYS, AI_OBJECT_TEXTURES } from "./ai-tiles";
+import { AI_TILE_KEYS, AI_OBJECT_TEXTURES, AI_FURNITURE_KEYS, AI_ITEM_KEYS, AI_CREATURE_KEYS, AI_CHAR_TEXTURES } from "./ai-tiles";
+import { setCharTextureProvider } from "./chargen";
+import type { CharTextureProvider } from "../../../shared/char-draw";
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
@@ -66,6 +68,21 @@ export class BootScene extends Phaser.Scene {
       this.load.image(texKey, `assets/ai/objects/${fileKey}.png`);
     }
 
+    // AI-generated furniture sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
+    for (const fileKey of AI_FURNITURE_KEYS) {
+      this.load.image(`ai-fur-${fileKey}`, `assets/ai/furniture/${fileKey}.png`);
+    }
+
+    // AI-generated world item sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
+    for (const fileKey of AI_ITEM_KEYS) {
+      this.load.image(`ai-fur-${fileKey}`, `assets/ai/furniture/${fileKey}.png`);
+    }
+
+    // AI-generated creature sprites (Nano Banana 2 + Bria RMBG → transparent PNG)
+    for (const fileKey of AI_CREATURE_KEYS) {
+      this.load.image(`ai-fur-${fileKey}`, `assets/ai/furniture/${fileKey}.png`);
+    }
+
     const w = this.scale.width;
     const h = this.scale.height;
     this.bar = this.add.graphics();
@@ -96,6 +113,24 @@ export class BootScene extends Phaser.Scene {
     const barY = h / 2;
     const barW = 320;
     const barH = 24;
+
+    // Extract ImageData from loaded AI char texture patches for character generation
+    const provider: CharTextureProvider = {};
+    for (const [field, texKey] of Object.entries(AI_CHAR_TEXTURES)) {
+      if (this.textures.exists(texKey)) {
+        const tex = this.textures.get(texKey);
+        const src = tex.getSourceImage() as HTMLImageElement;
+        const canvas = document.createElement("canvas");
+        canvas.width = src.width;
+        canvas.height = src.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(src, 0, 0);
+        provider[field as keyof CharTextureProvider] = ctx.getImageData(0, 0, src.width, src.height);
+      }
+    }
+    if (Object.keys(provider).length > 0) {
+      setCharTextureProvider(provider);
+    }
 
     // Get texture generation steps + animation step
     const texSteps = getTextureGenerationSteps(this);

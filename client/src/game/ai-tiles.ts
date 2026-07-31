@@ -52,10 +52,145 @@ export const AI_OBJECT_TEXTURES: Record<number, string> = {
 /** Object asset keys (without prefix) for loading from objects/ directory. */
 export const AI_OBJECT_KEYS: string[] = Object.values(AI_OBJECT_TEXTURES).map((k) => k.replace(/^ai-obj-/, ""));
 
-/** Tile + office asset keys (without prefix) for loading from tiles/ directory. */
+/**
+ * Maps furniture tile IDs to AI-generated furniture sprite texture keys.
+ * Furniture uses Nano Banana 2 + Bria RMBG (transparent PNG).
+ * When a tile ID is listed here, the AI texture is used instead of procedural canvas.
+ */
+export const AI_FURNITURE_TEXTURES: Record<number, string> = {
+  17: "ai-fur-desk_left",
+  18: "ai-fur-desk_right",
+  20: "ai-fur-filing_cabinet",
+  21: "ai-fur-wall_picture",
+  10: "ai-fur-window",
+  22: "ai-fur-small_plant",
+  23: "ai-fur-coffee_machine_top",
+  24: "ai-fur-coffee_machine_bottom",
+  25: "ai-fur-water_cooler",
+  26: "ai-fur-kitchen_counter_furniture",
+  27: "ai-fur-kitchen_sink",
+  28: "ai-fur-microwave",
+  29: "ai-fur-sofa_left",
+  30: "ai-fur-sofa_right",
+  31: "ai-fur-large_plant",
+  32: "ai-fur-toaster",
+  35: "ai-fur-server_rack",
+  36: "ai-fur-server_screen",
+  37: "ai-fur-chimney",
+  38: "ai-fur-desk_side_top",
+  39: "ai-fur-desk_side_bottom",
+  40: "ai-fur-desk_side_top_mirror",
+  41: "ai-fur-desk_side_bottom_mirror",
+};
+
+/** AI furniture chair textures (4 directions). */
+export const AI_FURNITURE_CHAIRS: Record<string, string> = {
+  "chair-down": "ai-fur-office_chair_down",
+  "chair-up": "ai-fur-office_chair_up",
+  "chair-left": "ai-fur-office_chair_left",
+  "chair-right": "ai-fur-office_chair_right",
+};
+
+/** AI furniture monitor textures (3 frames: off / lit / black). */
+export const AI_FURNITURE_MONITORS: Record<string, string> = {
+  off: "ai-fur-desk_monitor_off",
+  lit: "ai-fur-desk_monitor_lit",
+  black: "ai-fur-desk_monitor_black",
+};
+
+/** AI furniture side monitor textures (2 frames: off / lit). */
+export const AI_FURNITURE_MONITORS_SIDE: Record<string, string> = {
+  off: "ai-fur-desk_monitor_side_off",
+  lit: "ai-fur-desk_monitor_side_lit",
+};
+
+/** Furniture asset keys (without prefix) for loading from furniture/ directory. */
+export const AI_FURNITURE_KEYS: string[] = [
+  ...Object.values(AI_FURNITURE_TEXTURES),
+  ...Object.values(AI_FURNITURE_CHAIRS),
+  ...Object.values(AI_FURNITURE_MONITORS),
+  ...Object.values(AI_FURNITURE_MONITORS_SIDE),
+].map((k) => k.replace(/^ai-fur-/, ""));
+
+/**
+ * Maps procedural item texture keys to AI-generated item sprite texture keys.
+ * Items use Nano Banana 2 + Bria RMBG (transparent PNG).
+ * When a key is listed here, the AI texture is used instead of procedural canvas.
+ */
+export const AI_ITEM_TEXTURES: Record<string, string> = {
+  "golf-club": "ai-fur-golf_club",
+  "golf-ball": "ai-fur-golf_ball",
+  "axe": "ai-fur-axe",
+  "tee-box": "ai-fur-tee_box",
+  "leprechaun": "ai-fur-leprechaun",
+  "tennis-court": "ai-fur-tennis_court",
+  "tennis-wall": "ai-fur-tennis_wall",
+  "tennis-racket": "ai-fur-tennis_racket",
+  "tennis-ball": "ai-fur-tennis_ball",
+  "tennis-net": "ai-fur-tennis_net",
+};
+
+/** Item asset keys (without prefix) for loading from furniture/ directory. */
+export const AI_ITEM_KEYS: string[] = Object.values(AI_ITEM_TEXTURES).map((k) => k.replace(/^ai-fur-/, ""));
+
+/**
+ * Resolve a procedural item texture key to its AI-generated equivalent if loaded.
+ * Use this when creating sprites/images that reference item textures by key.
+ */
+export function resolveItemTex(scene: Phaser.Scene, procKey: string): string {
+  const aiKey = AI_ITEM_TEXTURES[procKey];
+  if (aiKey && scene.textures.exists(aiKey)) return aiKey;
+  return procKey;
+}
+
+/**
+ * Maps creature/beast/friendly spritesheet keys to AI-generated sprite texture keys.
+ * Creatures use Nano Banana 2 + Bria RMBG (transparent PNG).
+ * The AI sprite is used as the base for all animation frames.
+ */
+export const AI_CREATURE_TEXTURES: Record<string, string> = {
+  "creature-slime": "ai-fur-creature_slime",
+  "creature-wolf": "ai-fur-creature_wolf",
+  "creature-skeleton": "ai-fur-creature_skeleton",
+  "creature-imp": "ai-fur-creature_imp",
+  "creature-wraith": "ai-fur-creature_wraith",
+  "creature-fire-elemental": "ai-fur-creature_fire_elemental",
+  "beast-groveheart": "ai-fur-beast_groveheart",
+  "beast-stone-colossus": "ai-fur-beast_stone_colossus",
+  "beast-ash-wyrm": "ai-fur-beast_ash_wyrm",
+  "beast-void-leviathan": "ai-fur-beast_void_leviathan",
+  "beast-infernal-sovereign": "ai-fur-beast_infernal_sovereign",
+  "friendly-unicorn": "ai-fur-friendly_unicorn",
+  "friendly-fairy-bunny": "ai-fur-friendly_fairy_bunny",
+  "friendly-baby-dragon": "ai-fur-friendly_baby_dragon",
+  "friendly-crystal-fox": "ai-fur-friendly_crystal_fox",
+};
+
+/** Creature asset keys (without prefix) for loading from furniture/ directory. */
+export const AI_CREATURE_KEYS: string[] = Object.values(AI_CREATURE_TEXTURES).map((k) => k.replace(/^ai-fur-/, ""));
+
+/**
+ * Character texture patch keys for AI-generated tileable textures.
+ * These are small (32×32) PATINA Material basecolor textures used to
+ * add surface detail to character sprites (fabric weave, skin pores, etc.).
+ */
+export const AI_CHAR_TEXTURES = {
+  skin: "ai-char_skin",
+  shirtFabric: "ai-char_shirt_fabric",
+  pantsFabric: "ai-char_pants_fabric",
+  hairStraight: "ai-char_hair_straight",
+  hairCurly: "ai-char_hair_curly",
+  leather: "ai-char_leather",
+} as const;
+
+/** Char texture asset keys (without prefix) for loading from tiles/ directory. */
+export const AI_CHAR_KEYS: string[] = Object.values(AI_CHAR_TEXTURES).map((k) => k.replace(/^ai-/, ""));
+
+/** Tile + office + char texture asset keys (without prefix) for loading from tiles/ directory. */
 export const AI_TILE_KEYS: string[] = [
   ...Object.values(AI_TILE_TEXTURES).flat().map((k) => k.replace(/^ai-/, "")),
   ...Object.values(AI_OFFICE_TEXTURES).map((k) => k.replace(/^ai-/, "")),
+  ...AI_CHAR_KEYS,
 ];
 
 /** Flat list of all AI asset keys (kept for backwards compatibility). */

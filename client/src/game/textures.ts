@@ -14,10 +14,47 @@
  */
 
 import Phaser from "phaser";
+import { AI_ITEM_TEXTURES, AI_CREATURE_TEXTURES } from "./ai-tiles";
 
 export const SPRITE_SCALE = 1; // no pixel-art upscaling — smooth rendering
 
 type RGB = { r: number; g: number; b: number };
+
+/** Check if an AI-generated texture exists for a procedural item key, return AI key or null. */
+function aiItemKey(tex: Phaser.Textures.TextureManager, procKey: string): string | null {
+  const aiKey = AI_ITEM_TEXTURES[procKey];
+  if (aiKey && tex.exists(aiKey)) return aiKey;
+  return null;
+}
+
+/** Check if an AI-generated texture exists for a creature spritesheet key, return AI key or null. */
+function aiCreatureKey(tex: Phaser.Textures.TextureManager, procKey: string): string | null {
+  const aiKey = AI_CREATURE_TEXTURES[procKey];
+  if (aiKey && tex.exists(aiKey)) return aiKey;
+  return null;
+}
+
+/**
+ * Build a spritesheet from a single AI sprite by drawing it into all frame slots.
+ * The animation system will cycle through identical frames (static appearance).
+ */
+function buildAiSpritesheet(
+  tex: Phaser.Textures.TextureManager,
+  sheetKey: string,
+  aiKey: string,
+  frameCount: number,
+  frameSize: number,
+): void {
+  if (tex.exists(sheetKey)) return;
+  const sourceImg = tex.get(aiKey).getSourceImage() as HTMLImageElement;
+  const canvasTex = createCanvasTexture(tex, sheetKey, frameSize * frameCount, frameSize);
+  const ctx = canvasTex.getContext();
+  for (let f = 0; f < frameCount; f++) {
+    ctx.drawImage(sourceImg, f * frameSize, 0, frameSize, frameSize);
+  }
+  canvasTex.refresh();
+  registerFrames(tex.get(sheetKey)!, frameCount, frameSize);
+}
 
 /** Create a canvas texture, throwing if creation fails. */
 function createCanvasTexture(tex: Phaser.Textures.TextureManager, key: string, w: number, h: number): Phaser.Textures.CanvasTexture {
@@ -3827,6 +3864,15 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         const design = CREATURE_DESIGNS[i];
         const key = `creature-${design.name}`;
         if (tex.exists(key)) continue;
+
+        // Use AI creature texture if available
+        const aiKey = aiCreatureKey(tex, key);
+        if (aiKey) {
+          buildAiSpritesheet(tex, key, aiKey, CREATURE_FRAMES, TEX_SIZE);
+          continue;
+        }
+
+        // Fall back to procedural canvas drawing
         const sheetW = TEX_SIZE * CREATURE_FRAMES;
         const sheetH = TEX_SIZE;
         const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
@@ -3851,6 +3897,15 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         const design = BEAST_DESIGNS[i];
         const key = `beast-${design.name}`;
         if (tex.exists(key)) continue;
+
+        // Use AI beast texture if available
+        const aiKey = aiCreatureKey(tex, key);
+        if (aiKey) {
+          buildAiSpritesheet(tex, key, aiKey, BEAST_FRAMES, TEX_SIZE);
+          continue;
+        }
+
+        // Fall back to procedural canvas drawing
         const sheetW = TEX_SIZE * BEAST_FRAMES;
         const sheetH = TEX_SIZE;
         const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
@@ -3875,6 +3930,15 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         const design = FRIENDLY_DESIGNS[i];
         const key = `friendly-${design.name}`;
         if (tex.exists(key)) continue;
+
+        // Use AI friendly creature texture if available
+        const aiKey = aiCreatureKey(tex, key);
+        if (aiKey) {
+          buildAiSpritesheet(tex, key, aiKey, CREATURE_FRAMES, TEX_SIZE);
+          continue;
+        }
+
+        // Fall back to procedural canvas drawing
         const sheetW = TEX_SIZE * CREATURE_FRAMES;
         const sheetH = TEX_SIZE;
         const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
@@ -4013,17 +4077,17 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
   steps.push({
     name: "Items",
     fn: () => {
-      if (!tex.exists("golf-club")) {
+      if (!tex.exists("golf-club") && !aiItemKey(tex, "golf-club")) {
         const ct = createCanvasTexture(tex, "golf-club", 64, 64);
         drawGolfClub(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("golf-ball")) {
+      if (!tex.exists("golf-ball") && !aiItemKey(tex, "golf-ball")) {
         const ct = createCanvasTexture(tex, "golf-ball", 64, 64);
         drawGolfBall(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("axe")) {
+      if (!tex.exists("axe") && !aiItemKey(tex, "axe")) {
         const ct = createCanvasTexture(tex, "axe", 64, 64);
         drawAxe(ct.getContext(), 64);
         ct.refresh();
@@ -4055,12 +4119,12 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         drawMysticTree(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("tee-box")) {
+      if (!tex.exists("tee-box") && !aiItemKey(tex, "tee-box")) {
         const ct = createCanvasTexture(tex, "tee-box", 64, 64);
         drawTeeBox(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("leprechaun")) {
+      if (!tex.exists("leprechaun") && !aiItemKey(tex, "leprechaun")) {
         const ct = createCanvasTexture(tex, "leprechaun", 64, 64);
         drawLeprechaun(ct.getContext(), 64);
         ct.refresh();
@@ -4086,27 +4150,27 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
   steps.push({
     name: "Tennis",
     fn: () => {
-      if (!tex.exists("tennis-court")) {
+      if (!tex.exists("tennis-court") && !aiItemKey(tex, "tennis-court")) {
         const ct = createCanvasTexture(tex, "tennis-court", 64, 64);
         drawTennisCourt(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("tennis-wall")) {
+      if (!tex.exists("tennis-wall") && !aiItemKey(tex, "tennis-wall")) {
         const ct = createCanvasTexture(tex, "tennis-wall", 64, 64);
         drawTennisWall(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("tennis-racket")) {
+      if (!tex.exists("tennis-racket") && !aiItemKey(tex, "tennis-racket")) {
         const ct = createCanvasTexture(tex, "tennis-racket", 64, 64);
         drawTennisRacket(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("tennis-ball")) {
+      if (!tex.exists("tennis-ball") && !aiItemKey(tex, "tennis-ball")) {
         const ct = createCanvasTexture(tex, "tennis-ball", 64, 64);
         drawTennisBall(ct.getContext(), 64);
         ct.refresh();
       }
-      if (!tex.exists("tennis-net")) {
+      if (!tex.exists("tennis-net") && !aiItemKey(tex, "tennis-net")) {
         const ct = createCanvasTexture(tex, "tennis-net", 64, 64);
         drawTennisNet(ct.getContext(), 64);
         ct.refresh();

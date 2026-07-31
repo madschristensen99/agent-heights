@@ -25,10 +25,20 @@ export interface CharPalette {
 
 // ------------------------------------------------------------- draw surface
 
+export interface CharTextureProvider {
+  skin?: ImageData;
+  shirtFabric?: ImageData;
+  pantsFabric?: ImageData;
+  hairStraight?: ImageData;
+  hairCurly?: ImageData;
+  leather?: ImageData;
+}
+
 export interface DrawSurface {
   width: number;
   height: number;
   clip: { x: number; y: number; w: number; h: number } | null;
+  texProvider?: CharTextureProvider;
   set(x: number, y: number, hex: string): void;
   setAlpha(x: number, y: number, hex: string, a: number): void;
   rect(x: number, y: number, w: number, h: number, hex: string): void;
@@ -40,6 +50,7 @@ export interface DrawSurface {
   fillTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, hex: string): void;
   fillRoundedRect(x: number, y: number, w: number, h: number, r: number, hex: string): void;
   flipH(x: number, y: number, w: number, h: number): void;
+  texturedRect?(x: number, y: number, w: number, h: number, hex: string, tex: keyof CharTextureProvider): void;
 }
 
 // ----------------------------------------------------------------- helpers
@@ -156,6 +167,11 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.set(cx + xx, cy + yy, mix(left, right, t));
       }
     }
+  };
+
+  /** Overlay AI texture on a region if texturedRect is available. */
+  const texOverlay = (x: number, y: number, w: number, h: number, hex: string, tex: keyof CharTextureProvider) => {
+    if (s.texturedRect) s.texturedRect(x, y, w, h, hex, tex);
   };
 
   /** Radial gradient inside a circle (inner→outer), with optional highlight offset. */
@@ -693,6 +709,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const tw = isFat ? (breathing ? 30 : 28) : (breathing ? 24 : 22);
     const tx = isFat ? (breathing ? 17 : 18) : (breathing ? 20 : 21);
     vGradRR(bx(tx), by(38), tw, 18, 5, shirtLi, shirtDk);
+    texOverlay(bx(tx), by(38), tw, 18, pal.shirt, "shirtFabric");
     // Edge highlights
     s.rect(bx(tx), by(38), 2, 18, shirtLi);
     s.rect(bx(tx + tw - 2), by(38), 2, 18, shirtDk);
@@ -733,6 +750,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const rx2 = leftUp ? 23 : 33;
       rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
       vGradRR(lx(fx), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(fx), ly(58), 8, 14, pal.pants, "pantsFabric");
       s.rect(lx(fx), ly(58), 2, 14, pantsLi);
       el(lx(fx + 4), ly(74), 6, 4, SHOE);
       s.set(lx(fx + 2), ly(73), shoeLi);
@@ -747,9 +765,11 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const legW = isFat ? 9 : 8;
       rrO(lx(legLX), ly(58), legW, 14, 3, pal.pants);
       vGradRR(lx(legLX), ly(58), legW, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(legLX), ly(58), legW, 14, pal.pants, "pantsFabric");
       s.rect(lx(legLX), ly(58), 2, 14, pantsLi);
       rrO(lx(legRX), ly(58), legW, 14, 3, pal.pants);
       vGradRR(lx(legRX), ly(58), legW, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(legRX), ly(58), legW, 14, pal.pants, "pantsFabric");
       s.rect(lx(legRX), ly(58), 2, 14, pantsLi);
       el(lx(legLX + 4), ly(74), 6, 4, SHOE);
       el(lx(legRX + 4), ly(74), 6, 4, SHOE);
@@ -782,6 +802,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const utw = isFat ? 28 : 22;
     const utx = isFat ? 18 : 21;
     vGradRR(bx(utx), by(38), utw, 18, 5, shirtLi, shirtDk);
+    texOverlay(bx(utx), by(38), utw, 18, pal.shirt, "shirtFabric");
     s.rect(bx(utx), by(38), 2, 18, shirtLi);
     s.rect(bx(utx + utw - 2), by(38), 2, 18, shirtDk);
     // Soft top glow
@@ -811,6 +832,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const rx2 = leftUp ? 23 : 33;
       rrO(lx(fx), ly(58), 8, 14, 3, pal.pants);
       vGradRR(lx(fx), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(fx), ly(58), 8, 14, pal.pants, "pantsFabric");
       s.rect(lx(fx), ly(58), 2, 14, pantsLi);
       el(lx(fx + 4), ly(74), 6, 4, SHOE);
       s.set(lx(fx + 2), ly(73), shoeLi);
@@ -822,9 +844,11 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     } else {
       rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
       vGradRR(lx(23), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(23), ly(58), 8, 14, pal.pants, "pantsFabric");
       s.rect(lx(23), ly(58), 2, 14, pantsLi);
       rrO(lx(33), ly(58), 8, 14, 3, pal.pants);
       vGradRR(lx(33), ly(58), 8, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(33), ly(58), 8, 14, pal.pants, "pantsFabric");
       s.rect(lx(33), ly(58), 2, 14, pantsLi);
       el(lx(27), ly(74), 6, 4, SHOE);
       el(lx(37), ly(74), 6, 4, SHOE);
@@ -893,6 +917,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const rtw = isFat ? 22 : 18;
     const rtx = isFat ? 21 : 23;
     vGradRR(bx(rtx), by(38), rtw, 18, 5, shirtLi, shirtDk);
+    texOverlay(bx(rtx), by(38), rtw, 18, pal.shirt, "shirtFabric");
     s.rect(bx(rtx), by(38), 2, 18, shirtLi);
     s.rect(bx(rtx + rtw - 2), by(38), 2, 18, shirtDk);
     // Soft top glow
@@ -919,6 +944,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       const backX = leftUp ? 25 : 29;
       rrO(lx(frontX), ly(58), rlegW, 14, 3, pal.pants);
       vGradRR(lx(frontX), ly(58), rlegW, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(frontX), ly(58), rlegW, 14, pal.pants, "pantsFabric");
       s.rect(lx(frontX), ly(58), 2, 14, pantsLi);
       el(lx(frontX + 4), ly(74), 6, 4, SHOE);
       s.set(lx(frontX + 2), ly(73), shoeLi);
@@ -930,6 +956,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     } else {
       rrO(lx(25), ly(58), rlegW, 14, 3, pal.pants);
       vGradRR(lx(25), ly(58), rlegW, 14, 3, pantsLi, pantsDk);
+      texOverlay(lx(25), ly(58), rlegW, 14, pal.pants, "pantsFabric");
       s.rect(lx(25), ly(58), 2, 14, pantsLi);
       rrO(lx(33), ly(58), rlegW, 14, 3, pantsDk);
       vGradRR(lx(33), ly(58), rlegW, 14, 3, pantsMid, pantsDk);

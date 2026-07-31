@@ -9,7 +9,7 @@ import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
 import { creatureKey, beastKey, beastDesignName, friendlyCreatureKey, FRIENDLY_CREATURE_COUNT } from "./textures";
-import { AI_TILE_TEXTURES, AI_OBJECT_TEXTURES } from "./ai-tiles";
+import { AI_TILE_TEXTURES, AI_OBJECT_TEXTURES, AI_ITEM_TEXTURES, resolveItemTex } from "./ai-tiles";
 import { VFXManager } from "./effects";
 import { LightingSystem, type LightSource } from "./lighting";
 import { AudioSystem } from "./audio";
@@ -2090,14 +2090,13 @@ export class WorldLayer {
               }
             }
 
-            // Tennis objects (ball/racket/net) sit on court surface, not grass
             if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
-              drawTexToCanvas("tennis-court", px, py);
+              drawTexToCanvas(resolveItemTex(this.scene, "tennis-court"), px, py);
             }
 
             // Draw overlay textures (golf items, trees, etc.)
             // Prefer AI-generated object sprites when available, fall back to procedural
-            const aiObjKey = AI_OBJECT_TEXTURES[tile];
+            const aiObjKey = AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]];
             const overlayKey = aiObjKey ?? overlayTextures[tile];
             if (overlayKey) {
               if (this.scene.textures.exists(overlayKey)) {
@@ -2969,7 +2968,7 @@ export class WorldLayer {
             this.golfBallVx = 0;
             this.golfBallVy = hitSpeed;
           }
-          this.golfBall = this.scene.add.image(ballPx, ballPy, "golf-ball").setDepth(50).setScale(0.7);
+          this.golfBall = this.scene.add.image(ballPx, ballPy, resolveItemTex(this.scene, "golf-ball")).setDepth(50).setScale(0.7);
           this.golfBallActive = true;
           this.golfStrokes++;
           this.setTileAt(nearestBall.tx, nearestBall.ty, TILE.TEE_BOX);
@@ -3204,7 +3203,7 @@ export class WorldLayer {
             this.tennisBallVx = 0;
             this.tennisBallVy = -hitSpeed;
           }
-          this.tennisBall = this.scene.add.image(ballPx, ballPy, "tennis-ball").setDepth(50).setScale(0.7);
+          this.tennisBall = this.scene.add.image(ballPx, ballPy, resolveItemTex(this.scene, "tennis-ball")).setDepth(50).setScale(0.7);
           this.tennisBallActive = true;
           this.setTileAt(nearestTennisBall.tx, nearestTennisBall.ty, TILE.TENNIS_COURT);
           this.vfx.sparkBurst(ballPx, ballPy, 0xeeff44, 8 + Math.floor(power * 16), 60 + power * 80);

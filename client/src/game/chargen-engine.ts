@@ -13,6 +13,7 @@ import {
   mix,
   type CharPalette,
   type DrawSurface,
+  type CharTextureProvider,
   DIRS,
   CW,
   CH,
@@ -24,6 +25,14 @@ export { CW as CHAR_FRAME_W, CH as CHAR_FRAME_H };
 export const CHAR_FRAMES_PER_ROW = 8;
 export const CHAR_DIRS = DIRS.length;
 
+/** Module-level texture provider — populated by boot.ts from AI textures. */
+let charTexProvider: CharTextureProvider | undefined;
+
+/** Set the AI texture provider for character generation (called from boot.ts). */
+export function setCharTextureProvider(provider: CharTextureProvider | undefined): void {
+  charTexProvider = provider;
+}
+
 // ------------------------------------------------------------- pixel surface
 
 class PixelSheet implements DrawSurface {
@@ -31,6 +40,7 @@ class PixelSheet implements DrawSurface {
   width: number;
   height: number;
   clip: { x: number; y: number; w: number; h: number } | null = null;
+  texProvider?: CharTextureProvider;
 
   constructor(w: number, h: number) {
     this.width = w;
@@ -170,6 +180,43 @@ class PixelSheet implements DrawSurface {
     this.fillCircle(x + w - r - 1, y + h - r - 1, r, hex);
   }
 
+  texturedRect(x: number, y: number, w: number, h: number, _hex: string, tex: keyof CharTextureProvider): void {
+    const texData = this.texProvider?.[tex];
+    if (!texData) return;
+    const tw = texData.width;
+    const th = texData.height;
+    const td = texData.data;
+    const d = this.data;
+    const blendAlpha = 0.18;
+
+    for (let yy = 0; yy < h; yy++) {
+      for (let xx = 0; xx < w; xx++) {
+        const px = Math.round(x + xx);
+        const py = Math.round(y + yy);
+        if (px < 0 || py < 0 || px >= this.width || py >= this.height) continue;
+        if (!this.inClip(px, py)) continue;
+
+        const di = (py * this.width + px) * 4;
+        if (d[di + 3] === 0) continue;
+
+        const tx = xx % tw;
+        const ty = yy % th;
+        const ti = (ty * tw + tx) * 4;
+
+        const tr = td[ti];
+        const tg = td[ti + 1];
+        const tb = td[ti + 2];
+
+        const lum = (tr + tg + tb) / (3 * 255);
+        const delta = (lum - 0.5) * 2 * blendAlpha;
+
+        d[di] = Math.max(0, Math.min(255, Math.round(d[di] + delta * 255)));
+        d[di + 1] = Math.max(0, Math.min(255, Math.round(d[di + 1] + delta * 255)));
+        d[di + 2] = Math.max(0, Math.min(255, Math.round(d[di + 2] + delta * 255)));
+      }
+    }
+  }
+
   toCanvas(): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = this.width;
@@ -202,6 +249,7 @@ export function appearanceToPalette(ap: CharAppearance): CharPalette {
 function buildCharSheet(pal: CharPalette): PixelSheet {
   const cols = CHAR_FRAMES_PER_ROW;
   const s = new PixelSheet(CW * cols, CH * DIRS.length);
+  s.texProvider = charTexProvider;
   DIRS.forEach((dir, row) => {
     for (let pose = 0; pose < cols; pose++) {
       sharedDrawChar(s, pose * CW, row * CH, pal, dir, pose);
@@ -270,6 +318,7 @@ export function generateCharSprite(
 export function generateCharPreviewCanvas(ap: CharAppearance, scale = 1): HTMLCanvasElement {
   const pal = appearanceToPalette(ap);
   const s = new PixelSheet(CW, CH);
+  s.texProvider = charTexProvider;
   sharedDrawChar(s, 0, 0, pal, "down", 6);
 
   const srcCanvas = s.toCanvas();
