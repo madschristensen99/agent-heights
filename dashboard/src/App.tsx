@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { DashboardProvider, useDashboard } from "./lib/store";
-import { onAuthChange, isAuthEnabled } from "./lib/auth";
+import { onAuthChange, isAuthEnabled, initAuth } from "./lib/auth";
 import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar, type View } from "./components/Sidebar";
 import { AgentFleet } from "./components/AgentFleet";
@@ -84,6 +84,7 @@ function App() {
       setAuthed(true);
       return;
     }
+    void initAuth();
     const unsub = onAuthChange((state) => {
       if (!state.loading) {
         setAuthed(!!state.session);
