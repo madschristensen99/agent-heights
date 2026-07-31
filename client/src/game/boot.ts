@@ -5,9 +5,9 @@ import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 import { Store } from "../store";
-import { AI_CHAR_TEXTURES } from "./ai-tiles";
-import { setCharTextureProvider } from "./chargen";
-import type { CharTextureProvider } from "../../../shared/char-draw";
+import { AI_CHAR_TEXTURES, AI_HAIR_STYLES, AI_HAIR_DIRS, AI_HAIR_POSES, hairFrameKey, hairFrameUrl } from "./ai-tiles";
+import { setCharTextureProvider, setCharComponentProvider } from "./chargen";
+import type { CharTextureProvider, CharComponentProvider } from "../../../shared/char-draw";
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
@@ -62,6 +62,15 @@ export class BootScene extends Phaser.Scene {
     this.load.json("ai-tiles-atlas-meta", `assets/atlases/ai-tiles-atlas.json${atlasVer}`);
     this.load.image("ai-sprites-atlas", `assets/atlases/ai-sprites-atlas.webp${atlasVer}`);
     this.load.json("ai-sprites-atlas-meta", `assets/atlases/ai-sprites-atlas.json${atlasVer}`);
+
+    // AI hair component sprites (grayscale PNGs, 24 frames per style)
+    for (const style of AI_HAIR_STYLES) {
+      for (const dir of AI_HAIR_DIRS) {
+        for (let pose = 0; pose < AI_HAIR_POSES; pose++) {
+          this.load.image(hairFrameKey(style, dir, pose), hairFrameUrl(style, dir, pose));
+        }
+      }
+    }
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -119,6 +128,34 @@ export class BootScene extends Phaser.Scene {
     }
     if (Object.keys(provider).length > 0) {
       setCharTextureProvider(provider);
+    }
+
+    // Extract ImageData from loaded AI hair component sprites
+    const compProvider: CharComponentProvider = { hair: {} };
+    for (const style of AI_HAIR_STYLES) {
+      const frames: ImageData[] = [];
+      let allLoaded = true;
+      for (const dir of AI_HAIR_DIRS) {
+        for (let pose = 0; pose < AI_HAIR_POSES; pose++) {
+          const key = hairFrameKey(style, dir, pose);
+          if (!this.textures.exists(key)) { allLoaded = false; break; }
+          const tex = this.textures.get(key);
+          const src = tex.getSourceImage() as HTMLImageElement;
+          const canvas = document.createElement("canvas");
+          canvas.width = src.width;
+          canvas.height = src.height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(src, 0, 0);
+          frames.push(ctx.getImageData(0, 0, src.width, src.height));
+        }
+        if (!allLoaded) break;
+      }
+      if (allLoaded && frames.length === AI_HAIR_DIRS.length * AI_HAIR_POSES) {
+        compProvider.hair![style] = frames;
+      }
+    }
+    if (compProvider.hair && Object.keys(compProvider.hair).length > 0) {
+      setCharComponentProvider(compProvider);
     }
 
     // Get texture generation steps + animation step

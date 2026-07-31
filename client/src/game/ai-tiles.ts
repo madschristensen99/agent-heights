@@ -181,3 +181,58 @@ export const AI_TILE_KEYS: string[] = [
 
 /** Flat list of all AI asset keys (kept for backwards compatibility). */
 export const AI_ASSET_KEYS: string[] = [...AI_TILE_KEYS, ...AI_OBJECT_KEYS];
+
+// =============================================================== AI hair components
+
+/**
+ * AI-generated hair component sprites.
+ * Each hair style has 24 frames: 8 poses × 3 directions (down, right, up).
+ * Frames are grayscale PNGs for runtime color tinting.
+ * Left direction = mirror of right (handled at runtime).
+ */
+export const AI_HAIR_DIRS = ["down", "right", "up"] as const;
+export const AI_HAIR_POSES = 8;
+
+/** Hair styles that have AI-generated sprites (excludes "bald"). */
+export const AI_HAIR_STYLES = [
+  "short", "spiky", "long", "ponytail",
+  "buzz", "swept", "curly", "bun",
+  "balding", "mohawk", "afro", "braids",
+  "pigtails", "bob", "dreadlocks",
+];
+
+/**
+ * Build the Phaser texture key for a specific hair frame.
+ * e.g. ("spiky", "down", 3) → "ai-hair-spiky_down_3"
+ */
+export function hairFrameKey(style: string, dir: string, pose: number): string {
+  return `ai-hair-${style}_${dir}_${pose}`;
+}
+
+/**
+ * Build the asset URL for a specific hair frame.
+ * e.g. ("spiky", "down", 3) → "ai/char/hair/spiky/spiky_down_3.png"
+ */
+export function hairFrameUrl(style: string, dir: string, pose: number): string {
+  return `assets/ai/char/hair/${style}/${style}_${dir}_${pose}.png`;
+}
+
+/**
+ * Get all hair frame texture keys for a given style (24 keys).
+ */
+export function hairStyleKeys(style: string): string[] {
+  const keys: string[] = [];
+  for (const dir of AI_HAIR_DIRS) {
+    for (let pose = 0; pose < AI_HAIR_POSES; pose++) {
+      keys.push(hairFrameKey(style, dir, pose));
+    }
+  }
+  return keys;
+}
+
+/**
+ * Get all hair frame texture keys for all styles.
+ */
+export function allHairKeys(): string[] {
+  return AI_HAIR_STYLES.flatMap(hairStyleKeys);
+}

@@ -34,11 +34,22 @@ export interface CharTextureProvider {
   leather?: ImageData;
 }
 
+/**
+ * AI-generated component sprites (grayscale, transparent PNGs).
+ * Each entry maps a style key to an array of ImageData frames.
+ * Frame layout: 8 poses × 3 directions (down, right, up) = 24 frames.
+ * Frames are grayscale for runtime color tinting.
+ */
+export interface CharComponentProvider {
+  hair?: Record<string, ImageData[]>;
+}
+
 export interface DrawSurface {
   width: number;
   height: number;
   clip: { x: number; y: number; w: number; h: number } | null;
   texProvider?: CharTextureProvider;
+  componentProvider?: CharComponentProvider;
   set(x: number, y: number, hex: string): void;
   setAlpha(x: number, y: number, hex: string, a: number): void;
   rect(x: number, y: number, w: number, h: number, hex: string): void;
@@ -172,6 +183,55 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   /** Overlay AI texture on a region if texturedRect is available. */
   const texOverlay = (x: number, y: number, w: number, h: number, hex: string, tex: keyof CharTextureProvider) => {
     if (s.texturedRect) s.texturedRect(x, y, w, h, hex, tex);
+  };
+
+  /**
+   * Stamp an AI-generated grayscale component sprite onto the surface,
+   * tinting it to the target color. The sprite is expected to be CW×CH
+   * with transparent background and grayscale hair pixels.
+   * Returns true if the sprite was found and stamped, false to fall back.
+   */
+  const stampHairComponent = (style: string, dirName: "down" | "right" | "up", poseNum: number, targetColor: string): boolean => {
+    const provider = s.componentProvider?.hair;
+    if (!provider || !provider[style]) return false;
+    const frames = provider[style];
+    const dirIndex = dirName === "down" ? 0 : dirName === "right" ? 1 : 2;
+    const frameIndex = dirIndex * 8 + poseNum;
+    const img = frames[frameIndex];
+    if (!img) return false;
+
+    const tr = parseInt(targetColor.slice(1, 3), 16);
+    const tg = parseInt(targetColor.slice(3, 5), 16);
+    const tb = parseInt(targetColor.slice(5, 7), 16);
+    const clip = s.clip;
+    const sw = img.width;
+    const sh = img.height;
+    const data = img.data;
+
+    for (let py = 0; py < sh; py++) {
+      for (let px = 0; px < sw; px++) {
+        const si = (py * sw + px) * 4;
+        const a = data[si + 3];
+        if (a === 0) continue;
+        // Skip clip check if no clip
+        const absX = ox + px;
+        const absY = oy + py;
+        if (clip) {
+          if (absX < clip.x || absX >= clip.x + clip.w || absY < clip.y || absY >= clip.y + clip.h) continue;
+        }
+        if (absX < 0 || absY < 0 || absX >= s.width || absY >= s.height) continue;
+        // Grayscale value → tint by multiplying with target color ratio
+        const gray = data[si]; // r=g=b for grayscale
+        const alpha = a / 255;
+        // Tint grayscale pixel by multiplying with target color ratio
+        const r = Math.round((gray * tr) / 255);
+        const g = Math.round((gray * tg) / 255);
+        const b = Math.round((gray * tb) / 255);
+        const hex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+        s.setAlpha(absX, absY, hex, alpha);
+      }
+    }
+    return true;
   };
 
   /** Radial gradient inside a circle (inner→outer), with optional highlight offset. */
@@ -658,7 +718,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     ciO(hx(32), hy(18), 17, pal.skin);
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(32), hy(22), 13, 12, pal.skin);
-    drawHairDown();
+    if (!stampHairComponent(pal.hairStyle, "down", pose, pal.hair)) drawHairDown();
     drawHeadFeature("down");
     s.set(hx(32), hy(19), pal.skin);
     // Face 3-tone
@@ -785,7 +845,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- HEAD: all hair ----
     ciO(hx(32), hy(18), 17, pal.hair);
     rGradCi(hx(32), hy(18), 17, hairLi, hairDk, -4, -4);
-    drawHairUp();
+    if (!stampHairComponent(pal.hairStyle, "up", pose, pal.hair)) drawHairUp();
     drawHeadFeature("up");
     drawAccessory("up");
 
@@ -865,7 +925,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     ciO(hx(32), hy(18), 17, pal.skin);
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(35), hy(24), 11, 9, pal.skin);
-    drawHairRight();
+    if (!stampHairComponent(pal.hairStyle, "right", pose, pal.hair)) drawHairRight();
     drawHeadFeature("right");
     s.set(hx(32), hy(19), pal.skin);
     // Ear

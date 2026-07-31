@@ -14,6 +14,7 @@ import {
   type CharPalette,
   type DrawSurface,
   type CharTextureProvider,
+  type CharComponentProvider,
   DIRS,
   CW,
   CH,
@@ -28,9 +29,17 @@ export const CHAR_DIRS = DIRS.length;
 /** Module-level texture provider — populated by boot.ts from AI textures. */
 let charTexProvider: CharTextureProvider | undefined;
 
+/** Module-level component provider — populated by boot.ts from AI component sprites. */
+let charCompProvider: CharComponentProvider | undefined;
+
 /** Set the AI texture provider for character generation (called from boot.ts). */
 export function setCharTextureProvider(provider: CharTextureProvider | undefined): void {
   charTexProvider = provider;
+}
+
+/** Set the AI component provider for character generation (called from boot.ts). */
+export function setCharComponentProvider(provider: CharComponentProvider | undefined): void {
+  charCompProvider = provider;
 }
 
 // ------------------------------------------------------------- pixel surface
@@ -41,6 +50,7 @@ class PixelSheet implements DrawSurface {
   height: number;
   clip: { x: number; y: number; w: number; h: number } | null = null;
   texProvider?: CharTextureProvider;
+  componentProvider?: CharComponentProvider;
 
   constructor(w: number, h: number) {
     this.width = w;
@@ -250,6 +260,7 @@ function buildCharSheet(pal: CharPalette): PixelSheet {
   const cols = CHAR_FRAMES_PER_ROW;
   const s = new PixelSheet(CW * cols, CH * DIRS.length);
   s.texProvider = charTexProvider;
+  s.componentProvider = charCompProvider;
   DIRS.forEach((dir, row) => {
     for (let pose = 0; pose < cols; pose++) {
       sharedDrawChar(s, pose * CW, row * CH, pal, dir, pose);
@@ -319,6 +330,7 @@ export function generateCharPreviewCanvas(ap: CharAppearance, scale = 1): HTMLCa
   const pal = appearanceToPalette(ap);
   const s = new PixelSheet(CW, CH);
   s.texProvider = charTexProvider;
+  s.componentProvider = charCompProvider;
   sharedDrawChar(s, 0, 0, pal, "down", 6);
 
   const srcCanvas = s.toCanvas();

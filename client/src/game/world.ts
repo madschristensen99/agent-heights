@@ -1880,7 +1880,7 @@ export class WorldLayer {
 
   /** Texture cache key for a chunk's static tile rendering. */
   private chunkTexKey(cx: number, cy: number): string {
-    return `chunk-rt-${this.store.worldSeed}:${cx},${cy}`;
+    return `chunk-rt-v2-${this.store.worldSeed}:${cx},${cy}`;
   }
 
   /** Remove a cached chunk canvas texture so the next renderChunk redraws it. */
@@ -1950,10 +1950,45 @@ export class WorldLayer {
           if (!this.scene.textures.exists(textureKey)) return;
           const tex = this.scene.textures.get(textureKey);
           const fr = tex.get(0);
-          if (fr) {
+          if (!fr) return;
+          const srcW = fr.cutWidth;
+          const srcH = fr.cutHeight;
+          // Step-down scaling: when source is >2x larger than destination,
+          // draw through intermediate canvases (each 2x step) to mimic mipmaps.
+          // This prevents grainy/pixelated artifacts from large bilinear downscales.
+          if (srcW > w * 2 || srcH > h * 2) {
+            let curW = srcW;
+            let curH = srcH;
+            let curCanvas: HTMLCanvasElement | undefined;
+            // Step down by 2x until within 2x of target
+            while (curW > w * 2 || curH > h * 2) {
+              const nextW = Math.max(w * 2, Math.floor(curW / 2));
+              const nextH = Math.max(h * 2, Math.floor(curH / 2));
+              const next = document.createElement("canvas");
+              next.width = nextW;
+              next.height = nextH;
+              const nctx = next.getContext("2d")!;
+              nctx.imageSmoothingEnabled = true;
+              nctx.imageSmoothingQuality = "high";
+              if (curCanvas) {
+                nctx.drawImage(curCanvas, 0, 0, curW, curH, 0, 0, nextW, nextH);
+              } else {
+                nctx.drawImage(
+                  fr.source.image as CanvasImageSource,
+                  fr.cutX, fr.cutY, srcW, srcH,
+                  0, 0, nextW, nextH,
+                );
+              }
+              curCanvas = next;
+              curW = nextW;
+              curH = nextH;
+            }
+            // Final draw from intermediate canvas to main canvas
+            ctx.drawImage(curCanvas!, 0, 0, curW, curH, px, py, w, h);
+          } else {
             ctx.drawImage(
               fr.source.image as CanvasImageSource,
-              fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+              fr.cutX, fr.cutY, srcW, srcH,
               px, py, w, h,
             );
           }

@@ -343,7 +343,7 @@ async function processHair(def: HairDef, dryRun: boolean): Promise<void> {
   const allExist = SHEET_DIRS.every((dir) =>
     Array.from({ length: SHEET_COLS }, (_, p) =>
       existsSync(join(frameDir, `${def.key}_${dir}_${p}.png`))
-    )
+    ).every(Boolean)
   );
 
   if (allExist) {
