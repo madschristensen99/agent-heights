@@ -11,6 +11,7 @@ import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } 
 import { getServerByUrl } from "../../../shared/mcp-catalog";
 import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX } from "./furniture";
 import { upgradeWorkshop } from "./workshop";
+import { AI_OFFICE_TEXTURES } from "./ai-tiles";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 import { touchInput, isTouchDevice } from "../touch";
 import { md } from "../ui/md";
@@ -599,22 +600,28 @@ export class OfficeScene extends Phaser.Scene {
             this.theme === "agentHeights" ? "agentHeights" : "office",
             `tiles-${this.theme}`,
           )!;
-          // draw a floor-colored backdrop so empty map tiles aren't white
+          // draw a floor backdrop so empty map tiles aren't white
           const floorColor = this.theme === "agentHeights" ? 0x4a6a8a : 0xd4d0c8;
-          const bg = this.add.graphics().setDepth(-1);
-          bg.fillStyle(floorColor, 1);
-          bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
-          // subtle grid lines for texture
-          bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0x3a5a7a, 0.3);
-          for (let x = 0; x <= map.width; x++) {
-            bg.moveTo(x * TILE_PX, 0);
-            bg.lineTo(x * TILE_PX, map.heightInPixels);
+          const aiFloorKey = this.theme === "agentHeights"
+            ? AI_OFFICE_TEXTURES.floorAgentHeights
+            : AI_OFFICE_TEXTURES.floorClassic;
+          if (this.textures.exists(aiFloorKey)) {
+            this.add.tileSprite(0, 0, map.widthInPixels, map.heightInPixels, aiFloorKey).setDepth(-1).setOrigin(0, 0);
+          } else {
+            const bg = this.add.graphics().setDepth(-1);
+            bg.fillStyle(floorColor, 1);
+            bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
+            bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0x3a5a7a, 0.3);
+            for (let x = 0; x <= map.width; x++) {
+              bg.moveTo(x * TILE_PX, 0);
+              bg.lineTo(x * TILE_PX, map.heightInPixels);
+            }
+            for (let y = 0; y <= map.height; y++) {
+              bg.moveTo(0, y * TILE_PX);
+              bg.lineTo(map.widthInPixels, y * TILE_PX);
+            }
+            bg.strokePath();
           }
-          for (let y = 0; y <= map.height; y++) {
-            bg.moveTo(0, y * TILE_PX);
-            bg.lineTo(map.widthInPixels, y * TILE_PX);
-          }
-          bg.strokePath();
 
           map.createLayer("Ground", tiles)!.setDepth(0);
 

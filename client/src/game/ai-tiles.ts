@@ -24,5 +24,17 @@ export const AI_TILE_TEXTURES: Record<number, string[]> = {
   [TILE.WATER]: ["ai-water_0", "ai-water_1", "ai-water_2"],
 };
 
+/** Office interior AI textures (loaded separately from world tiles). */
+export const AI_OFFICE_TEXTURES = {
+  floorClassic: "ai-office_floor_0",
+  floorAgentHeights: "ai-office_floor_1",
+  wallClassic: "ai-office_wall_0",
+  wallAgentHeights: "ai-office_wall_1",
+  kitchenCounter: "ai-kitchen_counter",
+} as const;
+
 /** Flat list of all AI asset keys (without the "ai-" prefix) for loading. */
-export const AI_ASSET_KEYS: string[] = Object.values(AI_TILE_TEXTURES).flat().map((k) => k.replace(/^ai-/, ""));
+export const AI_ASSET_KEYS: string[] = [
+  ...Object.values(AI_TILE_TEXTURES).flat().map((k) => k.replace(/^ai-/, "")),
+  ...Object.values(AI_OFFICE_TEXTURES).map((k) => k.replace(/^ai-/, "")),
+];
