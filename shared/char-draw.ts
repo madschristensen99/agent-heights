@@ -660,6 +660,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     el(hx(32), hy(22), 13, 12, pal.skin);
     drawHairDown();
     drawHeadFeature("down");
+    // Hair texture overlay — only on top portion (hair region, not face)
+    texOverlay(hx(17), hy(4), 30, 14, pal.hair, "hairStraight");
     s.set(hx(32), hy(19), pal.skin);
     // Face 3-tone
     el(hx(26), hy(24), 3, 5, skinLi);
@@ -788,6 +790,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     drawHairUp();
     drawHeadFeature("up");
     drawAccessory("up");
+    // Hair texture overlay — entire head is hair when viewed from behind
+    texOverlay(hx(15), hy(1), 34, 34, pal.hair, "hairStraight");
 
     // ---- NECK ----
     rr(bx(29), by(34), 6, 4, 2, skinDk);
@@ -867,6 +871,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     el(hx(35), hy(24), 11, 9, pal.skin);
     drawHairRight();
     drawHeadFeature("right");
+    // Hair texture overlay — top/back portion (hair region, not face)
+    texOverlay(hx(17), hy(4), 30, 14, pal.hair, "hairStraight");
     s.set(hx(32), hy(19), pal.skin);
     // Ear
     s.set(hx(28), hy(24), skinDk);
