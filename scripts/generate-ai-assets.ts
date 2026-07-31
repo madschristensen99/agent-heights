@@ -237,7 +237,7 @@ const ASSETS: AssetDef[] = [
   tile("office_wall_2", "beige painted wall with subtle texture, faint wainscoting lines, office interior, top-down, tileable", 1107, 2),
   tile("office_wall_3", "single large glass window pane filling entire frame, blue tinted glass, subtle reflection, metal frame around edges only, top-down view, tileable, seamless", 1108, 2),
   tile("kitchen_counter", "granite countertop, black speckled, top-down", 1109, 2),
-  tile("office_helipad", "top-down helicopter landing pad, dark asphalt surface with large white H marker in center, white safety circle ring, yellow corner approach lights, weathered concrete, tileable", 1110, 2),
+  tile("office_helipad", "single helicopter landing pad viewed from directly above, one large white H marker centered in frame, one white circle ring around the H, dark weathered asphalt background, no repeating patterns, no tiling, fills entire frame", 1110, 2),
 
   // ------------------------------------------------------- Tier 3: Office furniture (Nano Banana 2 + Bria RMBG)
 

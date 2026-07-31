@@ -4023,15 +4023,18 @@ export class OfficeScene extends Phaser.Scene {
     // Top surface — AI helipad texture if available, else fallback to procedural
     const helipadKey = AI_OFFICE_TEXTURES.helipad;
     if (this.textures.exists(helipadKey)) {
-      // Use AI texture — scaled to cover the pad area
+      // Use AI texture — scaled to cover the pad area, clipped to ellipse
       const padW = padRX * 2;
       const padH = padRY * 2;
       const padImg = this.add.image(cx, padCY, helipadKey)
         .setOrigin(0.5, 0.5)
-        .setDepth(-0.45)
+        .setDepth(-0.48)
         .setDisplaySize(padW, padH);
-      // Skew the texture slightly to match the 3/4 perspective
-      padImg.setAngle(0);
+      // Create elliptical mask to clip the rectangular texture to the pad shape
+      const maskG = this.make.graphics({}, false);
+      maskG.fillStyle(0xffffff, 1);
+      maskG.fillEllipse(cx, padCY, padW * 0.98, padH * 0.98);
+      padImg.setMask(maskG.createGeometryMask());
     } else {
       // Fallback: procedural asphalt surface
       g.fillStyle(0x383840, 1);
