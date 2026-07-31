@@ -58,8 +58,6 @@ export const AI_OBJECT_KEYS: string[] = Object.values(AI_OBJECT_TEXTURES).map((k
  * When a tile ID is listed here, the AI texture is used instead of procedural canvas.
  */
 export const AI_FURNITURE_TEXTURES: Record<number, string> = {
-  17: "ai-fur-desk_left",
-  18: "ai-fur-desk_right",
   20: "ai-fur-filing_cabinet",
   21: "ai-fur-wall_picture",
   10: "ai-fur-window",
@@ -77,10 +75,6 @@ export const AI_FURNITURE_TEXTURES: Record<number, string> = {
   35: "ai-fur-server_rack",
   36: "ai-fur-server_screen",
   37: "ai-fur-chimney",
-  38: "ai-fur-desk_side_top",
-  39: "ai-fur-desk_side_bottom",
-  40: "ai-fur-desk_side_top_mirror",
-  41: "ai-fur-desk_side_bottom_mirror",
 };
 
 /** AI furniture chair textures (4 directions). */
@@ -121,7 +115,6 @@ export const AI_ITEM_TEXTURES: Record<string, string> = {
   "golf-club": "ai-fur-golf_club",
   "golf-ball": "ai-fur-golf_ball",
   "axe": "ai-fur-axe",
-  "tee-box": "ai-fur-tee_box",
   "leprechaun": "ai-fur-leprechaun",
   "tennis-court": "ai-fur-tennis_court",
   "tennis-wall": "ai-fur-tennis_wall",

@@ -226,7 +226,7 @@ class PixelSheet implements DrawSurface {
     const th = texData.height;
     const td = texData.data;
     const d = this.data;
-    const blendAlpha = 0.18;
+    const blendAlpha = 0.35;
 
     for (let yy = 0; yy < h; yy++) {
       for (let xx = 0; xx < w; xx++) {

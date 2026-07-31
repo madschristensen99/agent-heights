@@ -2336,6 +2336,30 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
       const py = y * TILE_PX;
       const sprite = scene.add.sprite(px, py, key);
       sprite.setOrigin(0, 0);
+
+      // AI sprites are 128x128 — scale down to fit tile grid.
+      // Per-tile-ID overrides for visual fit.
+      const scaleMap: Record<number, { w: number; h: number; ox?: number; oy?: number }> = {
+        25: { w: 48, h: 48, ox: 8, oy: 8 },   // water cooler — smaller, centered
+        28: { w: 44, h: 44, ox: 10, oy: 10 }, // microwave — smaller, centered
+        27: { w: 48, h: 48, ox: 8, oy: 8 },   // kitchen sink — smaller, centered
+        29: { w: 56, h: 56, ox: 4, oy: 4 },   // sofa left — slightly smaller
+        30: { w: 56, h: 56, ox: 4, oy: 4 },   // sofa right — slightly smaller
+        26: { w: 80, h: 80, ox: -8, oy: -8 }, // kitchen counter — bigger
+        22: { w: 48, h: 48, ox: 8, oy: 8 },   // small plant — smaller
+        31: { w: 56, h: 56, ox: 4, oy: 4 },   // large plant — slightly smaller
+        32: { w: 48, h: 48, ox: 8, oy: 8 },   // toaster — smaller
+        23: { w: 56, h: 56, ox: 4, oy: 4 },   // coffee machine top
+        24: { w: 56, h: 56, ox: 4, oy: 4 },   // coffee machine bottom
+      };
+      const isAi = aiKey && tex.exists(aiKey);
+      if (isAi) {
+        const cfg = scaleMap[tileId] ?? { w: TILE_PX, h: TILE_PX };
+        sprite.setDisplaySize(cfg.w, cfg.h);
+        if (cfg.ox) sprite.x += cfg.ox;
+        if (cfg.oy) sprite.y += cfg.oy;
+      }
+
       // Server racks and screens: shift up half a tile for visual fit
       if (tileId === 35 || tileId === 36) {
         sprite.y -= TILE_PX / 2;

@@ -2968,7 +2968,7 @@ export class WorldLayer {
             this.golfBallVx = 0;
             this.golfBallVy = hitSpeed;
           }
-          this.golfBall = this.scene.add.image(ballPx, ballPy, resolveItemTex(this.scene, "golf-ball")).setDepth(50).setScale(0.7);
+          this.golfBall = this.scene.add.image(ballPx, ballPy, resolveItemTex(this.scene, "golf-ball")).setDepth(50).setScale(0.3);
           this.golfBallActive = true;
           this.golfStrokes++;
           this.setTileAt(nearestBall.tx, nearestBall.ty, TILE.TEE_BOX);
@@ -3203,7 +3203,7 @@ export class WorldLayer {
             this.tennisBallVx = 0;
             this.tennisBallVy = -hitSpeed;
           }
-          this.tennisBall = this.scene.add.image(ballPx, ballPy, resolveItemTex(this.scene, "tennis-ball")).setDepth(50).setScale(0.7);
+          this.tennisBall = this.scene.add.image(ballPx, ballPy, resolveItemTex(this.scene, "tennis-ball")).setDepth(50).setScale(0.3);
           this.tennisBallActive = true;
           this.setTileAt(nearestTennisBall.tx, nearestTennisBall.ty, TILE.TENNIS_COURT);
           this.vfx.sparkBurst(ballPx, ballPy, 0xeeff44, 8 + Math.floor(power * 16), 60 + power * 80);
