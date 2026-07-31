@@ -191,7 +191,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
    * with transparent background and grayscale hair pixels.
    * Returns true if the sprite was found and stamped, false to fall back.
    */
-  const stampHairComponent = (style: string, dirName: "down" | "right" | "up", poseNum: number, targetColor: string): boolean => {
+  const stampHairComponent = (style: string, dirName: "down" | "right" | "up", poseNum: number, targetColor: string, minY?: number): boolean => {
     const provider = s.componentProvider?.hair;
     if (!provider || !provider[style]) return false;
     const frames = provider[style];
@@ -208,7 +208,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const sh = img.height;
     const data = img.data;
 
-    for (let py = 0; py < sh; py++) {
+    for (let py = minY ?? 0; py < sh; py++) {
       for (let px = 0; px < sw; px++) {
         const si = (py * sw + px) * 4;
         const a = data[si + 3];
@@ -841,6 +841,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(legRX + 6), ly(76), shoeDk);
     }
 
+    // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
+    stampHairComponent(pal.hairStyle, "down", pose, pal.hair, 35);
+
   } else if (d === "up") {
     // ---- HEAD: all hair ----
     ciO(hx(32), hy(18), 17, pal.hair);
@@ -919,6 +922,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(29), ly(76), shoeDk);
       s.set(lx(39), ly(76), shoeDk);
     }
+
+    // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
+    stampHairComponent(pal.hairStyle, "up", pose, pal.hair, 35);
 
   } else {
     // ---- RIGHT PROFILE ----
@@ -1026,6 +1032,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(28), ly(73), shoeMid);
       s.set(lx(31), ly(76), shoeDk);
     }
+
+    // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
+    stampHairComponent(pal.hairStyle, "right", pose, pal.hair, 35);
   }
 
   if (mirror) s.flipH(ox, oy, CW, CH);

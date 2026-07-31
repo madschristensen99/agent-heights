@@ -1941,6 +1941,7 @@ export class WorldLayer {
     if (!this.scene.textures.exists(texKey)) {
       const canvasTex = this.scene.textures.createCanvas(texKey, ssPxSize, ssPxSize);
       if (canvasTex) {
+        canvasTex.setFilter(Phaser.Textures.FilterMode.LINEAR);
         const ctx = canvasTex.getContext();
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
