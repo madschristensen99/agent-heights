@@ -39,8 +39,8 @@ function isLowEndDevice(): boolean {
   return false;
 }
 
-/** Supersample factor: 2x on desktop (128px tile resolution, 2048px canvas), 1x on mobile (64px tile, 2048px canvas). */
-export const SS_FACTOR = isLowEndDevice() ? 1 : 2;
+/** Supersample factor: 4x on desktop (full 256px tile resolution), 1x on mobile (2048px canvas, within all GPU limits). */
+export const SS_FACTOR = isLowEndDevice() ? 1 : 4;
 
 // --- 3D creature spritesheet helpers ---
 // 3D sheets are 8 cols (S,SE,E,NE,N,NW,W,SW) × 4 rows (idle,walk1,walk2,attack) = 32 frames
