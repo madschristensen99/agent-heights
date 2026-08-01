@@ -248,7 +248,7 @@ export async function handleStripeWebhook(
         }
 
         if (session.metadata?.type === "subscription" && session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          const sub = await stripe.subscriptions.retrieve(session.subscription as string, { expand: ['items.data.price'] });
           const tier = parseTier(session.metadata?.tier ?? sub.metadata?.tier);
           await supabaseAdmin
             .from("user_payments")
@@ -257,19 +257,21 @@ export async function handleStripeWebhook(
               subscription_id: sub.id,
               subscription_status: sub.status,
               subscription_tier: tier,
-              current_period_end: (sub as any).current_period_end ?? null,
+              current_period_end: sub.items.data[0]?.current_period_end ?? null,
               updated_at: new Date().toISOString(),
             }, { onConflict: "user_id" });
-          console.log(`[stripe] subscription started for user ${userId}, status=${sub.status}, tier=${tier}`);
+          console.log(`[stripe] subscription started for user ${userId}, status=${sub.status}, tier=${tier}, period_end=${sub.items.data[0]?.current_period_end ?? null}`);
         }
         break;
       }
 
       case "customer.subscription.updated": {
-        const sub = event.data.object as Stripe.Subscription;
-        const userId = sub.metadata?.userId;
+        const eventSub = event.data.object as Stripe.Subscription;
+        const userId = eventSub.metadata?.userId;
         if (!userId) break;
 
+        // Retrieve the full subscription to ensure current_period_end is populated
+        const sub = await stripe.subscriptions.retrieve(eventSub.id);
         const tier = parseTier(sub.metadata?.tier);
         await supabaseAdmin
           .from("user_payments")
@@ -277,10 +279,10 @@ export async function handleStripeWebhook(
             user_id: userId,
             subscription_status: sub.status,
             subscription_tier: tier,
-            current_period_end: (sub as any).current_period_end ?? null,
+            current_period_end: sub.items.data[0]?.current_period_end ?? null,
             updated_at: new Date().toISOString(),
           }, { onConflict: "user_id" });
-        console.log(`[stripe] subscription updated for user ${userId}, status=${sub.status}, tier=${tier}`);
+        console.log(`[stripe] subscription updated for user ${userId}, status=${sub.status}, tier=${tier}, period_end=${sub.items.data[0]?.current_period_end ?? null}`);
         break;
       }
 

@@ -15,7 +15,7 @@ import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
 import { startSubscriptionCheckout, openCustomerPortal } from "../payment";
-import * as monaco from "monaco-editor";
+let monacoModule: typeof import("monaco-editor") | null = null;
 
 const NAME_POOL = [
   "Pixel", "Mocha", "Byte", "Clippy", "Turbo", "Wren", "Dot", "Gizmo",
@@ -228,7 +228,7 @@ export class Hud {
   private renderQueued = false;
   private perfVisible = false;
   private voiceBtn: HTMLButtonElement | null = null;
-  private monacoEditor: monaco.editor.IStandaloneCodeEditor | null = null;
+  private monacoEditor: any = null;
   private monacoFilePath: string | null = null;
   private codeEditorSig = "";
 
@@ -3989,14 +3989,21 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         this.monacoFilePath = file.path;
         const lang = this.detectLanguage(file.path);
         const oldModel = this.monacoEditor.getModel();
-        const newModel = monaco.editor.createModel(file.content, lang);
+        const newModel = monacoModule!.editor.createModel(file.content, lang);
         this.monacoEditor.setModel(newModel);
         oldModel?.dispose();
       } else {
-        // First time — create the editor
+        // First time — create the editor (lazy-load monaco if needed)
+        if (!monacoModule) {
+          import("monaco-editor").then((m) => {
+            monacoModule = m;
+            this.renderCodeEditor();
+          });
+          return;
+        }
         this.monacoFilePath = file.path;
         const lang = this.detectLanguage(file.path);
-        this.monacoEditor = monaco.editor.create(monacoContainer, {
+        this.monacoEditor = monacoModule.editor.create(monacoContainer, {
           value: file.content,
           language: lang,
           theme: "vs-dark",
@@ -4018,7 +4025,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           },
         });
         // Ctrl/Cmd+S to save
-        this.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        this.monacoEditor.addCommand(monacoModule.KeyMod.CtrlCmd | monacoModule.KeyCode.KeyS, () => {
           saveBtn?.click();
         });
       }

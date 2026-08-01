@@ -2,12 +2,12 @@
  * Persistent chunk canvas texture cache using IndexedDB.
  *
  * After a chunk is painted to a Phaser CanvasTexture, we serialize it to a
- * PNG blob and store it in IndexedDB.  On subsequent page loads, we check
+ * WebP blob and store it in IndexedDB.  On subsequent page loads, we check
  * IndexedDB before painting — if the blob exists, we load it as an image
  * and register it as a Phaser texture, skipping all canvas painting.
  *
  * Cache key: `${texKey}|ss${SS_FACTOR}` — includes supersample factor so
- * mobile (SS=1) and desktop (SS=4) caches don't collide.
+ * mobile (SS=1) and desktop (SS=2) caches don't collide.
  */
 
 const DB_NAME = "agent-heights-chunks";
@@ -46,7 +46,7 @@ export async function saveChunkCanvas(
   try {
     const key = chunkCacheKey(texKey, ssFactor);
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/png"),
+      canvas.toBlob((b) => resolve(b), "image/webp", 0.85),
     );
     if (!blob) return;
     const db = await getDB();

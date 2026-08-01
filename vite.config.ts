@@ -14,6 +14,15 @@ export default defineConfig({
   build: {
     outDir: "../dist",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          phaser: ["phaser"],
+          supabase: ["@supabase/supabase-js"],
+          monaco: ["monaco-editor"],
+        },
+      },
+    },
   },
   server: {
     port: 5173,

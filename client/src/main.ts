@@ -75,11 +75,43 @@ if (isSpectator) {
   new Hud(store, net);
 }
 
+// Clean Stripe redirect params BEFORE initAuth so Supabase doesn't see them
+const _params = new URLSearchParams(window.location.search);
+const _paymentResult = _params.get("payment");
+if (_paymentResult) {
+  history.replaceState({}, "", window.location.pathname);
+}
+
+// Start auth early — runs in parallel with Phaser init and asset downloads
+// so the session is likely ready before BootScene finishes.
+if (!isSpectator) {
+  void initAuth();
+
+  // If we returned from a successful Stripe checkout, poll payment status
+  // while suppressing the payment overlay (webhook may not have processed yet)
+  if (_paymentResult && _paymentResult.endsWith("success")) {
+    suppressPaymentOverlay = true;
+    let attempts = 0;
+    const poll = async () => {
+      attempts++;
+      await refreshPaymentStatus();
+      // If payment is now confirmed, onPaymentChange will clear the suppress flag
+      if (attempts < 10) {
+        setTimeout(() => void poll(), 2000);
+      } else {
+        // Polling exhausted — stop suppressing so overlay can show if still unpaid
+        suppressPaymentOverlay = false;
+      }
+    };
+    setTimeout(() => void poll(), 1500);
+  }
+}
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
   dom: { createContainer: true },
-  backgroundColor: "#7a9abe",
+  backgroundColor: "#a3bdd0",
   pixelArt: true,
   roundPixels: true,
   scale: {
@@ -138,32 +170,3 @@ if (isSpectator) {
   });
 }
 
-// Clean Stripe redirect params BEFORE initAuth so Supabase doesn't see them
-const _params = new URLSearchParams(window.location.search);
-const _paymentResult = _params.get("payment");
-if (_paymentResult) {
-  history.replaceState({}, "", window.location.pathname);
-}
-
-if (!isSpectator) {
-  void initAuth();
-
-  // If we returned from a successful Stripe checkout, poll payment status
-  // while suppressing the payment overlay (webhook may not have processed yet)
-  if (_paymentResult && _paymentResult.endsWith("success")) {
-    suppressPaymentOverlay = true;
-    let attempts = 0;
-    const poll = async () => {
-      attempts++;
-      await refreshPaymentStatus();
-      // If payment is now confirmed, onPaymentChange will clear the suppress flag
-      if (attempts < 10) {
-        setTimeout(() => void poll(), 2000);
-      } else {
-        // Polling exhausted — stop suppressing so overlay can show if still unpaid
-        suppressPaymentOverlay = false;
-      }
-    };
-    setTimeout(() => void poll(), 1500);
-  }
-}
