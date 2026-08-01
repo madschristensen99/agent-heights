@@ -4,7 +4,7 @@ import type { Net } from "../net";
 import { AgentNPC, AgentResourcesNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
 import { AGENT_RESOURCES_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
-import { WorldLayer, LOAD_RADIUS } from "./world";
+import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
@@ -556,29 +556,6 @@ export class OfficeScene extends Phaser.Scene {
     let map: Phaser.Tilemaps.Tilemap;
     let walkable: boolean[][];
 
-    // Pre-compute how many door chunks will be needed so the progress bar
-    // total is stable from the first frame (avoids glitch when phases are
-    // dynamically inserted).
-    // doorX = mapW/2, doorY = mapH + TILE_PX (one tile below office)
-    // offset = { x: 0, y: mapH }, so ty = floor(TILE_PX / TILE_PX) = 1
-    // pcy = floor(1 / CHUNK_SIZE) = 0, so only dy >= 0 chunks are valid
-    const doorChunkCount = (() => {
-      let count = 0;
-      for (let dy = 0; dy <= LOAD_RADIUS; dy++) {
-        for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
-          count++;
-        }
-      }
-      return count;
-    })();
-
-    // Single collapsed phase for all door chunks (replaces per-chunk phases).
-    // The world layer phase fills in the fn and may set skip if all chunks
-    // are already cached.
-    const chunkPhases: Array<{ name: string; fn: () => void | Promise<void>; skip?: boolean }> = [
-      { name: `door chunks (×${doorChunkCount})`, fn: () => {} },
-    ];
-
     const phases: Array<{ name: string; fn: () => void | Promise<void>; skip?: boolean }> = [
       {
         name: "textures & animations",
@@ -1038,60 +1015,18 @@ export class OfficeScene extends Phaser.Scene {
           this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
           this.world.setOfficeGrid(this.grid);
 
-          // Immediately request all door chunks from the background worker so
-          // generation runs in parallel with the per-chunk phases below.  By the
-          // time each phase fires, the worker will likely have already computed
-          // the tile data — the phase only needs to render (GPU work).
+          // Kick off door chunk generation in the background worker and preload
+          // any cached canvas textures from IndexedDB.  Both are fire-and-forget
+          // — the actual chunk loading happens after this.ready = true so the
+          // player can move immediately.
           const doorChunks = this.world.getDoorChunkList();
           this.world.preGenerateChunks(doorChunks);
-
-          // Try to preload cached canvas textures from IndexedDB (persistent
-          // across page reloads).  Each hit is registered as a Phaser texture
-          // so renderChunk skips painting entirely.
-          this.world.preloadCachedCanvases(doorChunks).then((cacheHits) => {
-            const allCached = cacheHits === doorChunks.length ||
-              doorChunks.every(c => this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)));
-
-            if (allCached) {
-              chunkPhases[0].name = `cached chunks (×${doorChunks.length})`;
-              chunkPhases[0].fn = () => {
-                for (const c of doorChunks) this.world.loadSingleChunk(c.cx, c.cy);
-              };
-            } else {
-              // Single phase: wait for worker results, then load all ready
-              // chunks at once.  Falls back to sync generation for any that
-              // aren't ready after a brief wait.
-              chunkPhases[0].name = `door chunks (×${doorChunks.length})`;
-              chunkPhases[0].fn = async () => {
-                // Give the worker a few frames head start (it was requested
-                // above).  Wait up to ~100ms for pending chunks to arrive.
-                const deadline = performance.now() + 100;
-                while (performance.now() < deadline) {
-                  const allReady = doorChunks.every(c =>
-                    this.world.hasPendingChunk(c.cx, c.cy) ||
-                    this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)));
-                  if (allReady) break;
-                  await new Promise(r => setTimeout(r, 16));
-                }
-                // Load all door chunks — loadChunk handles cached/worker/sync
-                for (const c of doorChunks) {
-                  this.world.loadSingleChunk(c.cx, c.cy);
-                }
-                // Flush render jobs so all chunks are fully painted
-                while (this.world.hasRenderJobs()) {
-                  this.world.processRenderJobsNow();
-                }
-              };
-            }
-          });
+          this.world.preloadCachedCanvases(doorChunks);
         },
       },
-      ...chunkPhases,
       {
         name: "world cleanup & lighting",
         fn: () => {
-          this.world.finishDoorPreload();
-
           // Warm up the particle system so the first biome ambient doesn't cause a
           // stutter.  The first ParticleEmitter render compiles WebGL shaders and
           // allocates GPU buffers.  We create the emitter now and let it render for
@@ -1309,6 +1244,33 @@ export class OfficeScene extends Phaser.Scene {
 
           // Clean up loading overlay
           loadOverlay.remove();
+
+          // Background-load door chunks so the player doesn't hit a freeze
+          // when first walking outside.  Yields between chunks to avoid
+          // frame stalls — the player can move around the office immediately.
+          const preloadDoorChunks = async () => {
+            const doorChunks = this.world.getDoorChunkList();
+            // Wait briefly for the worker to finish generating tile data
+            const deadline = performance.now() + 100;
+            while (performance.now() < deadline) {
+              const allReady = doorChunks.every(c =>
+                this.world.hasPendingChunk(c.cx, c.cy) ||
+                this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)));
+              if (allReady) break;
+              await new Promise(r => setTimeout(r, 16));
+            }
+            for (const c of doorChunks) {
+              this.world.loadSingleChunk(c.cx, c.cy);
+              this.world.processRenderJobsNow();
+              await new Promise(r => setTimeout(r, 0));
+            }
+            // Flush any remaining render jobs
+            while (this.world.hasRenderJobs()) {
+              this.world.processRenderJobsNow();
+            }
+            this.world.finishDoorPreload();
+          };
+          preloadDoorChunks();
         },
       },
     ];

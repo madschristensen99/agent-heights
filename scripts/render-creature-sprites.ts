@@ -127,6 +127,7 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   renderer.setSize(128, 128);
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
 
@@ -136,14 +137,17 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   cam.position.set(0, Math.sin(elev) * 2, Math.cos(elev) * 2);
   cam.lookAt(0, 0, 0);
 
-  // Lighting
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  // Lighting — bright, even illumination so colors pop
+  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
   keyLight.position.copy(cam.position);
   scene.add(keyLight);
-  const fillLight = new THREE.DirectionalLight(0x8899ff, 0.25);
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
   fillLight.position.set(-1, 0.5, -1);
   scene.add(fillLight);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+  rimLight.position.set(0, -0.3, 1);
+  scene.add(rimLight);
 
   // Load MTL materials first (if available), then OBJ
   const objLoader = new OBJLoader();
@@ -170,11 +174,19 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   });
   scene.add(model);
 
-  // Apply texture to all meshes if no MTL was provided
-  if (texture && !mtlUrl) {
+  // Apply texture to all meshes — override MTL materials to ensure texture is used
+  if (texture) {
     model.traverse((child: any) => {
       if (child.isMesh) {
-        child.material = new THREE.MeshStandardMaterial({ map: texture });
+        const mat = child.material;
+        if (mat && mat.map !== texture) {
+          mat.map = texture;
+          mat.color = new THREE.Color(0xffffff);
+          mat.needsUpdate = true;
+        }
+        if (!mat) {
+          child.material = new THREE.MeshStandardMaterial({ map: texture });
+        }
       }
     });
   }
