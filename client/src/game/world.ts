@@ -2373,7 +2373,12 @@ export class WorldLayer {
 
       if (job.currentRow >= CHUNK_SIZE) {
         // All rows painted — finalize canvas and create display objects
-        job.canvasTex.refresh();
+        try {
+          job.canvasTex.refresh();
+        } catch {
+          // Texture source was destroyed (chunk unloaded / scene restart)
+          continue;
+        }
         this.finishRenderChunk(job.chunk, job.texKey, job.container, job.ox, job.oy, job.SS, job.chunkLightList);
         const key = `${job.chunk.cx},${job.chunk.cy}`;
         this.chunkGraphics.set(key, job.container);
