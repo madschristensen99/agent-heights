@@ -27,8 +27,23 @@ export interface WorldOffset {
   y: number;
 }
 
-export const LOAD_RADIUS = 2;
-const UNLOAD_RADIUS = 3;
+/** Detect low-end devices (mobile, low RAM, few cores) to reduce rendering cost. */
+function isLowEndDevice(): boolean {
+  const mem = (navigator as any).deviceMemory;
+  const cores = navigator.hardwareConcurrency;
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  if (isMobile) return true;
+  if (mem !== undefined && mem <= 4) return true;
+  if (cores !== undefined && cores <= 4) return true;
+  return false;
+}
+
+/** Supersample factor: 4x on desktop (full 256px tile resolution), 2x on mobile. */
+export const SS_FACTOR = isLowEndDevice() ? 2 : 4;
+
+/** Chunk load radius: smaller on mobile to reduce memory and load time. */
+export const LOAD_RADIUS = isLowEndDevice() ? 1 : 2;
+const UNLOAD_RADIUS = LOAD_RADIUS + 1;
 
 /**
  * Global cache of generated chunk data, keyed by `${worldSeed}:${cx},${cy}`.
@@ -1880,7 +1895,7 @@ export class WorldLayer {
 
   /** Texture cache key for a chunk's static tile rendering. */
   private chunkTexKey(cx: number, cy: number): string {
-    return `chunk-rt-v4-${this.store.worldSeed}:${cx},${cy}`;
+    return `chunk-rt-v5-${this.store.worldSeed}:${cx},${cy}`;
   }
 
   /** Remove a cached chunk canvas texture so the next renderChunk redraws it. */
@@ -1934,9 +1949,9 @@ export class WorldLayer {
 
     // Render static tiles to a persistent canvas texture (survives scene restarts).
     // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
-    // Supersample at 4x (SS=4) so AI textures draw at full 256x256 resolution,
-    // then the display image is scaled down by the GPU for clean filtering.
-    const SS = 4;
+    // Supersample at SS_FACTOR (4x desktop, 2x mobile) so AI textures render
+    // at full resolution, then the GPU scales down for clean filtering.
+    const SS = SS_FACTOR;
     const ssPxSize = chunkPxSize * SS;
     const ssTilePx = TILE_PX * SS;
     if (!this.scene.textures.exists(texKey)) {
@@ -1953,11 +1968,46 @@ export class WorldLayer {
           const tex = this.scene.textures.get(textureKey);
           const fr = tex.get(0);
           if (!fr) return;
-          ctx.drawImage(
-            fr.source.image as CanvasImageSource,
-            fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-            px, py, w, h,
-          );
+          const srcW = fr.cutWidth;
+          const srcH = fr.cutHeight;
+          // Step-down scaling: when source is >2x larger than destination,
+          // draw through intermediate canvases (each 2x step) to mimic mipmaps.
+          // Prevents grainy artifacts from large bilinear downscales (e.g. 256px -> 128px at SS=2).
+          // At SS=4, source (256px) == destination (256px), so this path is skipped.
+          if (srcW > w * 2 || srcH > h * 2) {
+            let curW = srcW;
+            let curH = srcH;
+            let curCanvas: HTMLCanvasElement | undefined;
+            while (curW > w * 2 || curH > h * 2) {
+              const nextW = Math.max(w * 2, Math.floor(curW / 2));
+              const nextH = Math.max(h * 2, Math.floor(curH / 2));
+              const next = document.createElement("canvas");
+              next.width = nextW;
+              next.height = nextH;
+              const nctx = next.getContext("2d")!;
+              nctx.imageSmoothingEnabled = true;
+              nctx.imageSmoothingQuality = "high";
+              if (curCanvas) {
+                nctx.drawImage(curCanvas, 0, 0, curW, curH, 0, 0, nextW, nextH);
+              } else {
+                nctx.drawImage(
+                  fr.source.image as CanvasImageSource,
+                  fr.cutX, fr.cutY, srcW, srcH,
+                  0, 0, nextW, nextH,
+                );
+              }
+              curCanvas = next;
+              curW = nextW;
+              curH = nextH;
+            }
+            ctx.drawImage(curCanvas!, 0, 0, curW, curH, px, py, w, h);
+          } else {
+            ctx.drawImage(
+              fr.source.image as CanvasImageSource,
+              fr.cutX, fr.cutY, srcW, srcH,
+              px, py, w, h,
+            );
+          }
         };
 
         // Pass 1: draw base tiles with per-tile variant selection
@@ -2136,14 +2186,14 @@ export class WorldLayer {
           }
         }
 
-        // Pass 4: skip expensive canvas blur — at 2x SS tile seams are barely visible
+        // Pass 4: skip expensive canvas blur — tile seams are barely visible
         // and the per-tile color jitter already breaks up grid patterns.
         canvasTex.refresh();
       }
     }
 
     // Create an Image from the (now cached) canvas texture — one GPU draw call
-    // The supersampled canvas (2x) is scaled down to normal size for display.
+    // The supersampled canvas is scaled down to normal size for display.
     const img = this.scene.add.image(ox, oy, texKey);
     img.setOrigin(0, 0);
     img.setScale(1 / SS);

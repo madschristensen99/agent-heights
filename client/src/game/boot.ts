@@ -5,7 +5,7 @@ import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 import { Store } from "../store";
-import { AI_CHAR_TEXTURES, AI_HAIR_STYLES, AI_HAIR_DIRS, AI_HAIR_POSES, hairFrameKey, hairFrameUrl } from "./ai-tiles";
+import { AI_CHAR_TEXTURES, AI_HAIR_STYLES, AI_HAIR_DIRS, AI_HAIR_POSES, hairFrameKey } from "./ai-tiles";
 import { setCharTextureProvider, setCharComponentProvider } from "./chargen";
 import type { CharTextureProvider, CharComponentProvider } from "../../../shared/char-draw";
 
@@ -56,21 +56,14 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 64,
     });
 
-    // AI texture atlases (replaces 124+ individual requests with 4)
-    const atlasVer = "?v=273";
+    // AI texture atlases (replaces 480+ individual requests with 6)
+    const atlasVer = "?v=274";
     this.load.image("ai-tiles-atlas", `assets/atlases/ai-tiles-atlas.webp${atlasVer}`);
     this.load.json("ai-tiles-atlas-meta", `assets/atlases/ai-tiles-atlas.json${atlasVer}`);
     this.load.image("ai-sprites-atlas", `assets/atlases/ai-sprites-atlas.webp${atlasVer}`);
     this.load.json("ai-sprites-atlas-meta", `assets/atlases/ai-sprites-atlas.json${atlasVer}`);
-
-    // AI hair component sprites (grayscale PNGs, 24 frames per style)
-    for (const style of AI_HAIR_STYLES) {
-      for (const dir of AI_HAIR_DIRS) {
-        for (let pose = 0; pose < AI_HAIR_POSES; pose++) {
-          this.load.image(hairFrameKey(style, dir, pose), hairFrameUrl(style, dir, pose));
-        }
-      }
-    }
+    this.load.image("ai-hair-atlas", `assets/atlases/ai-hair-atlas.webp${atlasVer}`);
+    this.load.json("ai-hair-atlas-meta", `assets/atlases/ai-hair-atlas.json${atlasVer}`);
 
     const w = this.scale.width;
     const h = this.scale.height;
@@ -111,6 +104,7 @@ export class BootScene extends Phaser.Scene {
     // code that references keys like "ai-grass_0" works without changes.
     this.unpackAtlas("ai-tiles-atlas", "ai-tiles-atlas-meta");
     this.unpackAtlas("ai-sprites-atlas", "ai-sprites-atlas-meta");
+    this.unpackAtlas("ai-hair-atlas", "ai-hair-atlas-meta");
 
     // Extract ImageData from loaded AI char texture patches for character generation
     const provider: CharTextureProvider = {};

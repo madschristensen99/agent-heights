@@ -223,6 +223,31 @@ async function main() {
 
   await buildAtlas("ai-sprites-atlas", spriteItems, 4096, 4096);
 
+  // Hair atlas: 15 styles × 24 frames (8 poses × 3 dirs) = 360 PNGs
+  const HAIR_STYLES = [
+    "short", "spiky", "long", "ponytail",
+    "buzz", "swept", "curly", "bun",
+    "balding", "mohawk", "afro", "braids",
+    "pigtails", "bob", "dreadlocks",
+  ];
+  const HAIR_DIRS = ["down", "right", "up"];
+  const HAIR_POSES = 8;
+  const hairItems: PackItem[] = [];
+  for (const style of HAIR_STYLES) {
+    for (const dir of HAIR_DIRS) {
+      for (let pose = 0; pose < HAIR_POSES; pose++) {
+        const fileKey = `${style}_${dir}_${pose}`;
+        hairItems.push(
+          makeItem(
+            `ai-hair-${fileKey}`,
+            join(AI_DIR, "char", "hair", style, `${fileKey}.png`),
+          ),
+        );
+      }
+    }
+  }
+  await buildAtlas("ai-hair-atlas", hairItems, 2048, 2048);
+
   console.log("\nDone! Atlases written to client/public/assets/atlases/");
 }
 
