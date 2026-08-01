@@ -174,19 +174,13 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   });
   scene.add(model);
 
-  // Apply texture to all meshes — override MTL materials to ensure texture is used
+  // Apply texture to all meshes using MeshBasicMaterial — no PBR lighting
+  // darkening, texture colors show at full brightness. We add subtle shading
+  // via a second pass with face normals.
   if (texture) {
     model.traverse((child: any) => {
       if (child.isMesh) {
-        const mat = child.material;
-        if (mat && mat.map !== texture) {
-          mat.map = texture;
-          mat.color = new THREE.Color(0xffffff);
-          mat.needsUpdate = true;
-        }
-        if (!mat) {
-          child.material = new THREE.MeshStandardMaterial({ map: texture });
-        }
+        child.material = new THREE.MeshBasicMaterial({ map: texture });
       }
     });
   }
@@ -229,6 +223,11 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   sheetCanvas.height = 128 * 4;
   const sheetCtx = sheetCanvas.getContext("2d")!;
 
+  // Compute average brightness of the spritesheet to auto-correct dark textures
+  const sampleCanvas = document.createElement("canvas");
+  sampleCanvas.width = 32; sampleCanvas.height = 32;
+  const sampleCtx = sampleCanvas.getContext("2d")!;
+
   for (let anim = 0; anim < 4; anim++) {
     for (let dir = 0; dir < 8; dir++) {
       model.rotation.y = dirRotations[dir];
@@ -239,6 +238,36 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
       renderer.render(scene, cam);
       sheetCtx.drawImage(renderer.domElement, dir * 128, anim * 128);
     }
+  }
+
+  // Auto-brighten: sample center frame, compute mean brightness, apply gamma correction if dark
+  sampleCtx.drawImage(sheetCanvas, 0, 0, 128, 128, 0, 0, 32, 32);
+  const sampleData = sampleCtx.getImageData(0, 0, 32, 32).data;
+  let sum = 0, count = 0;
+  for (let i = 0; i < sampleData.length; i += 4) {
+    if (sampleData[i + 3] > 0) {
+      sum += (sampleData[i] + sampleData[i + 1] + sampleData[i + 2]) / 3;
+      count++;
+    }
+  }
+  const avgBrightness = count > 0 ? sum / count : 128;
+  // Target brightness ~180/255; apply gamma correction if darker than 150
+  if (avgBrightness < 150 && count > 0) {
+    // We want: current^invGamma = target → invGamma = log(target)/log(current)
+    const target = 180 / 255;
+    const current = Math.max(avgBrightness / 255, 0.01);
+    const invGamma = Math.max(Math.log(target) / Math.log(current), 0.05);
+    const clampedInvGamma = Math.min(invGamma, 0.2); // cap at gamma=5 (invGamma=0.2)
+    const imgData = sheetCtx.getImageData(0, 0, sheetCanvas.width, sheetCanvas.height);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 0) {
+        d[i]   = 255 * Math.pow(d[i]   / 255, clampedInvGamma);
+        d[i+1] = 255 * Math.pow(d[i+1] / 255, clampedInvGamma);
+        d[i+2] = 255 * Math.pow(d[i+2] / 255, clampedInvGamma);
+      }
+    }
+    sheetCtx.putImageData(imgData, 0, 0);
   }
 
   return sheetCanvas.toDataURL("image/png");

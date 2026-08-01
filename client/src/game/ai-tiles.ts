@@ -109,11 +109,8 @@ export const AI_ITEM_TEXTURES: Record<string, string> = {
   "axe": "ai-fur-axe",
   "tee-box": "ai-fur-tee_box",
   "leprechaun": "ai-fur-leprechaun",
-  "tennis-court": "ai-fur-tennis_court",
-  "tennis-wall": "ai-fur-tennis_wall",
   "tennis-racket": "ai-fur-tennis_racket",
   "tennis-ball": "ai-fur-tennis_ball",
-  "tennis-net": "ai-fur-tennis_net",
 };
 
 /** Item asset keys (without prefix) for loading from furniture/ directory. */

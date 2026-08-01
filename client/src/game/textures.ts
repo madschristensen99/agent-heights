@@ -3368,24 +3368,21 @@ function drawLeprechaun(ctx: CanvasRenderingContext2D, size: number): void {
 // TENNIS TEXTURES
 // ============================================================
 
-/** Draw a tennis court tile — blue-green hard court surface (US Open style). */
+/** Draw a tennis court tile — blue-green hard court surface (US Open style).
+ *  Seamless: flat color so adjacent tiles form one continuous court. */
 function drawTennisCourt(ctx: CanvasRenderingContext2D, size: number): void {
-  // court surface — blue-green hard court, uniform color
-  const grad = ctx.createLinearGradient(0, 0, size, size);
-  grad.addColorStop(0, rgba(0x2e80b8, 1));
-  grad.addColorStop(0.5, rgba(0x3088c0, 1));
-  grad.addColorStop(1, rgba(0x2870a8, 1));
-  ctx.fillStyle = grad;
+  // court surface — flat blue-green, no gradient so tiles blend seamlessly
+  ctx.fillStyle = rgba(0x2e80b8, 1);
   ctx.fillRect(0, 0, size, size);
 
   // subtle texture — faint noise dots for acrylic court feel
-  ctx.fillStyle = rgba(0x4098d0, 0.15);
+  ctx.fillStyle = rgba(0x4098d0, 0.1);
   for (let i = 0; i < 12; i++) {
     const nx = (i * 37 + 13) % size;
     const ny = (i * 53 + 7) % size;
     ctx.fillRect(nx, ny, 2, 2);
   }
-  ctx.fillStyle = rgba(0x1a6090, 0.1);
+  ctx.fillStyle = rgba(0x1a6090, 0.08);
   for (let i = 0; i < 8; i++) {
     const nx = (i * 61 + 23) % size;
     const ny = (i * 43 + 29) % size;
@@ -3393,39 +3390,36 @@ function drawTennisCourt(ctx: CanvasRenderingContext2D, size: number): void {
   }
 }
 
-/** Draw a tennis wall — brick/concrete back wall. */
+/** Draw a tennis wall tile — seamless brick/concrete back wall.
+ *  Flat color + brick mortar lines that continue across tile boundaries. */
 function drawTennisWall(ctx: CanvasRenderingContext2D, size: number): void {
-  // wall base — concrete gray
-  const grad = ctx.createLinearGradient(0, 0, 0, size);
-  grad.addColorStop(0, rgba(0x888888, 1));
-  grad.addColorStop(0.7, rgba(0x777777, 1));
-  grad.addColorStop(1, rgba(0x666666, 1));
-  ctx.fillStyle = grad;
+  // wall base — flat concrete gray, no per-tile gradient
+  ctx.fillStyle = rgba(0x787878, 1);
   ctx.fillRect(0, 0, size, size);
 
-  // brick texture — rows of bricks
+  // brick texture — rows of bricks with mortar lines
+  // Use a brick width that divides evenly into size so vertical lines
+  // align across adjacent tiles (seamless tiling).
   ctx.strokeStyle = rgba(0x555555, 0.5);
   ctx.lineWidth = 0.8;
-  const brickH = size * 0.12;
+  const brickH = size / 8; // 8 rows, divides evenly
+  const brickW = size / 4; // 4 bricks per row, divides evenly
   for (let row = 0; row < 8; row++) {
     const y = row * brickH;
+    // horizontal mortar line
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(size, y);
     ctx.stroke();
-    // vertical mortar lines — offset every other row
-    const offset = row % 2 === 0 ? 0 : size * 0.25;
-    for (let bx = offset; bx < size; bx += size * 0.5) {
+    // vertical mortar lines — offset every other row by half a brick
+    const offset = row % 2 === 0 ? 0 : brickW / 2;
+    for (let bx = offset; bx < size; bx += brickW) {
       ctx.beginPath();
       ctx.moveTo(bx, y);
       ctx.lineTo(bx, y + brickH);
       ctx.stroke();
     }
   }
-
-  // top edge highlight — white cap
-  ctx.fillStyle = rgba(0xeeeeee, 0.8);
-  ctx.fillRect(0, 0, size, 2);
 }
 
 /** Draw a tennis racket lying diagonally on the ground. */
@@ -3542,38 +3536,20 @@ function drawTennisBall(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.fill();
 }
 
-/** Draw a tennis net — mesh netting between two posts. */
+/** Draw a tennis net tile — seamless mesh netting (no posts).
+ *  Mesh fills the full tile so adjacent net tiles form one continuous net.
+ *  Posts are not drawn here; they would only make sense on edge tiles. */
 function drawTennisNet(ctx: CanvasRenderingContext2D, size: number): void {
-  const cx = size / 2;
-  const cy = size / 2;
-  const netW = size * 0.7;
-  const netH = size * 0.45;
-  const nx = cx - netW / 2;
-  const ny = cy - netH / 2;
+  const netH = size * 0.5;
+  const ny = (size - netH) / 2;
 
-  // posts on either side
-  for (const side of [-1, 1]) {
-    const px = cx + side * (netW / 2);
-    // post shadow
-    ctx.fillStyle = rgba(0x000000, 0.2);
-    ctx.beginPath();
-    ctx.ellipse(px + 1, ny + netH - 1, 2.5, 1.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // post
-    ctx.fillStyle = rgba(0x444444, 1);
-    ctx.fillRect(px - 1.5, ny, 3, netH);
-    // post cap — white
-    ctx.fillStyle = rgba(0xeeeeee, 1);
-    ctx.fillRect(px - 2, ny, 4, 2);
-  }
-
-  // net mesh — grid of thin lines
+  // net mesh — grid of thin lines spanning the full tile width
   ctx.strokeStyle = rgba(0xdddddd, 0.5);
   ctx.lineWidth = 0.5;
   const meshCols = 8;
   const meshRows = 5;
   for (let i = 0; i <= meshCols; i++) {
-    const x = nx + (i / meshCols) * netW;
+    const x = (i / meshCols) * size;
     ctx.beginPath();
     ctx.moveTo(x, ny + 1);
     ctx.lineTo(x, ny + netH - 1);
@@ -3582,14 +3558,14 @@ function drawTennisNet(ctx: CanvasRenderingContext2D, size: number): void {
   for (let i = 0; i <= meshRows; i++) {
     const y = ny + 1 + (i / meshRows) * (netH - 2);
     ctx.beginPath();
-    ctx.moveTo(nx, y);
-    ctx.lineTo(nx + netW, y);
+    ctx.moveTo(0, y);
+    ctx.lineTo(size, y);
     ctx.stroke();
   }
 
-  // top band — white tape
+  // top band — white tape across full width
   ctx.fillStyle = rgba(0xffffff, 0.8);
-  ctx.fillRect(nx, ny, netW, 2);
+  ctx.fillRect(0, ny, size, 2);
 }
 
 // ============================================================
