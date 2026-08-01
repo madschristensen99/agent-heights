@@ -17,6 +17,8 @@
     "assets": "tsx scripts/generate-assets.ts",
     "ai-assets": "tsx scripts/generate-ai-assets.ts",
     "creature-sprites": "tsx scripts/generate-creature-sprites.ts",
+    "creature-3d": "tsx scripts/generate-creature-3d.ts",
+    "creature-render": "tsx scripts/render-creature-sprites.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

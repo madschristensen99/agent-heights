@@ -41,6 +41,23 @@ function isLowEndDevice(): boolean {
 /** Supersample factor: 4x on desktop (full 256px tile resolution), 1x on mobile (2048px canvas, within all GPU limits). */
 export const SS_FACTOR = isLowEndDevice() ? 1 : 4;
 
+// --- 3D creature spritesheet helpers ---
+// 3D sheets are 8 cols (S,SE,E,NE,N,NW,W,SW) × 4 rows (idle,walk1,walk2,attack) = 32 frames
+// Frame index = anim * 8 + dir
+const DIRS_3D = 8;
+
+/** Check if a sprite's texture is a 3D-rendered 8-directional spritesheet (≥1024px wide). */
+function has8Directions(sprite: Phaser.GameObjects.Sprite): boolean {
+  const src = sprite.texture.getSourceImage() as HTMLImageElement;
+  return src.width >= DIRS_3D * 128;
+}
+
+/** Map a movement vector to one of 8 direction indices (0=S, 1=SE, 2=E, 3=NE, 4=N, 5=NW, 6=W, 7=SW). */
+function dirFromVelocity(dx: number, dy: number): number {
+  if (dx === 0 && dy === 0) return 0;
+  return ((Math.round((Math.PI / 2 - Math.atan2(dy, dx)) / (Math.PI / 4)) % 8) + 8) % 8;
+}
+
 /** Chunk load radius: smaller on mobile to reduce memory and load time. */
 export const LOAD_RADIUS = isLowEndDevice() ? 1 : 2;
 const UNLOAD_RADIUS = LOAD_RADIUS + 1;
@@ -52,7 +69,27 @@ const UNLOAD_RADIUS = LOAD_RADIUS + 1;
  * overrides are re-applied on each loadChunk call.
  */
 const globalChunkCache = new Map<string, Chunk>();
-const MAX_CHUNKS_PER_FRAME = 3;
+const MAX_CHUNKS_PER_FRAME = isLowEndDevice() ? 1 : 3;
+const RENDER_ROWS_PER_FRAME = isLowEndDevice() ? 8 : 32; // mobile: 4 frames per chunk; desktop: 1 frame (all rows)
+
+/** State for a chunk being painted across multiple frames. */
+interface RenderJob {
+  chunk: Chunk;
+  texKey: string;
+  canvasTex: Phaser.Textures.CanvasTexture;
+  ctx: CanvasRenderingContext2D;
+  ssTilePx: number;
+  SS: number;
+  currentRow: number;       // next row to paint (0..CHUNK_SIZE-1)
+  // Pre-computed lookup tables for this chunk
+  overlayTextures: Record<number, string>;
+  edgeTileColors: Record<number, string>;
+  worldTilesTex: Phaser.Textures.Texture;
+  ox: number;
+  oy: number;
+  chunkLightList: LightSource[];
+  container: Phaser.GameObjects.Container;
+}
 const MAX_LIGHTS_PER_CHUNK = 8;
 const MAX_HP = 100;
 const CREATURE_CAP = 30;
@@ -188,6 +225,7 @@ class LegendaryBeast {
   name: string;
   private animKey: string;
   private moveTimer = 0;
+  private lastDir = 0;
   private scale: number;
 
   constructor(world: WorldLayer, def: BeastDef, x: number, y: number) {
@@ -246,17 +284,29 @@ class LegendaryBeast {
         this.container.setPosition(nx, ny);
         this.container.setDepth(25 + ny);
         moving = true;
-        this.sprite.setFlipX(dx < 0);
+        this.lastDir = dirFromVelocity(dx, dy);
       }
     }
 
     // animate
-    if (moving) {
-      this.moveTimer += dt;
-      const frame = Math.floor(this.moveTimer / 250) % 2 + 1; // frames 1,2
-      this.sprite.setFrame(frame);
+    const is3d = has8Directions(this.sprite);
+    if (is3d) {
+      if (moving) {
+        this.moveTimer += dt;
+        const anim = Math.floor(this.moveTimer / 250) % 2 + 1;
+        this.sprite.setFrame(anim * DIRS_3D + this.lastDir);
+      } else {
+        this.sprite.setFrame(this.lastDir);
+      }
     } else {
-      this.sprite.setFrame(0);
+      this.sprite.setFlipX(this.lastDir >= 4 && this.lastDir <= 6);
+      if (moving) {
+        this.moveTimer += dt;
+        const frame = Math.floor(this.moveTimer / 250) % 2 + 1;
+        this.sprite.setFrame(frame);
+      } else {
+        this.sprite.setFrame(0);
+      }
     }
 
     // pulse aura
@@ -267,7 +317,7 @@ class LegendaryBeast {
     if (dist < 50 && this.attackCd <= 0) {
       this.attackCd = this.attackCdMax;
       // attack frame
-      this.sprite.setFrame(3);
+      this.sprite.setFrame(is3d ? 3 * DIRS_3D + this.lastDir : 3);
       this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff4444, 12, 100);
       this.world.vfx?.shake("medium");
       this.world.audio?.beastRoar();
@@ -539,6 +589,7 @@ class Creature {
   private animKey: string;
   private lightGlow: Phaser.GameObjects.Image;
   private walkTimer = 0;
+  private lastDir = 0;
   nemesisId: string | null = null;
   private nameTag: Phaser.GameObjects.Text | null = null;
   private hasHitPlayer = false;
@@ -643,26 +694,37 @@ class Creature {
         this.container.setPosition(nx, ny);
         this.container.setDepth(20 + ny);
         moving = true;
-        // face direction
-        this.sprite.setFlipX(dx < 0);
+        this.lastDir = dirFromVelocity(dx, dy);
       }
     }
 
     // animation: walk vs idle
-    if (moving) {
-      this.walkTimer += dt;
-      const frame = Math.floor(this.walkTimer / 200) % 2 + 1; // frames 1,2
-      this.sprite.setFrame(frame);
+    const is3d = has8Directions(this.sprite);
+    if (is3d) {
+      if (moving) {
+        this.walkTimer += dt;
+        const anim = Math.floor(this.walkTimer / 200) % 2 + 1;
+        this.sprite.setFrame(anim * DIRS_3D + this.lastDir);
+      } else {
+        this.sprite.setFrame(this.lastDir); // idle = anim 0
+      }
     } else {
-      this.sprite.setFrame(0);
+      this.sprite.setFlipX(this.lastDir >= 4 && this.lastDir <= 6); // W, NW, SW
+      if (moving) {
+        this.walkTimer += dt;
+        const frame = Math.floor(this.walkTimer / 200) % 2 + 1;
+        this.sprite.setFrame(frame);
+      } else {
+        this.sprite.setFrame(0);
+      }
     }
 
     // attack cooldown
     this.attackCd -= dt;
     if (dist < 40 && this.attackCd <= 0) {
       this.attackCd = 1000;
-      // attack animation — frame 3
-      this.sprite.setFrame(3);
+      // attack animation
+      this.sprite.setFrame(is3d ? 3 * DIRS_3D + this.lastDir : 3);
       this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xff3333, 4, 60);
       this.world.audio?.creatureGrowl();
       this.hasHitPlayer = true;
@@ -735,6 +797,7 @@ class FriendlyCreature {
   private targetX: number;
   private targetY: number;
   private moving = false;
+  private lastDir = 0;
   private sparkleAt = 0;
   private curiousUntil = 0;
 
@@ -821,7 +884,7 @@ class FriendlyCreature {
         const { tx, ty } = this.world.pixelToTile(nx, ny);
         if (this.world.isCreatureWalkable(tx, ty)) {
           this.container.setPosition(nx, ny);
-          this.sprite.setFlipX(mdx < 0);
+          this.lastDir = dirFromVelocity(mdx, mdy);
         } else {
           this.moving = false;
         }
@@ -830,12 +893,24 @@ class FriendlyCreature {
     }
 
     // animation: walk vs idle vs hop
-    if (this.moving) {
-      this.walkTimer += dt;
-      const frame = Math.floor(this.walkTimer / 250) % 2 + 1; // frames 1,2
-      this.sprite.setFrame(frame);
+    const is3d = has8Directions(this.sprite);
+    if (is3d) {
+      if (this.moving) {
+        this.walkTimer += dt;
+        const anim = Math.floor(this.walkTimer / 250) % 2 + 1;
+        this.sprite.setFrame(anim * DIRS_3D + this.lastDir);
+      } else {
+        this.sprite.setFrame(this.lastDir);
+      }
     } else {
-      this.sprite.setFrame(0);
+      this.sprite.setFlipX(this.lastDir >= 4 && this.lastDir <= 6);
+      if (this.moving) {
+        this.walkTimer += dt;
+        const frame = Math.floor(this.walkTimer / 250) % 2 + 1;
+        this.sprite.setFrame(frame);
+      } else {
+        this.sprite.setFrame(0);
+      }
     }
 
     // occasional sparkle / heart particles
@@ -871,6 +946,7 @@ class DeployedAlly {
   private shadow: Phaser.GameObjects.Ellipse;
   private lightGlow: Phaser.GameObjects.Image;
   private walkTimer = 0;
+  private lastDir = 0;
   private nameTag: Phaser.GameObjects.Text;
   private hpBar: Phaser.GameObjects.Graphics;
 
@@ -952,7 +1028,7 @@ class DeployedAlly {
       this.attackCd -= dt;
       if (this.attackCd <= 0) {
         this.attackCd = 800;
-        this.sprite.setFrame(3);
+        this.sprite.setFrame(has8Directions(this.sprite) ? 3 * DIRS_3D + this.lastDir : 3);
         nearestEnemy.takeDamage(this.damage);
         this.world.vfx?.sparkBurst(nearestEnemy.container.x, nearestEnemy.container.y, 0x44ff88, 6, 60);
       }
@@ -963,7 +1039,7 @@ class DeployedAlly {
       this.attackCd -= dt;
       if (this.attackCd <= 0) {
         this.attackCd = 800;
-        this.sprite.setFrame(3);
+        this.sprite.setFrame(has8Directions(this.sprite) ? 3 * DIRS_3D + this.lastDir : 3);
         nearestBeast.takeDamage(this.damage);
         this.world.vfx?.sparkBurst(nearestBeast.container.x, nearestBeast.container.y, 0x44ff88, 6, 60);
       }
@@ -999,15 +1075,23 @@ class DeployedAlly {
         const { tx, ty } = this.world.pixelToTile(nx, ny);
         if (this.world.isCreatureWalkable(tx, ty)) {
           this.container.setPosition(nx, ny);
-          this.sprite.setFlipX(mdx < 0);
-          this.walkTimer += dt;
-          const frame = Math.floor(this.walkTimer / 200) % 2 + 1;
-          this.sprite.setFrame(frame);
+          this.lastDir = dirFromVelocity(mdx, mdy);
+          const is3d = has8Directions(this.sprite);
+          if (is3d) {
+            this.walkTimer += dt;
+            const anim = Math.floor(this.walkTimer / 200) % 2 + 1;
+            this.sprite.setFrame(anim * DIRS_3D + this.lastDir);
+          } else {
+            this.sprite.setFlipX(this.lastDir >= 4 && this.lastDir <= 6);
+            this.walkTimer += dt;
+            const frame = Math.floor(this.walkTimer / 200) % 2 + 1;
+            this.sprite.setFrame(frame);
+          }
         } else {
-          this.sprite.setFrame(0);
+          this.sprite.setFrame(has8Directions(this.sprite) ? this.lastDir : 0);
         }
       } else {
-        this.sprite.setFrame(0);
+        this.sprite.setFrame(has8Directions(this.sprite) ? this.lastDir : 0);
       }
     }
 
@@ -1270,6 +1354,10 @@ export class WorldLayer {
   private worker: Worker | null = null;
   private pendingChunks = new Map<string, Chunk>();
   private workerRequested = new Set<string>();
+
+  // --- Time-sliced chunk rendering ---
+  // Chunk canvas painting is split across frames to avoid main-thread stalls.
+  private renderingQueue: RenderJob[] = [];
 
   private ghostDialog!: HintTag;
   private recruitedHint!: Phaser.GameObjects.Text;
@@ -1715,6 +1803,23 @@ export class WorldLayer {
     // Request all needed chunks from the worker first (non-blocking)
     for (const n of needed) this.requestChunk(n.cx, n.cy);
 
+    // Pre-request chunks one ring beyond LOAD_RADIUS so the worker has a head start.
+    // These are NOT loaded — just sent to the worker so tile data is ready by the time
+    // the player moves close enough to need them.
+    const preRadius = LOAD_RADIUS + 1;
+    for (let dy = -preRadius; dy <= preRadius; dy++) {
+      for (let dx = -preRadius; dx <= preRadius; dx++) {
+        if (Math.abs(dx) <= LOAD_RADIUS && Math.abs(dy) <= LOAD_RADIUS) continue; // already requested above
+        const ncy = pcy + dy;
+        if (ncy < 0) continue;
+        const ncx = pcx + dx;
+        this.requestChunk(ncx, ncy);
+      }
+    }
+
+    // Continue painting any in-progress chunk renders (time-sliced across frames)
+    this.processRenderJobs();
+
     // Load only chunks that are ready (pre-generated by worker) or fall back
     // to synchronous generation.  This avoids CPU spikes during traversal —
     // if the worker hasn't finished a chunk yet, we skip it this frame and
@@ -1746,6 +1851,18 @@ export class WorldLayer {
         this.tennisChunks.delete(key);
       }
     }
+
+    // Drop any render jobs for chunks that are now out of range
+    this.renderingQueue = this.renderingQueue.filter(job => {
+      const dx = Math.abs(job.chunk.cx - pcx);
+      const dy = Math.abs(job.chunk.cy - pcy);
+      if (dx > UNLOAD_RADIUS || dy > UNLOAD_RADIUS) {
+        this.scene.textures.remove(job.texKey);
+        job.container.destroy();
+        return false;
+      }
+      return true;
+    });
   }
 
   /** Returns the list of chunks needed around the door exit, sorted by distance. */
@@ -1789,6 +1906,11 @@ export class WorldLayer {
     const needed = this.getDoorChunkList();
     for (const n of needed) {
       this.loadChunk(n.cx, n.cy);
+    }
+    // Flush any time-sliced render jobs so all door chunks are fully painted
+    // before the boot sequence continues.
+    while (this.renderingQueue.length > 0) {
+      this.processRenderJobs();
     }
     this.removeExtraBalls();
   }
@@ -1894,8 +2016,8 @@ export class WorldLayer {
   }
 
   /** Texture cache key for a chunk's static tile rendering. */
-  private chunkTexKey(cx: number, cy: number): string {
-    return `chunk-rt-v6-${this.store.worldSeed}:${cx},${cy}`;
+  chunkTexKey(cx: number, cy: number): string {
+    return `chunk-rt-v7-${this.store.worldSeed}:${cx},${cy}`;
   }
 
   /** Remove a cached chunk canvas texture so the next renderChunk redraws it. */
@@ -1932,276 +2054,317 @@ export class WorldLayer {
       [TILE.TENNIS_NET]: "tennis-net",
     };
 
-    const tileToFrame = (tile: number, variant: number): number => {
-      if (tile === TILE.WATER) return 21;
-      if (tile >= 22) return TILE.GRASS + variant * WORLD_TILE_FRAMES;
-      return tile + variant * WORLD_TILE_FRAMES;
-    };
-
-    // Edge autotiling: tiles that get a colored border where they meet different terrain
     const edgeTileColors: Record<number, string> = {
       [TILE.WATER]: "rgba(42,80,110,0.7)",
       [TILE.POND]: "rgba(40,70,50,0.6)",
       [TILE.LAVA]: "rgba(30,8,4,0.8)",
       [TILE.ACID]: "rgba(50,80,16,0.6)",
     };
-    const EDGE_WIDTH = 4;
 
-    // Render static tiles to a persistent canvas texture (survives scene restarts).
-    // On subsequent loads, we skip the ~1024 draw calls and just create an Image.
-    // Supersample at SS_FACTOR (4x desktop, 2x mobile) so AI textures render
-    // at full resolution, then the GPU scales down for clean filtering.
     const SS = SS_FACTOR;
     const ssPxSize = chunkPxSize * SS;
     const ssTilePx = TILE_PX * SS;
-    if (!this.scene.textures.exists(texKey)) {
-      const canvasTex = this.scene.textures.createCanvas(texKey, ssPxSize, ssPxSize);
-      if (canvasTex) {
-        canvasTex.setFilter(Phaser.Textures.FilterMode.LINEAR);
-        const ctx = canvasTex.getContext();
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        const worldTilesTex = this.scene.textures.get("world-tiles");
 
-        const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = ssTilePx, h: number = ssTilePx) => {
-          if (!this.scene.textures.exists(textureKey)) return;
-          const tex = this.scene.textures.get(textureKey);
+    // If canvas texture already exists (cached from a previous visit), skip painting
+    // and go straight to creating the display image + dynamic sprites.
+    if (this.scene.textures.exists(texKey)) {
+      this.finishRenderChunk(chunk, texKey, container, ox, oy, SS, chunkLightList);
+      this.chunkGraphics.set(key, container);
+      this.chunkLights.set(key, chunkLightList);
+      return;
+    }
+
+    // Create canvas and start time-sliced rendering
+    const canvasTex = this.scene.textures.createCanvas(texKey, ssPxSize, ssPxSize);
+    if (!canvasTex) {
+      this.chunkGraphics.set(key, container);
+      this.chunkLights.set(key, chunkLightList);
+      return;
+    }
+    canvasTex.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    const ctx = canvasTex.getContext();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    const worldTilesTex = this.scene.textures.get("world-tiles");
+
+    const job: RenderJob = {
+      chunk, texKey, canvasTex, ctx, ssTilePx, SS,
+      currentRow: 0,
+      overlayTextures, edgeTileColors, worldTilesTex,
+      ox, oy, chunkLightList, container,
+    };
+    this.renderingQueue.push(job);
+
+    // If RENDER_ROWS_PER_FRAME >= CHUNK_SIZE (desktop), paint everything now in one go
+    if (RENDER_ROWS_PER_FRAME >= CHUNK_SIZE) {
+      this.processRenderJobs();
+    }
+  }
+
+  /** Paint a batch of rows for all in-progress render jobs. Called from updateChunks. */
+  private processRenderJobs(): void {
+    if (this.renderingQueue.length === 0) return;
+    const EDGE_WIDTH = 4;
+    const remaining: RenderJob[] = [];
+    for (const job of this.renderingQueue) {
+      const { chunk, ctx, ssTilePx, SS, worldTilesTex, overlayTextures, edgeTileColors } = job;
+      const endRow = Math.min(job.currentRow + RENDER_ROWS_PER_FRAME, CHUNK_SIZE);
+
+      const tileToFrame = (tile: number, variant: number): number => {
+        if (tile === TILE.WATER) return 21;
+        if (tile >= 22) return TILE.GRASS + variant * WORLD_TILE_FRAMES;
+        return tile + variant * WORLD_TILE_FRAMES;
+      };
+
+      const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = ssTilePx, h: number = ssTilePx) => {
+        const scaledKey = `${textureKey}-ss${SS}`;
+        if (SS < 4 && this.scene.textures.exists(scaledKey)) {
+          const tex = this.scene.textures.get(scaledKey);
           const fr = tex.get(0);
-          if (!fr) return;
-          const srcW = fr.cutWidth;
-          const srcH = fr.cutHeight;
-          // Step-down scaling: when source is >2x larger than destination,
-          // draw through intermediate canvases (each 2x step) to mimic mipmaps.
-          // Prevents grainy artifacts from large bilinear downscales (e.g. 256px -> 128px at SS=2).
-          // At SS=4, source (256px) == destination (256px), so this path is skipped.
-          if (srcW > w * 2 || srcH > h * 2) {
-            let curW = srcW;
-            let curH = srcH;
-            let curCanvas: HTMLCanvasElement | undefined;
-            while (curW > w * 2 || curH > h * 2) {
-              const nextW = Math.max(w * 2, Math.floor(curW / 2));
-              const nextH = Math.max(h * 2, Math.floor(curH / 2));
-              const next = document.createElement("canvas");
-              next.width = nextW;
-              next.height = nextH;
-              const nctx = next.getContext("2d")!;
-              nctx.imageSmoothingEnabled = true;
-              nctx.imageSmoothingQuality = "high";
-              if (curCanvas) {
-                nctx.drawImage(curCanvas, 0, 0, curW, curH, 0, 0, nextW, nextH);
-              } else {
-                nctx.drawImage(
-                  fr.source.image as CanvasImageSource,
-                  fr.cutX, fr.cutY, srcW, srcH,
-                  0, 0, nextW, nextH,
-                );
-              }
-              curCanvas = next;
-              curW = nextW;
-              curH = nextH;
-            }
-            ctx.drawImage(curCanvas!, 0, 0, curW, curH, px, py, w, h);
-          } else {
+          if (fr) {
             ctx.drawImage(
               fr.source.image as CanvasImageSource,
-              fr.cutX, fr.cutY, srcW, srcH,
+              fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
               px, py, w, h,
             );
+            return;
           }
-        };
-
-        // Pass 1: draw base tiles with per-tile variant selection
-        for (let y = 0; y < CHUNK_SIZE; y++) {
-          for (let x = 0; x < CHUNK_SIZE; x++) {
-            const tile = chunk.tiles[y * CHUNK_SIZE + x];
-            const px = x * ssTilePx;
-            const py = y * ssTilePx;
-            const worldTileX = chunk.cx * CHUNK_SIZE + x;
-            const worldTileY = chunk.cy * CHUNK_SIZE + y;
-            // Position hash for variant — deterministic per world tile
-            let h = (worldTileX * 374761393 + worldTileY * 668265263) | 0;
-            h = (h ^ (h >>> 13)) | 0;
-            const variant = (h & 0x7fffffff) % WORLD_VARIANTS;
-            const frame = tileToFrame(tile, variant);
-
-            // Draw base tile — use AI texture if available, else spritesheet
-            // For object tiles (tree, flower, bush, etc.) with AI overlays, draw grass as base
-            const aiObjKeyForBase = AI_OBJECT_TEXTURES[tile];
-            const aiTextures = AI_TILE_TEXTURES[tile];
-            if (aiObjKeyForBase && this.scene.textures.exists(aiObjKeyForBase)) {
-              // Draw grass base under AI object sprite
-              const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
-              if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
-                drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
-              } else {
-                const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
-                if (grassFrame) {
-                  ctx.drawImage(
-                    grassFrame.source.image as CanvasImageSource,
-                    grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
-                    px, py, ssTilePx, ssTilePx,
-                  );
-                }
-              }
-            } else if (aiTextures && this.scene.textures.exists(aiTextures[variant % aiTextures.length])) {
-              drawTexToCanvas(aiTextures[variant % aiTextures.length], px, py);
+        }
+        if (!this.scene.textures.exists(textureKey)) return;
+        const tex = this.scene.textures.get(textureKey);
+        const fr = tex.get(0);
+        if (!fr) return;
+        const srcW = fr.cutWidth;
+        const srcH = fr.cutHeight;
+        if (srcW > w * 2 || srcH > h * 2) {
+          let curW = srcW;
+          let curH = srcH;
+          let curCanvas: HTMLCanvasElement | undefined;
+          while (curW > w * 2 || curH > h * 2) {
+            const nextW = Math.max(w * 2, Math.floor(curW / 2));
+            const nextH = Math.max(h * 2, Math.floor(curH / 2));
+            const next = document.createElement("canvas");
+            next.width = nextW;
+            next.height = nextH;
+            const nctx = next.getContext("2d")!;
+            nctx.imageSmoothingEnabled = true;
+            nctx.imageSmoothingQuality = "high";
+            if (curCanvas) {
+              nctx.drawImage(curCanvas, 0, 0, curW, curH, 0, 0, nextW, nextH);
             } else {
-              const fr = worldTilesTex.get(frame);
-              if (fr) {
+              nctx.drawImage(
+                fr.source.image as CanvasImageSource,
+                fr.cutX, fr.cutY, srcW, srcH,
+                0, 0, nextW, nextH,
+              );
+            }
+            curCanvas = next;
+            curW = nextW;
+            curH = nextH;
+          }
+          ctx.drawImage(curCanvas!, 0, 0, curW, curH, px, py, w, h);
+        } else {
+          ctx.drawImage(
+            fr.source.image as CanvasImageSource,
+            fr.cutX, fr.cutY, srcW, srcH,
+            px, py, w, h,
+          );
+        }
+      };
+
+      // Pass 1: draw base tiles for rows [currentRow, endRow)
+      for (let y = job.currentRow; y < endRow; y++) {
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+          const tile = chunk.tiles[y * CHUNK_SIZE + x];
+          const px = x * ssTilePx;
+          const py = y * ssTilePx;
+          const worldTileX = chunk.cx * CHUNK_SIZE + x;
+          const worldTileY = chunk.cy * CHUNK_SIZE + y;
+          let h = (worldTileX * 374761393 + worldTileY * 668265263) | 0;
+          h = (h ^ (h >>> 13)) | 0;
+          const variant = (h & 0x7fffffff) % WORLD_VARIANTS;
+          const frame = tileToFrame(tile, variant);
+
+          const aiObjKeyForBase = AI_OBJECT_TEXTURES[tile];
+          const aiTextures = AI_TILE_TEXTURES[tile];
+          if (aiObjKeyForBase && this.scene.textures.exists(aiObjKeyForBase)) {
+            const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
+            if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
+              drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
+            } else {
+              const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
+              if (grassFrame) {
                 ctx.drawImage(
-                  fr.source.image as CanvasImageSource,
-                  fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+                  grassFrame.source.image as CanvasImageSource,
+                  grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
                   px, py, ssTilePx, ssTilePx,
                 );
               }
             }
-
-            if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
-              drawTexToCanvas(resolveItemTex(this.scene, "tennis-court"), px, py);
+          } else if (aiTextures && this.scene.textures.exists(aiTextures[variant % aiTextures.length])) {
+            drawTexToCanvas(aiTextures[variant % aiTextures.length], px, py);
+          } else {
+            const fr = worldTilesTex.get(frame);
+            if (fr) {
+              ctx.drawImage(
+                fr.source.image as CanvasImageSource,
+                fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+                px, py, ssTilePx, ssTilePx,
+              );
             }
+          }
 
-            // Draw overlay textures (golf items, trees, etc.)
-            // Prefer AI-generated object sprites when available, fall back to procedural
-            const aiObjKey = AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]];
-            const overlayKey = aiObjKey ?? overlayTextures[tile];
+          if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
+            drawTexToCanvas(resolveItemTex(this.scene, "tennis-court"), px, py);
+          }
 
-            // For tee box tiles: draw grass base, only show sign on center tile of cluster
-            if (tile === TILE.TEE_BOX) {
-              // Draw grass base under tee box
-              const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
-              if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
-                drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
+          const aiObjKey = AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]];
+          const overlayKey = aiObjKey ?? overlayTextures[tile];
+
+          if (tile === TILE.TEE_BOX) {
+            const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
+            if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
+              drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
+            } else {
+              const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
+              if (grassFrame) {
+                ctx.drawImage(
+                  grassFrame.source.image as CanvasImageSource,
+                  grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
+                  px, py, ssTilePx, ssTilePx,
+                );
+              }
+            }
+            let teeNeighbors = 0;
+            for (let ndy = -1; ndy <= 1; ndy++) {
+              for (let ndx = -1; ndx <= 1; ndx++) {
+                if (ndx === 0 && ndy === 0) continue;
+                const nTile = this.getTileAtLoaded(worldTileX + ndx, worldTileY + ndy);
+                if (nTile === TILE.TEE_BOX) teeNeighbors++;
+              }
+            }
+            if (teeNeighbors === 8 && overlayKey && this.scene.textures.exists(overlayKey)) {
+              const signSize = ssTilePx * 0.75;
+              const signOff = ssTilePx * 0.125;
+              drawTexToCanvas(overlayKey, px + signOff, py + signOff, signSize, signSize);
+            }
+          } else if (overlayKey) {
+            if (this.scene.textures.exists(overlayKey)) {
+              if (tile === TILE.LEPRECHAUN) {
+                drawTexToCanvas(overlayKey, px - ssTilePx / 2, py - ssTilePx / 2, ssTilePx * 2, ssTilePx * 2);
               } else {
-                const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
-                if (grassFrame) {
-                  ctx.drawImage(
-                    grassFrame.source.image as CanvasImageSource,
-                    grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
-                    px, py, ssTilePx, ssTilePx,
-                  );
-                }
-              }
-              // Only show the sign on the center tile (surrounded by 8 tee box neighbors)
-              let teeNeighbors = 0;
-              for (let ndy = -1; ndy <= 1; ndy++) {
-                for (let ndx = -1; ndx <= 1; ndx++) {
-                  if (ndx === 0 && ndy === 0) continue;
-                  const nTile = this.getTileAtLoaded(worldTileX + ndx, worldTileY + ndy);
-                  if (nTile === TILE.TEE_BOX) teeNeighbors++;
-                }
-              }
-              if (teeNeighbors === 8 && overlayKey && this.scene.textures.exists(overlayKey)) {
-                const signSize = ssTilePx * 0.75;
-                const signOff = ssTilePx * 0.125;
-                drawTexToCanvas(overlayKey, px + signOff, py + signOff, signSize, signSize);
-              }
-            } else if (overlayKey) {
-              if (this.scene.textures.exists(overlayKey)) {
-                if (tile === TILE.LEPRECHAUN) {
-                  // leprechaun rendered at 2x scale, centered on tile
-                  drawTexToCanvas(overlayKey, px - ssTilePx / 2, py - ssTilePx / 2, ssTilePx * 2, ssTilePx * 2);
-                } else {
-                  drawTexToCanvas(overlayKey, px, py);
-                }
+                drawTexToCanvas(overlayKey, px, py);
               }
             }
           }
         }
+      }
 
-        // Pass 2: edge autotiling — soft gradient borders where terrain types meet
-        const ssEdge = EDGE_WIDTH * SS;
-        for (let y = 0; y < CHUNK_SIZE; y++) {
-          for (let x = 0; x < CHUNK_SIZE; x++) {
-            const tile = chunk.tiles[y * CHUNK_SIZE + x];
-            const edgeColor = edgeTileColors[tile];
-            if (!edgeColor) continue;
+      // Pass 2: edge gradients for rows [currentRow, endRow)
+      const ssEdge = EDGE_WIDTH * SS;
+      for (let y = job.currentRow; y < endRow; y++) {
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+          const tile = chunk.tiles[y * CHUNK_SIZE + x];
+          const edgeColor = edgeTileColors[tile];
+          if (!edgeColor) continue;
 
-            const px = x * ssTilePx;
-            const py = y * ssTilePx;
-            const worldTileX = chunk.cx * CHUNK_SIZE + x;
-            const worldTileY = chunk.cy * CHUNK_SIZE + y;
+          const px = x * ssTilePx;
+          const py = y * ssTilePx;
+          const worldTileX = chunk.cx * CHUNK_SIZE + x;
+          const worldTileY = chunk.cy * CHUNK_SIZE + y;
 
-            // Check 4 cardinal neighbors (use chunk data for interior, cross-chunk for borders)
-            const nTile = y > 0
-              ? chunk.tiles[(y - 1) * CHUNK_SIZE + x]
-              : this.getTileAtLoaded(worldTileX, worldTileY - 1);
-            const sTile = y < CHUNK_SIZE - 1
-              ? chunk.tiles[(y + 1) * CHUNK_SIZE + x]
-              : this.getTileAtLoaded(worldTileX, worldTileY + 1);
-            const wTile = x > 0
-              ? chunk.tiles[y * CHUNK_SIZE + (x - 1)]
-              : this.getTileAtLoaded(worldTileX - 1, worldTileY);
-            const eTile = x < CHUNK_SIZE - 1
-              ? chunk.tiles[y * CHUNK_SIZE + (x + 1)]
-              : this.getTileAtLoaded(worldTileX + 1, worldTileY);
+          const nTile = y > 0
+            ? chunk.tiles[(y - 1) * CHUNK_SIZE + x]
+            : this.getTileAtLoaded(worldTileX, worldTileY - 1);
+          const sTile = y < CHUNK_SIZE - 1
+            ? chunk.tiles[(y + 1) * CHUNK_SIZE + x]
+            : this.getTileAtLoaded(worldTileX, worldTileY + 1);
+          const wTile = x > 0
+            ? chunk.tiles[y * CHUNK_SIZE + (x - 1)]
+            : this.getTileAtLoaded(worldTileX - 1, worldTileY);
+          const eTile = x < CHUNK_SIZE - 1
+            ? chunk.tiles[y * CHUNK_SIZE + (x + 1)]
+            : this.getTileAtLoaded(worldTileX + 1, worldTileY);
 
-            // Soft gradient edges — fade from edge color to transparent for natural blending
-            if (nTile >= 0 && nTile !== tile) {
-              const grad = ctx.createLinearGradient(0, py, 0, py + ssEdge);
-              grad.addColorStop(0, edgeColor);
-              grad.addColorStop(1, "rgba(0,0,0,0)");
-              ctx.fillStyle = grad;
-              ctx.fillRect(px, py, ssTilePx, ssEdge);
-            }
-            if (sTile >= 0 && sTile !== tile) {
-              const grad = ctx.createLinearGradient(0, py + ssTilePx - ssEdge, 0, py + ssTilePx);
-              grad.addColorStop(0, "rgba(0,0,0,0)");
-              grad.addColorStop(1, edgeColor);
-              ctx.fillStyle = grad;
-              ctx.fillRect(px, py + ssTilePx - ssEdge, ssTilePx, ssEdge);
-            }
-            if (wTile >= 0 && wTile !== tile) {
-              const grad = ctx.createLinearGradient(px, 0, px + ssEdge, 0);
-              grad.addColorStop(0, edgeColor);
-              grad.addColorStop(1, "rgba(0,0,0,0)");
-              ctx.fillStyle = grad;
-              ctx.fillRect(px, py, ssEdge, ssTilePx);
-            }
-            if (eTile >= 0 && eTile !== tile) {
-              const grad = ctx.createLinearGradient(px + ssTilePx - ssEdge, 0, px + ssTilePx, 0);
-              grad.addColorStop(0, "rgba(0,0,0,0)");
-              grad.addColorStop(1, edgeColor);
-              ctx.fillStyle = grad;
-              ctx.fillRect(px + ssTilePx - ssEdge, py, ssEdge, ssTilePx);
-            }
+          if (nTile >= 0 && nTile !== tile) {
+            const grad = ctx.createLinearGradient(0, py, 0, py + ssEdge);
+            grad.addColorStop(0, edgeColor);
+            grad.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(px, py, ssTilePx, ssEdge);
+          }
+          if (sTile >= 0 && sTile !== tile) {
+            const grad = ctx.createLinearGradient(0, py + ssTilePx - ssEdge, 0, py + ssTilePx);
+            grad.addColorStop(0, "rgba(0,0,0,0)");
+            grad.addColorStop(1, edgeColor);
+            ctx.fillStyle = grad;
+            ctx.fillRect(px, py + ssTilePx - ssEdge, ssTilePx, ssEdge);
+          }
+          if (wTile >= 0 && wTile !== tile) {
+            const grad = ctx.createLinearGradient(px, 0, px + ssEdge, 0);
+            grad.addColorStop(0, edgeColor);
+            grad.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(px, py, ssEdge, ssTilePx);
+          }
+          if (eTile >= 0 && eTile !== tile) {
+            const grad = ctx.createLinearGradient(px + ssTilePx - ssEdge, 0, px + ssTilePx, 0);
+            grad.addColorStop(0, "rgba(0,0,0,0)");
+            grad.addColorStop(1, edgeColor);
+            ctx.fillStyle = grad;
+            ctx.fillRect(px + ssTilePx - ssEdge, py, ssEdge, ssTilePx);
           }
         }
+      }
 
-        // Pass 3: per-tile subtle color jitter to break up grid pattern
-        // Uses the same position hash as variant selection for determinism
-        for (let y = 0; y < CHUNK_SIZE; y++) {
-          for (let x = 0; x < CHUNK_SIZE; x++) {
-            const worldTileX = chunk.cx * CHUNK_SIZE + x;
-            const worldTileY = chunk.cy * CHUNK_SIZE + y;
-            let h2 = (worldTileX * 2246822519 + worldTileY * 3266489917) | 0;
-            h2 = (h2 ^ (h2 >>> 16)) | 0;
-            // Subtle brightness variation: ±8 brightness on a 4% opacity overlay
-            const brightness = ((h2 & 0x1f) - 16); // -16..+15
-            const px = x * ssTilePx;
-            const py = y * ssTilePx;
-            ctx.fillStyle = brightness > 0
-              ? `rgba(255,255,255,${brightness / 400})`
-              : `rgba(0,0,0,${-brightness / 400})`;
-            ctx.fillRect(px, py, ssTilePx, ssTilePx);
-          }
+      // Pass 3: color jitter for rows [currentRow, endRow)
+      for (let y = job.currentRow; y < endRow; y++) {
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+          const worldTileX = chunk.cx * CHUNK_SIZE + x;
+          const worldTileY = chunk.cy * CHUNK_SIZE + y;
+          let h2 = (worldTileX * 2246822519 + worldTileY * 3266489917) | 0;
+          h2 = (h2 ^ (h2 >>> 16)) | 0;
+          const brightness = ((h2 & 0x1f) - 16);
+          const px = x * ssTilePx;
+          const py = y * ssTilePx;
+          ctx.fillStyle = brightness > 0
+            ? `rgba(255,255,255,${brightness / 400})`
+            : `rgba(0,0,0,${-brightness / 400})`;
+          ctx.fillRect(px, py, ssTilePx, ssTilePx);
         }
+      }
 
-        // Pass 4: skip expensive canvas blur — tile seams are barely visible
-        // and the per-tile color jitter already breaks up grid patterns.
-        canvasTex.refresh();
+      job.currentRow = endRow;
+
+      if (job.currentRow >= CHUNK_SIZE) {
+        // All rows painted — finalize canvas and create display objects
+        job.canvasTex.refresh();
+        this.finishRenderChunk(job.chunk, job.texKey, job.container, job.ox, job.oy, job.SS, job.chunkLightList);
+        const key = `${job.chunk.cx},${job.chunk.cy}`;
+        this.chunkGraphics.set(key, job.container);
+        this.chunkLights.set(key, job.chunkLightList);
+      } else {
+        remaining.push(job);
       }
     }
+    this.renderingQueue = remaining;
+  }
 
-    // Create an Image from the (now cached) canvas texture — one GPU draw call
-    // The supersampled canvas is scaled down to normal size for display.
+  /** Create the display image, water sprites, and light sources for a finished chunk. */
+  private finishRenderChunk(
+    chunk: Chunk,
+    texKey: string,
+    container: Phaser.GameObjects.Container,
+    ox: number,
+    oy: number,
+    SS: number,
+    chunkLightList: LightSource[],
+  ): void {
     const img = this.scene.add.image(ox, oy, texKey);
     img.setOrigin(0, 0);
     img.setScale(1 / SS);
     container.add(img);
 
-    // Water animation sprites and light sources are dynamic — always recreated.
-    // Water: only create sprites for a subset of tiles to limit per-frame overhead.
-    // The static frame is already baked into the canvas texture.
     for (let y = 0; y < CHUNK_SIZE; y++) {
       for (let x = 0; x < CHUNK_SIZE; x++) {
         const tile = chunk.tiles[y * CHUNK_SIZE + x];
@@ -2215,7 +2378,6 @@ export class WorldLayer {
           container.add(waterSprite);
         }
 
-        // Fountain: 3x3 animated sprite centered on the fountain tile
         if (tile === TILE.FOUNTAIN) {
           const fountainSprite = this.scene.add.sprite(
             ox + px + TILE_PX / 2 - 96,
@@ -2228,7 +2390,6 @@ export class WorldLayer {
           container.add(fountainSprite);
         }
 
-        // Add tile-based light sources for special tiles (capped per chunk for perf)
         if (chunkLightList.length < MAX_LIGHTS_PER_CHUNK) {
           if (tile === TILE.LAVA) {
             chunkLightList.push(this.lighting.addLight(ox + px + TILE_PX / 2, oy + py + TILE_PX / 2, 80, 0xff6600, 0.4, 0.1, 0.005));
@@ -2244,9 +2405,6 @@ export class WorldLayer {
         }
       }
     }
-
-    this.chunkGraphics.set(key, container);
-    this.chunkLights.set(key, chunkLightList);
   }
 
   /** Sync ghost NPCs with the store's fired agents. */
@@ -3555,95 +3713,77 @@ export class WorldLayer {
     const active = this.nemesis.active();
     const overlay = document.createElement("div");
     overlay.id = "nemesis-codex-modal";
-    overlay.style.cssText = `
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.8); z-index: 1000;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
-    `;
 
     const card = document.createElement("div");
-    card.style.cssText = `
-      background: #1a1a2e; border: 1px solid rgba(74,255,168,0.3); border-radius: 12px;
-      width: 460px; max-height: 85vh; box-shadow: 0 12px 48px rgba(0,0,0,0.5);
-      overflow: hidden; display: flex; flex-direction: column;
-    `;
+    card.className = "nemesis-codex";
 
     // Header
     const header = document.createElement("div");
-    header.style.cssText = `
-      background: #111128; border-bottom: 1px solid rgba(74,255,168,0.2);
-      padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;
-    `;
-    header.innerHTML = `
-      <span style="font-size:17px;font-weight:bold;color:#4affa8;letter-spacing:1px;">NEMESIS CODEX</span>
-      <button id="nemesis-codex-close" style="padding:4px 14px;border:none;border-radius:6px;background:#333344;color:#ccc;font-size:0.8rem;cursor:pointer;font-family:inherit;">Close</button>
-    `;
+    header.className = "nemesis-codex-header";
+    header.innerHTML = `<span class="nemesis-codex-title">NEMESIS CODEX</span>`;
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "btn mini";
+    closeBtn.textContent = "Close";
+    header.appendChild(closeBtn);
     card.appendChild(header);
 
-    // Content
-    const content = document.createElement("div");
-    content.style.cssText = "flex:1;overflow-y:auto;padding:16px 20px;";
+    // Body
+    const body = document.createElement("div");
+    body.className = "nemesis-codex-body";
 
-    // Active Nemeses section
+    // ── Active Nemeses section ──
     const activeSection = document.createElement("div");
-    activeSection.style.cssText = "margin-bottom:16px;";
-    activeSection.innerHTML = `<div style="font-size:13px;font-weight:bold;color:#ff6644;margin-bottom:8px;">Active Nemeses (${active.length})</div>`;
+    const activeTitle = document.createElement("div");
+    activeTitle.className = "nemesis-section-title active";
+    activeTitle.innerHTML = `Active Nemeses <span class="count">${active.length}</span>`;
+    activeSection.appendChild(activeTitle);
+
     if (active.length === 0) {
-      activeSection.innerHTML += `<div style="font-size:12px;color:#888899;padding-left:8px;">No active nemeses. Go antagonize some creatures!</div>`;
+      const empty = document.createElement("div");
+      empty.className = "nemesis-empty";
+      empty.textContent = "No active nemeses. Go antagonize some creatures!";
+      activeSection.appendChild(empty);
     } else {
-      for (const entry of active.slice(0, 6)) {
-        const traitNames = entry.traitIds.map((id) => this.nemesis.getTrait(id)?.name ?? id).join(", ");
-        const weakNames = entry.weaknessIds.map((id) => this.nemesis.getWeakness(id)?.name ?? id).join(", ");
-        const item = document.createElement("div");
-        item.style.cssText = "padding:8px 10px;margin-bottom:6px;background:#0f0f1a;border-radius:8px;border-left:3px solid #ff6644;";
-        item.innerHTML = `
-          <div style="font-size:13px;color:#e0e0f0;font-weight:bold;">${entry.name} <span style="font-weight:normal;color:#aaa;">— ${entry.title}</span></div>
-          <div style="font-size:11px;color:#999;margin-top:3px;">Rank ${entry.rank} · Kills: ${entry.playerKills} · Encounters: ${entry.encounters}</div>
-          <div style="font-size:11px;color:#7799aa;margin-top:2px;">Traits: ${traitNames || "none"} | Weakness: ${weakNames || "none"}</div>
-        `;
-        activeSection.appendChild(item);
+      for (const entry of active.slice(0, 8)) {
+        activeSection.appendChild(this.buildNemesisCard(entry, false));
       }
     }
-    content.appendChild(activeSection);
+    body.appendChild(activeSection);
 
-    // Captured Roster section
+    // ── Captured Roster section ──
     const rosterSection = document.createElement("div");
-    rosterSection.style.cssText = "margin-bottom:16px;";
-    rosterSection.innerHTML = `<div style="font-size:13px;font-weight:bold;color:#44ff88;margin-bottom:8px;">Captured Roster (${this.capturedRoster.length})</div>`;
+    const rosterTitle = document.createElement("div");
+    rosterTitle.className = "nemesis-section-title captured";
+    rosterTitle.innerHTML = `Captured Roster <span class="count">${this.capturedRoster.length}</span>`;
+    rosterSection.appendChild(rosterTitle);
+
     if (this.capturedRoster.length === 0) {
-      rosterSection.innerHTML += `<div style="font-size:12px;color:#888899;padding-left:8px;">No captured creatures. Weaken them and press E to capture!</div>`;
+      const empty = document.createElement("div");
+      empty.className = "nemesis-empty";
+      empty.textContent = "No captured creatures. Weaken them and press E to capture!";
+      rosterSection.appendChild(empty);
     } else {
-      for (const entry of this.capturedRoster.slice(0, 6)) {
-        const item = document.createElement("div");
-        item.style.cssText = "padding:8px 10px;margin-bottom:6px;background:#0f0f1a;border-radius:8px;border-left:3px solid #44ff88;";
-        item.innerHTML = `
-          <div style="font-size:13px;color:#aaccaa;">${entry.name} <span style="color:#888;">— ${entry.title} (Rank ${entry.rank})</span></div>
-        `;
-        rosterSection.appendChild(item);
+      for (const entry of this.capturedRoster.slice(0, 8)) {
+        rosterSection.appendChild(this.buildNemesisCard(entry, true));
       }
     }
-    content.appendChild(rosterSection);
+    body.appendChild(rosterSection);
 
-    // Stats section
-    const statsSection = document.createElement("div");
-    statsSection.style.cssText = "padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);";
-    statsSection.innerHTML = `<div style="font-size:12px;color:#aa44ff;">Void Shards: ${this.voidShards} | Weapons: ${this.ownedWeapons.length}</div>`;
-    content.appendChild(statsSection);
+    card.appendChild(body);
 
-    card.appendChild(content);
-
-    // Footer
+    // Footer — resource stats
     const footer = document.createElement("div");
-    footer.style.cssText = "padding:10px 20px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;";
-    footer.innerHTML = `<span style="font-size:11px;color:#666677;">Press E to close</span>`;
+    footer.className = "nemesis-codex-footer";
+    footer.innerHTML = `
+      <div class="nemesis-footer-stat"><span class="icon"> shards</span> Void Shards: <span class="val">${this.voidShards}</span></div>
+      <div class="nemesis-footer-stat"><span class="icon"> Weapons</span> <span class="val">${this.ownedWeapons.length}</span></div>
+    `;
     card.appendChild(footer);
 
     overlay.appendChild(card);
     document.body.appendChild(overlay);
 
     // Wire close
-    const closeBtn = overlay.querySelector("#nemesis-codex-close") as HTMLButtonElement;
     closeBtn.addEventListener("click", () => {
       overlay.remove();
       this.nemesisPanel = null;
@@ -3656,6 +3796,96 @@ export class WorldLayer {
     });
 
     this.nemesisPanel = overlay;
+  }
+
+  /** Build a nemesis card element for the codex. */
+  private buildNemesisCard(entry: NemesisEntry, captured: boolean): HTMLElement {
+    const card = document.createElement("div");
+    card.className = `nemesis-card ${captured ? "captured-card" : "active-card"}`;
+
+    // Top row: rank badge + name + title
+    const top = document.createElement("div");
+    top.className = "nemesis-card-top";
+    const badge = document.createElement("span");
+    badge.className = `nemesis-rank-badge ${entry.rank}`;
+    badge.textContent = entry.rank;
+    top.appendChild(badge);
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "nemesis-card-name";
+    nameSpan.textContent = entry.name;
+    top.appendChild(nameSpan);
+    if (entry.title) {
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "nemesis-card-title";
+      titleSpan.textContent = `— ${entry.title}`;
+      top.appendChild(titleSpan);
+    }
+    card.appendChild(top);
+
+    // HP bar
+    const hpRow = document.createElement("div");
+    hpRow.className = "nemesis-hp-row";
+    const hpLabel = document.createElement("span");
+    hpLabel.className = "nemesis-hp-label";
+    hpLabel.textContent = "HP";
+    hpRow.appendChild(hpLabel);
+    const hpBar = document.createElement("div");
+    hpBar.className = "nemesis-hp-bar";
+    const hpFill = document.createElement("div");
+    const hpPct = entry.maxHp > 0 ? (entry.hp / entry.maxHp) * 100 : 0;
+    const hpClass = hpPct > 60 ? "high" : hpPct > 30 ? "mid" : "low";
+    hpFill.className = `nemesis-hp-fill ${hpClass}`;
+    hpFill.style.width = `${hpPct}%`;
+    hpBar.appendChild(hpFill);
+    hpRow.appendChild(hpBar);
+    const hpText = document.createElement("span");
+    hpText.className = "nemesis-hp-label";
+    hpText.textContent = `${entry.hp}/${entry.maxHp}`;
+    hpRow.appendChild(hpText);
+    card.appendChild(hpRow);
+
+    // Stat chips
+    const stats = document.createElement("div");
+    stats.className = "nemesis-stats";
+    stats.innerHTML = `
+      <span class="nemesis-stat">Kills: <span class="val">${entry.playerKills}</span></span>
+      <span class="nemesis-stat">Encounters: <span class="val">${entry.encounters}</span></span>
+      <span class="nemesis-stat">DMG: <span class="val">${entry.damage}</span></span>
+      <span class="nemesis-stat">SPD: <span class="val">${entry.speed}</span></span>
+    `;
+    card.appendChild(stats);
+
+    // Traits + weaknesses as badges
+    const traits = document.createElement("div");
+    traits.className = "nemesis-traits";
+    if (entry.traitIds.length > 0) {
+      for (const id of entry.traitIds) {
+        const t = this.nemesis.getTrait(id);
+        const badge = document.createElement("span");
+        badge.className = "nemesis-trait";
+        badge.textContent = t?.name ?? id;
+        if (t?.desc) badge.title = t.desc;
+        traits.appendChild(badge);
+      }
+    } else {
+      const none = document.createElement("span");
+      none.className = "nemesis-traits-empty";
+      none.textContent = "No traits";
+      traits.appendChild(none);
+    }
+    if (entry.weaknessIds.length > 0) {
+      for (const id of entry.weaknessIds) {
+        const w = this.nemesis.getWeakness(id);
+        const badge = document.createElement("span");
+        badge.className = "nemesis-weakness";
+        badge.textContent = w?.name ?? id;
+        if (w?.desc) badge.title = w.desc;
+        traits.appendChild(badge);
+      }
+    }
+    card.appendChild(traits);
+
+    return card;
   }
 
   /** Attempt to capture a weakened creature. */
@@ -3948,6 +4178,7 @@ export class WorldLayer {
     this.friendlies = [];
     this.pendingChunks.clear();
     this.workerRequested.clear();
+    this.renderingQueue = [];
     this.nemesisPanel?.remove();
     this.nemesisPanel = null;
     this.vfx.destroy();

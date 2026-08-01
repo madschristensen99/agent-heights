@@ -2038,6 +2038,297 @@ kbd {
   white-space: nowrap;
 }
 
+/* ── Nemesis Codex Modal ── */
+
+#nemesis-codex-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(42, 56, 72, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: nemesis-fade-in 0.2s ease-out;
+}
+
+@keyframes nemesis-fade-in {
+  from { opacity: 0; }
+}
+
+.nemesis-codex {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 520px;
+  max-width: 92vw;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: nemesis-slide-up 0.25s ease-out;
+}
+
+@keyframes nemesis-slide-up {
+  from { transform: translateY(16px); opacity: 0; }
+}
+
+.nemesis-codex-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--panel-edge-soft);
+  background: var(--panel-soft);
+}
+
+.nemesis-codex-title {
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--accent);
+  margin: 0;
+}
+
+.nemesis-codex-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Section headers ── */
+
+.nemesis-section-title {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nemesis-section-title .count {
+  background: var(--panel-soft);
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: 10px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dim);
+}
+
+.nemesis-section-title.active { border-color: var(--red); color: var(--red); }
+.nemesis-section-title.captured { border-color: var(--green); color: var(--green); }
+
+/* ── Nemesis cards ── */
+
+.nemesis-card {
+  background: var(--panel-soft);
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nemesis-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(58, 140, 212, 0.10);
+}
+
+.nemesis-card.captured-card {
+  border-left: 3px solid var(--green);
+}
+
+.nemesis-card.active-card {
+  border-left: 3px solid var(--red);
+}
+
+.nemesis-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.nemesis-rank-badge {
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.nemesis-rank-badge.creature { background: rgba(232, 168, 56, 0.15); color: var(--amber); border: 1px solid rgba(232, 168, 56, 0.3); }
+.nemesis-rank-badge.captain { background: rgba(224, 88, 88, 0.15); color: var(--red); border: 1px solid rgba(224, 88, 88, 0.3); }
+.nemesis-rank-badge.warchief { background: rgba(170, 68, 255, 0.15); color: #aa44ff; border: 1px solid rgba(170, 68, 255, 0.3); }
+
+.nemesis-card-name {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.nemesis-card-title {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dim);
+}
+
+/* ── HP bar ── */
+
+.nemesis-hp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.nemesis-hp-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+.nemesis-hp-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--panel-edge-soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.nemesis-hp-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.nemesis-hp-fill.high { background: var(--green); }
+.nemesis-hp-fill.mid { background: var(--amber); }
+.nemesis-hp-fill.low { background: var(--red); }
+
+/* ── Stat chips ── */
+
+.nemesis-stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.nemesis-stat {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dim);
+  background: var(--panel);
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+}
+
+.nemesis-stat .val {
+  color: var(--text);
+  font-weight: 800;
+}
+
+/* ── Trait / weakness badges ── */
+
+.nemesis-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.nemesis-trait,
+.nemesis-weakness {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  cursor: default;
+}
+
+.nemesis-trait {
+  background: rgba(224, 88, 88, 0.08);
+  color: var(--red);
+  border: 1px solid rgba(224, 88, 88, 0.2);
+}
+
+.nemesis-weakness {
+  background: rgba(76, 184, 102, 0.08);
+  color: var(--green);
+  border: 1px solid rgba(76, 184, 102, 0.2);
+}
+
+.nemesis-traits-empty {
+  font-family: var(--font-body);
+  font-size: 10px;
+  color: var(--dim);
+  font-style: italic;
+}
+
+/* ── Empty state ── */
+
+.nemesis-empty {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--dim);
+  font-style: italic;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+/* ── Stats footer ── */
+
+.nemesis-codex-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 12px 24px;
+  border-top: 1px solid var(--panel-edge-soft);
+  background: var(--panel-soft);
+}
+
+.nemesis-footer-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+.nemesis-footer-stat .icon {
+  font-size: 14px;
+}
+
+.nemesis-footer-stat .val {
+  color: var(--text);
+  font-weight: 800;
+}
+
 /* ============================================================= */
 /* === MOBILE / TOUCH RESPONSIVE                              === */
 /* ============================================================= */

@@ -221,6 +221,42 @@ export async function nanoBanana2Edit(
   return { url: img.url, width: img.width, height: img.height };
 }
 
+// ----------------------------------------------------- Hunyuan 3D Rapid (i23d)
+
+export interface Model3DResult {
+  /** URL of the generated GLB file. */
+  glbUrl: string;
+}
+
+/**
+ * Generate a 3D model (GLB) from a single front-view image using Hunyuan 3D Rapid.
+ * The input image should have a simple background with the object occupying >50% of frame.
+ *
+ * Set enablePbr=true to get metallic, roughness, and normal textures baked into the GLB.
+ *
+ * Cost: ~$0.225/generation + $0.15 for PBR = ~$0.375 per creature with PBR.
+ */
+export async function hunyuan3dRapid(
+  imageUrl: string,
+  opts: {
+    enablePbr?: boolean;
+  } = {},
+): Promise<Model3DResult> {
+  const result = await fal.subscribe("fal-ai/hunyuan-3d/v3.1/rapid/image-to-3d", {
+    input: {
+      input_image_url: imageUrl,
+      enable_pbr: opts.enablePbr ?? true,
+      enable_geometry: false,
+    },
+  });
+
+  const data = result.data as { model_glb?: { url: string }; glb?: { url: string } };
+  const glbUrl = data.model_glb?.url ?? data.glb?.url;
+  if (!glbUrl) throw new Error(`Hunyuan 3D Rapid returned no GLB: ${JSON.stringify(data).slice(0, 300)}`);
+
+  return { glbUrl };
+}
+
 // ------------------------------------------------------------- Bria bg remove
 
 /**

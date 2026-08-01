@@ -1053,7 +1053,7 @@ export class OfficeScene extends Phaser.Scene {
           // makes re-entering a lobby near-instant instead of showing N
           // "Building world chunk…" phases.
           const allCached = doorChunks.every(c =>
-            this.textures.exists(`chunk-rt-${this.store.worldSeed}:${c.cx},${c.cy}`),
+            this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)),
           );
 
           if (allCached) {
@@ -3737,61 +3737,74 @@ export class OfficeScene extends Phaser.Scene {
     const mbY = this.mailboxPx.y;
     const g = this.mailboxGfx;
     g.clear();
-    // ground shadow
-    g.fillStyle(0x000000, 0.2);
-    g.fillEllipse(mbX, mbY + 52, 36, 8);
-    // post — wooden, with grain shading
-    g.fillStyle(0x6a4a2a, 1);
+    // contact shadow
+    g.fillStyle(0x000000, 0.25);
+    g.fillEllipse(mbX, mbY + 52, 38, 8);
+    // post — brushed steel
+    g.fillStyle(0x4a4a52, 1);
     g.fillRect(mbX - 5, mbY + 20, 10, 32);
-    g.fillStyle(0x7a5a3a, 1);
+    g.fillStyle(0x6a6a72, 1);
     g.fillRect(mbX - 5, mbY + 20, 3, 32);
-    g.fillStyle(0x4a3a1a, 1);
+    g.fillStyle(0x2a2a32, 1);
     g.fillRect(mbX + 2, mbY + 20, 3, 32);
-    // mailbox body — blue, rounded top
+    // base plate
+    g.fillStyle(0x3a3a42, 1);
+    g.fillEllipse(mbX, mbY + 52, 16, 5);
+    // mailbox body — modern deep blue, rounded top
     const mbBlue = 0x2a5cb8;
-    const mbBlueLi = 0x3a78d8;
-    const mbBlueDk = 0x1a4090;
+    const mbBlueLi = 0x4a88e8;
+    const mbBlueDk = 0x1a3870;
     g.fillStyle(mbBlueDk, 1);
-    g.fillRoundedRect(mbX - 22, mbY - 12, 44, 36, 6);
+    g.fillRoundedRect(mbX - 23, mbY - 13, 46, 38, 7);
     g.fillStyle(mbBlue, 1);
-    g.fillRoundedRect(mbX - 21, mbY - 11, 42, 34, 5);
-    // top highlight
+    g.fillRoundedRect(mbX - 22, mbY - 12, 44, 36, 6);
+    // top highlight — glossy
     g.fillStyle(mbBlueLi, 1);
-    g.fillRoundedRect(mbX - 20, mbY - 10, 40, 8, 4);
-    g.fillStyle(0xffffff, 0.12);
-    g.fillRoundedRect(mbX - 19, mbY - 9, 38, 3, 2);
+    g.fillRoundedRect(mbX - 21, mbY - 11, 42, 10, 5);
+    g.fillStyle(0xffffff, 0.18);
+    g.fillRoundedRect(mbX - 20, mbY - 10, 40, 4, 3);
     // bottom shadow
     g.fillStyle(mbBlueDk, 1);
-    g.fillRoundedRect(mbX - 21, mbY + 14, 42, 8, 3);
-    // mail slot — dark recessed
-    g.fillStyle(0x0a0a14, 1);
-    g.fillRoundedRect(mbX - 14, mbY - 4, 28, 5, 2);
+    g.fillRoundedRect(mbX - 22, mbY + 15, 44, 9, 4);
+    // metallic trim line
+    g.fillStyle(0x8aaaff, 0.3);
+    g.fillRect(mbX - 21, mbY + 13, 42, 1);
+    // mail slot — dark recessed with depth
+    g.fillStyle(0x050508, 1);
+    g.fillRoundedRect(mbX - 15, mbY - 5, 30, 6, 2);
     g.fillStyle(0x1a1a28, 1);
-    g.fillRoundedRect(mbX - 13, mbY - 3, 26, 3, 1);
-    // label plate
-    g.fillStyle(0xe8e4d0, 1);
-    g.fillRoundedRect(mbX - 12, mbY + 4, 24, 8, 1);
+    g.fillRoundedRect(mbX - 14, mbY - 4, 28, 4, 1);
+    g.fillStyle(0x050508, 0.6);
+    g.fillRect(mbX - 14, mbY - 1, 28, 1);
+    // label plate — brushed metal
+    g.fillStyle(0xc8c8d0, 1);
+    g.fillRoundedRect(mbX - 13, mbY + 3, 26, 10, 2);
+    g.fillStyle(0xe8e8f0, 0.5);
+    g.fillRoundedRect(mbX - 12, mbY + 4, 24, 3, 1);
     g.fillStyle(0x33373d, 1);
-    g.fillRect(mbX - 9, mbY + 6, 18, 1);
-    g.fillRect(mbX - 9, mbY + 9, 14, 1);
+    g.fillRect(mbX - 10, mbY + 6, 20, 1);
+    g.fillRect(mbX - 10, mbY + 9, 16, 1);
     // red flag — up when mail, down when empty
     if (this.mailboxHasMail) {
-      g.fillStyle(0xc83030, 1);
+      g.fillStyle(0xb82828, 1);
       g.fillRect(mbX + 18, mbY - 8, 3, 16);
       g.fillRect(mbX + 18, mbY - 8, 10, 4);
       g.fillStyle(0xe84848, 1);
       g.fillRect(mbX + 19, mbY - 7, 1, 14);
       g.fillRect(mbX + 19, mbY - 7, 8, 2);
-      g.fillStyle(0x8a2020, 1);
+      g.fillStyle(0x8a1818, 1);
       g.fillCircle(mbX + 19, mbY + 7, 2);
+      // flag highlight
+      g.fillStyle(0xff6666, 0.5);
+      g.fillRect(mbX + 19, mbY - 6, 1, 4);
     } else {
-      g.fillStyle(0xc83030, 1);
+      g.fillStyle(0xb82828, 1);
       g.fillRect(mbX + 18, mbY + 2, 3, 14);
       g.fillRect(mbX + 18, mbY + 12, 10, 4);
       g.fillStyle(0xe84848, 1);
       g.fillRect(mbX + 19, mbY + 3, 1, 12);
       g.fillRect(mbX + 19, mbY + 13, 8, 2);
-      g.fillStyle(0x8a2020, 1);
+      g.fillStyle(0x8a1818, 1);
       g.fillCircle(mbX + 19, mbY + 3, 2);
     }
   }
@@ -3803,32 +3816,41 @@ export class OfficeScene extends Phaser.Scene {
     for (const mb of this.platformMailboxes) {
       const px = mb.tile.x * TILE_PX + TILE_PX / 2;
       const py = mb.tile.y * TILE_PX + TILE_PX / 2;
-      // ground shadow
-      g.fillStyle(0x000000, 0.2);
-      g.fillEllipse(px, py + 28, 28, 6);
-      // post
-      g.fillStyle(0x6a4a2a, 1);
+      // contact shadow
+      g.fillStyle(0x000000, 0.25);
+      g.fillEllipse(px, py + 28, 30, 6);
+      // post — brushed steel
+      g.fillStyle(0x4a4a52, 1);
       g.fillRect(px - 3, py + 12, 6, 18);
-      g.fillStyle(0x4a3a1a, 1);
+      g.fillStyle(0x6a6a72, 1);
+      g.fillRect(px - 3, py + 12, 2, 18);
+      g.fillStyle(0x2a2a32, 1);
       g.fillRect(px + 1, py + 12, 2, 18);
-      // mailbox body — platform-colored, rounded top
-      const w = 28, h = 26;
+      // mailbox body — platform-colored, rounded top, modern
+      const w = 30, h = 28;
       g.fillStyle(mb.colorDark, 1);
-      g.fillRoundedRect(px - w / 2, py - h / 2 - 2, w, h, 5);
+      g.fillRoundedRect(px - w / 2, py - h / 2 - 2, w, h, 6);
       g.fillStyle(mb.color, 1);
-      g.fillRoundedRect(px - w / 2 + 1, py - h / 2 - 1, w - 2, h - 2, 4);
-      // top highlight
+      g.fillRoundedRect(px - w / 2 + 1, py - h / 2 - 1, w - 2, h - 2, 5);
+      // top highlight — glossy
       g.fillStyle(mb.colorLight, 1);
-      g.fillRoundedRect(px - w / 2 + 2, py - h / 2, w - 4, 6, 3);
-      g.fillStyle(0xffffff, 0.1);
-      g.fillRoundedRect(px - w / 2 + 3, py - h / 2 + 1, w - 6, 2, 1);
-      // mail slot
-      g.fillStyle(0x0a0a14, 1);
-      g.fillRoundedRect(px - 9, py - 4, 18, 4, 2);
-      // platform label plate
+      g.fillRoundedRect(px - w / 2 + 2, py - h / 2, w - 4, 8, 4);
+      g.fillStyle(0xffffff, 0.15);
+      g.fillRoundedRect(px - w / 2 + 3, py - h / 2 + 1, w - 6, 3, 2);
+      // bottom shadow
+      g.fillStyle(mb.colorDark, 0.6);
+      g.fillRoundedRect(px - w / 2 + 1, py + h / 2 - 5, w - 2, 5, 3);
+      // mail slot — recessed with depth
+      g.fillStyle(0x050508, 1);
+      g.fillRoundedRect(px - 10, py - 5, 20, 5, 2);
+      g.fillStyle(0x1a1a28, 1);
+      g.fillRoundedRect(px - 9, py - 4, 18, 3, 1);
+      // platform label plate — brushed metal
       if (mb.platform) {
-        g.fillStyle(0xe8e4d0, 1);
-        g.fillRoundedRect(px - 10, py + 2, 20, 7, 1);
+        g.fillStyle(0xc8c8d0, 1);
+        g.fillRoundedRect(px - 11, py + 2, 22, 8, 2);
+        g.fillStyle(0xe8e8f0, 0.4);
+        g.fillRoundedRect(px - 10, py + 3, 20, 2, 1);
         g.fillStyle(0x33373d, 1);
         const label = mb.platform.slice(0, 4);
         for (let i = 0; i < label.length; i++) {
@@ -3838,10 +3860,10 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         // Unassigned — show a small "+" icon on the label plate
         g.fillStyle(0x2a3a5a, 1);
-        g.fillRoundedRect(px - 10, py + 2, 20, 7, 1);
+        g.fillRoundedRect(px - 11, py + 2, 22, 8, 2);
         g.fillStyle(0x4a5a7a, 1);
-        g.fillRect(px - 1, py + 4, 3, 1);
-        g.fillRect(px, py + 3, 1, 3);
+        g.fillRect(px - 1, py + 5, 3, 1);
+        g.fillRect(px, py + 4, 1, 3);
       }
       // red flag — up when mail pending, down when empty (only for assigned mailboxes)
       if (mb.platform && mb.flagUp) {
@@ -4243,34 +4265,47 @@ export class OfficeScene extends Phaser.Scene {
     const bx = this.redButtonTile.x * TILE_PX + 32;
     const by = this.redButtonTile.y * TILE_PX + 56;
 
-    // mounting plate
-    g.fillStyle(0x2a2a30, 1);
-    g.fillRoundedRect(bx - 22, by - 22, 44, 44, 6);
-    g.fillStyle(0x48484e, 1);
-    g.fillRoundedRect(bx - 20, by - 20, 40, 40, 5);
-    // screws
-    g.fillStyle(0x666666, 1);
-    for (const [sx, sy] of [[-16, -16], [16, -16], [-16, 16], [16, 16]] as const) {
+    // mounting plate — dark anodized
+    g.fillStyle(0x12121a, 1);
+    g.fillRoundedRect(bx - 23, by - 23, 46, 46, 7);
+    g.fillStyle(0x2a2a36, 1);
+    g.fillRoundedRect(bx - 21, by - 21, 42, 42, 6);
+    // metallic trim
+    g.lineStyle(1, 0x4a4a56, 0.5);
+    g.strokeRoundedRect(bx - 21, by - 21, 42, 42, 6);
+    // screws — brushed
+    g.fillStyle(0x666670, 1);
+    for (const [sx, sy] of [[-17, -17], [17, -17], [-17, 17], [17, 17]] as const) {
       g.fillCircle(bx + sx, by + sy, 2);
     }
-    // glass dome cover (semi-transparent ring)
-    g.fillStyle(0xaaaaaa, 0.08);
-    g.fillCircle(bx, by, 19);
-    g.lineStyle(1.5, 0x888888, 0.3);
-    g.strokeCircle(bx, by, 19);
+    g.fillStyle(0xaaaab4, 0.5);
+    for (const [sx, sy] of [[-17.5, -17.5], [16.5, -17.5], [-17.5, 16.5], [16.5, 16.5]] as const) {
+      g.fillCircle(bx + sx, by + sy, 0.8);
+    }
+    // glass dome cover (semi-transparent)
+    g.fillStyle(0xaaaaaa, 0.06);
+    g.fillCircle(bx, by, 20);
+    g.lineStyle(1.5, 0x888890, 0.25);
+    g.strokeCircle(bx, by, 20);
+    // dome highlight
+    g.fillStyle(0xffffff, 0.06);
+    g.fillCircle(bx - 5, by - 5, 8);
     // red button — dark outer ring
-    g.fillStyle(0x881111, 1);
-    g.fillCircle(bx, by, 13);
+    g.fillStyle(0x660808, 1);
+    g.fillCircle(bx, by, 14);
     // red button — bright top
-    g.fillStyle(0xdd2222, 1);
-    g.fillCircle(bx, by, 11);
-    g.fillStyle(0xff3333, 1);
-    g.fillCircle(bx - 1, by - 1, 9);
+    g.fillStyle(0xcc1818, 1);
+    g.fillCircle(bx, by, 12);
+    g.fillStyle(0xee2828, 1);
+    g.fillCircle(bx - 1, by - 1, 10);
     // specular highlight
-    g.fillStyle(0xff8888, 0.7);
-    g.fillCircle(bx - 3, by - 3, 4);
-    g.fillStyle(0xffaaaa, 0.5);
-    g.fillCircle(bx - 4, by - 4, 2);
+    g.fillStyle(0xff6868, 0.6);
+    g.fillCircle(bx - 3, by - 3, 5);
+    g.fillStyle(0xffaaaa, 0.4);
+    g.fillCircle(bx - 4, by - 4, 2.5);
+    // outer ring shadow
+    g.lineStyle(1, 0x440404, 0.5);
+    g.strokeCircle(bx, by, 14);
   }
 
   /** Draw a wardrobe cabinet in the break room for changing your appearance. */
@@ -4280,42 +4315,62 @@ export class OfficeScene extends Phaser.Scene {
     const bx = this.wardrobeTile.x * TILE_PX;
     const by = this.wardrobeTile.y * TILE_PX;
 
-    // shadow
-    g.fillStyle(0x000000, 0.2);
+    // contact shadow
+    g.fillStyle(0x000000, 0.25);
     g.fillEllipse(bx + 32, by + 60, 52, 10);
 
-    // body — dark wood
-    g.fillStyle(0x4a3528, 1);
-    g.fillRoundedRect(bx + 6, by + 4, 52, 56, 4);
-    g.fillStyle(0x5a4232, 1);
-    g.fillRoundedRect(bx + 8, by + 6, 48, 52, 3);
+    // body — dark walnut wood
+    g.fillStyle(0x2a1a10, 1);
+    g.fillRoundedRect(bx + 5, by + 3, 54, 58, 5);
+    g.fillStyle(0x3a2820, 1);
+    g.fillRoundedRect(bx + 7, by + 5, 50, 54, 4);
+    // wood grain lines
+    g.fillStyle(0x2a1a10, 0.3);
+    g.fillRect(bx + 9, by + 8, 46, 0.5);
+    g.fillRect(bx + 9, by + 20, 46, 0.5);
+    g.fillRect(bx + 9, by + 35, 46, 0.5);
+    g.fillRect(bx + 9, by + 48, 46, 0.5);
 
-    // left door
-    g.fillStyle(0x6a4a38, 1);
-    g.fillRoundedRect(bx + 10, by + 8, 22, 48, 2);
-    g.fillStyle(0x7a5a48, 1);
+    // left door — slightly lighter wood
+    g.fillStyle(0x4a3220, 1);
+    g.fillRoundedRect(bx + 10, by + 8, 22, 48, 3);
+    g.fillStyle(0x5a3a28, 1);
     g.fillRect(bx + 11, by + 9, 20, 6);
+    // door panel inset
+    g.fillStyle(0x3a2418, 0.5);
+    g.fillRoundedRect(bx + 13, by + 18, 16, 30, 2);
 
     // right door
-    g.fillStyle(0x6a4a38, 1);
-    g.fillRoundedRect(bx + 34, by + 8, 22, 48, 2);
-    g.fillStyle(0x7a5a48, 1);
+    g.fillStyle(0x4a3220, 1);
+    g.fillRoundedRect(bx + 34, by + 8, 22, 48, 3);
+    g.fillStyle(0x5a3a28, 1);
     g.fillRect(bx + 35, by + 9, 20, 6);
+    // door panel inset
+    g.fillStyle(0x3a2418, 0.5);
+    g.fillRoundedRect(bx + 37, by + 18, 16, 30, 2);
 
-    // door handles
-    g.fillStyle(0xc0a050, 1);
-    g.fillCircle(bx + 30, by + 32, 2);
-    g.fillCircle(bx + 36, by + 32, 2);
+    // door handles — brushed nickel
+    g.fillStyle(0x888890, 1);
+    g.fillRoundedRect(bx + 29, by + 30, 2, 6, 1);
+    g.fillRoundedRect(bx + 35, by + 30, 2, 6, 1);
+    g.fillStyle(0xaaaab4, 0.5);
+    g.fillRect(bx + 29, by + 30, 1, 5);
+    g.fillRect(bx + 35, by + 30, 1, 5);
 
-    // top molding
-    g.fillStyle(0x3a2818, 1);
-    g.fillRoundedRect(bx + 4, by + 2, 56, 6, 2);
+    // top molding — darker
+    g.fillStyle(0x1a1008, 1);
+    g.fillRoundedRect(bx + 3, by + 1, 58, 6, 3);
+    g.fillStyle(0x2a1a10, 1);
+    g.fillRoundedRect(bx + 5, by + 2, 54, 3, 2);
 
-    // mirror on left door
-    g.fillStyle(0x88aacc, 0.35);
+    // mirror on left door — modern
+    g.fillStyle(0x88aacc, 0.3);
     g.fillRoundedRect(bx + 12, by + 16, 18, 24, 2);
-    g.fillStyle(0xffffff, 0.15);
+    g.fillStyle(0xffffff, 0.12);
     g.fillRect(bx + 13, by + 17, 16, 3);
+    // mirror frame
+    g.lineStyle(0.8, 0x2a1a10, 0.6);
+    g.strokeRoundedRect(bx + 12, by + 16, 18, 24, 2);
   }
 
   /** Draw a nemesis codex terminal in the break room. */
@@ -4325,49 +4380,78 @@ export class OfficeScene extends Phaser.Scene {
     const bx = this.nemesisTerminalTile.x * TILE_PX;
     const by = this.nemesisTerminalTile.y * TILE_PX;
 
-    // shadow
-    g.fillStyle(0x000000, 0.2);
+    // contact shadow
+    g.fillStyle(0x000000, 0.25);
     g.fillEllipse(bx + 32, by + 60, 52, 10);
 
-    // desk/stand
-    g.fillStyle(0x2a2a35, 1);
-    g.fillRoundedRect(bx + 8, by + 40, 48, 20, 3);
+    // desk/stand — dark matte with metallic trim
     g.fillStyle(0x1a1a22, 1);
+    g.fillRoundedRect(bx + 8, by + 40, 48, 20, 3);
+    g.fillStyle(0x2a2a32, 1);
     g.fillRoundedRect(bx + 10, by + 42, 44, 16, 2);
+    // metallic trim line
+    g.fillStyle(0x4a4a56, 0.5);
+    g.fillRect(bx + 10, by + 42, 44, 1);
 
-    // terminal body — dark metal
-    g.fillStyle(0x1a1a2a, 1);
-    g.fillRoundedRect(bx + 6, by + 4, 52, 42, 4);
-    g.fillStyle(0x2a2a3a, 1);
-    g.fillRoundedRect(bx + 8, by + 6, 48, 38, 3);
+    // terminal body — dark premium frame with thin bezels
+    g.fillStyle(0x0a0a12, 1);
+    g.fillRoundedRect(bx + 4, by + 2, 56, 44, 5);
+    g.fillStyle(0x1a1a28, 1);
+    g.fillRoundedRect(bx + 6, by + 4, 52, 40, 4);
+    // frame highlight
+    g.fillStyle(0x3a3a48, 0.4);
+    g.fillRoundedRect(bx + 6, by + 4, 52, 2, 4);
 
-    // screen — glowing green
-    g.fillStyle(0x0a1a0a, 1);
-    g.fillRoundedRect(bx + 12, by + 10, 40, 30, 2);
-    g.fillStyle(0x4affa8, 0.15);
-    g.fillRoundedRect(bx + 12, by + 10, 40, 30, 2);
+    // screen — deep black with green CRT glow
+    g.fillStyle(0x050a08, 1);
+    g.fillRoundedRect(bx + 10, by + 8, 44, 32, 3);
+    // green phosphor glow
+    g.fillStyle(0x4affa8, 0.12);
+    g.fillRoundedRect(bx + 10, by + 8, 44, 32, 3);
 
-    // scanlines
-    g.fillStyle(0x4affa8, 0.08);
-    for (let i = 0; i < 6; i++) {
-      g.fillRect(bx + 12, by + 12 + i * 5, 40, 2);
+    // scanlines — finer
+    g.fillStyle(0x4affa8, 0.06);
+    for (let i = 0; i < 8; i++) {
+      g.fillRect(bx + 10, by + 9 + i * 4, 44, 1.5);
     }
 
-    // screen text lines (decorative)
-    g.fillStyle(0x4affa8, 0.6);
-    g.fillRect(bx + 15, by + 14, 20, 2);
-    g.fillRect(bx + 15, by + 18, 14, 2);
-    g.fillRect(bx + 15, by + 22, 24, 2);
-    g.fillRect(bx + 15, by + 26, 10, 2);
-    g.fillRect(bx + 15, by + 30, 18, 2);
+    // screen content — data table look
+    g.fillStyle(0x4affa8, 0.7);
+    // header bar
+    g.fillRect(bx + 13, by + 11, 38, 2);
+    g.fillStyle(0x4affa8, 0.3);
+    g.fillRect(bx + 13, by + 13, 38, 1);
+    // data rows
+    g.fillStyle(0x4affa8, 0.55);
+    g.fillRect(bx + 13, by + 16, 22, 1.5);
+    g.fillRect(bx + 13, by + 19, 16, 1.5);
+    g.fillRect(bx + 13, by + 22, 28, 1.5);
+    g.fillRect(bx + 13, by + 25, 12, 1.5);
+    g.fillRect(bx + 13, by + 28, 24, 1.5);
+    g.fillRect(bx + 13, by + 31, 18, 1.5);
+    // right column data
+    g.fillStyle(0x88ffcc, 0.4);
+    g.fillRect(bx + 38, by + 16, 12, 1.5);
+    g.fillRect(bx + 38, by + 19, 12, 1.5);
+    g.fillRect(bx + 38, by + 22, 12, 1.5);
+    g.fillRect(bx + 38, by + 25, 12, 1.5);
+    g.fillRect(bx + 38, by + 28, 12, 1.5);
+    g.fillRect(bx + 38, by + 31, 12, 1.5);
+    // cursor blink indicator
+    g.fillStyle(0x4affa8, 0.8);
+    g.fillRect(bx + 13, by + 35, 6, 1.5);
 
-    // power LED
+    // power LED — subtle, bottom right
     g.fillStyle(0x4affa8, 0.9);
-    g.fillCircle(bx + 52, by + 44, 1.5);
+    g.fillCircle(bx + 52, by + 44, 1.2);
+    g.fillStyle(0x4affa8, 0.3);
+    g.fillCircle(bx + 52, by + 44, 3);
 
-    // glow
-    g.fillStyle(0x4affa8, 0.05);
-    g.fillCircle(bx + 32, by + 25, 40);
+    // ambient glow
+    g.fillStyle(0x4affa8, 0.04);
+    g.fillCircle(bx + 32, by + 24, 45);
+    g.fillStyle(0x4affa8, 0.06);
+    g.fillCircle(bx + 32, by + 24, 25);
   }
 
   /** Create the helicopter visual as a container and return it.
@@ -4763,15 +4847,26 @@ export class OfficeScene extends Phaser.Scene {
     const sh = 288;
 
     this.projectorGfx = this.add.graphics().setDepth(3);
-    // outer frame
-    this.projectorGfx.fillStyle(0x1a2838, 1);
-    this.projectorGfx.fillRoundedRect(px - sw / 2 - 6, py - sh / 2 - 6, sw + 12, sh + 12, 6);
-    // inner bezel
-    this.projectorGfx.fillStyle(0x2a3848, 1);
-    this.projectorGfx.fillRoundedRect(px - sw / 2 - 4, py - sh / 2 - 4, sw + 8, sh + 8, 5);
+    // outer frame — dark anodized
+    this.projectorGfx.fillStyle(0x12121a, 1);
+    this.projectorGfx.fillRoundedRect(px - sw / 2 - 7, py - sh / 2 - 7, sw + 14, sh + 14, 8);
+    // inner bezel — slightly lighter
+    this.projectorGfx.fillStyle(0x2a2a36, 1);
+    this.projectorGfx.fillRoundedRect(px - sw / 2 - 5, py - sh / 2 - 5, sw + 10, sh + 10, 6);
+    // metallic trim
+    this.projectorGfx.lineStyle(1, 0x4a4a56, 0.5);
+    this.projectorGfx.strokeRoundedRect(px - sw / 2 - 5, py - sh / 2 - 5, sw + 10, sh + 10, 6);
     // screen surface (dark when off)
     this.projectorGfx.fillStyle(0x0a0a12, 1);
     this.projectorGfx.fillRoundedRect(px - sw / 2, py - sh / 2, sw, sh, 3);
+    // subtle screen reflection when off
+    this.projectorGfx.fillStyle(0x88bbff, 0.04);
+    this.projectorGfx.beginPath();
+    this.projectorGfx.moveTo(px - sw / 2, py - sh / 2);
+    this.projectorGfx.lineTo(px - sw / 2 + 80, py - sh / 2);
+    this.projectorGfx.lineTo(px - sw / 2, py - sh / 2 + 60);
+    this.projectorGfx.closePath();
+    this.projectorGfx.fillPath();
 
     // Draw control panel and speaker next to projector
     this.drawProjectorControlPanel();
@@ -4784,33 +4879,57 @@ export class OfficeScene extends Phaser.Scene {
     const py = this.projectorControlTile.y * TILE_PX + 32;
     this.projectorControlGfx = this.add.graphics().setDepth(3);
 
-    // mounting plate
-    this.projectorControlGfx.fillStyle(0x1a2838, 1);
-    this.projectorControlGfx.fillRoundedRect(px - 20, py - 16, 40, 32, 4);
-    this.projectorControlGfx.fillStyle(0x2a3848, 1);
-    this.projectorControlGfx.fillRoundedRect(px - 18, py - 14, 36, 28, 3);
+    // mounting plate — dark anodized
+    this.projectorControlGfx.fillStyle(0x12121a, 1);
+    this.projectorControlGfx.fillRoundedRect(px - 21, py - 17, 42, 34, 5);
+    this.projectorControlGfx.fillStyle(0x2a2a36, 1);
+    this.projectorControlGfx.fillRoundedRect(px - 19, py - 15, 38, 30, 4);
+    // metallic trim
+    this.projectorControlGfx.lineStyle(0.8, 0x4a4a56, 0.4);
+    this.projectorControlGfx.strokeRoundedRect(px - 19, py - 15, 38, 30, 4);
 
-    // small screen display
-    this.projectorControlGfx.fillStyle(0x0a0a12, 1);
-    this.projectorControlGfx.fillRoundedRect(px - 14, py - 10, 28, 12, 2);
-    // screen text indicator (channel label drawn as colored dot)
+    // small screen display — dark with blue tint
+    this.projectorControlGfx.fillStyle(0x0a0a14, 1);
+    this.projectorControlGfx.fillRoundedRect(px - 15, py - 11, 30, 13, 2);
+    // screen glow
+    this.projectorControlGfx.fillStyle(0x4a8cd4, 0.08);
+    this.projectorControlGfx.fillRoundedRect(px - 15, py - 11, 30, 13, 2);
+    // channel indicator — green dot with glow
+    this.projectorControlGfx.fillStyle(0x4acb4a, 0.3);
+    this.projectorControlGfx.fillCircle(px - 8, py - 4, 4);
     this.projectorControlGfx.fillStyle(0x4acb4a, 1);
     this.projectorControlGfx.fillCircle(px - 8, py - 4, 2);
+    // signal bars
+    this.projectorControlGfx.fillStyle(0x4a8cd4, 0.6);
+    this.projectorControlGfx.fillRect(px + 2, py - 6, 2, 4);
+    this.projectorControlGfx.fillRect(px + 5, py - 7, 2, 5);
+    this.projectorControlGfx.fillRect(px + 8, py - 8, 2, 6);
 
-    // channel buttons (3 small buttons)
+    // channel buttons (3 small buttons) with depth
     const btnColors = [0x666666, 0xe74c3c, 0x3498db];
+    const btnDarks = [0x444444, 0xb83828, 0x2878b0];
     for (let i = 0; i < 3; i++) {
       const bx = px - 12 + i * 12;
+      this.projectorControlGfx.fillStyle(btnDarks[i], 1);
+      this.projectorControlGfx.fillRoundedRect(bx, py + 4, 8, 7, 1);
       this.projectorControlGfx.fillStyle(btnColors[i], 1);
-      this.projectorControlGfx.fillRoundedRect(bx, py + 4, 8, 6, 1);
+      this.projectorControlGfx.fillRoundedRect(bx, py + 4, 8, 5, 1);
+      // highlight
+      this.projectorControlGfx.fillStyle(0xffffff, 0.15);
+      this.projectorControlGfx.fillRoundedRect(bx, py + 4, 8, 1.5, 1);
     }
 
-    // screws
-    this.projectorControlGfx.fillStyle(0x555555, 1);
-    this.projectorControlGfx.fillCircle(px - 15, py - 12, 1.5);
-    this.projectorControlGfx.fillCircle(px + 15, py - 12, 1.5);
-    this.projectorControlGfx.fillCircle(px - 15, py + 12, 1.5);
-    this.projectorControlGfx.fillCircle(px + 15, py + 12, 1.5);
+    // screws — brushed
+    this.projectorControlGfx.fillStyle(0x666670, 1);
+    this.projectorControlGfx.fillCircle(px - 16, py - 13, 1.5);
+    this.projectorControlGfx.fillCircle(px + 16, py - 13, 1.5);
+    this.projectorControlGfx.fillCircle(px - 16, py + 13, 1.5);
+    this.projectorControlGfx.fillCircle(px + 16, py + 13, 1.5);
+    this.projectorControlGfx.fillStyle(0xaaaab4, 0.5);
+    this.projectorControlGfx.fillCircle(px - 16.5, py - 13.5, 0.7);
+    this.projectorControlGfx.fillCircle(px + 15.5, py - 13.5, 0.7);
+    this.projectorControlGfx.fillCircle(px - 16.5, py + 12.5, 0.7);
+    this.projectorControlGfx.fillCircle(px + 15.5, py + 12.5, 0.7);
   }
 
   /** Draw a wall-mounted speaker for mute/unmute control. */
@@ -4819,31 +4938,46 @@ export class OfficeScene extends Phaser.Scene {
     const py = this.projectorSpeakerTile.y * TILE_PX + 32;
     this.projectorSpeakerGfx = this.add.graphics().setDepth(3);
 
-    // mounting plate
-    this.projectorSpeakerGfx.fillStyle(0x1a2838, 1);
-    this.projectorSpeakerGfx.fillRoundedRect(px - 16, py - 16, 32, 32, 4);
-    this.projectorSpeakerGfx.fillStyle(0x2a3848, 1);
-    this.projectorSpeakerGfx.fillRoundedRect(px - 14, py - 14, 28, 28, 3);
+    // mounting plate — dark anodized
+    this.projectorSpeakerGfx.fillStyle(0x12121a, 1);
+    this.projectorSpeakerGfx.fillRoundedRect(px - 17, py - 17, 34, 34, 5);
+    this.projectorSpeakerGfx.fillStyle(0x2a2a36, 1);
+    this.projectorSpeakerGfx.fillRoundedRect(px - 15, py - 15, 30, 30, 4);
+    // metallic trim
+    this.projectorSpeakerGfx.lineStyle(0.8, 0x4a4a56, 0.4);
+    this.projectorSpeakerGfx.strokeRoundedRect(px - 15, py - 15, 30, 30, 4);
 
-    // speaker cone (outer ring)
-    this.projectorSpeakerGfx.fillStyle(0x0a0a12, 1);
-    this.projectorSpeakerGfx.fillCircle(px, py, 10);
-    // speaker cone (inner)
-    this.projectorSpeakerGfx.fillStyle(0x1a1a2a, 1);
-    this.projectorSpeakerGfx.fillCircle(px, py, 8);
-    // speaker dust cap
-    this.projectorSpeakerGfx.fillStyle(0x2a2a3a, 1);
+    // speaker cone (outer ring — dark recess)
+    this.projectorSpeakerGfx.fillStyle(0x050508, 1);
+    this.projectorSpeakerGfx.fillCircle(px, py, 11);
+    // speaker cone (inner — dark grey)
+    this.projectorSpeakerGfx.fillStyle(0x1a1a24, 1);
+    this.projectorSpeakerGfx.fillCircle(px, py, 9);
+    // cone texture — concentric rings
+    this.projectorSpeakerGfx.fillStyle(0x2a2a34, 0.3);
+    this.projectorSpeakerGfx.fillCircle(px, py, 7);
+    this.projectorSpeakerGfx.fillStyle(0x1a1a24, 0.5);
+    this.projectorSpeakerGfx.fillCircle(px, py, 6);
+    // speaker dust cap — slightly metallic
+    this.projectorSpeakerGfx.fillStyle(0x2a2a36, 1);
     this.projectorSpeakerGfx.fillCircle(px, py, 4);
+    this.projectorSpeakerGfx.fillStyle(0x3a3a48, 0.5);
+    this.projectorSpeakerGfx.fillCircle(px, py, 3);
     // highlight
-    this.projectorSpeakerGfx.fillStyle(0x3a3a4a, 0.5);
+    this.projectorSpeakerGfx.fillStyle(0x5a5a6a, 0.4);
     this.projectorSpeakerGfx.fillCircle(px - 1, py - 1, 2);
 
-    // screws
-    this.projectorSpeakerGfx.fillStyle(0x555555, 1);
-    this.projectorSpeakerGfx.fillCircle(px - 11, py - 11, 1.5);
-    this.projectorSpeakerGfx.fillCircle(px + 11, py - 11, 1.5);
-    this.projectorSpeakerGfx.fillCircle(px - 11, py + 11, 1.5);
-    this.projectorSpeakerGfx.fillCircle(px + 11, py + 11, 1.5);
+    // screws — brushed
+    this.projectorSpeakerGfx.fillStyle(0x666670, 1);
+    this.projectorSpeakerGfx.fillCircle(px - 12, py - 12, 1.5);
+    this.projectorSpeakerGfx.fillCircle(px + 12, py - 12, 1.5);
+    this.projectorSpeakerGfx.fillCircle(px - 12, py + 12, 1.5);
+    this.projectorSpeakerGfx.fillCircle(px + 12, py + 12, 1.5);
+    this.projectorSpeakerGfx.fillStyle(0xaaaab4, 0.5);
+    this.projectorSpeakerGfx.fillCircle(px - 12.5, py - 12.5, 0.7);
+    this.projectorSpeakerGfx.fillCircle(px + 11.5, py - 12.5, 0.7);
+    this.projectorSpeakerGfx.fillCircle(px - 12.5, py + 11.5, 0.7);
+    this.projectorSpeakerGfx.fillCircle(px + 11.5, py + 11.5, 0.7);
   }
 
   /** Draw a wall-mounted clock at the new location near the chimney. */
@@ -4852,48 +4986,57 @@ export class OfficeScene extends Phaser.Scene {
     const py = this.clockTile.y * TILE_PX + 32;
     const g = this.add.graphics().setDepth(3);
 
-    // mounting plate
-    g.fillStyle(0x1a2838, 1);
-    g.fillRoundedRect(px - 18, py - 18, 36, 36, 4);
-    g.fillStyle(0x2a3848, 1);
-    g.fillRoundedRect(px - 16, py - 16, 32, 32, 3);
+    // mounting plate — dark anodized
+    g.fillStyle(0x12121a, 1);
+    g.fillRoundedRect(px - 19, py - 19, 38, 38, 5);
+    g.fillStyle(0x2a2a36, 1);
+    g.fillRoundedRect(px - 17, py - 17, 34, 34, 4);
+    // metallic trim
+    g.lineStyle(0.8, 0x4a4a56, 0.4);
+    g.strokeRoundedRect(px - 17, py - 17, 34, 34, 4);
 
-    // clock face
-    g.fillStyle(0xf5f0e0, 1);
-    g.fillCircle(px, py, 12);
-    g.fillStyle(0x0a0a12, 1);
-    g.lineStyle(1.5, 0x0a0a12, 1);
+    // clock face — modern white
+    g.fillStyle(0xf4f6f8, 1);
+    g.fillCircle(px, py, 13);
+    // bezel ring
+    g.lineStyle(1.5, 0x3a3a44, 1);
+    g.strokeCircle(px, py, 13);
+    // inner shadow ring
+    g.lineStyle(0.5, 0x000000, 0.15);
     g.strokeCircle(px, py, 12);
 
-    // hour ticks
-    g.fillStyle(0x333333, 1);
+    // hour ticks — modern bold markers
+    g.fillStyle(0x1a1a22, 1);
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
-      const r1 = 10;
-      g.fillCircle(
-        px + Math.cos(angle) * r1,
-        py + Math.sin(angle) * r1,
-        i % 3 === 0 ? 1.5 : 1,
-      );
+      const r1 = 10.5;
+      if (i % 3 === 0) {
+        // cardinal points — wider bars
+        g.fillRect(px + Math.cos(angle) * r1 - 1, py + Math.sin(angle) * r1 - 1, 2, 2);
+      } else {
+        g.fillCircle(px + Math.cos(angle) * r1, py + Math.sin(angle) * r1, 0.8);
+      }
     }
 
-    // hour hand
-    g.lineStyle(2, 0x333333, 1);
+    // hour hand — thick, dark
+    g.lineStyle(2.5, 0x1a1a22, 1);
     g.beginPath();
     g.moveTo(px, py);
     g.lineTo(px + 4, py - 6);
     g.strokePath();
 
-    // minute hand
-    g.lineStyle(1.5, 0x555555, 1);
+    // minute hand — thinner, dark grey
+    g.lineStyle(1.5, 0x3a3a44, 1);
     g.beginPath();
     g.moveTo(px, py);
     g.lineTo(px + 8, py - 2);
     g.strokePath();
 
-    // center dot
-    g.fillStyle(0x333333, 1);
-    g.fillCircle(px, py, 1.5);
+    // center dot — metallic
+    g.fillStyle(0x4a4a56, 1);
+    g.fillCircle(px, py, 2);
+    g.fillStyle(0x6a6a76, 0.6);
+    g.fillCircle(px - 0.5, py - 0.5, 1);
   }
 
   /** Convert a world-space rect to screen-space pixels using the main camera. */
@@ -5023,51 +5166,73 @@ export class OfficeScene extends Phaser.Scene {
     const bh = 88;
 
     const g = this.add.graphics().setDepth(3);
-    // outer frame with bevel
-    g.fillStyle(0x1a2838, 1);
-    g.fillRoundedRect(bx - bw / 2 - 6, by - 6, bw + 12, bh + 12, 6);
-    g.fillStyle(0x2a3848, 1);
-    g.fillRoundedRect(bx - bw / 2 - 4, by - 4, bw + 8, bh + 8, 5);
-    // inner board
-    g.fillStyle(0xf0f5fa, 1);
+    // outer frame — dark anodized aluminum
+    g.fillStyle(0x12121a, 1);
+    g.fillRoundedRect(bx - bw / 2 - 7, by - 7, bw + 14, bh + 14, 8);
+    g.fillStyle(0x2a2a36, 1);
+    g.fillRoundedRect(bx - bw / 2 - 5, by - 5, bw + 10, bh + 10, 6);
+    // metallic trim
+    g.lineStyle(1, 0x4a4a56, 0.6);
+    g.strokeRoundedRect(bx - bw / 2 - 5, by - 5, bw + 10, bh + 10, 6);
+    // inner board — soft white
+    g.fillStyle(0xf4f6f8, 1);
     g.fillRoundedRect(bx - bw / 2, by, bw, bh, 4);
     // top highlight
-    g.fillStyle(0xffffff, 0.15);
-    g.fillRoundedRect(bx - bw / 2, by, bw, 4, 4);
+    g.fillStyle(0xffffff, 0.2);
+    g.fillRoundedRect(bx - bw / 2, by, bw, 3, 4);
+    // bottom shadow
+    g.fillStyle(0x000000, 0.06);
+    g.fillRoundedRect(bx - bw / 2, by + bh - 4, bw, 4, 4);
 
-    // column headers with rounded tabs
+    // column headers — modern flat tabs with accent bars
     const colW = (bw - 24) / 3;
     const cols = [0xe8a838, 0x4cb866, 0x4a9cd8];
+    const colDarks = [0xc88828, 0x3c9846, 0x3a8cb8];
     for (let i = 0; i < 3; i++) {
       const cx = bx - bw / 2 + 8 + i * (colW + 4);
-      g.fillStyle(cols[i], 0.8);
-      g.fillRoundedRect(cx, by + 8, colW, 16, 3);
-      g.fillStyle(0xffffff, 0.2);
-      g.fillRoundedRect(cx, by + 8, colW, 4, 3);
+      // header tab
+      g.fillStyle(colDarks[i], 1);
+      g.fillRoundedRect(cx, by + 6, colW, 18, 3);
+      g.fillStyle(cols[i], 1);
+      g.fillRoundedRect(cx, by + 6, colW, 14, 3);
+      // top highlight
+      g.fillStyle(0xffffff, 0.25);
+      g.fillRoundedRect(cx, by + 6, colW, 3, 3);
+      // accent bar under header
+      g.fillStyle(colDarks[i], 0.5);
+      g.fillRect(cx, by + 23, colW, 1.5);
     }
 
-    // sticky notes with shadows
-    const notes: { col: number; y: number; color: number }[] = [
-      { col: 0, y: 32, color: 0xffe69e },
-      { col: 0, y: 60, color: 0xffe69e },
-      { col: 1, y: 32, color: 0xc4e8c4 },
-      { col: 2, y: 32, color: 0xc4d8f0 },
+    // sticky notes with drop shadows and pin dots
+    const notes: { col: number; y: number; color: number; rot: number }[] = [
+      { col: 0, y: 30, color: 0xffe69e, rot: -0.04 },
+      { col: 0, y: 58, color: 0xffd97a, rot: 0.03 },
+      { col: 1, y: 30, color: 0xc4e8c4, rot: 0.02 },
+      { col: 2, y: 30, color: 0xc4d8f0, rot: -0.03 },
     ];
     for (const n of notes) {
       const nx = bx - bw / 2 + 16 + n.col * (colW + 4);
       // shadow
-      g.fillStyle(0x000000, 0.12);
-      g.fillRoundedRect(nx + 2, n.y + 2, 24, 24, 2);
-      // note
+      g.fillStyle(0x000000, 0.15);
+      g.fillRoundedRect(nx + 2, n.y + 3, 26, 26, 2);
+      // note body
       g.fillStyle(n.color, 1);
-      g.fillRoundedRect(nx, n.y, 24, 24, 2);
-      // highlight
-      g.fillStyle(0xffffff, 0.15);
-      g.fillRoundedRect(nx, n.y, 24, 4, 2);
+      g.fillRoundedRect(nx, n.y, 26, 26, 2);
+      // top highlight
+      g.fillStyle(0xffffff, 0.2);
+      g.fillRoundedRect(nx, n.y, 26, 4, 2);
+      // text lines
+      g.fillStyle(0x333333, 0.3);
+      g.fillRect(nx + 4, n.y + 8, 18, 1.5);
+      g.fillRect(nx + 4, n.y + 12, 14, 1.5);
+      g.fillRect(nx + 4, n.y + 16, 16, 1.5);
+      // pin dot
+      g.fillStyle(0xcc4444, 0.8);
+      g.fillCircle(nx + 13, n.y + 3, 1.5);
     }
 
     // Invisible interactive zone so clicking the board opens it
-    const boardZone = this.add.zone(bx, by + bh / 2, bw + 12, bh + 12);
+    const boardZone = this.add.zone(bx, by + bh / 2, bw + 14, bh + 14);
     boardZone.setDepth(3);
     boardZone.setInteractive({ useHandCursor: true });
     boardZone.on("pointerdown", () => this.store.toggleBoard(true));
@@ -7824,31 +7989,50 @@ export class OfficeScene extends Phaser.Scene {
     const py = this.screenShareTile.y * TILE_PX + 32;
     this.screenShareGfx = this.add.graphics().setDepth(3);
 
-    // mounting plate
-    this.screenShareGfx.fillStyle(0x1a2838, 1);
-    this.screenShareGfx.fillRoundedRect(px - 20, py - 16, 40, 32, 4);
-    this.screenShareGfx.fillStyle(0x2a3848, 1);
-    this.screenShareGfx.fillRoundedRect(px - 18, py - 14, 36, 28, 3);
+    // mounting plate — dark anodized
+    this.screenShareGfx.fillStyle(0x12121a, 1);
+    this.screenShareGfx.fillRoundedRect(px - 21, py - 17, 42, 34, 5);
+    this.screenShareGfx.fillStyle(0x2a2a36, 1);
+    this.screenShareGfx.fillRoundedRect(px - 19, py - 15, 38, 30, 4);
+    // metallic trim
+    this.screenShareGfx.lineStyle(0.8, 0x4a4a56, 0.4);
+    this.screenShareGfx.strokeRoundedRect(px - 19, py - 15, 38, 30, 4);
 
-    // small screen display
-    this.screenShareGfx.fillStyle(0x0a0a12, 1);
-    this.screenShareGfx.fillRoundedRect(px - 14, py - 10, 28, 12, 2);
-    // monitor icon (screen with arrow)
+    // small screen display — dark with blue tint
+    this.screenShareGfx.fillStyle(0x0a0a14, 1);
+    this.screenShareGfx.fillRoundedRect(px - 15, py - 11, 30, 13, 2);
+    // screen glow
+    this.screenShareGfx.fillStyle(0x4a8cd4, 0.08);
+    this.screenShareGfx.fillRoundedRect(px - 15, py - 11, 30, 13, 2);
+    // monitor icon (screen with arrow) — modern flat
     this.screenShareGfx.fillStyle(0x4a8cd4, 1);
-    this.screenShareGfx.fillRect(px - 8, py - 7, 10, 6);
+    this.screenShareGfx.fillRoundedRect(px - 9, py - 8, 12, 7, 1);
     this.screenShareGfx.fillStyle(0x2a4868, 1);
-    this.screenShareGfx.fillRect(px - 6, py - 5, 6, 2);
+    this.screenShareGfx.fillRect(px - 7, py - 6, 8, 2);
+    // share arrow indicator
+    this.screenShareGfx.fillStyle(0x88ccff, 0.6);
+    this.screenShareGfx.fillRect(px + 4, py - 7, 2, 3);
+    this.screenShareGfx.fillRect(px + 3, py - 6, 4, 1);
 
-    // share button (green when sharing, gray when not)
+    // share button (green when sharing, gray when not) — with depth
+    this.screenShareGfx.fillStyle(0x444444, 1);
+    this.screenShareGfx.fillRoundedRect(px - 13, py + 4, 26, 9, 2);
     this.screenShareGfx.fillStyle(0x666666, 1);
-    this.screenShareGfx.fillRoundedRect(px - 12, py + 4, 24, 8, 2);
+    this.screenShareGfx.fillRoundedRect(px - 13, py + 4, 26, 7, 2);
+    this.screenShareGfx.fillStyle(0xffffff, 0.1);
+    this.screenShareGfx.fillRoundedRect(px - 13, py + 4, 26, 1.5, 2);
 
-    // screws
-    this.screenShareGfx.fillStyle(0x555555, 1);
-    this.screenShareGfx.fillCircle(px - 15, py - 12, 1.5);
-    this.screenShareGfx.fillCircle(px + 15, py - 12, 1.5);
-    this.screenShareGfx.fillCircle(px - 15, py + 12, 1.5);
-    this.screenShareGfx.fillCircle(px + 15, py + 12, 1.5);
+    // screws — brushed
+    this.screenShareGfx.fillStyle(0x666670, 1);
+    this.screenShareGfx.fillCircle(px - 16, py - 13, 1.5);
+    this.screenShareGfx.fillCircle(px + 16, py - 13, 1.5);
+    this.screenShareGfx.fillCircle(px - 16, py + 13, 1.5);
+    this.screenShareGfx.fillCircle(px + 16, py + 13, 1.5);
+    this.screenShareGfx.fillStyle(0xaaaab4, 0.5);
+    this.screenShareGfx.fillCircle(px - 16.5, py - 13.5, 0.7);
+    this.screenShareGfx.fillCircle(px + 15.5, py - 13.5, 0.7);
+    this.screenShareGfx.fillCircle(px - 16.5, py + 12.5, 0.7);
+    this.screenShareGfx.fillCircle(px + 15.5, py + 12.5, 0.7);
   }
 
   /** Draw the phone booth near the projector in the top-left corner. */
@@ -7857,39 +8041,49 @@ export class OfficeScene extends Phaser.Scene {
     const py = this.phoneBoothTile.y * TILE_PX + 32;
     this.phoneBoothGfx = this.add.graphics().setDepth(2);
 
-    // shadow
-    this.phoneBoothGfx.fillStyle(0x000000, 0.2);
-    this.phoneBoothGfx.fillEllipse(px, py + 28, 44, 10);
+    // contact shadow
+    this.phoneBoothGfx.fillStyle(0x000000, 0.25);
+    this.phoneBoothGfx.fillEllipse(px, py + 28, 46, 10);
 
-    // booth body (back panel)
-    this.phoneBoothGfx.fillStyle(0x1a2a3a, 1);
-    this.phoneBoothGfx.fillRoundedRect(px - 22, py - 30, 44, 60, 4);
-    this.phoneBoothGfx.fillStyle(0x2a3a4a, 1);
-    this.phoneBoothGfx.fillRoundedRect(px - 20, py - 28, 40, 56, 3);
+    // booth body (back panel) — dark modern
+    this.phoneBoothGfx.fillStyle(0x0a0a12, 1);
+    this.phoneBoothGfx.fillRoundedRect(px - 23, py - 31, 46, 62, 5);
+    this.phoneBoothGfx.fillStyle(0x1a1a28, 1);
+    this.phoneBoothGfx.fillRoundedRect(px - 21, py - 29, 42, 58, 4);
+    // metallic trim
+    this.phoneBoothGfx.lineStyle(0.8, 0x3a3a48, 0.5);
+    this.phoneBoothGfx.strokeRoundedRect(px - 21, py - 29, 42, 58, 4);
 
     // interior (dark)
-    this.phoneBoothGfx.fillStyle(0x0a0a12, 1);
-    this.phoneBoothGfx.fillRoundedRect(px - 16, py - 24, 32, 48, 2);
+    this.phoneBoothGfx.fillStyle(0x050508, 1);
+    this.phoneBoothGfx.fillRoundedRect(px - 17, py - 25, 34, 50, 3);
 
-    // door frame
-    this.phoneBoothGfx.lineStyle(2, 0x3a4a5a, 1);
-    this.phoneBoothGfx.strokeRoundedRect(px - 16, py - 24, 32, 48, 2);
+    // door frame — subtle metallic
+    this.phoneBoothGfx.lineStyle(1.5, 0x2a2a36, 1);
+    this.phoneBoothGfx.strokeRoundedRect(px - 17, py - 25, 34, 50, 3);
 
-    // small camera lens at top
-    this.phoneBoothGfx.fillStyle(0x1a1a2a, 1);
-    this.phoneBoothGfx.fillCircle(px, py - 20, 3);
+    // small camera lens at top — modern
+    this.phoneBoothGfx.fillStyle(0x050508, 1);
+    this.phoneBoothGfx.fillCircle(px, py - 21, 4);
+    this.phoneBoothGfx.fillStyle(0x1a1a28, 1);
+    this.phoneBoothGfx.fillCircle(px, py - 21, 3);
     this.phoneBoothGfx.fillStyle(0x4a8cd4, 0.8);
-    this.phoneBoothGfx.fillCircle(px, py - 20, 1.5);
+    this.phoneBoothGfx.fillCircle(px, py - 21, 1.5);
+    this.phoneBoothGfx.fillStyle(0x88ccff, 0.4);
+    this.phoneBoothGfx.fillCircle(px - 0.5, py - 21.5, 0.7);
 
     // "ON AIR" light (off by default)
     this.phoneBoothLight = this.add.graphics().setDepth(3);
     this.updatePhoneBoothVisual(false);
 
-    // roof / sign
-    this.phoneBoothGfx.fillStyle(0x2a4a6a, 1);
-    this.phoneBoothGfx.fillRoundedRect(px - 24, py - 36, 48, 8, 2);
-    this.phoneBoothGfx.fillStyle(0x1a3a5a, 1);
-    this.phoneBoothGfx.fillRoundedRect(px - 22, py - 34, 44, 4, 1);
+    // roof / sign — dark anodized
+    this.phoneBoothGfx.fillStyle(0x12121a, 1);
+    this.phoneBoothGfx.fillRoundedRect(px - 25, py - 37, 50, 9, 3);
+    this.phoneBoothGfx.fillStyle(0x2a2a36, 1);
+    this.phoneBoothGfx.fillRoundedRect(px - 23, py - 35, 46, 5, 2);
+    // metallic trim on sign
+    this.phoneBoothGfx.lineStyle(0.8, 0x4a4a56, 0.4);
+    this.phoneBoothGfx.strokeRoundedRect(px - 23, py - 35, 46, 5, 2);
   }
 
   /** Update the phone booth ON AIR light. */
