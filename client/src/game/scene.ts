@@ -259,6 +259,7 @@ export class OfficeScene extends Phaser.Scene {
   private ready = false;
 
   private mapPx = { w: 960, h: 640 };
+  private mapRef!: Phaser.Tilemaps.Tilemap;
   private player!: Phaser.GameObjects.Sprite;
   private playerLabel!: Phaser.GameObjects.Text;
   private playerNameBg!: Phaser.GameObjects.Graphics;
@@ -578,6 +579,7 @@ export class OfficeScene extends Phaser.Scene {
         name: "tilemap & collision",
         fn: () => {
           map = this.make.tilemap({ key: `map-${this.theme}` });
+          this.mapRef = map;
           const tiles = map.addTilesetImage(
             this.theme === "agentHeights" ? "agentHeights" : "office",
             `tiles-${this.theme}`,
@@ -769,11 +771,23 @@ export class OfficeScene extends Phaser.Scene {
           // so the player can walk straight out into the world.
           // The door is 2 tiles wide at spawnTile.x and spawnTile.x+1.
           const doorX = this.spawnTile.x;
+          const wallsLayer = this.mapRef.getLayer("Walls");
+          const furnitureLayer = this.mapRef.getLayer("Furniture");
           for (let dy = 0; dy <= 3; dy++) {
             const ty = this.spawnTile.y + dy;
             if (ty < map.height) {
               walkable[ty][doorX] = true;
               if (doorX + 1 < map.width) walkable[ty][doorX + 1] = true;
+              // Remove wall + furniture tiles at the door so the player can see
+              // the grass outside through the doorway
+              if (wallsLayer) {
+                this.mapRef.removeTileAt(doorX, ty, false, true, "Walls");
+                if (doorX + 1 < map.width) this.mapRef.removeTileAt(doorX + 1, ty, false, true, "Walls");
+              }
+              if (furnitureLayer) {
+                this.mapRef.removeTileAt(doorX, ty, false, true, "Furniture");
+                if (doorX + 1 < map.width) this.mapRef.removeTileAt(doorX + 1, ty, false, true, "Furniture");
+              }
             }
           }
           this.grid = new Grid(map.width, map.height, walkable);
@@ -1253,9 +1267,10 @@ export class OfficeScene extends Phaser.Scene {
           // Clean up loading overlay
           loadOverlay.remove();
 
-          // Synchronously load + render the chunks at the player's current position
-          // so they see ground immediately (handles spawning outside after a refresh).
-          // Also load the door chunk for when they're inside.
+          // Synchronously load chunks at the player's current position so tile
+          // data is ready immediately.  Canvas rendering happens via the
+          // time-sliced processRenderJobs() in the update loop — no main
+          // thread stall.  Also load the door chunk for when they're inside.
           const playerOutside = this.world.isOutside(this.player.x, this.player.y);
           if (playerOutside) {
             this.world.preloadChunksAt(this.player.x, this.player.y);
@@ -1263,13 +1278,11 @@ export class OfficeScene extends Phaser.Scene {
             for (let i = 0; i < Math.min(3, chunks.length); i++) {
               this.world.loadSingleChunk(chunks[i].cx, chunks[i].cy);
             }
-            this.world.processRenderJobsNow();
           } else {
             const doorChunks = this.world.getDoorChunkList();
             for (let i = 0; i < Math.min(3, doorChunks.length); i++) {
               this.world.loadSingleChunk(doorChunks[i].cx, doorChunks[i].cy);
             }
-            this.world.processRenderJobsNow();
           }
 
           // Schedule golf ball cleanup after chunks have had time to load
