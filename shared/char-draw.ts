@@ -916,16 +916,32 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const utx = isFat ? 18 : 21;
     const _ushirtDrawn = stampComponent("shirt", "default", "up", pose, pal.shirt);
     if (!_ushirtDrawn) {
-    vGradRR(bx(utx), by(38), utw, 18, 5, shirtLi, shirtDk);
+    vGradRR(bx(utx), by(38), utw, 18, 5, shirtDk, shirtLi);
     texOverlay(bx(utx), by(38), utw, 18, pal.shirt, "shirtFabric");
-    s.rect(bx(utx), by(38), 2, 18, shirtLi);
-    s.rect(bx(utx + utw - 2), by(38), 2, 18, shirtDk);
-    // Soft top glow
-    for (let xx = utx + 2; xx < utx + utw - 2; xx++) s.setAlpha(bx(xx), by(38), mix(pal.shirt, "#fff", 0.3), 0.2);
-    // Back seam
-    s.set(bx(31), by(40), shirtDk);
+    s.rect(bx(utx), by(38), 2, 18, shirtDk);
+    s.rect(bx(utx + utw - 2), by(38), 2, 18, shirtLi);
+    // Back collar — horizontal band at the top of the back
+    rr(bx(utx + 3), by(38), utw - 6, 3, 1, shirtDk);
+    s.set(bx(utx + 4), by(38), mix(pal.shirt, "#000", 0.35));
+    s.set(bx(utx + utw - 5), by(38), mix(pal.shirt, "#000", 0.35));
+    // Continuous back seam down the center
+    s.set(bx(31), by(41), shirtDk);
     s.set(bx(32), by(42), shirtDk);
-    s.set(bx(31), by(44), shirtDk);
+    s.set(bx(31), by(43), shirtDk);
+    s.set(bx(32), by(44), shirtDk);
+    s.set(bx(31), by(45), shirtDk);
+    s.set(bx(32), by(46), shirtDk);
+    s.set(bx(31), by(47), shirtDk);
+    s.set(bx(32), by(48), shirtDk);
+    s.set(bx(31), by(49), shirtDk);
+    s.set(bx(32), by(50), shirtDk);
+    s.set(bx(31), by(51), shirtDk);
+    s.set(bx(32), by(52), shirtDk);
+    // Shoulder blade shading
+    s.setAlpha(bx(utx + 5), by(43), shirtDk, 0.4);
+    s.setAlpha(bx(utx + 6), by(44), shirtDk, 0.3);
+    s.setAlpha(bx(utx + utw - 6), by(43), shirtDk, 0.4);
+    s.setAlpha(bx(utx + utw - 7), by(44), shirtDk, 0.3);
     // Belt line
     s.rect(bx(utx), by(55), utw, 1, pantsDk);
     }
