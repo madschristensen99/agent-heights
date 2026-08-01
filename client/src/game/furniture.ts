@@ -63,7 +63,7 @@ function linearGrad(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: n
 
 /* ---------- furniture drawing functions ---------- */
 
-/** Desk surface — left half (tile 17) — modern white laminate with accessories */
+/** Desk surface — left half (tile 17) — modern white laminate */
 function drawDeskLeft(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
   const topY = s * 0.22;
@@ -153,66 +153,9 @@ function drawDeskLeft(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.lineTo(s - 2, topY + h - 0.5);
   ctx.stroke();
 
-  // keyboard silhouette — left portion of desk
-  ctx.fillStyle = hexRGBA(0x1a1a22, 0.25);
-  roundRect(ctx, s * 0.06, topY + h * 0.35, s * 0.38, s * 0.16, 2);
-  ctx.fill();
-  // keyboard keys hint — tiny grid
-  ctx.fillStyle = hexRGBA(0x3a3a44, 0.15);
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 8; col++) {
-      ctx.fillRect(s * 0.08 + col * s * 0.042, topY + h * 0.38 + row * s * 0.045, s * 0.032, s * 0.032);
-    }
-  }
-
-  // notebook corner — top right of surface
-  ctx.fillStyle = hexRGBA(0x000000, 0.06);
-  ctx.beginPath();
-  ctx.moveTo(s * 0.72, topY + 4);
-  ctx.lineTo(s * 0.92, topY + 4);
-  ctx.lineTo(s * 0.90, topY + h * 0.55);
-  ctx.lineTo(s * 0.70, topY + h * 0.55);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = hexRGBA(0xe8e8e0, 0.7);
-  ctx.beginPath();
-  ctx.moveTo(s * 0.70, topY + 3);
-  ctx.lineTo(s * 0.90, topY + 3);
-  ctx.lineTo(s * 0.88, topY + h * 0.52);
-  ctx.lineTo(s * 0.68, topY + h * 0.52);
-  ctx.closePath();
-  ctx.fill();
-  // notebook spiral binding
-  ctx.strokeStyle = hexRGBA(0x8a8a90, 0.4);
-  ctx.lineWidth = 0.8;
-  for (let i = 0; i < 4; i++) {
-    const y = topY + 8 + i * s * 0.06;
-    ctx.beginPath();
-    ctx.arc(s * 0.69, y, 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  // notebook lines
-  ctx.strokeStyle = hexRGBA(0x6a9acc, 0.2);
-  ctx.lineWidth = 0.5;
-  for (let i = 0; i < 3; i++) {
-    const y = topY + 10 + i * s * 0.06;
-    ctx.beginPath();
-    ctx.moveTo(s * 0.74, y);
-    ctx.lineTo(s * 0.87, y);
-    ctx.stroke();
-  }
-
-  // cable hole
-  ctx.beginPath();
-  ctx.ellipse(s * 0.3, topY + h * 0.85, 4, 3, 0, 0, Math.PI * 2);
-  ctx.fillStyle = hexRGBA(0x1a1a1a, 0.7);
-  ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x2a2a2a, 0.5);
-  ctx.lineWidth = 1;
-  ctx.stroke();
 }
 
-/** Desk surface — right half (tile 18) — modern white laminate with mouse and accessories */
+/** Desk surface — right half (tile 18) — modern white laminate */
 function drawDeskRight(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
   const topY = s * 0.22;
@@ -297,54 +240,6 @@ function drawDeskRight(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.lineTo(s - 2, topY + h - 0.5);
   ctx.stroke();
 
-  // mouse — right side of desk surface
-  ctx.fillStyle = hexRGBA(0x2a2a30, 0.5);
-  ctx.beginPath();
-  ctx.ellipse(s * 0.72, topY + h * 0.5, s * 0.08, s * 0.12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // mouse highlight
-  ctx.fillStyle = hexRGBA(0x4a4a50, 0.3);
-  ctx.beginPath();
-  ctx.ellipse(s * 0.70, topY + h * 0.45, s * 0.04, s * 0.06, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // mouse scroll wheel
-  ctx.fillStyle = hexRGBA(0x1a1a20, 0.6);
-  ctx.fillRect(s * 0.71, topY + h * 0.38, 2, 4);
-
-  // sticky note — bottom left of surface
-  ctx.fillStyle = hexRGBA(0xffe94a, 0.7);
-  ctx.save();
-  ctx.translate(s * 0.12, topY + h * 0.6);
-  ctx.rotate(-0.08);
-  ctx.fillRect(0, 0, s * 0.16, s * 0.16);
-  // sticky note shadow
-  ctx.fillStyle = hexRGBA(0x000000, 0.08);
-  ctx.fillRect(s * 0.14, s * 0.02, s * 0.04, s * 0.14);
-  ctx.restore();
-  // sticky note lines
-  ctx.strokeStyle = hexRGBA(0x8a7a0a, 0.3);
-  ctx.lineWidth = 0.5;
-  for (let i = 0; i < 3; i++) {
-    const y = topY + h * 0.66 + i * s * 0.04;
-    ctx.beginPath();
-    ctx.moveTo(s * 0.14, y);
-    ctx.lineTo(s * 0.24, y);
-    ctx.stroke();
-  }
-
-  // pen lying on desk
-  ctx.fillStyle = hexRGBA(0x2a4a8a, 0.6);
-  ctx.save();
-  ctx.translate(s * 0.35, topY + h * 0.75);
-  ctx.rotate(0.15);
-  ctx.fillRect(0, 0, s * 0.22, 2.5);
-  // pen tip
-  ctx.fillStyle = hexRGBA(0x1a2a4a, 0.7);
-  ctx.fillRect(0, 0, 3, 2.5);
-  // pen clip
-  ctx.fillStyle = hexRGBA(0x4a6aaa, 0.5);
-  ctx.fillRect(s * 0.16, -1, 2, 4);
-  ctx.restore();
 }
 
 /** Office chair (tile 19) — premium executive with mesh back and chrome base */
@@ -1706,54 +1601,6 @@ function drawDeskSideBottom(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(s - 2, 0, 2, s);
 
-  // papers with shadow on desk surface
-  ctx.fillStyle = hexRGBA(0x000000, 0.08);
-  ctx.fillRect(s * 0.08, s * 0.18, s * 0.3, s * 0.38);
-  ctx.fillStyle = "#f7f8fa";
-  ctx.fillRect(s * 0.09, s * 0.16, s * 0.3, s * 0.38);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(s * 0.09, s * 0.16, s * 0.3, 3);
-  ctx.fillStyle = hexRGBA(0x9aa0a8, 0.6);
-  ctx.fillRect(s * 0.15, s * 0.28, s * 0.18, 1);
-  ctx.fillRect(s * 0.15, s * 0.34, s * 0.15, 1);
-  // pen on papers
-  ctx.fillStyle = hexRGBA(0x2a4a8a, 0.6);
-  ctx.save();
-  ctx.translate(s * 0.28, s * 0.42);
-  ctx.rotate(0.12);
-  ctx.fillRect(0, 0, s * 0.14, 2);
-  ctx.fillStyle = hexRGBA(0x1a2a4a, 0.7);
-  ctx.fillRect(0, 0, 2.5, 2);
-  ctx.restore();
-
-  // mug — ceramic with stripe and steam
-  ctx.fillStyle = hexRGBA(0x000000, 0.1);
-  ctx.beginPath();
-  ctx.ellipse(s * 0.51, s * 0.42, s * 0.1, s * 0.02, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#3a6f57";
-  roundRect(ctx, s * 0.42, s * 0.22, s * 0.18, s * 0.18, 2);
-  ctx.fill();
-  ctx.fillStyle = hexRGBA(0x5a9a7a, 0.4);
-  ctx.fillRect(s * 0.42, s * 0.22, s * 0.18, 2);
-  // mug stripe
-  ctx.fillStyle = hexRGBA(0xeeeeff, 0.3);
-  ctx.fillRect(s * 0.48, s * 0.24, 3, s * 0.14);
-  ctx.fillStyle = hexRGBA(0x6aaa8a, 0.3);
-  ctx.fillRect(s * 0.44, s * 0.24, 3, s * 0.1);
-  // handle
-  ctx.fillStyle = "#3a6f57";
-  ctx.fillRect(s * 0.58, s * 0.28, s * 0.06, s * 0.09);
-  // steam wisps
-  ctx.strokeStyle = hexRGBA(0xffffff, 0.15);
-  ctx.lineWidth = 1.2;
-  for (let i = 0; i < 2; i++) {
-    ctx.beginPath();
-    ctx.moveTo(s * 0.48 + i * 5, s * 0.20);
-    ctx.quadraticCurveTo(s * 0.46 + i * 5, s * 0.14, s * 0.49 + i * 5, s * 0.08);
-    ctx.stroke();
-  }
-
   // bottom edge
   ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(0, s - 2, s, 2);
@@ -1860,54 +1707,6 @@ function drawDeskSideBottomMirror(ctx: CanvasRenderingContext2D, s: number): voi
   // subtle monitor glow reflection
   ctx.fillStyle = hexRGBA(0x88bbff, 0.04);
   ctx.fillRect(surfaceX, s * 0.3, surfaceW, s * 0.4);
-
-  // papers with shadow on desk surface
-  ctx.fillStyle = hexRGBA(0x000000, 0.08);
-  ctx.fillRect(s * 0.62, s * 0.18, s * 0.3, s * 0.38);
-  ctx.fillStyle = "#f7f8fa";
-  ctx.fillRect(s * 0.61, s * 0.16, s * 0.3, s * 0.38);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(s * 0.61, s * 0.16, s * 0.3, 3);
-  ctx.fillStyle = hexRGBA(0x9aa0a8, 0.6);
-  ctx.fillRect(s * 0.67, s * 0.28, s * 0.18, 1);
-  ctx.fillRect(s * 0.70, s * 0.34, s * 0.15, 1);
-  // pen on papers
-  ctx.fillStyle = hexRGBA(0x2a4a8a, 0.6);
-  ctx.save();
-  ctx.translate(s * 0.72, s * 0.42);
-  ctx.rotate(-0.12);
-  ctx.fillRect(0, 0, s * 0.14, 2);
-  ctx.fillStyle = hexRGBA(0x1a2a4a, 0.7);
-  ctx.fillRect(0, 0, 2.5, 2);
-  ctx.restore();
-
-  // mug — ceramic with stripe and steam
-  ctx.fillStyle = hexRGBA(0x000000, 0.1);
-  ctx.beginPath();
-  ctx.ellipse(s * 0.49, s * 0.42, s * 0.1, s * 0.02, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#3a6f57";
-  roundRect(ctx, s * 0.40, s * 0.22, s * 0.18, s * 0.18, 2);
-  ctx.fill();
-  ctx.fillStyle = hexRGBA(0x5a9a7a, 0.4);
-  ctx.fillRect(s * 0.40, s * 0.22, s * 0.18, 2);
-  // mug stripe
-  ctx.fillStyle = hexRGBA(0xeeeeff, 0.3);
-  ctx.fillRect(s * 0.46, s * 0.24, 3, s * 0.14);
-  ctx.fillStyle = hexRGBA(0x6aaa8a, 0.3);
-  ctx.fillRect(s * 0.42, s * 0.24, 3, s * 0.1);
-  // handle
-  ctx.fillStyle = "#3a6f57";
-  ctx.fillRect(s * 0.36, s * 0.28, s * 0.06, s * 0.09);
-  // steam wisps
-  ctx.strokeStyle = hexRGBA(0xffffff, 0.15);
-  ctx.lineWidth = 1.2;
-  for (let i = 0; i < 2; i++) {
-    ctx.beginPath();
-    ctx.moveTo(s * 0.46 + i * 5, s * 0.20);
-    ctx.quadraticCurveTo(s * 0.44 + i * 5, s * 0.14, s * 0.47 + i * 5, s * 0.08);
-    ctx.stroke();
-  }
 
   // bottom edge
   ctx.fillStyle = shade(0x1a1a20, -10);
@@ -2138,10 +1937,10 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean 
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // screen — nearly edge-to-edge, very thin bezels
-  const screenX = s * 0.10;
+  // screen — nearly edge-to-edge, very thin bezels (centered in frame)
+  const screenX = s * 0.12;
   const screenY = s * 0.08;
-  const screenW = s * 0.70;
+  const screenW = s * 0.76;
   const screenH = s * 0.44;
   if (lit) {
     ctx.fillStyle = hexRGBA(0xaaccff, 0.5);
