@@ -269,6 +269,8 @@ export class OfficeScene extends Phaser.Scene {
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
+  private skyImage!: Phaser.GameObjects.Image;
+  private clouds: { sprite: Phaser.GameObjects.Image; speed: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
@@ -513,6 +515,9 @@ export class OfficeScene extends Phaser.Scene {
       console.warn("[scene] Post-pipeline setup failed — continuing without visual effects:", err);
     }
 
+    // Sky gradient + drifting clouds (screen-fixed, behind everything)
+    this.createSky();
+
     // Initialize audio on first user interaction
     this.input.once("pointerdown", () => {
       this.world?.audio.init();
@@ -552,6 +557,7 @@ export class OfficeScene extends Phaser.Scene {
     this.heliAgent = null;
     this.heliElevatorGfx?.destroy();
     this.heliElevatorGfx = null;
+    this.clouds = [];
 
     // Variables that cross phase boundaries
     let map: Phaser.Tilemaps.Tilemap;
@@ -1347,6 +1353,97 @@ export class OfficeScene extends Phaser.Scene {
   /** Draw the vignette overlay — disabled (was causing visible black frame). */
   private drawVignette(): void {
     this.lightingOverlay?.clear();
+  }
+
+  /** Create a gradient sky background and drifting cloud sprites. */
+  private createSky(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    // --- Gradient sky texture (4×512 canvas, smooth enough even with NEAREST) ---
+    if (!this.textures.exists("sky-gradient")) {
+      const gradCanvas = document.createElement("canvas");
+      gradCanvas.width = 4;
+      gradCanvas.height = 512;
+      const ctx = gradCanvas.getContext("2d")!;
+      const grad = ctx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0, "#4a7a9e");
+      grad.addColorStop(0.4, "#6a9abe");
+      grad.addColorStop(0.75, "#9ab8d4");
+      grad.addColorStop(1, "#c4d8e8");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 4, 512);
+      this.textures.addImage("sky-gradient", gradCanvas as unknown as HTMLImageElement);
+    }
+
+    this.skyImage = this.add.image(0, 0, "sky-gradient")
+      .setOrigin(0, 0)
+      .setDepth(-2)
+      .setScrollFactor(0)
+      .setDisplaySize(w, h);
+
+    // --- Cloud textures (3 variants) ---
+    for (let i = 0; i < 3; i++) {
+      const key = `cloud-${i}`;
+      if (!this.textures.exists(key)) {
+        this.generateCloudTexture(key, i);
+      }
+    }
+
+    // --- Cloud sprites (7 instances, top 40% of screen) ---
+    const cloudCount = 7;
+    for (let i = 0; i < cloudCount; i++) {
+      const cloudTex = `cloud-${i % 3}`;
+      const x = Math.random() * w;
+      const y = Math.random() * h * 0.4;
+      const scale = 0.5 + Math.random() * 1.0;
+      const alpha = 0.4 + Math.random() * 0.35;
+      const speed = 5 + Math.random() * 15;
+
+      const sprite = this.add.image(x, y, cloudTex)
+        .setOrigin(0.5, 0.5)
+        .setDepth(-1.5)
+        .setScrollFactor(0)
+        .setScale(scale)
+        .setAlpha(alpha);
+
+      this.clouds.push({ sprite, speed });
+    }
+
+    // Resize handler — keep sky covering full screen
+    const onSkyResize = () => {
+      this.skyImage.setDisplaySize(this.scale.width, this.scale.height);
+    };
+    this.scale.on("resize", onSkyResize);
+    this.events.once("shutdown", () => this.scale.off("resize", onSkyResize));
+  }
+
+  /** Generate a soft cloud texture using overlapping radial gradients. */
+  private generateCloudTexture(key: string, variant: number): void {
+    const cw = 128;
+    const ch = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d")!;
+
+    const blobSets = [
+      [{ x: 32, y: 32, r: 20 }, { x: 48, y: 28, r: 24 }, { x: 64, y: 30, r: 22 }, { x: 80, y: 34, r: 18 }, { x: 56, y: 38, r: 26 }],
+      [{ x: 28, y: 34, r: 18 }, { x: 44, y: 30, r: 22 }, { x: 60, y: 32, r: 20 }, { x: 76, y: 36, r: 16 }, { x: 52, y: 40, r: 24 }],
+      [{ x: 36, y: 30, r: 22 }, { x: 52, y: 34, r: 26 }, { x: 68, y: 30, r: 20 }, { x: 84, y: 36, r: 18 }, { x: 60, y: 42, r: 22 }],
+    ];
+    const blobs = blobSets[variant % 3];
+
+    for (const blob of blobs) {
+      const grad = ctx.createRadialGradient(blob.x, blob.y, 0, blob.x, blob.y, blob.r);
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.9)");
+      grad.addColorStop(0.5, "rgba(255, 255, 255, 0.5)");
+      grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(blob.x - blob.r, blob.y - blob.r, blob.r * 2, blob.r * 2);
+    }
+
+    this.textures.addImage(key, canvas as unknown as HTMLImageElement);
   }
 
   /** Update lighting: monitor glows, day/night cycle, vignette refresh. */
@@ -6333,9 +6430,21 @@ export class OfficeScene extends Phaser.Scene {
 
   update(time: number, dt: number): void {
     if (!this.ready) return;
+    const _frameStart = performance.now();
     // cap dt so a lag spike (chunk gen, GC, tab switch) doesn't cause a
     // teleport-length step that tunnels through collision
     dt = Math.min(dt, 100);
+
+    // Cloud drift — screen-fixed, wrap around edges
+    const sw = this.scale.width;
+    for (const c of this.clouds) {
+      c.sprite.x += c.speed * dt / 1000;
+      const halfW = c.sprite.displayWidth / 2;
+      if (c.sprite.x - halfW > sw) {
+        c.sprite.x = -halfW;
+      }
+    }
+
     // typing in a HUD field? the game keyboard is yours, not the boss's
     const active = document.activeElement?.tagName;
     const typing = active === "INPUT" || active === "TEXTAREA" || active === "SELECT";
@@ -6652,8 +6761,14 @@ export class OfficeScene extends Phaser.Scene {
     // --- world layer: chunks, ghosts, compass, recruit ---
     this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
     const spacePressed = Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
+    const _worldStart = performance.now();
     this.world.update(time, dt, this.player.x, this.player.y, ePressed, vx, vy, this.playerDir, spacePressed);
+    const _worldTime = performance.now() - _worldStart;
     this.world.vfx.updateSmoke();
+    const _frameTime = performance.now() - _frameStart;
+    if (_frameTime > 20) {
+      console.log(`[scene] SLOW FRAME: ${_frameTime.toFixed(0)}ms total, world=${_worldTime.toFixed(0)}ms, dt=${dt.toFixed(0)}, outside=${this.world.isOutside(this.player.x, this.player.y)}, renderJobs=${this.world.hasRenderJobs()}`);
+    }
 
     // Q: teleport back to office when outside
     let qPressed = Phaser.Input.Keyboard.JustDown(this.keys.Q);
