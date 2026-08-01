@@ -664,6 +664,34 @@ export class OfficeScene extends Phaser.Scene {
             }
           }
 
+          // Draw windows on the top wall — hardcoded positions (excludes tiles under TV/projector)
+          const windowXs = [1, 2, 10, 11, 12, 15, 18, 20, 21, 22, 23, 25, 28];
+          for (const x of windowXs) {
+            const wx = x * TILE_PX;
+            const wy = 1 * TILE_PX;
+            const wg = this.add.graphics().setDepth(1.1);
+            // Window frame
+            wg.fillStyle(0x4a4a50, 1);
+            wg.fillRoundedRect(wx + 5, wy + 6, 54, 40, 4);
+            // Glass
+            wg.fillStyle(0x88bbdd, 0.8);
+            wg.fillRoundedRect(wx + 8, wy + 9, 48, 34, 3);
+            // Reflection highlight
+            wg.fillStyle(0xaaddee, 0.5);
+            wg.fillRoundedRect(wx + 10, wy + 11, 20, 14, 2);
+            // Cross mullions
+            wg.lineStyle(1.5, 0x4a4a50, 0.8);
+            wg.beginPath();
+            wg.moveTo(wx + 32, wy + 9);
+            wg.lineTo(wx + 32, wy + 43);
+            wg.moveTo(wx + 8, wy + 26);
+            wg.lineTo(wx + 56, wy + 26);
+            wg.strokePath();
+            // Windowsill
+            wg.fillStyle(0x5a5a60, 1);
+            wg.fillRoundedRect(wx + 4, wy + 44, 56, 5, 2);
+          }
+
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
           upgradeFurniture(this, furniture);
           upgradeWorkshop(this);
