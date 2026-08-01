@@ -1208,7 +1208,7 @@ export class OfficeScene extends Phaser.Scene {
             const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
             const desiredTheme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
             if (desiredTheme !== this.theme) {
-              console.log(`[scene] ready but theme mismatch: theme=${this.theme} desired=${desiredTheme} (roomId=${this.store.roomId}) — restarting`);
+              console.log(`[scene] ready but theme mismatch: theme=${this.theme} desired=${desiredTheme} (roomId=${this.store.roomId}) — restarting at ${performance.now().toFixed(0)}ms`);
               this.ready = false;
               this.remotePlayers.clear();
               this.scene.restart();
