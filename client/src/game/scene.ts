@@ -1247,32 +1247,11 @@ export class OfficeScene extends Phaser.Scene {
           // Clean up loading overlay
           loadOverlay.remove();
 
-          // Background-load door chunks so the player doesn't hit a freeze
-          // when first walking outside.  Yields between chunks to avoid
-          // frame stalls — the player can move around the office immediately.
-          const preloadDoorChunks = async () => {
-            const doorChunks = this.world.getDoorChunkList();
-            // Wait briefly for the worker to finish generating tile data
-            const deadline = performance.now() + 100;
-            while (performance.now() < deadline) {
-              const allReady = doorChunks.every(c =>
-                this.world.hasPendingChunk(c.cx, c.cy) ||
-                this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)));
-              if (allReady) break;
-              await new Promise(r => setTimeout(r, 16));
-            }
-            for (const c of doorChunks) {
-              this.world.loadSingleChunk(c.cx, c.cy);
-              this.world.processRenderJobsNow();
-              await new Promise(r => setTimeout(r, 0));
-            }
-            // Flush any remaining render jobs
-            while (this.world.hasRenderJobs()) {
-              this.world.processRenderJobsNow();
-            }
-            this.world.finishDoorPreload();
-          };
-          preloadDoorChunks();
+          // Schedule golf ball cleanup after chunks have had time to load
+          // via the update loop's updateChunks.  Non-blocking.
+          this.time.delayedCall(3000, () => {
+            if (this.scene.isActive()) this.world.finishDoorPreload();
+          });
         },
       },
     ];

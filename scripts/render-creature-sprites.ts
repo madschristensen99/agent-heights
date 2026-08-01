@@ -174,13 +174,12 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   });
   scene.add(model);
 
-  // Apply texture to all meshes using MeshBasicMaterial — no PBR lighting
-  // darkening, texture colors show at full brightness. We add subtle shading
-  // via a second pass with face normals.
+  // Apply texture to all meshes using MeshLambertMaterial — gives directional
+  // shading (so faces/features are visible) without PBR darkening from MeshStandardMaterial.
   if (texture) {
     model.traverse((child: any) => {
       if (child.isMesh) {
-        child.material = new THREE.MeshBasicMaterial({ map: texture });
+        child.material = new THREE.MeshLambertMaterial({ map: texture });
       }
     });
   }
