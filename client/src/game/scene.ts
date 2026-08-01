@@ -1256,13 +1256,23 @@ export class OfficeScene extends Phaser.Scene {
           // Clean up loading overlay
           loadOverlay.remove();
 
-          // Synchronously load + render the chunk right outside the door
-          // so the player sees grass immediately when stepping outside.
-          // The rest load via time-budgeted updateChunks in the background.
-          const doorChunks = this.world.getDoorChunkList();
-          if (doorChunks.length > 0) {
-            this.world.loadSingleChunk(doorChunks[0].cx, doorChunks[0].cy);
-            this.world.processRenderJobsNow();
+          // Synchronously load + render the chunk at the player's current position
+          // so they see ground immediately (handles spawning outside after a refresh).
+          // Also load the door chunk for when they're inside.
+          const playerOutside = this.world.isOutside(this.player.x, this.player.y);
+          if (playerOutside) {
+            this.world.preloadChunksAt(this.player.x, this.player.y);
+            const doorChunks = this.world.getChunksAt(this.player.x, this.player.y);
+            if (doorChunks.length > 0) {
+              this.world.loadSingleChunk(doorChunks[0].cx, doorChunks[0].cy);
+              this.world.processRenderJobsNow();
+            }
+          } else {
+            const doorChunks = this.world.getDoorChunkList();
+            if (doorChunks.length > 0) {
+              this.world.loadSingleChunk(doorChunks[0].cx, doorChunks[0].cy);
+              this.world.processRenderJobsNow();
+            }
           }
 
           // Schedule golf ball cleanup after chunks have had time to load

@@ -71,7 +71,7 @@ const UNLOAD_RADIUS = LOAD_RADIUS + 1;
  */
 const globalChunkCache = new Map<string, Chunk>();
 const MAX_CHUNKS_PER_FRAME = 1; // load 1 chunk per frame to avoid stacking render jobs
-const RENDER_ROW_BUDGET_MS = 16; // paint rows until this time budget is exceeded
+const RENDER_ROW_BUDGET_MS = 8; // paint rows until this time budget is exceeded
 
 /** State for a chunk being painted across multiple frames. */
 interface RenderJob {
@@ -2025,6 +2025,38 @@ export class WorldLayer {
     }
   }
 
+  /** Request worker generation around an arbitrary position (non-blocking). */
+  preloadChunksAt(px: number, py: number): void {
+    const { tx, ty } = this.pixelToTile(px, py);
+    const pcx = Math.floor(tx / CHUNK_SIZE);
+    const pcy = Math.floor(ty / CHUNK_SIZE);
+    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+        this.requestChunk(pcx + dx, pcy + dy);
+      }
+    }
+  }
+
+  /** Returns chunks needed around a position, sorted by distance. */
+  getChunksAt(px: number, py: number): { cx: number; cy: number }[] {
+    const { tx, ty } = this.pixelToTile(px, py);
+    const pcx = Math.floor(tx / CHUNK_SIZE);
+    const pcy = Math.floor(ty / CHUNK_SIZE);
+    const needed: { cx: number; cy: number; dist: number }[] = [];
+    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+        const ncy = pcy + dy;
+        if (ncy < 0) continue;
+        const ncx = pcx + dx;
+        const key = `${ncx},${ncy}`;
+        if (this.chunks.has(key)) continue;
+        needed.push({ cx: ncx, cy: ncy, dist: dx * dx + dy * dy });
+      }
+    }
+    needed.sort((a, b) => a.dist - b.dist);
+    return needed.map((n) => ({ cx: n.cx, cy: n.cy }));
+  }
+
   /** Pre-generate a batch of chunks via the worker. Returns immediately;
    *  results arrive asynchronously in pendingChunks. */
   preGenerateChunks(coords: { cx: number; cy: number }[]): void {
@@ -2382,14 +2414,24 @@ export class WorldLayer {
     if (this.renderingQueue.length === 0) return;
     const remaining: RenderJob[] = [];
     const renderStart = performance.now();
+    let budgetExceeded = false;
     for (const job of this.renderingQueue) {
       // Skip if texture was destroyed (chunk unloaded / scene restart) mid-render
       if (!this.scene.textures.exists(job.texKey)) continue;
 
+      // If budget already exceeded, just keep this job for next frame
+      if (budgetExceeded) {
+        remaining.push(job);
+        continue;
+      }
+
       // Paint rows until time budget is exceeded or job is complete
       while (job.currentRow < CHUNK_SIZE) {
         const done = this.paintRenderRow(job);
-        if (performance.now() - renderStart > RENDER_ROW_BUDGET_MS) break;
+        if (performance.now() - renderStart > RENDER_ROW_BUDGET_MS) {
+          budgetExceeded = true;
+          break;
+        }
         if (done) break;
       }
 
