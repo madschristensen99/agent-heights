@@ -70,8 +70,8 @@ const UNLOAD_RADIUS = LOAD_RADIUS + 1;
  * overrides are re-applied on each loadChunk call.
  */
 const globalChunkCache = new Map<string, Chunk>();
-const MAX_CHUNKS_PER_FRAME = isLowEndDevice() ? 1 : 2;
-const RENDER_ROWS_PER_FRAME = isLowEndDevice() ? 8 : 8; // 4 frames per chunk on all devices — prevents main thread freezes
+const MAX_CHUNKS_PER_FRAME = 1; // load 1 chunk per frame to avoid stacking render jobs
+const RENDER_ROW_BUDGET_MS = 16; // paint rows until this time budget is exceeded
 
 /** State for a chunk being painted across multiple frames. */
 interface RenderJob {
@@ -1906,9 +1906,13 @@ export class WorldLayer {
     return this.renderingQueue.length > 0;
   }
 
-  /** Process all pending render jobs synchronously (flush). */
+  /** Process all pending render jobs synchronously (flush, ignores time budget). */
   processRenderJobsNow(): void {
-    this.processRenderJobs();
+    while (this.renderingQueue.length > 0) {
+      const prevLen = this.renderingQueue.length;
+      this.processRenderJobs();
+      if (this.renderingQueue.length === prevLen) break; // no progress — avoid infinite loop
+    }
   }
 
   /** Synchronously preload all chunks around the door exit. Call once after
@@ -2143,249 +2147,251 @@ export class WorldLayer {
       ox, oy, chunkLightList, container,
     };
     this.renderingQueue.push(job);
-
-    // If RENDER_ROWS_PER_FRAME >= CHUNK_SIZE (desktop), paint everything now in one go
-    if (RENDER_ROWS_PER_FRAME >= CHUNK_SIZE) {
-      this.processRenderJobs();
-    }
   }
 
-  /** Paint a batch of rows for all in-progress render jobs. Called from updateChunks. */
+  /** Paint a single row of a chunk render job. Returns true if job is complete. */
+  private paintRenderRow(job: RenderJob): boolean {
+    const EDGE_WIDTH = 4;
+    const { chunk, ctx, ssTilePx, SS, worldTilesTex, overlayTextures, edgeTileColors } = job;
+    const y = job.currentRow;
+
+    const tileToFrame = (tile: number, variant: number): number => {
+      if (tile === TILE.WATER) return 21;
+      if (tile >= 22) return TILE.GRASS + variant * WORLD_TILE_FRAMES;
+      return tile + variant * WORLD_TILE_FRAMES;
+    };
+
+    const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = ssTilePx, h: number = ssTilePx) => {
+      const scaledKey = `${textureKey}-ss${SS}`;
+      if (SS < 4 && this.scene.textures.exists(scaledKey)) {
+        const tex = this.scene.textures.get(scaledKey);
+        const fr = tex.get(0);
+        if (fr) {
+          ctx.drawImage(
+            fr.source.image as CanvasImageSource,
+            fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+            px, py, w, h,
+          );
+          return;
+        }
+      }
+      if (!this.scene.textures.exists(textureKey)) return;
+      const tex = this.scene.textures.get(textureKey);
+      const fr = tex.get(0);
+      if (!fr) return;
+      const srcW = fr.cutWidth;
+      const srcH = fr.cutHeight;
+      if (srcW > w * 2 || srcH > h * 2) {
+        let curW = srcW;
+        let curH = srcH;
+        let curCanvas: HTMLCanvasElement | undefined;
+        while (curW > w * 2 || curH > h * 2) {
+          const nextW = Math.max(w * 2, Math.floor(curW / 2));
+          const nextH = Math.max(h * 2, Math.floor(curH / 2));
+          const next = document.createElement("canvas");
+          next.width = nextW;
+          next.height = nextH;
+          const nctx = next.getContext("2d")!;
+          nctx.imageSmoothingEnabled = true;
+          nctx.imageSmoothingQuality = "high";
+          if (curCanvas) {
+            nctx.drawImage(curCanvas, 0, 0, curW, curH, 0, 0, nextW, nextH);
+          } else {
+            nctx.drawImage(
+              fr.source.image as CanvasImageSource,
+              fr.cutX, fr.cutY, srcW, srcH,
+              0, 0, nextW, nextH,
+            );
+          }
+          curCanvas = next;
+          curW = nextW;
+          curH = nextH;
+        }
+        ctx.drawImage(curCanvas!, 0, 0, curW, curH, px, py, w, h);
+      } else {
+        ctx.drawImage(
+          fr.source.image as CanvasImageSource,
+          fr.cutX, fr.cutY, srcW, srcH,
+          px, py, w, h,
+        );
+      }
+    };
+
+    // Pass 1: draw base tiles for row y
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const tile = chunk.tiles[y * CHUNK_SIZE + x];
+      const px = x * ssTilePx;
+      const py = y * ssTilePx;
+      const worldTileX = chunk.cx * CHUNK_SIZE + x;
+      const worldTileY = chunk.cy * CHUNK_SIZE + y;
+      let h = (worldTileX * 374761393 + worldTileY * 668265263) | 0;
+      h = (h ^ (h >>> 13)) | 0;
+      const variant = (h & 0x7fffffff) % WORLD_VARIANTS;
+      const frame = tileToFrame(tile, variant);
+
+      const aiObjKeyForBase = AI_OBJECT_TEXTURES[tile];
+      const aiTextures = AI_TILE_TEXTURES[tile];
+      if (aiObjKeyForBase && this.scene.textures.exists(aiObjKeyForBase)) {
+        const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
+        if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
+          drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
+        } else {
+          const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
+          if (grassFrame) {
+            ctx.drawImage(
+              grassFrame.source.image as CanvasImageSource,
+              grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
+              px, py, ssTilePx, ssTilePx,
+            );
+          }
+        }
+      } else if (aiTextures && this.scene.textures.exists(aiTextures[variant % aiTextures.length])) {
+        drawTexToCanvas(aiTextures[variant % aiTextures.length], px, py);
+      } else {
+        const fr = worldTilesTex.get(frame);
+        if (fr) {
+          ctx.drawImage(
+            fr.source.image as CanvasImageSource,
+            fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
+            px, py, ssTilePx, ssTilePx,
+          );
+        }
+      }
+
+      if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
+        drawTexToCanvas(resolveItemTex(this.scene, "tennis-court"), px, py);
+      }
+
+      const aiObjKey = AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]];
+      const overlayKey = aiObjKey ?? overlayTextures[tile];
+
+      if (tile === TILE.TEE_BOX) {
+        const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
+        if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
+          drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
+        } else {
+          const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
+          if (grassFrame) {
+            ctx.drawImage(
+              grassFrame.source.image as CanvasImageSource,
+              grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
+              px, py, ssTilePx, ssTilePx,
+            );
+          }
+        }
+        let teeNeighbors = 0;
+        for (let ndy = -1; ndy <= 1; ndy++) {
+          for (let ndx = -1; ndx <= 1; ndx++) {
+            if (ndx === 0 && ndy === 0) continue;
+            const nTile = this.getTileAtLoaded(worldTileX + ndx, worldTileY + ndy);
+            if (nTile === TILE.TEE_BOX) teeNeighbors++;
+          }
+        }
+        if (teeNeighbors === 8 && overlayKey && this.scene.textures.exists(overlayKey)) {
+          const signSize = ssTilePx * 0.75;
+          const signOff = ssTilePx * 0.125;
+          drawTexToCanvas(overlayKey, px + signOff, py + signOff, signSize, signSize);
+        }
+      } else if (overlayKey) {
+        if (this.scene.textures.exists(overlayKey)) {
+          if (tile === TILE.LEPRECHAUN) {
+            drawTexToCanvas(overlayKey, px - ssTilePx / 2, py - ssTilePx / 2, ssTilePx * 2, ssTilePx * 2);
+          } else {
+            drawTexToCanvas(overlayKey, px, py);
+          }
+        }
+      }
+    }
+
+    // Pass 2: edge gradients for row y
+    const ssEdge = EDGE_WIDTH * SS;
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const tile = chunk.tiles[y * CHUNK_SIZE + x];
+      const edgeColor = edgeTileColors[tile];
+      if (!edgeColor) continue;
+
+      const px = x * ssTilePx;
+      const py = y * ssTilePx;
+      const worldTileX = chunk.cx * CHUNK_SIZE + x;
+      const worldTileY = chunk.cy * CHUNK_SIZE + y;
+
+      const nTile = y > 0
+        ? chunk.tiles[(y - 1) * CHUNK_SIZE + x]
+        : this.getTileAtLoaded(worldTileX, worldTileY - 1);
+      const sTile = y < CHUNK_SIZE - 1
+        ? chunk.tiles[(y + 1) * CHUNK_SIZE + x]
+        : this.getTileAtLoaded(worldTileX, worldTileY + 1);
+      const wTile = x > 0
+        ? chunk.tiles[y * CHUNK_SIZE + (x - 1)]
+        : this.getTileAtLoaded(worldTileX - 1, worldTileY);
+      const eTile = x < CHUNK_SIZE - 1
+        ? chunk.tiles[y * CHUNK_SIZE + (x + 1)]
+        : this.getTileAtLoaded(worldTileX + 1, worldTileY);
+
+      if (nTile >= 0 && nTile !== tile) {
+        const grad = ctx.createLinearGradient(0, py, 0, py + ssEdge);
+        grad.addColorStop(0, edgeColor);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(px, py, ssTilePx, ssEdge);
+      }
+      if (sTile >= 0 && sTile !== tile) {
+        const grad = ctx.createLinearGradient(0, py + ssTilePx - ssEdge, 0, py + ssTilePx);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(1, edgeColor);
+        ctx.fillStyle = grad;
+        ctx.fillRect(px, py + ssTilePx - ssEdge, ssTilePx, ssEdge);
+      }
+      if (wTile >= 0 && wTile !== tile) {
+        const grad = ctx.createLinearGradient(px, 0, px + ssEdge, 0);
+        grad.addColorStop(0, edgeColor);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(px, py, ssEdge, ssTilePx);
+      }
+      if (eTile >= 0 && eTile !== tile) {
+        const grad = ctx.createLinearGradient(px + ssTilePx - ssEdge, 0, px + ssTilePx, 0);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(1, edgeColor);
+        ctx.fillStyle = grad;
+        ctx.fillRect(px + ssTilePx - ssEdge, py, ssEdge, ssTilePx);
+      }
+    }
+
+    // Pass 3: color jitter for row y
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const worldTileX = chunk.cx * CHUNK_SIZE + x;
+      const worldTileY = chunk.cy * CHUNK_SIZE + y;
+      let h2 = (worldTileX * 2246822519 + worldTileY * 3266489917) | 0;
+      h2 = (h2 ^ (h2 >>> 16)) | 0;
+      const brightness = ((h2 & 0x1f) - 16);
+      const px = x * ssTilePx;
+      const py = y * ssTilePx;
+      ctx.fillStyle = brightness > 0
+        ? `rgba(255,255,255,${brightness / 400})`
+        : `rgba(0,0,0,${-brightness / 400})`;
+      ctx.fillRect(px, py, ssTilePx, ssTilePx);
+    }
+
+    job.currentRow++;
+    return job.currentRow >= CHUNK_SIZE;
+  }
+
+  /** Paint render jobs using a time budget to avoid frame stalls. */
   private processRenderJobs(): void {
     if (this.renderingQueue.length === 0) return;
-    const EDGE_WIDTH = 4;
     const remaining: RenderJob[] = [];
+    const renderStart = performance.now();
     for (const job of this.renderingQueue) {
       // Skip if texture was destroyed (chunk unloaded / scene restart) mid-render
       if (!this.scene.textures.exists(job.texKey)) continue;
-      const { chunk, ctx, ssTilePx, SS, worldTilesTex, overlayTextures, edgeTileColors } = job;
-      const endRow = Math.min(job.currentRow + RENDER_ROWS_PER_FRAME, CHUNK_SIZE);
 
-      const tileToFrame = (tile: number, variant: number): number => {
-        if (tile === TILE.WATER) return 21;
-        if (tile >= 22) return TILE.GRASS + variant * WORLD_TILE_FRAMES;
-        return tile + variant * WORLD_TILE_FRAMES;
-      };
-
-      const drawTexToCanvas = (textureKey: string, px: number, py: number, w: number = ssTilePx, h: number = ssTilePx) => {
-        const scaledKey = `${textureKey}-ss${SS}`;
-        if (SS < 4 && this.scene.textures.exists(scaledKey)) {
-          const tex = this.scene.textures.get(scaledKey);
-          const fr = tex.get(0);
-          if (fr) {
-            ctx.drawImage(
-              fr.source.image as CanvasImageSource,
-              fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-              px, py, w, h,
-            );
-            return;
-          }
-        }
-        if (!this.scene.textures.exists(textureKey)) return;
-        const tex = this.scene.textures.get(textureKey);
-        const fr = tex.get(0);
-        if (!fr) return;
-        const srcW = fr.cutWidth;
-        const srcH = fr.cutHeight;
-        if (srcW > w * 2 || srcH > h * 2) {
-          let curW = srcW;
-          let curH = srcH;
-          let curCanvas: HTMLCanvasElement | undefined;
-          while (curW > w * 2 || curH > h * 2) {
-            const nextW = Math.max(w * 2, Math.floor(curW / 2));
-            const nextH = Math.max(h * 2, Math.floor(curH / 2));
-            const next = document.createElement("canvas");
-            next.width = nextW;
-            next.height = nextH;
-            const nctx = next.getContext("2d")!;
-            nctx.imageSmoothingEnabled = true;
-            nctx.imageSmoothingQuality = "high";
-            if (curCanvas) {
-              nctx.drawImage(curCanvas, 0, 0, curW, curH, 0, 0, nextW, nextH);
-            } else {
-              nctx.drawImage(
-                fr.source.image as CanvasImageSource,
-                fr.cutX, fr.cutY, srcW, srcH,
-                0, 0, nextW, nextH,
-              );
-            }
-            curCanvas = next;
-            curW = nextW;
-            curH = nextH;
-          }
-          ctx.drawImage(curCanvas!, 0, 0, curW, curH, px, py, w, h);
-        } else {
-          ctx.drawImage(
-            fr.source.image as CanvasImageSource,
-            fr.cutX, fr.cutY, srcW, srcH,
-            px, py, w, h,
-          );
-        }
-      };
-
-      // Pass 1: draw base tiles for rows [currentRow, endRow)
-      for (let y = job.currentRow; y < endRow; y++) {
-        for (let x = 0; x < CHUNK_SIZE; x++) {
-          const tile = chunk.tiles[y * CHUNK_SIZE + x];
-          const px = x * ssTilePx;
-          const py = y * ssTilePx;
-          const worldTileX = chunk.cx * CHUNK_SIZE + x;
-          const worldTileY = chunk.cy * CHUNK_SIZE + y;
-          let h = (worldTileX * 374761393 + worldTileY * 668265263) | 0;
-          h = (h ^ (h >>> 13)) | 0;
-          const variant = (h & 0x7fffffff) % WORLD_VARIANTS;
-          const frame = tileToFrame(tile, variant);
-
-          const aiObjKeyForBase = AI_OBJECT_TEXTURES[tile];
-          const aiTextures = AI_TILE_TEXTURES[tile];
-          if (aiObjKeyForBase && this.scene.textures.exists(aiObjKeyForBase)) {
-            const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
-            if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
-              drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
-            } else {
-              const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
-              if (grassFrame) {
-                ctx.drawImage(
-                  grassFrame.source.image as CanvasImageSource,
-                  grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
-                  px, py, ssTilePx, ssTilePx,
-                );
-              }
-            }
-          } else if (aiTextures && this.scene.textures.exists(aiTextures[variant % aiTextures.length])) {
-            drawTexToCanvas(aiTextures[variant % aiTextures.length], px, py);
-          } else {
-            const fr = worldTilesTex.get(frame);
-            if (fr) {
-              ctx.drawImage(
-                fr.source.image as CanvasImageSource,
-                fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight,
-                px, py, ssTilePx, ssTilePx,
-              );
-            }
-          }
-
-          if (tile === TILE.TENNIS_BALL || tile === TILE.TENNIS_RACKET || tile === TILE.TENNIS_NET) {
-            drawTexToCanvas(resolveItemTex(this.scene, "tennis-court"), px, py);
-          }
-
-          const aiObjKey = AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]];
-          const overlayKey = aiObjKey ?? overlayTextures[tile];
-
-          if (tile === TILE.TEE_BOX) {
-            const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
-            if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
-              drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
-            } else {
-              const grassFrame = worldTilesTex.get(tileToFrame(TILE.GRASS, variant));
-              if (grassFrame) {
-                ctx.drawImage(
-                  grassFrame.source.image as CanvasImageSource,
-                  grassFrame.cutX, grassFrame.cutY, grassFrame.cutWidth, grassFrame.cutHeight,
-                  px, py, ssTilePx, ssTilePx,
-                );
-              }
-            }
-            let teeNeighbors = 0;
-            for (let ndy = -1; ndy <= 1; ndy++) {
-              for (let ndx = -1; ndx <= 1; ndx++) {
-                if (ndx === 0 && ndy === 0) continue;
-                const nTile = this.getTileAtLoaded(worldTileX + ndx, worldTileY + ndy);
-                if (nTile === TILE.TEE_BOX) teeNeighbors++;
-              }
-            }
-            if (teeNeighbors === 8 && overlayKey && this.scene.textures.exists(overlayKey)) {
-              const signSize = ssTilePx * 0.75;
-              const signOff = ssTilePx * 0.125;
-              drawTexToCanvas(overlayKey, px + signOff, py + signOff, signSize, signSize);
-            }
-          } else if (overlayKey) {
-            if (this.scene.textures.exists(overlayKey)) {
-              if (tile === TILE.LEPRECHAUN) {
-                drawTexToCanvas(overlayKey, px - ssTilePx / 2, py - ssTilePx / 2, ssTilePx * 2, ssTilePx * 2);
-              } else {
-                drawTexToCanvas(overlayKey, px, py);
-              }
-            }
-          }
-        }
+      // Paint rows until time budget is exceeded or job is complete
+      while (job.currentRow < CHUNK_SIZE) {
+        const done = this.paintRenderRow(job);
+        if (performance.now() - renderStart > RENDER_ROW_BUDGET_MS) break;
+        if (done) break;
       }
-
-      // Pass 2: edge gradients for rows [currentRow, endRow)
-      const ssEdge = EDGE_WIDTH * SS;
-      for (let y = job.currentRow; y < endRow; y++) {
-        for (let x = 0; x < CHUNK_SIZE; x++) {
-          const tile = chunk.tiles[y * CHUNK_SIZE + x];
-          const edgeColor = edgeTileColors[tile];
-          if (!edgeColor) continue;
-
-          const px = x * ssTilePx;
-          const py = y * ssTilePx;
-          const worldTileX = chunk.cx * CHUNK_SIZE + x;
-          const worldTileY = chunk.cy * CHUNK_SIZE + y;
-
-          const nTile = y > 0
-            ? chunk.tiles[(y - 1) * CHUNK_SIZE + x]
-            : this.getTileAtLoaded(worldTileX, worldTileY - 1);
-          const sTile = y < CHUNK_SIZE - 1
-            ? chunk.tiles[(y + 1) * CHUNK_SIZE + x]
-            : this.getTileAtLoaded(worldTileX, worldTileY + 1);
-          const wTile = x > 0
-            ? chunk.tiles[y * CHUNK_SIZE + (x - 1)]
-            : this.getTileAtLoaded(worldTileX - 1, worldTileY);
-          const eTile = x < CHUNK_SIZE - 1
-            ? chunk.tiles[y * CHUNK_SIZE + (x + 1)]
-            : this.getTileAtLoaded(worldTileX + 1, worldTileY);
-
-          if (nTile >= 0 && nTile !== tile) {
-            const grad = ctx.createLinearGradient(0, py, 0, py + ssEdge);
-            grad.addColorStop(0, edgeColor);
-            grad.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = grad;
-            ctx.fillRect(px, py, ssTilePx, ssEdge);
-          }
-          if (sTile >= 0 && sTile !== tile) {
-            const grad = ctx.createLinearGradient(0, py + ssTilePx - ssEdge, 0, py + ssTilePx);
-            grad.addColorStop(0, "rgba(0,0,0,0)");
-            grad.addColorStop(1, edgeColor);
-            ctx.fillStyle = grad;
-            ctx.fillRect(px, py + ssTilePx - ssEdge, ssTilePx, ssEdge);
-          }
-          if (wTile >= 0 && wTile !== tile) {
-            const grad = ctx.createLinearGradient(px, 0, px + ssEdge, 0);
-            grad.addColorStop(0, edgeColor);
-            grad.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = grad;
-            ctx.fillRect(px, py, ssEdge, ssTilePx);
-          }
-          if (eTile >= 0 && eTile !== tile) {
-            const grad = ctx.createLinearGradient(px + ssTilePx - ssEdge, 0, px + ssTilePx, 0);
-            grad.addColorStop(0, "rgba(0,0,0,0)");
-            grad.addColorStop(1, edgeColor);
-            ctx.fillStyle = grad;
-            ctx.fillRect(px + ssTilePx - ssEdge, py, ssEdge, ssTilePx);
-          }
-        }
-      }
-
-      // Pass 3: color jitter for rows [currentRow, endRow)
-      for (let y = job.currentRow; y < endRow; y++) {
-        for (let x = 0; x < CHUNK_SIZE; x++) {
-          const worldTileX = chunk.cx * CHUNK_SIZE + x;
-          const worldTileY = chunk.cy * CHUNK_SIZE + y;
-          let h2 = (worldTileX * 2246822519 + worldTileY * 3266489917) | 0;
-          h2 = (h2 ^ (h2 >>> 16)) | 0;
-          const brightness = ((h2 & 0x1f) - 16);
-          const px = x * ssTilePx;
-          const py = y * ssTilePx;
-          ctx.fillStyle = brightness > 0
-            ? `rgba(255,255,255,${brightness / 400})`
-            : `rgba(0,0,0,${-brightness / 400})`;
-          ctx.fillRect(px, py, ssTilePx, ssTilePx);
-        }
-      }
-
-      job.currentRow = endRow;
 
       if (job.currentRow >= CHUNK_SIZE) {
         // All rows painted — finalize canvas and create display objects
@@ -2668,7 +2674,7 @@ export class WorldLayer {
             let placed = false;
             for (let attempt = 0; attempt < 5 && !placed; attempt++) {
               const angle = Math.random() * Math.PI * 2;
-              const dist = hostility === 0 ? 800 + Math.random() * 400 : 250 + Math.random() * 300;
+              const dist = hostility === 0 ? 1400 + Math.random() * 600 : 250 + Math.random() * 300;
               const sx = playerX + Math.cos(angle) * dist;
               const sy = playerY + Math.sin(angle) * dist;
               const { tx, ty } = this.pixelToTile(sx, sy);
