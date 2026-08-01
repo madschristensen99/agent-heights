@@ -271,8 +271,6 @@ export class OfficeScene extends Phaser.Scene {
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
   private skyGfx!: Phaser.GameObjects.Graphics;
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number }[] = [];
-  private _skyW = 0;
-  private _skyH = 0;
 
   /** Multiplayer: remote player sprites keyed by userId. */
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
@@ -479,7 +477,7 @@ export class OfficeScene extends Phaser.Scene {
       position: fixed; inset: 0; z-index: 9998;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      background: #7a9abe;
+      background: #a3bdd0;
       font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
     `;
     loadOverlay.innerHTML = `
@@ -1093,7 +1091,6 @@ export class OfficeScene extends Phaser.Scene {
               cam.setZoom(this.clampZoom(this.userZoom));
             }
             this.drawVignette();
-            this.drawSkyGradient();
           };
           this.scale.on("resize", onResize);
           this.events.once("shutdown", () => this.scale.off("resize", onResize));
@@ -1256,23 +1253,23 @@ export class OfficeScene extends Phaser.Scene {
           // Clean up loading overlay
           loadOverlay.remove();
 
-          // Synchronously load + render the chunk at the player's current position
+          // Synchronously load + render the chunks at the player's current position
           // so they see ground immediately (handles spawning outside after a refresh).
           // Also load the door chunk for when they're inside.
           const playerOutside = this.world.isOutside(this.player.x, this.player.y);
           if (playerOutside) {
             this.world.preloadChunksAt(this.player.x, this.player.y);
-            const doorChunks = this.world.getChunksAt(this.player.x, this.player.y);
-            if (doorChunks.length > 0) {
-              this.world.loadSingleChunk(doorChunks[0].cx, doorChunks[0].cy);
-              this.world.processRenderJobsNow();
+            const chunks = this.world.getChunksAt(this.player.x, this.player.y);
+            for (let i = 0; i < Math.min(3, chunks.length); i++) {
+              this.world.loadSingleChunk(chunks[i].cx, chunks[i].cy);
             }
+            this.world.processRenderJobsNow();
           } else {
             const doorChunks = this.world.getDoorChunkList();
-            if (doorChunks.length > 0) {
-              this.world.loadSingleChunk(doorChunks[0].cx, doorChunks[0].cy);
-              this.world.processRenderJobsNow();
+            for (let i = 0; i < Math.min(3, doorChunks.length); i++) {
+              this.world.loadSingleChunk(doorChunks[i].cx, doorChunks[i].cy);
             }
+            this.world.processRenderJobsNow();
           }
 
           // Schedule golf ball cleanup after chunks have had time to load
@@ -1380,9 +1377,8 @@ export class OfficeScene extends Phaser.Scene {
   /** Create a gradient sky background and drifting cloud sprites. */
   private createSky(): void {
     // Sky gradient drawn as a Graphics object with horizontal color strips.
-    // Screen-fixed so it always covers the full canvas regardless of camera zoom.
-    this.skyGfx = this.add.graphics().setDepth(-2).setScrollFactor(0);
-    this.drawSkyGradient();
+    // World-space, repositioned each frame to cover the camera's world view.
+    this.skyGfx = this.add.graphics().setDepth(-2);
 
     // --- Cloud textures (3 variants) ---
     for (let i = 0; i < 3; i++) {
@@ -1392,12 +1388,12 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // --- Cloud sprites (7 instances, screen-fixed in the top portion) ---
+    // --- Cloud sprites (7 instances, world-space above the office) ---
     const cloudCount = 7;
     for (let i = 0; i < cloudCount; i++) {
       const cloudTex = `cloud-${i % 3}`;
-      const x = Math.random() * this.scale.width;
-      const y = Math.random() * this.scale.height * 0.4;
+      const x = Math.random() * 2000 - 1000;
+      const y = -200 - Math.random() * 400;
       const scale = 0.5 + Math.random() * 1.0;
       const alpha = 0.4 + Math.random() * 0.35;
       const speed = 5 + Math.random() * 15;
@@ -1405,7 +1401,6 @@ export class OfficeScene extends Phaser.Scene {
       const sprite = this.add.image(x, y, cloudTex)
         .setOrigin(0.5, 0.5)
         .setDepth(-1.5)
-        .setScrollFactor(0)
         .setScale(scale)
         .setAlpha(alpha);
 
@@ -1413,10 +1408,10 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Draw the sky gradient as horizontal strips using Graphics. */
+  /** Draw the sky gradient as horizontal strips covering the camera world view. */
   private drawSkyGradient(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    const cam = this.cameras.main;
+    const view = cam.worldView;
     this.skyGfx.clear();
 
     // Gradient stops (top to bottom)
@@ -1430,7 +1425,6 @@ export class OfficeScene extends Phaser.Scene {
     const strips = 64;
     for (let i = 0; i < strips; i++) {
       const t = i / (strips - 1);
-      // Find the two stops to interpolate between
       let s0 = stops[0], s1 = stops[stops.length - 1];
       for (let j = 0; j < stops.length - 1; j++) {
         if (t >= stops[j].pos && t <= stops[j + 1].pos) {
@@ -1445,30 +1439,26 @@ export class OfficeScene extends Phaser.Scene {
       const b = Math.round(s0.b + (s1.b - s0.b) * localT);
       const color = (r << 16) | (g << 8) | b;
 
-      const stripY = Math.floor((i / strips) * h);
-      const stripH = Math.ceil(h / strips) + 1;
+      const stripY = view.y + Math.floor((i / strips) * view.height);
+      const stripH = Math.ceil(view.height / strips) + 1;
       this.skyGfx.fillStyle(color, 1);
-      this.skyGfx.fillRect(0, stripY, w, stripH);
+      this.skyGfx.fillRect(view.x, stripY, view.width, stripH);
     }
   }
 
-  /** Update sky size to canvas + drift clouds. Called every frame. */
+  /** Reposition sky to cover camera view + drift clouds. Called every frame. */
   private updateSky(dt: number): void {
-    // Redraw sky gradient if canvas size changed
-    const w = this.scale.width;
-    const h = this.scale.height;
-    if (this._skyW !== w || this._skyH !== h) {
-      this._skyW = w;
-      this._skyH = h;
-      this.drawSkyGradient();
-    }
+    // Redraw sky gradient to cover the camera's current world view
+    this.drawSkyGradient();
 
-    // Clouds: drift in screen space, wrap around canvas edges
+    // Clouds: drift in world space, wrap around camera view edges
+    const cam = this.cameras.main;
+    const view = cam.worldView;
     for (const c of this.clouds) {
       c.sprite.x += c.speed * dt / 1000;
       const halfW = c.sprite.displayWidth / 2;
-      if (c.sprite.x - halfW > w) {
-        c.sprite.x = -halfW;
+      if (c.sprite.x - halfW > view.x + view.width) {
+        c.sprite.x = view.x - halfW;
       }
     }
   }
