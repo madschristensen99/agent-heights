@@ -2645,7 +2645,7 @@ export class WorldLayer {
             let placed = false;
             for (let attempt = 0; attempt < 5 && !placed; attempt++) {
               const angle = Math.random() * Math.PI * 2;
-              const dist = 250 + Math.random() * 300;
+              const dist = hostility === 0 ? 500 + Math.random() * 300 : 250 + Math.random() * 300;
               const sx = playerX + Math.cos(angle) * dist;
               const sy = playerY + Math.sin(angle) * dist;
               const { tx, ty } = this.pixelToTile(sx, sy);
