@@ -2093,7 +2093,7 @@ function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: bool
   ctx.fill();
 }
 
-/** Desk monitor (tile 33) — modern ultrawide IPS with thin bezels */
+/** Desk monitor (tile 33) — modern ultrawide IPS with thin white bezels */
 function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
   const cx = s * 0.5;
 
@@ -2125,16 +2125,16 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean 
   ctx.fillStyle = neckGrad;
   ctx.fillRect(cx - 3, s * 0.5, 6, s * 0.28);
 
-  // monitor body — ultra-thin bezel, dark premium frame
+  // monitor body — ultra-thin bezel, white premium frame
   const bezelGrad = linearGrad(ctx, 0, s * 0.08, 0, s * 0.55, [
-    [0, shade(0x2a2a30, 10)],
-    [0.5, shade(0x1a1a20, 0)],
-    [1, shade(0x12121a, -10)],
+    [0, shade(0xf0f0f4, 5)],
+    [0.5, shade(0xe0e0e8, 0)],
+    [1, shade(0xd0d0d8, -5)],
   ]);
   ctx.fillStyle = bezelGrad;
   roundRect(ctx, s * 0.08, s * 0.06, s * 0.84, s * 0.48, 3);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x3a3a44, 0.6);
+  ctx.strokeStyle = hexRGBA(0xb0b0b8, 0.6);
   ctx.lineWidth = 1;
   ctx.stroke();
 

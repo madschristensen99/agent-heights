@@ -633,10 +633,10 @@ export class OfficeScene extends Phaser.Scene {
           walls.setCollisionByProperty({ solid: true });
           furniture.setCollisionByProperty({ solid: true });
 
-          // Apply AI wall textures — specific texture per wall side, full opacity
+          // Apply AI wall textures — specific texture per wall side, 50% opacity
           const tex = this.textures;
-          const brickKey = "ai-wall_2";       // red brick — left wall
-          const stoneKey = "ai-wall_0";       // gray stone — bottom wall
+          const brickKey = "ai-wall_2";       // red brick — bottom wall
+          const stoneKey = "ai-wall_0";       // gray stone — left wall
           const lightStoneKey = "ai-wall_1";  // light stone — top wall
           const drywallKey = AI_OFFICE_TEXTURES.wallBlue; // blue accent wall — right wall
           const hasBrick = tex.exists(brickKey);
@@ -651,14 +651,15 @@ export class OfficeScene extends Phaser.Scene {
                 // Skip door tiles (index 13-14) and window tiles (index 10) so they remain visible
                 if (wt.index === 13 || wt.index === 14 || wt.index === 10) continue;
                 let wallKey: string | null = null;
-                if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
-                else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
+                if (x === 0 && hasStone) wallKey = stoneKey;           // left wall = stone
+                else if (y === map.height - 1 && hasBrick) wallKey = brickKey; // bottom wall = brick
                 else if (x === map.width - 1 && hasDrywall) wallKey = drywallKey; // right wall = drywall
                 else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
                 if (wallKey) {
                   const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
                     .setOrigin(0, 0)
-                    .setDepth(1.05);
+                    .setDepth(1.05)
+                    .setAlpha(0.5);
                   ws.setDisplaySize(TILE_PX, TILE_PX);
                 }
               }
@@ -5261,21 +5262,37 @@ export class OfficeScene extends Phaser.Scene {
     const gapX = (cw - cols * slotW) / (cols + 1);
     const gapY = (ch - rows * slotH) / (rows + 1);
 
-    // outer wooden frame
+    // outer frame — dark walnut with bevel
+    g.fillStyle(0x1a1008, 1);
+    g.fillRoundedRect(tx - cw / 2 - 7, ty - 7, cw + 14, ch + 14, 7);
     g.fillStyle(0x3a2818, 1);
-    g.fillRoundedRect(tx - cw / 2 - 6, ty - 6, cw + 12, ch + 12, 6);
+    g.fillRoundedRect(tx - cw / 2 - 5, ty - 5, cw + 10, ch + 10, 6);
+    // wood grain
+    g.fillStyle(0x2a1a10, 0.3);
+    g.fillRect(tx - cw / 2 - 4, ty - 3, cw + 8, 0.5);
+    g.fillRect(tx - cw / 2 - 4, ty + ch, cw + 8, 0.5);
     // inner dark background (cabinet interior)
-    g.fillStyle(0x1a1410, 1);
+    g.fillStyle(0x0a0808, 1);
     g.fillRoundedRect(tx - cw / 2, ty, cw, ch, 4);
-    // glass sheen
+    // glass sheen — diagonal
     g.fillStyle(0xffffff, 0.04);
     g.fillRoundedRect(tx - cw / 2 + 2, ty + 2, cw - 4, ch / 3, 3);
+    g.fillStyle(0x88bbff, 0.03);
+    g.beginPath();
+    g.moveTo(tx - cw / 2, ty);
+    g.lineTo(tx - cw / 2 + 30, ty);
+    g.lineTo(tx - cw / 2, ty + 40);
+    g.closePath();
+    g.fillPath();
 
-    // wooden shelves
-    g.fillStyle(0x3a2818, 0.8);
+    // wooden shelves — darker with highlight
+    g.fillStyle(0x3a2818, 0.9);
     for (let r = 1; r < rows; r++) {
       const sy = ty + gapY * r + slotH * r;
       g.fillRect(tx - cw / 2 + 2, sy - 1, cw - 4, 3);
+      g.fillStyle(0x5a4030, 0.4);
+      g.fillRect(tx - cw / 2 + 2, sy - 1, cw - 4, 0.5);
+      g.fillStyle(0x3a2818, 0.9);
     }
 
     // draw trophy slots — proportional fill based on unlocked/total
@@ -5307,7 +5324,7 @@ export class OfficeScene extends Phaser.Scene {
         if (isFilled) {
           const ach = unlockedAch[idx];
           const color = ach ? (tierColors[ach.tier] ?? 0xffd700) : 0xffd700;
-          // trophy cup
+          // trophy cup — with stem and base
           g.fillStyle(color, 1);
           g.fillCircle(sx + slotW / 2, sy + 6, 4);
           g.fillRect(sx + slotW / 2 - 2, sy + 9, 4, 4);
@@ -5315,12 +5332,15 @@ export class OfficeScene extends Phaser.Scene {
           // sparkle
           g.fillStyle(0xffffff, 0.5);
           g.fillCircle(sx + slotW / 2 + 2, sy + 5, 1);
+          // metallic shine
+          g.fillStyle(0xffffff, 0.2);
+          g.fillCircle(sx + slotW / 2 - 1, sy + 4, 1.5);
         } else {
           // empty cavity — dark recessed slot
-          g.fillStyle(0x0a0808, 0.6);
+          g.fillStyle(0x050404, 0.7);
           g.fillRoundedRect(sx, sy, slotW, slotH, 2);
           // subtle dust
-          g.fillStyle(0x2a2a2a, 0.3);
+          g.fillStyle(0x2a2a2a, 0.2);
           g.fillCircle(sx + slotW / 2, sy + slotH / 2, 1.5);
         }
         idx++;
@@ -5341,36 +5361,51 @@ export class OfficeScene extends Phaser.Scene {
     const bh = 84;
 
     // Drop shadow
-    g.fillStyle(0x000000, 0.25);
+    g.fillStyle(0x000000, 0.3);
     g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 4, bw, bh, 3);
 
-    // Wooden frame
+    // Wooden frame — dark walnut with bevel
+    g.fillStyle(0x2a1a10, 1);
+    g.fillRoundedRect(bx - bw / 2 - 5, by - bh / 2 - 5, bw + 10, bh + 10, 6);
     g.fillStyle(0x4a3220, 1);
-    g.fillRoundedRect(bx - bw / 2 - 4, by - bh / 2 - 4, bw + 8, bh + 8, 5);
+    g.fillRoundedRect(bx - bw / 2 - 3, by - bh / 2 - 3, bw + 6, bh + 6, 5);
     g.fillStyle(0x5a4030, 1);
     g.fillRoundedRect(bx - bw / 2 - 2, by - bh / 2 - 2, bw + 4, bh + 4, 4);
 
-    // Cork surface
+    // Cork surface — warmer tone
     g.fillStyle(0xcba872, 1);
     g.fillRoundedRect(bx - bw / 2, by - bh / 2, bw, bh, 3);
 
-    // Cork texture
+    // Cork texture — finer grain
     g.fillStyle(0xb8985f, 0.4);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 35; i++) {
       const dx = bx - bw / 2 + 4 + Math.random() * (bw - 8);
       const dy = by - bh / 2 + 4 + Math.random() * (bh - 8);
-      g.fillCircle(dx, dy, 0.8 + Math.random() * 0.8);
+      g.fillCircle(dx, dy, 0.6 + Math.random() * 0.8);
+    }
+    // darker cork spots
+    g.fillStyle(0x8a6840, 0.3);
+    for (let i = 0; i < 12; i++) {
+      const dx = bx - bw / 2 + 4 + Math.random() * (bw - 8);
+      const dy = by - bh / 2 + 4 + Math.random() * (bh - 8);
+      g.fillCircle(dx, dy, 0.5 + Math.random() * 0.5);
     }
 
-    // Title strip at top
-    g.fillStyle(0x2a3848, 0.9);
+    // Title strip at top — dark modern
+    g.fillStyle(0x1a1a22, 0.9);
     g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 3, bw - 6, 12, 2);
+    g.fillStyle(0x2a2a36, 0.5);
+    g.fillRoundedRect(bx - bw / 2 + 3, by - bh / 2 + 3, bw - 6, 3, 2);
 
-    // Gold star
+    // Gold star — with glow
+    g.fillStyle(0xffd700, 0.3);
+    g.fillCircle(bx - bw / 2 + 9, by - bh / 2 + 9, 4);
     g.fillStyle(0xffd700, 1);
     g.fillCircle(bx - bw / 2 + 9, by - bh / 2 + 9, 2.5);
+    g.fillStyle(0xffffff, 0.4);
+    g.fillCircle(bx - bw / 2 + 8, by - bh / 2 + 8, 1);
 
-    // Mounting nails at left side (attached to wall)
+    // Mounting nails at left side (attached to wall) — brushed
     g.fillStyle(0x888890, 1);
     g.fillCircle(bx - bw / 2 - 6, by - bh / 2 + 4, 1.5);
     g.fillCircle(bx - bw / 2 - 6, by + bh / 2 - 4, 1.5);
@@ -5378,16 +5413,25 @@ export class OfficeScene extends Phaser.Scene {
     g.fillCircle(bx - bw / 2 - 6.5, by - bh / 2 + 3.5, 0.7);
     g.fillCircle(bx - bw / 2 - 6.5, by + bh / 2 - 4.5, 0.7);
 
-    // Pinned photos — 3 small polaroid cards arranged vertically
+    // Pinned photos — 3 small polaroid cards arranged vertically with shadows
     const photoColors = [0xc44a4a, 0x3a7cb5, 0x3d9152];
     const photoSpacing = 24;
     const photoStartY = by - bh / 2 + 20;
     for (let i = 0; i < photoColors.length; i++) {
       const py = photoStartY + i * photoSpacing;
+      // shadow
+      g.fillStyle(0x000000, 0.15);
+      g.fillRoundedRect(bx - 8, py - 7, 18, 22, 1);
+      // polaroid
       g.fillStyle(0xf8f6f0, 1);
       g.fillRoundedRect(bx - 9, py - 8, 18, 22, 1);
+      // photo
       g.fillStyle(photoColors[i], 1);
       g.fillRect(bx - 7, py - 6, 14, 12);
+      // photo highlight
+      g.fillStyle(0xffffff, 0.15);
+      g.fillRect(bx - 7, py - 6, 14, 2);
+      // pin
       g.fillStyle(0xd44a4a, 1);
       g.fillCircle(bx, py - 10, 2);
       g.fillStyle(0xffffff, 0.5);
