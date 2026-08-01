@@ -38,8 +38,8 @@ function isLowEndDevice(): boolean {
   return false;
 }
 
-/** Supersample factor: 4x on desktop (full 256px tile resolution), 2x on mobile. */
-export const SS_FACTOR = isLowEndDevice() ? 2 : 4;
+/** Supersample factor: 4x on desktop (full 256px tile resolution), 1x on mobile (2048px canvas, within all GPU limits). */
+export const SS_FACTOR = isLowEndDevice() ? 1 : 4;
 
 /** Chunk load radius: smaller on mobile to reduce memory and load time. */
 export const LOAD_RADIUS = isLowEndDevice() ? 1 : 2;
@@ -1895,7 +1895,7 @@ export class WorldLayer {
 
   /** Texture cache key for a chunk's static tile rendering. */
   private chunkTexKey(cx: number, cy: number): string {
-    return `chunk-rt-v5-${this.store.worldSeed}:${cx},${cy}`;
+    return `chunk-rt-v6-${this.store.worldSeed}:${cx},${cy}`;
   }
 
   /** Remove a cached chunk canvas texture so the next renderChunk redraws it. */

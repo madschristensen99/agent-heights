@@ -100,11 +100,16 @@ export class BootScene extends Phaser.Scene {
     const barW = 320;
     const barH = 24;
 
-    // Unpack AI texture atlases into individual Phaser textures so existing
-    // code that references keys like "ai-grass_0" works without changes.
+    // Unpack tile + sprite atlases into individual Phaser textures.
+    // Hair atlas is NOT unpacked — we extract ImageData directly from it
+    // to avoid creating 360 GPU textures that are never rendered by Phaser.
     this.unpackAtlas("ai-tiles-atlas", "ai-tiles-atlas-meta");
     this.unpackAtlas("ai-sprites-atlas", "ai-sprites-atlas-meta");
-    this.unpackAtlas("ai-hair-atlas", "ai-hair-atlas-meta");
+
+    // Free atlas source textures after unpacking — saves ~128MB of GPU memory.
+    // The individual sub-textures are already extracted; the atlas source is no longer needed.
+    this.textures.remove("ai-tiles-atlas");
+    this.textures.remove("ai-sprites-atlas");
 
     // Extract ImageData from loaded AI char texture patches for character generation
     const provider: CharTextureProvider = {};
@@ -124,29 +129,37 @@ export class BootScene extends Phaser.Scene {
       setCharTextureProvider(provider);
     }
 
-    // Extract ImageData from loaded AI hair component sprites
+    // Extract ImageData from AI hair atlas directly — no individual Phaser textures needed.
+    // This avoids creating 360 GPU textures just to read pixel data once.
     const compProvider: CharComponentProvider = { hair: {} };
-    for (const style of AI_HAIR_STYLES) {
-      const frames: ImageData[] = [];
-      let allLoaded = true;
-      for (const dir of AI_HAIR_DIRS) {
-        for (let pose = 0; pose < AI_HAIR_POSES; pose++) {
-          const key = hairFrameKey(style, dir, pose);
-          if (!this.textures.exists(key)) { allLoaded = false; break; }
-          const tex = this.textures.get(key);
-          const src = tex.getSourceImage() as HTMLImageElement;
-          const canvas = document.createElement("canvas");
-          canvas.width = src.width;
-          canvas.height = src.height;
-          const ctx = canvas.getContext("2d")!;
-          ctx.drawImage(src, 0, 0);
-          frames.push(ctx.getImageData(0, 0, src.width, src.height));
+    const hairMeta = this.cache.json.get("ai-hair-atlas-meta") as
+      | { frames: Record<string, { x: number; y: number; w: number; h: number }> }
+      | undefined;
+    if (this.textures.exists("ai-hair-atlas") && hairMeta?.frames) {
+      const hairAtlasImg = this.textures.get("ai-hair-atlas").getSourceImage() as CanvasImageSource;
+      for (const style of AI_HAIR_STYLES) {
+        const frames: ImageData[] = [];
+        let allLoaded = true;
+        for (const dir of AI_HAIR_DIRS) {
+          for (let pose = 0; pose < AI_HAIR_POSES; pose++) {
+            const key = hairFrameKey(style, dir, pose);
+            const frame = hairMeta.frames[key];
+            if (!frame) { allLoaded = false; break; }
+            const canvas = document.createElement("canvas");
+            canvas.width = frame.w;
+            canvas.height = frame.h;
+            const ctx = canvas.getContext("2d")!;
+            ctx.drawImage(hairAtlasImg, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+            frames.push(ctx.getImageData(0, 0, frame.w, frame.h));
+          }
+          if (!allLoaded) break;
         }
-        if (!allLoaded) break;
+        if (allLoaded && frames.length === AI_HAIR_DIRS.length * AI_HAIR_POSES) {
+          compProvider.hair![style] = frames;
+        }
       }
-      if (allLoaded && frames.length === AI_HAIR_DIRS.length * AI_HAIR_POSES) {
-        compProvider.hair![style] = frames;
-      }
+      // Free the hair atlas source texture — ImageData is already extracted.
+      this.textures.remove("ai-hair-atlas");
     }
     if (compProvider.hair && Object.keys(compProvider.hair).length > 0) {
       setCharComponentProvider(compProvider);
