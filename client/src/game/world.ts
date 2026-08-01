@@ -2005,6 +2005,22 @@ export class WorldLayer {
     this.worker.postMessage({ worldSeed: this.store.worldSeed, cx, cy });
   }
 
+  /** Request worker generation for door chunks without any canvas rendering.
+   *  Called when the player is inside the office so tile data is ready
+   *  by the time they walk outside, without blocking the main thread. */
+  preloadDoorChunksWorkerOnly(): void {
+    const doorX = this.officeW / 2;
+    const doorY = this.officeH + TILE_PX;
+    const { tx, ty } = this.pixelToTile(doorX, doorY);
+    const pcx = Math.floor(tx / CHUNK_SIZE);
+    const pcy = Math.floor(ty / CHUNK_SIZE);
+    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+        this.requestChunk(pcx + dx, pcy + dy);
+      }
+    }
+  }
+
   /** Pre-generate a batch of chunks via the worker. Returns immediately;
    *  results arrive asynchronously in pendingChunks. */
   preGenerateChunks(coords: { cx: number; cy: number }[]): void {
@@ -2775,12 +2791,13 @@ export class WorldLayer {
       }
     }
 
-    // load/unload chunks — when inside, preload around the door exit so chunks
-    // are ready by the time the player walks outside (avoids first-exit hitch)
+    // load/unload chunks — when inside, only request worker generation
+    // (non-blocking) so tile data is ready when the player walks outside.
+    // Canvas rendering happens only when outside to keep the game responsive.
     if (outside) {
       this.updateChunks(playerX, playerY, vx, vy);
     } else {
-      this.updateChunks(this.officeW / 2, this.officeH + TILE_PX);
+      this.preloadDoorChunksWorkerOnly();
     }
 
     // update ghosts
