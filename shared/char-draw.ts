@@ -631,10 +631,19 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   };
 
   // ===== HEAD FEATURES (ears, horns, antennae) =====
+  // Fixed colors per feature type — each item has its own inherent color
+  const HEAD_FEATURE_COLORS: Record<string, string> = {
+    "cat ears": "#c9a06a",    // warm tan fur
+    "horns": "#d4c8a0",       // bone / ivory
+    "antennae": "#4a4a5a",    // dark metallic stalks
+    "elf ears": pal.skin,     // skin-toned pointed ears
+  };
+  const headFeatureColor = (hf: string): string => HEAD_FEATURE_COLORS[hf] ?? pal.headFeatureColor ?? pal.hair;
+
   const drawHeadFeature = (dir2: Dir) => {
     const hf = pal.headFeature ?? "none";
     if (hf === "none") return;
-    const hfc = pal.headFeatureColor ?? pal.hair;
+    const hfc = headFeatureColor(hf);
     const hfcDk = mix(hfc, "#000000", 0.25);
     if (hf === "cat ears") {
       const inner = mix(hfc, "#ffaaaa", 0.4);
@@ -691,8 +700,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.skin);
         s.set(hx(50), hy(22), skinDk);
       } else if (dir2 === "up") {
-        s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), hfc);
-        s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), hfc);
+        s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
+        s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.skin);
       } else if (dir2 === "right") {
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
         s.set(hx(14), hy(22), skinDk);
@@ -754,7 +763,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(32), hy(22), 13, 12, pal.skin);
     if (!stampComponent("hair", pal.hairStyle, "down", pose, pal.hair)) drawHairDown();
-    if (!stampComponent("headFeature", pal.headFeature ?? "none", "down", pose, pal.hair)) drawHeadFeature("down");
+    if (!stampComponent("headFeature", pal.headFeature ?? "none", "down", pose, headFeatureColor(pal.headFeature ?? "none"))) drawHeadFeature("down");
     s.set(hx(32), hy(19), pal.skin);
     // Face 3-tone
     el(hx(26), hy(24), 3, 5, skinLi);
@@ -899,7 +908,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     ciO(hx(32), hy(18), 17, pal.hair);
     rGradCi(hx(32), hy(18), 17, hairLi, hairDk, -4, -4);
     if (!stampComponent("hair", pal.hairStyle, "up", pose, pal.hair)) drawHairUp();
-    if (!stampComponent("headFeature", pal.headFeature ?? "none", "up", pose, pal.hair)) drawHeadFeature("up");
+    if (!stampComponent("headFeature", pal.headFeature ?? "none", "up", pose, headFeatureColor(pal.headFeature ?? "none"))) drawHeadFeature("up");
     if (!stampComponent("accessory", pal.accessory, "up", pose, pal.shirt)) drawAccessory("up");
 
     // ---- NECK ----
@@ -1011,7 +1020,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(35), hy(24), 11, 9, pal.skin);
     if (!stampComponent("hair", pal.hairStyle, "right", pose, pal.hair)) drawHairRight();
-    if (!stampComponent("headFeature", pal.headFeature ?? "none", "right", pose, pal.hair)) drawHeadFeature("right");
+    if (!stampComponent("headFeature", pal.headFeature ?? "none", "right", pose, headFeatureColor(pal.headFeature ?? "none"))) drawHeadFeature("right");
     s.set(hx(32), hy(19), pal.skin);
     // Ear
     s.set(hx(28), hy(24), skinDk);
