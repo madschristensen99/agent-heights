@@ -1977,8 +1977,8 @@ export class OfficeScene extends Phaser.Scene {
     // Tap empty ground: walk there (mobile only)
     this.pendingInteract = false;
     const targetTile = tileOf(worldPoint.x, worldPoint.y);
-    const outside = this.world.isOutside(worldPoint.x, worldPoint.y);
-    if (outside) {
+    const playerOutside = this.world.isOutside(this.player.x, this.player.y);
+    if (playerOutside) {
       this.playerPath = [];
       this.playerTargetPx = { x: worldPoint.x, y: worldPoint.y };
       this.showPathMarkerPx(worldPoint.x, worldPoint.y);
