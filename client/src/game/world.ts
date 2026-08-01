@@ -39,8 +39,8 @@ function isLowEndDevice(): boolean {
   return false;
 }
 
-/** Supersample factor: 4x on desktop (full 256px tile resolution), 1x on mobile (2048px canvas, within all GPU limits). */
-export const SS_FACTOR = isLowEndDevice() ? 1 : 4;
+/** Supersample factor: 2x on desktop (128px tile resolution, 4096px canvas), 1x on mobile (2048px canvas, within all GPU limits). */
+export const SS_FACTOR = isLowEndDevice() ? 1 : 2;
 
 // --- 3D creature spritesheet helpers ---
 // 3D sheets are 8 cols (S,SE,E,NE,N,NW,W,SW) × 4 rows (idle,walk1,walk2,attack) = 32 frames
@@ -1351,6 +1351,9 @@ export class WorldLayer {
   private chunkLights = new Map<string, LightSource[]>();
   private ghosts = new Map<string, GhostNPC>();
 
+  // --- Cached downscaled textures (avoids per-tile canvas creation) ---
+  private downscaledTexCache = new Map<string, HTMLCanvasElement>();
+
   // --- Web Worker for background chunk generation ---
   private worker: Worker | null = null;
   private pendingChunks = new Map<string, Chunk>();
@@ -1959,6 +1962,8 @@ export class WorldLayer {
     const key = `${cx},${cy}`;
     if (this.chunks.has(key)) return;
 
+    const _t0 = performance.now();
+
     // Check global cache first — chunk data persists across scene restarts
     const cacheKey = `${this.store.worldSeed}:${key}`;
     const cached = globalChunkCache.get(cacheKey);
@@ -1969,6 +1974,7 @@ export class WorldLayer {
       this.chunks.set(key, chunk);
       this.scanTennisTiles(chunk);
       this.renderChunk(chunk);
+      if (performance.now() - _t0 > 50) console.log(`[world] loadChunk(cached) ${key}: ${(performance.now() - _t0).toFixed(0)}ms`);
       return;
     }
 
@@ -1982,17 +1988,21 @@ export class WorldLayer {
       this.chunks.set(key, pending);
       this.scanTennisTiles(pending);
       this.renderChunk(pending);
+      if (performance.now() - _t0 > 50) console.log(`[world] loadChunk(worker) ${key}: ${(performance.now() - _t0).toFixed(0)}ms`);
       return;
     }
 
     // Fallback: generate synchronously on the main thread
+    const _genStart = performance.now();
     const chunk = generateChunk(this.store.worldSeed, cx, cy);
+    const _genTime = performance.now() - _genStart;
     // Cache raw data before overrides (clone so overrides don't mutate the cache)
     globalChunkCache.set(cacheKey, { cx, cy, biome: chunk.biome, tiles: [...chunk.tiles] });
     this.applyChunkOverrides(chunk);
     this.chunks.set(key, chunk);
     this.scanTennisTiles(chunk);
     this.renderChunk(chunk);
+    if (performance.now() - _t0 > 50) console.log(`[world] loadChunk(gen) ${key}: ${(performance.now() - _t0).toFixed(0)}ms (gen=${_genTime.toFixed(0)}ms)`);
   }
 
   /** Apply persisted tile overrides to a chunk after generation. */
@@ -2111,7 +2121,7 @@ export class WorldLayer {
 
   /** Texture cache key for a chunk's static tile rendering. */
   chunkTexKey(cx: number, cy: number): string {
-    return `chunk-rt-v7-${this.store.worldSeed}:${cx},${cy}`;
+    return `chunk-rt-v8-${this.store.worldSeed}:${cx},${cy}`;
   }
 
   /** Remove a cached chunk canvas texture so the next renderChunk redraws it. */
@@ -2124,6 +2134,7 @@ export class WorldLayer {
   }
 
   private renderChunk(chunk: Chunk): void {
+    const _t0 = performance.now();
     const key = `${chunk.cx},${chunk.cy}`;
     const chunkPxSize = CHUNK_SIZE * TILE_PX;
     const texKey = this.chunkTexKey(chunk.cx, chunk.cy);
@@ -2189,6 +2200,7 @@ export class WorldLayer {
       ox, oy, chunkLightList, container,
     };
     this.renderingQueue.push(job);
+    if (performance.now() - _t0 > 50) console.log(`[world] renderChunk ${key}: ${(performance.now() - _t0).toFixed(0)}ms (canvas ${ssPxSize}x${ssPxSize})`);
   }
 
   /** Paint a single row of a chunk render job. Returns true if job is complete. */
@@ -2218,6 +2230,15 @@ export class WorldLayer {
         }
       }
       if (!this.scene.textures.exists(textureKey)) return;
+
+      // Check the downscaled cache first — avoids recreating temporary canvases per tile
+      const cacheKey = `${textureKey}:${w}x${h}`;
+      const cached = this.downscaledTexCache.get(cacheKey);
+      if (cached) {
+        ctx.drawImage(cached, 0, 0, cached.width, cached.height, px, py, w, h);
+        return;
+      }
+
       const tex = this.scene.textures.get(textureKey);
       const fr = tex.get(0);
       if (!fr) return;
@@ -2249,6 +2270,8 @@ export class WorldLayer {
           curW = nextW;
           curH = nextH;
         }
+        // Cache the final downscaled canvas
+        this.downscaledTexCache.set(cacheKey, curCanvas!);
         ctx.drawImage(curCanvas!, 0, 0, curW, curH, px, py, w, h);
       } else {
         ctx.drawImage(
