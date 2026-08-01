@@ -1278,11 +1278,15 @@ export class OfficeScene extends Phaser.Scene {
             for (let i = 0; i < Math.min(3, chunks.length); i++) {
               this.world.loadSingleChunk(chunks[i].cx, chunks[i].cy);
             }
+            this.world.processRenderJobsNow();
           } else {
             const doorChunks = this.world.getDoorChunkList();
             for (let i = 0; i < Math.min(3, doorChunks.length); i++) {
               this.world.loadSingleChunk(doorChunks[i].cx, doorChunks[i].cy);
             }
+            // Paint the door chunks synchronously so grass is visible
+            // through the doorway immediately from inside the office.
+            this.world.processRenderJobsNow();
           }
 
           // Schedule golf ball cleanup after chunks have had time to load

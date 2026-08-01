@@ -2879,6 +2879,9 @@ export class WorldLayer {
       this.updateChunks(playerX, playerY, vx, vy);
     } else {
       this.preloadDoorChunksWorkerOnly();
+      // Continue painting any queued render jobs (e.g. door chunks loaded
+      // during init) even while inside the office.
+      this.processRenderJobs();
     }
 
     // update ghosts
