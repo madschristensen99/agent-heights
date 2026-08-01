@@ -648,8 +648,8 @@ export class OfficeScene extends Phaser.Scene {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
                 if (!wt) continue;
-                // Skip door tiles (index 13-14) and window tiles (index 10) so they remain visible
-                if (wt.index === 13 || wt.index === 14 || wt.index === 10) continue;
+                // Skip door tiles (index 13-14) so they remain visible
+                if (wt.index === 13 || wt.index === 14) continue;
                 let wallKey: string | null = null;
                 if (x === 0 && hasStone) wallKey = stoneKey;           // left wall = stone
                 else if (y === map.height - 1 && hasBrick) wallKey = brickKey; // bottom wall = brick
@@ -663,36 +663,6 @@ export class OfficeScene extends Phaser.Scene {
                   ws.setDisplaySize(TILE_PX, TILE_PX);
                 }
               }
-            }
-          }
-
-          // Draw windows on top of the top wall (above AI textures) so they're always visible
-          for (let x = 0; x < map.width; x++) {
-            const wt = walls.getTileAt(x, 1);
-            if (wt && wt.index === 10) {
-              const wx = x * TILE_PX;
-              const wy = 1 * TILE_PX;
-              const wg = this.add.graphics().setDepth(1.1);
-              // Window frame
-              wg.fillStyle(0x4a4a50, 1);
-              wg.fillRoundedRect(wx + 5, wy + 6, 54, 40, 4);
-              // Glass
-              wg.fillStyle(0x88bbdd, 0.8);
-              wg.fillRoundedRect(wx + 8, wy + 9, 48, 34, 3);
-              // Reflection highlight
-              wg.fillStyle(0xaaddee, 0.5);
-              wg.fillRoundedRect(wx + 10, wy + 11, 20, 14, 2);
-              // Cross mullions
-              wg.lineStyle(1.5, 0x4a4a50, 0.8);
-              wg.beginPath();
-              wg.moveTo(wx + 32, wy + 9);
-              wg.lineTo(wx + 32, wy + 43);
-              wg.moveTo(wx + 8, wy + 26);
-              wg.lineTo(wx + 56, wy + 26);
-              wg.strokePath();
-              // Windowsill
-              wg.fillStyle(0x5a5a60, 1);
-              wg.fillRoundedRect(wx + 4, wy + 44, 56, 5, 2);
             }
           }
 

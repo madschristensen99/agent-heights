@@ -103,10 +103,10 @@ async function ensureWhiteBackground(buffer: Buffer): Promise<Buffer> {
 }
 
 async function processCreature(creature: CreatureDef, dryRun: boolean): Promise<void> {
-  const glbPath = join(MODELS_DIR, `${creature.key}.glb`);
+  const objPath = join(MODELS_DIR, `${creature.key}.obj`);
 
-  if (existsSync(glbPath)) {
-    console.log(`  [SKIP] ${creature.key} — GLB already exists`);
+  if (existsSync(objPath)) {
+    console.log(`  [SKIP] ${creature.key} — OBJ already exists`);
     return;
   }
 
@@ -137,15 +137,24 @@ async function processCreature(creature: CreatureDef, dryRun: boolean): Promise<
   console.log(`         uploaded: ${imageUrl}`);
 
   // 3. Generate 3D model via Hunyuan 3D Rapid
-  const result = await hunyuan3dRapid(imageUrl, { enablePbr: true });
-  console.log(`         GLB generated: ${result.glbUrl}`);
+  const result = await hunyuan3dRapid(imageUrl);
+  console.log(`         OBJ: ${result.objUrl}`);
+  if (result.mtlUrl) console.log(`         MTL: ${result.mtlUrl}`);
+  if (result.textureUrl) console.log(`         TEX: ${result.textureUrl}`);
 
-  // 4. Download GLB file
-  const glbBuf = await downloadUrl(result.glbUrl);
+  // 4. Download OBJ, MTL, and texture files
+  const objBuf = await downloadUrl(result.objUrl);
+  saveBuffer(objPath, objBuf);
+  console.log(`         saved: ${objPath} (${(objBuf.length / 1024 / 1024).toFixed(1)} MB)`);
 
-  // 5. Save GLB
-  saveBuffer(glbPath, glbBuf);
-  console.log(`         saved: ${glbPath} (${(glbBuf.length / 1024 / 1024).toFixed(1)} MB)`);
+  if (result.mtlUrl) {
+    const mtlBuf = await downloadUrl(result.mtlUrl);
+    saveBuffer(join(MODELS_DIR, `${creature.key}.mtl`), mtlBuf);
+  }
+  if (result.textureUrl) {
+    const texBuf = await downloadUrl(result.textureUrl);
+    saveBuffer(join(MODELS_DIR, `${creature.key}_texture.png`), texBuf);
+  }
 }
 
 async function main() {

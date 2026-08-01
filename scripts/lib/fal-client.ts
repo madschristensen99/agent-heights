@@ -224,15 +224,19 @@ export async function nanoBanana2Edit(
 // ----------------------------------------------------- Hunyuan 3D Rapid (i23d)
 
 export interface Model3DResult {
-  /** URL of the generated GLB file. */
-  glbUrl: string;
+  /** URL of the generated OBJ file. */
+  objUrl: string;
+  /** URL of the MTL material file. */
+  mtlUrl: string;
+  /** URL of the texture PNG. */
+  textureUrl: string;
 }
 
 /**
- * Generate a 3D model (GLB) from a single front-view image using Hunyuan 3D Rapid.
- * The input image should have a simple background with the object occupying >50% of frame.
+ * Generate a 3D model from a single front-view image using Hunyuan 3D Rapid.
+ * Returns OBJ + MTL + texture files (the Rapid variant doesn't produce GLB).
  *
- * Set enablePbr=true to get metallic, roughness, and normal textures baked into the GLB.
+ * Set enablePbr=true to get PBR textures (metallic, roughness, normal).
  *
  * Cost: ~$0.225/generation + $0.15 for PBR = ~$0.375 per creature with PBR.
  */
@@ -245,16 +249,25 @@ export async function hunyuan3dRapid(
   const result = await fal.subscribe("fal-ai/hunyuan-3d/v3.1/rapid/image-to-3d", {
     input: {
       input_image_url: imageUrl,
-      enable_pbr: opts.enablePbr ?? true,
+      enable_pbr: opts.enablePbr ?? false,
       enable_geometry: false,
     },
   });
 
-  const data = result.data as { model_glb?: { url: string }; glb?: { url: string } };
-  const glbUrl = data.model_glb?.url ?? data.glb?.url;
-  if (!glbUrl) throw new Error(`Hunyuan 3D Rapid returned no GLB: ${JSON.stringify(data).slice(0, 300)}`);
+  const data = result.data as {
+    model_glb?: { url: string };
+    material_mtl?: { url: string };
+    texture?: { url: string };
+    model_urls?: { obj?: { url: string }; mtl?: { url: string }; texture?: { url: string } };
+  };
 
-  return { glbUrl };
+  const objUrl = data.model_urls?.obj?.url ?? data.model_glb?.url;
+  const mtlUrl = data.model_urls?.mtl?.url ?? data.material_mtl?.url;
+  const textureUrl = data.model_urls?.texture?.url ?? data.texture?.url;
+
+  if (!objUrl) throw new Error(`Hunyuan 3D Rapid returned no model: ${JSON.stringify(data).slice(0, 300)}`);
+
+  return { objUrl, mtlUrl: mtlUrl ?? "", textureUrl: textureUrl ?? "" };
 }
 
 // ------------------------------------------------------------- Bria bg remove

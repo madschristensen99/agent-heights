@@ -42,6 +42,9 @@ export interface CharTextureProvider {
  */
 export interface CharComponentProvider {
   hair?: Record<string, ImageData[]>;
+  beard?: Record<string, ImageData[]>;
+  shirt?: Record<string, ImageData[]>;
+  pants?: Record<string, ImageData[]>;
 }
 
 export interface DrawSurface {
@@ -94,14 +97,14 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   const isIdle = pose === 6;
   const isBlink = pose === 7;
   const stepping = pose === 1 || pose === 3 || pose === 5;
-  const bodyBob = isIdle ? -1 : (stepping ? 1 : 0);
-  const headBob = isIdle ? -1 : (stepping ? 2 : (pose === 2 || pose === 4 ? 1 : 0));
+  const bodyBob = (isIdle || isBlink) ? -1 : (stepping ? 1 : 0);
+  const headBob = (isIdle || isBlink) ? -1 : (stepping ? 2 : (pose === 2 || pose === 4 ? 1 : 0));
   const headSway = pose === 1 ? -1 : pose === 3 ? 1 : pose === 4 ? -1 : 0;
   const armSwingL = pose === 1 ? -1 : pose === 3 ? 1 : pose === 4 ? -1 : 0;
   const armSwingR = pose === 1 ? 1 : pose === 3 ? -1 : pose === 4 ? 1 : 0;
   const armSwing = pose === 1 ? 2 : pose === 3 ? -2 : pose === 4 ? 2 : 0;
   const hairBounce = stepping ? 1 : 0;
-  const breathing = isIdle;
+  const breathing = isIdle || isBlink;
   const eyesClosed = isBlink;
   const eyeColor = pal.eyeColor ?? "#2a2040";
 
@@ -188,11 +191,18 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   /**
    * Stamp an AI-generated grayscale component sprite onto the surface,
    * tinting it to the target color. The sprite is expected to be CW×CH
-   * with transparent background and grayscale hair pixels.
+   * with transparent background and grayscale pixels.
    * Returns true if the sprite was found and stamped, false to fall back.
    */
-  const stampHairComponent = (style: string, dirName: "down" | "right" | "up", poseNum: number, targetColor: string, minY?: number): boolean => {
-    const provider = s.componentProvider?.hair;
+  const stampComponent = (
+    component: "hair" | "beard" | "shirt" | "pants",
+    style: string,
+    dirName: "down" | "right" | "up",
+    poseNum: number,
+    targetColor: string,
+    minY?: number,
+  ): boolean => {
+    const provider = s.componentProvider?.[component];
     if (!provider || !provider[style]) return false;
     const frames = provider[style];
     const dirIndex = dirName === "down" ? 0 : dirName === "right" ? 1 : 2;
@@ -211,7 +221,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // Face exclusion zone for "down" direction — prevents AI-generated hair
     // artifacts from covering the face area. Only applies to the initial stamp
     // (minY undefined), not the re-stamp for hanging hair below the face.
-    const excludeFace = !minY && dirName === "down";
+    const excludeFace = !minY && dirName === "down" && component === "hair";
 
     for (let py = minY ?? 0; py < sh; py++) {
       for (let px = 0; px < sw; px++) {
@@ -729,7 +739,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     ciO(hx(32), hy(18), 17, pal.skin);
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(32), hy(22), 13, 12, pal.skin);
-    if (!stampHairComponent(pal.hairStyle, "down", pose, pal.hair)) drawHairDown();
+    if (!stampComponent("hair", pal.hairStyle, "down", pose, pal.hair)) drawHairDown();
     drawHeadFeature("down");
     s.set(hx(32), hy(19), pal.skin);
     // Face 3-tone
@@ -765,7 +775,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.fillCircleAlpha(hx(24), hy(27), 3, blush, 0.35);
     s.fillCircleAlpha(hx(40), hy(27), 3, blush, 0.35);
     drawAccessory("down");
-    drawBeard("down");
+    if (!stampComponent("beard", pal.beard ?? "none", "down", pose, pal.hair)) drawBeard("down");
 
     // ---- NECK ----
     rr(bx(29), by(34), 6, 4, 2, skinDk);
@@ -779,6 +789,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO with gradient shading ----
     const tw = isFat ? (breathing ? 30 : 28) : (breathing ? 24 : 22);
     const tx = isFat ? (breathing ? 17 : 18) : (breathing ? 20 : 21);
+    const _shirtDrawn = stampComponent("shirt", "default", "down", pose, pal.shirt);
+    if (!_shirtDrawn) {
     vGradRR(bx(tx), by(38), tw, 18, 5, shirtLi, shirtDk);
     texOverlay(bx(tx), by(38), tw, 18, pal.shirt, "shirtFabric");
     // Edge highlights
@@ -801,6 +813,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(31), by(42), shirtDk);
     s.set(bx(31), by(46), shirtDk);
     s.set(bx(31), by(50), shirtDk);
+    }
 
     // ---- ARMS ----
     const armLX = isFat ? 14 : 17;
@@ -815,6 +828,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(armRX + 1 + armSwingR), by(54), skinDk);
 
     // ---- LEGS & SHOES with soles ----
+    const _pantsDrawn = stampComponent("pants", "default", "down", pose, pal.pants);
+    if (!_pantsDrawn) {
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
       const fx = leftUp ? 33 : 23;
@@ -851,15 +866,16 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(legLX + 6), ly(76), shoeDk);
       s.set(lx(legRX + 6), ly(76), shoeDk);
     }
+    }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
-    stampHairComponent(pal.hairStyle, "down", pose, pal.hair, 35);
+    stampComponent("hair", pal.hairStyle, "down", pose, pal.hair, 35);
 
   } else if (d === "up") {
     // ---- HEAD: all hair ----
     ciO(hx(32), hy(18), 17, pal.hair);
     rGradCi(hx(32), hy(18), 17, hairLi, hairDk, -4, -4);
-    if (!stampHairComponent(pal.hairStyle, "up", pose, pal.hair)) drawHairUp();
+    if (!stampComponent("hair", pal.hairStyle, "up", pose, pal.hair)) drawHairUp();
     drawHeadFeature("up");
     drawAccessory("up");
 
@@ -935,14 +951,14 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
-    stampHairComponent(pal.hairStyle, "up", pose, pal.hair, 35);
+    stampComponent("hair", pal.hairStyle, "up", pose, pal.hair, 35);
 
   } else {
     // ---- RIGHT PROFILE ----
     ciO(hx(32), hy(18), 17, pal.skin);
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(35), hy(24), 11, 9, pal.skin);
-    if (!stampHairComponent(pal.hairStyle, "right", pose, pal.hair)) drawHairRight();
+    if (!stampComponent("hair", pal.hairStyle, "right", pose, pal.hair)) drawHairRight();
     drawHeadFeature("right");
     s.set(hx(32), hy(19), pal.skin);
     // Ear
@@ -979,7 +995,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // Blush — soft alpha
     s.fillCircleAlpha(hx(32), hy(27), 3, blush, 0.35);
     drawAccessory("right");
-    drawBeard("right");
+    if (!stampComponent("beard", pal.beard ?? "none", "right", pose, pal.hair)) drawBeard("right");
 
     // ---- NECK ----
     rr(bx(29), by(34), 6, 4, 2, skinDk);
@@ -1045,7 +1061,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
-    stampHairComponent(pal.hairStyle, "right", pose, pal.hair, 35);
+    stampComponent("hair", pal.hairStyle, "right", pose, pal.hair, 35);
   }
 
   if (mirror) s.flipH(ox, oy, CW, CH);

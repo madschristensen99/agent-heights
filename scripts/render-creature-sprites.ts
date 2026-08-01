@@ -31,10 +31,11 @@
  * Requires: npx playwright install chromium
  * Output: client/public/assets/ai/creatures3d/ (PNG sprite sheets)
  */
-import { join, dirname, resolve } from "node:path";
+import { join, dirname, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFileSync, mkdirSync } from "node:fs";
+import { createServer } from "node:http";
 import { chromium } from "playwright";
 import sharp from "sharp";
 
@@ -43,9 +44,9 @@ const MODELS_DIR = join(ROOT, "client", "public", "assets", "ai", "models");
 const OUTPUT_DIR = join(ROOT, "client", "public", "assets", "ai", "creatures3d");
 
 const THREE_PATH = join(ROOT, "node_modules", "three", "build", "three.module.js");
-const GLTF_LOADER_PATH = join(ROOT, "node_modules", "three", "examples", "jsm", "loaders", "GLTFLoader.js");
-const BUF_GEOM_UTILS_PATH = join(ROOT, "node_modules", "three", "examples", "jsm", "utils", "BufferGeometryUtils.js");
-const SKELETON_UTILS_PATH = join(ROOT, "node_modules", "three", "examples", "jsm", "utils", "SkeletonUtils.js");
+const THREE_CORE_PATH = join(ROOT, "node_modules", "three", "build", "three.core.js");
+const OBJ_LOADER_PATH = join(ROOT, "node_modules", "three", "examples", "jsm", "loaders", "OBJLoader.js");
+const MTL_LOADER_PATH = join(ROOT, "node_modules", "three", "examples", "jsm", "loaders", "MTLLoader.js");
 
 const FRAME_SIZE = 128;
 const DIRS = 8;
@@ -77,23 +78,28 @@ const CREATURE_KEYS: string[] = [
 
 // =============================================================== HTML template
 
-const RENDER_HTML = `<!DOCTYPE html>
+function renderHtml(port: number): string {
+  const base = `http://localhost:${port}`;
+  return `<!DOCTYPE html>
 <html>
 <head>
 <script type="importmap">
-{"imports":{"three":"http://localhost/three.module.js"}}
+{"imports":{"three":"${base}/three.module.js"}}
 </script>
 </head>
 <body>
 <script type="module">
 import * as THREE from 'three';
-import { GLTFLoader } from 'http://localhost/GLTFLoader.js';
+import { OBJLoader } from '${base}/OBJLoader.js';
+import { MTLLoader } from '${base}/MTLLoader.js';
 window.THREE = THREE;
-window.GLTFLoader = GLTFLoader;
+window.OBJLoader = OBJLoader;
+window.MTLLoader = MTLLoader;
 window.__ready = true;
 </script>
 </body>
 </html>`;
+}
 
 // =============================================================== rendering
 
@@ -109,12 +115,13 @@ function parseArgs(): { filter?: string; dryRun: boolean } {
 }
 
 /**
- * Render a single creature's GLB into a sprite sheet data URL.
+ * Render a single creature's OBJ into a sprite sheet data URL.
  * Runs inside the Playwright browser context.
  */
-const RENDER_FN = async (glbUrl: string) => {
+const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: string | null) => {
   const THREE = (window as any).THREE;
-  const GLTFLoader = (window as any).GLTFLoader;
+  const OBJLoader = (window as any).OBJLoader;
+  const MTLLoader = (window as any).MTLLoader;
 
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
   renderer.setSize(128, 128);
@@ -138,13 +145,39 @@ const RENDER_FN = async (glbUrl: string) => {
   fillLight.position.set(-1, 0.5, -1);
   scene.add(fillLight);
 
-  // Load GLB
-  const loader = new GLTFLoader();
-  const gltf = await new Promise<any>((res, rej) => {
-    loader.load(glbUrl, res, undefined, rej);
+  // Load MTL materials first (if available), then OBJ
+  const objLoader = new OBJLoader();
+  if (mtlUrl) {
+    const mtlLoader = new MTLLoader();
+    const materials = await new Promise<any>((res, rej) => {
+      mtlLoader.load(mtlUrl, res, undefined, rej);
+    });
+    materials.preload();
+    objLoader.setMaterials(materials);
+  }
+
+  // If texture URL is available, load it and apply to all meshes
+  let texture: any = null;
+  if (textureUrl) {
+    texture = await new Promise<any>((res, rej) => {
+      new THREE.TextureLoader().load(textureUrl, res, undefined, rej);
+    });
+    texture.colorSpace = THREE.SRGBColorSpace;
+  }
+
+  const model = await new Promise<any>((res, rej) => {
+    objLoader.load(objUrl, res, undefined, rej);
   });
-  const model = gltf.scene;
   scene.add(model);
+
+  // Apply texture to all meshes if no MTL was provided
+  if (texture && !mtlUrl) {
+    model.traverse((child: any) => {
+      if (child.isMesh) {
+        child.material = new THREE.MeshStandardMaterial({ map: texture });
+      }
+    });
+  }
 
   // Auto-fit model into view
   const box = new THREE.Box3().setFromObject(model);
@@ -202,40 +235,96 @@ const RENDER_FN = async (glbUrl: string) => {
 async function renderCreature(
   page: import("playwright").Page,
   creatureKey: string,
+  port: number,
 ): Promise<Buffer> {
-  const glbPath = join(MODELS_DIR, `${creatureKey}.glb`);
+  const objPath = join(MODELS_DIR, `${creatureKey}.obj`);
+  const mtlPath = join(MODELS_DIR, `${creatureKey}.mtl`);
+  const texPath = join(MODELS_DIR, `${creatureKey}_texture.png`);
+  const hasMtl = existsSync(mtlPath);
+  const hasTex = existsSync(texPath);
 
-  // Set up routes for this creature
-  await page.route("**/three.module.js", (route) =>
-    route.fulfill({ path: THREE_PATH, contentType: "application/javascript" }),
-  );
-  await page.route("**/GLTFLoader.js", (route) =>
-    route.fulfill({ path: GLTF_LOADER_PATH, contentType: "application/javascript" }),
-  );
-  await page.route("**/utils/BufferGeometryUtils.js", (route) =>
-    route.fulfill({ path: BUF_GEOM_UTILS_PATH, contentType: "application/javascript" }),
-  );
-  await page.route("**/utils/SkeletonUtils.js", (route) =>
-    route.fulfill({ path: SKELETON_UTILS_PATH, contentType: "application/javascript" }),
-  );
-  await page.route("**/model.glb", (route) =>
-    route.fulfill({ path: glbPath, contentType: "model/gltf-binary" }),
-  );
-  await page.route("http://localhost/render.html", (route) =>
-    route.fulfill({ body: RENDER_HTML, contentType: "text/html" }),
-  );
+  const base = `http://localhost:${port}`;
 
-  await page.goto("http://localhost/render.html");
+  page.on("pageerror", (err) => console.error(`  [browser error]`, err.message));
+  await page.goto(`${base}/render.html`);
   await page.waitForFunction(() => (window as any).__ready, { timeout: 15000 });
 
-  const dataUrl = await page.evaluate(RENDER_FN, "http://localhost/model.glb");
-
-  // Clean up routes for next creature
-  await page.unroute("**/*");
+  const dataUrl = await page.evaluate(
+    (args: { fn: string; objUrl: string; mtlUrl: string | null; textureUrl: string | null }) => {
+      // eslint-disable-next-line no-eval
+      const renderFn = eval(`(${args.fn})`);
+      return renderFn(args.objUrl, args.mtlUrl, args.textureUrl);
+    },
+    {
+      fn: RENDER_FN.toString(),
+      objUrl: `${base}/model.obj`,
+      mtlUrl: hasMtl ? `${base}/model.mtl` : null,
+      textureUrl: hasTex ? `${base}/texture.png` : null,
+    },
+  );
 
   // Convert data URL to buffer
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
   return Buffer.from(base64, "base64");
+}
+
+/**
+ * Create a local HTTP server that serves the files needed for rendering.
+ * The MTL file is rewritten to point texture paths to the server's texture URL.
+ */
+function createRenderServer(port: number, creatureKey: string): Promise<import("node:http").Server> {
+  const objPath = join(MODELS_DIR, `${creatureKey}.obj`);
+  const mtlPath = join(MODELS_DIR, `${creatureKey}.mtl`);
+  const texPath = join(MODELS_DIR, `${creatureKey}_texture.png`);
+  const hasMtl = existsSync(mtlPath);
+  const hasTex = existsSync(texPath);
+
+  const server = createServer((req, res) => {
+    const url = req.url ?? "/";
+    try {
+      if (url === "/render.html") {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(renderHtml(port));
+      } else if (url === "/three.module.js") {
+        res.writeHead(200, { "Content-Type": "application/javascript" });
+        res.end(readFileSync(THREE_PATH));
+      } else if (url === "/three.core.js") {
+        res.writeHead(200, { "Content-Type": "application/javascript" });
+        res.end(readFileSync(THREE_CORE_PATH));
+      } else if (url === "/OBJLoader.js") {
+        res.writeHead(200, { "Content-Type": "application/javascript" });
+        res.end(readFileSync(OBJ_LOADER_PATH));
+      } else if (url === "/MTLLoader.js") {
+        res.writeHead(200, { "Content-Type": "application/javascript" });
+        res.end(readFileSync(MTL_LOADER_PATH));
+      } else if (url === "/model.obj") {
+        res.writeHead(200, { "Content-Type": "model/obj" });
+        res.end(readFileSync(objPath));
+      } else if (url === "/model.mtl" && hasMtl) {
+        const mtlContent = readFileSync(mtlPath, "utf-8");
+        const rewritten = mtlContent.replace(
+          /map_Kd\s+\S+/g,
+          hasTex ? `map_Kd http://localhost:${port}/texture.png` : "map_Kd",
+        );
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end(rewritten);
+      } else if (url === "/texture.png" && hasTex) {
+        res.writeHead(200, { "Content-Type": "image/png" });
+        res.end(readFileSync(texPath));
+      } else {
+        res.writeHead(404);
+        res.end("Not found");
+      }
+    } catch (err) {
+      console.error(`  [server] error serving ${url}:`, err);
+      res.writeHead(500);
+      res.end("Internal error");
+    }
+  });
+
+  return new Promise((resolve) => {
+    server.listen(port, "127.0.0.1", () => resolve(server));
+  });
 }
 
 async function main() {
@@ -251,19 +340,19 @@ async function main() {
 
   if (dryRun) {
     for (const key of creatures) {
-      const glbPath = join(MODELS_DIR, `${key}.glb`);
+      const objPath = join(MODELS_DIR, `${key}.obj`);
       const outPath = join(OUTPUT_DIR, `${key}.png`);
-      const glbExists = existsSync(glbPath);
+      const objExists = existsSync(objPath);
       const outExists = existsSync(outPath);
-      console.log(`  ${glbExists ? "[GLB]" : "[NO GLB]"} ${key} → ${outExists ? "EXISTS" : "would render"} ${outPath}`);
+      console.log(`  ${objExists ? "[OBJ]" : "[NO OBJ]"} ${key} → ${outExists ? "EXISTS" : "would render"} ${outPath}`);
     }
     return;
   }
 
-  // Check all GLB files exist first
-  const missing = creatures.filter((k) => !existsSync(join(MODELS_DIR, `${k}.glb`)));
+  // Check all OBJ files exist first
+  const missing = creatures.filter((k) => !existsSync(join(MODELS_DIR, `${k}.obj`)));
   if (missing.length > 0) {
-    console.error(`  [ERROR] Missing GLB files: ${missing.join(", ")}`);
+    console.error(`  [ERROR] Missing OBJ files: ${missing.join(", ")}`);
     console.error(`  Run "pnpm tsx scripts/generate-creature-3d.ts" first.`);
     process.exit(1);
   }
@@ -276,6 +365,7 @@ async function main() {
 
   let success = 0;
   let failed = 0;
+  let port = 18080;
 
   for (const key of creatures) {
     const outPath = join(OUTPUT_DIR, `${key}.png`);
@@ -288,8 +378,11 @@ async function main() {
 
     console.log(`  [RENDER] ${key}...`);
 
+    // Create a dedicated HTTP server for this creature
+    const server = await createRenderServer(port, key);
+
     try {
-      const pngBuf = await renderCreature(page, key);
+      const pngBuf = await renderCreature(page, key, port);
       mkdirSync(OUTPUT_DIR, { recursive: true });
       writeFileSync(outPath, pngBuf);
       console.log(`         saved: ${outPath} (${(pngBuf.length / 1024).toFixed(0)} KB)`);
@@ -297,6 +390,9 @@ async function main() {
     } catch (err) {
       console.error(`  [FAIL] ${key}: ${err}`);
       failed++;
+    } finally {
+      server.close();
+      port++;
     }
   }
 
