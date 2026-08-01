@@ -477,7 +477,7 @@ export class OfficeScene extends Phaser.Scene {
       position: fixed; inset: 0; z-index: 9998;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      background: #a3bdd0;
+      background: #7a9abe;
       font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
     `;
     loadOverlay.innerHTML = `
@@ -1253,6 +1253,15 @@ export class OfficeScene extends Phaser.Scene {
           // Clean up loading overlay
           loadOverlay.remove();
 
+          // Synchronously load + render the chunk right outside the door
+          // so the player sees grass immediately when stepping outside.
+          // The rest load via time-budgeted updateChunks in the background.
+          const doorChunks = this.world.getDoorChunkList();
+          if (doorChunks.length > 0) {
+            this.world.loadSingleChunk(doorChunks[0].cx, doorChunks[0].cy);
+            this.world.processRenderJobsNow();
+          }
+
           // Schedule golf ball cleanup after chunks have had time to load
           // via the update loop's updateChunks.  Non-blocking.
           this.time.delayedCall(3000, () => {
@@ -1357,13 +1366,10 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Create a gradient sky background and drifting cloud sprites. */
   private createSky(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-
-    // --- Gradient sky texture (4×512 canvas, smooth enough even with NEAREST) ---
+    // --- Gradient sky texture (256×512 canvas, wide enough for NEAREST filtering) ---
     if (!this.textures.exists("sky-gradient")) {
       const gradCanvas = document.createElement("canvas");
-      gradCanvas.width = 4;
+      gradCanvas.width = 256;
       gradCanvas.height = 512;
       const ctx = gradCanvas.getContext("2d")!;
       const grad = ctx.createLinearGradient(0, 0, 0, 512);
@@ -1372,15 +1378,16 @@ export class OfficeScene extends Phaser.Scene {
       grad.addColorStop(0.75, "#9ab8d4");
       grad.addColorStop(1, "#c4d8e8");
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 4, 512);
+      ctx.fillRect(0, 0, 256, 512);
       this.textures.addImage("sky-gradient", gradCanvas as unknown as HTMLImageElement);
     }
 
+    // Sky is screen-fixed — always covers the full canvas, regardless of camera zoom
     this.skyImage = this.add.image(0, 0, "sky-gradient")
       .setOrigin(0, 0)
       .setDepth(-2)
       .setScrollFactor(0)
-      .setDisplaySize(w, h);
+      .setDisplaySize(this.scale.width, this.scale.height);
 
     // --- Cloud textures (3 variants) ---
     for (let i = 0; i < 3; i++) {
@@ -1390,12 +1397,12 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // --- Cloud sprites (7 instances, top 40% of screen) ---
+    // --- Cloud sprites (7 instances, screen-fixed in the top portion) ---
     const cloudCount = 7;
     for (let i = 0; i < cloudCount; i++) {
       const cloudTex = `cloud-${i % 3}`;
-      const x = Math.random() * w;
-      const y = Math.random() * h * 0.4;
+      const x = Math.random() * this.scale.width;
+      const y = Math.random() * this.scale.height * 0.4;
       const scale = 0.5 + Math.random() * 1.0;
       const alpha = 0.4 + Math.random() * 0.35;
       const speed = 5 + Math.random() * 15;
@@ -1409,13 +1416,22 @@ export class OfficeScene extends Phaser.Scene {
 
       this.clouds.push({ sprite, speed });
     }
+  }
 
-    // Resize handler — keep sky covering full screen
-    const onSkyResize = () => {
-      this.skyImage.setDisplaySize(this.scale.width, this.scale.height);
-    };
-    this.scale.on("resize", onSkyResize);
-    this.events.once("shutdown", () => this.scale.off("resize", onSkyResize));
+  /** Update sky size to canvas + drift clouds. Called every frame. */
+  private updateSky(dt: number): void {
+    // Sky: always cover the full canvas (canvas size doesn't change with camera zoom)
+    this.skyImage.setDisplaySize(this.scale.width, this.scale.height);
+
+    // Clouds: drift in screen space, wrap around canvas edges
+    const sw = this.scale.width;
+    for (const c of this.clouds) {
+      c.sprite.x += c.speed * dt / 1000;
+      const halfW = c.sprite.displayWidth / 2;
+      if (c.sprite.x - halfW > sw) {
+        c.sprite.x = -halfW;
+      }
+    }
   }
 
   /** Generate a soft cloud texture using overlapping radial gradients. */
@@ -6435,15 +6451,8 @@ export class OfficeScene extends Phaser.Scene {
     // teleport-length step that tunnels through collision
     dt = Math.min(dt, 100);
 
-    // Cloud drift — screen-fixed, wrap around edges
-    const sw = this.scale.width;
-    for (const c of this.clouds) {
-      c.sprite.x += c.speed * dt / 1000;
-      const halfW = c.sprite.displayWidth / 2;
-      if (c.sprite.x - halfW > sw) {
-        c.sprite.x = -halfW;
-      }
-    }
+    // Sky gradient + cloud drift — world-space, follows camera view
+    this.updateSky(dt);
 
     // typing in a HUD field? the game keyboard is yours, not the boss's
     const active = document.activeElement?.tagName;
