@@ -1,16 +1,20 @@
 /**
- * AI Character Component Generator — Phase 1: Hair
+ * AI Character Component Generator — Hair, Beard, Shirt, Pants
  *
- * Renders procedural spritesheets with GREEN body + WHITE hair,
- * sends to Nano Banana 2 Edit for enhancement, extracts hair as
- * grayscale transparent PNGs for runtime color tinting.
+ * Renders procedural spritesheets with GREEN body + WHITE target component,
+ * sends to Nano Banana 2 Edit for enhancement, extracts the target component
+ * as grayscale transparent PNGs for runtime color tinting.
  *
  * Usage:
- *   pnpm tsx scripts/generate-char-components.ts                # all hair
- *   pnpm tsx scripts/generate-char-components.ts --filter spiky  # one style
- *   pnpm tsx scripts/generate-char-components.ts --dry-run       # list only
+ *   pnpm tsx scripts/generate-char-components.ts                         # all components
+ *   pnpm tsx scripts/generate-char-components.ts --component hair         # hair only
+ *   pnpm tsx scripts/generate-char-components.ts --component beard        # beard only
+ *   pnpm tsx scripts/generate-char-components.ts --component shirt        # shirt only
+ *   pnpm tsx scripts/generate-char-components.ts --component pants        # pants only
+ *   pnpm tsx scripts/generate-char-components.ts --filter spiky           # filter by style
+ *   pnpm tsx scripts/generate-char-components.ts --dry-run               # list only
  *
- * Requires FAL_KEY. Output: client/public/assets/ai/char/hair/
+ * Requires FAL_KEY. Output: client/public/assets/ai/char/{hair,beard,shirt,pants}/
  */
 import { PNG } from "pngjs";
 import { join, dirname } from "node:path";
@@ -27,14 +31,16 @@ import {
   CW,
   CH,
 } from "../shared/char-draw";
-import { HAIR_STYLES } from "../shared/types";
+import { HAIR_STYLES, BEARD_STYLES } from "../shared/types";
 import { nanoBanana2Edit, removeBackground, downloadUrl } from "./lib/fal-client.js";
 import { saveBuffer, uploadToFal } from "./lib/post-process.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT_DIR = join(ROOT, "client", "public", "assets", "ai", "char", "hair");
+const AI_CHAR_DIR = join(ROOT, "client", "public", "assets", "ai", "char");
 const SHEET_COLS = 8;
 const SHEET_DIRS: Dir[] = ["down", "right", "up"];
+
+type ComponentType = "hair" | "beard" | "shirt" | "pants";
 
 // Load .env
 try {
@@ -185,9 +191,10 @@ class Sheet implements DrawSurface {
   toBuffer(): Buffer { return PNG.sync.write(this.png); }
 }
 
-// =============================================================== hair definitions
+// =============================================================== component definitions
 
-interface HairDef {
+interface ComponentDef {
+  type: ComponentType;
   key: string;
   desc: string;
   seed: number;
@@ -211,29 +218,70 @@ const HAIR_DESCRIPTIONS: Record<string, string> = {
   dreadlocks: "hair in long dreadlock strands hanging down",
 };
 
-const HAIR_DEFS: HairDef[] = HAIR_STYLES
+const BEARD_DESCRIPTIONS: Record<string, string> = {
+  stubble: "light stubble beard — short facial hair shadow across the jaw and chin",
+  mustache: "a neat mustache across the upper lip",
+  goatee: "a goatee beard on the chin, small and pointed",
+  full_beard: "a full beard covering the jaw, chin, and cheeks with thick facial hair",
+};
+
+const HAIR_DEFS: ComponentDef[] = HAIR_STYLES
   .filter((s) => s !== "bald")
   .map((style, i) => ({
+    type: "hair" as const,
     key: style,
     desc: HAIR_DESCRIPTIONS[style] ?? style,
     seed: 6000 + i,
   }));
 
+const BEARD_DEFS: ComponentDef[] = BEARD_STYLES
+  .filter((s) => s !== "none")
+  .map((style, i) => ({
+    type: "beard" as const,
+    key: style,
+    desc: BEARD_DESCRIPTIONS[style] ?? style,
+    seed: 7000 + i,
+  }));
+
+const SHIRT_DEFS: ComponentDef[] = [
+  { type: "shirt", key: "default", desc: "a simple collared shirt with buttons, folds, and fabric texture", seed: 8000 },
+];
+
+const PANTS_DEFS: ComponentDef[] = [
+  { type: "pants", key: "default", desc: "simple trousers with visible folds, creases, and fabric texture", seed: 9000 },
+];
+
+const ALL_DEFS: ComponentDef[] = [...HAIR_DEFS, ...BEARD_DEFS, ...SHIRT_DEFS, ...PANTS_DEFS];
+
 // =============================================================== green palette
 
-function greenPalette(hairStyle: string): CharPalette {
-  return {
+/**
+ * Build a green palette for a specific component type.
+ * The target component is white; everything else is green (to be removed).
+ */
+function greenPaletteFor(type: ComponentType, style: string): CharPalette {
+  const base: CharPalette = {
     skin: "#00ff00",
-    hair: "#ffffff",
+    hair: "#00ff00",
     shirt: "#00ff00",
     shirtShade: "#00cc00",
     pants: "#00ff00",
     eyeColor: "#00ff00",
-    hairStyle,
+    hairStyle: "bald",
     accessory: "none",
     headFeature: "none",
     beard: "none",
   };
+  switch (type) {
+    case "hair":
+      return { ...base, hair: "#ffffff", hairStyle: style };
+    case "beard":
+      return { ...base, beard: style, beardColor: "#ffffff" };
+    case "shirt":
+      return { ...base, shirt: "#ffffff", shirtShade: "#cccccc" };
+    case "pants":
+      return { ...base, pants: "#ffffff" };
+  }
 }
 
 // =============================================================== sheet builder
@@ -252,9 +300,9 @@ function buildComponentSheet(pal: CharPalette): Sheet {
 
 /**
  * Remove green-dominant pixels (body) and convert remaining pixels
- * (hair) to grayscale for runtime color tinting. Single pass.
+ * (target component) to grayscale for runtime color tinting. Single pass.
  */
-async function extractHairComponent(input: Buffer): Promise<Buffer> {
+async function extractComponent(input: Buffer): Promise<Buffer> {
   const image = sharp(input);
   const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
 
@@ -327,36 +375,45 @@ async function sliceCharGrid(input: Buffer, cols: number, rows: number): Promise
 
 // =============================================================== prompt builder
 
-function buildHairPrompt(desc: string): string {
+function buildComponentPrompt(type: ComponentType, desc: string): string {
+  const componentName =
+    type === "hair" ? "hair" :
+    type === "beard" ? "facial hair / beard" :
+    type === "shirt" ? "shirt / clothing on the torso" :
+    "pants / trousers on the legs";
+
   return `Enhance this pixel art character sprite sheet. The sheet has 8 columns (animation poses, left to right) and 3 rows (top=facing forward/down, middle=facing right, bottom=facing away/up). Each grid cell is one character frame.
 
 CRITICAL INSTRUCTIONS:
 - Keep the EXACT same grid layout, frame positions, and character proportions
-- The character's body, skin, face, and clothes are colored bright GREEN (#00ff00) — you MUST keep them green, do not change the body color at all
-- Only enhance the WHITE hair: add detailed strands, shading, highlights, texture, and depth to the hair
-- The hair style is: ${desc}
-- Keep the hair in the EXACT same position and shape as the reference — the white hair pixels in the reference show where hair should be, do not move or mirror the hair to a different position
-- Do not add any new elements, accessories, or change the hair style
-- Do not add dark outlines around the hair edges — use smooth shading only
+- The character's body, skin, face, and all other parts are colored bright GREEN (#00ff00) — you MUST keep them green, do not change the body color at all
+- Only enhance the WHITE ${componentName}: add detailed texture, shading, highlights, and depth
+- The ${componentName} style is: ${desc}
+- Keep the ${componentName} in the EXACT same position and shape as the reference — the white pixels in the reference show where it should be, do not move or mirror to a different position
+- Do not add any new elements, accessories, or change the style
+- Do not add dark outlines around the edges — use smooth shading only
 - Use a clean pixel art style with proper shading
 - The background must be solid flat white`;
 }
 
 // =============================================================== pipeline
 
-function parseArgs(): { filter?: string; dryRun: boolean } {
+function parseArgs(): { component?: ComponentType; filter?: string; dryRun: boolean } {
   const args = process.argv.slice(2);
+  let component: ComponentType | undefined;
   let filter: string | undefined;
   let dryRun = false;
   for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--component" && args[i + 1]) component = args[i + 1] as ComponentType;
     if (args[i] === "--filter" && args[i + 1]) filter = args[i + 1];
     if (args[i] === "--dry-run") dryRun = true;
   }
-  return { filter, dryRun };
+  return { component, filter, dryRun };
 }
 
-async function processHair(def: HairDef, dryRun: boolean): Promise<void> {
-  const frameDir = join(OUT_DIR, def.key);
+async function processComponent(def: ComponentDef, dryRun: boolean): Promise<void> {
+  const outDir = join(AI_CHAR_DIR, def.type);
+  const frameDir = join(outDir, def.key);
   const allExist = SHEET_DIRS.every((dir) =>
     Array.from({ length: SHEET_COLS }, (_, p) =>
       existsSync(join(frameDir, `${def.key}_${dir}_${p}.png`))
@@ -364,19 +421,19 @@ async function processHair(def: HairDef, dryRun: boolean): Promise<void> {
   );
 
   if (allExist) {
-    console.log(`  [SKIP] ${def.key} — all 24 frames already exist`);
+    console.log(`  [SKIP] ${def.type}/${def.key} — all 24 frames already exist`);
     return;
   }
 
   if (dryRun) {
-    console.log(`  [DRY]  ${def.key} — would generate 24 frames (seed ${def.seed})`);
+    console.log(`  [DRY]  ${def.type}/${def.key} — would generate 24 frames (seed ${def.seed})`);
     return;
   }
 
-  console.log(`  [GEN]  ${def.key} — rendering reference sheet...`);
+  console.log(`  [GEN]  ${def.type}/${def.key} — rendering reference sheet...`);
 
-  // 1. Render procedural sheet with green body + white hair
-  const pal = greenPalette(def.key);
+  // 1. Render procedural sheet with green body + white target component
+  const pal = greenPaletteFor(def.type, def.key);
   const sheet = buildComponentSheet(pal);
   const sheetBuf = sheet.toBuffer();
 
@@ -387,11 +444,11 @@ async function processHair(def: HairDef, dryRun: boolean): Promise<void> {
     .toBuffer();
 
   // 3. Upload to fal.ai
-  const refUrl = await uploadToFal(upscaled, `hair_${def.key}.png`);
+  const refUrl = await uploadToFal(upscaled, `${def.type}_${def.key}.png`);
   console.log(`         uploaded reference: ${refUrl}`);
 
   // 4. Generate enhanced version via Nano Banana 2 Edit
-  const prompt = buildHairPrompt(def.desc);
+  const prompt = buildComponentPrompt(def.type, def.desc);
   const result = await nanoBanana2Edit(prompt, [refUrl], {
     seed: def.seed,
     aspectRatio: "16:9",
@@ -408,13 +465,13 @@ async function processHair(def: HairDef, dryRun: boolean): Promise<void> {
   const frames = await sliceCharGrid(transparentBuf, SHEET_COLS, SHEET_DIRS.length);
   console.log(`         sliced into ${frames.length} frames`);
 
-  // 7. Extract hair (remove green body) + convert to grayscale
+  // 7. Extract component (remove green body) + convert to grayscale
   for (let i = 0; i < frames.length; i++) {
     const dir = SHEET_DIRS[Math.floor(i / SHEET_COLS)];
     const pose = i % SHEET_COLS;
-    const hairFrame = await extractHairComponent(frames[i]);
+    const componentFrame = await extractComponent(frames[i]);
     const outPath = join(frameDir, `${def.key}_${dir}_${pose}.png`);
-    saveBuffer(outPath, hairFrame);
+    saveBuffer(outPath, componentFrame);
   }
   console.log(`         saved 24 frames to ${frameDir}`);
 }
@@ -422,26 +479,30 @@ async function processHair(def: HairDef, dryRun: boolean): Promise<void> {
 // =============================================================== main
 
 async function main() {
-  const { filter, dryRun } = parseArgs();
+  const { component, filter, dryRun } = parseArgs();
 
-  let defs = HAIR_DEFS;
+  let defs = ALL_DEFS;
+  if (component) {
+    defs = defs.filter((d) => d.type === component);
+  }
   if (filter) {
     defs = defs.filter((d) => d.key.includes(filter));
   }
 
-  console.log(`\nAI Character Component Generator — Hair`);
-  console.log(`  ${defs.length} hair style(s) to process${filter ? ` (filter: "${filter}")` : ""}${dryRun ? " [DRY RUN]" : ""}\n`);
+  const label = component ? `${component}` : "all components";
+  console.log(`\nAI Character Component Generator — ${label}`);
+  console.log(`  ${defs.length} component(s) to process${filter ? ` (filter: "${filter}")` : ""}${dryRun ? " [DRY RUN]" : ""}\n`);
 
   for (const def of defs) {
     try {
-      await processHair(def, dryRun);
+      await processComponent(def, dryRun);
     } catch (err) {
-      console.error(`  [FAIL] ${def.key}: ${err}`);
+      console.error(`  [FAIL] ${def.type}/${def.key}: ${err}`);
     }
   }
 
-  console.log(`\nDone! ${defs.length} hair style(s) processed.`);
-  console.log(`Output: ${OUT_DIR}`);
+  console.log(`\nDone! ${defs.length} component(s) processed.`);
+  console.log(`Output: ${AI_CHAR_DIR}`);
 }
 
 main().catch((err) => {

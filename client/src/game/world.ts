@@ -2600,8 +2600,8 @@ export class WorldLayer {
 
       // --- spawn creatures based on hostility (skip farthest infernal region) ---
       if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 600 + Math.random() * 1200) {
-        if (hostility >= 1 && hostility < 5) {
-          const spawnCount = 2 + Math.floor(hostility / 2);
+        if (hostility >= 0 && hostility < 5) {
+          const spawnCount = hostility === 0 ? 1 : 2 + Math.floor(hostility / 2);
           let spawnedAny = false;
           for (let s = 0; s < spawnCount; s++) {
             // try up to 5 positions to find a walkable tile

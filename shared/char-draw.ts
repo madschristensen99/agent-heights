@@ -20,6 +20,7 @@ export interface CharPalette {
   accessory: string;
   headFeature?: string;
   beard?: string;
+  beardColor?: string;
   bodyType?: "normal" | "fat";
 }
 
@@ -692,42 +693,44 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   const drawBeard = (dir2: Dir) => {
     const bd = pal.beard ?? "none";
     if (bd === "none") return;
+    const bc = pal.beardColor ?? pal.hair;
+    const bcDk = mix(bc, "#000000", 0.25);
     if (dir2 === "down") {
       if (bd === "stubble") {
         for (let i = 0; i < 8; i++) {
           const sx = 24 + (i * 2);
-          s.set(hx(sx), hy(30 + (i % 2)), hairDk);
-          s.set(hx(sx + 1), hy(31 + (i % 2)), hairDk);
+          s.set(hx(sx), hy(30 + (i % 2)), bcDk);
+          s.set(hx(sx + 1), hy(31 + (i % 2)), bcDk);
         }
       } else if (bd === "mustache") {
-        s.rect(hx(27), hy(27), 10, 2, pal.hair);
-        s.set(hx(27), hy(28), hairDk); s.set(hx(36), hy(28), hairDk);
+        s.rect(hx(27), hy(27), 10, 2, bc);
+        s.set(hx(27), hy(28), bcDk); s.set(hx(36), hy(28), bcDk);
       } else if (bd === "goatee") {
-        el(hx(32), hy(32), 4, 4, pal.hair);
-        s.set(hx(30), hy(31), hairDk); s.set(hx(34), hy(31), hairDk);
-        s.set(hx(32), hy(35), hairDk);
+        el(hx(32), hy(32), 4, 4, bc);
+        s.set(hx(30), hy(31), bcDk); s.set(hx(34), hy(31), bcDk);
+        s.set(hx(32), hy(35), bcDk);
       } else if (bd === "full_beard") {
-        el(hx(32), hy(31), 12, 6, pal.hair);
-        el(hx(24), hy(29), 4, 5, pal.hair); el(hx(40), hy(29), 4, 5, pal.hair);
-        el(hx(32), hy(33), 10, 3, hairDk);
-        s.set(hx(26), hy(28), pal.hair); s.set(hx(38), hy(28), pal.hair);
+        el(hx(32), hy(31), 12, 6, bc);
+        el(hx(24), hy(29), 4, 5, bc); el(hx(40), hy(29), 4, 5, bc);
+        el(hx(32), hy(33), 10, 3, bcDk);
+        s.set(hx(26), hy(28), bc); s.set(hx(38), hy(28), bc);
       }
     } else if (dir2 === "right") {
       if (bd === "stubble") {
         for (let i = 0; i < 5; i++) {
-          s.set(hx(38 + i), hy(30 + (i % 2)), hairDk);
+          s.set(hx(38 + i), hy(30 + (i % 2)), bcDk);
         }
       } else if (bd === "mustache") {
-        s.rect(hx(36), hy(27), 6, 2, pal.hair);
-        s.set(hx(36), hy(28), hairDk);
+        s.rect(hx(36), hy(27), 6, 2, bc);
+        s.set(hx(36), hy(28), bcDk);
       } else if (bd === "goatee") {
-        el(hx(42), hy(32), 4, 4, pal.hair);
-        s.set(hx(40), hy(31), hairDk); s.set(hx(44), hy(35), hairDk);
+        el(hx(42), hy(32), 4, 4, bc);
+        s.set(hx(40), hy(31), bcDk); s.set(hx(44), hy(35), bcDk);
       } else if (bd === "full_beard") {
-        el(hx(42), hy(31), 8, 6, pal.hair);
-        el(hx(38), hy(29), 4, 5, pal.hair);
-        el(hx(42), hy(33), 6, 3, hairDk);
-        s.set(hx(40), hy(28), pal.hair);
+        el(hx(42), hy(31), 8, 6, bc);
+        el(hx(38), hy(29), 4, 5, bc);
+        el(hx(42), hy(33), 6, 3, bcDk);
+        s.set(hx(40), hy(28), bc);
       }
     }
   };
@@ -891,6 +894,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO (back) ----
     const utw = isFat ? 28 : 22;
     const utx = isFat ? 18 : 21;
+    const _ushirtDrawn = stampComponent("shirt", "default", "up", pose, pal.shirt);
+    if (!_ushirtDrawn) {
     vGradRR(bx(utx), by(38), utw, 18, 5, shirtLi, shirtDk);
     texOverlay(bx(utx), by(38), utw, 18, pal.shirt, "shirtFabric");
     s.rect(bx(utx), by(38), 2, 18, shirtLi);
@@ -903,6 +908,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(31), by(44), shirtDk);
     // Belt line
     s.rect(bx(utx), by(55), utw, 1, pantsDk);
+    }
 
     // ---- ARMS ----
     const uarmLX = isFat ? 14 : 17;
@@ -916,6 +922,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(uarmRX + 1 + armSwingR), by(54), skinDk);
 
     // ---- LEGS & SHOES with soles ----
+    const _upantsDrawn = stampComponent("pants", "default", "up", pose, pal.pants);
+    if (!_upantsDrawn) {
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
       const fx = leftUp ? 33 : 23;
@@ -948,6 +956,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(36), ly(73), shoeMid);
       s.set(lx(29), ly(76), shoeDk);
       s.set(lx(39), ly(76), shoeDk);
+    }
     }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
@@ -1009,6 +1018,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // ---- TORSO (profile) ----
     const rtw = isFat ? 22 : 18;
     const rtx = isFat ? 21 : 23;
+    const _rshirtDrawn = stampComponent("shirt", "default", "right", pose, pal.shirt);
+    if (!_rshirtDrawn) {
     vGradRR(bx(rtx), by(38), rtw, 18, 5, shirtLi, shirtDk);
     texOverlay(bx(rtx), by(38), rtw, 18, pal.shirt, "shirtFabric");
     s.rect(bx(rtx), by(38), 2, 18, shirtLi);
@@ -1020,6 +1031,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(rtx + 3), by(41), shirtDk);
     // Belt line
     s.rect(bx(rtx), by(55), rtw, 1, pantsDk);
+    }
 
     // ---- ARM ----
     const rarmX = 35;
@@ -1031,6 +1043,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
 
     // ---- LEGS (profile) with soles ----
     const rlegW = isFat ? 10 : 8;
+    const _rpantsDrawn = stampComponent("pants", "default", "right", pose, pal.pants);
+    if (!_rpantsDrawn) {
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
       const frontX = leftUp ? 29 : 25;
@@ -1058,6 +1072,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(27), ly(73), shoeLi);
       s.set(lx(28), ly(73), shoeMid);
       s.set(lx(31), ly(76), shoeDk);
+    }
     }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso

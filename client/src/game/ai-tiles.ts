@@ -236,3 +236,49 @@ export function hairStyleKeys(style: string): string[] {
 export function allHairKeys(): string[] {
   return AI_HAIR_STYLES.flatMap(hairStyleKeys);
 }
+
+// =============================================================== AI beard components
+
+/**
+ * AI-generated beard component sprites.
+ * Same layout as hair: 8 poses × 3 directions (down, right, up) = 24 frames.
+ * Excludes "none" (no beard).
+ */
+export const AI_BEARD_STYLES = ["stubble", "mustache", "goatee", "full_beard"];
+
+/**
+ * Build the Phaser texture key for a specific beard frame.
+ */
+export function beardFrameKey(style: string, dir: string, pose: number): string {
+  return `ai-beard-${style}_${dir}_${pose}`;
+}
+
+// =============================================================== AI shirt/pants components
+
+/**
+ * AI-generated shirt and pants component sprites.
+ * Single style "default" — 8 poses × 3 directions = 24 frames each.
+ */
+export const AI_SHIRT_STYLES = ["default"];
+export const AI_PANTS_STYLES = ["default"];
+
+/**
+ * Build the Phaser texture key for a specific shirt frame.
+ */
+export function shirtFrameKey(style: string, dir: string, pose: number): string {
+  return `ai-shirt-${style}_${dir}_${pose}`;
+}
+
+/**
+ * Build the Phaser texture key for a specific pants frame.
+ */
+export function pantsFrameKey(style: string, dir: string, pose: number): string {
+  return `ai-pants-${style}_${dir}_${pose}`;
+}
+
+/**
+ * Generic component frame key builder.
+ */
+export function componentFrameKey(component: "hair" | "beard" | "shirt" | "pants", style: string, dir: string, pose: number): string {
+  return `ai-${component}-${style}_${dir}_${pose}`;
+}
