@@ -302,6 +302,43 @@ async function main() {
   }
   await buildAtlas("ai-pants-atlas", pantsItems, 1024, 1024);
 
+  // Accessory atlas: 6 styles × 24 frames = 144 PNGs
+  const ACCESSORY_STYLES = ["glasses", "headband", "earrings", "cap", "beanie", "headphones"];
+  const accessoryItems: PackItem[] = [];
+  for (const style of ACCESSORY_STYLES) {
+    for (const dir of HAIR_DIRS) {
+      for (let pose = 0; pose < HAIR_POSES; pose++) {
+        const fileKey = `${style}_${dir}_${pose}`;
+        accessoryItems.push(
+          makeItem(
+            `ai-accessory-${fileKey}`,
+            join(AI_DIR, "char", "accessory", style, `${fileKey}.png`),
+          ),
+        );
+      }
+    }
+  }
+  await buildAtlas("ai-accessory-atlas", accessoryItems, 1024, 1024);
+
+  // Head feature atlas: 4 styles × 24 frames = 96 PNGs
+  const HEAD_FEATURE_STYLES = ["cat ears", "horns", "antennae", "elf ears"];
+  const headFeatureItems: PackItem[] = [];
+  for (const style of HEAD_FEATURE_STYLES) {
+    const safeStyle = style.replace(/ /g, "_");
+    for (const dir of HAIR_DIRS) {
+      for (let pose = 0; pose < HAIR_POSES; pose++) {
+        const fileKey = `${safeStyle}_${dir}_${pose}`;
+        headFeatureItems.push(
+          makeItem(
+            `ai-headFeature-${fileKey}`,
+            join(AI_DIR, "char", "headFeature", safeStyle, `${fileKey}.png`),
+          ),
+        );
+      }
+    }
+  }
+  await buildAtlas("ai-headFeature-atlas", headFeatureItems, 1024, 1024);
+
   console.log("\nDone! Atlases written to client/public/assets/atlases/");
 }
 

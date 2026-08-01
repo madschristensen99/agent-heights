@@ -279,6 +279,31 @@ export function pantsFrameKey(style: string, dir: string, pose: number): string 
 /**
  * Generic component frame key builder.
  */
-export function componentFrameKey(component: "hair" | "beard" | "shirt" | "pants", style: string, dir: string, pose: number): string {
+export function componentFrameKey(component: "hair" | "beard" | "shirt" | "pants" | "accessory" | "headFeature", style: string, dir: string, pose: number): string {
   return `ai-${component}-${style}_${dir}_${pose}`;
+}
+
+// =============================================================== AI accessory components
+
+/**
+ * AI-generated accessory component sprites.
+ * Excludes "none". 8 poses × 3 directions = 24 frames each.
+ */
+export const AI_ACCESSORY_STYLES = ["glasses", "headband", "earrings", "cap", "beanie", "headphones"];
+
+export function accessoryFrameKey(style: string, dir: string, pose: number): string {
+  return `ai-accessory-${style}_${dir}_${pose}`;
+}
+
+// =============================================================== AI head feature components
+
+/**
+ * AI-generated head feature component sprites.
+ * Excludes "none". 8 poses × 3 directions = 24 frames each.
+ */
+export const AI_HEAD_FEATURE_STYLES = ["cat ears", "horns", "antennae", "elf ears"];
+
+export function headFeatureFrameKey(style: string, dir: string, pose: number): string {
+  const safeStyle = style.replace(/ /g, "_");
+  return `ai-headFeature-${safeStyle}_${dir}_${pose}`;
 }

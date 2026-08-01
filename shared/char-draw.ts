@@ -21,6 +21,8 @@ export interface CharPalette {
   headFeature?: string;
   beard?: string;
   beardColor?: string;
+  headFeatureColor?: string;
+  accessoryColor?: string;
   bodyType?: "normal" | "fat";
 }
 
@@ -46,6 +48,8 @@ export interface CharComponentProvider {
   beard?: Record<string, ImageData[]>;
   shirt?: Record<string, ImageData[]>;
   pants?: Record<string, ImageData[]>;
+  accessory?: Record<string, ImageData[]>;
+  headFeature?: Record<string, ImageData[]>;
 }
 
 export interface DrawSurface {
@@ -196,7 +200,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
    * Returns true if the sprite was found and stamped, false to fall back.
    */
   const stampComponent = (
-    component: "hair" | "beard" | "shirt" | "pants",
+    component: "hair" | "beard" | "shirt" | "pants" | "accessory" | "headFeature",
     style: string,
     dirName: "down" | "right" | "up",
     poseNum: number,
@@ -552,26 +556,26 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   // ===== ACCESSORIES =====
   const drawAccessory = (dir2: Dir) => {
     const ac = pal.accessory;
+    const accCol = pal.accessoryColor ?? pal.shirt;
+    const accDk = mix(accCol, "#000000", 0.3);
     if (ac === "glasses") {
-      const gc = mix(pal.shirt, "#000000", 0.3);
       if (dir2 === "down") {
-        s.rect(hx(24), hy(21), 6, 1, gc); s.rect(hx(24), hy(25), 6, 1, gc); s.rect(hx(24), hy(21), 1, 5, gc); s.rect(hx(29), hy(21), 1, 5, gc);
-        s.rect(hx(33), hy(21), 6, 1, gc); s.rect(hx(33), hy(25), 6, 1, gc); s.rect(hx(33), hy(21), 1, 5, gc); s.rect(hx(38), hy(21), 1, 5, gc);
-        s.rect(hx(30), hy(23), 3, 1, gc);
+        s.rect(hx(24), hy(21), 6, 1, accDk); s.rect(hx(24), hy(25), 6, 1, accDk); s.rect(hx(24), hy(21), 1, 5, accDk); s.rect(hx(29), hy(21), 1, 5, accDk);
+        s.rect(hx(33), hy(21), 6, 1, accDk); s.rect(hx(33), hy(25), 6, 1, accDk); s.rect(hx(33), hy(21), 1, 5, accDk); s.rect(hx(38), hy(21), 1, 5, accDk);
+        s.rect(hx(30), hy(23), 3, 1, accDk);
       } else if (dir2 === "right") {
-        s.rect(hx(34), hy(21), 6, 1, gc); s.rect(hx(34), hy(25), 6, 1, gc); s.rect(hx(34), hy(21), 1, 5, gc); s.rect(hx(39), hy(21), 1, 5, gc);
+        s.rect(hx(34), hy(21), 6, 1, accDk); s.rect(hx(34), hy(25), 6, 1, accDk); s.rect(hx(34), hy(21), 1, 5, accDk); s.rect(hx(39), hy(21), 1, 5, accDk);
       }
     } else if (ac === "headband") {
-      const hc = pal.shirt;
-      if (dir2 === "down") { rr(hx(19), hy(13), 26, 3, 1, hc); s.set(hx(20), hy(12), hc); s.set(hx(44), hy(12), hc); }
-      else if (dir2 === "up") { rr(hx(18), hy(13), 28, 3, 1, hc); }
-      else if (dir2 === "right") { rr(hx(22), hy(13), 22, 3, 1, hc); }
+      if (dir2 === "down") { rr(hx(19), hy(13), 26, 3, 1, accCol); s.set(hx(20), hy(12), accCol); s.set(hx(44), hy(12), accCol); }
+      else if (dir2 === "up") { rr(hx(18), hy(13), 28, 3, 1, accCol); }
+      else if (dir2 === "right") { rr(hx(22), hy(13), 22, 3, 1, accCol); }
     } else if (ac === "earrings") {
-      const ec = "#ffd700";
+      const ec = accCol;
       if (dir2 === "down") { s.set(hx(18), hy(28), ec); s.set(hx(46), hy(28), ec); }
       else if (dir2 === "right") { s.set(hx(28), hy(27), ec); }
     } else if (ac === "cap") {
-      const cc = mix(pal.shirt, "#000000", 0.1);
+      const cc = mix(accCol, "#000000", 0.1);
       const ccLi = mix(cc, "#ffffff", 0.2);
       const ccDk = mix(cc, "#000000", 0.25);
       if (dir2 === "down") {
@@ -595,7 +599,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.set(hx(25), hy(3), mix(cc, "#fff", 0.15));
       }
     } else if (ac === "beanie") {
-      const bc = mix(pal.shirt, "#000000", 0.05);
+      const bc = mix(accCol, "#000000", 0.05);
       if (dir2 === "down") {
         rr(hx(16), hy(6), 32, 10, 4, bc);
         s.rect(hx(16), hy(13), 32, 2, mix(bc, "#000", 0.2));
@@ -610,8 +614,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.set(hx(28), hy(4), mix(bc, "#fff", 0.3));
       }
     } else if (ac === "headphones") {
-      const hc = "#3a3a44";
-      const hcLi = "#5a5a64";
+      const hc = mix(accCol, "#000000", 0.4);
+      const hcLi = mix(accCol, "#000000", 0.2);
       if (dir2 === "down") {
         s.rect(hx(18), hy(6), 28, 2, hc);
         ci(hx(16), hy(20), 3, hc); ci(hx(16), hy(20), 2, hcLi);
@@ -630,47 +634,49 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   const drawHeadFeature = (dir2: Dir) => {
     const hf = pal.headFeature ?? "none";
     if (hf === "none") return;
+    const hfc = pal.headFeatureColor ?? pal.hair;
+    const hfcDk = mix(hfc, "#000000", 0.25);
     if (hf === "cat ears") {
-      const inner = mix(pal.hair, "#ffaaaa", 0.4);
+      const inner = mix(hfc, "#ffaaaa", 0.4);
       if (dir2 === "down") {
-        s.fillTriangle(hx(22), hy(10), hx(17), hy(2), hx(27), hy(5), pal.hair);
+        s.fillTriangle(hx(22), hy(10), hx(17), hy(2), hx(27), hy(5), hfc);
         s.fillTriangle(hx(23), hy(9), hx(20), hy(5), hx(26), hy(6), inner);
-        s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), pal.hair);
+        s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), hfc);
         s.fillTriangle(hx(41), hy(9), hx(38), hy(6), hx(44), hy(5), inner);
       } else if (dir2 === "up") {
-        s.fillTriangle(hx(22), hy(10), hx(17), hy(2), hx(27), hy(5), pal.hair);
-        s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), pal.hair);
+        s.fillTriangle(hx(22), hy(10), hx(17), hy(2), hx(27), hy(5), hfc);
+        s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), hfc);
       } else if (dir2 === "right") {
-        s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), pal.hair);
+        s.fillTriangle(hx(42), hy(10), hx(37), hy(5), hx(47), hy(2), hfc);
         s.fillTriangle(hx(41), hy(9), hx(38), hy(6), hx(44), hy(5), inner);
       }
     } else if (hf === "horns") {
       if (dir2 === "down") {
-        s.fillTriangle(hx(20), hy(10), hx(16), hy(0), hx(24), hy(6), "#6a5a4a");
-        s.fillTriangle(hx(21), hy(9), hx(18), hy(3), hx(23), hy(7), "#8a7a6a");
-        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), "#6a5a4a");
-        s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), "#8a7a6a");
+        s.fillTriangle(hx(20), hy(10), hx(16), hy(0), hx(24), hy(6), hfcDk);
+        s.fillTriangle(hx(21), hy(9), hx(18), hy(3), hx(23), hy(7), hfc);
+        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), hfcDk);
+        s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), hfc);
       } else if (dir2 === "up") {
-        s.fillTriangle(hx(20), hy(10), hx(16), hy(0), hx(24), hy(6), "#6a5a4a");
-        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), "#6a5a4a");
+        s.fillTriangle(hx(20), hy(10), hx(16), hy(0), hx(24), hy(6), hfcDk);
+        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), hfcDk);
       } else if (dir2 === "right") {
-        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), "#6a5a4a");
-        s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), "#8a7a6a");
+        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), hfcDk);
+        s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), hfc);
       }
     } else if (hf === "antennae") {
       const tip = pal.eyeColor ?? "#00e5ff";
       if (dir2 === "down") {
-        s.line(hx(27), hy(8), hx(24), hy(0), pal.hair);
+        s.line(hx(27), hy(8), hx(24), hy(0), hfc);
         s.set(hx(24), hy(0), tip); s.set(hx(23), hy(1), tip);
-        s.line(hx(37), hy(8), hx(40), hy(0), pal.hair);
+        s.line(hx(37), hy(8), hx(40), hy(0), hfc);
         s.set(hx(40), hy(0), tip); s.set(hx(41), hy(1), tip);
       } else if (dir2 === "up") {
-        s.line(hx(27), hy(8), hx(24), hy(0), pal.hair);
+        s.line(hx(27), hy(8), hx(24), hy(0), hfc);
         s.set(hx(24), hy(0), tip);
-        s.line(hx(37), hy(8), hx(40), hy(0), pal.hair);
+        s.line(hx(37), hy(8), hx(40), hy(0), hfc);
         s.set(hx(40), hy(0), tip);
       } else if (dir2 === "right") {
-        s.line(hx(37), hy(8), hx(40), hy(0), pal.hair);
+        s.line(hx(37), hy(8), hx(40), hy(0), hfc);
         s.set(hx(40), hy(0), tip); s.set(hx(41), hy(1), tip);
       }
     } else if (hf === "elf ears") {
@@ -680,8 +686,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
         s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.skin);
         s.set(hx(50), hy(22), skinDk);
       } else if (dir2 === "up") {
-        s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.hair);
-        s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), pal.hair);
+        s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), hfc);
+        s.fillTriangle(hx(49), hy(24), hx(53), hy(18), hx(47), hy(26), hfc);
       } else if (dir2 === "right") {
         s.fillTriangle(hx(15), hy(24), hx(11), hy(18), hx(17), hy(26), pal.skin);
         s.set(hx(14), hy(22), skinDk);
@@ -743,7 +749,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(32), hy(22), 13, 12, pal.skin);
     if (!stampComponent("hair", pal.hairStyle, "down", pose, pal.hair)) drawHairDown();
-    drawHeadFeature("down");
+    if (!stampComponent("headFeature", pal.headFeature ?? "none", "down", pose, pal.hair)) drawHeadFeature("down");
     s.set(hx(32), hy(19), pal.skin);
     // Face 3-tone
     el(hx(26), hy(24), 3, 5, skinLi);
@@ -777,7 +783,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     // Blush — soft alpha
     s.fillCircleAlpha(hx(24), hy(27), 3, blush, 0.35);
     s.fillCircleAlpha(hx(40), hy(27), 3, blush, 0.35);
-    drawAccessory("down");
+    if (!stampComponent("accessory", pal.accessory, "down", pose, pal.shirt)) drawAccessory("down");
     if (!stampComponent("beard", pal.beard ?? "none", "down", pose, pal.hair)) drawBeard("down");
 
     // ---- NECK ----
@@ -841,13 +847,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       vGradRR(lx(fx), ly(58), 8, 14, 3, pantsLi, pantsDk);
       texOverlay(lx(fx), ly(58), 8, 14, pal.pants, "pantsFabric");
       s.rect(lx(fx), ly(58), 2, 14, pantsLi);
-      el(lx(fx + 4), ly(74), 6, 4, SHOE);
-      s.set(lx(fx + 2), ly(73), shoeLi);
-      s.set(lx(fx + 3), ly(73), shoeMid);
-      s.set(lx(fx + 6), ly(76), shoeDk);
       rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
-      el(lx(rx2 + 4), ly(72), 6, 4, SHOE);
-      s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
       const legLX = isFat ? 21 : 23;
       const legRX = isFat ? 35 : 33;
@@ -860,6 +860,22 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       vGradRR(lx(legRX), ly(58), legW, 14, 3, pantsLi, pantsDk);
       texOverlay(lx(legRX), ly(58), legW, 14, pal.pants, "pantsFabric");
       s.rect(lx(legRX), ly(58), 2, 14, pantsLi);
+    }
+    }
+    // Shoes (always drawn — not part of AI pants component)
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
+      const fx = leftUp ? 33 : 23;
+      const rx2 = leftUp ? 23 : 33;
+      el(lx(fx + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(fx + 2), ly(73), shoeLi);
+      s.set(lx(fx + 3), ly(73), shoeMid);
+      s.set(lx(fx + 6), ly(76), shoeDk);
+      el(lx(rx2 + 4), ly(72), 6, 4, SHOE);
+      s.set(lx(rx2 + 2), ly(71), shoeLi);
+    } else {
+      const legLX = isFat ? 21 : 23;
+      const legRX = isFat ? 35 : 33;
       el(lx(legLX + 4), ly(74), 6, 4, SHOE);
       el(lx(legRX + 4), ly(74), 6, 4, SHOE);
       s.set(lx(legLX + 2), ly(73), shoeLi);
@@ -868,7 +884,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(legRX + 3), ly(73), shoeMid);
       s.set(lx(legLX + 6), ly(76), shoeDk);
       s.set(lx(legRX + 6), ly(76), shoeDk);
-    }
     }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
@@ -879,8 +894,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     ciO(hx(32), hy(18), 17, pal.hair);
     rGradCi(hx(32), hy(18), 17, hairLi, hairDk, -4, -4);
     if (!stampComponent("hair", pal.hairStyle, "up", pose, pal.hair)) drawHairUp();
-    drawHeadFeature("up");
-    drawAccessory("up");
+    if (!stampComponent("headFeature", pal.headFeature ?? "none", "up", pose, pal.hair)) drawHeadFeature("up");
+    if (!stampComponent("accessory", pal.accessory, "up", pose, pal.shirt)) drawAccessory("up");
 
     // ---- NECK ----
     rr(bx(29), by(34), 6, 4, 2, skinDk);
@@ -932,13 +947,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       vGradRR(lx(fx), ly(58), 8, 14, 3, pantsLi, pantsDk);
       texOverlay(lx(fx), ly(58), 8, 14, pal.pants, "pantsFabric");
       s.rect(lx(fx), ly(58), 2, 14, pantsLi);
-      el(lx(fx + 4), ly(74), 6, 4, SHOE);
-      s.set(lx(fx + 2), ly(73), shoeLi);
-      s.set(lx(fx + 3), ly(73), shoeMid);
-      s.set(lx(fx + 6), ly(76), shoeDk);
       rrO(lx(rx2), ly(60), 8, 10, 3, pal.pants);
-      el(lx(rx2 + 4), ly(72), 6, 4, SHOE);
-      s.set(lx(rx2 + 2), ly(71), shoeLi);
     } else {
       rrO(lx(23), ly(58), 8, 14, 3, pal.pants);
       vGradRR(lx(23), ly(58), 8, 14, 3, pantsLi, pantsDk);
@@ -948,6 +957,20 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       vGradRR(lx(33), ly(58), 8, 14, 3, pantsLi, pantsDk);
       texOverlay(lx(33), ly(58), 8, 14, pal.pants, "pantsFabric");
       s.rect(lx(33), ly(58), 2, 14, pantsLi);
+    }
+    }
+    // Shoes (always drawn — not part of AI pants component)
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
+      const fx = leftUp ? 33 : 23;
+      const rx2 = leftUp ? 23 : 33;
+      el(lx(fx + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(fx + 2), ly(73), shoeLi);
+      s.set(lx(fx + 3), ly(73), shoeMid);
+      s.set(lx(fx + 6), ly(76), shoeDk);
+      el(lx(rx2 + 4), ly(72), 6, 4, SHOE);
+      s.set(lx(rx2 + 2), ly(71), shoeLi);
+    } else {
       el(lx(27), ly(74), 6, 4, SHOE);
       el(lx(37), ly(74), 6, 4, SHOE);
       s.set(lx(25), ly(73), shoeLi);
@@ -956,7 +979,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(36), ly(73), shoeMid);
       s.set(lx(29), ly(76), shoeDk);
       s.set(lx(39), ly(76), shoeDk);
-    }
     }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
@@ -968,7 +990,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
     el(hx(35), hy(24), 11, 9, pal.skin);
     if (!stampComponent("hair", pal.hairStyle, "right", pose, pal.hair)) drawHairRight();
-    drawHeadFeature("right");
+    if (!stampComponent("headFeature", pal.headFeature ?? "none", "right", pose, pal.hair)) drawHeadFeature("right");
     s.set(hx(32), hy(19), pal.skin);
     // Ear
     s.set(hx(28), hy(24), skinDk);
@@ -1003,7 +1025,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(hx(43), hy(29), skinDk);
     // Blush — soft alpha
     s.fillCircleAlpha(hx(32), hy(27), 3, blush, 0.35);
-    drawAccessory("right");
+    if (!stampComponent("accessory", pal.accessory, "right", pose, pal.shirt)) drawAccessory("right");
     if (!stampComponent("beard", pal.beard ?? "none", "right", pose, pal.hair)) drawBeard("right");
 
     // ---- NECK ----
@@ -1053,13 +1075,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       vGradRR(lx(frontX), ly(58), rlegW, 14, 3, pantsLi, pantsDk);
       texOverlay(lx(frontX), ly(58), rlegW, 14, pal.pants, "pantsFabric");
       s.rect(lx(frontX), ly(58), 2, 14, pantsLi);
-      el(lx(frontX + 4), ly(74), 6, 4, SHOE);
-      s.set(lx(frontX + 2), ly(73), shoeLi);
-      s.set(lx(frontX + 3), ly(73), shoeMid);
-      s.set(lx(frontX + 6), ly(76), shoeDk);
       // Back leg darker
       rrO(lx(backX), ly(60), rlegW, 10, 3, pantsDk);
-      el(lx(backX + 4), ly(72), 6, 4, shoeDk);
     } else {
       rrO(lx(25), ly(58), rlegW, 14, 3, pal.pants);
       vGradRR(lx(25), ly(58), rlegW, 14, 3, pantsLi, pantsDk);
@@ -1067,12 +1084,24 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.rect(lx(25), ly(58), 2, 14, pantsLi);
       rrO(lx(33), ly(58), rlegW, 14, 3, pantsDk);
       vGradRR(lx(33), ly(58), rlegW, 14, 3, pantsMid, pantsDk);
+    }
+    }
+    // Shoes (always drawn — not part of AI pants component)
+    if (stepping) {
+      const leftUp = pose === 1 || pose === 5;
+      const frontX = leftUp ? 29 : 25;
+      const backX = leftUp ? 25 : 29;
+      el(lx(frontX + 4), ly(74), 6, 4, SHOE);
+      s.set(lx(frontX + 2), ly(73), shoeLi);
+      s.set(lx(frontX + 3), ly(73), shoeMid);
+      s.set(lx(frontX + 6), ly(76), shoeDk);
+      el(lx(backX + 4), ly(72), 6, 4, shoeDk);
+    } else {
       el(lx(29), ly(74), 6, 4, SHOE);
       el(lx(37), ly(74), 6, 4, shoeDk);
       s.set(lx(27), ly(73), shoeLi);
       s.set(lx(28), ly(73), shoeMid);
       s.set(lx(31), ly(76), shoeDk);
-    }
     }
 
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso

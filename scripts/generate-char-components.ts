@@ -31,7 +31,7 @@ import {
   CW,
   CH,
 } from "../shared/char-draw";
-import { HAIR_STYLES, BEARD_STYLES } from "../shared/types";
+import { HAIR_STYLES, BEARD_STYLES, ACCESSORIES, HEAD_FEATURES } from "../shared/types";
 import { nanoBanana2Edit, removeBackground, downloadUrl } from "./lib/fal-client.js";
 import { saveBuffer, uploadToFal } from "./lib/post-process.js";
 
@@ -40,7 +40,7 @@ const AI_CHAR_DIR = join(ROOT, "client", "public", "assets", "ai", "char");
 const SHEET_COLS = 8;
 const SHEET_DIRS: Dir[] = ["down", "right", "up"];
 
-type ComponentType = "hair" | "beard" | "shirt" | "pants";
+type ComponentType = "hair" | "beard" | "shirt" | "pants" | "accessory" | "headFeature";
 
 // Load .env
 try {
@@ -251,7 +251,41 @@ const PANTS_DEFS: ComponentDef[] = [
   { type: "pants", key: "default", desc: "simple trousers with visible folds, creases, and fabric texture", seed: 9000 },
 ];
 
-const ALL_DEFS: ComponentDef[] = [...HAIR_DEFS, ...BEARD_DEFS, ...SHIRT_DEFS, ...PANTS_DEFS];
+const ACCESSORY_DESCRIPTIONS: Record<string, string> = {
+  glasses: "stylish thick-rimmed glasses with reflective lenses and visible frame detail",
+  headband: "a prominent headband with texture and a small decorative knot",
+  earrings: "large noticeable hoop earrings with metallic shine and detail",
+  cap: "a detailed baseball cap with a curved brim, stitching, and a logo patch",
+  beanie: "a cozy knit beanie with visible ribbed texture and a folded cuff",
+  headphones: "large over-ear headphones with padded ear cups, a thick headband, and metallic details",
+};
+
+const ACCESSORY_DEFS: ComponentDef[] = ACCESSORIES
+  .filter((s) => s !== "none")
+  .map((style, i) => ({
+    type: "accessory" as const,
+    key: style,
+    desc: ACCESSORY_DESCRIPTIONS[style] ?? style,
+    seed: 10000 + i,
+  }));
+
+const HEAD_FEATURE_DESCRIPTIONS: Record<string, string> = {
+  "cat ears": "large pointed cat ears with inner fur detail and shading",
+  horns: "prominent curved demon horns with ridged texture and shading",
+  antennae: "thin insect antennae with glowing bulbous tips",
+  "elf ears": "large pointed elf ears extending outward with inner detail",
+};
+
+const HEAD_FEATURE_DEFS: ComponentDef[] = HEAD_FEATURES
+  .filter((s) => s !== "none")
+  .map((style, i) => ({
+    type: "headFeature" as const,
+    key: style,
+    desc: HEAD_FEATURE_DESCRIPTIONS[style] ?? style,
+    seed: 11000 + i,
+  }));
+
+const ALL_DEFS: ComponentDef[] = [...HAIR_DEFS, ...BEARD_DEFS, ...SHIRT_DEFS, ...PANTS_DEFS, ...ACCESSORY_DEFS, ...HEAD_FEATURE_DEFS];
 
 // =============================================================== green palette
 
@@ -281,6 +315,10 @@ function greenPaletteFor(type: ComponentType, style: string): CharPalette {
       return { ...base, shirt: "#ffffff", shirtShade: "#cccccc" };
     case "pants":
       return { ...base, pants: "#ffffff" };
+    case "accessory":
+      return { ...base, accessory: style, accessoryColor: "#ffffff" };
+    case "headFeature":
+      return { ...base, headFeature: style, headFeatureColor: "#ffffff" };
   }
 }
 
@@ -380,7 +418,9 @@ function buildComponentPrompt(type: ComponentType, desc: string): string {
     type === "hair" ? "hair" :
     type === "beard" ? "facial hair / beard" :
     type === "shirt" ? "shirt / clothing on the torso" :
-    "pants / trousers on the legs";
+    type === "pants" ? "pants / trousers on the legs" :
+    type === "accessory" ? "accessory (glasses, headband, cap, etc.)" :
+    "head feature (ears, horns, antennae, etc.)";
 
   return `Enhance this pixel art character sprite sheet. The sheet has 8 columns (animation poses, left to right) and 3 rows (top=facing forward/down, middle=facing right, bottom=facing away/up). Each grid cell is one character frame.
 
@@ -412,11 +452,12 @@ function parseArgs(): { component?: ComponentType; filter?: string; dryRun: bool
 }
 
 async function processComponent(def: ComponentDef, dryRun: boolean): Promise<void> {
+  const safeKey = def.key.replace(/ /g, "_");
   const outDir = join(AI_CHAR_DIR, def.type);
-  const frameDir = join(outDir, def.key);
+  const frameDir = join(outDir, safeKey);
   const allExist = SHEET_DIRS.every((dir) =>
     Array.from({ length: SHEET_COLS }, (_, p) =>
-      existsSync(join(frameDir, `${def.key}_${dir}_${p}.png`))
+      existsSync(join(frameDir, `${safeKey}_${dir}_${p}.png`))
     ).every(Boolean)
   );
 
@@ -470,7 +511,7 @@ async function processComponent(def: ComponentDef, dryRun: boolean): Promise<voi
     const dir = SHEET_DIRS[Math.floor(i / SHEET_COLS)];
     const pose = i % SHEET_COLS;
     const componentFrame = await extractComponent(frames[i]);
-    const outPath = join(frameDir, `${def.key}_${dir}_${pose}.png`);
+    const outPath = join(frameDir, `${safeKey}_${dir}_${pose}.png`);
     saveBuffer(outPath, componentFrame);
   }
   console.log(`         saved 24 frames to ${frameDir}`);

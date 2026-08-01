@@ -2636,7 +2636,7 @@ export class WorldLayer {
       }
 
       // --- spawn creatures based on hostility (skip farthest infernal region) ---
-      if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 600 + Math.random() * 1200) {
+      if (this.creatures.length < CREATURE_CAP && time - this.lastSpawnTime > 1500 + Math.random() * 2000) {
         if (hostility >= 0 && hostility < 5) {
           const spawnCount = hostility === 0 ? 1 : 2 + Math.floor(hostility / 2);
           let spawnedAny = false;
@@ -2645,7 +2645,7 @@ export class WorldLayer {
             let placed = false;
             for (let attempt = 0; attempt < 5 && !placed; attempt++) {
               const angle = Math.random() * Math.PI * 2;
-              const dist = hostility === 0 ? 500 + Math.random() * 300 : 250 + Math.random() * 300;
+              const dist = hostility === 0 ? 800 + Math.random() * 400 : 250 + Math.random() * 300;
               const sx = playerX + Math.cos(angle) * dist;
               const sy = playerY + Math.sin(angle) * dist;
               const { tx, ty } = this.pixelToTile(sx, sy);
