@@ -128,6 +128,7 @@ export interface CharAppearance {
   beard: number;      // index into BEARD_STYLES
   eyeColor: number;   // index into EYE_COLORS
   headFeature: number; // index into HEAD_FEATURES
+  bodyType?: "normal" | "fat"; // optional, defaults to "normal"
 }
 
 /** Default appearance (matches pre-baked char-0). */

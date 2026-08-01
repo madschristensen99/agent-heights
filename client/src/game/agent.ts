@@ -667,6 +667,7 @@ export class AgentResourcesNPC {
   private state: AgentResourcesState = "sitting";
   private greetUntil = 0;
   private wasPlayerInside = false;
+  private texKey = "char-agent-resources";
 
   constructor(
     scene: Phaser.Scene,
@@ -675,11 +676,10 @@ export class AgentResourcesNPC {
     onClick: (id: string) => void,
   ) {
     this.seat = seat;
-    const c = "char-agent-resources";
 
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
-    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(1);
+    this.sprite = scene.add.sprite(0, 0, this.texKey, 6).setOrigin(0.5, 1).setScale(1);
     this.nameTag = createNameTag(scene, "Agent Resources", "idle");
 
     this.container = scene.add.container(feet.x, feet.y, [
@@ -691,7 +691,7 @@ export class AgentResourcesNPC {
     this.container.setDepth(10 + this.container.y);
     // start sitting at desk, facing left toward the entrance
     this.dir = "left";
-    this.play(`${c}-idle-left`);
+    this.play(`${this.texKey}-idle-left`);
 
     this.sprite.setInteractive({ useHandCursor: true });
     this.sprite.on("pointerdown", () => onClick(AGENT_RESOURCES_ID));
@@ -701,6 +701,14 @@ export class AgentResourcesNPC {
   sync(info: AgentInfo): void {
     this.info = info;
     this.nameTag.setStatus(info.status);
+    if (info.appearance) {
+      const key = agentTextureKey(info);
+      if (key !== this.texKey) {
+        this.texKey = key;
+        this.sprite.setTexture(key, 6);
+        this.play(`${key}-idle-${this.dir}`);
+      }
+    }
   }
 
   /** Get current state for broadcasting to other clients. */
@@ -720,8 +728,7 @@ export class AgentResourcesNPC {
     this.state = state as AgentResourcesState;
     // Clear path — visitors don't run the pathfinding state machine
     this.path = [];
-    const c = "char-agent-resources";
-    this.play(`${c}-idle-${this.dir}`);
+    this.play(`${this.texKey}-idle-${this.dir}`);
     this.container.setDepth(10 + this.container.y);
   }
 
@@ -736,7 +743,7 @@ export class AgentResourcesNPC {
   }
 
   update(time: number, _dt: number, _wander: boolean, playerX: number, playerY: number): void {
-    const c = "char-agent-resources";
+    const c = this.texKey;
     const pt = tileOf(playerX, playerY);
     const playerInside =
       pt.x >= AGENT_RESOURCES_OFFICE.x0 && pt.x <= AGENT_RESOURCES_OFFICE.x1 &&
@@ -837,6 +844,7 @@ export class HermesNPC {
   private sortUntil = 0;
   private deliverUntil = 0;
   private scene: Phaser.Scene;
+  private texKey = "char-hermes";
 
   constructor(
     scene: Phaser.Scene,
@@ -846,11 +854,10 @@ export class HermesNPC {
   ) {
     this.seat = seat;
     this.scene = scene;
-    const c = "char-hermes";
 
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 52, 20, 0x000000, 0.15);
-    this.sprite = scene.add.sprite(0, 0, c, 6).setOrigin(0.5, 1).setScale(1);
+    this.sprite = scene.add.sprite(0, 0, this.texKey, 6).setOrigin(0.5, 1).setScale(1);
     this.nameTag = createNameTag(scene, "Hermes", "idle");
     this.emoteSprite = scene.add.sprite(0, -140, "emote-icons", 0)
       .setVisible(false)
@@ -864,7 +871,7 @@ export class HermesNPC {
       this.emoteSprite,
     ]);
     this.container.setDepth(10 + this.container.y);
-    this.sprite.play(`${c}-idle-right`);
+    this.sprite.play(`${this.texKey}-idle-right`);
 
     this.sprite.setInteractive({ useHandCursor: true });
     this.sprite.on("pointerdown", () => onClick(HERMES_ID));
@@ -873,6 +880,14 @@ export class HermesNPC {
   sync(info: AgentInfo): void {
     this.info = info;
     this.nameTag.setStatus(info.status);
+    if (info.appearance) {
+      const key = agentTextureKey(info);
+      if (key !== this.texKey) {
+        this.texKey = key;
+        this.sprite.setTexture(key, 6);
+        this.play(`${key}-idle-${this.dir}`);
+      }
+    }
   }
 
   /** Get current state for broadcasting to other clients. */
@@ -891,8 +906,7 @@ export class HermesNPC {
     this.dir = dir;
     this.state = state as HermesState;
     this.path = [];
-    const c = "char-hermes";
-    this.play(`${c}-idle-${this.dir}`);
+    this.play(`${this.texKey}-idle-${this.dir}`);
     this.container.setDepth(10 + this.container.y);
   }
 
@@ -932,7 +946,7 @@ export class HermesNPC {
   }
 
   update(time: number, dt: number): void {
-    const c = "char-hermes";
+    const c = this.texKey;
     dt = Math.min(dt, 100);
 
     if (this.emoteUntil > 0 && time >= this.emoteUntil) {

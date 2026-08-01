@@ -276,11 +276,24 @@ export class BootScene extends Phaser.Scene {
     };
 
     extractComponentAtlas("ai-hair-atlas", "ai-hair-atlas-meta", AI_HAIR_STYLES, hairFrameKey, compProvider.hair!);
-    extractComponentAtlas("ai-beard-atlas", "ai-beard-atlas-meta", AI_BEARD_STYLES, beardFrameKey, compProvider.beard!);
     extractComponentAtlas("ai-shirt-atlas", "ai-shirt-atlas-meta", AI_SHIRT_STYLES, shirtFrameKey, compProvider.shirt!);
     extractComponentAtlas("ai-pants-atlas", "ai-pants-atlas-meta", AI_PANTS_STYLES, pantsFrameKey, compProvider.pants!);
-    extractComponentAtlas("ai-accessory-atlas", "ai-accessory-atlas-meta", AI_ACCESSORY_STYLES, accessoryFrameKey, compProvider.accessory!);
-    extractComponentAtlas("ai-headFeature-atlas", "ai-headFeature-atlas-meta", AI_HEAD_FEATURE_STYLES, headFeatureFrameKey, compProvider.headFeature!);
+
+    // Defer non-critical component extraction (beard, accessory, headFeature)
+    // to after the game starts — these are rarely needed immediately and
+    // each extractComponentAtlas call does many canvas + getImageData operations.
+    const deferredProvider: CharComponentProvider = { beard: {}, accessory: {}, headFeature: {} };
+    const deferredExtract = () => {
+      extractComponentAtlas("ai-beard-atlas", "ai-beard-atlas-meta", AI_BEARD_STYLES, beardFrameKey, deferredProvider.beard!);
+      extractComponentAtlas("ai-accessory-atlas", "ai-accessory-atlas-meta", AI_ACCESSORY_STYLES, accessoryFrameKey, deferredProvider.accessory!);
+      extractComponentAtlas("ai-headFeature-atlas", "ai-headFeature-atlas-meta", AI_HEAD_FEATURE_STYLES, headFeatureFrameKey, deferredProvider.headFeature!);
+      // Merge into the main provider
+      const merged = { ...compProvider, ...deferredProvider } as CharComponentProvider;
+      setCharComponentProvider(merged);
+    };
+    // Run after the game has started — atlas sources persist in the global
+    // TextureManager so extraction works even after BootScene shuts down.
+    setTimeout(deferredExtract, 2000);
 
     const hasAny =
       (compProvider.hair && Object.keys(compProvider.hair).length > 0) ||
@@ -486,7 +499,7 @@ export class BootScene extends Phaser.Scene {
     }
 
     // --- character sheet animations ---
-    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss", "char-agent-resources"];
+    const sheets = [...Array.from({ length: CHAR_VARIANTS }, (_, i) => `char-${i}`), "boss", "char-agent-resources", "char-hermes"];
     const dirs: Dir[] = ["down", "left", "right", "up"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;

@@ -6383,10 +6383,20 @@ export class OfficeScene extends Phaser.Scene {
   private syncAgents(): void {
     for (const [id, info] of this.store.agents) {
       if (id === AGENT_RESOURCES_ID) {
+        if (info.appearance) {
+          const key = agentTextureKey(info);
+          generateCharTexture(this, key, info.appearance);
+          this.ensureCharAnimations(key);
+        }
         this.agentResources?.sync(info);
         continue;
       }
       if (id === HERMES_ID) {
+        if (info.appearance) {
+          const key = agentTextureKey(info);
+          generateCharTexture(this, key, info.appearance);
+          this.ensureCharAnimations(key);
+        }
         this.hermes?.sync(info);
         continue;
       }
@@ -7984,12 +7994,12 @@ export class OfficeScene extends Phaser.Scene {
 
     // Resolve sprite image for the dashboard header
     let spriteImg: string;
-    if (agent.id === AGENT_RESOURCES_ID) {
+    if (agent.appearance) {
+      spriteImg = generateCharPreviewDataURL(agent.appearance, 3);
+    } else if (agent.id === AGENT_RESOURCES_ID) {
       spriteImg = "assets/characters/char-agent-resources.png";
     } else if (agent.id === HERMES_ID) {
       spriteImg = "assets/characters/char-hermes.png";
-    } else if (agent.appearance) {
-      spriteImg = generateCharPreviewDataURL(agent.appearance, 3);
     } else {
       spriteImg = `assets/characters/char-${agent.sprite}.png`;
     }

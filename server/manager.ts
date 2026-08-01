@@ -230,7 +230,7 @@ interface QueuedTask {
   /** Schedule that fired this task, if any (for backoff tracking). */
   scheduleId?: string | null;
   /** Review context if this queued task is a manager review. */
-  reviewContext?: { agentId: string; agentName: string; originalTask: string } | null;
+  reviewContext?: { agentId: string; agentName: string; originalTask: string; cardId?: string | null } | null;
   /** Agent to release from "waiting" when this task finishes. */
   notifyOnComplete?: string | null;
   /** Agent to walk to and wait at after completing this task. */
@@ -268,7 +268,7 @@ interface AgentRuntime {
   /** Timestamp when the current task started (for duration tracking). */
   taskStartedAt: number;
   /** Context for review tasks: which agent+task is being reviewed. */
-  reviewContext: { agentId: string; agentName: string; originalTask: string } | null;
+  reviewContext: { agentId: string; agentName: string; originalTask: string; cardId?: string | null } | null;
   /** Platform context for tasks that came from a messaging platform (Telegram, etc.). */
   platformContext: { platform: string; sender: string } | null;
   /** Agent ID we are waiting at (status "waiting"). */
@@ -281,6 +281,8 @@ interface AgentRuntime {
   freshStart: boolean;
   /** Summary of prior tasks injected into the system prompt on a fresh start. */
   memorySummary: string | null;
+  /** If true, a stale-session retry has already been attempted for the current task. */
+  retryAttempted: boolean;
 }
 
 export class AgentManager {
@@ -440,7 +442,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -589,7 +591,15 @@ export class AgentManager {
 
   /** Ensure Agent Resources — the permanent office manager — always exists in the roster. */
   private ensureAgentResources(): void {
-    if (this.agents.has(AGENT_RESOURCES_ID)) return;
+    if (this.agents.has(AGENT_RESOURCES_ID)) {
+      const rt = this.agents.get(AGENT_RESOURCES_ID)!;
+      if (!rt.info.appearance) {
+        rt.info.appearance = { skin: 0, hairStyle: 3, hair: 8, shirt: 9, pants: 6, accessory: 2, accent: 0, beard: 0, eyeColor: 3, headFeature: 0 };
+        this.persist();
+        this.broadcast({ type: "agent", agent: rt.info });
+      }
+      return;
+    }
     const info: AgentInfo = {
       id: AGENT_RESOURCES_ID,
       name: "Agent Resources",
@@ -600,7 +610,7 @@ export class AgentManager {
       task: null,
       deskIndex: -1,
       sprite: 0,
-      appearance: null,
+      appearance: { skin: 0, hairStyle: 3, hair: 8, shirt: 9, pants: 6, accessory: 2, accent: 0, beard: 0, eyeColor: 3, headFeature: 0 },
       accent: "#c44a4a",
       systemPrompt: "",
       role: "manager",
@@ -610,7 +620,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
     this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -618,7 +628,15 @@ export class AgentManager {
 
   /** Ensure Hermes — the permanent devops engineer — always exists in the roster. */
   private ensureHermes(): void {
-    if (this.agents.has(HERMES_ID)) return;
+    if (this.agents.has(HERMES_ID)) {
+      const rt = this.agents.get(HERMES_ID)!;
+      if (!rt.info.appearance) {
+        rt.info.appearance = { skin: 0, hairStyle: 9, hair: 3, shirt: 2, pants: 5, accessory: 1, accent: 1, beard: 4, eyeColor: 3, headFeature: 0, bodyType: "fat" };
+        this.persist();
+        this.broadcast({ type: "agent", agent: rt.info });
+      }
+      return;
+    }
     const info: AgentInfo = {
       id: HERMES_ID,
       name: "Hermes",
@@ -629,7 +647,7 @@ export class AgentManager {
       task: null,
       deskIndex: -1,
       sprite: 0,
-      appearance: null,
+      appearance: { skin: 0, hairStyle: 9, hair: 3, shirt: 2, pants: 5, accessory: 1, accent: 1, beard: 4, eyeColor: 3, headFeature: 0, bodyType: "fat" },
       accent: "#3a7cb5",
       systemPrompt: "",
       role: "devops",
@@ -639,7 +657,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -1187,7 +1205,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -1251,7 +1269,7 @@ export class AgentManager {
     this.broadcast({ type: "toast", text: `${rt.info.name}'s system prompt updated.` });
   }
 
-  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null, notifyOnComplete?: string, waitFor?: string): void {
+  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string; cardId?: string | null } | null, notifyOnComplete?: string, waitFor?: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     const cleanTask = task.trim();
@@ -1348,7 +1366,7 @@ export class AgentManager {
   }
 
   /** Begin executing a task immediately (assumes agent is idle). */
-  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string } | null, notifyOnComplete?: string, waitFor?: string): void {
+  private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string; cardId?: string | null } | null, notifyOnComplete?: string, waitFor?: string): void {
     const cleanTask = task.trim();
     if (!cleanTask) return;
 
@@ -1803,7 +1821,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -1849,7 +1867,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2515,6 +2533,7 @@ export class AgentManager {
     let finalText = "";
     let abortReason = ""; // set when system-initiated abort fires (loop, budget, idle)
     const hadSession = rt.info.sessionId != null;
+    let shouldRetry = false; // set when stale session error triggers a one-time retry
     try {
       const events = runner(prompt, {
         cwd: this.cwdFor(slug, rt.info.id),
@@ -2714,9 +2733,17 @@ export class AgentManager {
         clearAllMemory(rt.info.id);
         void this.save.clearMessages(rt.info.id);
         this.persist();
-        this.log(rt, "status", isTokenLimitError
-          ? "Context window exceeded — starting a fresh conversation next task (previous conversation archived)."
-          : "Couldn't resume memory — starting a fresh conversation next task.");
+        // Retry once with a fresh session for stale session errors (not token limit)
+        if (isStaleSessionError && !gotEvents && !rt.retryAttempted) {
+          rt.retryAttempted = true;
+          rt.freshStart = true;
+          shouldRetry = true;
+          this.log(rt, "status", "Stale session detected — retrying with a fresh conversation.");
+        } else {
+          this.log(rt, "status", isTokenLimitError
+            ? "Context window exceeded — starting a fresh conversation next task (previous conversation archived)."
+            : "Couldn't resume memory — starting a fresh conversation next task.");
+        }
       }
 
       if (!sawError && !abort.signal.aborted) {
@@ -2727,7 +2754,10 @@ export class AgentManager {
         // For Flow 4 (just wait, no handoff), startWaiting sets it directly.
         if (rt.waitFor) this.startWaiting(rt, rt.waitFor);
         if (isManager && isReviewTask && rt.reviewContext) this.processReviewVerdict(rt, finalText);
-        this.notifyManagersOfCompletion(rt, task, finalText, false);
+        // Don't notify managers when a manager completes a review — the verdict is already
+        // handled by processReviewVerdict above. Notifying would create a recursive
+        // review-of-review chain that loops indefinitely.
+        if (!(isManager && isReviewTask)) this.notifyManagersOfCompletion(rt, task, finalText, false);
         // Release any agent that was waiting for this task to finish.
         if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
         this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
@@ -2777,7 +2807,12 @@ export class AgentManager {
       rt.memorySummary = null;
       if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
         const duration = Date.now() - rt.taskStartedAt;
-        if (sawError) {
+        if (shouldRetry) {
+          // Stale session retry — don't record as failure, just re-invoke with fresh session.
+          // retryAttempted stays true so the retry invocation won't retry again.
+          this.setStatus(rt, "working");
+          void this.runTask(rt, task, false);
+        } else if (sawError) {
           rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           // Auto-record task failure in the office state graph
@@ -2869,6 +2904,8 @@ export class AgentManager {
       if (!this.shuttingDown) {
         rt.scheduleId = null;
       }
+      // Reset retry flag for future tasks (the retry invocation has its own finally)
+      if (!shouldRetry) rt.retryAttempted = false;
     }
   }
 
@@ -2990,13 +3027,21 @@ export class AgentManager {
       const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${ctx.originalTask.slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.`;
       this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback.`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} requested rework from ${ctx.agentName}.` });
-      this.assign(ctx.agentId, reworkTask);
+      // Reuse the original card so the rework doesn't create a new orphaned card
+      this.assign(ctx.agentId, reworkTask, undefined, ctx.cardId ?? undefined);
       return;
     }
 
     if (/\bAPPROVED\b/i.test(reviewText)) {
       this.log(mgr, "status", `Review verdict: APPROVED — ${ctx.agentName}'s work accepted.`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} approved ${ctx.agentName}'s work.` });
+      // Move the original card to done if it's still in backlog (e.g. worker failed but manager accepts)
+      if (ctx.cardId) {
+        const card = this.board.get(ctx.cardId);
+        if (card && card.status === "backlog") {
+          this.completeCard(ctx.cardId);
+        }
+      }
       // Post approval message to the original agent's inbox
       const slug = this.slugFor(target);
       const inboxPath = join(this.cwdFor(slug, ctx.agentId), "inbox.jsonl");
@@ -3118,7 +3163,7 @@ export class AgentManager {
         const reviewTask = failed
           ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}. Review the situation and decide if any action is needed. End your response with either APPROVED (if no further action is needed) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`
           : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed. End your response with either APPROVED (if the work is acceptable) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`;
-        this.assign(mgr.info.id, reviewTask, undefined, undefined, undefined, { agentId: rt.info.id, agentName: rt.info.name, originalTask: task });
+        this.assign(mgr.info.id, reviewTask, undefined, undefined, undefined, { agentId: rt.info.id, agentName: rt.info.name, originalTask: task, cardId: rt.cardId });
       }
     }
 

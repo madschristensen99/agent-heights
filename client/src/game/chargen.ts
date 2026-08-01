@@ -51,6 +51,7 @@ export function appearanceToPalette(ap: CharAppearance): CharPalette {
     eyeColor: EYE_COLORS[ap.eyeColor % EYE_COLORS.length],
     headFeature: HEAD_FEATURES[ap.headFeature % HEAD_FEATURES.length],
     beard: BEARD_STYLES[ap.beard % BEARD_STYLES.length],
+    bodyType: ap.bodyType,
   };
 }
 
