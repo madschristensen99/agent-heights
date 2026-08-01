@@ -2140,6 +2140,8 @@ export class WorldLayer {
     const EDGE_WIDTH = 4;
     const remaining: RenderJob[] = [];
     for (const job of this.renderingQueue) {
+      // Skip if texture was destroyed (chunk unloaded / scene restart) mid-render
+      if (!this.scene.textures.exists(job.texKey)) continue;
       const { chunk, ctx, ssTilePx, SS, worldTilesTex, overlayTextures, edgeTileColors } = job;
       const endRow = Math.min(job.currentRow + RENDER_ROWS_PER_FRAME, CHUNK_SIZE);
 
