@@ -67,7 +67,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     // AI texture atlases (replaces 480+ individual requests with 6)
-    const atlasVer = "?v=275";
+    const atlasVer = "?v=276";
     this.load.image("ai-tiles-atlas", `assets/atlases/ai-tiles-atlas.webp${atlasVer}`);
     this.load.json("ai-tiles-atlas-meta", `assets/atlases/ai-tiles-atlas.json${atlasVer}`);
     this.load.image("ai-sprites-atlas", `assets/atlases/ai-sprites-atlas.webp${atlasVer}`);
@@ -320,9 +320,11 @@ export class BootScene extends Phaser.Scene {
     const processNextStep = () => {
       if (stepIndex >= allSteps.length) {
         updateBar(1, "Ready!");
+        console.log(`[boot] texture steps done at ${performance.now().toFixed(0)}ms`);
         const store = this.game.registry.get("store") as Store | undefined;
         const startOffice = () => {
           if (this.scene.isActive("office")) return;
+          console.log(`[boot] starting OfficeScene at ${performance.now().toFixed(0)}ms`);
           this.scene.start("office");
         };
 
@@ -335,6 +337,7 @@ export class BootScene extends Phaser.Scene {
           };
           const tryStart = (state: AuthState) => {
             if (state.loading) return;
+            console.log(`[boot] auth state: session=${!!state.session} initialDataReady=${store?.initialDataReady} at ${performance.now().toFixed(0)}ms`);
             if (state.session) {
               if (!store || store.initialDataReady) {
                 startOfficeOnce();
@@ -352,6 +355,7 @@ export class BootScene extends Phaser.Scene {
           onAuthChange(tryStart);
           this.time.delayedCall(15000, () => startOfficeOnce());
         } else {
+          console.log(`[boot] no auth, initialDataReady=${store?.initialDataReady} at ${performance.now().toFixed(0)}ms`);
           if (!store || store.initialDataReady) {
             startOffice();
           } else {

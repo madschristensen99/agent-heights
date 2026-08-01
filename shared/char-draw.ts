@@ -652,16 +652,21 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       }
     } else if (hf === "horns") {
       if (dir2 === "down") {
-        s.fillTriangle(hx(20), hy(10), hx(16), hy(0), hx(24), hy(6), hfcDk);
-        s.fillTriangle(hx(21), hy(9), hx(18), hy(3), hx(23), hy(7), hfc);
-        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), hfcDk);
-        s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), hfc);
+        // Left horn — wider base, tapered tip, slight outward curve
+        s.fillTriangle(hx(18), hy(12), hx(14), hy(-1), hx(26), hy(8), hfcDk);
+        s.fillTriangle(hx(19), hy(11), hx(16), hy(2), hx(25), hy(9), hfc);
+        s.set(hx(17), hy(10), hfcDk);
+        // Right horn — mirrored
+        s.fillTriangle(hx(46), hy(12), hx(50), hy(-1), hx(38), hy(8), hfcDk);
+        s.fillTriangle(hx(45), hy(11), hx(48), hy(2), hx(39), hy(9), hfc);
+        s.set(hx(47), hy(10), hfcDk);
       } else if (dir2 === "up") {
-        s.fillTriangle(hx(20), hy(10), hx(16), hy(0), hx(24), hy(6), hfcDk);
-        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), hfcDk);
+        s.fillTriangle(hx(18), hy(12), hx(14), hy(-1), hx(26), hy(8), hfcDk);
+        s.fillTriangle(hx(46), hy(12), hx(50), hy(-1), hx(38), hy(8), hfcDk);
       } else if (dir2 === "right") {
-        s.fillTriangle(hx(44), hy(10), hx(40), hy(6), hx(48), hy(0), hfcDk);
-        s.fillTriangle(hx(43), hy(9), hx(41), hy(7), hx(46), hy(3), hfc);
+        s.fillTriangle(hx(46), hy(12), hx(50), hy(-1), hx(38), hy(8), hfcDk);
+        s.fillTriangle(hx(45), hy(11), hx(48), hy(2), hx(39), hy(9), hfc);
+        s.set(hx(47), hy(10), hfcDk);
       }
     } else if (hf === "antennae") {
       const tip = pal.eyeColor ?? "#00e5ff";

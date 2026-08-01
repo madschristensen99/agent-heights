@@ -902,7 +902,7 @@ export class Hud {
         <div class="onboard-layout">
           <div class="onboard-form">
             <label>YOUR NAME
-              <input id="ob-name" maxlength="24" placeholder="e.g. Kye" autofocus />
+              <input id="ob-name" maxlength="24" placeholder="e.g. Robert" autofocus />
             </label>
             <label>WORKSPACE NAME
               <input id="ob-workspace" maxlength="32" placeholder="e.g. My Office" />

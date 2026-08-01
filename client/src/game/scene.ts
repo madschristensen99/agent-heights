@@ -460,6 +460,7 @@ export class OfficeScene extends Phaser.Scene {
     const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null || this.store.isOrgRoom;
     this.theme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
     this.ready = false;
+    console.log(`[scene] create() start at ${performance.now().toFixed(0)}ms, roomId=${this.store.roomId}, initialDataReady=${this.store.initialDataReady}`);
 
     // Remove any stale overlay from a previous scene restart
     document.getElementById("office-loading")?.remove();
@@ -1187,10 +1188,11 @@ export class OfficeScene extends Phaser.Scene {
             });
           }
           this.ready = true;
+          console.log(`[scene] this.ready = true at ${performance.now().toFixed(0)}ms`);
 
           // If room_state arrived while scene was loading, restart to match
           if (this.store.roomId !== this.lastRoomId) {
-            console.log(`[scene] ready but room mismatch: lastRoomId=${this.lastRoomId} store.roomId=${this.store.roomId} — restarting`);
+            console.log(`[scene] ready but room mismatch: lastRoomId=${this.lastRoomId} store.roomId=${this.store.roomId} — restarting at ${performance.now().toFixed(0)}ms`);
             this.lastRoomId = this.store.roomId;
             this.ready = false;
             this.remotePlayers.clear();
@@ -1302,11 +1304,13 @@ export class OfficeScene extends Phaser.Scene {
 
       // Run the phase on the next frame so the bar update renders first
       this.time.delayedCall(0, () => {
+        const phaseStart = performance.now();
         try {
           const result = phase.fn() as unknown;
           if (result instanceof Promise) {
             // Async phase — wait for completion before advancing
             result.then(() => {
+              console.log(`[scene] phase "${phase.name}" done in ${(performance.now() - phaseStart).toFixed(0)}ms`);
               phaseIndex++;
               updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
               this.time.delayedCall(0, processNextPhase);
@@ -1317,6 +1321,7 @@ export class OfficeScene extends Phaser.Scene {
               this.time.delayedCall(0, processNextPhase);
             });
           } else {
+            console.log(`[scene] phase "${phase.name}" done in ${(performance.now() - phaseStart).toFixed(0)}ms`);
             phaseIndex++;
             updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
             this.time.delayedCall(0, processNextPhase);

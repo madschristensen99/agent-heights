@@ -271,7 +271,7 @@ const ACCESSORY_DEFS: ComponentDef[] = ACCESSORIES
 
 const HEAD_FEATURE_DESCRIPTIONS: Record<string, string> = {
   "cat ears": "large pointed cat ears with inner fur detail and shading",
-  horns: "prominent curved demon horns with ridged texture and shading",
+  horns: "sharp pointed tapered horns growing from the top of the head, like a goat or demon — conical shape widening at the base, with horizontal ridge rings and dark shading",
   antennae: "thin insect antennae with glowing bulbous tips",
   "elf ears": "large pointed elf ears extending outward with inner detail",
 };
