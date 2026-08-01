@@ -63,75 +63,148 @@ function linearGrad(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: n
 
 /* ---------- furniture drawing functions ---------- */
 
-/** Desk surface — left half (tile 17) */
+/** Desk surface — left half (tile 17) — modern white laminate with accessories */
 function drawDeskLeft(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
-  const topY = s * 0.25;
-  const h = s * 0.35;
+  const topY = s * 0.22;
+  const h = s * 0.38;
 
-  // shadow
-  ctx.fillStyle = hexRGBA(0x000000, 0.15);
+  // contact shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.18);
   ctx.beginPath();
-  ctx.ellipse(cx, s * 0.72, s * 0.48, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, s * 0.74, s * 0.48, s * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // desk leg (right side — shared with right half)
-  ctx.fillStyle = shade(0x3a3a40, -10);
-  ctx.fillRect(s * 0.46, s * 0.55, 4, s * 0.2);
-  ctx.fillStyle = shade(0x3a3a40, -30);
-  ctx.fillRect(s * 0.46, s * 0.72, 6, 3);
+  // desk leg (right side — shared with right half) — brushed aluminum
+  const legGrad = linearGrad(ctx, s * 0.44, 0, s * 0.52, 0, [
+    [0, shade(0x8a8a90, -10)],
+    [0.5, shade(0xc0c0c8, 15)],
+    [1, shade(0x6a6a70, -15)],
+  ]);
+  ctx.fillStyle = legGrad;
+  ctx.fillRect(s * 0.46, s * 0.55, 5, s * 0.2);
+  ctx.fillStyle = shade(0x4a4a50, -10);
+  ctx.fillRect(s * 0.45, s * 0.73, 7, 3);
 
-  // desk surface — laminated wood with bevel
+  // desk surface — modern white laminate with subtle warm tint
   const surfaceGrad = linearGrad(ctx, 0, topY, 0, topY + h, [
-    [0, shade(0x8a7a6a, 20)],
-    [0.3, shade(0x7a6a5a, 0)],
-    [0.7, shade(0x6a5a4a, -10)],
-    [1, shade(0x5a4a3a, -25)],
+    [0, shade(0xf4f4f6, 8)],
+    [0.3, shade(0xe8e8ec, 0)],
+    [0.7, shade(0xd8d8dc, -8)],
+    [1, shade(0xc8c8cc, -18)],
   ]);
   ctx.fillStyle = surfaceGrad;
   roundRect(ctx, 2, topY, s - 2, h, 4);
   ctx.fill();
 
-  // front panel — darker wood side covering lower tile
-  const panelGrad = linearGrad(ctx, 0, topY + h, 0, s * 0.95, [
-    [0, shade(0x5a4a3a, -5)],
-    [0.5, shade(0x4a3a2a, -15)],
-    [1, shade(0x3a2a1a, -25)],
+  // ambient occlusion — subtle darkening at edges
+  ctx.fillStyle = hexRGBA(0x000000, 0.06);
+  ctx.fillRect(2, topY, 3, h);
+  ctx.fillRect(s - 5, topY, 3, h);
+
+  // front panel — matte charcoal with metallic trim
+  const panelGrad = linearGrad(ctx, 0, topY + h, 0, s * 0.97, [
+    [0, shade(0x3a3a42, 5)],
+    [0.4, shade(0x2e2e36, 0)],
+    [1, shade(0x222228, -10)],
   ]);
   ctx.fillStyle = panelGrad;
-  roundRect(ctx, 2, topY + h, s - 2, s * 0.35, 4);
+  roundRect(ctx, 2, topY + h, s - 2, s * 0.37, 4);
   ctx.fill();
 
-  // surface texture — subtle wood grain lines
-  ctx.strokeStyle = hexRGBA(0x4a3a2a, 0.15);
-  ctx.lineWidth = 0.8;
-  for (let i = 0; i < 5; i++) {
-    const y = topY + 4 + i * (h / 6);
+  // metallic trim line at panel top
+  const trimGrad = linearGrad(ctx, 0, 0, s, 0, [
+    [0, hexRGBA(0x888890, 0.3)],
+    [0.5, hexRGBA(0xc8c8d0, 0.6)],
+    [1, hexRGBA(0x888890, 0.3)],
+  ]);
+  ctx.fillStyle = trimGrad;
+  ctx.fillRect(2, topY + h, s - 2, 1.5);
+
+  // cable management cutout on front panel
+  ctx.fillStyle = hexRGBA(0x1a1a1e, 0.8);
+  roundRect(ctx, s * 0.35, s * 0.68, s * 0.2, s * 0.04, 2);
+  ctx.fill();
+
+  // surface texture — subtle matte finish noise lines
+  ctx.strokeStyle = hexRGBA(0xc0c0c8, 0.08);
+  ctx.lineWidth = 0.6;
+  for (let i = 0; i < 4; i++) {
+    const y = topY + 5 + i * (h / 5);
     ctx.beginPath();
     ctx.moveTo(4, y);
-    ctx.bezierCurveTo(s * 0.3, y + 1, s * 0.6, y - 1, s - 4, y + 0.5);
+    ctx.lineTo(s - 4, y + 0.3);
     ctx.stroke();
   }
 
-  // top edge bevel highlight
-  ctx.strokeStyle = hexRGBA(0xaa9a8a, 0.5);
+  // top edge bevel highlight — bright white
+  ctx.strokeStyle = hexRGBA(0xffffff, 0.5);
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(4, topY + 1);
   ctx.lineTo(s - 4, topY + 1);
   ctx.stroke();
 
-  // front edge — darker shadow line
-  ctx.strokeStyle = hexRGBA(0x3a2a1a, 0.4);
+  // front edge shadow line
+  ctx.strokeStyle = hexRGBA(0x1a1a20, 0.5);
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(2, topY + h - 1);
-  ctx.lineTo(s - 2, topY + h - 1);
+  ctx.moveTo(2, topY + h - 0.5);
+  ctx.lineTo(s - 2, topY + h - 0.5);
   ctx.stroke();
+
+  // keyboard silhouette — left portion of desk
+  ctx.fillStyle = hexRGBA(0x1a1a22, 0.25);
+  roundRect(ctx, s * 0.06, topY + h * 0.35, s * 0.38, s * 0.16, 2);
+  ctx.fill();
+  // keyboard keys hint — tiny grid
+  ctx.fillStyle = hexRGBA(0x3a3a44, 0.15);
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 8; col++) {
+      ctx.fillRect(s * 0.08 + col * s * 0.042, topY + h * 0.38 + row * s * 0.045, s * 0.032, s * 0.032);
+    }
+  }
+
+  // notebook corner — top right of surface
+  ctx.fillStyle = hexRGBA(0x000000, 0.06);
+  ctx.beginPath();
+  ctx.moveTo(s * 0.72, topY + 4);
+  ctx.lineTo(s * 0.92, topY + 4);
+  ctx.lineTo(s * 0.90, topY + h * 0.55);
+  ctx.lineTo(s * 0.70, topY + h * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = hexRGBA(0xe8e8e0, 0.7);
+  ctx.beginPath();
+  ctx.moveTo(s * 0.70, topY + 3);
+  ctx.lineTo(s * 0.90, topY + 3);
+  ctx.lineTo(s * 0.88, topY + h * 0.52);
+  ctx.lineTo(s * 0.68, topY + h * 0.52);
+  ctx.closePath();
+  ctx.fill();
+  // notebook spiral binding
+  ctx.strokeStyle = hexRGBA(0x8a8a90, 0.4);
+  ctx.lineWidth = 0.8;
+  for (let i = 0; i < 4; i++) {
+    const y = topY + 8 + i * s * 0.06;
+    ctx.beginPath();
+    ctx.arc(s * 0.69, y, 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // notebook lines
+  ctx.strokeStyle = hexRGBA(0x6a9acc, 0.2);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 3; i++) {
+    const y = topY + 10 + i * s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.74, y);
+    ctx.lineTo(s * 0.87, y);
+    ctx.stroke();
+  }
 
   // cable hole
   ctx.beginPath();
-  ctx.ellipse(s * 0.3, topY + h * 0.5, 4, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(s * 0.3, topY + h * 0.85, 4, 3, 0, 0, Math.PI * 2);
   ctx.fillStyle = hexRGBA(0x1a1a1a, 0.7);
   ctx.fill();
   ctx.strokeStyle = hexRGBA(0x2a2a2a, 0.5);
@@ -139,174 +212,281 @@ function drawDeskLeft(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.stroke();
 }
 
-/** Desk surface — right half (tile 18) */
+/** Desk surface — right half (tile 18) — modern white laminate with mouse and accessories */
 function drawDeskRight(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
-  const topY = s * 0.25;
-  const h = s * 0.35;
+  const topY = s * 0.22;
+  const h = s * 0.38;
 
-  // shadow
-  ctx.fillStyle = hexRGBA(0x000000, 0.15);
+  // contact shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.18);
   ctx.beginPath();
-  ctx.ellipse(cx, s * 0.72, s * 0.48, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, s * 0.74, s * 0.48, s * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // desk leg (left side)
-  ctx.fillStyle = shade(0x3a3a40, -10);
-  ctx.fillRect(s * 0.08, s * 0.55, 4, s * 0.2);
-  ctx.fillStyle = shade(0x3a3a40, -30);
-  ctx.fillRect(s * 0.06, s * 0.72, 6, 3);
+  // desk leg (left side) — brushed aluminum
+  const legGrad = linearGrad(ctx, s * 0.06, 0, s * 0.14, 0, [
+    [0, shade(0x6a6a70, -15)],
+    [0.5, shade(0xc0c0c8, 15)],
+    [1, shade(0x8a8a90, -10)],
+  ]);
+  ctx.fillStyle = legGrad;
+  ctx.fillRect(s * 0.08, s * 0.55, 5, s * 0.2);
+  ctx.fillStyle = shade(0x4a4a50, -10);
+  ctx.fillRect(s * 0.07, s * 0.73, 7, 3);
 
-  // desk surface
+  // desk surface — modern white laminate matching left half
   const surfaceGrad = linearGrad(ctx, 0, topY, 0, topY + h, [
-    [0, shade(0x8a7a6a, 20)],
-    [0.3, shade(0x7a6a5a, 0)],
-    [0.7, shade(0x6a5a4a, -10)],
-    [1, shade(0x5a4a3a, -25)],
+    [0, shade(0xf4f4f6, 8)],
+    [0.3, shade(0xe8e8ec, 0)],
+    [0.7, shade(0xd8d8dc, -8)],
+    [1, shade(0xc8c8cc, -18)],
   ]);
   ctx.fillStyle = surfaceGrad;
   roundRect(ctx, 0, topY, s - 2, h, 4);
   ctx.fill();
 
-  // front panel — darker wood side covering lower tile
-  const panelGrad = linearGrad(ctx, 0, topY + h, 0, s * 0.95, [
-    [0, shade(0x5a4a3a, -5)],
-    [0.5, shade(0x4a3a2a, -15)],
-    [1, shade(0x3a2a1a, -25)],
+  // ambient occlusion
+  ctx.fillStyle = hexRGBA(0x000000, 0.06);
+  ctx.fillRect(0, topY, 3, h);
+  ctx.fillRect(s - 5, topY, 3, h);
+
+  // front panel — matte charcoal matching left half
+  const panelGrad = linearGrad(ctx, 0, topY + h, 0, s * 0.97, [
+    [0, shade(0x3a3a42, 5)],
+    [0.4, shade(0x2e2e36, 0)],
+    [1, shade(0x222228, -10)],
   ]);
   ctx.fillStyle = panelGrad;
-  roundRect(ctx, 0, topY + h, s - 2, s * 0.35, 4);
+  roundRect(ctx, 0, topY + h, s - 2, s * 0.37, 4);
   ctx.fill();
 
-  // wood grain
-  ctx.strokeStyle = hexRGBA(0x4a3a2a, 0.15);
-  ctx.lineWidth = 0.8;
-  for (let i = 0; i < 5; i++) {
-    const y = topY + 4 + i * (h / 6);
+  // metallic trim line at panel top
+  const trimGrad = linearGrad(ctx, 0, 0, s, 0, [
+    [0, hexRGBA(0x888890, 0.3)],
+    [0.5, hexRGBA(0xc8c8d0, 0.6)],
+    [1, hexRGBA(0x888890, 0.3)],
+  ]);
+  ctx.fillStyle = trimGrad;
+  ctx.fillRect(0, topY + h, s - 2, 1.5);
+
+  // surface texture — subtle matte finish
+  ctx.strokeStyle = hexRGBA(0xc0c0c8, 0.08);
+  ctx.lineWidth = 0.6;
+  for (let i = 0; i < 4; i++) {
+    const y = topY + 5 + i * (h / 5);
     ctx.beginPath();
-    ctx.moveTo(2, y + 0.5);
-    ctx.bezierCurveTo(s * 0.3, y - 1, s * 0.6, y + 1, s - 6, y);
+    ctx.moveTo(2, y);
+    ctx.lineTo(s - 4, y + 0.3);
     ctx.stroke();
   }
 
-  // top edge bevel
-  ctx.strokeStyle = hexRGBA(0xaa9a8a, 0.5);
+  // top edge bevel highlight
+  ctx.strokeStyle = hexRGBA(0xffffff, 0.5);
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(4, topY + 1);
+  ctx.moveTo(2, topY + 1);
   ctx.lineTo(s - 4, topY + 1);
   ctx.stroke();
 
-  // front edge shadow
-  ctx.strokeStyle = hexRGBA(0x3a2a1a, 0.4);
+  // front edge shadow line
+  ctx.strokeStyle = hexRGBA(0x1a1a20, 0.5);
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(2, topY + h - 1);
-  ctx.lineTo(s - 2, topY + h - 1);
+  ctx.moveTo(0, topY + h - 0.5);
+  ctx.lineTo(s - 2, topY + h - 0.5);
   ctx.stroke();
+
+  // mouse — right side of desk surface
+  ctx.fillStyle = hexRGBA(0x2a2a30, 0.5);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.72, topY + h * 0.5, s * 0.08, s * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // mouse highlight
+  ctx.fillStyle = hexRGBA(0x4a4a50, 0.3);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.70, topY + h * 0.45, s * 0.04, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // mouse scroll wheel
+  ctx.fillStyle = hexRGBA(0x1a1a20, 0.6);
+  ctx.fillRect(s * 0.71, topY + h * 0.38, 2, 4);
+
+  // sticky note — bottom left of surface
+  ctx.fillStyle = hexRGBA(0xffe94a, 0.7);
+  ctx.save();
+  ctx.translate(s * 0.12, topY + h * 0.6);
+  ctx.rotate(-0.08);
+  ctx.fillRect(0, 0, s * 0.16, s * 0.16);
+  // sticky note shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.08);
+  ctx.fillRect(s * 0.14, s * 0.02, s * 0.04, s * 0.14);
+  ctx.restore();
+  // sticky note lines
+  ctx.strokeStyle = hexRGBA(0x8a7a0a, 0.3);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 3; i++) {
+    const y = topY + h * 0.66 + i * s * 0.04;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.14, y);
+    ctx.lineTo(s * 0.24, y);
+    ctx.stroke();
+  }
+
+  // pen lying on desk
+  ctx.fillStyle = hexRGBA(0x2a4a8a, 0.6);
+  ctx.save();
+  ctx.translate(s * 0.35, topY + h * 0.75);
+  ctx.rotate(0.15);
+  ctx.fillRect(0, 0, s * 0.22, 2.5);
+  // pen tip
+  ctx.fillStyle = hexRGBA(0x1a2a4a, 0.7);
+  ctx.fillRect(0, 0, 3, 2.5);
+  // pen clip
+  ctx.fillStyle = hexRGBA(0x4a6aaa, 0.5);
+  ctx.fillRect(s * 0.16, -1, 2, 4);
+  ctx.restore();
 }
 
-/** Office chair (tile 19) */
+/** Office chair (tile 19) — premium executive with mesh back and chrome base */
 function drawOfficeChair(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
 
-  // shadow
-  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  // contact shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.25);
   ctx.beginPath();
   ctx.ellipse(cx, s * 0.85, s * 0.28, s * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 5-star wheel base
-  ctx.fillStyle = shade(0x2a2a30, 0);
+  // 5-star wheel base — chrome/polished
+  const chromeGrad = linearGrad(ctx, -3, 0, 3, 0, [
+    [0, shade(0x6a6a70, -15)],
+    [0.5, shade(0xc0c0c8, 20)],
+    [1, shade(0x6a6a70, -15)],
+  ]);
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
     ctx.save();
     ctx.translate(cx, s * 0.78);
     ctx.rotate(a);
+    ctx.fillStyle = chromeGrad;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(-3, s * 0.12);
     ctx.lineTo(3, s * 0.12);
     ctx.closePath();
     ctx.fill();
-    // wheel
+    // wheel — dark rubber
     ctx.beginPath();
     ctx.arc(0, s * 0.13, 3, 0, Math.PI * 2);
     ctx.fillStyle = shade(0x1a1a20, 0);
     ctx.fill();
-    ctx.fillStyle = shade(0x2a2a30, 0);
     ctx.restore();
   }
 
-  // center column
+  // center column — polished chrome
   const colGrad = linearGrad(ctx, cx - 4, 0, cx + 4, 0, [
-    [0, shade(0x1a1a20, -10)],
-    [0.5, shade(0x3a3a40, 10)],
-    [1, shade(0x1a1a20, -10)],
+    [0, shade(0x5a5a60, -10)],
+    [0.5, shade(0xb0b0b8, 20)],
+    [1, shade(0x5a5a60, -10)],
   ]);
   ctx.fillStyle = colGrad;
   ctx.fillRect(cx - 4, s * 0.5, 8, s * 0.28);
 
-  // seat — cushioned
+  // seat — charcoal cushion with subtle sheen
   const seatGrad = linearGrad(ctx, 0, s * 0.38, 0, s * 0.52, [
-    [0, shade(0x3a4a5a, 20)],
-    [0.5, shade(0x2a3a4a, 0)],
-    [1, shade(0x1a2a3a, -15)],
+    [0, shade(0x3a3a42, 15)],
+    [0.5, shade(0x2a2a32, 0)],
+    [1, shade(0x1a1a22, -15)],
   ]);
   ctx.fillStyle = seatGrad;
   roundRect(ctx, cx - s * 0.18, s * 0.38, s * 0.36, s * 0.14, 6);
   ctx.fill();
-  // seat stitching line
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.4);
+  // seat cushion seam
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.4);
   ctx.lineWidth = 0.8;
   roundRect(ctx, cx - s * 0.15, s * 0.4, s * 0.3, s * 0.1, 4);
   ctx.stroke();
+  // seat highlight
+  ctx.fillStyle = hexRGBA(0x5a5a62, 0.15);
+  ctx.fillRect(cx - s * 0.14, s * 0.39, s * 0.28, 2);
 
-  // backrest — ergonomic
-  const backGrad = linearGrad(ctx, 0, s * 0.1, 0, s * 0.38, [
-    [0, shade(0x3a4a5a, 25)],
-    [0.5, shade(0x2a3a4a, 5)],
-    [1, shade(0x1a2a3a, -10)],
+  // backrest — charcoal mesh with headrest
+  const backGrad = linearGrad(ctx, 0, s * 0.06, 0, s * 0.38, [
+    [0, shade(0x3a3a42, 20)],
+    [0.5, shade(0x2a2a32, 5)],
+    [1, shade(0x1a1a22, -12)],
   ]);
   ctx.fillStyle = backGrad;
-  roundRect(ctx, cx - s * 0.16, s * 0.08, s * 0.32, s * 0.32, 8);
+  roundRect(ctx, cx - s * 0.16, s * 0.06, s * 0.32, s * 0.34, 8);
   ctx.fill();
-  // backrest stitching
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.3);
-  ctx.lineWidth = 0.8;
-  roundRect(ctx, cx - s * 0.13, s * 0.11, s * 0.26, s * 0.26, 6);
-  ctx.stroke();
+
+  // headrest — small bump at top
+  ctx.fillStyle = shade(0x2a2a32, 10);
+  roundRect(ctx, cx - s * 0.12, s * 0.04, s * 0.24, s * 0.06, 6);
+  ctx.fill();
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.fillRect(cx - s * 0.10, s * 0.05, s * 0.20, 1.5);
+
+  // mesh weave pattern — horizontal lines
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 6; i++) {
+    const y = s * 0.12 + i * s * 0.04;
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.14, y);
+    ctx.lineTo(cx + s * 0.14, y);
+    ctx.stroke();
+  }
+  // mesh weave — vertical lines (interleaved)
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.12);
+  for (let i = 0; i < 5; i++) {
+    const x = cx - s * 0.12 + i * s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(x, s * 0.12);
+    ctx.lineTo(x, s * 0.36);
+    ctx.stroke();
+  }
+
   // lumbar curve highlight
-  ctx.fillStyle = hexRGBA(0x4a5a6a, 0.15);
+  ctx.fillStyle = hexRGBA(0x5a5a62, 0.12);
   ctx.beginPath();
   ctx.ellipse(cx, s * 0.28, s * 0.1, s * 0.04, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // armrests
-  ctx.fillStyle = shade(0x2a3a4a, -5);
+  // armrests — with padding detail
+  ctx.fillStyle = shade(0x2a2a32, -5);
   roundRect(ctx, cx - s * 0.22, s * 0.36, s * 0.05, s * 0.12, 3);
   ctx.fill();
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.fillRect(cx - s * 0.21, s * 0.37, s * 0.03, s * 0.08);
   roundRect(ctx, cx + s * 0.17, s * 0.36, s * 0.05, s * 0.12, 3);
   ctx.fill();
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.fillRect(cx + s * 0.18, s * 0.37, s * 0.03, s * 0.08);
 }
 
-/** Office chair facing up toward desk — rear view (assigned seat) */
+/** Office chair facing up toward desk — rear view (assigned seat) — premium executive */
 function drawOfficeChairUp(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
 
-  // shadow
-  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  // contact shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.25);
   ctx.beginPath();
   ctx.ellipse(cx, s * 0.88, s * 0.26, s * 0.05, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 5-star wheel base at bottom (same as front — symmetrical)
-  ctx.fillStyle = shade(0x2a2a30, 0);
+  // 5-star wheel base — chrome
+  const chromeGrad = linearGrad(ctx, -3, 0, 3, 0, [
+    [0, shade(0x5a5a60, -15)],
+    [0.5, shade(0xb0b0b8, 20)],
+    [1, shade(0x5a5a60, -15)],
+  ]);
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
     ctx.save();
     ctx.translate(cx, s * 0.8);
     ctx.rotate(a);
+    ctx.fillStyle = chromeGrad;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(-3, s * 0.1);
@@ -317,24 +497,23 @@ function drawOfficeChairUp(ctx: CanvasRenderingContext2D, s: number): void {
     ctx.arc(0, s * 0.11, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = shade(0x1a1a20, 0);
     ctx.fill();
-    ctx.fillStyle = shade(0x2a2a30, 0);
     ctx.restore();
   }
 
-  // center column — short, mostly hidden behind seat
+  // center column — polished chrome
   const colGrad = linearGrad(ctx, cx - 3, 0, cx + 3, 0, [
-    [0, shade(0x1a1a20, -10)],
-    [0.5, shade(0x3a3a40, 10)],
-    [1, shade(0x1a1a20, -10)],
+    [0, shade(0x5a5a60, -10)],
+    [0.5, shade(0xb0b0b8, 20)],
+    [1, shade(0x5a5a60, -10)],
   ]);
   ctx.fillStyle = colGrad;
   ctx.fillRect(cx - 3, s * 0.62, 6, s * 0.2);
 
-  // seat — only the front edge visible peeking out below the backrest
+  // seat — charcoal, front edge visible
   const seatGrad = linearGrad(ctx, 0, s * 0.54, 0, s * 0.66, [
-    [0, shade(0x2a3a4a, 5)],
-    [0.5, shade(0x1a2a3a, -5)],
-    [1, shade(0x1a2a3a, -15)],
+    [0, shade(0x2a2a32, 5)],
+    [0.5, shade(0x1a1a22, -5)],
+    [1, shade(0x12121a, -15)],
   ]);
   ctx.fillStyle = seatGrad;
   ctx.beginPath();
@@ -345,82 +524,95 @@ function drawOfficeChairUp(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.closePath();
   ctx.fill();
 
-  // back of backrest — the dominant feature, showing rear surface
-  // slightly narrower at top (ergonomic flare), wider at bottom
-  const backGrad = linearGrad(ctx, 0, s * 0.08, 0, s * 0.58, [
-    [0, shade(0x2a3a4a, 10)],
-    [0.3, shade(0x2a3a4a, 0)],
-    [0.7, shade(0x1a2a3a, -8)],
-    [1, shade(0x1a2a3a, -18)],
+  // back of backrest — charcoal mesh, ergonomic flare
+  const backGrad = linearGrad(ctx, 0, s * 0.06, 0, s * 0.58, [
+    [0, shade(0x2a2a32, 10)],
+    [0.3, shade(0x2a2a32, 0)],
+    [0.7, shade(0x1a1a22, -8)],
+    [1, shade(0x12121a, -18)],
   ]);
   ctx.fillStyle = backGrad;
   ctx.beginPath();
-  ctx.moveTo(cx - s * 0.13, s * 0.1);
-  ctx.quadraticCurveTo(cx - s * 0.16, s * 0.08, cx - s * 0.15, s * 0.12);
+  ctx.moveTo(cx - s * 0.13, s * 0.08);
+  ctx.quadraticCurveTo(cx - s * 0.16, s * 0.06, cx - s * 0.15, s * 0.10);
   ctx.lineTo(cx - s * 0.17, s * 0.52);
   ctx.quadraticCurveTo(cx - s * 0.17, s * 0.58, cx - s * 0.13, s * 0.58);
   ctx.lineTo(cx + s * 0.13, s * 0.58);
   ctx.quadraticCurveTo(cx + s * 0.17, s * 0.58, cx + s * 0.17, s * 0.52);
-  ctx.lineTo(cx + s * 0.15, s * 0.12);
-  ctx.quadraticCurveTo(cx + s * 0.16, s * 0.08, cx + s * 0.13, s * 0.1);
-  ctx.quadraticCurveTo(cx, s * 0.06, cx - s * 0.13, s * 0.1);
+  ctx.lineTo(cx + s * 0.15, s * 0.10);
+  ctx.quadraticCurveTo(cx + s * 0.16, s * 0.06, cx + s * 0.13, s * 0.08);
+  ctx.quadraticCurveTo(cx, s * 0.04, cx - s * 0.13, s * 0.08);
   ctx.closePath();
   ctx.fill();
 
-  // rear seam — vertical stitch line down the middle of the back
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.2);
+  // headrest bump at top
+  ctx.fillStyle = shade(0x2a2a32, 8);
+  roundRect(ctx, cx - s * 0.10, s * 0.04, s * 0.20, s * 0.05, 5);
+  ctx.fill();
+
+  // rear seam — vertical center line
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.2);
   ctx.lineWidth = 0.8;
   ctx.beginPath();
-  ctx.moveTo(cx, s * 0.14);
+  ctx.moveTo(cx, s * 0.12);
   ctx.lineTo(cx, s * 0.52);
   ctx.stroke();
 
-  // subtle horizontal support lines on backrest
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.12);
-  ctx.lineWidth = 0.6;
-  for (let i = 0; i < 3; i++) {
-    const y = s * 0.2 + i * s * 0.12;
+  // mesh weave pattern — horizontal lines on rear
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.15);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 5; i++) {
+    const y = s * 0.16 + i * s * 0.08;
     ctx.beginPath();
     ctx.moveTo(cx - s * 0.14, y);
     ctx.quadraticCurveTo(cx, y + 1, cx + s * 0.14, y);
     ctx.stroke();
   }
 
-  // top edge highlight — catches light from above
-  ctx.fillStyle = hexRGBA(0x5a6a7a, 0.25);
+  // top edge highlight
+  ctx.fillStyle = hexRGBA(0x5a5a62, 0.2);
   ctx.beginPath();
-  ctx.moveTo(cx - s * 0.12, s * 0.1);
-  ctx.quadraticCurveTo(cx, s * 0.07, cx + s * 0.12, s * 0.1);
-  ctx.lineTo(cx + s * 0.11, s * 0.14);
-  ctx.quadraticCurveTo(cx, s * 0.11, cx - s * 0.11, s * 0.14);
+  ctx.moveTo(cx - s * 0.12, s * 0.08);
+  ctx.quadraticCurveTo(cx, s * 0.05, cx + s * 0.12, s * 0.08);
+  ctx.lineTo(cx + s * 0.11, s * 0.12);
+  ctx.quadraticCurveTo(cx, s * 0.09, cx - s * 0.11, s * 0.12);
   ctx.closePath();
   ctx.fill();
 
-  // armrest tops — just the tips visible on either side of the backrest
-  ctx.fillStyle = shade(0x2a3a4a, -8);
+  // armrest tops — tips visible on either side
+  ctx.fillStyle = shade(0x2a2a32, -8);
   roundRect(ctx, cx - s * 0.2, s * 0.36, s * 0.04, s * 0.08, 2);
   ctx.fill();
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.fillRect(cx - s * 0.19, s * 0.37, s * 0.02, s * 0.05);
   roundRect(ctx, cx + s * 0.16, s * 0.36, s * 0.04, s * 0.08, 2);
   ctx.fill();
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.fillRect(cx + s * 0.17, s * 0.37, s * 0.02, s * 0.05);
 }
 
-/** Office chair facing left — side view (Agent Resources's chair) */
+/** Office chair facing left — side view (Agent Resources's chair) — premium executive */
 function drawOfficeChairLeft(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
 
-  // shadow
-  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  // contact shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.25);
   ctx.beginPath();
   ctx.ellipse(cx, s * 0.85, s * 0.28, s * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 5-star wheel base
-  ctx.fillStyle = shade(0x2a2a30, 0);
+  // 5-star wheel base — chrome
+  const chromeGrad = linearGrad(ctx, -3, 0, 3, 0, [
+    [0, shade(0x5a5a60, -15)],
+    [0.5, shade(0xb0b0b8, 20)],
+    [1, shade(0x5a5a60, -15)],
+  ]);
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
     ctx.save();
     ctx.translate(cx, s * 0.78);
     ctx.rotate(a);
+    ctx.fillStyle = chromeGrad;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(-3, s * 0.12);
@@ -431,55 +623,70 @@ function drawOfficeChairLeft(ctx: CanvasRenderingContext2D, s: number): void {
     ctx.arc(0, s * 0.13, 3, 0, Math.PI * 2);
     ctx.fillStyle = shade(0x1a1a20, 0);
     ctx.fill();
-    ctx.fillStyle = shade(0x2a2a30, 0);
     ctx.restore();
   }
 
-  // center column
+  // center column — polished chrome
   const colGrad = linearGrad(ctx, cx - 4, 0, cx + 4, 0, [
-    [0, shade(0x1a1a20, -10)],
-    [0.5, shade(0x3a3a40, 10)],
-    [1, shade(0x1a1a20, -10)],
+    [0, shade(0x5a5a60, -10)],
+    [0.5, shade(0xb0b0b8, 20)],
+    [1, shade(0x5a5a60, -10)],
   ]);
   ctx.fillStyle = colGrad;
   ctx.fillRect(cx - 4, s * 0.5, 8, s * 0.28);
 
-  // seat — viewed from side, narrower
+  // seat — charcoal, side view
   const seatGrad = linearGrad(ctx, 0, s * 0.38, 0, s * 0.52, [
-    [0, shade(0x3a4a5a, 20)],
-    [0.5, shade(0x2a3a4a, 0)],
-    [1, shade(0x1a2a3a, -15)],
+    [0, shade(0x3a3a42, 15)],
+    [0.5, shade(0x2a2a32, 0)],
+    [1, shade(0x1a1a22, -15)],
   ]);
   ctx.fillStyle = seatGrad;
   roundRect(ctx, cx - s * 0.14, s * 0.38, s * 0.28, s * 0.14, 6);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.4);
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.4);
   ctx.lineWidth = 0.8;
   roundRect(ctx, cx - s * 0.11, s * 0.4, s * 0.22, s * 0.1, 4);
   ctx.stroke();
 
-  // backrest — on right side (chair faces left)
+  // backrest — on right side (chair faces left), charcoal mesh
   const backGrad = linearGrad(ctx, s * 0.55, 0, s * 0.92, 0, [
-    [0, shade(0x3a4a5a, 25)],
-    [0.5, shade(0x2a3a4a, 5)],
-    [1, shade(0x1a2a3a, -10)],
+    [0, shade(0x3a3a42, 20)],
+    [0.5, shade(0x2a2a32, 5)],
+    [1, shade(0x1a1a22, -10)],
   ]);
   ctx.fillStyle = backGrad;
-  roundRect(ctx, s * 0.55, s * 0.08, s * 0.32, s * 0.34, 8);
+  roundRect(ctx, s * 0.55, s * 0.06, s * 0.32, s * 0.36, 8);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.3);
-  ctx.lineWidth = 0.8;
-  roundRect(ctx, s * 0.58, s * 0.11, s * 0.26, s * 0.28, 6);
-  ctx.stroke();
-  ctx.fillStyle = hexRGBA(0x4a5a6a, 0.15);
+
+  // headrest bump
+  ctx.fillStyle = shade(0x2a2a32, 10);
+  roundRect(ctx, s * 0.57, s * 0.04, s * 0.28, s * 0.05, 5);
+  ctx.fill();
+
+  // mesh weave pattern — horizontal lines
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 5; i++) {
+    const y = s * 0.12 + i * s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.57, y);
+    ctx.lineTo(s * 0.85, y);
+    ctx.stroke();
+  }
+
+  // lumbar curve highlight
+  ctx.fillStyle = hexRGBA(0x5a5a62, 0.12);
   ctx.beginPath();
   ctx.ellipse(s * 0.71, s * 0.25, s * 0.04, s * 0.1, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // armrest (left side only visible from this angle)
-  ctx.fillStyle = shade(0x2a3a4a, -5);
+  // armrest (left side only visible) with padding detail
+  ctx.fillStyle = shade(0x2a2a32, -5);
   roundRect(ctx, cx - s * 0.18, s * 0.36, s * 0.05, s * 0.12, 3);
   ctx.fill();
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.fillRect(cx - s * 0.17, s * 0.37, s * 0.03, s * 0.08);
 }
 
 /** Filing cabinet (tile 20) */
@@ -1436,23 +1643,26 @@ function drawDeskSideTop(ctx: CanvasRenderingContext2D, s: number): void {
   // top edge
   ctx.fillStyle = hexRGBA(0xb8babc, 0.5);
   ctx.fillRect(0, 0, surfaceW, 2);
+  // subtle monitor glow reflection on desk surface
+  ctx.fillStyle = hexRGBA(0x88bbff, 0.04);
+  ctx.fillRect(0, s * 0.3, surfaceW, s * 0.4);
 
   // front panel — right portion (facing Agent Resources who sits on the right)
   const panelGrad = linearGrad(ctx, panelX, 0, s, 0, [
-    [0, shade(0xc3c8cd, 0)],
-    [0.5, shade(0xb3b8bd, -5)],
-    [1, shade(0xa3a8ad, -10)],
+    [0, shade(0x3a3a42, 5)],
+    [0.5, shade(0x2e2e36, 0)],
+    [1, shade(0x222228, -10)],
   ]);
   ctx.fillStyle = panelGrad;
   ctx.fillRect(panelX, 0, panelW, s);
-  // panel left edge (transition from surface)
-  ctx.fillStyle = shade(0x9a9fa4, -10);
-  ctx.fillRect(panelX, 0, 2, s);
+  // metallic trim at panel left edge
+  ctx.fillStyle = hexRGBA(0xc8c8d0, 0.4);
+  ctx.fillRect(panelX, 0, 1.5, s);
   // panel right edge
-  ctx.fillStyle = shade(0x8a8f94, -15);
+  ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(s - 2, 0, 2, s);
   // panel top edge
-  ctx.fillStyle = hexRGBA(0xd4d6d8, 0.5);
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.5);
   ctx.fillRect(panelX, 0, panelW, 2);
 
   // cable hole on desk surface
@@ -1478,18 +1688,22 @@ function drawDeskSideBottom(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillRect(0, 0, surfaceW, s);
   ctx.fillStyle = hexRGBA(0xffffff, 0.2);
   ctx.fillRect(0, 0, 1, s);
+  // subtle monitor glow reflection
+  ctx.fillStyle = hexRGBA(0x88bbff, 0.04);
+  ctx.fillRect(0, s * 0.3, surfaceW, s * 0.4);
 
-  // front panel continuation
+  // front panel continuation — matte charcoal matching front desk
   const panelGrad = linearGrad(ctx, panelX, 0, s, 0, [
-    [0, shade(0xc3c8cd, 0)],
-    [0.5, shade(0xb3b8bd, -5)],
-    [1, shade(0xa3a8ad, -10)],
+    [0, shade(0x3a3a42, 5)],
+    [0.5, shade(0x2e2e36, 0)],
+    [1, shade(0x222228, -10)],
   ]);
   ctx.fillStyle = panelGrad;
   ctx.fillRect(panelX, 0, panelW, s);
-  ctx.fillStyle = shade(0x9a9fa4, -10);
-  ctx.fillRect(panelX, 0, 2, s);
-  ctx.fillStyle = shade(0x8a8f94, -15);
+  // metallic trim
+  ctx.fillStyle = hexRGBA(0xc8c8d0, 0.4);
+  ctx.fillRect(panelX, 0, 1.5, s);
+  ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(s - 2, 0, 2, s);
 
   // papers with shadow on desk surface
@@ -1502,25 +1716,55 @@ function drawDeskSideBottom(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillStyle = hexRGBA(0x9aa0a8, 0.6);
   ctx.fillRect(s * 0.15, s * 0.28, s * 0.18, 1);
   ctx.fillRect(s * 0.15, s * 0.34, s * 0.15, 1);
+  // pen on papers
+  ctx.fillStyle = hexRGBA(0x2a4a8a, 0.6);
+  ctx.save();
+  ctx.translate(s * 0.28, s * 0.42);
+  ctx.rotate(0.12);
+  ctx.fillRect(0, 0, s * 0.14, 2);
+  ctx.fillStyle = hexRGBA(0x1a2a4a, 0.7);
+  ctx.fillRect(0, 0, 2.5, 2);
+  ctx.restore();
 
-  // mug
+  // mug — ceramic with stripe and steam
+  ctx.fillStyle = hexRGBA(0x000000, 0.1);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.51, s * 0.42, s * 0.1, s * 0.02, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = "#3a6f57";
   roundRect(ctx, s * 0.42, s * 0.22, s * 0.18, s * 0.18, 2);
   ctx.fill();
   ctx.fillStyle = hexRGBA(0x5a9a7a, 0.4);
   ctx.fillRect(s * 0.42, s * 0.22, s * 0.18, 2);
+  // mug stripe
+  ctx.fillStyle = hexRGBA(0xeeeeff, 0.3);
+  ctx.fillRect(s * 0.48, s * 0.24, 3, s * 0.14);
   ctx.fillStyle = hexRGBA(0x6aaa8a, 0.3);
   ctx.fillRect(s * 0.44, s * 0.24, 3, s * 0.1);
   // handle
   ctx.fillStyle = "#3a6f57";
   ctx.fillRect(s * 0.58, s * 0.28, s * 0.06, s * 0.09);
+  // steam wisps
+  ctx.strokeStyle = hexRGBA(0xffffff, 0.15);
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(s * 0.48 + i * 5, s * 0.20);
+    ctx.quadraticCurveTo(s * 0.46 + i * 5, s * 0.14, s * 0.49 + i * 5, s * 0.08);
+    ctx.stroke();
+  }
 
   // bottom edge
-  ctx.fillStyle = shade(0x8a8f94, -10);
+  ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(0, s - 2, s, 2);
 
-  // desk legs under surface
-  ctx.fillStyle = shade(0x5a5a60, 0);
+  // desk legs under surface — brushed aluminum
+  const legGrad = linearGrad(ctx, s * 0.04, 0, s * 0.12, 0, [
+    [0, shade(0x6a6a70, -15)],
+    [0.5, shade(0xb0b0b8, 10)],
+    [1, shade(0x6a6a70, -10)],
+  ]);
+  ctx.fillStyle = legGrad;
   ctx.fillRect(s * 0.06, s * 0.85, 6, s * 0.12);
   ctx.fillRect(s * 0.56, s * 0.85, 6, s * 0.12);
   ctx.fillStyle = shade(0x3a3a40, -5);
@@ -1540,22 +1784,22 @@ function drawDeskSideTopMirror(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.ellipse(s * 0.65, s * 0.92, s * 0.3, s * 0.05, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // front panel — left portion (facing Hermes who sits on the left)
+  // front panel — left portion (matte charcoal matching front desk)
   const panelGrad = linearGrad(ctx, 0, 0, panelW, 0, [
-    [0, shade(0xa3a8ad, -10)],
-    [0.5, shade(0xb3b8bd, -5)],
-    [1, shade(0xc3c8cd, 0)],
+    [0, shade(0x222228, -10)],
+    [0.5, shade(0x2e2e36, 0)],
+    [1, shade(0x3a3a42, 5)],
   ]);
   ctx.fillStyle = panelGrad;
   ctx.fillRect(0, 0, panelW, s);
-  // panel right edge (transition to surface)
-  ctx.fillStyle = shade(0x9a9fa4, -10);
-  ctx.fillRect(panelW - 2, 0, 2, s);
+  // metallic trim at panel right edge (transition to surface)
+  ctx.fillStyle = hexRGBA(0xc8c8d0, 0.4);
+  ctx.fillRect(panelW - 1.5, 0, 1.5, s);
   // panel left edge
-  ctx.fillStyle = shade(0x8a8f94, -15);
+  ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(0, 0, 2, s);
   // panel top edge
-  ctx.fillStyle = hexRGBA(0xd4d6d8, 0.5);
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.5);
   ctx.fillRect(0, 0, panelW, 2);
 
   // desk surface — right portion (top-down view, the working area)
@@ -1572,6 +1816,9 @@ function drawDeskSideTopMirror(ctx: CanvasRenderingContext2D, s: number): void {
   // top edge
   ctx.fillStyle = hexRGBA(0xb8babc, 0.5);
   ctx.fillRect(surfaceX, 0, surfaceW, 2);
+  // subtle monitor glow reflection on desk surface
+  ctx.fillStyle = hexRGBA(0x88bbff, 0.04);
+  ctx.fillRect(surfaceX, s * 0.3, surfaceW, s * 0.4);
 
   // cable hole on desk surface
   ctx.beginPath();
@@ -1586,17 +1833,18 @@ function drawDeskSideBottomMirror(ctx: CanvasRenderingContext2D, s: number): voi
   const surfaceX = panelW;
   const surfaceW = s - panelW;
 
-  // front panel continuation
+  // front panel continuation — matte charcoal
   const panelGrad = linearGrad(ctx, 0, 0, panelW, 0, [
-    [0, shade(0xa3a8ad, -10)],
-    [0.5, shade(0xb3b8bd, -5)],
-    [1, shade(0xc3c8cd, 0)],
+    [0, shade(0x222228, -10)],
+    [0.5, shade(0x2e2e36, 0)],
+    [1, shade(0x3a3a42, 5)],
   ]);
   ctx.fillStyle = panelGrad;
   ctx.fillRect(0, 0, panelW, s);
-  ctx.fillStyle = shade(0x9a9fa4, -10);
-  ctx.fillRect(panelW - 2, 0, 2, s);
-  ctx.fillStyle = shade(0x8a8f94, -15);
+  // metallic trim
+  ctx.fillStyle = hexRGBA(0xc8c8d0, 0.4);
+  ctx.fillRect(panelW - 1.5, 0, 1.5, s);
+  ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(0, 0, 2, s);
 
   // desk surface continuation
@@ -1609,6 +1857,9 @@ function drawDeskSideBottomMirror(ctx: CanvasRenderingContext2D, s: number): voi
   ctx.fillRect(surfaceX, 0, surfaceW, s);
   ctx.fillStyle = hexRGBA(0xffffff, 0.2);
   ctx.fillRect(s - 1, 0, 1, s);
+  // subtle monitor glow reflection
+  ctx.fillStyle = hexRGBA(0x88bbff, 0.04);
+  ctx.fillRect(surfaceX, s * 0.3, surfaceW, s * 0.4);
 
   // papers with shadow on desk surface
   ctx.fillStyle = hexRGBA(0x000000, 0.08);
@@ -1620,25 +1871,55 @@ function drawDeskSideBottomMirror(ctx: CanvasRenderingContext2D, s: number): voi
   ctx.fillStyle = hexRGBA(0x9aa0a8, 0.6);
   ctx.fillRect(s * 0.67, s * 0.28, s * 0.18, 1);
   ctx.fillRect(s * 0.70, s * 0.34, s * 0.15, 1);
+  // pen on papers
+  ctx.fillStyle = hexRGBA(0x2a4a8a, 0.6);
+  ctx.save();
+  ctx.translate(s * 0.72, s * 0.42);
+  ctx.rotate(-0.12);
+  ctx.fillRect(0, 0, s * 0.14, 2);
+  ctx.fillStyle = hexRGBA(0x1a2a4a, 0.7);
+  ctx.fillRect(0, 0, 2.5, 2);
+  ctx.restore();
 
-  // mug
+  // mug — ceramic with stripe and steam
+  ctx.fillStyle = hexRGBA(0x000000, 0.1);
+  ctx.beginPath();
+  ctx.ellipse(s * 0.49, s * 0.42, s * 0.1, s * 0.02, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = "#3a6f57";
   roundRect(ctx, s * 0.40, s * 0.22, s * 0.18, s * 0.18, 2);
   ctx.fill();
   ctx.fillStyle = hexRGBA(0x5a9a7a, 0.4);
   ctx.fillRect(s * 0.40, s * 0.22, s * 0.18, 2);
+  // mug stripe
+  ctx.fillStyle = hexRGBA(0xeeeeff, 0.3);
+  ctx.fillRect(s * 0.46, s * 0.24, 3, s * 0.14);
   ctx.fillStyle = hexRGBA(0x6aaa8a, 0.3);
   ctx.fillRect(s * 0.42, s * 0.24, 3, s * 0.1);
   // handle
   ctx.fillStyle = "#3a6f57";
   ctx.fillRect(s * 0.36, s * 0.28, s * 0.06, s * 0.09);
+  // steam wisps
+  ctx.strokeStyle = hexRGBA(0xffffff, 0.15);
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(s * 0.46 + i * 5, s * 0.20);
+    ctx.quadraticCurveTo(s * 0.44 + i * 5, s * 0.14, s * 0.47 + i * 5, s * 0.08);
+    ctx.stroke();
+  }
 
   // bottom edge
-  ctx.fillStyle = shade(0x8a8f94, -10);
+  ctx.fillStyle = shade(0x1a1a20, -10);
   ctx.fillRect(0, s - 2, s, 2);
 
-  // desk legs under surface
-  ctx.fillStyle = shade(0x5a5a60, 0);
+  // desk legs under surface — brushed aluminum
+  const legGrad = linearGrad(ctx, s * 0.36, 0, s * 0.44, 0, [
+    [0, shade(0x6a6a70, -15)],
+    [0.5, shade(0xb0b0b8, 10)],
+    [1, shade(0x6a6a70, -10)],
+  ]);
+  ctx.fillStyle = legGrad;
   ctx.fillRect(s * 0.38, s * 0.85, 6, s * 0.12);
   ctx.fillRect(s * 0.88, s * 0.85, 6, s * 0.12);
   ctx.fillStyle = shade(0x3a3a40, -5);
@@ -1646,23 +1927,28 @@ function drawDeskSideBottomMirror(ctx: CanvasRenderingContext2D, s: number): voi
   ctx.fillRect(s * 0.88, s * 0.95, 10, 3);
 }
 
-/** Office chair facing right — side view (Hermes's chair, mirrored from Agent Resources's) */
+/** Office chair facing right — side view (Hermes's chair, mirrored) — premium executive */
 function drawOfficeChairRight(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
 
-  // shadow
-  ctx.fillStyle = hexRGBA(0x000000, 0.2);
+  // contact shadow
+  ctx.fillStyle = hexRGBA(0x000000, 0.25);
   ctx.beginPath();
   ctx.ellipse(cx, s * 0.85, s * 0.28, s * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 5-star wheel base
-  ctx.fillStyle = shade(0x2a2a30, 0);
+  // 5-star wheel base — chrome
+  const chromeGrad = linearGrad(ctx, -3, 0, 3, 0, [
+    [0, shade(0x5a5a60, -15)],
+    [0.5, shade(0xb0b0b8, 20)],
+    [1, shade(0x5a5a60, -15)],
+  ]);
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
     ctx.save();
     ctx.translate(cx, s * 0.78);
     ctx.rotate(a);
+    ctx.fillStyle = chromeGrad;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(-3, s * 0.12);
@@ -1673,55 +1959,70 @@ function drawOfficeChairRight(ctx: CanvasRenderingContext2D, s: number): void {
     ctx.arc(0, s * 0.13, 3, 0, Math.PI * 2);
     ctx.fillStyle = shade(0x1a1a20, 0);
     ctx.fill();
-    ctx.fillStyle = shade(0x2a2a30, 0);
     ctx.restore();
   }
 
-  // center column
+  // center column — polished chrome
   const colGrad = linearGrad(ctx, cx - 4, 0, cx + 4, 0, [
-    [0, shade(0x1a1a20, -10)],
-    [0.5, shade(0x3a3a40, 10)],
-    [1, shade(0x1a1a20, -10)],
+    [0, shade(0x5a5a60, -10)],
+    [0.5, shade(0xb0b0b8, 20)],
+    [1, shade(0x5a5a60, -10)],
   ]);
   ctx.fillStyle = colGrad;
   ctx.fillRect(cx - 4, s * 0.5, 8, s * 0.28);
 
-  // seat — viewed from side, narrower
+  // seat — charcoal, side view
   const seatGrad = linearGrad(ctx, 0, s * 0.38, 0, s * 0.52, [
-    [0, shade(0x3a4a5a, 20)],
-    [0.5, shade(0x2a3a4a, 0)],
-    [1, shade(0x1a2a3a, -15)],
+    [0, shade(0x3a3a42, 15)],
+    [0.5, shade(0x2a2a32, 0)],
+    [1, shade(0x1a1a22, -15)],
   ]);
   ctx.fillStyle = seatGrad;
   roundRect(ctx, cx - s * 0.14, s * 0.38, s * 0.28, s * 0.14, 6);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.4);
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.4);
   ctx.lineWidth = 0.8;
   roundRect(ctx, cx - s * 0.11, s * 0.4, s * 0.22, s * 0.1, 4);
   ctx.stroke();
 
-  // backrest — on left side (chair faces right)
+  // backrest — on left side (chair faces right), charcoal mesh
   const backGrad = linearGrad(ctx, s * 0.08, 0, s * 0.45, 0, [
-    [0, shade(0x1a2a3a, -10)],
-    [0.5, shade(0x2a3a4a, 5)],
-    [1, shade(0x3a4a5a, 25)],
+    [0, shade(0x1a1a22, -10)],
+    [0.5, shade(0x2a2a32, 5)],
+    [1, shade(0x3a3a42, 20)],
   ]);
   ctx.fillStyle = backGrad;
-  roundRect(ctx, s * 0.08, s * 0.08, s * 0.32, s * 0.34, 8);
+  roundRect(ctx, s * 0.08, s * 0.06, s * 0.32, s * 0.36, 8);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x4a5a6a, 0.3);
-  ctx.lineWidth = 0.8;
-  roundRect(ctx, s * 0.11, s * 0.11, s * 0.26, s * 0.28, 6);
-  ctx.stroke();
-  ctx.fillStyle = hexRGBA(0x4a5a6a, 0.15);
+
+  // headrest bump
+  ctx.fillStyle = shade(0x2a2a32, 10);
+  roundRect(ctx, s * 0.10, s * 0.04, s * 0.28, s * 0.05, 5);
+  ctx.fill();
+
+  // mesh weave pattern — horizontal lines
+  ctx.strokeStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 5; i++) {
+    const y = s * 0.12 + i * s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.10, y);
+    ctx.lineTo(s * 0.38, y);
+    ctx.stroke();
+  }
+
+  // lumbar curve highlight
+  ctx.fillStyle = hexRGBA(0x5a5a62, 0.12);
   ctx.beginPath();
   ctx.ellipse(s * 0.25, s * 0.25, s * 0.04, s * 0.1, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // armrest (right side only visible from this angle)
-  ctx.fillStyle = shade(0x2a3a4a, -5);
+  // armrest (right side only visible) with padding detail
+  ctx.fillStyle = shade(0x2a2a32, -5);
   roundRect(ctx, cx + s * 0.13, s * 0.36, s * 0.05, s * 0.12, 3);
   ctx.fill();
+  ctx.fillStyle = hexRGBA(0x4a4a52, 0.2);
+  ctx.fillRect(cx + s * 0.14, s * 0.37, s * 0.03, s * 0.08);
 }
 
 /** Side-view monitor — thin profile seen from the side, screen faces right toward Agent Resources */
@@ -1734,46 +2035,65 @@ function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: bool
   ctx.ellipse(cx, s * 0.88, s * 0.12, s * 0.04, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // stand base
-  ctx.fillStyle = shade(0xa0a8b0, 0);
+  // stand base — brushed aluminum
+  const baseGrad = linearGrad(ctx, cx - s * 0.08, 0, cx + s * 0.08, 0, [
+    [0, shade(0x808898, -10)],
+    [0.5, shade(0xc0c8d0, 15)],
+    [1, shade(0x808898, -10)],
+  ]);
+  ctx.fillStyle = baseGrad;
   roundRect(ctx, cx - s * 0.08, s * 0.8, s * 0.16, s * 0.05, 2);
   ctx.fill();
 
-  // stand neck — short
-  ctx.fillStyle = shade(0x808898, -5);
+  // stand neck — short, polished
+  const neckGrad = linearGrad(ctx, cx - 2, 0, cx + 2, 0, [
+    [0, shade(0x808898, -5)],
+    [0.5, shade(0xd0d8e0, 15)],
+    [1, shade(0x808898, -5)],
+  ]);
+  ctx.fillStyle = neckGrad;
   ctx.fillRect(cx - 2, s * 0.62, 4, s * 0.2);
 
-  // monitor body — thin profile seen from the side
-  // The screen faces RIGHT (toward Agent Resources who sits on the right)
+  // monitor body — ultra-thin profile, modern IPS panel
+  // Slight taper at top (curved back hint)
   const bezelGrad = linearGrad(ctx, 0, s * 0.15, 0, s * 0.62, [
-    [0, shade(0xd0d8e0, 5)],
-    [0.5, shade(0xb0b8c0, 0)],
-    [1, shade(0x9098a0, -10)],
+    [0, shade(0x2a2a30, 10)],
+    [0.5, shade(0x1a1a20, 0)],
+    [1, shade(0x12121a, -10)],
   ]);
   ctx.fillStyle = bezelGrad;
-  // thin vertical slab representing the side profile
-  roundRect(ctx, cx - 6, s * 0.15, 12, s * 0.47, 3);
+  ctx.beginPath();
+  ctx.moveTo(cx - 5, s * 0.15);
+  ctx.lineTo(cx + 5, s * 0.15);
+  ctx.lineTo(cx + 7, s * 0.62);
+  ctx.lineTo(cx - 7, s * 0.62);
+  ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x808898, 0.5);
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = hexRGBA(0x3a3a44, 0.5);
+  ctx.lineWidth = 0.8;
   ctx.stroke();
 
   // screen edge glow — on the RIGHT side (facing Agent Resources)
   if (lit) {
-    ctx.fillStyle = hexRGBA(0x88bbff, 0.6);
+    // bright blue-white glow strip
+    ctx.fillStyle = hexRGBA(0xaaccff, 0.7);
+    ctx.fillRect(cx + 4, s * 0.18, 2.5, s * 0.41);
+    // soft bloom
+    ctx.fillStyle = hexRGBA(0x88bbff, 0.15);
+    ctx.fillRect(cx + 3, s * 0.16, 5, s * 0.45);
   } else {
-    ctx.fillStyle = hexRGBA(0x2a3a5a, 0.8);
+    ctx.fillStyle = hexRGBA(0x1a2a3a, 0.8);
+    ctx.fillRect(cx + 4, s * 0.18, 2, s * 0.41);
   }
-  ctx.fillRect(cx + 3, s * 0.18, 2, s * 0.41);
 
-  // power LED
+  // power LED — subtle, on back
   ctx.beginPath();
-  ctx.arc(cx - 3, s * 0.58, 1.5, 0, Math.PI * 2);
-  ctx.fillStyle = hexRGBA(0x66ff66, 0.8);
+  ctx.arc(cx - 4, s * 0.58, 1.2, 0, Math.PI * 2);
+  ctx.fillStyle = hexRGBA(0x44ff66, 0.6);
   ctx.fill();
 }
 
-/** Desk monitor (tile 33) */
+/** Desk monitor (tile 33) — modern ultrawide IPS with thin bezels */
 function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
   const cx = s * 0.5;
 
@@ -1783,80 +2103,126 @@ function drawDeskMonitor(ctx: CanvasRenderingContext2D, s: number, lit: boolean 
   ctx.ellipse(cx, s * 0.82, s * 0.22, s * 0.04, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // stand base
-  ctx.fillStyle = shade(0xa0a8b0, 0);
+  // stand base — brushed aluminum disc
+  const baseGrad = linearGrad(ctx, cx - s * 0.12, 0, cx + s * 0.12, 0, [
+    [0, shade(0x808898, -10)],
+    [0.5, shade(0xc8d0d8, 15)],
+    [1, shade(0x808898, -10)],
+  ]);
+  ctx.fillStyle = baseGrad;
   roundRect(ctx, cx - s * 0.12, s * 0.75, s * 0.24, s * 0.06, 3);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x808898, 0.5);
+  ctx.strokeStyle = hexRGBA(0x606870, 0.5);
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // stand neck
+  // stand neck — polished metal
   const neckGrad = linearGrad(ctx, cx - 3, 0, cx + 3, 0, [
-    [0, shade(0x808898, -5)],
-    [0.5, shade(0xc0c8d0, 10)],
-    [1, shade(0x808898, -5)],
+    [0, shade(0x707880, -5)],
+    [0.5, shade(0xd0d8e0, 20)],
+    [1, shade(0x707880, -5)],
   ]);
   ctx.fillStyle = neckGrad;
   ctx.fillRect(cx - 3, s * 0.5, 6, s * 0.28);
 
-  // monitor body — slim bezel (lighter, Frutiger-style)
-  const bezelGrad = linearGrad(ctx, 0, s * 0.1, 0, s * 0.55, [
-    [0, shade(0xd0d8e0, 5)],
-    [0.5, shade(0xb0b8c0, 0)],
-    [1, shade(0x9098a0, -10)],
+  // monitor body — ultra-thin bezel, dark premium frame
+  const bezelGrad = linearGrad(ctx, 0, s * 0.08, 0, s * 0.55, [
+    [0, shade(0x2a2a30, 10)],
+    [0.5, shade(0x1a1a20, 0)],
+    [1, shade(0x12121a, -10)],
   ]);
   ctx.fillStyle = bezelGrad;
-  roundRect(ctx, s * 0.12, s * 0.08, s * 0.76, s * 0.46, 4);
+  roundRect(ctx, s * 0.08, s * 0.06, s * 0.84, s * 0.48, 3);
   ctx.fill();
-  ctx.strokeStyle = hexRGBA(0x808898, 0.5);
+  ctx.strokeStyle = hexRGBA(0x3a3a44, 0.6);
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // screen
+  // screen — nearly edge-to-edge, very thin bezels
+  const screenX = s * 0.10;
+  const screenY = s * 0.08;
+  const screenW = s * 0.70;
+  const screenH = s * 0.44;
   if (lit) {
-    ctx.fillStyle = hexRGBA(0x88bbff, 0.6);
+    ctx.fillStyle = hexRGBA(0xaaccff, 0.5);
   } else {
-    ctx.fillStyle = hexRGBA(0x2a3a5a, 0.9);
+    ctx.fillStyle = hexRGBA(0x1a2a3a, 0.95);
   }
-  roundRect(ctx, s * 0.15, s * 0.11, s * 0.7, s * 0.4, 2);
+  roundRect(ctx, screenX, screenY, screenW, screenH, 2);
   ctx.fill();
 
   if (!lit) {
-    // screen content — code editor look
-    ctx.fillStyle = hexRGBA(0x6699cc, 0.2);
-    ctx.fillRect(s * 0.17, s * 0.13, s * 0.66, s * 0.36);
-    // code lines
-    const lineColors = [0x4a9acd, 0xcc8844, 0x66bb44, 0x8866bb];
-    for (let i = 0; i < 8; i++) {
-      const ly = s * 0.15 + i * (s * 0.045);
-      const indent = (i % 3) * s * 0.04;
-      const lineW = s * (0.15 + Math.random() * 0.3);
-      ctx.fillStyle = hexRGBA(lineColors[i % lineColors.length], 0.6);
-      ctx.fillRect(s * 0.19 + indent, ly, lineW, 2);
+    // screen content — realistic IDE layout
+    // dark editor background
+    ctx.fillStyle = hexRGBA(0x1e1e2e, 0.9);
+    ctx.fillRect(screenX + 1, screenY + 1, screenW - 2, screenH - 2);
+
+    // sidebar — file tree
+    ctx.fillStyle = hexRGBA(0x181828, 0.8);
+    ctx.fillRect(screenX + 1, screenY + 1, s * 0.1, screenH - 2);
+    // file tree items
+    ctx.fillStyle = hexRGBA(0x88aacc, 0.4);
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(screenX + 3, screenY + 3 + i * s * 0.06, s * 0.06, 1.5);
     }
+    ctx.fillStyle = hexRGBA(0x66bb88, 0.3);
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(screenX + 5, screenY + 5 + i * s * 0.06, s * 0.04, 1.5);
+    }
+
+    // code area — syntax highlighted lines
+    const lineColors = [0x6699cc, 0xcc8844, 0x66bb44, 0x8866bb, 0x6699cc, 0xcc8844, 0x66bb44];
+    for (let i = 0; i < 7; i++) {
+      const ly = screenY + 3 + i * (s * 0.055);
+      const indent = (i % 3) * s * 0.03;
+      const lineW = s * (0.12 + ((i * 7) % 5) * 0.04);
+      ctx.fillStyle = hexRGBA(lineColors[i % lineColors.length], 0.55);
+      ctx.fillRect(screenX + s * 0.12 + indent, ly, lineW, 1.8);
+    }
+
+    // terminal strip at bottom
+    ctx.fillStyle = hexRGBA(0x0a0a14, 0.7);
+    ctx.fillRect(screenX + 1, screenY + screenH - s * 0.08, screenW - 2, s * 0.07);
+    ctx.fillStyle = hexRGBA(0x44ff66, 0.4);
+    ctx.fillRect(screenX + 3, screenY + screenH - s * 0.06, s * 0.15, 1.5);
+    ctx.fillStyle = hexRGBA(0x44ddaa, 0.3);
+    ctx.fillRect(screenX + 3, screenY + screenH - s * 0.04, s * 0.1, 1.5);
   }
 
-  // screen glow
+  // screen glow / reflection
   if (lit) {
-    ctx.fillStyle = hexRGBA(0xffffff, 0.12);
+    // bright blue-white glow
+    ctx.fillStyle = hexRGBA(0xffffff, 0.15);
+    roundRect(ctx, screenX, screenY, screenW, screenH, 2);
+    ctx.fill();
+    // subtle diagonal sheen
+    ctx.fillStyle = hexRGBA(0xffffff, 0.06);
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY);
+    ctx.lineTo(screenX + s * 0.2, screenY);
+    ctx.lineTo(screenX, screenY + s * 0.15);
+    ctx.closePath();
+    ctx.fill();
   } else {
-    ctx.fillStyle = hexRGBA(0x6699ff, 0.08);
+    // subtle reflection on dark screen
+    ctx.fillStyle = hexRGBA(0x88bbff, 0.06);
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY);
+    ctx.lineTo(screenX + s * 0.25, screenY);
+    ctx.lineTo(screenX, screenY + s * 0.2);
+    ctx.closePath();
+    ctx.fill();
   }
-  roundRect(ctx, s * 0.15, s * 0.11, s * 0.7, s * 0.4, 2);
-  ctx.fill();
+
+  // bottom bezel LED bar — subtle modern indicator
+  ctx.fillStyle = hexRGBA(0x44ff66, 0.5);
+  ctx.fillRect(cx - 4, s * 0.53, 8, 1);
 
   // power LED
   ctx.beginPath();
-  ctx.arc(s * 0.82, s * 0.52, 1.5, 0, Math.PI * 2);
-  ctx.fillStyle = hexRGBA(0x66ff66, 0.8);
+  ctx.arc(s * 0.84, s * 0.52, 1.2, 0, Math.PI * 2);
+  ctx.fillStyle = hexRGBA(0x44ff66, 0.7);
   ctx.fill();
-
-  // brand text
-  ctx.fillStyle = hexRGBA(0x808898, 0.6);
-  ctx.font = "bold 5px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("SYNC", cx, s * 0.54);
 }
 
 /* ---------- server room furniture ---------- */
