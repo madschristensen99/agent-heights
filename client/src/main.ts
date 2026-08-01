@@ -79,7 +79,7 @@ const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
   dom: { createContainer: true },
-  backgroundColor: "#a3bdd0",
+  backgroundColor: "#7a9abe",
   pixelArt: true,
   roundPixels: true,
   scale: {

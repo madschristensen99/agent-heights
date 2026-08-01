@@ -269,8 +269,10 @@ export class OfficeScene extends Phaser.Scene {
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
-  private skyImage!: Phaser.GameObjects.Image;
+  private skyGfx!: Phaser.GameObjects.Graphics;
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number }[] = [];
+  private _skyW = 0;
+  private _skyH = 0;
 
   /** Multiplayer: remote player sprites keyed by userId. */
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
@@ -1091,6 +1093,7 @@ export class OfficeScene extends Phaser.Scene {
               cam.setZoom(this.clampZoom(this.userZoom));
             }
             this.drawVignette();
+            this.drawSkyGradient();
           };
           this.scale.on("resize", onResize);
           this.events.once("shutdown", () => this.scale.off("resize", onResize));
@@ -1366,28 +1369,10 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Create a gradient sky background and drifting cloud sprites. */
   private createSky(): void {
-    // --- Gradient sky texture (256×512 canvas, wide enough for NEAREST filtering) ---
-    if (!this.textures.exists("sky-gradient")) {
-      const gradCanvas = document.createElement("canvas");
-      gradCanvas.width = 256;
-      gradCanvas.height = 512;
-      const ctx = gradCanvas.getContext("2d")!;
-      const grad = ctx.createLinearGradient(0, 0, 0, 512);
-      grad.addColorStop(0, "#4a7a9e");
-      grad.addColorStop(0.4, "#6a9abe");
-      grad.addColorStop(0.75, "#9ab8d4");
-      grad.addColorStop(1, "#c4d8e8");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 256, 512);
-      this.textures.addImage("sky-gradient", gradCanvas as unknown as HTMLImageElement);
-    }
-
-    // Sky is screen-fixed — always covers the full canvas, regardless of camera zoom
-    this.skyImage = this.add.image(0, 0, "sky-gradient")
-      .setOrigin(0, 0)
-      .setDepth(-2)
-      .setScrollFactor(0)
-      .setDisplaySize(this.scale.width, this.scale.height);
+    // Sky gradient drawn as a Graphics object with horizontal color strips.
+    // Screen-fixed so it always covers the full canvas regardless of camera zoom.
+    this.skyGfx = this.add.graphics().setDepth(-2).setScrollFactor(0);
+    this.drawSkyGradient();
 
     // --- Cloud textures (3 variants) ---
     for (let i = 0; i < 3; i++) {
@@ -1418,17 +1403,61 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** Draw the sky gradient as horizontal strips using Graphics. */
+  private drawSkyGradient(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    this.skyGfx.clear();
+
+    // Gradient stops (top to bottom)
+    const stops = [
+      { pos: 0.0,  r: 0x4a, g: 0x7a, b: 0x9e },
+      { pos: 0.4,  r: 0x6a, g: 0x9a, b: 0xbe },
+      { pos: 0.75, r: 0x9a, g: 0xb8, b: 0xd4 },
+      { pos: 1.0,  r: 0xc4, g: 0xd8, b: 0xe8 },
+    ];
+
+    const strips = 64;
+    for (let i = 0; i < strips; i++) {
+      const t = i / (strips - 1);
+      // Find the two stops to interpolate between
+      let s0 = stops[0], s1 = stops[stops.length - 1];
+      for (let j = 0; j < stops.length - 1; j++) {
+        if (t >= stops[j].pos && t <= stops[j + 1].pos) {
+          s0 = stops[j];
+          s1 = stops[j + 1];
+          break;
+        }
+      }
+      const localT = (t - s0.pos) / (s1.pos - s0.pos);
+      const r = Math.round(s0.r + (s1.r - s0.r) * localT);
+      const g = Math.round(s0.g + (s1.g - s0.g) * localT);
+      const b = Math.round(s0.b + (s1.b - s0.b) * localT);
+      const color = (r << 16) | (g << 8) | b;
+
+      const stripY = Math.floor((i / strips) * h);
+      const stripH = Math.ceil(h / strips) + 1;
+      this.skyGfx.fillStyle(color, 1);
+      this.skyGfx.fillRect(0, stripY, w, stripH);
+    }
+  }
+
   /** Update sky size to canvas + drift clouds. Called every frame. */
   private updateSky(dt: number): void {
-    // Sky: always cover the full canvas (canvas size doesn't change with camera zoom)
-    this.skyImage.setDisplaySize(this.scale.width, this.scale.height);
+    // Redraw sky gradient if canvas size changed
+    const w = this.scale.width;
+    const h = this.scale.height;
+    if (this._skyW !== w || this._skyH !== h) {
+      this._skyW = w;
+      this._skyH = h;
+      this.drawSkyGradient();
+    }
 
     // Clouds: drift in screen space, wrap around canvas edges
-    const sw = this.scale.width;
     for (const c of this.clouds) {
       c.sprite.x += c.speed * dt / 1000;
       const halfW = c.sprite.displayWidth / 2;
-      if (c.sprite.x - halfW > sw) {
+      if (c.sprite.x - halfW > w) {
         c.sprite.x = -halfW;
       }
     }
