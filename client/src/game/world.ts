@@ -39,8 +39,8 @@ function isLowEndDevice(): boolean {
   return false;
 }
 
-/** Supersample factor: 4x on desktop (full 256px tile resolution), 1x on mobile (2048px canvas, within all GPU limits). */
-export const SS_FACTOR = isLowEndDevice() ? 1 : 4;
+/** Supersample factor: 2x on desktop (128px tile resolution, 2048px canvas), 1x on mobile (64px tile, 2048px canvas). */
+export const SS_FACTOR = isLowEndDevice() ? 1 : 2;
 
 // --- 3D creature spritesheet helpers ---
 // 3D sheets are 8 cols (S,SE,E,NE,N,NW,W,SW) × 4 rows (idle,walk1,walk2,attack) = 32 frames
@@ -70,8 +70,8 @@ const UNLOAD_RADIUS = LOAD_RADIUS + 1;
  * overrides are re-applied on each loadChunk call.
  */
 const globalChunkCache = new Map<string, Chunk>();
-const MAX_CHUNKS_PER_FRAME = isLowEndDevice() ? 1 : 3;
-const RENDER_ROWS_PER_FRAME = isLowEndDevice() ? 8 : 32; // mobile: 4 frames per chunk; desktop: 1 frame (all rows)
+const MAX_CHUNKS_PER_FRAME = isLowEndDevice() ? 1 : 2;
+const RENDER_ROWS_PER_FRAME = isLowEndDevice() ? 8 : 8; // 4 frames per chunk on all devices — prevents main thread freezes
 
 /** State for a chunk being painted across multiple frames. */
 interface RenderJob {
