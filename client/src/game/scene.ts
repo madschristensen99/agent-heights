@@ -572,16 +572,14 @@ export class OfficeScene extends Phaser.Scene {
       return count;
     })();
 
-    // Pre-allocate chunk phase slots (filled in by the "world layer" phase)
-    const chunkPhases: Array<{ name: string; fn: () => void; skip?: boolean }> = [];
-    for (let i = 0; i < doorChunkCount; i++) {
-      chunkPhases.push({
-        name: `world chunk ${i + 1}/${doorChunkCount}`,
-        fn: () => {}, // filled in by "world layer" phase
-      });
-    }
+    // Single collapsed phase for all door chunks (replaces per-chunk phases).
+    // The world layer phase fills in the fn and may set skip if all chunks
+    // are already cached.
+    const chunkPhases: Array<{ name: string; fn: () => void | Promise<void>; skip?: boolean }> = [
+      { name: `door chunks (×${doorChunkCount})`, fn: () => {} },
+    ];
 
-    const phases: Array<{ name: string; fn: () => void; skip?: boolean }> = [
+    const phases: Array<{ name: string; fn: () => void | Promise<void>; skip?: boolean }> = [
       {
         name: "textures & animations",
         fn: () => {
@@ -1019,31 +1017,45 @@ export class OfficeScene extends Phaser.Scene {
           const doorChunks = this.world.getDoorChunkList();
           this.world.preGenerateChunks(doorChunks);
 
-          // Check if all door chunks already have cached canvas textures.
-          // If so, load them all in a single phase and skip the rest — this
-          // makes re-entering a lobby near-instant instead of showing N
-          // "Building world chunk…" phases.
-          const allCached = doorChunks.every(c =>
-            this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)),
-          );
+          // Try to preload cached canvas textures from IndexedDB (persistent
+          // across page reloads).  Each hit is registered as a Phaser texture
+          // so renderChunk skips painting entirely.
+          this.world.preloadCachedCanvases(doorChunks).then((cacheHits) => {
+            const allCached = cacheHits === doorChunks.length ||
+              doorChunks.every(c => this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)));
 
-          if (allCached) {
-            chunkPhases[0].name = `cached chunks (×${doorChunks.length})`;
-            chunkPhases[0].fn = () => {
-              for (const c of doorChunks) this.world.loadSingleChunk(c.cx, c.cy);
-            };
-            for (let i = 1; i < chunkPhases.length; i++) {
-              chunkPhases[i].skip = true;
-            }
-          } else {
-            // Fill in the pre-allocated chunk phase slots with actual chunk data
-            for (let i = 0; i < doorChunks.length && i < chunkPhases.length; i++) {
-              const c = doorChunks[i];
-              chunkPhases[i].fn = () => {
-                this.world.loadSingleChunk(c.cx, c.cy);
+            if (allCached) {
+              chunkPhases[0].name = `cached chunks (×${doorChunks.length})`;
+              chunkPhases[0].fn = () => {
+                for (const c of doorChunks) this.world.loadSingleChunk(c.cx, c.cy);
+              };
+            } else {
+              // Single phase: wait for worker results, then load all ready
+              // chunks at once.  Falls back to sync generation for any that
+              // aren't ready after a brief wait.
+              chunkPhases[0].name = `door chunks (×${doorChunks.length})`;
+              chunkPhases[0].fn = async () => {
+                // Give the worker a few frames head start (it was requested
+                // above).  Wait up to ~100ms for pending chunks to arrive.
+                const deadline = performance.now() + 100;
+                while (performance.now() < deadline) {
+                  const allReady = doorChunks.every(c =>
+                    this.world.hasPendingChunk(c.cx, c.cy) ||
+                    this.textures.exists(this.world.chunkTexKey(c.cx, c.cy)));
+                  if (allReady) break;
+                  await new Promise(r => setTimeout(r, 16));
+                }
+                // Load all door chunks — loadChunk handles cached/worker/sync
+                for (const c of doorChunks) {
+                  this.world.loadSingleChunk(c.cx, c.cy);
+                }
+                // Flush render jobs so all chunks are fully painted
+                while (this.world.hasRenderJobs()) {
+                  this.world.processRenderJobsNow();
+                }
               };
             }
-          }
+          });
         },
       },
       ...chunkPhases,
@@ -1274,8 +1286,8 @@ export class OfficeScene extends Phaser.Scene {
     ];
 
     // Process phases one per frame so the loading bar visibly progresses.
-    // All phases (including per-chunk slots) are pre-allocated, so the total
-    // is stable from the first frame — no progress bar glitches.
+    // All phases are pre-allocated, so the total is stable from the first
+    // frame — no progress bar glitches.  Phases may be sync or async.
     let phaseIndex = 0;
     const totalPhases = phases.length;
 
@@ -1288,8 +1300,7 @@ export class OfficeScene extends Phaser.Scene {
 
       const phase = phases[phaseIndex];
 
-      // Skip phases marked as skip (e.g. cached chunk phases) — process
-      // them instantly without a frame delay.
+      // Skip phases marked as skip — process them instantly without a frame delay.
       if (phase.skip) {
         phaseIndex++;
         processNextPhase();
@@ -1302,13 +1313,30 @@ export class OfficeScene extends Phaser.Scene {
       // Run the phase on the next frame so the bar update renders first
       this.time.delayedCall(0, () => {
         try {
-          phase.fn();
+          const result = phase.fn() as unknown;
+          if (result instanceof Promise) {
+            // Async phase — wait for completion before advancing
+            result.then(() => {
+              phaseIndex++;
+              updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+              this.time.delayedCall(0, processNextPhase);
+            }).catch((err) => {
+              console.error(`[scene] PHASE "${phase.name}" REJECTED:`, err);
+              phaseIndex++;
+              updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+              this.time.delayedCall(0, processNextPhase);
+            });
+          } else {
+            phaseIndex++;
+            updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+            this.time.delayedCall(0, processNextPhase);
+          }
         } catch (err) {
           console.error(`[scene] PHASE "${phase.name}" CRASHED:`, err);
+          phaseIndex++;
+          updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+          this.time.delayedCall(0, processNextPhase);
         }
-        phaseIndex++;
-        updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
-        this.time.delayedCall(0, processNextPhase);
       });
     };
 

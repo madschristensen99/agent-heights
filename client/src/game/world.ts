@@ -16,6 +16,7 @@ import { AudioSystem } from "./audio";
 import { HUDSystem } from "./hud";
 import { achievements } from "./achievements";
 import WorldgenWorker from "./worldgen.worker?worker";
+import { saveChunkCanvas, removeChunkCanvas, preloadChunkCanvases } from "./chunk-cache";
 
 /**
  * World offset: the world tile grid starts at the bottom-left corner of the
@@ -1900,6 +1901,16 @@ export class WorldLayer {
     this.removeExtraBalls();
   }
 
+  /** Check if any chunk render jobs are still in progress. */
+  hasRenderJobs(): boolean {
+    return this.renderingQueue.length > 0;
+  }
+
+  /** Process all pending render jobs synchronously (flush). */
+  processRenderJobsNow(): void {
+    this.processRenderJobs();
+  }
+
   /** Synchronously preload all chunks around the door exit. Call once after
    *  construction so the player doesn't hit a freeze when first walking outside. */
   preloadDoorChunks(): void {
@@ -2005,6 +2016,27 @@ export class WorldLayer {
     return this.pendingChunks.has(`${cx},${cy}`);
   }
 
+  /** Preload cached chunk canvas textures from IndexedDB for the given coords.
+   *  Each hit is registered as a Phaser texture so renderChunk skips painting.
+   *  Returns the number of cache hits. */
+  async preloadCachedCanvases(coords: { cx: number; cy: number }[]): Promise<number> {
+    const entries = coords.map(c => ({
+      texKey: this.chunkTexKey(c.cx, c.cy),
+      ssFactor: SS_FACTOR,
+    }));
+    const loaded = await preloadChunkCanvases(entries);
+    let hits = 0;
+    for (const [texKey, img] of loaded) {
+      if (this.scene.textures.exists(texKey)) {
+        // Already registered (e.g. from a previous scene in same page session)
+        continue;
+      }
+      this.scene.textures.addImage(texKey, img as unknown as HTMLImageElement);
+      hits++;
+    }
+    return hits;
+  }
+
   private removeChunkLights(key: string): void {
     const lights = this.chunkLights.get(key);
     if (lights) {
@@ -2026,6 +2058,7 @@ export class WorldLayer {
     if (this.scene.textures.exists(texKey)) {
       this.scene.textures.remove(texKey);
     }
+    removeChunkCanvas(texKey, SS_FACTOR);
   }
 
   private renderChunk(chunk: Chunk): void {
@@ -2343,6 +2376,10 @@ export class WorldLayer {
         const key = `${job.chunk.cx},${job.chunk.cy}`;
         this.chunkGraphics.set(key, job.container);
         this.chunkLights.set(key, job.chunkLightList);
+
+        // Persist canvas to IndexedDB so repeat visits skip painting entirely
+        const canvasEl = job.canvasTex.getSourceImage() as HTMLCanvasElement;
+        saveChunkCanvas(job.texKey, job.SS, canvasEl);
       } else {
         remaining.push(job);
       }

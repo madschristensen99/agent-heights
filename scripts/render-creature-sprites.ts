@@ -357,9 +357,18 @@ async function main() {
     process.exit(1);
   }
 
-  // Launch browser
-  console.log("  Launching headless Chromium...");
-  const browser = await chromium.launch({ headless: true });
+  // Launch browser with WebGL software rendering (SwiftShader) — headless Chromium
+  // loses WebGL context without these flags, producing blank/transparent output.
+  console.log("  Launching headless Chromium (SwiftShader WebGL)...");
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      "--use-gl=angle",
+      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader",
+      "--ignore-gpu-blocklist",
+    ],
+  });
   const page = await browser.newPage();
   page.setDefaultTimeout(30000);
 

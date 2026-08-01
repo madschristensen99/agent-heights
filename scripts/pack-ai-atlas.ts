@@ -248,6 +248,60 @@ async function main() {
   }
   await buildAtlas("ai-hair-atlas", hairItems, 2048, 2048);
 
+  // Beard atlas: 4 styles × 24 frames = 96 PNGs
+  const BEARD_STYLES = ["stubble", "mustache", "goatee", "full_beard"];
+  const beardItems: PackItem[] = [];
+  for (const style of BEARD_STYLES) {
+    for (const dir of HAIR_DIRS) {
+      for (let pose = 0; pose < HAIR_POSES; pose++) {
+        const fileKey = `${style}_${dir}_${pose}`;
+        beardItems.push(
+          makeItem(
+            `ai-beard-${fileKey}`,
+            join(AI_DIR, "char", "beard", style, `${fileKey}.png`),
+          ),
+        );
+      }
+    }
+  }
+  await buildAtlas("ai-beard-atlas", beardItems, 1024, 1024);
+
+  // Shirt atlas: 1 style × 24 frames = 24 PNGs
+  const SHIRT_STYLES = ["default"];
+  const shirtItems: PackItem[] = [];
+  for (const style of SHIRT_STYLES) {
+    for (const dir of HAIR_DIRS) {
+      for (let pose = 0; pose < HAIR_POSES; pose++) {
+        const fileKey = `${style}_${dir}_${pose}`;
+        shirtItems.push(
+          makeItem(
+            `ai-shirt-${fileKey}`,
+            join(AI_DIR, "char", "shirt", style, `${fileKey}.png`),
+          ),
+        );
+      }
+    }
+  }
+  await buildAtlas("ai-shirt-atlas", shirtItems, 1024, 1024);
+
+  // Pants atlas: 1 style × 24 frames = 24 PNGs
+  const PANTS_STYLES = ["default"];
+  const pantsItems: PackItem[] = [];
+  for (const style of PANTS_STYLES) {
+    for (const dir of HAIR_DIRS) {
+      for (let pose = 0; pose < HAIR_POSES; pose++) {
+        const fileKey = `${style}_${dir}_${pose}`;
+        pantsItems.push(
+          makeItem(
+            `ai-pants-${fileKey}`,
+            join(AI_DIR, "char", "pants", style, `${fileKey}.png`),
+          ),
+        );
+      }
+    }
+  }
+  await buildAtlas("ai-pants-atlas", pantsItems, 1024, 1024);
+
   console.log("\nDone! Atlases written to client/public/assets/atlases/");
 }
 
