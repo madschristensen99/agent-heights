@@ -2270,7 +2270,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const sig =
       `${this.rosterCollapsed}|${this.store.selectedId}|` +
       [...this.store.agents.values()]
-        .map((a) => a.id + a.name + a.status + a.accent + a.role)
+        .map((a) => a.id + a.name + a.status + a.accent + a.role + (a.appearance ? JSON.stringify(a.appearance) : ''))
         .join(",") + "|" +
       [...this.store.vacationedAgents.values()]
         .map((a) => a.id + a.name + a.accent)
@@ -2287,12 +2287,30 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
       })
       .map(
-        (a) => `
+        (a) => {
+          let avatarUrl: string;
+          let avatarSize: string;
+          if (a.appearance) {
+            avatarUrl = generateCharPreviewDataURL(a.appearance, 2);
+            avatarSize = 'background-size:20px 30px;';
+          } else if (a.id === AGENT_RESOURCES_ID) {
+            avatarUrl = 'assets/characters/char-agent-resources.png';
+            avatarSize = 'background-size:160px 120px;';
+          } else if (a.id === HERMES_ID) {
+            avatarUrl = 'assets/characters/char-hermes.png';
+            avatarSize = 'background-size:160px 120px;';
+          } else {
+            avatarUrl = `assets/characters/char-${a.sprite ?? 0}.png`;
+            avatarSize = 'background-size:160px 120px;';
+          }
+          return `
         <div class="agent-row ${a.id === this.store.selectedId ? "selected" : ""}" data-id="${a.id}">
+          <div class="roster-avatar" style="background-image:url('${avatarUrl}');${avatarSize}"></div>
           <span class="dot ${a.status}"></span>
           <span class="name" style="color:${a.accent}">${esc(a.name)}${a.role === "manager" ? " 👔" : a.role === "devops" ? " 🚂" : ""}</span>
           <span class="status">${a.status}</span>
-        </div>`,
+        </div>`;
+        },
       )
       .join("");
     const vacRows = [...this.store.vacationedAgents.values()]
