@@ -1082,7 +1082,7 @@ export class Hud {
       ? '<p style="color:#888;font-size:0.85rem;">No players in room.</p>'
       : players.map(p => `
         <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
-          <span style="width:8px;height:8px;border-radius:50%;background:${p.role === 'owner' ? '#4f9dde' : p.role === 'guest' ? '#f0b850' : '#666'};"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:${p.role === 'owner' ? '#4f9dde' : p.role === 'guest' ? '#e8a838' : '#666'};"></span>
           <span style="font-size:0.85rem;">${p.name}</span>
           <span style="font-size:0.7rem;color:#888;">${p.role}</span>
         </div>
@@ -2302,7 +2302,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         <div class="agent-row vac-row" data-vac-id="${a.id}">
           <span class="dot idle"></span>
           <span class="name" style="color:${a.accent};opacity:0.6">🏖️ ${esc(a.name)}</span>
-          <span class="status" style="cursor:pointer;color:#5dd47e">restore</span>
+          <span class="status" style="cursor:pointer;color:#5a9a5a">restore</span>
         </div>`,
       )
       .join("");
