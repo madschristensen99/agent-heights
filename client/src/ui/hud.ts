@@ -1,7 +1,7 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
-import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig, PersonalityTraits } from "../../../shared/types";
-import { AGENT_MODELS, OFFICE_THEMES, AGENT_RESOURCES_ID, HERMES_ID, SCHEDULE_PRESETS,
+import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig, PersonalityTraits, AgentInfo } from "../../../shared/types";
+import { AGENT_MODELS, OFFICE_THEMES, AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
   randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
@@ -295,6 +295,7 @@ export class Hud {
           <button class="btn" id="d-stop">STOP</button>
           <button class="btn" id="d-clear">CLEAR</button>
           <button class="btn" id="d-vacation">VACATION</button>
+          <button class="btn" id="d-fuse" title="Merge two agents into one">FUSE</button>
           <button class="btn danger" id="d-fire">FIRE</button>
         </div>
       </div>
@@ -309,6 +310,7 @@ export class Hud {
       <div class="modal-backdrop" id="worlds-modal" hidden></div>
       <div class="modal-backdrop" id="wardrobe-modal" hidden></div>
       <div class="modal-backdrop" id="forge-modal" hidden></div>
+      <div class="modal-backdrop" id="fuse-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
@@ -574,6 +576,11 @@ export class Hud {
         () => this.net.send({ type: "fire", agentId: agent.id }),
       );
     });
+    document.getElementById("d-fuse")!.addEventListener("click", () => {
+      const agent = this.store.selected();
+      if (!agent) return;
+      this.openFuseModal(agent.id);
+    });
   }
 
   private bindFeed(): void {
@@ -687,6 +694,7 @@ export class Hud {
       const worlds = document.getElementById("worlds-modal")!;
       const wardrobe = document.getElementById("wardrobe-modal")!;
       const forge = document.getElementById("forge-modal")!;
+      const fuse = document.getElementById("fuse-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
         settings.hidden = true;
@@ -698,6 +706,7 @@ export class Hud {
         worlds.hidden = true;
         wardrobe.hidden = true;
         forge.hidden = true;
+        fuse.hidden = true;
         this.store.toggleForgePanel(false);
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
@@ -710,7 +719,7 @@ export class Hud {
       if (active?.isContentEditable) return;
       const tag = active?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden || !railway.hidden || !github.hidden || !codeEditor.hidden || !worlds.hidden || !forge.hidden) return;
+      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden || !railway.hidden || !github.hidden || !codeEditor.hidden || !worlds.hidden || !forge.hidden || !fuse.hidden) return;
       switch (e.key.toLowerCase()) {
         case "h":
           e.preventDefault();
@@ -1073,7 +1082,7 @@ export class Hud {
       ? '<p style="color:#888;font-size:0.85rem;">No players in room.</p>'
       : players.map(p => `
         <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
-          <span style="width:8px;height:8px;border-radius:50%;background:${p.role === 'owner' ? '#4f9dde' : p.role === 'guest' ? '#e8a838' : '#666'};"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:${p.role === 'owner' ? '#4f9dde' : p.role === 'guest' ? '#f0b850' : '#666'};"></span>
           <span style="font-size:0.85rem;">${p.name}</span>
           <span style="font-size:0.7rem;color:#888;">${p.role}</span>
         </div>
@@ -1898,11 +1907,190 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     });
   }
 
+  // ------------------------------------------------------------- fuse modal
+
+  private openFuseModal(agentAId: string): void {
+    if (this.store.accessLevel !== "manage") {
+      this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access." : "Go to your office to manage agents.");
+      return;
+    }
+    const hireable = [...this.store.agents.values()].filter(
+      (a) => a.id !== AGENT_RESOURCES_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
+    );
+    if (hireable.length < 2) {
+      this.toast("You need at least 2 hireable agents to fuse.");
+      return;
+    }
+    const agentA = this.store.agents.get(agentAId);
+    if (!agentA || agentA.id === AGENT_RESOURCES_ID || agentA.id === HERMES_ID || agentA.id === WIZARD_ID) return;
+
+    const modal = document.getElementById("fuse-modal")!;
+    modal.hidden = false;
+
+    const others = hireable.filter((a) => a.id !== agentAId);
+
+    // Pre-build merged prompt
+    const buildMergedPrompt = (a: AgentInfo, b: AgentInfo) => {
+      const parts: string[] = [`You are a fused agent combining the expertise of two specialists.`];
+      parts.push(`\n[Specialist A — ${a.name}]:\n${a.systemPrompt || "(no custom prompt)"}`);
+      parts.push(`\n[Specialist B — ${b.name}]:\n${b.systemPrompt || "(no custom prompt)"}`);
+      parts.push(`\nYou possess the full capabilities of both. Approach tasks with the combined perspective.`);
+      return parts.join("\n");
+    };
+
+    const firstOther = others[0];
+    const mergedPrompt = buildMergedPrompt(agentA, firstOther);
+
+    // Merge MCP server names for display
+    const mergeMcpDisplay = (a: AgentInfo, b: AgentInfo) => {
+      const all = [...(a.mcpServers ?? []), ...(b.mcpServers ?? [])];
+      const seen = new Set<string>();
+      const unique = all.filter((s) => {
+        const key = s.url ?? s.command ?? JSON.stringify(s);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (unique.length === 0) return "<span style='color:#666;'>None</span>";
+      return unique.map((s) => `<span style='display:inline-block;background:#1a1a2e;border:1px solid #333;border-radius:4px;padding:0.15rem 0.5rem;margin:0.15rem;font-size:0.75rem;'>${esc(s.name ?? s.url ?? s.command ?? "MCP")}</span>`).join("");
+    };
+
+    // Average personality
+    const avgPersonality = (a: AgentInfo, b: AgentInfo) => ({
+      openness: ((a.personality?.openness ?? 0.5) + (b.personality?.openness ?? 0.5)) / 2,
+      conscientiousness: ((a.personality?.conscientiousness ?? 0.5) + (b.personality?.conscientiousness ?? 0.5)) / 2,
+      extraversion: ((a.personality?.extraversion ?? 0.5) + (b.personality?.extraversion ?? 0.5)) / 2,
+      agreeableness: ((a.personality?.agreeableness ?? 0.5) + (b.personality?.agreeableness ?? 0.5)) / 2,
+      neuroticism: ((a.personality?.neuroticism ?? 0.5) + (b.personality?.neuroticism ?? 0.5)) / 2,
+    });
+
+    const personality = avgPersonality(agentA, firstOther);
+
+    const traitSliders = ([
+      { key: "openness", label: "Openness" },
+      { key: "conscientiousness", label: "Conscientiousness" },
+      { key: "extraversion", label: "Extraversion" },
+      { key: "agreeableness", label: "Agreeableness" },
+      { key: "neuroticism", label: "Neuroticism" },
+    ] as const).map(({ key, label }) => `
+      <div class="trait-row" style="margin-bottom:0.5rem;">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:#ccc;margin-bottom:0.2rem;">
+          <span>${label}</span>
+          <span id="f-${key}-val" style="color:#4f9dde;font-weight:600;">${Math.round(personality[key] * 100)}</span>
+        </div>
+        <input type="range" id="f-${key}" min="0" max="100" value="${Math.round(personality[key] * 100)}"
+          style="width:100%;accent-color:#4f9dde;" />
+      </div>
+    `).join("");
+
+    const suggestedName = (agentA.name.slice(0, 8) + firstOther.name.slice(0, 8)).slice(0, 24);
+
+    modal.innerHTML = `
+      <div class="modal hire-modal" style="max-width:680px;">
+        <h2>⚗️ FUSE AGENTS</h2>
+        <p style="color:#888;font-size:0.82rem;margin-bottom:0.8rem;">
+          Merge two agents into one. Their MCP servers, wallets, and personalities are combined.
+          Both originals are fired. The fused agent starts with a clean slate.
+        </p>
+        <div class="hire-layout">
+          <div class="hire-form" style="flex:1;">
+            <label>AGENT A
+              <select id="f-agent-a" style="margin-bottom:0.4rem;">
+                ${hireable.map((a) => `<option value="${a.id}" ${a.id === agentAId ? "selected" : ""}>${esc(a.name)}</option>`).join("")}
+              </select>
+            </label>
+            <label>AGENT B
+              <select id="f-agent-b">
+                ${others.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}
+              </select>
+            </label>
+            <label>FUSED NAME <input id="f-name" maxlength="24" value="${esc(suggestedName)}" /></label>
+            <label>MERGED SYSTEM PROMPT <span class="opt">(editable)</span>
+              <textarea id="f-prompt" rows="6" style="font-size:0.78rem;">${esc(mergedPrompt)}</textarea>
+            </label>
+          </div>
+          <div class="hire-form" style="flex:1;">
+            <div class="sec" style="font-size:0.8rem;color:#888;margin-top:0.3rem;">MERGED MCP SERVERS</div>
+            <div id="f-mcp-display" style="padding:0.4rem 0;margin-bottom:0.4rem;">${mergeMcpDisplay(agentA, firstOther)}</div>
+            <div class="sec" style="font-size:0.8rem;color:#888;">PERSONALITY (averaged)</div>
+            <div id="f-traits" style="padding:0.4rem 0;">
+              ${traitSliders}
+            </div>
+            <div class="sec" style="font-size:0.8rem;color:#888;margin-top:0.3rem;">WALLETS</div>
+            <div id="f-wallets" style="padding:0.3rem 0;font-size:0.78rem;color:#ccc;">
+              ${((agentA.cdpSolana || firstOther.cdpSolana) ? "🔵 Solana (CDP) " : "")}${((agentA.crossmintWallet || firstOther.crossmintWallet) ? "🟢 Crossmint " : "")}${(!agentA.cdpSolana && !firstOther.cdpSolana && !agentA.crossmintWallet && !firstOther.crossmintWallet) ? "<span style='color:#666;'>None</span>" : ""}
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" id="f-cancel">CANCEL</button>
+          <button class="btn primary" id="f-ok">⚗️ FUSE ▶</button>
+        </div>
+      </div>
+    `;
+
+    const updatePreview = () => {
+      const aId = (document.getElementById("f-agent-a") as HTMLSelectElement).value;
+      const bId = (document.getElementById("f-agent-b") as HTMLSelectElement).value;
+      const a = this.store.agents.get(aId);
+      const b = this.store.agents.get(bId);
+      if (!a || !b) return;
+      (document.getElementById("f-prompt") as HTMLTextAreaElement).value = buildMergedPrompt(a, b);
+      document.getElementById("f-mcp-display")!.innerHTML = mergeMcpDisplay(a, b);
+      const p = avgPersonality(a, b);
+      for (const key of ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"] as const) {
+        const slider = document.getElementById(`f-${key}`) as HTMLInputElement;
+        const valSpan = document.getElementById(`f-${key}-val`)!;
+        slider.value = String(Math.round(p[key] * 100));
+        valSpan.textContent = String(Math.round(p[key] * 100));
+      }
+      document.getElementById("f-wallets")!.innerHTML =
+        ((a.cdpSolana || b.cdpSolana) ? "🔵 Solana (CDP) " : "") +
+        ((a.crossmintWallet || b.crossmintWallet) ? "🟢 Crossmint " : "") ||
+        "<span style='color:#666;'>None</span>";
+    };
+
+    document.getElementById("f-cancel")!.addEventListener("click", () => (modal.hidden = true));
+    document.getElementById("f-agent-a")!.addEventListener("change", updatePreview);
+    document.getElementById("f-agent-b")!.addEventListener("change", updatePreview);
+
+    // Wire up trait slider value displays
+    for (const key of ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"] as const) {
+      const slider = document.getElementById(`f-${key}`) as HTMLInputElement;
+      const valSpan = document.getElementById(`f-${key}-val`)!;
+      slider.addEventListener("input", () => {
+        valSpan.textContent = slider.value;
+      });
+    }
+
+    document.getElementById("f-ok")!.addEventListener("click", () => {
+      const aId = (document.getElementById("f-agent-a") as HTMLSelectElement).value;
+      const bId = (document.getElementById("f-agent-b") as HTMLSelectElement).value;
+      const name = (document.getElementById("f-name") as HTMLInputElement).value.trim();
+      const systemPrompt = (document.getElementById("f-prompt") as HTMLTextAreaElement).value;
+      if (!name) return;
+      if (aId === bId) {
+        this.toast("You can't fuse an agent with itself.");
+        return;
+      }
+      const traits: PersonalityTraits = {
+        openness: parseInt((document.getElementById("f-openness") as HTMLInputElement).value) / 100,
+        conscientiousness: parseInt((document.getElementById("f-conscientiousness") as HTMLInputElement).value) / 100,
+        extraversion: parseInt((document.getElementById("f-extraversion") as HTMLInputElement).value) / 100,
+        agreeableness: parseInt((document.getElementById("f-agreeableness") as HTMLInputElement).value) / 100,
+        neuroticism: parseInt((document.getElementById("f-neuroticism") as HTMLInputElement).value) / 100,
+      };
+      this.net.send({ type: "fuse", agentA: aId, agentB: bId, name, systemPrompt, personality: traits });
+      modal.hidden = true;
+    });
+  }
+
   private hireFromMarketplace(agent: MarketplaceAgent): void {
     if (this.store.accessLevel !== "manage") {
       this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access to hire agents." : "Go to your office to manage agents.");
       return;
     }
+    if (!this.canHireAgent()) return;
     // Parse the agent config JSON — may contain a custom appearance, model,
     // and systemPrompt for premium/curated marketplace agents.
     let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; cdpSolana?: boolean; crossmintWallet?: boolean } = {};
@@ -1950,6 +2138,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access to hire agents." : "Go to your office to manage agents.");
       return;
     }
+    if (!this.canHireAgent()) return;
 
     const hasInstall = !!(mcpConfig.url || mcpConfig.command);
     const needsSetup = !hasInstall && !!mcpConfig.sourceUrl;
@@ -1975,6 +2164,17 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       mcpServers: [mcpConfig],
     };
     this.store.triggerHelicopter(delivery);
+  }
+
+  private canHireAgent(): boolean {
+    if (this.store.agentLimit > 0) {
+      const hireable = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID).length;
+      if (hireable >= this.store.agentLimit) {
+        this.toast(`You've reached your agent limit (${this.store.agentLimit}). Upgrade your plan to hire more agents.`);
+        return false;
+      }
+    }
+    return true;
   }
 
   private scheduleRender(): void {
@@ -2082,7 +2282,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     roster.classList.toggle("collapsed", this.rosterCollapsed);
     const rows = [...this.store.agents.values()]
       .sort((a, b) => {
-        const perm = (id: string) => id === AGENT_RESOURCES_ID ? 0 : id === HERMES_ID ? 1 : 2;
+        const perm = (id: string) => id === AGENT_RESOURCES_ID ? 0 : id === HERMES_ID ? 1 : id === WIZARD_ID ? 2 : 3;
         const pa = perm(a.id), pb = perm(b.id);
         return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
       })
@@ -2102,7 +2302,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         <div class="agent-row vac-row" data-vac-id="${a.id}">
           <span class="dot idle"></span>
           <span class="name" style="color:${a.accent};opacity:0.6">🏖️ ${esc(a.name)}</span>
-          <span class="status" style="cursor:pointer;color:#5a9a5a">restore</span>
+          <span class="status" style="cursor:pointer;color:#5dd47e">restore</span>
         </div>`,
       )
       .join("");
@@ -2190,13 +2390,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
       ${agent.role === "manager" ? "· 👔 MANAGER " : ""}
-      · ${agent.id === AGENT_RESOURCES_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
+      · ${agent.id === AGENT_RESOURCES_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : agent.id === WIZARD_ID ? "world builder" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
 
-    // Agent Resources and Hermes can't be fired or vacationed
+    // Agent Resources and Hermes can't be fired, vacationed, or fused
+    const isNpc = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID || agent.id === WIZARD_ID;
     const fireBtn = document.getElementById("d-fire") as HTMLButtonElement | null;
-    if (fireBtn) fireBtn.hidden = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID;
+    if (fireBtn) fireBtn.hidden = isNpc;
     const vacBtn = document.getElementById("d-vacation") as HTMLButtonElement | null;
-    if (vacBtn) vacBtn.hidden = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID;
+    if (vacBtn) vacBtn.hidden = isNpc;
+    const fuseBtn = document.getElementById("d-fuse") as HTMLButtonElement | null;
+    if (fuseBtn) fuseBtn.hidden = isNpc;
 
     const handoffSel = document.getElementById("d-handoff") as HTMLSelectElement;
     const others = [...this.store.agents.values()].filter((a) => a.id !== agent.id);
@@ -3378,7 +3581,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       return;
     }
 
-    const agents = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID);
+    const agents = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID && a.id !== WIZARD_ID);
     const fired = [...this.store.firedAgents.values()];
 
     const allAgents = [

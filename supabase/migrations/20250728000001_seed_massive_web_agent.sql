@@ -37,7 +37,7 @@ Perfect for:
     'agent',
     'approved',
     '["Fetch any URL with JS rendering and captcha solving","Google search with structured results","Geo-target from 195+ countries","Bypass Cloudflare and anti-bot protection","Control scraping difficulty to optimize credits","Check remaining credits (free)"]',
-    '["research","data","web"]',
+    '["data","research"]',
     '["Massive API token (get yours at joinmassive.com)"]',
     '[{"label":"Massive Web Render API","url":"https://docs.joinmassive.com/web-render"},{"label":"Get API Token","url":"https://joinmassive.com"},{"label":"Pricing","url":"https://joinmassive.com/pricing"}]',
     'https://www.google.com/s2/favicons?domain=joinmassive.com&sz=128'

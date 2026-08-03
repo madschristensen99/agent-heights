@@ -48,6 +48,15 @@ function statusColor(status: AgentStatus): string {
   }
 }
 
+function formatElapsed(ms: number): string {
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return "just started";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m in`;
+  const hr = Math.floor(min / 60);
+  return `${hr}h ${min % 60}m in`;
+}
+
 function imgToBase64(path: string): string {
   if (!existsSync(path)) return "";
   const buf = readFileSync(path);
@@ -57,6 +66,7 @@ function imgToBase64(path: string): string {
 export interface OfficeSnapshotAgent {
   info: AgentInfo;
   task: string | null;
+  taskStartedAt?: number;
 }
 
 /**
@@ -74,11 +84,16 @@ export async function generateOfficeScreenshot(
     const bossImg = imgToBase64(join(IMG_DIR, "boss.png"));
 
     // Build agent cards
+    const now = Date.now();
     const agentCards = agents.map((a) => {
       const sprite = imgToBase64(spritePathForAgent(a.info));
       const emoji = statusEmoji(a.info.status);
       const color = statusColor(a.info.status);
       const task = a.task ? a.task.slice(0, 60) : "Waiting for tasks...";
+      const elapsed = a.taskStartedAt && (a.info.status === "working" || a.info.status === "thinking")
+        ? formatElapsed(now - a.taskStartedAt)
+        : null;
+      const isHermes = a.info.id === "hermes";
 
       return `
         <div class="agent-card" style="border-left-color: ${color}">
@@ -87,9 +102,10 @@ export async function generateOfficeScreenshot(
             <div class="status-emoji">${emoji}</div>
           </div>
           <div class="agent-info">
-            <div class="agent-name">${a.info.name}</div>
+            <div class="agent-name">${a.info.name}${isHermes ? " <span class=\"badge\">mail clerk</span>" : ""}</div>
             <div class="agent-role">${a.info.title || a.info.role || "worker"}</div>
             <div class="agent-task" title="${(a.task ?? "").replace(/"/g, '&quot;')}">${task}</div>
+            ${elapsed ? `<div class="agent-elapsed">${elapsed}</div>` : ""}
           </div>
         </div>`;
     }).join("");
@@ -204,13 +220,32 @@ export async function generateOfficeScreenshot(
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .agent-elapsed {
+    color: #6a8;
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .badge {
+    display: inline-block;
+    background: #4a9;
+    color: #1a1a2e;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
   .caption {
-    color: #aaa;
-    font-size: 13px;
+    color: #ccc;
+    font-size: 14px;
     margin-top: 16px;
-    padding-top: 12px;
+    padding: 12px 16px;
     border-top: 1px solid #333;
     text-align: center;
+    background: #22223a;
+    border-radius: 8px;
+    font-style: italic;
   }
   .timestamp {
     color: #555;

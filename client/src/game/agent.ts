@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { AgentInfo } from "../../../shared/types";
-import { AGENT_RESOURCES_ID, HERMES_ID } from "../../../shared/types";
+import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID } from "../../../shared/types";
+import type { WorldTheme } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
 
 /** Returns the Phaser texture key for an agent's character sprite. */
@@ -19,6 +20,17 @@ export const STATUS_COLORS: Record<AgentInfo["status"], number> = {
   error: 0xe05858,
   waiting: 0xb47ec4,
 };
+
+/**
+ * Returns theme-aware status colors. If a theme with custom statusColors is
+ * active, those override the defaults. Falls back to STATUS_COLORS.
+ */
+export function getThemeStatusColors(theme?: WorldTheme | null): Record<AgentInfo["status"], number> {
+  if (theme?.statusColors) {
+    return { ...STATUS_COLORS, ...theme.statusColors };
+  }
+  return STATUS_COLORS;
+}
 
 export type Dir = "down" | "left" | "right" | "up";
 
@@ -1017,6 +1029,84 @@ export class HermesNPC {
     // idle — sitting at desk, facing right
     this.dir = "right";
     this.play(`${c}-idle-right`);
+    this.container.setDepth(10 + this.container.y);
+  }
+
+  destroy(): void {
+    this.container.destroy();
+  }
+}
+
+/** Wizard — the world-builder NPC. Sits at a desk and can be chatted with.
+ *  Has GitHub tools on the server side to read and modify world files. */
+export class WizardNPC {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private nameTag: NameTag;
+  private shadow: Phaser.GameObjects.Ellipse;
+
+  info!: AgentInfo;
+  private dir: Dir = "down";
+  private texKey = "char-wizard";
+
+  constructor(
+    scene: Phaser.Scene,
+    _grid: Grid,
+    seat: Tile,
+    onClick: (id: string) => void,
+  ) {
+
+    const feet = feetOf(seat);
+    this.shadow = scene.add.ellipse(0, 2, 50, 18, 0x000000, 0.15);
+    this.sprite = scene.add.sprite(0, 0, this.texKey, 6).setOrigin(0.5, 1).setScale(1);
+    this.nameTag = createNameTag(scene, "Wizard", "idle");
+
+    this.container = scene.add.container(feet.x, feet.y, [
+      this.shadow,
+      this.sprite,
+      this.nameTag.nameBg,
+      this.nameTag.label,
+    ]);
+    this.container.setDepth(10 + this.container.y);
+    this.dir = "down";
+    this.play(`${this.texKey}-idle-${this.dir}`);
+
+    this.sprite.setInteractive({ useHandCursor: true });
+    this.sprite.on("pointerdown", () => onClick(WIZARD_ID));
+  }
+
+  sync(info: AgentInfo): void {
+    this.info = info;
+    this.nameTag.setStatus(info.status);
+    if (info.appearance) {
+      const key = agentTextureKey(info);
+      if (key !== this.texKey) {
+        this.texKey = key;
+        this.sprite.setTexture(key, 6);
+        this.play(`${key}-idle-${this.dir}`);
+      }
+    }
+  }
+
+  getState(): { x: number; y: number; dir: Dir; state: string } {
+    return { x: this.container.x, y: this.container.y, dir: this.dir, state: "idle" };
+  }
+
+  remoteUpdate(x: number, y: number, dir: Dir, _state: string): void {
+    this.container.setPosition(x, y);
+    this.dir = dir;
+    this.play(`${this.texKey}-idle-${this.dir}`);
+    this.container.setDepth(10 + this.container.y);
+  }
+
+  private play(key: string): void {
+    if (this.sprite.anims.currentAnim?.key !== key || !this.sprite.anims.isPlaying) {
+      this.sprite.play(key, true);
+    }
+  }
+
+  update(_time: number, _dt: number): void {
+    this.play(`${this.texKey}-idle-${this.dir}`);
     this.container.setDepth(10 + this.container.y);
   }
 

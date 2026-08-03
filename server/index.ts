@@ -760,7 +760,7 @@ wss.on("connection", async (ws, req) => {
   let freeTrialTimer: ReturnType<typeof setTimeout> | null = null;
   if (isSupabaseConfigured && isStripeConfigured) {
     try {
-      const payStatus = await getUserPaymentStatus(user.id);
+      const payStatus = await getUserPaymentStatus(user.id, user.email);
 
       // Start a free trial for authed users without a subscription
       let freeTrialExpiresAt = payStatus.freeTrialExpiresAt;
@@ -1161,6 +1161,9 @@ wss.on("connection", async (ws, req) => {
           break;
         case "recruit":
           await activeManager.recruit(msg.firedAgentId);
+          break;
+        case "fuse":
+          await activeManager.fuseAgents(msg.agentA, msg.agentB, msg.name, msg.systemPrompt, msg.appearance, msg.personality);
           break;
         case "rename":
           activeManager.rename(msg.agentId, msg.name);

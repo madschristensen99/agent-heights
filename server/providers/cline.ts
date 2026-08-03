@@ -14,6 +14,7 @@ import { wrapRailwayTools } from "./railway-mcp.js";
 import { loadMCPTools, type OnApiErrorFn } from "./mcp-client.js";
 import { loadCdpSolanaTools } from "./cdp-solana.js";
 import { loadCrossmintWalletTools } from "./crossmint-wallets.js";
+import { loadWizardTools } from "./wizard-tools.js";
 import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
 import { browserNavigate, browserScreenshot, browserExtractText, browserClick, browserFill } from "./browser.js";
 
@@ -154,10 +155,14 @@ export async function makeTools(cwd: string, opts?: {
   updateSelfSchedule?: (scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }) => string;
   deleteSelfSchedule?: (scheduleId: string) => string;
   hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: import("../../shared/types.js").MCPServerConfig[]) => Promise<string>;
+  delegateTask?: (agentName: string, task: string) => string;
+  requestHire?: (skillArea: string, reason: string) => string;
   officeState?: import("../office-state.js").OfficeState;
   agentName?: string;
   registerMcpServer?: (opts: { name: string; description: string; runtime: "node" | "python"; entryFile: string }) => Promise<{ id: string; tools: { name: string; description: string }[] }>;
   listOfficeMcp?: () => { id: string; name: string; description: string; tools: { name: string; description: string }[]; builtByName: string; status: string }[];
+  wizardGithubPat?: string;
+  wizardBranch?: string;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -935,10 +940,52 @@ export async function makeTools(cwd: string, opts?: {
   }
   const baseWithForge = [...baseWithSchedules, ...hireTools, ...forgeTools];
 
+  // ── Mail clerk tools (Hermes/devops only) ───────────────────────
+  const mailClerkTools: AgentTool<any, any>[] = [];
+  if (opts?.delegateTask) {
+    mailClerkTools.push({
+      name: "delegate_task",
+      description:
+        "Assign a task to a specific colleague in the office. Use this when you've received a message from a platform user and need to route it to the right agent. " +
+        "Specify the agent's name and the task description. The task will be assigned immediately if the agent is idle, or queued if they're busy.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agentName: { type: "string", description: "The name of the colleague to assign the task to" },
+          task: { type: "string", description: "The task description to assign" },
+        },
+        required: ["agentName", "task"],
+      },
+      async execute(input: any) {
+        return opts.delegateTask!(String(input.agentName ?? ""), String(input.task ?? ""));
+      },
+    });
+  }
+  if (opts?.requestHire) {
+    mailClerkTools.push({
+      name: "request_hire",
+      description:
+        "Request Agent Resources to hire a new agent with specific skills. Use this when no existing agent has the right expertise for a task. " +
+        "Agent Resources will review the request and hire someone if appropriate.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          skillArea: { type: "string", description: "The skill area needed (e.g. 'Python backend', 'React frontend', 'data analysis')" },
+          reason: { type: "string", description: "Why this hire is needed" },
+        },
+        required: ["skillArea", "reason"],
+      },
+      async execute(input: any) {
+        return opts.requestHire!(String(input.skillArea ?? ""), String(input.reason ?? ""));
+      },
+    });
+  }
+  const baseWithMailClerk = [...baseWithForge, ...mailClerkTools];
+
   if (opts?.railway) {
     const railwayTools = await wrapRailwayTools();
     if (railwayTools.length > 0) {
-      return [...baseWithForge, ...railwayTools];
+      return [...baseWithMailClerk, ...railwayTools];
     }
   }
 
@@ -946,7 +993,7 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
     const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
     if (mcpTools.length > 0) {
-      return [...baseWithForge, ...mcpTools];
+      return [...baseWithMailClerk, ...mcpTools];
     }
   }
 
@@ -954,7 +1001,7 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.cdpSolana && opts?.agentId) {
     const cdpTools = await loadCdpSolanaTools(opts.agentId);
     if (cdpTools.length > 0) {
-      return [...baseWithForge, ...cdpTools];
+      return [...baseWithMailClerk, ...cdpTools];
     }
   }
 
@@ -962,11 +1009,19 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.crossmintWallet && opts?.agentId) {
     const crossmintTools = await loadCrossmintWalletTools(opts.agentId);
     if (crossmintTools.length > 0) {
-      return [...baseWithForge, ...crossmintTools];
+      return [...baseWithMailClerk, ...crossmintTools];
     }
   }
 
-  return baseWithForge;
+  // Load Wizard GitHub tools (server-side PAT, world branch file operations)
+  if (opts?.wizardGithubPat && opts?.wizardBranch) {
+    const wizardTools = await loadWizardTools({ pat: opts.wizardGithubPat, branch: opts.wizardBranch });
+    if (wizardTools.length > 0) {
+      return [...baseWithMailClerk, ...wizardTools];
+    }
+  }
+
+  return baseWithMailClerk;
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
@@ -1070,7 +1125,15 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           },
         });
       }
-      const tools = isChat ? agentResourcesHireTools : await makeTools(ctx.cwd, {
+      // Wizard chat: load GitHub tools so the Wizard can modify the world branch during chat
+      const wizardChatTools: AgentTool<any, any>[] = [];
+      if (isChat && ctx.wizardGithubPat && ctx.wizardBranch) {
+        const wt = await loadWizardTools({ pat: ctx.wizardGithubPat, branch: ctx.wizardBranch });
+        wizardChatTools.push(...wt);
+      }
+      const tools = isChat
+        ? (wizardChatTools.length > 0 ? wizardChatTools : agentResourcesHireTools)
+        : await makeTools(ctx.cwd, {
         railway: ctx.railway,
         sharedCwd: ctx.sharedCwd,
         workspaceRoot: resolve(ctx.cwd, ".."),
@@ -1090,12 +1153,16 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         updateSelfSchedule: ctx.updateSelfSchedule,
         deleteSelfSchedule: ctx.deleteSelfSchedule,
         hireAgent: ctx.hireAgent,
+        delegateTask: ctx.delegateTask,
+        requestHire: ctx.requestHire,
         officeState: ctx.officeState,
         agentName: ctx.agentName,
         registerMcpServer: ctx.registerMcpServer,
         listOfficeMcp: ctx.listOfficeMcp,
+        wizardGithubPat: ctx.wizardGithubPat,
+        wizardBranch: ctx.wizardBranch,
       });
-      const maxIter = isChat ? (agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
+      const maxIter = isChat ? (wizardChatTools.length > 0 ? 10 : agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
         providerId: "openai-compatible",

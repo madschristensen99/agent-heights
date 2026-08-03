@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { CHUNK_SIZE, TILE, WORLD_TILE_FRAMES, WORLD_VARIANTS } from "../../../shared/types";
-import type { FiredAgent } from "../../../shared/types";
+import type { FiredAgent, WorldTheme } from "../../../shared/types";
 import type { Store } from "../store";
 import type { Net } from "../net";
 import { isTouchDevice } from "../touch";
@@ -1340,6 +1340,8 @@ export class WorldLayer {
   offset: WorldOffset;
   private officeW: number;
   private officeH: number;
+  /** Active world theme (null = HQ/default). Set from registry on init. */
+  worldTheme: WorldTheme | null = null;
 
   vfx: VFXManager;
   audio: AudioSystem;
@@ -1462,6 +1464,8 @@ export class WorldLayer {
     this.officeH = officeH;
     // world tiles start just below the office
     this.offset = { x: 0, y: officeH };
+    // Load world theme from registry (set by BootScene if world-theme.json exists)
+    this.worldTheme = scene.registry.get("worldTheme") ?? null;
 
     // Initialize visual upgrade systems
     this.vfx = new VFXManager(scene);
@@ -1545,7 +1549,7 @@ export class WorldLayer {
     const { tx, ty } = this.pixelToTile(px, py);
     const cx = Math.floor(tx / CHUNK_SIZE);
     const cy = Math.floor(ty / CHUNK_SIZE);
-    return hostilityAt(cx, cy);
+    return hostilityAt(cx, cy, this.worldTheme?.worldgen?.hostilityThresholds);
   }
 
   /** Chunk distance from the office origin (0,0). */
@@ -1994,7 +1998,7 @@ export class WorldLayer {
 
     // Fallback: generate synchronously on the main thread
     const _genStart = performance.now();
-    const chunk = generateChunk(this.store.worldSeed, cx, cy);
+    const chunk = generateChunk(this.store.worldSeed, cx, cy, this.worldTheme);
     const _genTime = performance.now() - _genStart;
     // Cache raw data before overrides (clone so overrides don't mutate the cache)
     globalChunkCache.set(cacheKey, { cx, cy, biome: chunk.biome, tiles: [...chunk.tiles] });
@@ -2026,7 +2030,7 @@ export class WorldLayer {
     const cacheKey = `${this.store.worldSeed}:${key}`;
     if (globalChunkCache.has(cacheKey)) return;
     this.workerRequested.add(key);
-    this.worker.postMessage({ worldSeed: this.store.worldSeed, cx, cy });
+    this.worker.postMessage({ worldSeed: this.store.worldSeed, cx, cy, theme: this.worldTheme });
   }
 
   /** Request worker generation for door chunks without any canvas rendering.
@@ -2721,8 +2725,9 @@ export class WorldLayer {
       const { tx, ty } = this.pixelToTile(playerX, playerY);
       const cx = Math.floor(tx / CHUNK_SIZE);
       const cy = Math.floor(ty / CHUNK_SIZE);
-      const hostility = hostilityAt(cx, cy);
-      const biomeName = ["meadow", "forest", "ruins", "wasteland", "void", "infernal"][Math.round(hostility)];
+      const hostility = hostilityAt(cx, cy, this.worldTheme?.worldgen?.hostilityThresholds);
+      const biomeList = this.worldTheme?.worldgen?.biomes ?? ["meadow", "forest", "ruins", "wasteland", "void", "infernal"];
+      const biomeName = biomeList[Math.min(Math.round(hostility), biomeList.length - 1)] ?? "meadow";
       const biomeDisplay = biomeName.toUpperCase();
 
       // HUD compass

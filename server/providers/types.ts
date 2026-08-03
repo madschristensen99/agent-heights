@@ -56,6 +56,10 @@ export interface RunContext {
   clearMessages?: (agentId: string) => Promise<void>;
   /** Hire an agent (Agent Resources only). Triggers helicopter delivery + creates agent. */
   hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]) => Promise<string>;
+  /** Delegate a task to another agent (Hermes/devops only). Assigns the task immediately. */
+  delegateTask?: (agentName: string, task: string) => string;
+  /** Request Agent Resources to hire a new agent (Hermes/devops only). Sends a message to Agent Resources' inbox. */
+  requestHire?: (skillArea: string, reason: string) => string;
   /** Called when an agent posts a message to a colleague's inbox. Lets the manager assign a review task to an idle recipient. */
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
   /** Called when an MCP tool encounters a rate-limit or API funding error. Lets the manager notify Agent Resources, Hermes, and the user. */
@@ -83,6 +87,10 @@ export interface RunContext {
   }) => Promise<{ id: string; tools: { name: string; description: string }[] }>;
   /** List all MCP servers registered in the office forge (self-built by any agent). */
   listOfficeMcp?: () => { id: string; name: string; description: string; tools: { name: string; description: string }[]; builtByName: string; status: string }[];
+  /** If set, inject Wizard GitHub tools (read/write/create files on the world branch). */
+  wizardGithubPat?: string;
+  /** Git branch name for the Wizard to operate on (e.g. "worlds/erics-alley"). */
+  wizardBranch?: string;
 }
 
 export type ProviderRunner = (

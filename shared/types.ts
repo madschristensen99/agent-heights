@@ -343,6 +343,92 @@ export interface WorldState {
   chunkOverrides?: Record<string, Record<number, number>>;
 }
 
+// ── World Theme System ────────────────────────────────────────────────
+
+/** Status color overrides for a world theme. */
+export interface ThemeStatusColors {
+  idle: number;
+  thinking: number;
+  working: number;
+  done: number;
+  error: number;
+  waiting: number;
+}
+
+/** A custom interactable object placed in a themed world. */
+export interface ThemeInteractable {
+  tileId: number;
+  x: number;
+  y: number;
+  interactionType: string;
+}
+
+/** World generation overrides for a themed world. */
+export interface ThemeWorldgen {
+  biomes: string[];
+  baseGround: Record<string, number>;
+  obstacles: Record<string, number[]>;
+  decorations?: Record<string, number[]>;
+  hostileTiles?: Record<string, number[]>;
+  hostilityThresholds: number[];
+}
+
+/** Tile definition for a themed world. */
+export interface ThemeTile {
+  id: number;
+  walkable: boolean;
+  textureKey?: string;
+  animated?: boolean;
+  frames?: number;
+}
+
+/** Agent work animation override. */
+export interface ThemeAgentWorkAnim {
+  spritesheetPath: string;
+  frames: number;
+  frameRate: number;
+}
+
+/** Asset paths for a themed world — all relative to the branch root. */
+export interface ThemeAssets {
+  tilesetPath: string;
+  characterSpritesheetPath?: string;
+  furnitureSpritesheetPath?: string;
+  worldTileSpritesheetPath?: string;
+  uiTexturePath?: string;
+}
+
+/** Office layout override for a themed world. */
+export interface ThemeOffice {
+  tilemapPath: string;
+  tilesetPath: string;
+  floorTile: number;
+  wallTile: number;
+  doorTile: number;
+}
+
+/**
+ * A world theme config — committed as `world-theme.json` to the branch root.
+ * When present, the game loads themed assets and overrides instead of the
+ * hardcoded office defaults.
+ */
+export interface WorldTheme {
+  id: string;
+  name: string;
+  description: string;
+  workMetaphor: string;
+  arrivalMetaphor: string;
+  office: ThemeOffice;
+  furniture: Record<string, string>;
+  worldgen: ThemeWorldgen;
+  tiles?: Record<string, ThemeTile>;
+  interactables: Record<string, ThemeInteractable>;
+  agentWorkAnim?: ThemeAgentWorkAnim;
+  statusColors?: ThemeStatusColors;
+  emotes?: Record<string, number>;
+  assets: ThemeAssets;
+}
+
 /** Chunk side length in tiles. */
 export const CHUNK_SIZE = 32;
 
@@ -418,6 +504,8 @@ export interface TaskCard {
   createdAt: number;
   type?: CardType;
   progress?: number; // 0-100
+  originalAgentId?: string | null;
+  revertedAt?: number | null;
 }
 
 export interface AgentSchedule {
@@ -647,6 +735,7 @@ export type ClientMsg =
   | { type: "move_card"; cardId: string; status: CardStatus }
   | { type: "delete_card"; cardId: string }
   | { type: "recruit"; firedAgentId: string }
+  | { type: "fuse"; agentA: string; agentB: string; name: string; systemPrompt: string; appearance?: CharAppearance; personality?: PersonalityTraits }
   | { type: "railway_query" }
   | { type: "update_appearance"; appearance: CharAppearance }
   | { type: "update_agent"; agentId: string; systemPrompt?: string }
@@ -846,7 +935,7 @@ export type ServerMsg =
   | { type: "agent_log_history"; agentId: string; entries: LogEntry[] }
   | { type: "agent_task_info"; agentId: string; currentTask: string | null; queue: { task: string; handoffTo: string | null }[]; history: { task: string; success: boolean; ts: number; durationMs: number }[] }
   | { type: "agent_memory"; agentId: string; messages: { role: string; content: string }[] }
-  | { type: "mailbox_update"; platform: string; flagUp: boolean; pendingCount: number; lastMessage: string }
+  | { type: "mailbox_update"; platform: string; flagUp: boolean; pendingCount: number; lastMessage: string; assignedAgentId: string | null }
   | { type: "mailbox_messages"; platform: string; events: PlatformEvent[] }
   | { type: "mail_digest"; totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }
   | { type: "platform_connection"; states: PlatformConnectionState[] }
@@ -863,7 +952,8 @@ export type ServerMsg =
   | { type: "office_mcp_removed"; serverId: string }
   | { type: "mcp_build_log"; serverId: string; line: string; stream: "stdout" | "stderr" }
   | { type: "deletion_scheduled"; scheduledDeletionAt: number }
-  | { type: "deletion_cancelled" };
+  | { type: "deletion_cancelled" }
+  | { type: "fuse_effect"; agentAId: string; agentBId: string; fusedId: string };
 
 export const AGENT_MODELS = [
   { id: "kimi-k2.5", label: "Standard" },
@@ -937,6 +1027,9 @@ export const AGENT_RESOURCES_ID = "agent-resources";
 
 /** Fixed agent id for Hermes, the devops core engineer NPC in the mail room. */
 export const HERMES_ID = "hermes";
+
+/** Fixed agent id for the Wizard, the world-builder NPC present in world branches. */
+export const WIZARD_ID = "wizard";
 
 /** Default platforms for the 6 mailbox slots — all unassigned by default. */
 export const DEFAULT_MAILBOX_PLATFORMS: (string | null)[] = [null, null, null, null, null, null];

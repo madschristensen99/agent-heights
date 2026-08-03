@@ -223,21 +223,27 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const sh = img.height;
     const data = img.data;
 
-    // Face exclusion zone for "down" direction — prevents AI-generated hair
-    // artifacts from covering the face area. Only applies to the initial stamp
-    // (minY undefined), not the re-stamp for hanging hair below the face.
-    const excludeFace = !minY && dirName === "down" && component === "hair";
+    // Face exclusion zone — prevents AI-generated hair artifacts from covering
+    // the face area. Only applies to the initial stamp (minY undefined), not
+    // the re-stamp for hanging hair below the face.
+    const excludeFace = !minY && component === "hair";
+    // Face center differs by direction: "down" face is centered, "right" face
+    // is shifted to the right side of the sprite.
+    const faceCX = dirName === "right" ? 38 : 32;
+    const faceCY = 25;
+    const faceRX2 = dirName === "right" ? 81 : 100; // rx^2 (9^2 vs 10^2)
+    const faceRY2 = 64; // ry^2 (8^2)
 
     for (let py = minY ?? 0; py < sh; py++) {
       for (let px = 0; px < sw; px++) {
         const si = (py * sw + px) * 4;
         const a = data[si + 3];
         if (a === 0) continue;
-        // Skip face exclusion zone (ellipse centered at 32,25 rx=10 ry=7)
+        // Skip face exclusion zone
         if (excludeFace) {
-          const fdx = px - 32;
-          const fdy = py - 25;
-          if ((fdx * fdx) / 100 + (fdy * fdy) / 49 <= 1) continue;
+          const fdx = px - faceCX;
+          const fdy = py - faceCY;
+          if ((fdx * fdx) / faceRX2 + (fdy * fdy) / faceRY2 <= 1) continue;
         }
         // Skip clip check if no clip
         const absX = ox + px;

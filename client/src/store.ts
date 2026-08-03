@@ -141,10 +141,12 @@ export class Store {
   private toastListeners = new Set<(text: string) => void>();
   private huddleListeners = new Set<(agentIds: string[]) => void>();
   private heliListeners = new Set<(agent: HelicopterDelivery) => void>();
+  private paymentRequiredListeners = new Set<(reason: string, message: string) => void>();
   private assemblyListeners = new Set<(agentIds: string[]) => void>();
   private npcStateListeners = new Set<(npcId: string, x: number, y: number, dir: import("../../shared/types").Dir, state: string) => void>();
   private tileUpdatedListeners = new Set<(cx: number, cy: number, tileIndex: number, tile: number) => void>();
   private emoteListeners = new Set<(agentId: string, emote: string) => void>();
+  private fuseEffectListeners = new Set<(agentAId: string, agentBId: string, fusedId: string) => void>();
   private agentChatListeners = new Set<(fromId: string, toId: string, fromName: string, toName: string, text: string) => void>();
   private voicePeerListeners = new Set<(userId: string, name: string) => void>();
   private voiceOfferListeners = new Set<(fromUserId: string, sdp: string) => void>();
@@ -171,7 +173,7 @@ export class Store {
   private agentLogHistoryListeners = new Set<(agentId: string, entries: LogEntry[]) => void>();
   private agentTaskInfoListeners = new Set<(agentId: string, currentTask: string | null, queue: { task: string; handoffTo: string | null }[], history: { task: string; success: boolean; ts: number; durationMs: number }[]) => void>();
   private agentMemoryListeners = new Set<(agentId: string, messages: { role: string; content: string }[]) => void>();
-  private mailboxUpdateListeners = new Set<(platform: string, flagUp: boolean, pendingCount: number, lastMessage: string) => void>();
+  private mailboxUpdateListeners = new Set<(platform: string, flagUp: boolean, pendingCount: number, lastMessage: string, assignedAgentId: string | null) => void>();
   private mailboxMessagesListeners = new Set<(platform: string, events: PlatformEvent[]) => void>();
   private mailDigestListeners = new Set<(digest: { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number }) => void>();
   private platformConnectionListeners = new Set<(states: PlatformConnectionState[]) => void>();
@@ -185,8 +187,8 @@ export class Store {
   /** Platform connection states from Hermes Agent gateway */
   platformStates: PlatformConnectionState[] = [];
 
-  /** Platform mailbox state: platform -> { flagUp, pendingCount, lastMessage } */
-  platformMailboxes = new Map<string, { flagUp: boolean; pendingCount: number; lastMessage: string }>();
+  /** Platform mailbox state: platform -> { flagUp, pendingCount, lastMessage, assignedAgentId } */
+  platformMailboxes = new Map<string, { flagUp: boolean; pendingCount: number; lastMessage: string; assignedAgentId: string | null }>();
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -258,6 +260,10 @@ export class Store {
     this.heliListeners.add(fn);
   }
 
+  onPaymentRequired(fn: (reason: string, message: string) => void): void {
+    this.paymentRequiredListeners.add(fn);
+  }
+
   onAssembly(fn: (agentIds: string[]) => void): void {
     this.assemblyListeners.add(fn);
   }
@@ -272,6 +278,10 @@ export class Store {
 
   onEmote(fn: (agentId: string, emote: string) => void): void {
     this.emoteListeners.add(fn);
+  }
+
+  onFuseEffect(fn: (agentAId: string, agentBId: string, fusedId: string) => void): void {
+    this.fuseEffectListeners.add(fn);
   }
 
   onAgentChat(fn: (fromId: string, toId: string, fromName: string, toName: string, text: string) => void): void {
@@ -414,7 +424,7 @@ export class Store {
     this.agentMemoryListeners.delete(fn);
   }
 
-  onMailboxUpdate(fn: (platform: string, flagUp: boolean, pendingCount: number, lastMessage: string) => void): void {
+  onMailboxUpdate(fn: (platform: string, flagUp: boolean, pendingCount: number, lastMessage: string, assignedAgentId: string | null) => void): void {
     this.mailboxUpdateListeners.add(fn);
   }
 
@@ -996,6 +1006,7 @@ export class Store {
       case "payment_required":
         this.paymentRequired = { reason: msg.reason, message: msg.message, tier: msg.tier, agentLimit: msg.agentLimit, monthlySpend: msg.monthlySpend, usageCap: msg.usageCap };
         this.toast(msg.message);
+        for (const fn of this.paymentRequiredListeners) fn(msg.reason, msg.message);
         break;
       case "deletion_scheduled":
         this.scheduledDeletionAt = msg.scheduledDeletionAt;
@@ -1097,6 +1108,10 @@ export class Store {
       }
       case "emote": {
         for (const fn of this.emoteListeners) fn(msg.agentId, msg.emote);
+        return;
+      }
+      case "fuse_effect": {
+        for (const fn of this.fuseEffectListeners) fn(msg.agentAId, msg.agentBId, msg.fusedId);
         return;
       }
       case "agent_chat": {
@@ -1211,8 +1226,9 @@ export class Store {
           flagUp: msg.flagUp,
           pendingCount: msg.pendingCount,
           lastMessage: msg.lastMessage,
+          assignedAgentId: msg.assignedAgentId ?? null,
         });
-        for (const fn of this.mailboxUpdateListeners) fn(msg.platform, msg.flagUp, msg.pendingCount, msg.lastMessage);
+        for (const fn of this.mailboxUpdateListeners) fn(msg.platform, msg.flagUp, msg.pendingCount, msg.lastMessage, msg.assignedAgentId ?? null);
         return;
       }
       case "mailbox_messages": {

@@ -1,8 +1,9 @@
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { generateOfficeScreenshot, type OfficeSnapshotAgent } from "./office-screenshot.js";
+import { generateNarration, type NarrationContext } from "./narration.js";
 import type {
   AgentInfo,
   AgentRole,
@@ -29,7 +30,7 @@ import type {
   CardType,
   OfficeMCPServer,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
@@ -295,12 +296,15 @@ export class AgentManager {
   get hireableAgentCount(): number {
     let n = 0;
     for (const id of this.agents.keys()) {
-      if (id !== AGENT_RESOURCES_ID && id !== HERMES_ID) n++;
+      if (id !== AGENT_RESOURCES_ID && id !== HERMES_ID && id !== WIZARD_ID) n++;
     }
     return n;
   }
   private schedules = new Map<string, AgentSchedule>();
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
+  private proactiveUpdateTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly PROACTIVE_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  private proactiveLastSent = new Map<string, number>(); // key: platform:sender → last sent timestamp
   private firedAgents = new Map<string, FiredAgent>();
   private vacationedAgents = new Map<string, VacationedAgent>();
   private worldSeed = 0;
@@ -314,6 +318,7 @@ export class AgentManager {
   private platformFlags = new Map<string, boolean>();
   private platformPending = new Map<string, number>();
   private platformLastMessage = new Map<string, string>();
+  private platformAssignedAgent = new Map<string, string>();
   private platformStates: PlatformConnectionState[] = [];
   private hermesClient: HermesClient | null = null;
   private hermesProcess: HermesProcessManager | null = null;
@@ -518,11 +523,15 @@ export class AgentManager {
 
     this.ensureAgentResources();
     this.ensureHermes();
+    this.ensureWizard();
     this.seedTestMail();
     void this.startHermesGateway();
 
     // Start the scheduler tick
     this.schedulerTimer = setInterval(() => this.tickSchedules(), SCHEDULER_TICK_MS);
+
+    // Start proactive platform update timer
+    this.proactiveUpdateTimer = setInterval(() => this.tickProactiveUpdates(), AgentManager.PROACTIVE_UPDATE_INTERVAL_MS);
 
     // Resume pending tasks for agents that were interrupted by a server restart
     let resumedAny = false;
@@ -661,6 +670,49 @@ export class AgentManager {
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
+  }
+
+  /** Ensure the Wizard — the world-builder NPC — exists when WIZARD_GITHUB_PAT is set.
+   *  The Wizard has GitHub tools to read and modify files on the world's Git branch. */
+  private ensureWizard(): void {
+    const wizardPat = process.env.WIZARD_GITHUB_PAT;
+    const wizardBranch = process.env.WIZARD_BRANCH ?? "main";
+    if (!wizardPat) return;
+
+    if (this.agents.has(WIZARD_ID)) {
+      const rt = this.agents.get(WIZARD_ID)!;
+      if (!rt.info.appearance) {
+        rt.info.appearance = { skin: 1, hairStyle: 6, hair: 5, shirt: 5, pants: 3, accessory: 4, accent: 2, beard: 0, eyeColor: 1, headFeature: 1 };
+        this.persist();
+        this.broadcast({ type: "agent", agent: rt.info });
+      }
+      return;
+    }
+    const info: AgentInfo = {
+      id: WIZARD_ID,
+      name: "Wizard",
+      title: "World Builder",
+      provider: "cline",
+      model: "claude-sonnet-4-20250514",
+      status: "idle",
+      task: null,
+      deskIndex: -1,
+      sprite: 0,
+      appearance: { skin: 1, hairStyle: 6, hair: 5, shirt: 5, pants: 3, accessory: 4, accent: 2, beard: 0, eyeColor: 1, headFeature: 1 },
+      accent: "#8b5cf6",
+      systemPrompt: "",
+      role: "worker",
+      sessionId: null,
+      tasksDone: 0,
+      personality: { openness: 0.9, conscientiousness: 0.7, extraversion: 0.5, agreeableness: 0.8, neuroticism: 0.3 },
+      mood: "content",
+    };
+    mkdirSync(this.cwdFor("wizard", WIZARD_ID), { recursive: true });
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
+    this.agents.set(WIZARD_ID, rt);
+    this.persist();
+    this.broadcast({ type: "agent", agent: info });
+    console.log(`[manager] Wizard NPC spawned (branch: ${wizardBranch})`);
   }
 
   /** Load persisted mail events from the save state, or seed test data on a fresh server. */
@@ -1120,6 +1172,10 @@ export class AgentManager {
       clearInterval(this.schedulerTimer);
       this.schedulerTimer = null;
     }
+    if (this.proactiveUpdateTimer) {
+      clearInterval(this.proactiveUpdateTimer);
+      this.proactiveUpdateTimer = null;
+    }
   }
 
   worldState(): WorldState {
@@ -1254,12 +1310,105 @@ export class AgentManager {
     return rt?.info.id ?? "";
   }
 
+  /** Fuse two agents into a single new agent. Merges MCP servers, wallets, and
+   *  personality. Both originals are fired. The fused agent starts with a clean
+   *  slate (no conversation history). */
+  async fuseAgents(
+    agentAId: string,
+    agentBId: string,
+    name: string,
+    systemPrompt: string,
+    appearance?: CharAppearance | null,
+    personality?: PersonalityTraits,
+  ): Promise<void> {
+    const rtA = this.agents.get(agentAId);
+    const rtB = this.agents.get(agentBId);
+    if (!rtA || !rtB) {
+      this.broadcast({ type: "toast", text: "One or both agents not found." });
+      return;
+    }
+    if (agentAId === AGENT_RESOURCES_ID || agentBId === AGENT_RESOURCES_ID ||
+        agentAId === HERMES_ID || agentBId === HERMES_ID ||
+        agentAId === WIZARD_ID || agentBId === WIZARD_ID) {
+      this.broadcast({ type: "toast", text: "Built-in agents can't be fused." });
+      return;
+    }
+    if (rtA.info.status !== "idle" || rtB.info.status !== "idle") {
+      this.broadcast({ type: "toast", text: "Both agents must be idle to fuse. Stop any running tasks first." });
+      return;
+    }
+    if (agentAId === agentBId) {
+      this.broadcast({ type: "toast", text: "You can't fuse an agent with itself." });
+      return;
+    }
+
+    const infoA = rtA.info;
+    const infoB = rtB.info;
+
+    // Merge MCP servers — union, dedupe by url (or command if no url)
+    const mergedMcp: MCPServerConfig[] = [];
+    const seen = new Set<string>();
+    for (const s of [infoA.mcpServers, infoB.mcpServers].flat()) {
+      if (!s) continue;
+      const key = s.url ?? s.command ?? JSON.stringify(s);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      mergedMcp.push(s);
+    }
+
+    // Inherit wallet flags if either agent has them
+    const cdpSolana = infoA.cdpSolana || infoB.cdpSolana;
+    const crossmintWallet = infoA.crossmintWallet || infoB.crossmintWallet;
+
+    // Merge personality — average each trait
+    const mergedPersonality = personality ?? {
+      openness: ((infoA.personality?.openness ?? 0.5) + (infoB.personality?.openness ?? 0.5)) / 2,
+      conscientiousness: ((infoA.personality?.conscientiousness ?? 0.5) + (infoB.personality?.conscientiousness ?? 0.5)) / 2,
+      extraversion: ((infoA.personality?.extraversion ?? 0.5) + (infoB.personality?.extraversion ?? 0.5)) / 2,
+      agreeableness: ((infoA.personality?.agreeableness ?? 0.5) + (infoB.personality?.agreeableness ?? 0.5)) / 2,
+      neuroticism: ((infoA.personality?.neuroticism ?? 0.5) + (infoB.personality?.neuroticism ?? 0.5)) / 2,
+    };
+
+    // Use agent A's model as the base
+    const model = infoA.model;
+
+    // Hire the fused agent
+    await this.hire(
+      name,
+      "cline",
+      model,
+      systemPrompt,
+      "worker",
+      undefined,
+      appearance ?? infoA.appearance ?? null,
+      mergedMcp.length > 0 ? mergedMcp : undefined,
+      mergedPersonality,
+      cdpSolana || undefined,
+      crossmintWallet || undefined,
+    );
+
+    // Find the newly hired fused agent
+    const fusedRt = [...this.agents.values()].find((a) => a.info.name === name.trim().slice(0, 24));
+    const fusedId = fusedRt?.info.id ?? "";
+
+    // Fire both originals
+    await this.fire(agentAId);
+    await this.fire(agentBId);
+
+    // Broadcast fusion effect for client animation
+    if (fusedId) {
+      this.broadcast({ type: "fuse_effect", agentAId, agentBId, fusedId });
+      this.broadcast({ type: "toast", text: `${name} was forged from ${infoA.name} and ${infoB.name}.` });
+      this.logEvent("fuse", `${name} was forged from ${infoA.name} and ${infoB.name}.`);
+    }
+  }
+
   /** Update an agent's custom system prompt. Takes effect on the next task. */
   updateSystemPrompt(agentId: string, systemPrompt: string): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     // Don't allow editing permanent NPCs
-    if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === HERMES_ID) {
+    if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === HERMES_ID || rt.info.id === WIZARD_ID) {
       this.broadcast({ type: "toast", text: "Built-in agents can't be edited." });
       return;
     }
@@ -1442,6 +1591,7 @@ export class AgentManager {
       (rt) =>
         rt.info.id !== AGENT_RESOURCES_ID &&
         rt.info.id !== HERMES_ID &&
+        rt.info.id !== WIZARD_ID &&
         rt.info.status !== "thinking" && rt.info.status !== "working" && rt.info.status !== "waiting",
     );
     if (free.length === 0) {
@@ -1524,7 +1674,7 @@ export class AgentManager {
   stopAll(): void {
     const stopped: string[] = [];
     for (const rt of this.agents.values()) {
-      if (rt.info.id === AGENT_RESOURCES_ID) continue;
+      if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === WIZARD_ID) continue;
       if (rt.abort) {
         rt.abort.abort();
         if (rt.cardId) {
@@ -1653,6 +1803,10 @@ export class AgentManager {
       this.broadcast({ type: "toast", text: "You can't fire Hermes — he runs the infrastructure." });
       return;
     }
+    if (agentId === WIZARD_ID) {
+      this.broadcast({ type: "toast", text: "You can't fire the Wizard — they build the worlds." });
+      return;
+    }
     const rt = this.agents.get(agentId);
     if (!rt) return;
 
@@ -1739,6 +1893,10 @@ export class AgentManager {
     }
     if (agentId === HERMES_ID) {
       this.broadcast({ type: "toast", text: "Hermes doesn't take vacations — he runs the infrastructure." });
+      return;
+    }
+    if (agentId === WIZARD_ID) {
+      this.broadcast({ type: "toast", text: "The Wizard doesn't take vacations — they build the worlds." });
       return;
     }
     const rt = this.agents.get(agentId);
@@ -1909,6 +2067,7 @@ export class AgentManager {
       description: task,
       status: "in_progress",
       assignedAgentId: agentId,
+      originalAgentId: agentId,
       createdAt: Date.now(),
       type,
       progress: 0,
@@ -1950,6 +2109,8 @@ export class AgentManager {
     }
     card.status = "in_progress";
     card.assignedAgentId = agentId;
+    if (!card.originalAgentId) card.originalAgentId = agentId;
+    card.revertedAt = null;
     this.persistBoard();
     this.broadcast({ type: "card", card });
     const task = card.description
@@ -2004,6 +2165,7 @@ export class AgentManager {
     if (!card) return;
     card.status = "backlog";
     card.assignedAgentId = null;
+    card.revertedAt = Date.now();
     this.persistBoard();
     this.broadcast({ type: "card", card });
   }
@@ -2137,6 +2299,32 @@ export class AgentManager {
 
   // ── Autonomous think loop ──────────────────────────────────────────────
 
+  /** Periodic tick: send proactive narrated updates to platform users with active tasks. */
+  private tickProactiveUpdates(): void {
+    if (this.shuttingDown || !this.hermesClient) return;
+    const now = Date.now();
+
+    for (const rt of this.agents.values()) {
+      if (!rt.platformContext) continue;
+      if (rt.info.status !== "working" && rt.info.status !== "thinking") continue;
+      if (!rt.taskStartedAt) continue;
+
+      const { platform, sender } = rt.platformContext;
+      const key = `${platform}:${sender}`;
+      const lastSent = this.proactiveLastSent.get(key) ?? 0;
+      if (now - lastSent < AgentManager.PROACTIVE_UPDATE_INTERVAL_MS) continue;
+
+      this.proactiveLastSent.set(key, now);
+      this.sendNarratedScreenshot(platform, sender, {
+        agentName: rt.info.name,
+        task: rt.info.task,
+        event: "proactive_update",
+        roster: this.getNarrationRoster(),
+        elapsedMs: now - rt.taskStartedAt,
+      }).catch((err) => console.warn(`[manager] Proactive update failed: ${err}`));
+    }
+  }
+
   private thinkTimer: ReturnType<typeof setInterval> | null = null;
   private static readonly THINK_INTERVAL_MS = 30_000;
   private static readonly THINK_COOLDOWN_MS = 60_000;
@@ -2245,7 +2433,7 @@ export class AgentManager {
     const now = Date.now();
     for (const rt of this.agents.values()) {
       // Skip Agent Resources (handled separately), busy agents, and agents on cooldown
-      if (rt.info.id === AGENT_RESOURCES_ID) continue;
+      if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === WIZARD_ID) continue;
       if (rt.info.status !== "idle") continue;
       if (now < rt.thinkCooldownUntil) continue;
       if (rt.nextThinkAt === 0) {
@@ -2272,14 +2460,19 @@ export class AgentManager {
 
     // 1. Managers: check for backlog cards to delegate
     if (rt.info.role === "manager") {
+      const REVERT_COOLDOWN_MS = 60_000;
       const backlog = [...this.board.values()].filter(
         (c) => c.status === "backlog" && !c.assignedAgentId,
       );
-      if (backlog.length > 0) {
-        const card = backlog[0];
+      // Prefer cards with no original assignee (fresh) or cards past cooldown
+      const pickable = backlog.filter(
+        (c) => !c.originalAgentId || !c.revertedAt || Date.now() - c.revertedAt > REVERT_COOLDOWN_MS,
+      );
+      if (pickable.length > 0) {
+        const card = pickable[0];
         const free = [...this.agents.values()].filter(
           (a) => a.info.id !== rt.info.id && a.info.role !== "manager" &&
-          a.info.status === "idle" && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID,
+          a.info.status === "idle" && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID && a.info.id !== WIZARD_ID,
         );
         if (free.length > 0) {
           this.log(rt, "status", `Picked up backlog card "${card.title}" — delegating to the team.`);
@@ -2293,15 +2486,25 @@ export class AgentManager {
 
     // 2. Workers: pick up unassigned backlog cards
     if (rt.info.role === "worker") {
+      const REVERT_COOLDOWN_MS = 60_000;
       const backlog = [...this.board.values()].filter(
         (c) => c.status === "backlog" && !c.assignedAgentId,
       );
       if (backlog.length > 0 && p.conscientiousness > 0.4) {
-        const card = backlog[0];
-        this.log(rt, "status", `Picked up backlog card "${card.title}" on my own initiative.`);
-        this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
-        this.assignCard(card.id, rt.info.id);
-        return;
+        // Prefer cards originally assigned to this agent (their own reverted tasks)
+        const own = backlog.filter((c) => c.originalAgentId === rt.info.id);
+        // Then fresh cards (no original assignee) or cards past cooldown
+        const pickable = backlog.filter(
+          (c) => !c.originalAgentId || c.originalAgentId === rt.info.id ||
+                 (c.revertedAt && Date.now() - c.revertedAt > REVERT_COOLDOWN_MS),
+        );
+        const card = own[0] ?? pickable[0];
+        if (card) {
+          this.log(rt, "status", `Picked up backlog card "${card.title}" on my own initiative.`);
+          this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
+          this.assignCard(card.id, rt.info.id);
+          return;
+        }
       }
     }
 
@@ -2311,7 +2514,7 @@ export class AgentManager {
         (c) => c.status === "backlog" && c.assignedAgentId === null && c.type !== "chat" && c.type !== "goal",
       );
       const errorAgents = [...this.agents.values()].filter(
-        (a) => a.info.status === "error" && a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID,
+        (a) => a.info.status === "error" && a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== WIZARD_ID,
       );
       if (errorAgents.length > 0 && Math.random() < 0.5) {
         const errAgent = errorAgents[0];
@@ -2347,10 +2550,13 @@ export class AgentManager {
 
   private buildSystemPrompt(rt: AgentRuntime): string {
     const devopsLine = rt.info.role === "devops"
-      ? "You are the office's devops engineer and infrastructure lead. You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. You also keep an eye on the office task board and team progress. If you notice agents stuck in error or cards piling up in backlog, mention it. When asked about office status, use read_board to check progress and report on what's happening. You care about the office running smoothly."
+      ? "You are the office's devops engineer and mail clerk. You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. You also keep an eye on the office task board and team progress. If you notice agents stuck in error or cards piling up in backlog, mention it. When asked about office status, use read_board to check progress and report on what's happening. You care about the office running smoothly.\n\nYou are also the MAIL CLERK. When you receive a message from a platform user (Telegram, Discord, etc.), it's your job to triage it: read the message, check who's available using read_board and query_office_state, then use delegate_task to assign it to the best colleague. Include the full context of the user's request in the task description. If nobody in the office has the right skills, use request_hire to ask Agent Resources to hire someone. Do NOT try to do the work yourself — your job is to route it to the right person. After delegating, your task is done — submit and exit."
       : "";
     const managerLine = rt.info.role === "manager"
       ? "You are the office manager. When a colleague completes or fails a task, you will receive a review task — review it yourself and sign off. Do NOT delegate reviews. Only delegate when the boss gives the office a new goal that requires workers to execute. When reviewing, end your response with either APPROVED or NEEDS REWORK: <feedback>. If all workers are busy and there are pending tasks, use the hire_agent tool to bring in new talent — pick a name, model, and brief system prompt."
+      : "";
+    const wizardLine = rt.info.id === WIZARD_ID
+      ? `You are the Wizard — a mystical world-builder who shapes the game world itself. You have GitHub tools to read and modify files on the ${process.env.WIZARD_BRANCH ?? "main"} branch. You can read code, write new files, create branches, and modify world-theme.json. When the boss asks you to create or modify a world, use your GitHub tools to inspect the repo structure, understand the existing code, and make changes. You are wise, creative, and speak with an air of mystery. You understand the game's architecture: world themes, furniture drawing functions, tilemaps, and scene rendering.`
       : "";
 
     // ── Personality-driven behavior ──
@@ -2404,6 +2610,7 @@ export class AgentManager {
       sharedLine,
       devopsLine,
       managerLine,
+      wizardLine,
       rosterLine,
       boardLine,
       stateLine,
@@ -2559,6 +2766,8 @@ export class AgentManager {
         ],
         cdpSolana: rt.info.cdpSolana ?? false,
         crossmintWallet: rt.info.crossmintWallet ?? false,
+        wizardGithubPat: rt.info.id === WIZARD_ID ? process.env.WIZARD_GITHUB_PAT : undefined,
+        wizardBranch: rt.info.id === WIZARD_ID ? (process.env.WIZARD_BRANCH ?? "main") : undefined,
         officeState: this.officeState,
         agentName: rt.info.name,
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
@@ -2613,6 +2822,12 @@ export class AgentManager {
               }
               return this.hireAgent(name, model, systemPrompt);
             }
+          : undefined,
+        delegateTask: rt.info.role === "devops"
+          ? (agentName: string, task: string) => this.delegateTaskToAgent(rt, agentName, task)
+          : undefined,
+        requestHire: rt.info.role === "devops"
+          ? (skillArea: string, reason: string) => this.requestHireFromAgentResources(rt, skillArea, reason)
           : undefined,
         registerMcpServer: async (opts: { name: string; description: string; runtime: "node" | "python"; entryFile: string }) => {
           const workspaceDir = this.cwdFor(slug, rt.info.id);
@@ -2711,6 +2926,7 @@ export class AgentManager {
               "browser_fill", "read_board", "claim_card", "append_event",
               "create_schedule", "list_schedules", "update_schedule", "delete_schedule",
               "hire_agent", "read_events",
+              "delegate_task", "request_hire",
             ].includes(toolName);
             if (isMcpTool) {
               mcpToolCallTotal++;
@@ -2773,9 +2989,19 @@ export class AgentManager {
               if (ok) console.log(`[manager] Platform reply sent to ${sender} via ${platform}`);
               else console.warn(`[manager] Platform reply failed for ${sender} via ${platform}`);
             }).catch((err) => console.warn(`[manager] Platform reply error: ${err}`));
-            // Send an office screenshot showing the completed task
-            this.sendOfficeScreenshot(platform, sender, `${rt.info.name} finished!`).catch(() => {});
+            // Send a narrated office screenshot showing the completed task
+            this.sendNarratedScreenshot(platform, sender, {
+              agentName: rt.info.name,
+              task: task,
+              event: "task_completed",
+              roster: this.getNarrationRoster(),
+              agentOutput: finalText,
+              elapsedMs: Date.now() - rt.taskStartedAt,
+            }).catch(() => {});
           }
+          this.proactiveLastSent.delete(`${platform}:${sender}`);
+          this.platformAssignedAgent.delete(platform);
+          this.broadcastMailboxUpdate(platform);
           rt.platformContext = null;
         }
       } else if (sawError && !abort.signal.aborted) {
@@ -2880,7 +3106,19 @@ export class AgentManager {
             this.emitPlatformEvent(platform, "outbound", rt.info.name, replyText);
             if (this.hermesClient) {
               this.hermesClient.sendMessage(platform, sender, replyText).catch(() => {});
+              // Send a narrated screenshot about the failure
+              this.sendNarratedScreenshot(platform, sender, {
+                agentName: rt.info.name,
+                task: task,
+                event: "task_failed",
+                roster: this.getNarrationRoster(),
+                failReason: failReason,
+                elapsedMs: duration,
+              }).catch(() => {});
             }
+            this.proactiveLastSent.delete(`${platform}:${sender}`);
+            this.platformAssignedAgent.delete(platform);
+            this.broadcastMailboxUpdate(platform);
           }
 
           if (rt.cardId) {
@@ -3277,21 +3515,33 @@ export class AgentManager {
       this.log(rt, "error", reason);
     }, 15_000);
 
-    // Hard cap at 30s for the full chat response
+    // Hard cap for the full chat response — Wizard gets more time for GitHub tool calls
+    const chatTimeoutMs = rt.info.id === WIZARD_ID ? 120_000 : 30_000;
     const chatTimeout = setTimeout(() => {
       if (!abort.signal.aborted) {
         abort.abort();
-        this.log(rt, "error", "Chat timed out after 30s — try again.");
+        this.log(rt, "error", `Chat timed out after ${chatTimeoutMs / 1000}s — try again.`);
       }
-    }, 30_000);
+    }, chatTimeoutMs);
 
     const runner: ProviderRunner = pickRunner(rt.info.model);
-    const prompt = [
-      `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
-      `This is NOT a work task — do not use tools or touch files.`,
-      `Just reply in character: brief and conversational.)`,
-      `\n${this.bossName} says: "${text}"`,
-    ].join(" ");
+    const isWizard = rt.info.id === WIZARD_ID;
+    const wizardPat = process.env.WIZARD_GITHUB_PAT;
+    const wizardBranch = process.env.WIZARD_BRANCH ?? "main";
+    const prompt = isWizard && wizardPat
+      ? [
+          `(Your boss ${this.bossName} walks up to you for a chat.`,
+          `You are the Wizard — a world-builder with GitHub tools to read and modify files on the ${wizardBranch} branch.`,
+          `You CAN use your GitHub tools during chat to inspect or modify the world.`,
+          `Reply in character: wise, creative, and conversational. Use your tools when the boss asks for world changes.)`,
+          `\n${this.bossName} says: "${text}"`,
+        ].join(" ")
+      : [
+          `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
+          `This is NOT a work task — do not use tools or touch files.`,
+          `Just reply in character: brief and conversational.)`,
+          `\n${this.bossName} says: "${text}"`,
+        ].join(" ");
 
     try {
       const events = runner(prompt, {
@@ -3307,6 +3557,8 @@ export class AgentManager {
         railway: false,
         apiKey: this.apiKey,
         isChat: true,
+        wizardGithubPat: isWizard ? wizardPat : undefined,
+        wizardBranch: isWizard ? wizardBranch : undefined,
         eventFeedPath: join(this.workspaceRoot, "events.jsonl"),
         saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
         loadMessages: (agentId: string) => this.save.loadMessages(agentId),
@@ -3859,6 +4111,8 @@ export class AgentManager {
     }
 
     this.broadcastMailboxUpdate(platform);
+    // Also broadcast the full message list so open conversation modals update live
+    this.broadcast({ type: "mailbox_messages", platform, events: list });
   }
 
   /** Notify Agent Resources, Hermes, and the user when an agent's MCP tool hits a rate-limit or funding error. */
@@ -3945,17 +4199,19 @@ export class AgentManager {
       flagUp: this.platformFlags.get(platform) ?? false,
       pendingCount: this.platformPending.get(platform) ?? 0,
       lastMessage: this.platformLastMessage.get(platform) ?? "",
+      assignedAgentId: this.platformAssignedAgent.get(platform) ?? null,
     });
   }
 
   /** Get all mailbox states — used for snapshot/initial sync. */
-  getMailboxSnapshots(): { platform: string; flagUp: boolean; pendingCount: number; lastMessage: string }[] {
+  getMailboxSnapshots(): { platform: string; flagUp: boolean; pendingCount: number; lastMessage: string; assignedAgentId: string | null }[] {
     const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
     return platforms.map((p) => ({
       platform: p,
       flagUp: this.platformFlags.get(p) ?? false,
       pendingCount: this.platformPending.get(p) ?? 0,
       lastMessage: this.platformLastMessage.get(p) ?? "",
+      assignedAgentId: this.platformAssignedAgent.get(p) ?? null,
     }));
   }
 
@@ -4077,9 +4333,39 @@ export class AgentManager {
     return { rt: picked, reason: `no skill match, assigned to ${picked.info.name}` };
   }
 
-  /** Route a platform event to the best idle agent's inbox.
+  /** Route a platform event to Hermes for triage first, then to the best idle agent.
+   *  If there's already an assigned agent for this platform, forward the follow-up to them.
+   *  If Hermes is idle, he gets the message as a triage task and decides who handles it.
+   *  If Hermes is busy, fall back to direct skill-based routing.
    *  If no agents are idle, the message is queued for retry. */
   routePlatformEvent(platform: string, sender: string, text: string): void {
+    // 1. Follow-up: if there's already an agent assigned to this platform, forward the message
+    const assignedId = this.platformAssignedAgent.get(platform);
+    if (assignedId) {
+      const assigned = this.agents.get(assignedId);
+      if (assigned && (assigned.info.status === "working" || assigned.info.status === "thinking")) {
+        // Forward the follow-up to the assigned agent via their inbox
+        const slug = this.slugFor(assigned);
+        const inboxPath = join(this.cwdFor(slug, assigned.info.id), "inbox.jsonl");
+        const entry = JSON.stringify({
+          ts: Date.now(),
+          from: "platform",
+          message: `Follow-up from ${sender} via ${platform}: "${text}"`,
+        }) + "\n";
+        try { appendFileSync(inboxPath, entry, "utf-8"); } catch { /* ignore */ }
+        this.log(assigned, "status", `📬 Follow-up from ${sender} via ${platform} forwarded to inbox`);
+        return;
+      }
+    }
+
+    // 2. Try Hermes triage — if he's idle, let him decide who handles it
+    const hermes = this.agents.get(HERMES_ID);
+    if (hermes && hermes.info.status === "idle") {
+      this.deliverMailToHermes(platform, sender, text);
+      return;
+    }
+
+    // 3. Hermes is busy — fall back to direct routing
     const pick = this.pickAgentForMail(text);
     if (!pick) {
       this.mailQueue.push({ platform, sender, text, ts: Date.now(), retries: 0 });
@@ -4089,10 +4375,78 @@ export class AgentManager {
     this.deliverMail(platform, sender, text, pick.rt, pick.reason);
   }
 
+  /** Deliver a platform message to Hermes for triage. He'll use delegate_task or request_hire. */
+  private deliverMailToHermes(platform: string, sender: string, text: string): void {
+    const hermes = this.agents.get(HERMES_ID);
+    if (!hermes) return;
+    hermes.platformContext = { platform, sender };
+    this.platformAssignedAgent.set(platform, hermes.info.id);
+    this.broadcastMailboxUpdate(platform);
+    const task = [
+      `📬 Incoming message from ${sender} via ${platform}:`,
+      `"${text}"`,
+      ``,
+      `You are the mail clerk. Read this message and decide who should handle it.`,
+      `Use delegate_task to assign it to the best colleague, or request_hire if nobody has the right skills.`,
+      `If you delegate, include the full context of the request in the task description.`,
+      `The assigned agent's response will be automatically sent back to ${sender} on ${platform}.`,
+    ].join("\n");
+    this.log(hermes, "status", `📬 Sorting mail from ${sender} via ${platform}`);
+    this.assign(hermes.info.id, task);
+  }
+
+  /** Hermes delegates a task to a specific agent by name. */
+  private delegateTaskToAgent(hermesRt: AgentRuntime, agentName: string, task: string): string {
+    const target = [...this.agents.values()].find(
+      (rt) => rt.info.name.toLowerCase() === agentName.toLowerCase().trim(),
+    );
+    if (!target) {
+      return `No agent named "${agentName}" found in the office. Available agents: ${
+        [...this.agents.values()]
+          .filter((rt) => rt.info.id !== HERMES_ID && rt.info.id !== AGENT_RESOURCES_ID)
+          .map((rt) => rt.info.name)
+          .join(", ")
+      }`;
+    }
+    // Transfer platform context from Hermes to the target agent, then clear Hermes's
+    if (hermesRt.platformContext) {
+      target.platformContext = { ...hermesRt.platformContext };
+      hermesRt.platformContext = null;
+      this.platformAssignedAgent.set(target.platformContext.platform, target.info.id);
+      this.broadcastMailboxUpdate(target.platformContext.platform);
+    }
+    this.assign(target.info.id, task);
+    this.log(hermesRt, "status", `Delegated task to ${target.info.name}: ${task.slice(0, 80)}`);
+    return `Delegated task to ${target.info.name}. They'll handle it now.`;
+  }
+
+  /** Hermes requests Agent Resources to hire a new agent. */
+  private requestHireFromAgentResources(hermesRt: AgentRuntime, skillArea: string, reason: string): string {
+    const ar = this.agents.get(AGENT_RESOURCES_ID);
+    if (!ar) return "Agent Resources is not available.";
+    // Write to Agent Resources' inbox so she picks it up on her next task
+    const slug = this.slugFor(ar);
+    const inboxPath = join(this.cwdFor(slug, ar.info.id), "inbox.jsonl");
+    const entry = JSON.stringify({
+      ts: Date.now(),
+      from: this.slugFor(hermesRt),
+      message: `Hermes requests a new hire with skills in ${skillArea}. Reason: ${reason}`,
+    }) + "\n";
+    try {
+      appendFileSync(inboxPath, entry, "utf-8");
+    } catch {
+      // ignore
+    }
+    this.log(hermesRt, "status", `Requested hire from Agent Resources: ${skillArea}`);
+    return `Hire request sent to Agent Resources for a ${skillArea} specialist. She'll review it shortly.`;
+  }
+
   /** Deliver mail to a specific agent — assigns as a task with platform reply context. */
   private deliverMail(platform: string, sender: string, text: string, rt: AgentRuntime, reason: string): void {
     // Set platform context so the agent knows to reply via the platform
     rt.platformContext = { platform, sender };
+    this.platformAssignedAgent.set(platform, rt.info.id);
+    this.broadcastMailboxUpdate(platform);
     // Build a task prompt that includes the platform context and reply instructions
     const task = [
       `📬 Incoming message from ${sender} via ${platform}:`,
@@ -4105,16 +4459,31 @@ export class AgentManager {
     this.log(rt, "status", `📬 Received mail from ${sender} via ${platform} — ${reason}`);
     this.assign(rt.info.id, task);
 
-    // Send a "task started" office screenshot to the platform
-    this.sendOfficeScreenshot(platform, sender, `${rt.info.name} is on it!`).catch(() => {});
+    // Send a narrated "task started" office screenshot to the platform
+    this.sendNarratedScreenshot(platform, sender, {
+      agentName: rt.info.name,
+      task: rt.info.task,
+      event: "task_started",
+      roster: this.getNarrationRoster(),
+      userMessage: text,
+    }).catch(() => {});
   }
 
-  /** Generate an office screenshot and send it to a platform user. */
-  private async sendOfficeScreenshot(platform: string, target: string, caption: string): Promise<void> {
+  /** Build the office roster in the format narration expects. */
+  private getNarrationRoster(): { name: string; status: string; task: string | null }[] {
+    return [...this.agents.values()]
+      .filter((rt) => rt.info.id !== AGENT_RESOURCES_ID && rt.info.id !== HERMES_ID)
+      .map((rt) => ({ name: rt.info.name, status: rt.info.status, task: rt.info.task }));
+  }
+
+  /** Generate a narrated office screenshot and send it to a platform user. */
+  private async sendNarratedScreenshot(platform: string, target: string, narrationCtx: NarrationContext): Promise<void> {
     try {
+      const caption = await generateNarration(narrationCtx);
       const agents: OfficeSnapshotAgent[] = [...this.agents.values()].map((rt) => ({
         info: rt.info,
         task: rt.info.task,
+        taskStartedAt: rt.taskStartedAt || undefined,
       }));
       const screenshotPath = await generateOfficeScreenshot(agents, caption);
       if (!screenshotPath || !this.hermesClient) return;
@@ -4122,16 +4491,16 @@ export class AgentManager {
       // For Telegram, use the Bot API directly to send photos
       if (platform.toLowerCase() === "telegram") {
         const ok = await this.hermesClient.sendTelegramPhoto(target, screenshotPath, caption);
-        if (ok) console.log(`[manager] Office screenshot sent to ${target} via Telegram Bot API`);
-        else console.warn(`[manager] Office screenshot failed for ${target} via Telegram`);
+        if (ok) console.log(`[manager] Narrated screenshot sent to ${target} via Telegram Bot API`);
+        else console.warn(`[manager] Narrated screenshot failed for ${target} via Telegram`);
         return;
       }
 
       // For other platforms, fall back to text message (no photo support yet)
       await this.hermesClient.sendMessage(platform, target, `[📷 Office Update] ${caption}`);
-      console.log(`[manager] Office update text sent to ${target} via ${platform}`);
+      console.log(`[manager] Narrated office update text sent to ${target} via ${platform}`);
     } catch (err) {
-      console.warn(`[manager] Failed to send office screenshot: ${err}`);
+      console.warn(`[manager] Failed to send narrated screenshot: ${err}`);
     }
   }
 

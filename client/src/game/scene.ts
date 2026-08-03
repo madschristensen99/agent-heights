@@ -1,16 +1,17 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, AgentResourcesNPC, HermesNPC, feetOf, tileOf, TILE_PX, STATUS_COLORS, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
-import { AGENT_RESOURCES_ID, HERMES_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry } from "../../../shared/types";
+import { AgentNPC, AgentResourcesNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
+import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getServerByUrl } from "../../../shared/mcp-catalog";
-import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX, resolveChairTex } from "./furniture";
+import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX, resolveChairTex, clearThemeFurniture } from "./furniture";
 import { upgradeWorkshop } from "./workshop";
+import { MailboxConversation } from "./mailbox-conversation";
 import { AI_OFFICE_TEXTURES } from "./ai-tiles";
 import { achievements, ACHIEVEMENTS } from "./achievements";
 import { touchInput, isTouchDevice } from "../touch";
@@ -95,6 +96,7 @@ export class OfficeScene extends Phaser.Scene {
   private npcs = new Map<string, AgentNPC>();
   private agentResources: AgentResourcesNPC | null = null;
   private hermes: HermesNPC | null = null;
+  private wizard: WizardNPC | null = null;
   private agentResourcesSeat: Tile | null = null;
   private agentResourcesOfficeZone: Phaser.GameObjects.Zone | null = null;
   private seats: Tile[] = [];
@@ -104,6 +106,7 @@ export class OfficeScene extends Phaser.Scene {
   private agentResourcesMonitor: Phaser.GameObjects.Sprite | null = null;
   private hermesSeat: Tile | null = null;
   private hermesMonitor: Phaser.GameObjects.Sprite | null = null;
+  private wizardSeat: Tile | null = null;
   private spawnTile: Tile = { x: 14, y: 16 };
   private doorTile: Tile = { x: 14, y: 17 };
   private boardTile: Tile = { x: 14, y: 2 };
@@ -227,7 +230,9 @@ export class OfficeScene extends Phaser.Scene {
   private initialSyncDone = false;
 
   private world!: WorldLayer;
-  private theme: "classic" | "agentHeights" = "classic";
+  private theme: "classic" | "agentHeights" | "world" = "classic";
+  /** Active world theme (null = HQ/default). Loaded from registry in create(). */
+  private worldTheme: WorldTheme | null = null;
   /** Pixel positions of chimney tiles — for smoke when devops agents work. */
   private chimneyPositions: { x: number; y: number }[] = [];
   /** Server rack tile positions for E-interaction. */
@@ -289,6 +294,8 @@ export class OfficeScene extends Phaser.Scene {
   private agentFsPath = ".";
   /** Unsubscribe functions for agent log/FS listeners. */
   private agentViewCleanup: (() => void)[] = [];
+  /** Active in-world mailbox conversation panel (null = closed). */
+  private mailboxConversation: MailboxConversation | null = null;
   /** Projector texture key for agent frames. */
   private projectorAgentTextureKey = "projector-agent-frame";
   /** Phaser image object for agent frames on projector. */
@@ -451,6 +458,10 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.events.once("shutdown", () => {
       this.closeAgentViewModal();
+      if (this.mailboxConversation) {
+        this.mailboxConversation.destroy();
+        this.mailboxConversation = null;
+      }
       this.hideProjectorAgentFrame();
       this.closePortal();
       for (const overlay of this.monitorMatrixOverlays.values()) overlay.destroy();
@@ -460,8 +471,14 @@ export class OfficeScene extends Phaser.Scene {
     // HQ2 and org rooms use the agentHeights (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
     // players start. This prevents a brief flash of the wrong room layout.
-    const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null || this.store.isOrgRoom;
-    this.theme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
+    // If a world-theme.json was loaded by BootScene, use "world" theme instead.
+    this.worldTheme = this.registry.get("worldTheme") ?? null;
+    if (this.worldTheme) {
+      this.theme = "world";
+    } else {
+      const isHq2 = this.store.roomId === "hq2" || this.store.roomId === null || this.store.isOrgRoom;
+      this.theme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
+    }
     this.ready = false;
     console.log(`[scene] create() start at ${performance.now().toFixed(0)}ms, roomId=${this.store.roomId}, initialDataReady=${this.store.initialDataReady}`);
 
@@ -533,8 +550,12 @@ export class OfficeScene extends Phaser.Scene {
     this.npcs.clear();
     this.initialSyncDone = false;
     this.agentResources = null;
+    // Clear any theme-registered furniture from the previous run
+    clearThemeFurniture();
     this.hermes = null;
+    this.wizard = null;
     this.agentResourcesSeat = null;
+    this.wizardSeat = null;
     this.seats = [];
     this.extraSpots = [];
     this.monitors = [];
@@ -578,27 +599,20 @@ export class OfficeScene extends Phaser.Scene {
       {
         name: "tilemap & collision",
         fn: () => {
-          map = this.make.tilemap({ key: `map-${this.theme}` });
-          this.mapRef = map;
-          const tiles = map.addTilesetImage(
-            this.theme === "agentHeights" ? "agentHeights" : "office",
-            `tiles-${this.theme}`,
-          )!;
-          // draw a floor backdrop so empty map tiles aren't white
-          const floorColor = this.theme === "agentHeights" ? 0x4a6a8a : 0xd4d0c8;
-          const aiFloorKey = this.theme === "agentHeights"
-            ? AI_OFFICE_TEXTURES.floorAgentHeights
-            : AI_OFFICE_TEXTURES.floorClassic;
-          if (this.textures.exists(aiFloorKey)) {
-            const floorSprite = this.add.tileSprite(0, 0, map.widthInPixels, map.heightInPixels, aiFloorKey).setDepth(-1).setOrigin(0, 0);
-            // Texture is 256x256 but each office tile is 64x64 — scale down to match
-            floorSprite.tileScaleX = TILE_PX / 256;
-            floorSprite.tileScaleY = TILE_PX / 256;
-          } else {
+          let walls: Phaser.Tilemaps.TilemapLayer;
+          let furniture: Phaser.Tilemaps.TilemapLayer;
+          if (this.theme === "world" && this.worldTheme) {
+            map = this.make.tilemap({ key: "map-theme" });
+            this.mapRef = map;
+            const tiles = map.addTilesetImage(
+              this.worldTheme.office.tilesetPath.replace(/\.[^.]+$/, "").split("/").pop() ?? "tiles-theme",
+              "tiles-theme",
+            )!;
+            const floorColor = 0x2a2a2a;
             const bg = this.add.graphics().setDepth(-1);
             bg.fillStyle(floorColor, 1);
             bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
-            bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0x3a5a7a, 0.3);
+            bg.lineStyle(1, 0x1a1a1a, 0.3);
             for (let x = 0; x <= map.width; x++) {
               bg.moveTo(x * TILE_PX, 0);
               bg.lineTo(x * TILE_PX, map.heightInPixels);
@@ -608,14 +622,49 @@ export class OfficeScene extends Phaser.Scene {
               bg.lineTo(map.widthInPixels, y * TILE_PX);
             }
             bg.strokePath();
+            map.createLayer("Ground", tiles)!.setDepth(0).setAlpha(0);
+            walls = map.createLayer("Walls", tiles)!.setDepth(1);
+            furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
+            walls.setCollisionByProperty({ solid: true });
+            furniture.setCollisionByProperty({ solid: true });
+          } else {
+            map = this.make.tilemap({ key: `map-${this.theme}` });
+            this.mapRef = map;
+            const tiles = map.addTilesetImage(
+              this.theme === "agentHeights" ? "agentHeights" : "office",
+              `tiles-${this.theme}`,
+            )!;
+            // draw a floor backdrop so empty map tiles aren't white
+            const floorColor = this.theme === "agentHeights" ? 0x4a6a8a : 0xd4d0c8;
+            const aiFloorKey = this.theme === "agentHeights"
+              ? AI_OFFICE_TEXTURES.floorAgentHeights
+              : AI_OFFICE_TEXTURES.floorClassic;
+            if (this.textures.exists(aiFloorKey)) {
+              const floorSprite = this.add.tileSprite(0, 0, map.widthInPixels, map.heightInPixels, aiFloorKey).setDepth(-1).setOrigin(0, 0);
+              floorSprite.tileScaleX = TILE_PX / 256;
+              floorSprite.tileScaleY = TILE_PX / 256;
+            } else {
+              const bg = this.add.graphics().setDepth(-1);
+              bg.fillStyle(floorColor, 1);
+              bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
+              bg.lineStyle(1, floorColor === 0xd4d0c8 ? 0xc8c4bc : 0x3a5a7a, 0.3);
+              for (let x = 0; x <= map.width; x++) {
+                bg.moveTo(x * TILE_PX, 0);
+                bg.lineTo(x * TILE_PX, map.heightInPixels);
+              }
+              for (let y = 0; y <= map.height; y++) {
+                bg.moveTo(0, y * TILE_PX);
+                bg.lineTo(map.widthInPixels, y * TILE_PX);
+              }
+              bg.strokePath();
+            }
+
+            map.createLayer("Ground", tiles)!.setDepth(0).setAlpha(0);
+            walls = map.createLayer("Walls", tiles)!.setDepth(1);
+            furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
+            walls.setCollisionByProperty({ solid: true });
+            furniture.setCollisionByProperty({ solid: true });
           }
-
-          map.createLayer("Ground", tiles)!.setDepth(0).setAlpha(0);
-
-          const walls = map.createLayer("Walls", tiles)!.setDepth(1);
-          const furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
-          walls.setCollisionByProperty({ solid: true });
-          furniture.setCollisionByProperty({ solid: true });
 
           // Apply AI wall textures — specific texture per wall side, 50% opacity
           const tex = this.textures;
@@ -640,10 +689,11 @@ export class OfficeScene extends Phaser.Scene {
                 else if (x === map.width - 1 && hasDrywall) wallKey = drywallKey; // right wall = drywall
                 else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
                 if (wallKey) {
+                  const isStone = wallKey === stoneKey || wallKey === lightStoneKey;
                   const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
                     .setOrigin(0, 0)
                     .setDepth(1.05)
-                    .setAlpha(0.5);
+                    .setAlpha(isStone ? 1 : 0.5);
                   ws.setDisplaySize(TILE_PX, TILE_PX);
                 }
               }
@@ -679,7 +729,7 @@ export class OfficeScene extends Phaser.Scene {
           }
 
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
-          upgradeFurniture(this, furniture);
+          upgradeFurniture(this, furniture, this.worldTheme);
           upgradeWorkshop(this);
 
           // Remove old clock tile from furniture layer (clock moved to west wall)
@@ -741,6 +791,8 @@ export class OfficeScene extends Phaser.Scene {
                 .setDepth(10 + (obj.y ?? 0) - 10)
                 .setFlipX(true);
               this.hermesMonitor = spr;
+            } else if (obj.name === "wizard-seat") {
+              this.wizardSeat = { x: tx, y: ty };
             } else if (obj.name.startsWith("seat-")) {
               const idx = Number(obj.name.slice(5));
               this.seats[idx] = { x: tx, y: ty };
@@ -792,6 +844,30 @@ export class OfficeScene extends Phaser.Scene {
           }
           this.grid = new Grid(map.width, map.height, walkable);
 
+          // Draw doormat at the entrance — the Ground layer is hidden (alpha=0)
+          // so the doormat tiles placed in the map data are invisible. Redraw it.
+          {
+            const dmX = this.doorTile.x * TILE_PX;
+            const dmY = this.doorTile.y * TILE_PX;
+            const dmW = TILE_PX * 2; // 2-tile wide doormat
+            const dmH = TILE_PX;
+            const dmG = this.add.graphics().setDepth(0.5);
+            // base
+            dmG.fillStyle(0x7a6a42, 1);
+            dmG.fillRect(dmX, dmY, dmW, dmH);
+            // beveled border
+            dmG.fillStyle(0x5a4a2a, 1);
+            dmG.fillRect(dmX, dmY, dmW, 3);
+            dmG.fillRect(dmX, dmY + dmH - 3, dmW, 3);
+            dmG.fillRect(dmX, dmY, 3, dmH);
+            dmG.fillRect(dmX + dmW - 3, dmY, 3, dmH);
+            // ridge texture
+            dmG.fillStyle(0x928050, 1);
+            for (let ry = 6; ry < dmH - 6; ry += 5) {
+              dmG.fillRect(dmX + 4, dmY + ry, dmW - 8, 2);
+            }
+          }
+
           // Agent Resources — the office manager NPC
           if (this.agentResourcesSeat) {
             // Create Agent Resources's left-facing chair sprite
@@ -829,6 +905,19 @@ export class OfficeScene extends Phaser.Scene {
             );
           }
 
+          // Wizard — down-facing chair at the wizard's desk
+          if (this.wizardSeat) {
+            const wcx = this.wizardSeat.x * TILE_PX + TILE_PX / 2;
+            const wcy = this.wizardSeat.y * TILE_PX + TILE_PX / 2;
+            this.add
+              .sprite(wcx, wcy, resolveChairTex(this, CHAIR_TEX_DOWN))
+              .setDepth(5 + this.wizardSeat.y * TILE_PX + 1);
+
+            this.wizard = new WizardNPC(this, this.grid, this.wizardSeat, (clicked) =>
+              this.walkToAgent(clicked),
+            );
+          }
+
           // standing spots for agents hired beyond the 8 desks — stable order so
           // every client agrees on who stands where
           for (let y = 3; y < map.height - 2 && this.extraSpots.length < 96; y++) {
@@ -837,6 +926,7 @@ export class OfficeScene extends Phaser.Scene {
               if (this.seats.some((s) => s && s.x === x && s.y === y)) continue;
               if (this.agentResourcesSeat && this.agentResourcesSeat.x === x && this.agentResourcesSeat.y === y) continue;
               if (this.hermesSeat && this.hermesSeat.x === x && this.hermesSeat.y === y) continue;
+              if (this.wizardSeat && this.wizardSeat.x === x && this.wizardSeat.y === y) continue;
               this.extraSpots.push({ x, y });
             }
           }
@@ -963,7 +1053,7 @@ export class OfficeScene extends Phaser.Scene {
           });
 
           // Subscribe to live mailbox updates from the server
-          this.store.onMailboxUpdate((platform, flagUp, pendingCount, lastMessage) => {
+          this.store.onMailboxUpdate((platform, flagUp, pendingCount, lastMessage, assignedAgentId) => {
             const mb = this.platformMailboxes.find((m) => m.platform === platform);
             if (!mb) return;
             const wasUp = mb.flagUp;
@@ -976,9 +1066,18 @@ export class OfficeScene extends Phaser.Scene {
             if (flagUp && !wasUp && this.hermes) {
               this.hermes.sortMail(mb.tile);
 
-              // After sorting (~4s), deliver to a random idle agent's desk
+              // After sorting (~4s), deliver to the assigned agent's desk
               this.time.delayedCall(4500, () => {
                 if (!this.hermes) return;
+                // Use the assigned agent from the server if available
+                if (assignedAgentId) {
+                  const npc = this.npcs.get(assignedAgentId);
+                  if (npc) {
+                    this.hermes.deliverTo(npc.tile());
+                    return;
+                  }
+                }
+                // Fallback: deliver to a random idle agent's desk
                 const idleAgents: { id: string; tile: import("./path").Tile }[] = [];
                 for (const [id, npc] of this.npcs) {
                   const info = this.store.agents.get(id);
@@ -1184,6 +1283,23 @@ export class OfficeScene extends Phaser.Scene {
               console.log(`[heli-debug] onHelicopter callback: ready=${this.ready}, heliActive=${this.heliActive}, name=${delivery?.name}`);
               if (this.ready && !this.heliActive) this.triggerHelicopter(delivery);
             });
+            this.store.onPaymentRequired((reason, _message) => {
+              if (this.heliActive && reason === "agent_limit") {
+                console.log("[heli-debug] payment_required received — cancelling helicopter animation");
+                this.heliContainer?.destroy();
+                this.heliContainer = null;
+                this.heliRotor = null;
+                this.heliAgent?.destroy();
+                this.heliAgent = null;
+                this.heliElevatorGfx?.destroy();
+                this.heliElevatorGfx = null;
+                this.heliActive = false;
+                this.heliDelivery = null;
+                this.heliSound?.stop();
+                this.heliSound = null;
+                this.pendingHeliAgents = [];
+              }
+            });
             this.store.onAssembly((agentIds) => {
               if (this.ready) this.startAssembly(agentIds);
             });
@@ -1191,6 +1307,7 @@ export class OfficeScene extends Phaser.Scene {
               if (!this.ready || this.store.roomId === "hq2") return;
               if (npcId === AGENT_RESOURCES_ID) this.agentResources?.remoteUpdate(x, y, dir, state);
               else if (npcId === HERMES_ID) this.hermes?.remoteUpdate(x, y, dir, state);
+              else if (npcId === WIZARD_ID) this.wizard?.remoteUpdate(x, y, dir, state);
             });
             this.store.onTileUpdated((cx, cy, tileIndex, tile) => {
               if (!this.ready) return;
@@ -1205,6 +1322,30 @@ export class OfficeScene extends Phaser.Scene {
               if (!this.ready) return;
               const npc = this.npcs.get(fromId);
               if (npc) npc.showEmote("💬", 4000);
+            });
+            this.store.onFuseEffect((agentAId, agentBId, fusedId) => {
+              if (!this.ready) return;
+              const npcA = this.npcs.get(agentAId);
+              const npcB = this.npcs.get(agentBId);
+              if (npcA && npcB) {
+                const ax = npcA.container.x;
+                const ay = npcA.container.y;
+                const bx = npcB.container.x;
+                const by = npcB.container.y;
+                const mx = (ax + bx) / 2;
+                const my = (ay + by) / 2;
+                // Walk both agents to the midpoint
+                this.tweens.add({ targets: npcA.container, x: mx, y: my, duration: 600, ease: "Quad.easeIn" });
+                this.tweens.add({ targets: npcB.container, x: mx, y: my, duration: 600, ease: "Quad.easeIn" });
+                // Flash + particles at the meeting point
+                this.time.delayedCall(600, () => {
+                  this.world.vfx.sparkBurst(mx, my, 0xffdd44, 30, 150);
+                  this.world.vfx.shockwave(mx, my, 0xffffff, 5);
+                  this.world.vfx.celebrate(mx, my);
+                  this.cameras.main.flash(200, 255, 255, 255);
+                  this.cameras.main.shake(300, 0.008);
+                });
+              }
             });
           }
           this.ready = true;
@@ -1520,7 +1661,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!glow) return;
       const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
       if (agent && agent.status !== "idle" && agent.status !== "waiting") {
-        const color = STATUS_COLORS[agent.status];
+        const color = getThemeStatusColors(this.worldTheme)[agent.status];
         glow.setPosition(m.x, m.y + 4);
         glow.setFillStyle(color, pulse);
         glow.setVisible(true);
@@ -2016,6 +2157,9 @@ export class OfficeScene extends Phaser.Scene {
     } else if (id === HERMES_ID && this.hermes) {
       npcX = this.hermes.container.x;
       npcY = this.hermes.container.y;
+    } else if (id === WIZARD_ID && this.wizard) {
+      npcX = this.wizard.container.x;
+      npcY = this.wizard.container.y;
     } else {
       const npc = this.npcs.get(id);
       if (!npc) return;
@@ -2189,7 +2333,19 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Set interactable tile positions based on the current theme. */
   private setupInteractables(): void {
-    if (this.theme === "agentHeights") {
+    if (this.theme === "world" && this.worldTheme?.interactables) {
+      // Use theme-defined interactables, with fallback defaults for non-nullable fields
+      const ia = this.worldTheme.interactables;
+      this.clockTile = ia.clock ? { x: ia.clock.x, y: ia.clock.y } : { x: 1, y: 3 };
+      this.projectorControlTile = ia.projectorControl ? { x: ia.projectorControl.x, y: ia.projectorControl.y } : { x: 6, y: 1 };
+      this.projectorSpeakerTile = ia.projectorSpeaker ? { x: ia.projectorSpeaker.x, y: ia.projectorSpeaker.y } : { x: 7, y: 1 };
+      this.vendingTile = ia.vending ? { x: ia.vending.x, y: ia.vending.y } : null;
+      this.sofaTile = ia.sofa ? { x: ia.sofa.x, y: ia.sofa.y } : null;
+      this.hallOfFameTile = ia.hallOfFame ? { x: ia.hallOfFame.x, y: ia.hallOfFame.y } : { x: 1, y: 5 };
+      this.wardrobeTile = ia.wardrobe ? { x: ia.wardrobe.x, y: ia.wardrobe.y } : { x: 21, y: 18 };
+      this.filingTiles = ia.filing ? [ia.filing] : [];
+      this.plantTiles = ia.plant ? [ia.plant] : [];
+    } else if (this.theme === "agentHeights") {
       this.clockTile = { x: 1, y: 3 };
       this.projectorControlTile = { x: 6, y: 1 };
       this.projectorSpeakerTile = { x: 7, y: 1 };
@@ -2404,126 +2560,29 @@ export class OfficeScene extends Phaser.Scene {
     overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
   }
 
-  /** Show a conversation thread modal for a platform mailbox with reply capability. */
+  /** Show an in-world Phaser conversation panel for a platform mailbox with reply capability. */
   private showMailboxConversationModal(platform: string, events: PlatformEvent[]): void {
+    // Close any existing conversation
+    if (this.mailboxConversation) {
+      this.mailboxConversation.destroy();
+      this.mailboxConversation = null;
+    }
+
     const net = this.game.registry.get("net") as import("../net").Net;
-    const entry = getPlatformEntry(platform);
-    const colorHex = entry ? "#" + entry.color.toString(16).padStart(6, "0") : "#888";
-    const logoSlug = PLATFORM_ICON_SLUGS[platform];
 
-    const overlay = document.createElement("div");
-    overlay.style.cssText = `
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.55); z-index: 10000;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
-    `;
-
-    const card = document.createElement("div");
-    card.style.cssText = `
-      background: #f5f0e6; border: 3px solid #d4c5a9; border-radius: 16px;
-      width: 480px; max-height: 80vh; box-shadow: 0 12px 48px rgba(0,0,0,0.3);
-      overflow: hidden; display: flex; flex-direction: column;
-    `;
-
-    // Header
-    const header = document.createElement("div");
-    header.style.cssText = `
-      background: #e8dcc8; border-bottom: 2px solid #d4c5a9;
-      padding: 14px 20px; display: flex; align-items: center; gap: 10px;
-    `;
-    const logoHtml = logoSlug
-      ? `<img src="https://cdn.simpleicons.org/${logoSlug}" alt="${platform}" style="width:22px;height:22px;flex-shrink:0;object-fit:contain;" onerror="this.style.display='none'">`
-      : `<span style="width:22px;height:22px;border-radius:6px;background:${colorHex};border:2px solid rgba(0,0,0,0.15);flex-shrink:0;"></span>`;
-    header.innerHTML = `${logoHtml}<span style="font-size:17px;font-weight:bold;color:#3d3528;flex:1;">${platform} Inbox</span><span style="font-size:12px;color:#8b7355;">${events.length} message${events.length > 1 ? "s" : ""}</span>`;
-    card.appendChild(header);
-
-    // Message list (scrollable)
-    const list = document.createElement("div");
-    list.style.cssText = "flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;";
-
-    for (const ev of events) {
-      const msg = document.createElement("div");
-      const isInbound = ev.direction === "inbound";
-      msg.style.cssText = `
-        padding: 10px 14px; border-radius: 12px; max-width: 85%;
-        ${isInbound
-          ? "background: #fff; border: 1px solid #e0d8c8; align-self: flex-start;"
-          : "background: #e3f2e3; border: 1px solid #c8e0c8; align-self: flex-end;"}
-      `;
-      const time = new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const dirIcon = isInbound ? "←" : "→";
-      msg.innerHTML = `
-        <div style="font-size:11px;color:#8b7355;margin-bottom:4px;">${dirIcon} <b>${ev.sender}</b> · ${time}</div>
-        <div style="font-size:14px;color:#3d3528;word-wrap:break-word;">${ev.text.slice(0, 500)}</div>
-      `;
-      list.appendChild(msg);
-    }
-    card.appendChild(list);
-
-    // Reply area
-    const replyArea = document.createElement("div");
-    replyArea.style.cssText = "padding: 12px 16px; border-top: 2px solid #d4c5a9; display: flex; gap: 8px;";
-
-    const replyInput = document.createElement("input");
-    replyInput.type = "text";
-    replyInput.placeholder = "Reply to last sender...";
-    replyInput.style.cssText = `
-      flex: 1; padding: 10px 12px; border: 2px solid #d4c5a9; border-radius: 10px;
-      font-size: 14px; font-family: inherit; outline: none; background: #fff;
-    `;
-    replyArea.appendChild(replyInput);
-
-    // Pre-fill target with last inbound sender
-    const lastInbound = events.find((e) => e.direction === "inbound");
-    if (lastInbound) {
-      replyInput.placeholder = `Reply to ${lastInbound.sender}...`;
-    }
-
-    const sendBtn = document.createElement("button");
-    sendBtn.textContent = "Send";
-    sendBtn.style.cssText = `
-      padding: 10px 20px; border: 2px solid #4a9b4a; border-radius: 10px;
-      background: #4a9b4a; color: #fff; font-size: 14px; font-weight: bold;
-      cursor: pointer; font-family: inherit; white-space: nowrap;
-    `;
-    sendBtn.addEventListener("mouseenter", () => { sendBtn.style.background = "#3a8b3a"; });
-    sendBtn.addEventListener("mouseleave", () => { sendBtn.style.background = "#4a9b4a"; });
-    sendBtn.onclick = () => {
-      const text = replyInput.value.trim();
-      if (!text) return;
-      const target = lastInbound?.sender ?? "";
-      net.send({ type: "reply_mailbox", platform, target, text });
-      // Add optimistic outbound message to the list
-      const msg = document.createElement("div");
-      msg.style.cssText = "padding: 10px 14px; border-radius: 12px; max-width: 85%; background: #e3f2e3; border: 1px solid #c8e0c8; align-self: flex-end;";
-      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      msg.innerHTML = `
-        <div style="font-size:11px;color:#8b7355;margin-bottom:4px;">→ <b>You</b> · ${time}</div>
-        <div style="font-size:14px;color:#3d3528;word-wrap:break-word;">${text.slice(0, 500)}</div>
-      `;
-      list.appendChild(msg);
-      list.scrollTop = list.scrollHeight;
-      replyInput.value = "";
-    };
-    replyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendBtn.click(); });
-    replyArea.appendChild(sendBtn);
-    card.appendChild(replyArea);
-
-    // Close button
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "Close";
-    closeBtn.style.cssText = `
-      margin: 0 16px 12px; padding: 8px; background: none; border: 2px solid #8b7355;
-      border-radius: 8px; color: #8b7355; font-size: 13px; font-weight: bold;
-      cursor: pointer; font-family: inherit;
-    `;
-    closeBtn.onclick = () => overlay.remove();
-    card.appendChild(closeBtn);
-
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+    this.mailboxConversation = new MailboxConversation(
+      this,
+      platform,
+      events,
+      (plat, target, text) => {
+        net.send({ type: "reply_mailbox", platform: plat, target, text });
+      },
+      () => {
+        this.mailboxConversation = null;
+      },
+      (handler) => this.store.onMailboxMessages(handler),
+      (handler) => this.store.offMailboxMessages(handler),
+    );
   }
 
   /** Platform-specific setup steps for the connect modal. */
@@ -6400,6 +6459,15 @@ export class OfficeScene extends Phaser.Scene {
         this.hermes?.sync(info);
         continue;
       }
+      if (id === WIZARD_ID) {
+        if (info.appearance) {
+          const key = agentTextureKey(info);
+          if (!this.textures.exists(key)) generateCharTexture(this, key, info.appearance);
+          this.ensureCharAnimations(key);
+        }
+        this.wizard?.sync(info);
+        continue;
+      }
       const existing = this.npcs.get(id);
       if (existing) {
         existing.sync(info);
@@ -6454,7 +6522,7 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         // Working — lit with status color (matrix overlay drawn in update)
         m?.setFrame("1");
-        m?.setTint(STATUS_COLORS[agent.status]);
+        m?.setTint(getThemeStatusColors(this.worldTheme)[agent.status]);
       }
     });
 
@@ -6474,7 +6542,7 @@ export class OfficeScene extends Phaser.Scene {
       const agentResourcesInfo = this.store.agents.get(AGENT_RESOURCES_ID);
       if (agentResourcesInfo && agentResourcesInfo.status !== "idle") {
         this.agentResourcesMonitor.setFrame("1");
-        this.agentResourcesMonitor.setTint(STATUS_COLORS[agentResourcesInfo.status]);
+        this.agentResourcesMonitor.setTint(getThemeStatusColors(this.worldTheme)[agentResourcesInfo.status]);
       } else {
         this.agentResourcesMonitor.setFrame("0");
         this.agentResourcesMonitor.clearTint();
@@ -6521,14 +6589,17 @@ export class OfficeScene extends Phaser.Scene {
       if (!isVisitorTyping) {
         this.agentResources?.update(time, dt, false, this.player.x, this.player.y);
         this.hermes?.update(time, dt);
+        this.wizard?.update(time, dt);
       }
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
       const selAgentResources = this.store.selectedId === AGENT_RESOURCES_ID ? this.agentResources : null;
       const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
-      this.selectRing.setVisible(!!(sel || selAgentResources || selHermes));
+      const selWizard = this.store.selectedId === WIZARD_ID ? this.wizard : null;
+      this.selectRing.setVisible(!!(sel || selAgentResources || selHermes || selWizard));
       if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
       else if (selAgentResources) this.selectRing.setPosition(selAgentResources.container.x, selAgentResources.container.y + 1);
       else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
+      else if (selWizard) this.selectRing.setPosition(selWizard.container.x, selWizard.container.y + 1);
       return;
     }
 
@@ -6809,16 +6880,19 @@ export class OfficeScene extends Phaser.Scene {
     if (!isVisitor) {
       this.agentResources?.update(time, dt, false, this.player.x, this.player.y);
       this.hermes?.update(time, dt);
+      this.wizard?.update(time, dt);
     }
 
     // selection ring
     const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
     const selAgentResources = this.store.selectedId === AGENT_RESOURCES_ID ? this.agentResources : null;
     const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
-    this.selectRing.setVisible(!!(sel || selAgentResources || selHermes));
+    const selWizard = this.store.selectedId === WIZARD_ID ? this.wizard : null;
+    this.selectRing.setVisible(!!(sel || selAgentResources || selHermes || selWizard));
     if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
     else if (selAgentResources) this.selectRing.setPosition(selAgentResources.container.x, selAgentResources.container.y + 1);
     else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
+    else if (selWizard) this.selectRing.setPosition(selWizard.container.x, selWizard.container.y + 1);
 
     // --- lighting ---
     this.updateLighting(time);
@@ -6975,6 +7049,10 @@ export class OfficeScene extends Phaser.Scene {
       if (this.hermes) {
         const s = this.hermes.getState();
         this.net?.send({ type: "npc_update", npcId: HERMES_ID, ...s });
+      }
+      if (this.wizard) {
+        const s = this.wizard.getState();
+        this.net?.send({ type: "npc_update", npcId: WIZARD_ID, ...s });
       }
     }
   }

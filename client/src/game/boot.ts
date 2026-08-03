@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { CHAR_VARIANTS } from "../../../shared/types";
+import { CHAR_VARIANTS, type WorldTheme } from "../../../shared/types";
 import { CHAR_FRAME_W, CHAR_FRAME_H, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
@@ -33,7 +33,7 @@ export class BootScene extends Phaser.Scene {
     super("boot");
   }
 
-  preload(): void {
+  async preload(): Promise<void> {
     const v = "?v=8x";
     this.load.tilemapTiledJSON("map-classic", `assets/maps/office.json${v}`);
     this.load.tilemapTiledJSON("map-agentHeights", `assets/maps/agentHeights.json${v}`);
@@ -140,6 +140,60 @@ export class BootScene extends Phaser.Scene {
         console.warn("[Asset Load Error]", file.key, file.url);
       }
     });
+
+    // ── World Theme ──────────────────────────────────────────────────
+    // Check for a world-theme.json — if present, this is an alt world.
+    // Load theme-specific assets (tileset, tilemap, spritesheets).
+    // The JSON is fetched synchronously in preload() so we know which
+    // additional assets to queue before create() runs.
+    try {
+      const themeRes = await fetch("assets/world-theme.json");
+      if (themeRes.ok) {
+        const theme: WorldTheme = await themeRes.json();
+        this.registry.set("worldTheme", theme);
+        console.log(`[boot] World theme found: ${theme.name} (${theme.id})`);
+
+        // Load theme tilemap + tileset
+        this.load.tilemapTiledJSON("map-theme", theme.office.tilemapPath);
+        this.load.image("tiles-theme", theme.office.tilesetPath);
+
+        // Load theme world tiles spritesheet if specified
+        if (theme.assets.worldTileSpritesheetPath) {
+          this.load.spritesheet("world-tiles-theme", theme.assets.worldTileSpritesheetPath, {
+            frameWidth: 64,
+            frameHeight: 64,
+          });
+        }
+
+        // Load theme furniture spritesheet if specified
+        if (theme.assets.furnitureSpritesheetPath) {
+          this.load.spritesheet("furniture-theme", theme.assets.furnitureSpritesheetPath, {
+            frameWidth: 64,
+            frameHeight: 64,
+          });
+        }
+
+        // Load theme character spritesheet if specified
+        if (theme.assets.characterSpritesheetPath) {
+          this.load.spritesheet("chars-theme", theme.assets.characterSpritesheetPath, {
+            frameWidth: CHAR_FRAME_W,
+            frameHeight: CHAR_FRAME_H,
+          });
+        }
+
+        // Load agent work animation if specified
+        if (theme.agentWorkAnim) {
+          this.load.spritesheet("agent-work-anim", theme.agentWorkAnim.spritesheetPath, {
+            frameWidth: CHAR_FRAME_W,
+            frameHeight: CHAR_FRAME_H,
+          });
+        }
+      } else {
+        console.log("[boot] No world-theme.json — running in HQ mode");
+      }
+    } catch (e) {
+      console.warn("[boot] Failed to fetch world-theme.json:", e);
+    }
   }
 
   create(): void {

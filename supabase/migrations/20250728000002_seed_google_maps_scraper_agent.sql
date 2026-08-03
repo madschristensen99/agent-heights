@@ -34,7 +34,7 @@ Perfect for:
     'agent',
     'approved',
     '["Search Google Maps for businesses with ratings and contact info","Retrieve public business reviews with filtering","Fetch public business photos","Structure results for prospecting and market analysis"]',
-    '["research","data","web"]',
+    '["data","research"]',
     '["Google Maps Scraper API key (get yours at gmapsextractor.com)"]',
     '[{"label":"Google Maps Scraper MCP","url":"https://gmapsextractor.com/google-maps-scraper-mcp"},{"label":"Get API Key","url":"https://gmapsextractor.com/google-maps-scraper-mcp"}]',
     'https://www.google.com/s2/favicons?domain=gmapsextractor.com&sz=128'

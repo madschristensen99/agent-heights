@@ -1,4 +1,4 @@
-import { CHUNK_SIZE, TILE } from "../../../shared/types";
+import { CHUNK_SIZE, TILE, type WorldTheme } from "../../../shared/types";
 
 /**
  * Seeded PRNG (mulberry32) — deterministic per (seed, chunkX, chunkY).
@@ -64,12 +64,13 @@ function valueNoise(worldSeed: number, wx: number, wy: number, scale: number): n
 export type Biome = "meadow" | "forest" | "ruins" | "wasteland" | "void" | "infernal";
 
 /** Hostility level 0–5+, scales with distance from origin. Never hits a wall — always playable.
- *  Returns fractional values near biome boundaries to enable smooth transitions. */
-export function hostilityAt(cx: number, cy: number): number {
+ *  Returns fractional values near biome boundaries to enable smooth transitions.
+ *  Accepts optional custom thresholds for themed worlds. */
+export function hostilityAt(cx: number, cy: number, customThresholds?: number[]): number {
   const dist = Math.hypot(cx, cy);
   // Each biome spans a range; transition zone is the outer 20% of each range
   // where hostility smoothly interpolates to the next level.
-  const thresholds = [2, 4, 7, 11, 18];
+  const thresholds = customThresholds ?? [2, 4, 7, 11, 18];
   const transitionWidth = 0.8; // chunk distance for smooth blend
   for (let i = 0; i < thresholds.length; i++) {
     if (dist < thresholds[i]) {
@@ -83,9 +84,14 @@ export function hostilityAt(cx: number, cy: number): number {
   return thresholds.length;
 }
 
-export function biomeAt(_worldSeed: number, cx: number, cy: number): Biome {
-  const h = hostilityAt(cx, cy);
-  return (["meadow", "forest", "ruins", "wasteland", "void", "infernal"] as Biome[])[Math.round(h)];
+export function biomeAt(_worldSeed: number, cx: number, cy: number, theme?: WorldTheme | null): Biome {
+  const thresholds = theme?.worldgen?.hostilityThresholds;
+  const h = hostilityAt(cx, cy, thresholds);
+  if (theme?.worldgen?.biomes) {
+    const biomes = theme.worldgen.biomes;
+    return (biomes[Math.min(Math.round(h), biomes.length - 1)] as Biome) ?? (DEFAULT_BIOMES[Math.round(h)] ?? "meadow");
+  }
+  return (DEFAULT_BIOMES[Math.round(h)] ?? "meadow");
 }
 
 export interface Chunk {
@@ -116,23 +122,26 @@ function canOverwrite(tiles: number[], i: number): boolean {
  * Open terrain — mostly walkable ground with scattered features.
  * The farther from origin, the more obstacles and hostile tiles appear.
  */
-export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk {
-  const biome = biomeAt(worldSeed, cx, cy);
+const DEFAULT_BIOMES: Biome[] = ["meadow", "forest", "ruins", "wasteland", "void", "infernal"];
+
+export function generateChunk(worldSeed: number, cx: number, cy: number, theme?: WorldTheme | null): Chunk {
+  const biome = biomeAt(worldSeed, cx, cy, theme);
   const rng = mulberry32(chunkSeed(worldSeed, cx, cy));
-  const hostility = hostilityAt(cx, cy);
+  const thresholds = theme?.worldgen?.hostilityThresholds;
+  const hostility = hostilityAt(cx, cy, thresholds);
   const hostilityFloor = Math.floor(hostility);
   const hostilityFrac = hostility - hostilityFloor;
 
   // Determine adjacent biome for transition blending
-  const biomeList: Biome[] = ["meadow", "forest", "ruins", "wasteland", "void", "infernal"];
+  const biomeList: Biome[] = theme?.worldgen?.biomes as Biome[] ?? DEFAULT_BIOMES;
   const nextBiome = biomeList[Math.min(hostilityFloor + 1, biomeList.length - 1)];
 
   // base ground tile for this biome
-  const baseTile = baseGround(biome);
+  const baseTile = baseGround(biome, theme);
   const tiles = new Array<number>(CHUNK_SIZE * CHUNK_SIZE).fill(baseTile);
 
   // Ground variation — patches of secondary ground tile for visual texture
-  const variationTile = groundVariation(biome);
+  const variationTile = groundVariation(biome, theme);
   if (variationTile !== baseTile) {
     for (let y = 0; y < CHUNK_SIZE; y++) {
       for (let x = 0; x < CHUNK_SIZE; x++) {
@@ -337,12 +346,15 @@ export function generateChunk(worldSeed: number, cx: number, cy: number): Chunk 
   // into winding maze-like lines. Any stone tile with 3+ cardinal stone
   // neighbors is converted back to base ground so no tile touches more
   // than 2 stone neighbors in orthogonal directions.
-  thinStoneTiles(tiles, biome);
+  thinStoneTiles(tiles, biome, theme);
 
   return { cx, cy, biome, tiles };
 }
 
-function baseGround(biome: Biome): number {
+function baseGround(biome: Biome, theme?: WorldTheme | null): number {
+  if (theme?.worldgen?.baseGround?.[biome] !== undefined) {
+    return theme.worldgen.baseGround[biome];
+  }
   switch (biome) {
     case "meadow": return TILE.GRASS;
     case "forest": return TILE.GRASS;
@@ -350,6 +362,7 @@ function baseGround(biome: Biome): number {
     case "wasteland": return TILE.SAND;
     case "void": return TILE.SAND; // dark sand, void tiles are scattered hazards
     case "infernal": return TILE.SAND; // walkable ground, lava is scattered
+    default: return TILE.GRASS;
   }
 }
 
@@ -358,8 +371,8 @@ const STONE_TILES = new Set<number>([TILE.ROCK, TILE.RUIN, TILE.CRYSTAL, TILE.BI
 /** Thinning pass — convert any stone tile with 3+ cardinal stone neighbors back
  *  to base ground. This breaks clumps into winding 1-2 tile wide lines so no
  *  stone tile touches more than 2 stone neighbors orthogonally. */
-function thinStoneTiles(tiles: number[], biome: Biome): void {
-  const ground = baseGround(biome);
+function thinStoneTiles(tiles: number[], biome: Biome, theme?: WorldTheme | null): void {
+  const ground = baseGround(biome, theme);
   const toRemove: number[] = [];
   for (let y = 0; y < CHUNK_SIZE; y++) {
     for (let x = 0; x < CHUNK_SIZE; x++) {
@@ -377,7 +390,13 @@ function thinStoneTiles(tiles: number[], biome: Biome): void {
 }
 
 /** Secondary ground tile for visual texture patches within a biome. */
-function groundVariation(biome: Biome): number {
+function groundVariation(biome: Biome, theme?: WorldTheme | null): number {
+  if (theme?.worldgen?.baseGround?.[biome] !== undefined) {
+    // For themed worlds, use a different tile from the same biome's obstacles as variation
+    const obstacles = theme.worldgen.obstacles?.[biome];
+    if (obstacles && obstacles.length > 0) return obstacles[0];
+    return baseGround(biome, theme);
+  }
   switch (biome) {
     case "meadow": return TILE.PATH;     // dirt patches in the grass
     case "forest": return TILE.SAND;      // sandy forest clearings
@@ -385,6 +404,7 @@ function groundVariation(biome: Biome): number {
     case "wasteland": return TILE.PATH;   // cracked earth patches in sand
     case "void": return TILE.SAND;        // pale sand patches
     case "infernal": return TILE.PATH;    // scorched earth patches
+    default: return TILE.PATH;
   }
 }
 

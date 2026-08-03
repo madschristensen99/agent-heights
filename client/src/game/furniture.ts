@@ -13,6 +13,7 @@ import {
   AI_FURNITURE_MONITORS,
   AI_FURNITURE_MONITORS_SIDE,
 } from "./ai-tiles";
+import type { WorldTheme } from "../../../shared/types";
 
 const TILE_PX = 64;
 
@@ -2297,6 +2298,50 @@ const FURNITURE_TYPES: FurnitureType[] = [
   { tileIds: [37], draw: drawChimney },
 ];
 
+/**
+ * Custom furniture drawing functions registered by a world theme.
+ * A `furniture-theme.ts` file on the branch can register functions here
+ * via `registerThemeFurniture()`.
+ */
+const themeFurnitureDraws = new Map<number, (ctx: CanvasRenderingContext2D, size: number) => void>();
+
+/** Register a custom drawing function for a tile ID (used by theme furniture). */
+export function registerThemeFurniture(tileId: number, draw: (ctx: CanvasRenderingContext2D, size: number) => void): void {
+  themeFurnitureDraws.set(tileId, draw);
+}
+
+/** Clear all registered theme furniture (called on scene shutdown). */
+export function clearThemeFurniture(): void {
+  themeFurnitureDraws.clear();
+}
+
+/**
+ * Get the effective furniture types for the current context.
+ * If a theme is active, theme-registered draws override base draws.
+ */
+function getEffectiveFurnitureTypes(): FurnitureType[] {
+  if (themeFurnitureDraws.size === 0) return FURNITURE_TYPES;
+  // Build a merged list: base types with theme overrides applied
+  const result: FurnitureType[] = [];
+  for (const ft of FURNITURE_TYPES) {
+    const overriddenTileIds = ft.tileIds.filter((id) => themeFurnitureDraws.has(id));
+    const baseTileIds = ft.tileIds.filter((id) => !themeFurnitureDraws.has(id));
+    if (baseTileIds.length > 0) {
+      result.push({ tileIds: baseTileIds, draw: ft.draw });
+    }
+    for (const id of overriddenTileIds) {
+      result.push({ tileIds: [id], draw: themeFurnitureDraws.get(id)! });
+    }
+  }
+  // Add any theme-registered tile IDs not in the base set
+  for (const [tileId, draw] of themeFurnitureDraws) {
+    if (!FURNITURE_TYPES.some((ft) => ft.tileIds.includes(tileId))) {
+      result.push({ tileIds: [tileId], draw });
+    }
+  }
+  return result;
+}
+
 export const CHAIR_TEX_DOWN = "chair-down";
 export const CHAIR_TEX_UP = "chair-up";
 export const CHAIR_TEX_LEFT = "chair-left";
@@ -2320,15 +2365,27 @@ const CHAIR_TILE_IDS = new Set([19, 33, 42]);
  * Generate furniture textures and overlay them on the furniture layer.
  * Call after the Tiled map furniture layer is created.
  */
-export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Tilemaps.TilemapLayer): void {
+export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Tilemaps.TilemapLayer, theme?: WorldTheme | null): void {
   const tex = scene.textures;
   const map = furnitureLayer.tilemap;
+  const effectiveTypes = getEffectiveFurnitureTypes();
+  // Build a set of tile IDs that the theme overrides with spritesheet frames
+  const themeTileIds = new Set<number>();
+  if (theme) {
+    for (const tileIdStr of Object.keys(theme.furniture)) {
+      themeTileIds.add(Number(tileIdStr));
+    }
+  }
+  const hasThemeSpritesheet = theme && tex.exists("furniture-theme");
 
   // Generate canvas textures for each furniture type (procedural fallback)
-  for (const ft of FURNITURE_TYPES) {
+  for (const ft of effectiveTypes) {
     for (const tileId of ft.tileIds) {
       const key = `furniture-${tileId}`;
       if (tex.exists(key)) continue;
+
+      // If a theme spritesheet exists for this tile ID, use it instead
+      if (hasThemeSpritesheet && themeTileIds.has(tileId)) continue;
 
       // If an AI-generated texture exists for this tile ID, skip procedural generation
       const aiKey = AI_FURNITURE_TEXTURES[tileId];
@@ -2489,17 +2546,28 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
         continue;
       }
 
-      // Use AI texture if available, otherwise procedural fallback
+      // Use theme spritesheet frame if available, then AI texture, then procedural fallback
+      const themeKey = (hasThemeSpritesheet && themeTileIds.has(tileId)) ? "furniture-theme" : null;
       const aiKey = AI_FURNITURE_TEXTURES[tileId];
-      const key = (aiKey && tex.exists(aiKey)) ? aiKey : `furniture-${tileId}`;
-      if (!tex.exists(key)) continue;
+      let key: string | null = null;
+      let themeFrame: number | undefined;
+      if (themeKey && tex.exists(themeKey)) {
+        key = themeKey;
+        // Use tileId as the frame index (theme spritesheet frames correspond to tile IDs)
+        themeFrame = tileId;
+      } else if (aiKey && tex.exists(aiKey)) {
+        key = aiKey;
+      } else {
+        key = `furniture-${tileId}`;
+      }
+      if (!key || !tex.exists(key)) continue;
 
       // Hide the underlying tile to prevent double rendering
       tile.alpha = 0;
 
       const px = x * TILE_PX;
       const py = y * TILE_PX;
-      const sprite = scene.add.sprite(px, py, key);
+      const sprite = scene.add.sprite(px, py, key, themeFrame);
       sprite.setOrigin(0, 0);
 
       // AI sprites are 128x128 — scale down to fit tile grid.
@@ -2517,7 +2585,7 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
         23: { w: 56, h: 56, ox: 4, oy: 4 },   // coffee machine top
         24: { w: 56, h: 56, ox: 4, oy: 4 },   // coffee machine bottom
       };
-      const isAi = aiKey && tex.exists(aiKey);
+      const isAi = aiKey && tex.exists(aiKey) && !themeKey;
       if (isAi) {
         const cfg = scaleMap[tileId] ?? { w: TILE_PX, h: TILE_PX };
         sprite.setDisplaySize(cfg.w, cfg.h);
