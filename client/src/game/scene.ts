@@ -671,12 +671,13 @@ export class OfficeScene extends Phaser.Scene {
           const brickKey = "ai-wall_2";       // red brick — bottom wall
           const stoneKey = "ai-wall_0";       // gray stone — left wall
           const lightStoneKey = "ai-wall_1";  // light stone — top wall
-          const drywallKey = AI_OFFICE_TEXTURES.wallBlue; // blue accent wall — right wall
+          const drywallKey = stoneKey; // stone — right wall (mesoamerican)
           const hasBrick = tex.exists(brickKey);
           const hasStone = tex.exists(stoneKey);
           const hasLightStone = tex.exists(lightStoneKey);
           const hasDrywall = tex.exists(drywallKey);
-          if (hasBrick || hasStone || hasLightStone || hasDrywall) {
+          const hasOfficeWall = tex.exists(AI_OFFICE_TEXTURES.wallClassic) || tex.exists(AI_OFFICE_TEXTURES.wallAgentHeights);
+          if (hasBrick || hasStone || hasLightStone || hasDrywall || hasOfficeWall) {
             for (let y = 0; y < map.height; y++) {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
@@ -684,16 +685,32 @@ export class OfficeScene extends Phaser.Scene {
                 // Skip door tiles (index 13-14) so they remain visible
                 if (wt.index === 13 || wt.index === 14) continue;
                 let wallKey: string | null = null;
+                let wallAlpha = 1;
                 if (x === 0 && hasStone) wallKey = stoneKey;           // left wall = stone
-                else if (y === map.height - 1 && hasBrick) wallKey = brickKey; // bottom wall = brick
+                else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
                 else if (x === map.width - 1 && hasDrywall) wallKey = drywallKey; // right wall = drywall
                 else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
+                else {
+                  // Interior walls — apply themed office wall texture
+                  const officeWallKeys = [
+                    AI_OFFICE_TEXTURES.wallAgentHeights,
+                    AI_OFFICE_TEXTURES.wallBeige,
+                    AI_OFFICE_TEXTURES.wallBlue,
+                  ];
+                  const officeKey = this.theme === "agentHeights"
+                    ? officeWallKeys[(x + y) % officeWallKeys.length]
+                    : AI_OFFICE_TEXTURES.wallClassic;
+                  if (tex.exists(officeKey)) {
+                    wallKey = officeKey;
+                    wallAlpha = 0.85;
+                  }
+                }
                 if (wallKey) {
                   const isStone = wallKey === stoneKey || wallKey === lightStoneKey;
                   const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
                     .setOrigin(0, 0)
                     .setDepth(1.05)
-                    .setAlpha(isStone ? 1 : 0.5);
+                    .setAlpha(isStone ? 1 : wallAlpha);
                   ws.setDisplaySize(TILE_PX, TILE_PX);
                 }
               }
@@ -848,7 +865,7 @@ export class OfficeScene extends Phaser.Scene {
           // so the doormat tiles placed in the map data are invisible. Redraw it.
           {
             const dmX = this.doorTile.x * TILE_PX;
-            const dmY = this.doorTile.y * TILE_PX;
+            const dmY = this.doorTile.y * TILE_PX + TILE_PX;
             const dmW = TILE_PX * 2; // 2-tile wide doormat
             const dmH = TILE_PX;
             const dmG = this.add.graphics().setDepth(0.5);
@@ -5783,9 +5800,6 @@ export class OfficeScene extends Phaser.Scene {
   /** Master method — draws cultural overlays on all four perimeter walls + corners. */
   private drawCulturalWalls(): void {
     this.drawNorthWallAsian();
-    this.drawSouthWallMediterranean();
-    this.drawWestWallVictorian();
-    this.drawEastWallArtDeco();
     this.drawCornerAccents();
   }
 
@@ -5929,6 +5943,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** South wall (y=19) — Mediterranean: arched entry, terracotta band, balconies, marble. */
   private drawSouthWallMediterranean(): void {
+    return; // dead code — removed from drawCulturalWalls
     const g = this.add.graphics().setDepth(1);
     const mapPxW = 30 * TILE_PX;
     const wallY = 19 * TILE_PX;
@@ -6002,6 +6017,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** West wall (x=0) — Victorian Industrial: enhanced brick, pipes, sign bracket, downspout. */
   private drawWestWallVictorian(): void {
+    return; // dead code — removed from drawCulturalWalls
     const g = this.add.graphics().setDepth(1);
     const wallX = 0;
     const mapPxH = 20 * TILE_PX;
@@ -6150,98 +6166,148 @@ export class OfficeScene extends Phaser.Scene {
     g.fillPath();
   }
 
-  /** East wall (x=29) — Art Deco: glass curtain wall, sunburst, neon, chevrons. */
-  private drawEastWallArtDeco(): void {
+  /** East wall (x=29) — Mesoamerican: stone blocks, stepped fret (greca), glyphs, feathered serpent. */
+  private drawEastWallMesoamerican(): void {
+    return; // dead code — removed from drawCulturalWalls
     const g = this.add.graphics().setDepth(1);
     const wallX = 29 * TILE_PX;
     const mapPxH = 20 * TILE_PX;
     const wallW = TILE_PX;
 
-    // --- Glass curtain wall panels ---
-    const panelW = 16;
-    const panelCount = Math.floor(mapPxH / panelW);
-    for (let i = 0; i < panelCount; i++) {
-      const py = i * panelW;
-      // Glass panel — dark stone tones matching the other 3 walls' intensity
-      const isLight = i % 2 === 0;
-      g.fillStyle(isLight ? 0x6a6058 : 0x4a4038, 0.85);
-      g.fillRect(wallX, py, wallW, panelW);
-      // Mullion frame
-      g.fillStyle(0x6a6a6a, 0.6);
+    // --- Stone block courses (ashlar masonry) ---
+    const blockH = 14;
+    const blockW = 28;
+    const blockColors = [0x6a6058, 0x5a5048, 0x7a7068, 0x6a6058, 0x4a4038];
+    for (let row = 0; row < Math.floor(mapPxH / blockH); row++) {
+      const py = row * blockH;
+      const offset = row % 2 === 0 ? 0 : blockW / 2;
+      for (let bx = 0; bx < Math.ceil(wallW / blockW) + 1; bx++) {
+        const px = wallX + bx * blockW + offset - blockW;
+        if (px + blockW < wallX) continue;
+        const clampedX = Math.max(px, wallX);
+        const clampedW = Math.min(px + blockW, wallX + wallW) - clampedX;
+        if (clampedW <= 0) continue;
+        const colorIdx = (row * 3 + bx) % blockColors.length;
+        g.fillStyle(blockColors[colorIdx], 0.85);
+        g.fillRect(clampedX, py, clampedW, blockH);
+      }
+      // Mortar lines — horizontal
+      g.fillStyle(0x2a2218, 0.5);
       g.fillRect(wallX, py, wallW, 1);
-      g.fillRect(wallX, py + panelW - 1, wallW, 1);
-      // Vertical mullion
-      g.fillRect(wallX + wallW / 2 - 1, py, 2, panelW);
-      // Glass reflection — diagonal streak (warm highlight, not blue)
-      g.fillStyle(0xeae0d0, 0.15);
-      g.fillRect(wallX + 4, py + 2, wallW - 8, 3);
-      g.fillRect(wallX + 6, py + 6, wallW - 12, 2);
     }
-
-    // --- Art Deco sunburst at top center ---
-    const sunCx = wallX + wallW / 2;
-    const sunCy = 2 * TILE_PX;
-    const sunR = 28;
-    g.lineStyle(1.5, 0xddaa44, 0.6);
-    for (let i = 0; i < 16; i++) {
-      const angle = (i / 16) * Math.PI * 2;
-      g.beginPath();
-      g.moveTo(sunCx, sunCy);
-      g.lineTo(sunCx + Math.cos(angle) * sunR, sunCy + Math.sin(angle) * sunR);
-      g.strokePath();
-    }
-    // Sunburst inner circle
-    g.fillStyle(0xddaa44, 0.5);
-    g.fillCircle(sunCx, sunCy, 6);
-    g.fillStyle(0xffcc66, 0.4);
-    g.fillCircle(sunCx, sunCy, 4);
-    // Sunburst outer ring
-    g.lineStyle(1, 0xddaa44, 0.3);
-    g.beginPath();
-    g.arc(sunCx, sunCy, sunR, 0, Math.PI * 2);
-    g.strokePath();
-
-    // --- Neon accent strips ---
-    const neonPositions = [6, 12, 17];
-    const neonColors = [0x00ffff, 0xff00ff, 0x00ffff];
-    for (let i = 0; i < neonPositions.length; i++) {
-      const ny = neonPositions[i] * TILE_PX;
-      const color = neonColors[i];
-      // Glow
-      g.fillStyle(color, 0.08);
-      g.fillRect(wallX + 2, ny, 3, TILE_PX);
-      g.fillStyle(color, 0.15);
-      g.fillRect(wallX + 3, ny, 1, TILE_PX);
-      // Core line
-      g.fillStyle(color, 0.4);
-      g.fillRect(wallX + 3, ny, 1, TILE_PX);
-    }
-
-    // --- Chevron band across midsection ---
-    const chevY = 9 * TILE_PX;
-    const chevH = 20;
-    g.fillStyle(0xddaa44, 0.3);
-    g.fillRect(wallX, chevY, wallW, chevH);
-    // Chevron pattern
-    g.fillStyle(0x2a2a3a, 0.5);
-    const chevStep = 8;
-    for (let cy = 0; cy < chevH; cy += chevStep) {
-      for (let cx = 0; cx < wallW; cx += chevStep) {
-        g.beginPath();
-        g.moveTo(wallX + cx, chevY + cy);
-        g.lineTo(wallX + cx + chevStep / 2, chevY + cy + chevStep / 2);
-        g.lineTo(wallX + cx, chevY + cy + chevStep);
-        g.lineTo(wallX + cx, chevY + cy + chevStep - 2);
-        g.lineTo(wallX + cx + chevStep / 2 - 2, chevY + cy + chevStep / 2);
-        g.lineTo(wallX + cx, chevY + cy + 2);
-        g.closePath();
-        g.fillPath();
+    // Mortar lines — vertical (staggered)
+    for (let row = 0; row < Math.floor(mapPxH / blockH); row++) {
+      const py = row * blockH;
+      const offset = row % 2 === 0 ? 0 : blockW / 2;
+      for (let bx = 0; bx < Math.ceil(wallW / blockW) + 1; bx++) {
+        const px = wallX + bx * blockW + offset - blockW;
+        if (px < wallX || px >= wallX + wallW) continue;
+        g.fillStyle(0x2a2218, 0.4);
+        g.fillRect(px, py, 1, blockH);
       }
     }
-    // Chevron band borders
-    g.fillStyle(0xddaa44, 0.5);
-    g.fillRect(wallX, chevY, wallW, 1);
-    g.fillRect(wallX, chevY + chevH - 1, wallW, 1);
+
+    // --- Stepped fret (greca) band across midsection ---
+    const grecaY = 8 * TILE_PX;
+    const grecaH = 24;
+    g.fillStyle(0x8a7a5a, 0.4);
+    g.fillRect(wallX, grecaY, wallW, grecaH);
+    g.fillStyle(0x6a5a3a, 0.5);
+    g.fillRect(wallX, grecaY, wallW, 1);
+    g.fillRect(wallX, grecaY + grecaH - 1, wallW, 1);
+    // Stepped fret pattern
+    g.lineStyle(2, 0x4a3a22, 0.6);
+    const stepUnit = 6;
+    for (let cy = 2; cy < grecaH - 2; cy += stepUnit * 2) {
+      for (let cx = 2; cx < wallW - 2; cx += stepUnit * 2) {
+        g.beginPath();
+        g.moveTo(wallX + cx, grecaY + cy);
+        g.lineTo(wallX + cx + stepUnit, grecaY + cy);
+        g.lineTo(wallX + cx + stepUnit, grecaY + cy + stepUnit);
+        g.lineTo(wallX + cx + stepUnit * 2, grecaY + cy + stepUnit);
+        g.lineTo(wallX + cx + stepUnit * 2, grecaY + cy + stepUnit * 2);
+        g.lineTo(wallX + cx, grecaY + cy + stepUnit * 2);
+        g.closePath();
+        g.strokePath();
+      }
+    }
+
+    // --- Carved glyph medallions at 3 positions ---
+    const glyphPositions = [3, 12, 17];
+    for (let i = 0; i < glyphPositions.length; i++) {
+      const gy = glyphPositions[i] * TILE_PX + TILE_PX / 2;
+      const gx = wallX + wallW / 2;
+      // Medallion frame
+      g.fillStyle(0x4a3a22, 0.6);
+      g.fillCircle(gx, gy, 10);
+      g.fillStyle(0x6a5a3a, 0.5);
+      g.fillCircle(gx, gy, 8);
+      // Glyph — varies by position
+      g.lineStyle(1.5, 0x3a2a12, 0.7);
+      if (i === 0) {
+        // Sun disk rays
+        for (let r = 0; r < 8; r++) {
+          const a = (r / 8) * Math.PI * 2;
+          g.beginPath();
+          g.moveTo(gx + Math.cos(a) * 3, gy + Math.sin(a) * 3);
+          g.lineTo(gx + Math.cos(a) * 7, gy + Math.sin(a) * 7);
+          g.strokePath();
+        }
+        g.fillStyle(0x3a2a12, 0.5);
+        g.fillCircle(gx, gy, 3);
+      } else if (i === 1) {
+        // Jaguar spot rosette
+        g.fillStyle(0x3a2a12, 0.5);
+        g.fillCircle(gx, gy, 5);
+        g.fillStyle(0x5a4a2a, 0.4);
+        for (let r = 0; r < 4; r++) {
+          const a = (r / 4) * Math.PI * 2 + Math.PI / 4;
+          g.fillCircle(gx + Math.cos(a) * 6, gy + Math.sin(a) * 6, 2);
+        }
+      } else {
+        // Step-fret spiral
+        g.beginPath();
+        for (let s = 0; s < 12; s++) {
+          const a = (s / 12) * Math.PI * 3;
+          const r = 2 + s * 0.5;
+          const px = gx + Math.cos(a) * r;
+          const py2 = gy + Math.sin(a) * r;
+          if (s === 0) g.moveTo(px, py2);
+          else g.lineTo(px, py2);
+        }
+        g.strokePath();
+      }
+    }
+
+    // --- Feathered serpent (Quetzalcoatl) motif near top ---
+    const serpY = 1 * TILE_PX + TILE_PX / 2;
+    const serpX = wallX + wallW / 2;
+    // Serpent head
+    g.fillStyle(0x4a8a4a, 0.5);
+    g.fillCircle(serpX, serpY, 8);
+    g.fillStyle(0x3a6a3a, 0.6);
+    g.fillCircle(serpX, serpY, 6);
+    // Eyes
+    g.fillStyle(0xddaa44, 0.6);
+    g.fillCircle(serpX - 3, serpY - 2, 1.5);
+    g.fillCircle(serpX + 3, serpY - 2, 1.5);
+    // Feathered crown
+    g.lineStyle(1, 0x4a8a4a, 0.4);
+    for (let f = 0; f < 7; f++) {
+      const fa = -Math.PI / 2 + (f - 3) * 0.3;
+      g.beginPath();
+      g.moveTo(serpX + Math.cos(fa) * 6, serpY + Math.sin(fa) * 6);
+      g.lineTo(serpX + Math.cos(fa) * 14, serpY + Math.sin(fa) * 14);
+      g.strokePath();
+    }
+    // Coiled body — S-curve below head
+    g.lineStyle(2, 0x4a8a4a, 0.35);
+    g.beginPath();
+    g.moveTo(serpX, serpY + 8);
+    g.lineTo(serpX - 8, serpY + 16);
+    g.lineTo(serpX + 6, serpY + 24);
+    g.lineTo(serpX - 4, serpY + 32);
+    g.strokePath();
   }
 
   /** Four building corners — Mesoamerican stepped pyramid blocks with glyph carvings. */
