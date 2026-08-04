@@ -256,6 +256,8 @@ export interface CircleServiceConfig {
   description: string;
   /** Tool definitions exposed by this service. */
   tools: PremiumToolDef[];
+  /** HTTP method for this endpoint (default: GET). */
+  method?: "GET" | "POST" | "PUT" | "DELETE";
 }
 
 /** A tool definition for a premium API service. */

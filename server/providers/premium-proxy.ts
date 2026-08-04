@@ -12,7 +12,7 @@
  */
 
 import type { AgentTool } from "@cline/sdk";
-import { payAndFetchWithPrice, isCircleGatewayConfigured } from "./circle-gateway.js";
+import { payAndFetchWithOptions, isCircleGatewayConfigured } from "./circle-gateway.js";
 import { getMonthlySpend } from "../usage.js";
 import { getUsageCap } from "../usage.js";
 import type { SubscriptionTier } from "../../shared/types.js";
@@ -44,6 +44,8 @@ export interface CircleServiceConfig {
   description: string;
   /** Tool definitions exposed by this service. */
   tools: PremiumToolDef[];
+  /** HTTP method for this endpoint (default: GET). */
+  method?: "GET" | "POST" | "PUT" | "DELETE";
 }
 
 /**
@@ -122,29 +124,29 @@ export async function loadPremiumTools(
             }
           }
 
-          // Build the full URL with query params from input (for GET-style APIs)
-          // or we pass the input as the request body for POST-style APIs.
-          // The x402 protocol works with any HTTP method — GatewayClient.pay()
-          // handles the 402 → sign → retry flow for the URL.
+          const httpMethod = service.method ?? "GET";
           let url = service.endpoint;
           const inputObj = input ?? {};
+          let payOptions: { method?: string; body?: unknown; headers?: Record<string, string> } = {};
 
-          // If the tool schema has parameters, append them as query string
-          // This is a simple approach — services can also use POST bodies
-          // but the x402 GatewayClient.pay() works with URL-based requests
-          const queryParams = Object.entries(inputObj)
-            .filter(([, v]) => v !== undefined && v !== null && v !== "")
-            .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-            .join("&");
-
-          if (queryParams) {
-            url += (url.includes("?") ? "&" : "?") + queryParams;
+          if (httpMethod === "GET") {
+            // For GET, append input as query params
+            const queryParams = Object.entries(inputObj)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+              .join("&");
+            if (queryParams) {
+              url += (url.includes("?") ? "&" : "?") + queryParams;
+            }
+          } else {
+            // For POST/PUT, send input as JSON body
+            payOptions = { method: httpMethod, body: inputObj, headers: { "Content-Type": "application/json" } };
           }
 
-          console.log(`[premium-proxy] calling ${service.name}.${def.name} ($${service.pricePerCall}/call) for user ${proxyCtx.userId}`);
+          console.log(`[premium-proxy] calling ${service.name}.${def.name} ($${service.pricePerCall}/call, ${httpMethod}) for user ${proxyCtx.userId}`);
 
           // Pay and fetch
-          const result = await payAndFetchWithPrice(url, service.pricePerCall);
+          const result = await payAndFetchWithOptions(url, service.pricePerCall, payOptions);
 
           if (result.error) {
             console.error(`[premium-proxy] ${service.name}.${def.name} failed: ${result.error}`);

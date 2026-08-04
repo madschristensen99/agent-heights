@@ -351,27 +351,54 @@ function generateSql(items: DiscoveryItem[]): string {
         .replace(/^_+|_+$/g, "")
         .slice(0, 40) || "call";
 
+      // Extract clean JSON Schema from Circle's input format:
+      // POST: { body: { type: "object", properties: {...} }, type: "http", method: "POST" }
+      // GET:  { type: "http", method: "GET", queryParams: { type: "object", properties: {...} } }
+      const rawInput: any = item.metadata.input ?? {};
+      const httpMethod = (rawInput.method ?? "GET").toUpperCase();
+      let cleanSchema: any = { type: "object", properties: {} };
+      if (rawInput.body && typeof rawInput.body === "object" && rawInput.body.properties) {
+        cleanSchema = { type: "object", properties: rawInput.body.properties, required: rawInput.body.required ?? [] };
+      } else if (rawInput.queryParams && typeof rawInput.queryParams === "object" && rawInput.queryParams.properties) {
+        cleanSchema = { type: "object", properties: rawInput.queryParams.properties, required: rawInput.queryParams.required ?? [] };
+      } else if (rawInput.properties) {
+        cleanSchema = { type: "object", properties: rawInput.properties, required: rawInput.required ?? [] };
+      }
+
+      const fullToolName = slugify(serviceName) + "__" + toolName;
+
       return {
-        name: slugify(serviceName) + "__" + toolName,
+        name: fullToolName,
         endpoint: item.resource,
         pricePerCall: priceUsd,
         description: item.metadata.description || provider.description,
+        method: httpMethod,
         tools: [
           {
             name: toolName,
             description: item.metadata.description || `Call ${serviceName}`,
-            inputSchema: item.metadata.input ?? { type: "object", properties: {} },
+            inputSchema: cleanSchema,
           },
         ],
       };
     });
 
-    // Build combined system prompt
+    // Build combined system prompt — include actual tool names so the model knows what to call
     const toolList = serviceItems
       .map((item) => {
         const accept = item.accepts[0];
         const priceUsd = accept ? amountToUsd(accept.amount) : 0.01;
-        return `- ${item.metadata.description || item.resource} ($${priceUsd.toFixed(4)}/call)`;
+        const toolName = item.metadata.path
+          .replace(/^\//, "")
+          .replace(/[^a-zA-Z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 40) || "call";
+        const fullToolName = slugify(serviceName) + "__" + toolName;
+        const rawInput: any = item.metadata.input ?? {};
+        const httpMethod = (rawInput.method ?? "GET").toUpperCase();
+        const params = rawInput.body?.required ?? rawInput.queryParams?.required ?? rawInput.required ?? [];
+        const paramHint = params.length > 0 ? ` (requires: ${params.join(", ")})` : "";
+        return `- ${fullToolName}: ${item.metadata.description || item.resource} ($${priceUsd.toFixed(4)}/call, ${httpMethod}${paramHint})`;
       })
       .join("\n");
 
@@ -380,7 +407,7 @@ function generateSql(items: DiscoveryItem[]): string {
     const systemPrompt = [
       `You are a premium AI agent powered by ${serviceName}.`,
       provider.description ? `\n${provider.description}` : "",
-      `\n\nYou have access to the following paid API tools:`,
+      `\n\nYou have access to the following paid API tools (use the tool names exactly as shown):`,
       toolList,
       `\n\nEach API call deducts from the user's subscription usage budget. Use calls wisely and always explain what you're doing before making them.`,
       provider.docsUrl ? `\n\nAPI docs: ${provider.docsUrl}` : "",

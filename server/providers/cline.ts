@@ -984,56 +984,57 @@ export async function makeTools(cwd: string, opts?: {
       },
     });
   }
-  const baseWithMailClerk = [...baseWithForge, ...mailClerkTools];
+  const allTools = [...baseWithForge, ...mailClerkTools];
 
+  // Load Railway tools
   if (opts?.railway) {
-    const railwayTools = await wrapRailwayTools();
-    if (railwayTools.length > 0) {
-      return [...baseWithMailClerk, ...railwayTools];
-    }
+    try {
+      const railwayTools = await wrapRailwayTools();
+      if (railwayTools.length > 0) allTools.push(...railwayTools);
+    } catch (e) { console.error("[cline] Railway tools failed:", e); }
   }
 
   // Load tools from any MCP servers declared in the agent config (e.g. Robinhood Trading MCP)
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
-    const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
-    if (mcpTools.length > 0) {
-      return [...baseWithMailClerk, ...mcpTools];
-    }
+    try {
+      const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
+      if (mcpTools.length > 0) allTools.push(...mcpTools);
+    } catch (e) { console.error("[cline] MCP tools failed:", e); }
   }
 
   // Load CDP Solana wallet tools (auto-provisioned, no user credentials needed)
   if (opts?.cdpSolana && opts?.agentId) {
-    const cdpTools = await loadCdpSolanaTools(opts.agentId);
-    if (cdpTools.length > 0) {
-      return [...baseWithMailClerk, ...cdpTools];
-    }
+    try {
+      const cdpTools = await loadCdpSolanaTools(opts.agentId);
+      if (cdpTools.length > 0) allTools.push(...cdpTools);
+    } catch (e) { console.error("[cline] CDP Solana tools failed:", e); }
   }
 
   // Load Crossmint multi-chain wallet tools (auto-provisioned, gas sponsored)
   if (opts?.crossmintWallet && opts?.agentId) {
-    const crossmintTools = await loadCrossmintWalletTools(opts.agentId);
-    if (crossmintTools.length > 0) {
-      return [...baseWithMailClerk, ...crossmintTools];
-    }
+    try {
+      const crossmintTools = await loadCrossmintWalletTools(opts.agentId);
+      if (crossmintTools.length > 0) allTools.push(...crossmintTools);
+    } catch (e) { console.error("[cline] Crossmint tools failed:", e); }
   }
 
   // Load premium Circle x402 API tools (paid via Gateway, costs flow into usage budget)
   if (opts?.circleServices && opts.circleServices.length > 0 && opts?.premiumProxyCtx) {
-    const premiumTools = await loadPremiumTools(opts.circleServices, opts.premiumProxyCtx);
-    if (premiumTools.length > 0) {
-      return [...baseWithMailClerk, ...premiumTools];
-    }
+    try {
+      const premiumTools = await loadPremiumTools(opts.circleServices, opts.premiumProxyCtx);
+      if (premiumTools.length > 0) allTools.push(...premiumTools);
+    } catch (e) { console.error("[cline] Premium tools failed:", e); }
   }
 
   // Load Wizard GitHub tools (server-side PAT, world branch file operations)
   if (opts?.wizardGithubPat && opts?.wizardBranch) {
-    const wizardTools = await loadWizardTools({ pat: opts.wizardGithubPat, branch: opts.wizardBranch });
-    if (wizardTools.length > 0) {
-      return [...baseWithMailClerk, ...wizardTools];
-    }
+    try {
+      const wizardTools = await loadWizardTools({ pat: opts.wizardGithubPat, branch: opts.wizardBranch });
+      if (wizardTools.length > 0) allTools.push(...wizardTools);
+    } catch (e) { console.error("[cline] Wizard tools failed:", e); }
   }
 
-  return baseWithMailClerk;
+  return allTools;
 }
 
 export const runCline: ProviderRunner = async function* (task, ctx) {
