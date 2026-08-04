@@ -92,6 +92,8 @@ export class BootScene extends Phaser.Scene {
     const creature3dKeys = [
       "creature-slime", "creature-wolf", "creature-skeleton", "creature-imp",
       "creature-wraith", "creature-fire-elemental",
+      "beast-groveheart", "beast-stone-colossus", "beast-ash-wyrm",
+      "beast-void-leviathan", "beast-infernal-sovereign",
       "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
     ];
     for (const key of creature3dKeys) {
