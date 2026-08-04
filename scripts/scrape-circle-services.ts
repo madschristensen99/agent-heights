@@ -398,6 +398,16 @@ function generateSql(items: DiscoveryItem[]): string {
     const summary = description.slice(0, 120);
     const tags = (provider.tags ?? []).slice(0, 10).join(",");
     const categories = categoryFromCircle(provider.category ?? "INFRASTRUCTURE");
+
+    // Generate avatar image URL from the provider's website domain via Google's favicon service
+    let imageUrl: string | null = null;
+    if (provider.website) {
+      try {
+        const domain = new URL(provider.website).hostname;
+        imageUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+      } catch {}
+    }
+
     const useCases = serviceItems
       .slice(0, 5)
       .map((item) => item.metadata.description || item.metadata.provider.description || "")
@@ -413,9 +423,7 @@ function generateSql(items: DiscoveryItem[]): string {
     const categoriesJson = JSON.stringify(categories);
 
     lines.push(`-- Agent ${agentNum}: ${agentName} (${serviceItems.length} endpoint(s))`);
-    lines.push(
-      `INSERT INTO heights_cloud_agents (name, description, summary, agent, language, use_cases, tags, is_free, price, price_usd, is_premium, category, requirements, links, status, created_at)`,
-    );
+    lines.push(`INSERT INTO heights_cloud_agents (name, description, summary, agent, language, use_cases, tags, is_free, price, price_usd, is_premium, category, requirements, links, image_url, status, created_at)`);
     lines.push(`VALUES (`);
     lines.push(`  '${escapeSql(agentName)}',`);
     lines.push(`  '${escapeSql(description)}',`);
@@ -431,6 +439,7 @@ function generateSql(items: DiscoveryItem[]): string {
     lines.push(`  '${escapeSql(categoriesJson)}'::jsonb,`);
     lines.push(`  '[]'::jsonb,`);
     lines.push(`  '${escapeSql(links)}'::jsonb,`);
+    lines.push(`  ${imageUrl ? `'${escapeSql(imageUrl)}'` : 'NULL'},`);
     lines.push(`  'approved',`);
     lines.push(`  now()`);
     lines.push(`) ON CONFLICT (name) DO NOTHING;`);
