@@ -864,20 +864,29 @@ export class OfficeScene extends Phaser.Scene {
             const dmY = this.doorTile.y * TILE_PX + TILE_PX;
             const dmW = TILE_PX * 2; // 2-tile wide doormat
             const dmH = TILE_PX;
-            const dmG = this.add.graphics().setDepth(0.5);
-            // base
-            dmG.fillStyle(0x7a6a42, 1);
-            dmG.fillRect(dmX, dmY, dmW, dmH);
-            // beveled border
-            dmG.fillStyle(0x5a4a2a, 1);
-            dmG.fillRect(dmX, dmY, dmW, 3);
-            dmG.fillRect(dmX, dmY + dmH - 3, dmW, 3);
-            dmG.fillRect(dmX, dmY, 3, dmH);
-            dmG.fillRect(dmX + dmW - 3, dmY, 3, dmH);
-            // ridge texture
-            dmG.fillStyle(0x928050, 1);
-            for (let ry = 6; ry < dmH - 6; ry += 5) {
-              dmG.fillRect(dmX + 4, dmY + ry, dmW - 8, 2);
+            const dmTexKey = AI_OFFICE_TEXTURES.doormat;
+            if (this.textures.exists(dmTexKey)) {
+              this.add.image(dmX, dmY, dmTexKey)
+                .setOrigin(0, 0)
+                .setDepth(0.5)
+                .setDisplaySize(dmW, dmH);
+            } else {
+              // Fallback: procedural doormat
+              const dmG = this.add.graphics().setDepth(0.5);
+              // base
+              dmG.fillStyle(0x7a6a42, 1);
+              dmG.fillRect(dmX, dmY, dmW, dmH);
+              // beveled border
+              dmG.fillStyle(0x5a4a2a, 1);
+              dmG.fillRect(dmX, dmY, dmW, 3);
+              dmG.fillRect(dmX, dmY + dmH - 3, dmW, 3);
+              dmG.fillRect(dmX, dmY, 3, dmH);
+              dmG.fillRect(dmX + dmW - 3, dmY, 3, dmH);
+              // ridge texture
+              dmG.fillStyle(0x928050, 1);
+              for (let ry = 6; ry < dmH - 6; ry += 5) {
+                dmG.fillRect(dmX + 4, dmY + ry, dmW - 8, 2);
+              }
             }
           }
 

@@ -33,6 +33,7 @@ export const AI_OFFICE_TEXTURES = {
   wallBeige: "ai-office_wall_2",
   wallBlue: "ai-office_wall_3",
   helipad: "ai-office_helipad",
+  doormat: "ai-office_doormat",
   kitchenCounter: "ai-kitchen_counter",
 } as const;
 

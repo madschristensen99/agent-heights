@@ -91,6 +91,7 @@ export class BootScene extends Phaser.Scene {
     const creature3dVer = "?v=3d2";
     const creature3dKeys = [
       "creature-slime",
+      "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
     ];
     for (const key of creature3dKeys) {
       const file = key.replace(/-/g, "_");

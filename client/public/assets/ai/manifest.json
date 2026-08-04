@@ -739,5 +739,20 @@
     "size": 256,
     "hasPBR": true,
     "hasSvg": false
+  },
+  {
+    "key": "office_doormat",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/office_doormat_basecolor.webp",
+      "normal": "tiles/office_doormat_normal.webp",
+      "roughness": "tiles/office_doormat_roughness.webp",
+      "metalness": "tiles/office_doormat_metalness.webp",
+      "height": "tiles/office_doormat_height.webp"
+    },
+    "size": 256,
+    "hasPBR": true,
+    "hasSvg": false
   }
 ]
