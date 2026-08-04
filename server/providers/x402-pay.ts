@@ -82,8 +82,7 @@ async function getDirectScheme(): Promise<any> {
 
     const signer = {
       address: account.address,
-      signTypedData: (domain: any, types: any, message: any) =>
-        account.signTypedData({ domain, types, message } as any),
+      signTypedData: (params: any) => account.signTypedData(params),
     };
 
     directScheme = new ExactEvmScheme(signer as any);
