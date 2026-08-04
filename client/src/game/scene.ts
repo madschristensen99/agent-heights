@@ -668,16 +668,18 @@ export class OfficeScene extends Phaser.Scene {
 
           // Apply AI wall textures — specific texture per wall side, 50% opacity
           const tex = this.textures;
-          const brickKey = "ai-wall_2";       // red brick — bottom wall
-          const stoneKey = "ai-wall_0";       // gray stone — left wall
+          const brickKey = "ai-wall_2";       // red brick — left wall
+          const stoneKey = "ai-wall_0";       // gray stone — bottom wall
+          const mesoKey = "ai-wall_3";       // mesoamerican — right wall
           const lightStoneKey = "ai-wall_1";  // light stone — top wall
-          const drywallKey = stoneKey; // stone — right wall (mesoamerican)
+          const drywallKey = mesoKey; // mesoamerican — right wall
           const hasBrick = tex.exists(brickKey);
           const hasStone = tex.exists(stoneKey);
           const hasLightStone = tex.exists(lightStoneKey);
           const hasDrywall = tex.exists(drywallKey);
+          const hasMeso = tex.exists(mesoKey);
           const hasInteriorWall = tex.exists("interior-wall-0");
-          if (hasBrick || hasStone || hasLightStone || hasDrywall || hasInteriorWall) {
+          if (hasBrick || hasStone || hasLightStone || hasDrywall || hasMeso || hasInteriorWall) {
             for (let y = 0; y < map.height; y++) {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
@@ -686,9 +688,9 @@ export class OfficeScene extends Phaser.Scene {
                 if (wt.index === 13 || wt.index === 14) continue;
                 let wallKey: string | null = null;
                 let wallAlpha = 1;
-                if (x === 0 && hasStone) wallKey = stoneKey;           // left wall = stone
+                if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
                 else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
-                else if (x === map.width - 1 && hasDrywall) wallKey = drywallKey; // right wall = drywall
+                else if (x === map.width - 1 && hasMeso) wallKey = mesoKey; // right wall = mesoamerican
                 else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
                 else {
                   // Interior walls — procedural textured walls with depth/shading
@@ -700,7 +702,7 @@ export class OfficeScene extends Phaser.Scene {
                   }
                 }
                 if (wallKey) {
-                  const isStone = wallKey === stoneKey || wallKey === lightStoneKey;
+                  const isStone = wallKey === stoneKey || wallKey === lightStoneKey || wallKey === mesoKey;
                   const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
                     .setOrigin(0, 0)
                     .setDepth(1.05)
@@ -1104,8 +1106,11 @@ export class OfficeScene extends Phaser.Scene {
             }
           });
 
-          // Subscribe to mailbox message responses (when player presses E)
+          // Subscribe to mailbox message responses — only open a new panel if
+          // one isn't already open for this platform (live updates are handled
+          // by the MailboxConversation's own internal liveHandler).
           this.store.onMailboxMessages((platform, events) => {
+            if (this.mailboxConversation) return; // panel already open, let its liveHandler deal with it
             if (events.length === 0) {
               this.store.toast(`[${platform}] No messages.`);
               return;
@@ -2528,11 +2533,22 @@ export class OfficeScene extends Phaser.Scene {
             this.store.toast(`[${platform}] No response from server. Make sure you're in your office.`);
           }
         });
-        const onMessages = (respPlatform: string, _events: any[]) => {
+        const onMessages = (respPlatform: string, events: PlatformEvent[]) => {
           if (responded || respPlatform !== platform) return;
           responded = true;
           timeout.remove();
           this.store.offMailboxMessages(onMessages);
+          if (events.length === 0) {
+            this.store.toast(`[${platform}] No messages.`);
+            return;
+          }
+          this.showMailboxConversationModal(platform, events);
+          const mb = this.platformMailboxes.find((m) => m.platform === platform);
+          if (mb) {
+            const mbPx = { x: mb.tile.x * TILE_PX + TILE_PX / 2, y: mb.tile.y * TILE_PX + TILE_PX / 2 };
+            this.world.vfx.sparkBurst(mbPx.x, mbPx.y, mb.color, 8, 50);
+            this.world.audio.uiClick();
+          }
         };
         this.store.onMailboxMessages(onMessages);
       }));

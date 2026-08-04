@@ -773,7 +773,6 @@ export class AgentManager {
       ["Slack", "inbound", "sarah@design", "Can someone review the new landing page?"],
       ["Slack", "inbound", "mike@eng", "Deploy is stuck — need devops help"],
       ["Discord", "inbound", "moderator", "New feature request: dark mode for the dashboard"],
-      ["Telegram", "inbound", "client_4823", "When will my project be ready?"],
       ["WhatsApp", "inbound", "+1-555-0100", "Meeting moved to 3pm"],
       ["Signal", "inbound", "ops-team", "Server CPU spike on prod-04"],
       ["Email", "inbound", "boss@company.com", "Q3 roadmap review needed by Friday"],
@@ -4369,10 +4368,10 @@ export class AgentManager {
     }
   }
 
-  /** Get recent events for a platform (newest first). */
+  /** Get recent events for a platform (chronological order, oldest first). */
   getPlatformMessages(platform: string): PlatformEvent[] {
     const list = this.platformEvents.get(platform) ?? [];
-    return [...list].reverse();
+    return [...list];
   }
 
   /** Mark a platform's mailbox as checked — lowers the flag, resets pending count. */

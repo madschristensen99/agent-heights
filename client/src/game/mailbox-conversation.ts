@@ -159,6 +159,13 @@ export class MailboxConversation {
       z-index: 10001;
     `;
     document.body.appendChild(this.replyInput);
+    this.replyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        this.destroy();
+      }
+    });
     setTimeout(() => this.replyInput.focus(), 50);
 
     // Send button
@@ -360,6 +367,7 @@ export class MailboxConversation {
 
     // Remove DOM input
     this.replyInput.remove();
+    // (keydown listener is auto-removed when the element is removed from DOM)
 
     // Remove keyboard listeners
     if (this.escKey) this.escKey.removeAllListeners();
