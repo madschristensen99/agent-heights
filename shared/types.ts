@@ -236,8 +236,33 @@ export interface AgentInfo {
   cdpSolana?: boolean;
   /** If true, agent gets auto-provisioned multi-chain smart wallet tools via Crossmint. */
   crossmintWallet?: boolean;
+  /** If true, this is a premium marketplace agent with paid API services. */
+  isPremium?: boolean;
+  /** Premium Circle x402 API services this agent can call (paid via Circle Gateway). */
+  circleServices?: CircleServiceConfig[];
   /** Agent ID this agent is waiting at (when status is "waiting"). */
   waitingFor?: string | null;
+}
+
+/** A premium API service from Circle's x402 marketplace. */
+export interface CircleServiceConfig {
+  /** Human-readable name for the service (e.g. "weather-api"). */
+  name: string;
+  /** The x402-protected API endpoint URL. */
+  endpoint: string;
+  /** Price per call in USD. */
+  pricePerCall: number;
+  /** Human-readable description of the service. */
+  description: string;
+  /** Tool definitions exposed by this service. */
+  tools: PremiumToolDef[];
+}
+
+/** A tool definition for a premium API service. */
+export interface PremiumToolDef {
+  name: string;
+  description: string;
+  inputSchema: { type: string; properties?: Record<string, unknown>; required?: string[] };
 }
 
 /** Access control list for an individual agent.
@@ -311,6 +336,8 @@ export interface FiredAgent {
   mood: FiredAgentMood;
   cdpSolana?: boolean;
   crossmintWallet?: boolean;
+  isPremium?: boolean;
+  circleServices?: CircleServiceConfig[];
 }
 
 /** An agent on vacation — temporarily away with all data preserved. */
@@ -718,7 +745,7 @@ export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean; crossmintWallet?: boolean }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean; crossmintWallet?: boolean; isPremium?: boolean; circleServices?: CircleServiceConfig[] }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_new"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
@@ -905,7 +932,7 @@ export type ServerMsg =
   | { type: "org_members"; orgId: string; members: OrgMember[] }
   | { type: "org_created"; org: Organization }
   | { type: "org_error"; message: string }
-  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; usageCap: number; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null }
+  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; usageCap: number; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null; nextTrialAt: number | null }
   | { type: "payment_required"; reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number }
   | { type: "emote"; agentId: string; emote: string }
   | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string }

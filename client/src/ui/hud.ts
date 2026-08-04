@@ -2093,7 +2093,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (!this.canHireAgent()) return;
     // Parse the agent config JSON — may contain a custom appearance, model,
     // and systemPrompt for premium/curated marketplace agents.
-    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; cdpSolana?: boolean; crossmintWallet?: boolean } = {};
+    let config: { model?: string; systemPrompt?: string; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; cdpSolana?: boolean; crossmintWallet?: boolean; isPremium?: boolean; circleServices?: import("../../../shared/types").CircleServiceConfig[] } = {};
     try {
       if (agent.agent) config = JSON.parse(agent.agent);
     } catch { /* not JSON or missing — fall back to defaults */ }
@@ -2124,6 +2124,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       mcpServers: config.mcpServers,
       cdpSolana: config.cdpSolana,
       crossmintWallet: config.crossmintWallet,
+      isPremium: config.isPremium,
+      circleServices: config.circleServices,
     };
 
     // Trigger the helicopter delivery animation. The hire WS message is

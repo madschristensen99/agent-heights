@@ -46,6 +46,7 @@ import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./puls
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 import { getAgentAccount, getAgentBalances as getCdpBalances } from "./providers/cdp-solana.js";
 import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCrossmintBalances } from "./providers/crossmint-wallets.js";
+import type { CircleServiceConfig } from "./providers/premium-proxy.js";
 import { OfficeState } from "./office-state.js";
 import { registerServer, listServers, getServerConfigs, unregisterServer, loadServers, restartServer } from "./mcp-forge.js";
 
@@ -1199,7 +1200,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean, crossmintWallet?: boolean): Promise<void> {
+  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[]): Promise<void> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -1254,6 +1255,8 @@ export class AgentManager {
       mcpServers: mcpServers?.length ? mcpServers : undefined,
       cdpSolana: cdpSolana ?? false,
       crossmintWallet: crossmintWallet ?? false,
+      isPremium: isPremium ?? false,
+      circleServices: circleServices?.length ? circleServices : undefined,
       personality: traits,
       mood: "content",
     };
@@ -1291,7 +1294,7 @@ export class AgentManager {
   /** Hire an agent from Agent Resources's chat — broadcasts helicopter_delivery to client
    *  so the helicopter animation plays, then hires the agent server-side.
    *  Returns the new agent's id. */
-  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean, crossmintWallet?: boolean): Promise<string> {
+  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[]): Promise<string> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     // Broadcast helicopter delivery to all clients so the animation plays
     this.broadcast({
@@ -1304,7 +1307,7 @@ export class AgentManager {
       alreadyHired: true,
     });
     // Hire the agent server-side (this creates the agent + broadcasts "agent" msg)
-    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana, crossmintWallet);
+    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana, crossmintWallet, isPremium, circleServices);
     // Find the agent we just hired by name
     const rt = [...this.agents.values()].find((a) => a.info.name === cleanName);
     return rt?.info.id ?? "";
@@ -1359,6 +1362,9 @@ export class AgentManager {
     // Inherit wallet flags if either agent has them
     const cdpSolana = infoA.cdpSolana || infoB.cdpSolana;
     const crossmintWallet = infoA.crossmintWallet || infoB.crossmintWallet;
+    // Inherit premium services if either agent has them
+    const isPremium = infoA.isPremium || infoB.isPremium;
+    const mergedCircleServices = [...(infoA.circleServices ?? []), ...(infoB.circleServices ?? [])];
 
     // Merge personality — average each trait
     const mergedPersonality = personality ?? {
@@ -1385,6 +1391,8 @@ export class AgentManager {
       mergedPersonality,
       cdpSolana || undefined,
       crossmintWallet || undefined,
+      isPremium || undefined,
+      mergedCircleServices.length > 0 ? mergedCircleServices : undefined,
     );
 
     // Find the newly hired fused agent
@@ -2020,6 +2028,8 @@ export class AgentManager {
       tasksDone: fa.tasksDone,
       cdpSolana: fa.cdpSolana ?? false,
       crossmintWallet: fa.crossmintWallet ?? false,
+      isPremium: fa.isPremium ?? false,
+      circleServices: fa.circleServices,
     };
 
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
@@ -2766,6 +2776,9 @@ export class AgentManager {
         ],
         cdpSolana: rt.info.cdpSolana ?? false,
         crossmintWallet: rt.info.crossmintWallet ?? false,
+        circleServices: rt.info.circleServices,
+        subscriptionTier: this.subscriptionTier,
+        userId: this.userId,
         wizardGithubPat: rt.info.id === WIZARD_ID ? process.env.WIZARD_GITHUB_PAT : undefined,
         wizardBranch: rt.info.id === WIZARD_ID ? (process.env.WIZARD_BRANCH ?? "main") : undefined,
         officeState: this.officeState,

@@ -11,6 +11,7 @@ export interface MarketplaceAgent {
   is_free: boolean;
   price: number | null;
   price_usd: number | null;
+  is_premium: boolean;
   category: string[];
   requirements: string[];
   links: { label: string; url: string }[];

@@ -9,6 +9,7 @@ export interface PaymentState {
   usageCap: number;
   currentPeriodEnd: number | null;
   freeTrialExpiresAt: number | null;
+  nextTrialAt: number | null;
 }
 
 type PaymentListener = (state: PaymentState | null) => void;
@@ -80,6 +81,7 @@ export async function refreshPaymentStatus(): Promise<void> {
       usageCap: (result.usageCap as number) ?? 0,
       currentPeriodEnd: (result.currentPeriodEnd as number | null) ?? null,
       freeTrialExpiresAt: (result.freeTrialExpiresAt as number | null) ?? null,
+      nextTrialAt: (result.nextTrialAt as number | null) ?? null,
     });
   }
 }
@@ -110,6 +112,13 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
         <p style="color:#a0a5b4;font-size:0.85rem;margin:0;line-height:1.4;">You're looking around for free! Time remaining:</p>
         <p id="trial-countdown" style="font-size:1.6rem;font-weight:800;color:#58c866;margin:0;letter-spacing:0.05em;">2:00</p>
         <p style="color:#7a8090;font-size:0.75rem;margin:0.3rem 0 0;line-height:1.3;">Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.</p>
+      </div>
+
+      <div id="payment-trial-expired-section" style="display:none;flex-direction:column;gap:0.5rem;background:rgba(224,93,93,0.08);border:1px solid #4a3a3a;border-radius:12px;padding:1.2rem;margin-bottom:1rem;">
+        <h2 style="font-size:1rem;color:#e05d5d;margin:0;">Free Trial Ended</h2>
+        <p style="color:#a0a5b4;font-size:0.85rem;margin:0;line-height:1.4;">Your 2-minute free trial for today has ended. You can come back for another free trial in:</p>
+        <p id="trial-reset-countdown" style="font-size:1.6rem;font-weight:800;color:#e05d5d;margin:0;letter-spacing:0.05em;">--:--:--</p>
+        <p style="color:#7a8090;font-size:0.75rem;margin:0.3rem 0 0;line-height:1.3;">Or subscribe now to the Starter plan for $0.99/mo to keep running tasks and chatting with your agents.</p>
       </div>
 
       <div id="payment-subscription-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
@@ -171,6 +180,8 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   const activeSection = overlay.querySelector("#payment-active-section") as HTMLDivElement;
   const trialSection = overlay.querySelector("#payment-trial-section") as HTMLDivElement;
   const trialCountdown = overlay.querySelector("#trial-countdown") as HTMLParagraphElement;
+  const trialExpiredSection = overlay.querySelector("#payment-trial-expired-section") as HTMLDivElement;
+  const trialResetCountdown = overlay.querySelector("#trial-reset-countdown") as HTMLParagraphElement;
   const loadingEl = overlay.querySelector("#payment-loading") as HTMLDivElement;
   const periodInfo = overlay.querySelector("#payment-period-info") as HTMLParagraphElement;
   const activeTitle = overlay.querySelector("#payment-active-title") as HTMLHeadingElement;
@@ -186,22 +197,40 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   let selectedBillingPeriod: BillingPeriod = "annual";
 
   function updateCountdown() {
-    if (!currentState || !currentState.freeTrialExpiresAt) {
+    if (!currentState) {
       trialSection.style.display = "none";
+      trialExpiredSection.style.display = "none";
       if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
       return;
     }
-    const remaining = currentState.freeTrialExpiresAt - Date.now();
-    if (remaining <= 0) {
+
+    // Active trial countdown
+    if (currentState.freeTrialExpiresAt && currentState.freeTrialExpiresAt > Date.now()) {
+      trialSection.style.display = "flex";
+      const remaining = currentState.freeTrialExpiresAt - Date.now();
+      const secs = Math.ceil(remaining / 1000);
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      trialCountdown.textContent = `${m}:${s.toString().padStart(2, "0")}`;
+    } else {
       trialSection.style.display = "none";
-      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
-      return;
     }
-    trialSection.style.display = "flex";
-    const secs = Math.ceil(remaining / 1000);
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    trialCountdown.textContent = `${m}:${s.toString().padStart(2, "0")}`;
+
+    // Expired trial — show countdown to next reset
+    const trialExpired = !currentState.subscriptionActive &&
+      (!currentState.freeTrialExpiresAt || currentState.freeTrialExpiresAt <= Date.now()) &&
+      currentState.nextTrialAt;
+    if (trialExpired && currentState.nextTrialAt! > Date.now()) {
+      trialExpiredSection.style.display = "flex";
+      const remaining = currentState.nextTrialAt! - Date.now();
+      const totalSecs = Math.ceil(remaining / 1000);
+      const h = Math.floor(totalSecs / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      const s = totalSecs % 60;
+      trialResetCountdown.textContent = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    } else {
+      trialExpiredSection.style.display = "none";
+    }
   }
 
   function buildTierCard(tier: typeof SUBSCRIPTION_TIER_LIST[number], isUpgrade: boolean): string {
@@ -225,19 +254,23 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       subscriptionSection.style.display = "none";
       activeSection.style.display = "none";
       trialSection.style.display = "none";
+      trialExpiredSection.style.display = "none";
       if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
       return;
     }
     loadingEl.style.display = "none";
 
-    // Show trial banner if trial is active
+    // Show trial banner if trial is active, or expired-trial countdown if trial is used up
     const trialActive = currentState.freeTrialExpiresAt && currentState.freeTrialExpiresAt > Date.now();
-    if (trialActive) {
-      trialSection.style.display = "flex";
+    const trialExpired = !currentState.subscriptionActive &&
+      (!currentState.freeTrialExpiresAt || currentState.freeTrialExpiresAt <= Date.now()) &&
+      currentState.nextTrialAt;
+    if (trialActive || trialExpired) {
       if (!countdownInterval) countdownInterval = setInterval(updateCountdown, 1000);
       updateCountdown();
     } else {
       trialSection.style.display = "none";
+      trialExpiredSection.style.display = "none";
       if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
     }
 

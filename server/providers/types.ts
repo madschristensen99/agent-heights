@@ -11,7 +11,7 @@ export interface UsageData {
   totalCost?: number;
 }
 
-import type { GameSettings, MCPServerConfig } from "../../shared/types.js";
+import type { GameSettings, MCPServerConfig, CircleServiceConfig, SubscriptionTier } from "../../shared/types.js";
 import type { OfficeState } from "../office-state.js";
 
 export interface RunContext {
@@ -48,6 +48,12 @@ export interface RunContext {
   cdpSolana?: boolean;
   /** If true, inject Crossmint multi-chain wallet tools (auto-provisioned, gas sponsored). */
   crossmintWallet?: boolean;
+  /** Premium Circle x402 API services — paid via Circle Gateway, costs flow into usage budget. */
+  circleServices?: CircleServiceConfig[];
+  /** User's subscription tier — used for usage cap checks on premium API calls. */
+  subscriptionTier?: SubscriptionTier | null;
+  /** User ID — needed for per-user usage tracking on premium API calls. */
+  userId?: string;
   /** Persist full conversation messages for an agent (for context restoration across restarts). */
   saveMessages?: (agentId: string, messages: unknown[]) => Promise<void>;
   /** Load persisted conversation messages for an agent (for context restoration across restarts). */

@@ -36,6 +36,8 @@ export function MarketplaceView() {
     const mcpServers = config.mcpServers as { url?: string; command?: string; name?: string }[] | undefined;
     const cdpSolana = Boolean(config.cdpSolana);
     const crossmintWallet = Boolean(config.crossmintWallet);
+    const isPremium = Boolean(config.isPremium);
+    const circleServices = config.circleServices as { name: string; endpoint: string; pricePerCall: number; description: string; tools: { name: string; description: string; inputSchema: object }[] }[] | undefined;
 
     send({
       type: "hire",
@@ -46,6 +48,8 @@ export function MarketplaceView() {
       mcpServers: mcpServers as never,
       cdpSolana,
       crossmintWallet,
+      isPremium,
+      circleServices: circleServices as never,
     });
   };
 
@@ -100,6 +104,9 @@ export function MarketplaceView() {
                   ) : agent.price_usd != null ? (
                     <span className="text-xs bg-bg-hover text-gray-300 px-2 py-0.5 rounded-full">${agent.price_usd}</span>
                   ) : null}
+                  {agent.is_premium && (
+                    <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">Premium</span>
+                  )}
                 </div>
 
                 <p className="text-sm text-gray-400 mt-3 line-clamp-3">{agent.description}</p>

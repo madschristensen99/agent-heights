@@ -22,6 +22,12 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+export function nextTrialResetAt(): number {
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+  return next.getTime();
+}
+
 export function getFreeTrialStatus(userId: string): { active: boolean; expiresAt: number | null } {
   const today = todayKey();
   const entry = freeTrialMap.get(userId);
@@ -53,16 +59,17 @@ export interface PaymentStatus {
   usageCap: number; // monthly usage cap in cents (80% of tier price)
   currentPeriodEnd: number | null;
   freeTrialExpiresAt: number | null;
+  nextTrialAt: number | null;
 }
 
 export async function getUserPaymentStatus(userId: string, email?: string | null): Promise<PaymentStatus> {
   // Admin emails get business tier automatically (no Stripe payment required)
   if (email && AGENT_HEIGHTS_HQ_ADMINS.includes(email.toLowerCase())) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "business", agentLimit: SUBSCRIPTION_TIERS.business.agentLimit, usageCap: SUBSCRIPTION_TIERS.business.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "business", agentLimit: SUBSCRIPTION_TIERS.business.agentLimit, usageCap: SUBSCRIPTION_TIERS.business.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null, nextTrialAt: null };
   }
 
   if (!isSupabaseConfigured || !isStripeConfigured) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "pro", agentLimit: SUBSCRIPTION_TIERS.pro.agentLimit, usageCap: SUBSCRIPTION_TIERS.pro.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "pro", agentLimit: SUBSCRIPTION_TIERS.pro.agentLimit, usageCap: SUBSCRIPTION_TIERS.pro.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null, nextTrialAt: null };
   }
   try {
     // Try full query with subscription_tier (may fail if migration not applied)
@@ -86,7 +93,8 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
 
     if (error || !data) {
       const trial = getFreeTrialStatus(userId);
-      return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
+      const nextTrialAt = !trial.active ? nextTrialResetAt() : null;
+      return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt, nextTrialAt };
     }
 
     const entrancePaid = true; // Entrance fee removed — always true
@@ -97,7 +105,9 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
       (data.subscription_status === "trialing") ||
       (data.subscription_status === "past_due" && data.current_period_end && data.current_period_end > now);
 
-    const freeTrialExpiresAt = !subscriptionActive ? getFreeTrialStatus(userId).expiresAt : null;
+    const trialStatus = !subscriptionActive ? getFreeTrialStatus(userId) : null;
+    const freeTrialExpiresAt = trialStatus?.expiresAt ?? null;
+    const nextTrialAt = trialStatus && !trialStatus.active ? nextTrialResetAt() : null;
 
     const tier = parseTier(data.subscription_tier as string | null);
     // If subscription is active but tier is NULL (legacy subscription from before
@@ -116,10 +126,12 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
       usageCap,
       currentPeriodEnd: data.current_period_end ?? null,
       freeTrialExpiresAt,
+      nextTrialAt,
     };
   } catch {
     const trial = getFreeTrialStatus(userId);
-    return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt };
+    const nextTrialAt = !trial.active ? nextTrialResetAt() : null;
+    return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt, nextTrialAt };
   }
 }
 

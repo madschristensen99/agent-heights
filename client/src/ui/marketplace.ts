@@ -51,7 +51,7 @@ export class MarketplaceBrowser {
   private categoryChips: HTMLDivElement;
   private currentCategory = "All";
   private allAgents: MarketplaceAgent[] = [];
-  private currentTab: "agents" | "community" = "agents";
+  private currentTab: "agents" | "community" | "premium" = "agents";
   onHireAgent: (agent: MarketplaceAgent) => void = () => {};
   onHireCommunityMCP: (name: string, mcpConfig: MCPServerConfig) => void = () => {};
   onSetMcpKey: (serverUrl: string, apiKey: string) => void = () => {};
@@ -78,6 +78,7 @@ export class MarketplaceBrowser {
       </div>
       <div style="padding: 0.25rem 1rem; border-bottom: 1px solid #222; display:flex; gap:0.25rem;">
         <button id="mq-tab-agents" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#2a2a2a; color:#e0e0e0; cursor:pointer;">Agents</button>
+        <button id="mq-tab-premium" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Premium</button>
         <button id="mq-tab-community" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Community MCPs</button>
       </div>
       <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #222;">
@@ -97,39 +98,46 @@ export class MarketplaceBrowser {
 
     // Tab switching
     const tabAgents = this.panel.querySelector("#mq-tab-agents") as HTMLButtonElement;
+    const tabPremium = this.panel.querySelector("#mq-tab-premium") as HTMLButtonElement;
     const tabCommunity = this.panel.querySelector("#mq-tab-community") as HTMLButtonElement;
     tabAgents.addEventListener("click", () => this.switchTab("agents"));
+    tabPremium.addEventListener("click", () => this.switchTab("premium"));
     tabCommunity.addEventListener("click", () => this.switchTab("community"));
 
     let searchTimer: ReturnType<typeof setTimeout> | null = null;
     this.searchInput.addEventListener("input", () => {
       if (searchTimer) clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
-        if (this.currentTab === "agents") void this.renderAgents();
+        if (this.currentTab === "agents" || this.currentTab === "premium") void this.renderAgents();
         else void this.renderCommunity();
       }, 300);
     });
   }
 
-  private switchTab(tab: "agents" | "community"): void {
+  private switchTab(tab: "agents" | "community" | "premium"): void {
     this.currentTab = tab;
     const tabAgents = this.panel.querySelector("#mq-tab-agents") as HTMLButtonElement;
+    const tabPremium = this.panel.querySelector("#mq-tab-premium") as HTMLButtonElement;
     const tabCommunity = this.panel.querySelector("#mq-tab-community") as HTMLButtonElement;
     const categoryChips = this.panel.querySelector("#mq-categories") as HTMLDivElement;
 
+    // Reset all tabs to inactive
+    const inactiveStyle = (btn: HTMLButtonElement) => { btn.style.background = "#1a1a1a"; btn.style.color = "#888"; };
+    const activeStyle = (btn: HTMLButtonElement) => { btn.style.background = "#2a2a2a"; btn.style.color = "#e0e0e0"; };
+    inactiveStyle(tabAgents); inactiveStyle(tabPremium); inactiveStyle(tabCommunity);
+
     if (tab === "agents") {
-      tabAgents.style.background = "#2a2a2a";
-      tabAgents.style.color = "#e0e0e0";
-      tabCommunity.style.background = "#1a1a1a";
-      tabCommunity.style.color = "#888";
+      activeStyle(tabAgents);
       this.searchInput.placeholder = "Search agents…";
       categoryChips.style.display = "flex";
       void this.load();
+    } else if (tab === "premium") {
+      activeStyle(tabPremium);
+      this.searchInput.placeholder = "Search premium agents…";
+      categoryChips.style.display = "flex";
+      void this.loadPremium();
     } else {
-      tabCommunity.style.background = "#2a2a2a";
-      tabCommunity.style.color = "#e0e0e0";
-      tabAgents.style.background = "#1a1a1a";
-      tabAgents.style.color = "#888";
+      activeStyle(tabCommunity);
       this.searchInput.placeholder = "Search 22k+ community MCPs…";
       categoryChips.style.display = "none";
       void this.renderCommunity();
@@ -139,6 +147,7 @@ export class MarketplaceBrowser {
   show(): void {
     this.panel.style.display = "flex";
     if (this.currentTab === "agents") void this.load();
+    else if (this.currentTab === "premium") void this.loadPremium();
     else void this.renderCommunity();
     if (!localStorage.getItem("agent-heights-market-seen")) {
       localStorage.setItem("agent-heights-market-seen", "1");
@@ -185,6 +194,28 @@ export class MarketplaceBrowser {
     if (search) params.set("search", search);
 
     this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Loading…</div>`;
+
+    try {
+      const res = await fetch(`/api/marketplace?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: MarketplaceResult = await res.json();
+      this.allAgents = data.agents ?? [];
+      this.renderCategoryChips();
+      this.renderAgents();
+    } catch {
+      this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Unable to reach the marketplace. Please try again later.</div>`;
+    }
+  }
+
+  private async loadPremium(): Promise<void> {
+    const search = this.searchInput.value.trim();
+    const params = new URLSearchParams({ type: "agent", premium: "true" });
+    if (search) params.set("search", search);
+
+    this.content.innerHTML = `
+      <div style="text-align:center;color:#666;padding:2rem;">
+        <div style="font-size:0.85rem; margin-bottom:0.5rem;">Loading premium agents…</div>
+      </div>`;
 
     try {
       const res = await fetch(`/api/marketplace?${params}`);
@@ -268,12 +299,16 @@ export class MarketplaceBrowser {
       const summary = agent.summary || "";
       const tags = (agent.tags || "").split(",").filter(Boolean).slice(0, 4);
       const price = agent.is_free ? "Free" : agent.price_usd ? `$${agent.price_usd}` : "";
+      const isPremium = agent.is_premium;
 
       card.innerHTML = `
         <div style="display:flex; align-items:flex-start; gap:0.5rem;">
           ${agent.image_url ? `<img src="${agent.image_url}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${this.letterAvatar(name, 40)}'" />` : ""}
           <div style="flex:1; min-width:0;">
-            <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.15rem;">${this.escape(name)}</div>
+            <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.15rem; display:flex; align-items:center; gap:0.3rem;">
+              ${this.escape(name)}
+              ${isPremium ? `<span style="font-size:0.6rem; padding:0.1rem 0.3rem; background:#2a1a3a; color:#b388ff; border-radius:0.25rem; font-weight:600;">PREMIUM</span>` : ""}
+            </div>
             <div style="font-size:0.75rem; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.escape(summary.slice(0, 80))}</div>
             <div style="display:flex; gap:0.25rem; margin-top:0.35rem; flex-wrap:wrap;">
               ${tags.map((t: string) => `<span style="font-size:0.65rem; padding:0.1rem 0.35rem; background:#1a1a1a; border-radius:0.25rem; color:#888;">${this.escape(t.trim())}</span>`).join("")}
@@ -380,6 +415,7 @@ export class MarketplaceBrowser {
             <div style="font-size:0.8rem; color:#888;">${this.escape(agent.summary)}</div>
             <div style="margin-top:0.35rem;">
               <span style="font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:0.25rem; ${agent.is_free ? "background:#1a2a1a; color:#53b86b;" : "background:#2a2a1a; color:#c9852c;"}">${agent.is_free ? "Free" : agent.price_usd ? `$${agent.price_usd}` : "Paid"}</span>
+              ${agent.is_premium ? `<span style="font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:0.25rem; background:#2a1a3a; color:#b388ff; margin-left:0.25rem;">Premium</span>` : ""}
               ${agent.language ? `<span style="font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:0.25rem; background:#1a1a2a; color:#6b8acf; margin-left:0.25rem;">${this.escape(agent.language)}</span>` : ""}
             </div>
           </div>
@@ -394,6 +430,10 @@ export class MarketplaceBrowser {
           <div style="font-size:0.8rem; color:#aaa; white-space:pre-wrap;">${this.escape(requirements)}</div>
         </div>
         ${mcpKeyHtml}
+        ${agent.is_premium ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:#1a1525;">
+          <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">Premium Agent</div>
+          <div style="font-size:0.75rem; color:#aaa; line-height:1.4;">This agent uses paid API services. Costs are billed through your subscription usage budget — no crypto wallet needed. Your monthly usage cap applies.</div>
+        </div>` : ""}
         <div style="display:flex; gap:0.5rem;">
           <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;"${authRequiredServers.length > 0 ? " disabled" : ""}>Hire into HQ</button>
           <button id="mq-cancel" style="padding:0.6rem 1rem; border:1px solid #222; border-radius:0.5rem; background:#1a1a1a; color:#888; font-size:0.9rem; cursor:pointer;">Close</button>

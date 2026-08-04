@@ -14,6 +14,8 @@ import { wrapRailwayTools } from "./railway-mcp.js";
 import { loadMCPTools, type OnApiErrorFn } from "./mcp-client.js";
 import { loadCdpSolanaTools } from "./cdp-solana.js";
 import { loadCrossmintWalletTools } from "./crossmint-wallets.js";
+import { loadPremiumTools, type CircleServiceConfig, type PremiumProxyContext } from "./premium-proxy.js";
+import { recordUsage } from "../usage.js";
 import { loadWizardTools } from "./wizard-tools.js";
 import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
 import { browserNavigate, browserScreenshot, browserExtractText, browserClick, browserFill } from "./browser.js";
@@ -147,6 +149,8 @@ export async function makeTools(cwd: string, opts?: {
   mcpServers?: import("../../shared/types.js").MCPServerConfig[];
   cdpSolana?: boolean;
   crossmintWallet?: boolean;
+  circleServices?: CircleServiceConfig[];
+  premiumProxyCtx?: PremiumProxyContext;
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => void;
   abortRef?: { signal: AbortSignal };
   onApiError?: OnApiErrorFn;
@@ -1013,6 +1017,14 @@ export async function makeTools(cwd: string, opts?: {
     }
   }
 
+  // Load premium Circle x402 API tools (paid via Gateway, costs flow into usage budget)
+  if (opts?.circleServices && opts.circleServices.length > 0 && opts?.premiumProxyCtx) {
+    const premiumTools = await loadPremiumTools(opts.circleServices, opts.premiumProxyCtx);
+    if (premiumTools.length > 0) {
+      return [...baseWithMailClerk, ...premiumTools];
+    }
+  }
+
   // Load Wizard GitHub tools (server-side PAT, world branch file operations)
   if (opts?.wizardGithubPat && opts?.wizardBranch) {
     const wizardTools = await loadWizardTools({ pat: opts.wizardGithubPat, branch: opts.wizardBranch });
@@ -1145,6 +1157,28 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         mcpServers: ctx.mcpServers,
         cdpSolana: ctx.cdpSolana,
         crossmintWallet: ctx.crossmintWallet,
+        circleServices: ctx.circleServices,
+        premiumProxyCtx: ctx.circleServices && ctx.circleServices.length > 0 ? {
+          userId: ctx.userId ?? "",
+          agentId,
+          agentName: ctx.agentName ?? "",
+          subscriptionTier: ctx.subscriptionTier ?? null,
+          onPremiumUsage: (params) => {
+            // Record premium API cost to api_usage_records — flows into monthly spend
+            recordUsage({
+              userId: params.userId,
+              agentId: params.agentId,
+              agentName: params.agentName,
+              model: `circle:${params.serviceName}`,
+              provider: "circle-gateway",
+              inputTokens: 0,
+              outputTokens: 0,
+              totalCost: params.cost,
+              task: params.task,
+              isChat: false,
+            });
+          },
+        } : undefined,
         onPostMessage: ctx.onPostMessage,
         abortRef,
         onApiError: ctx.onApiError,

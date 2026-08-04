@@ -4788,6 +4788,8 @@ export class OfficeScene extends Phaser.Scene {
         mcpServers: delivery.mcpServers,
         cdpSolana: delivery.cdpSolana,
         crossmintWallet: delivery.crossmintWallet,
+        isPremium: delivery.isPremium,
+        circleServices: delivery.circleServices,
       });
     }
 

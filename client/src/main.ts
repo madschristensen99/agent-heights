@@ -22,6 +22,7 @@ net.onMessage = (msg) => {
       usageCap: msg.usageCap,
       currentPeriodEnd: msg.currentPeriodEnd,
       freeTrialExpiresAt: msg.freeTrialExpiresAt,
+      nextTrialAt: msg.nextTrialAt,
     });
   } else if (msg.type === "payment_required") {
     store.toast(msg.message);

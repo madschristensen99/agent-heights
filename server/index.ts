@@ -18,12 +18,13 @@ import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUs
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory, createOnrampUrl } from "./providers/cdp-solana.js";
 import { getAgentBalances as getCrossmintBalances, getAgentPolicy as getCrossmintPolicy, getAgentTxHistory as getCrossmintTxHistory, fundAgentWallet, createCrossmintOnrampUrl } from "./providers/crossmint-wallets.js";
+import { startBalanceMonitor as startCircleBalanceMonitor, isCircleGatewayConfigured } from "./providers/circle-gateway.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
-import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial } from "./stripe.js";
+import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial, nextTrialResetAt } from "./stripe.js";
 import { getUsageSummary } from "./usage.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
 import { scheduleDeletion, cancelDeletion, getDeletionStatus, processExpiredDeletions, GRACE_PERIOD_DAYS } from "./account.js";
@@ -782,6 +783,7 @@ wss.on("connection", async (ws, req) => {
         usageCap: payStatus.usageCap,
         currentPeriodEnd: payStatus.currentPeriodEnd,
         freeTrialExpiresAt,
+        nextTrialAt: payStatus.nextTrialAt,
       } satisfies ServerMsg));
 
       // Set timer to notify when free trial expires
@@ -802,6 +804,7 @@ wss.on("connection", async (ws, req) => {
                 usageCap: 0,
                 currentPeriodEnd: null,
                 freeTrialExpiresAt: Date.now(),
+                nextTrialAt: nextTrialResetAt(),
               } satisfies ServerMsg));
               ws.send(JSON.stringify({
                 type: "payment_required",
@@ -822,6 +825,7 @@ wss.on("connection", async (ws, req) => {
             usageCap: 0,
             currentPeriodEnd: null,
             freeTrialExpiresAt: Date.now(),
+            nextTrialAt: nextTrialResetAt(),
           } satisfies ServerMsg));
           ws.send(JSON.stringify({
             type: "payment_required",
@@ -1034,7 +1038,7 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         case "hire":
-          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana, msg.crossmintWallet);
+          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana, msg.crossmintWallet, msg.isPremium, msg.circleServices);
           break;
         case "update_agent": {
           if (msg.systemPrompt !== undefined) {
@@ -2893,6 +2897,12 @@ server.listen(SERVER_PORT, () => {
     console.log(`[agent-heights]   Set REDIS_URL to enable pub/sub + presence`);
   }
   console.log(`[agent-heights] global multiplayer room: ${HQ2_ROOM_ID}`);
+
+  // Start Circle Gateway balance monitor if configured
+  if (isCircleGatewayConfigured()) {
+    startCircleBalanceMonitor();
+    console.log(`[agent-heights] Circle Gateway premium payments enabled`);
+  }
 
   // Restore user sessions at boot so agents resume immediately after a
   // server restart, without waiting for each user to reconnect.

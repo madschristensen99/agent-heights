@@ -14,6 +14,8 @@ export interface HelicopterDelivery {
   mcpServers?: MCPServerConfig[];
   cdpSolana?: boolean;
   crossmintWallet?: boolean;
+  isPremium?: boolean;
+  circleServices?: import("../../shared/types").CircleServiceConfig[];
   alreadyHired?: boolean;
 }
 
@@ -109,6 +111,7 @@ export class Store {
   usageCap = 0;
   currentPeriodEnd: number | null = null;
   freeTrialExpiresAt: number | null = null;
+  nextTrialAt: number | null = null;
   paymentRequired: { reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number } | null = null;
   scheduledDeletionAt: number | null = null;
   roomId: string | null = null;
@@ -1002,6 +1005,7 @@ export class Store {
         this.usageCap = msg.usageCap;
         this.currentPeriodEnd = msg.currentPeriodEnd;
         this.freeTrialExpiresAt = msg.freeTrialExpiresAt;
+        this.nextTrialAt = msg.nextTrialAt;
         break;
       case "payment_required":
         this.paymentRequired = { reason: msg.reason, message: msg.message, tier: msg.tier, agentLimit: msg.agentLimit, monthlySpend: msg.monthlySpend, usageCap: msg.usageCap };

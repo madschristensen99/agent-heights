@@ -64,6 +64,7 @@ function mapAgent(r: Record<string, unknown>): MarketplaceAgent {
     is_free: Boolean(r.is_free),
     price: r.price != null ? Number(r.price) : null,
     price_usd: r.price_usd != null ? Number(r.price_usd) : null,
+    is_premium: Boolean(r.is_premium),
     category: parseCategory(r.category),
     requirements: parseRequirements(r.requirements),
     links: parseLinks(r.links),
@@ -123,6 +124,13 @@ export async function handleMarketplaceRequest(
         .eq("status", "approved")
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
+
+      const premium = params.get("premium");
+      if (premium === "true") {
+        query = query.eq("is_premium", true);
+      } else if (premium === "false") {
+        query = query.eq("is_premium", false);
+      }
 
       if (search) {
         query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,tags.ilike.%${search}%`);
