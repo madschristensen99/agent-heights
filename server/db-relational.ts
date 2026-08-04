@@ -85,7 +85,7 @@ export class RelationalPersistence {
       // Load settings
       const { data: settingsRow } = await supabaseAdmin
         .from("agent_heights_game_settings")
-        .select("cline_max_iterations, cline_auto_approve, game_idle_wander, game_theme, railway_enabled, mailbox_platforms")
+        .select("cline_max_iterations, cline_auto_approve, cline_review_handoff, game_idle_wander, game_theme, railway_enabled, mailbox_platforms")
         .eq("user_id", this.userId)
         .maybeSingle();
 
@@ -94,6 +94,7 @@ export class RelationalPersistence {
             cline: {
               maxIterations: settingsRow.cline_max_iterations,
               autoApproveCommands: settingsRow.cline_auto_approve,
+              reviewBeforeHandoff: settingsRow.cline_review_handoff ?? false,
             },
             game: {
               idleWander: settingsRow.game_idle_wander,
@@ -375,6 +376,7 @@ export class RelationalPersistence {
             user_id: this.userId,
             cline_max_iterations: this.state.settings.cline.maxIterations,
             cline_auto_approve: this.state.settings.cline.autoApproveCommands,
+            cline_review_handoff: this.state.settings.cline.reviewBeforeHandoff,
             game_idle_wander: this.state.settings.game.idleWander,
             game_theme: this.state.settings.game.theme,
             railway_enabled: this.state.settings.railway.enabled,

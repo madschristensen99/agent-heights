@@ -174,6 +174,7 @@ export class MarketplaceBrowser {
     banner.innerHTML = `
       <div style="font-weight:700; color:#53b86b; font-size:0.85rem; margin-bottom:0.3rem;">🛒 Welcome to the Marketplace</div>
       <div style="margin-bottom:0.4rem;"><strong>Agents</strong> — Browse curated, ready-to-hire AI agents. Click a card for details, then hit <strong>Hire into HQ</strong> to add them to your office.</div>
+      <div style="margin-bottom:0.4rem;"><strong>Premium</strong> — Agents with paid data APIs (Reddit, crypto, stocks, etc.). Each call costs a few cents, billed to your subscription. No crypto wallet needed.</div>
       <div><strong>Community MCPs</strong> — Search 22,000+ MCP servers. Hiring one gives your agent those tools instantly.</div>
     `;
     const close = document.createElement("button");
@@ -301,6 +302,22 @@ export class MarketplaceBrowser {
       const price = agent.is_free ? "Free" : agent.price_usd ? `$${agent.price_usd}` : "";
       const isPremium = agent.is_premium;
 
+      // Parse circleServices to show per-call price on the card
+      let premiumPriceLabel = "";
+      if (isPremium && agent.agent) {
+        try {
+          const cfg = JSON.parse(agent.agent);
+          const services: { pricePerCall: number }[] = cfg.circleServices ?? [];
+          if (services.length > 0) {
+            const minPrice = Math.min(...services.map((s) => s.pricePerCall));
+            const maxPrice = Math.max(...services.map((s) => s.pricePerCall));
+            premiumPriceLabel = minPrice === maxPrice
+              ? `$${minPrice.toFixed(2)}/call`
+              : `$${minPrice.toFixed(2)}–$${maxPrice.toFixed(2)}/call`;
+          }
+        } catch { /* not JSON */ }
+      }
+
       card.innerHTML = `
         <div style="display:flex; align-items:flex-start; gap:0.5rem;">
           ${agent.image_url ? `<img src="${agent.image_url}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${this.letterAvatar(name, 40)}'" />` : `<img src="${this.letterAvatar(name, 40)}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" />`}
@@ -313,6 +330,7 @@ export class MarketplaceBrowser {
             <div style="display:flex; gap:0.25rem; margin-top:0.35rem; flex-wrap:wrap;">
               ${tags.map((t: string) => `<span style="font-size:0.65rem; padding:0.1rem 0.35rem; background:#1a1a1a; border-radius:0.25rem; color:#888;">${this.escape(t.trim())}</span>`).join("")}
               ${price ? `<span style="font-size:0.65rem; padding:0.1rem 0.35rem; background:#1a2a1a; border-radius:0.25rem; color:#53b86b;">${price}</span>` : ""}
+              ${premiumPriceLabel ? `<span style="font-size:0.65rem; padding:0.1rem 0.35rem; background:#2a1a3a; border-radius:0.25rem; color:#b388ff;">${premiumPriceLabel}</span>` : ""}
             </div>
           </div>
         </div>
@@ -339,12 +357,16 @@ export class MarketplaceBrowser {
       ? agent.requirements.map((r: string) => `• ${r}`).join("\n")
       : "None";
 
-    // Parse agent config to detect MCP servers that need auth
+    // Parse agent config to detect MCP servers that need auth + premium services
     let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey"; keyLabel?: string; keyPlaceholder?: string; keyHelpUrl?: string; urlPlaceholder?: string; envVars?: { name: string; description: string; isRequired: boolean }[] }[] = [];
+    let circleServices: { name: string; pricePerCall: number; description: string; tools: { name: string; description: string }[] }[] = [];
     try {
       const config = agent.agent ? JSON.parse(agent.agent) : {};
       if (config.mcpServers && Array.isArray(config.mcpServers)) {
         mcpServers = config.mcpServers;
+      }
+      if (config.circleServices && Array.isArray(config.circleServices)) {
+        circleServices = config.circleServices;
       }
     } catch { /* not JSON */ }
 
@@ -430,9 +452,29 @@ export class MarketplaceBrowser {
           <div style="font-size:0.8rem; color:#aaa; white-space:pre-wrap;">${this.escape(requirements)}</div>
         </div>
         ${mcpKeyHtml}
-        ${agent.is_premium ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:#1a1525;">
-          <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">Premium Agent</div>
-          <div style="font-size:0.75rem; color:#aaa; line-height:1.4;">This agent uses paid API services. Costs are billed through your subscription usage budget — no crypto wallet needed. Your monthly usage cap applies.</div>
+        ${agent.is_premium && circleServices.length > 0 ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:#1a1525;">
+          <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.4rem;">⚡ PREMIUM AGENT — Paid API Services</div>
+          <div style="font-size:0.72rem; color:#aaa; line-height:1.4; margin-bottom:0.5rem;">This agent can call paid data APIs (StableSocial, CoinGecko, etc.). Each call costs a small amount, billed to your subscription — no crypto wallet needed.</div>
+          <div style="font-size:0.7rem; font-weight:600; color:#888; margin-bottom:0.25rem;">SERVICES & PRICING</div>
+          <div style="display:flex; flex-direction:column; gap:0.35rem;">
+            ${circleServices.map((s) => {
+              const toolNames = s.tools.map((t) => t.name).join(", ");
+              return `<div style="padding:0.4rem 0.5rem; border:1px solid #2a1a3a; border-radius:0.375rem; background:#120d1a;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:0.75rem; font-weight:600; color:#ccc;">${this.escape(s.name)}</span>
+                  <span style="font-size:0.7rem; font-weight:600; color:#b388ff;">$${s.pricePerCall.toFixed(2)}/call</span>
+                </div>
+                <div style="font-size:0.68rem; color:#777; margin-top:0.15rem;">${this.escape(s.description.slice(0, 100))}</div>
+                ${toolNames ? `<div style="font-size:0.62rem; color:#555; margin-top:0.2rem;">Tools: ${this.escape(toolNames)}</div>` : ""}
+              </div>`;
+            }).join("")}
+          </div>
+          <div style="font-size:0.68rem; color:#666; margin-top:0.5rem; line-height:1.4;">
+            <strong style="color:#888;">Your premium allowance:</strong> Starter $0.50/mo · Pro $3.00/mo · Business $12.00/mo (separate from your AI inference budget).
+          </div>
+        </div>` : agent.is_premium ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:#1a1525;">
+          <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">⚡ Premium Agent</div>
+          <div style="font-size:0.75rem; color:#aaa; line-height:1.4;">This agent uses paid API services. Costs are billed through your subscription — no crypto wallet needed. Your monthly premium allowance applies (Starter $0.50 · Pro $3.00 · Business $12.00).</div>
         </div>` : ""}
         <div style="display:flex; gap:0.5rem;">
           <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;"${authRequiredServers.length > 0 ? " disabled" : ""}>Hire into HQ</button>

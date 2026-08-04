@@ -4790,6 +4790,7 @@ export class OfficeScene extends Phaser.Scene {
         crossmintWallet: delivery.crossmintWallet,
         isPremium: delivery.isPremium,
         circleServices: delivery.circleServices,
+        skills: delivery.skills,
       });
     }
 

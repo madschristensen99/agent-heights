@@ -109,6 +109,30 @@ const MIN_SCHEDULE_INTERVAL_MS = 15 * 60 * 1000;
 const MAX_DUPLICATE_TOOL_CALLS = 3; // Abort after 3 identical tool calls (was 5 — too permissive)
 const MAX_CALLS_PER_TOOL = 10; // Abort after 10 calls to the same tool name (catches varied-input loops)
 const MAX_MCP_TOOL_CALLS = 20; // Total MCP-originated tool calls per task before aborting
+const MAX_REWORKS = 3; // Maximum rework cycles before warning the manager
+
+/** Patterns that indicate a transient (retryable) failure — rate limit, timeout, API hang. */
+const TRANSIENT_FAILURE_PATTERNS = [
+  /rate\s*limit/i,
+  /too\s*many\s*requests/i,
+  /No response from model/i,
+  /aborted.*(?:rate limit|API hang)/i,
+  /timeout/i,
+  /temporarily unavailable/i,
+  /service unavailable/i,
+  /\b503\b/,
+  /\b429\b/,
+];
+
+/** Check if a failure reason looks like a transient issue (rate limit, timeout, API hang). */
+function isTransientFailure(reason: string): boolean {
+  return TRANSIENT_FAILURE_PATTERNS.some((p) => p.test(reason));
+}
+
+/** Detect if a task string is itself a rework assignment (sent back by a manager). */
+function isReworkTask(task: string): boolean {
+  return /was reviewed by.*and needs revision/i.test(task);
+}
 
 /** Validate a 5-field cron expression and return a specific error message. */
 function validateCron(cron: string): { valid: boolean; error?: string } {
@@ -286,6 +310,8 @@ interface AgentRuntime {
   memorySummary: string | null;
   /** If true, a stale-session retry has already been attempted for the current task. */
   retryAttempted: boolean;
+  /** Number of times the current task has been sent back for rework by a manager. */
+  reworkCount: number;
 }
 
 export class AgentManager {
@@ -451,7 +477,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -635,7 +661,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
     this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -672,7 +698,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -714,7 +740,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("wizard", WIZARD_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
     this.agents.set(WIZARD_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -1270,7 +1296,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -1539,6 +1565,7 @@ export class AgentManager {
 
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
     rt.doneTimer = null;
+    rt.retryAttempted = false;
     rt.info.task = cleanTask;
     const target = handoffTo && handoffTo !== rt.info.id ? this.agents.get(handoffTo) : undefined;
     rt.handoffTo = target ? target.info.id : null;
@@ -1867,6 +1894,8 @@ export class AgentManager {
     rt.waitingFor = null;
     rt.info.waitingFor = null;
     rt.waitFor = null;
+    // Clean up any pending handoff gated for review
+    this.pendingHandoffs.delete(agentId);
     if (rt.cardId) {
       this.revertCard(rt.cardId);
       rt.cardId = null;
@@ -1999,7 +2028,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2048,7 +2077,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -3175,9 +3204,22 @@ export class AgentManager {
           const duration = Date.now() - rt.taskStartedAt;
           const failReason = abortReason || "Task aborted (unknown reason).";
 
-          // Notify managers about the failure
-          this.notifyManagersOfCompletion(rt, task, failReason, true);
-          this.logEvent("task_error", `${rt.info.name} aborted: "${task.slice(0, 100)}" — ${failReason.slice(0, 100)}`);
+          // Auto-retry transient failures (rate limit, timeout, API hang) once before
+          // involving the manager. This handles the common case where a rate limit
+          // clears after a few minutes. If the retry also fails, it falls through
+          // to normal error handling and the manager gets an enhanced prompt.
+          if (isTransientFailure(failReason) && !rt.retryAttempted) {
+            rt.retryAttempted = true;
+            rt.freshStart = true;
+            shouldRetry = true;
+            this.log(rt, "status", `Transient failure detected (${failReason.slice(0, 80)}) — auto-retrying with a fresh conversation.`);
+            // Skip manager notification, card revert, and error status — the retry will handle all of that
+            if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
+            // Jump to the finally block's retry path (shouldRetry = true)
+          } else {
+            // Notify managers about the failure
+            this.notifyManagersOfCompletion(rt, task, failReason, true);
+            this.logEvent("task_error", `${rt.info.name} aborted: "${task.slice(0, 100)}" — ${failReason.slice(0, 100)}`);
 
           // Record in task history
           rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
@@ -3223,6 +3265,7 @@ export class AgentManager {
               this.persist();
             }
           }, DONE_LINGER_MS);
+          }
         }
       }
       // Clear scheduleId after result tracking is done
@@ -3349,8 +3392,12 @@ export class AgentManager {
     const reworkMatch = reviewText.match(/\bNEEDS?\s+REWORK\b[:\s]*([\s\S]*)/i);
     if (reworkMatch) {
       const feedback = reworkMatch[1].trim().slice(0, 1000) || "No specific feedback provided.";
-      const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${ctx.originalTask.slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.`;
-      this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback.`);
+      target.reworkCount += 1;
+      const reworkWarning = target.reworkCount >= MAX_REWORKS
+        ? `\n\n⚠️ This is rework attempt #${target.reworkCount} — the maximum allowed. If this attempt fails, the task will be abandoned.`
+        : `\n\n(Rework attempt #${target.reworkCount} of ${MAX_REWORKS}.)`;
+      const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${ctx.originalTask.slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.${reworkWarning}`;
+      this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback (rework #${target.reworkCount}).`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} requested rework from ${ctx.agentName}.` });
       // Discard any pending handoff — the rework will re-trigger it when complete
       this.pendingHandoffs.delete(ctx.agentId);
@@ -3360,6 +3407,7 @@ export class AgentManager {
     }
 
     if (/\bAPPROVED\b/i.test(reviewText)) {
+      target.reworkCount = 0;
       this.log(mgr, "status", `Review verdict: APPROVED — ${ctx.agentName}'s work accepted.`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} approved ${ctx.agentName}'s work.` });
       // Move the original card to done if it's still in backlog (e.g. worker failed but manager accepts)
@@ -3388,6 +3436,7 @@ export class AgentManager {
     }
 
     // No clear verdict — default to approved
+    target.reworkCount = 0;
     this.log(mgr, "status", `Review complete — no explicit APPROVED/NEEDS REWORK verdict, defaulting to approved.`);
     // Release the pending handoff if one was gated
     this.releasePendingHandoff(ctx.agentId);
@@ -3541,9 +3590,20 @@ export class AgentManager {
 
       // If the manager is idle, assign them a task to review the completion report
       if (mgr.info.status !== "thinking" && mgr.info.status !== "working" && mgr.info.status !== "waiting") {
-        const reviewTask = failed
-          ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}. Review the situation and decide if any action is needed. End your response with either APPROVED (if no further action is needed) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`
-          : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed. End your response with either APPROVED (if the work is acceptable) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`;
+        let reviewTask: string;
+        if (failed) {
+          const transient = isTransientFailure(result);
+          const reworkNote = isReworkTask(task)
+            ? ` Note: This was a rework attempt (the original work was previously deemed insufficient). Rework attempt #${rt.reworkCount} of ${MAX_REWORKS}.`
+            : "";
+          if (transient) {
+            reviewTask = `${rt.info.name} failed their task: "${task.slice(0, 200)}". The failure was due to a transient issue: ${result.slice(0, 200)}. The task was NOT completed.${reworkNote} Use NEEDS REWORK with "Retry the same task — the previous attempt failed due to a transient issue (rate limit/timeout)." unless you intentionally want to abandon this task. Use APPROVED only if you want to accept the failure and stop retrying.`;
+          } else {
+            reviewTask = `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}.${reworkNote} Review the situation and decide if any action is needed. Use APPROVED only if the failure is acceptable and no further work is needed. Use NEEDS REWORK: <specific feedback for the agent> if the agent should retry with your feedback. A failed task means the work was NOT done — approving it means accepting incomplete work.`;
+          }
+        } else {
+          reviewTask = `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed. End your response with either APPROVED (if the work is acceptable) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`;
+        }
         this.assign(mgr.info.id, reviewTask, undefined, undefined, undefined, { agentId: rt.info.id, agentName: rt.info.name, originalTask: task, cardId: rt.cardId });
       }
     }

@@ -82,6 +82,18 @@ export function Settings() {
                 <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${settings.cline.autoApproveCommands ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>
             </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm text-gray-300">Review Before Handoff</label>
+                <p className="text-xs text-muted mt-0.5">Require a manager to approve work before it's passed to the next agent</p>
+              </div>
+              <button
+                onClick={() => send({ type: "set_settings", settings: { ...settings, cline: { ...settings.cline, reviewBeforeHandoff: !settings.cline.reviewBeforeHandoff } } })}
+                className={`relative w-11 h-6 rounded-full transition-colors ${settings.cline.reviewBeforeHandoff ? "bg-accent" : "bg-border"}`}
+              >
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${settings.cline.reviewBeforeHandoff ? "translate-x-5" : "translate-x-0.5"}`} />
+              </button>
+            </div>
           </div>
         </section>
 

@@ -16,6 +16,7 @@ export interface HelicopterDelivery {
   crossmintWallet?: boolean;
   isPremium?: boolean;
   circleServices?: import("../../shared/types").CircleServiceConfig[];
+  skills?: import("../../shared/types").TaskCategory[];
   alreadyHired?: boolean;
 }
 

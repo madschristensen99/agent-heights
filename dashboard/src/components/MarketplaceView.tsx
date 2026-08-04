@@ -111,6 +111,34 @@ export function MarketplaceView() {
 
                 <p className="text-sm text-gray-400 mt-3 line-clamp-3">{agent.description}</p>
 
+                {agent.is_premium && (() => {
+                  try {
+                    const cfg = agent.agent ? JSON.parse(agent.agent) : {};
+                    const services: { name: string; pricePerCall: number; description: string }[] = cfg.circleServices ?? [];
+                    if (services.length === 0) return null;
+                    const minPrice = Math.min(...services.map((s) => s.pricePerCall));
+                    const maxPrice = Math.max(...services.map((s) => s.pricePerCall));
+                    const priceLabel = minPrice === maxPrice
+                      ? `$${minPrice.toFixed(2)}/call`
+                      : `$${minPrice.toFixed(2)}–$${maxPrice.toFixed(2)}/call`;
+                    return (
+                      <div className="mt-2 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                        <div className="text-xs text-purple-400 font-medium mb-1">⚡ {priceLabel}</div>
+                        <div className="flex flex-wrap gap-1">
+                          {services.slice(0, 4).map((s, i) => (
+                            <span key={i} className="text-xs text-purple-300/70 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                              {s.name} · ${s.pricePerCall.toFixed(2)}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Allowance: Starter $0.50 · Pro $3.00 · Business $12.00/mo
+                        </div>
+                      </div>
+                    );
+                  } catch { return null; }
+                })()}
+
                 {agent.use_cases.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {agent.use_cases.slice(0, 3).map((uc, i) => (
