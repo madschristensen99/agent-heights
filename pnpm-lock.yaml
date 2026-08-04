@@ -13,13 +13,13 @@ importers:
     dependencies:
       '@circle-fin/x402-batching':
         specifier: ^3.2.0
-        version: 3.2.0(@x402/core@2.20.0)(viem@2.55.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))
+        version: 3.2.0(@x402/core@2.20.0)(@x402/evm@2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(viem@2.55.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))
       '@cline/sdk':
         specifier: ^0.0.51
         version: 0.0.51(@anthropic-ai/sdk@0.106.0(zod@3.25.76))(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@coinbase/cdp-sdk':
         specifier: ^1.54.0
-        version: 1.54.0(@x402/core@2.20.0)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        version: 1.54.0(@x402/core@2.20.0)(@x402/evm@2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@railway/cli':
         specifier: ^4.0.0
         version: 4.68.0
@@ -29,6 +29,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.108.2
         version: 2.108.2
+      '@x402/evm':
+        specifier: ^2.20.0
+        version: 2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       dompurify:
         specifier: ^3.4.9
         version: 3.4.9
@@ -2040,6 +2043,9 @@ packages:
 
   '@x402/core@2.20.0':
     resolution: {integrity: sha512-BaPPVTZ4LAeYKB0yRMOnuzDGoratyLeYobBMH/leFmRe+al94RQnw/uwuw9Rgsupsywz6JQdHzhm4LsE4snuDg==}
+
+  '@x402/evm@2.20.0':
+    resolution: {integrity: sha512-TugTYYHHhDs/QxT4ek4+oSRF9GsyVMYEirrMPRCNrF7FZLaSntNXMaDk7TEaukiwBPxbfciaJLRg84aa5lIpdQ==}
 
   abitype@1.0.6:
     resolution: {integrity: sha512-MMSqYh4+C/aVqI2RQaWqbvI4Kxo5cQV40WQ4QFtDnNzCkqChm8MuENhElmynZlO0qUy/ObkEUaXtKqYnx1Kp3A==}
@@ -4238,10 +4244,12 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@circle-fin/x402-batching@3.2.0(@x402/core@2.20.0)(viem@2.55.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))':
+  '@circle-fin/x402-batching@3.2.0(@x402/core@2.20.0)(@x402/evm@2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(viem@2.55.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))':
     dependencies:
       '@x402/core': 2.20.0
       viem: 2.55.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
+    optionalDependencies:
+      '@x402/evm': 2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
   '@cline/agents@0.0.51(@anthropic-ai/sdk@0.106.0(zod@3.25.76))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.8.0(@opentelemetry/api@1.9.1))':
     dependencies:
@@ -4346,7 +4354,7 @@ snapshots:
       zod: 4.4.3
       zod-to-json-schema: 3.25.2(zod@4.4.3)
 
-  '@coinbase/cdp-sdk@1.54.0(@x402/core@2.20.0)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@coinbase/cdp-sdk@1.54.0(@x402/core@2.20.0)(@x402/evm@2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
     dependencies:
       '@solana-program/system': 0.10.0(@solana/kit@5.5.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana-program/token': 0.9.0(@solana/kit@5.5.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
@@ -4362,6 +4370,7 @@ snapshots:
       zod: 3.25.76
     optionalDependencies:
       '@x402/core': 2.20.0
+      '@x402/evm': 2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -5877,6 +5886,16 @@ snapshots:
   '@x402/core@2.20.0':
     dependencies:
       zod: 3.25.76
+
+  '@x402/evm@2.20.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@x402/core': 2.20.0
+      viem: 2.55.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
 
   abitype@1.0.6(typescript@5.9.3)(zod@3.25.76):
     optionalDependencies:
