@@ -688,8 +688,8 @@ export class OfficeScene extends Phaser.Scene {
                 if (wt.index === 13 || wt.index === 14) continue;
                 let wallKey: string | null = null;
                 let wallAlpha = 1;
-                if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
-                else if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone
+                if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone (priority at corners)
+                else if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
                 else if (x === map.width - 1 && hasMeso) wallKey = mesoKey; // right wall = mesoamerican
                 else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
                 else {

@@ -317,6 +317,23 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyPlaceholder: "tvly-...",
     keyHelpUrl: "https://app.tavily.com/api-key",
   },
+  {
+    id: "fal-ai",
+    name: "fal.ai",
+    summary: "Run inference on 1,000+ AI models — image, video, audio generation.",
+    description:
+      "fal's official MCP server gives agents direct access to the full fal platform: search models, check schemas, run inference, upload files, and browse documentation. Agents can generate images, video, and audio using any of 1,000+ models without leaving the workspace. Every request uses your own API key — nothing is stored on the server.",
+    transport: "remote",
+    authType: "apikey",
+    isOfficial: true,
+    category: ["ai", "media", "generation"],
+    icon: "https://cdn.simpleicons.org/fal",
+    visitorsPerWeek: "—",
+    url: "https://mcp.fal.ai/mcp",
+    keyLabel: "API Key",
+    keyPlaceholder: "fal_...",
+    keyHelpUrl: "https://fal.ai/dashboard/keys",
+  },
 
   // ── Tier 2: Local MCPs (Native Game Integration Candidates) ──────────
 

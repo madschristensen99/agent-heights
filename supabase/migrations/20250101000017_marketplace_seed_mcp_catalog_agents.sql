@@ -1,10 +1,10 @@
 -- Seed the marketplace with curated agents for each MCP server in the catalog.
--- Auto-generated from shared/mcp-catalog.ts on 2026-07-16.
+-- Auto-generated from shared/mcp-catalog.ts on 2026-08-04.
 -- Each agent connects to a remote MCP server with correct auth configuration.
 -- Skips agents already seeded in earlier migrations (Robinhood, Yahoo Finance, GitHub).
 
 -- Delete any existing agents with these names first (idempotent re-seed)
-DELETE FROM public.swarms_cloud_agents
+DELETE FROM public.heights_cloud_agents
 WHERE name IN (
   'Notion Agent',
   'Linear Agent',
@@ -15,12 +15,12 @@ WHERE name IN (
   'Grafana Agent',
   'MongoDB Agent',
   'FireCrawl Agent',
-  'n8n Agent',
   'Vercel Agent',
   'Supabase Agent',
   'GitLab Agent',
   'Brave Search Agent',
   'Tavily Agent',
+  'fal.ai Agent',
   'Home Assistant Agent',
   'Asana Agent',
   'Atlassian (Jira & Confluence) Agent',
@@ -40,6 +40,7 @@ WHERE name IN (
   'Airtable Agent',
   'ClickUp Agent',
   'Calendly Agent',
+  'Calendly (Personal Token) Agent',
   'Cal.com Agent',
   'Hugging Face Agent',
   'OpenRouter Agent',
@@ -271,10 +272,11 @@ WHERE name IN (
   'Wyndham Hotels and Resorts Agent',
   'ZipRecruiter Agent',
   'Zocks Agent',
-  'ZoomInfo Agent'
+  'ZoomInfo Agent',
+  'Google Maps Scraper Agent'
 );
 
-INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
+INSERT INTO public.heights_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
 VALUES
   (
     'Notion Agent',
@@ -512,32 +514,6 @@ To connect: Get your API Key at https://www.firecrawl.dev/app/api-keys',
     'https://icons.duckduckgo.com/ip3/firecrawl.dev.ico'
   ),
   (
-    'n8n Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a n8n agent connected via the n8n MCP server. Workflow automation with 525+ integration nodes. You authenticate via an MCP Access Token — the user will provide their instance URL and token. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":2,"hair":1,"shirt":4,"pants":1,"accessory":0,"accent":0,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"name":"n8n","authType":"apikey","keyLabel":"MCP Access Token","keyPlaceholder":"Paste your n8n MCP Access Token...","keyHelpUrl":"https://docs.n8n.io/connect/connect-to-n8n-mcp-server","urlPlaceholder":"https://your-n8n-domain/mcp-server/http"}]}',
-    'n8n Agent — connected to n8n via MCP (API Key required).
-
-Integrates with n8n workflow automation platform to provide conversational access to 525+ nodes including AI-capable ones. Agents can create, trigger, and manage automated workflows.
-
-This agent can:
-• Access n8n data and capabilities via MCP
-• Automate n8n workflows from conversation
-
-To connect: Get your MCP Access Token at https://docs.n8n.io/connect/connect-to-n8n-mcp-server',
-    'n8n agent — Workflow automation with 525+ integration nodes. (MCP Access Token)',
-    'n8n,n8n,mcp,AI & ML',
-    true,
-    null,
-    null,
-    'TypeScript',
-    'agent',
-    'approved',
-    '["Access n8n data and capabilities via MCP","Automate n8n workflows from conversation"]',
-    '["AI & ML"]',
-    '["MCP Access Token (https://docs.n8n.io/connect/connect-to-n8n-mcp-server)"]',
-    '[{"label":"n8n MCP Docs","url":"https://docs.n8n.io/connect/connect-to-n8n-mcp-server"},{"label":"Get your MCP Access Token","url":"https://docs.n8n.io/connect/connect-to-n8n-mcp-server"}]',
-    'https://icons.duckduckgo.com/ip3/n8n.io.ico'
-  ),
-  (
     'Vercel Agent',
     '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Vercel agent connected via the Vercel MCP at https://mcp.vercel.com. Deployment management and project operations. You authenticate via an API key — the user will provide their key. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":2,"hairStyle":3,"hair":1,"shirt":5,"pants":1,"accessory":0,"accent":2,"beard":1,"eyeColor":1,"headFeature":0},"mcpServers":[{"url":"https://mcp.vercel.com","name":"vercel","authType":"apikey","keyLabel":"Access Token","keyPlaceholder":"vercel_...","keyHelpUrl":"https://vercel.com/account/tokens"}]}',
     'Vercel Agent — connected to Vercel via MCP (Access Token required).
@@ -666,6 +642,32 @@ To connect: Get your API Key at https://app.tavily.com/api-key',
     '["API Key (https://app.tavily.com/api-key)"]',
     '[{"label":"Tavily MCP Server","url":"https://mcp.tavily.com/mcp"},{"label":"Get your API Key","url":"https://app.tavily.com/api-key"}]',
     'https://icons.duckduckgo.com/ip3/tavily.com.ico'
+  ),
+  (
+    'fal.ai Agent',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a fal.ai agent connected via the fal.ai MCP at https://mcp.fal.ai/mcp. Run inference on 1,000+ AI models — image, video, audio generation. You authenticate via an API key — the user will provide their key. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":2,"hairStyle":4,"hair":4,"shirt":11,"pants":1,"accessory":3,"accent":4,"beard":1,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://mcp.fal.ai/mcp","name":"fal-ai","authType":"apikey","keyLabel":"API Key","keyPlaceholder":"fal_...","keyHelpUrl":"https://fal.ai/dashboard/keys"}]}',
+    'fal.ai Agent — connected to fal.ai via MCP (API Key required).
+
+fal''s official MCP server gives agents direct access to the full fal platform: search models, check schemas, run inference, upload files, and browse documentation. Agents can generate images, video, and audio using any of 1,000+ models without leaving the workspace. Every request uses your own API key — nothing is stored on the server.
+
+This agent can:
+• Access fal.ai data and capabilities via MCP
+• Automate fal.ai workflows from conversation
+
+To connect: Get your API Key at https://fal.ai/dashboard/keys',
+    'fal.ai agent — Run inference on 1,000+ AI models — image, video, audio generation. (API Key)',
+    'fal-ai,fal.ai,mcp,AI & ML',
+    true,
+    null,
+    null,
+    'TypeScript',
+    'agent',
+    'approved',
+    '["Access fal.ai data and capabilities via MCP","Automate fal.ai workflows from conversation"]',
+    '["AI & ML"]',
+    '["API Key (https://fal.ai/dashboard/keys)"]',
+    '[{"label":"fal.ai MCP Server","url":"https://mcp.fal.ai/mcp"},{"label":"Get your API Key","url":"https://fal.ai/dashboard/keys"}]',
+    'https://icons.duckduckgo.com/ip3/fal.ai.ico'
   ),
   (
     'Home Assistant Agent',
@@ -976,7 +978,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["Access Zoom data and capabilities via MCP","Automate Zoom workflows from conversation"]',
     '["Communication"]',
     '["Zoom account (OAuth connection required)"]',
-    '[{"label":"Zoom MCP Server","url":"https://mcp.zoom.us/mcp/zoom/streamable"}]',
+    '[{"label":"Zoom MCP Server","url":"https://mcp.zoom.us/mcp/zoom/streamable"},{"label":"Get your API Key","url":"https://marketplace.zoom.us/"}]',
     'https://icons.duckduckgo.com/ip3/zoom.us.ico'
   ),
   (
@@ -1010,7 +1012,7 @@ To connect: Get your API Key at https://console.twilio.com/us1/account/keys',
     '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a PayPal agent connected via the PayPal MCP at https://mcp.paypal.com/mcp. Access PayPal payments platform. You authenticate via OAuth — the user will connect their account. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":2,"hairStyle":4,"hair":0,"shirt":1,"pants":0,"accessory":4,"accent":0,"beard":1,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://mcp.paypal.com/mcp","name":"paypal","authType":"oauth"}]}',
     'PayPal Agent — connected to PayPal via MCP (OAuth).
 
-Integrate with PayPal''s payments platform. Agents can create orders, process payments, manage transactions, and query payment history.
+Integrate with PayPal''s payments platform. Agents can create orders, process payments, manage transactions, and query payment history. Uses OAuth — you''ll be redirected to PayPal to authorize.
 
 This agent can:
 • Access PayPal data and capabilities via MCP
@@ -1137,17 +1139,17 @@ To connect: Get your API Key at https://app.clickup.com/settings/apps',
   ),
   (
     'Calendly Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Calendly agent connected via the Calendly MCP at https://mcp.calendly.com. Scheduling, events, availability. You authenticate via an API key — the user will provide their key. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":6,"hair":3,"shirt":0,"pants":0,"accessory":0,"accent":8,"beard":2,"eyeColor":1,"headFeature":0},"mcpServers":[{"url":"https://mcp.calendly.com","name":"calendly","authType":"apikey","keyLabel":"API Key","keyPlaceholder":"Paste API key...","keyHelpUrl":"https://calendly.com/integrations/api_webhooks"}]}',
-    'Calendly Agent — connected to Calendly via MCP (API Key required).
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Calendly agent connected via the Calendly MCP at https://mcp.calendly.com. Scheduling, events, availability (OAuth). You authenticate via OAuth — the user will connect their account. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":6,"hair":3,"shirt":0,"pants":0,"accessory":0,"accent":8,"beard":2,"eyeColor":1,"headFeature":0},"mcpServers":[{"url":"https://mcp.calendly.com","name":"calendly","authType":"oauth"}]}',
+    'Calendly Agent — connected to Calendly via MCP (OAuth).
 
-Manage Calendly scheduling, events, and availability. Agents can create meeting types, check availability, and schedule appointments.
+Manage Calendly scheduling, events, and availability. Agents can create meeting types, check availability, and schedule appointments. Uses OAuth 2.1 with PKCE and Dynamic Client Registration — no API key needed. Best for multi-user apps.
 
 This agent can:
 • Access Calendly data and capabilities via MCP
 • Automate Calendly workflows from conversation
 
-To connect: Get your API Key at https://calendly.com/integrations/api_webhooks',
-    'Calendly agent — Scheduling, events, availability. (API Key)',
+To connect: Click "Connect via OAuth" when hiring this agent.',
+    'Calendly agent — Scheduling, events, availability (OAuth). (OAuth)',
     'calendly,calendly,mcp,Productivity',
     true,
     null,
@@ -1157,8 +1159,34 @@ To connect: Get your API Key at https://calendly.com/integrations/api_webhooks',
     'approved',
     '["Access Calendly data and capabilities via MCP","Automate Calendly workflows from conversation"]',
     '["Productivity"]',
-    '["API Key (https://calendly.com/integrations/api_webhooks)"]',
-    '[{"label":"Calendly MCP Server","url":"https://mcp.calendly.com"},{"label":"Get your API Key","url":"https://calendly.com/integrations/api_webhooks"}]',
+    '["Calendly account (OAuth connection required)"]',
+    '[{"label":"Calendly MCP Server","url":"https://mcp.calendly.com"}]',
+    'https://icons.duckduckgo.com/ip3/calendly.com.ico'
+  ),
+  (
+    'Calendly (Personal Token) Agent',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Calendly (Personal Token) agent connected via the Calendly (Personal Token) MCP at https://mcp.calendly.com. Scheduling, events, availability (API Token). You authenticate via an API key — the user will provide their key. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":4,"hair":0,"shirt":5,"pants":0,"accessory":4,"accent":0,"beard":0,"eyeColor":1,"headFeature":0},"mcpServers":[{"url":"https://mcp.calendly.com","name":"calendly-pat","authType":"apikey","keyLabel":"Personal Access Token","keyPlaceholder":"eyJ...","keyHelpUrl":"https://calendly.com/integrations/api_webhooks"}]}',
+    'Calendly (Personal Token) Agent — connected to Calendly (Personal Token) via MCP (Personal Access Token required).
+
+Manage Calendly scheduling, events, and availability using a Personal Access Token. Agents can create meeting types, check availability, schedule appointments, and set up webhook subscriptions for real-time event notifications. Best for internal/single-account apps.
+
+This agent can:
+• Access Calendly (Personal Token) data and capabilities via MCP
+• Automate Calendly (Personal Token) workflows from conversation
+
+To connect: Get your Personal Access Token at https://calendly.com/integrations/api_webhooks',
+    'Calendly (Personal Token) agent — Scheduling, events, availability (API Token). (Personal Access Token)',
+    'calendly-pat,calendly (personal token),mcp,Productivity',
+    true,
+    null,
+    null,
+    'TypeScript',
+    'agent',
+    'approved',
+    '["Access Calendly (Personal Token) data and capabilities via MCP","Automate Calendly (Personal Token) workflows from conversation"]',
+    '["Productivity"]',
+    '["Personal Access Token (https://calendly.com/integrations/api_webhooks)"]',
+    '[{"label":"Calendly (Personal Token) MCP Server","url":"https://mcp.calendly.com"},{"label":"Get your Personal Access Token","url":"https://calendly.com/integrations/api_webhooks"}]',
     'https://icons.duckduckgo.com/ip3/calendly.com.ico'
   ),
   (
@@ -2179,17 +2207,16 @@ To connect: Get your API Key at https://app.fireflies.ai/api/webhooks',
   ),
   (
     'Otter.ai Agent',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Otter.ai agent connected via the Otter.ai MCP at https://mcp.otter.ai/mcp. Unlock your meeting intelligence. You authenticate via OAuth — no API key is needed. You have three tools: fetch (query a specific conversation by URL), search (search across all meeting transcripts), and get user info. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":4,"hair":4,"shirt":12,"pants":1,"accessory":0,"accent":9,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://mcp.otter.ai/mcp","name":"otter-ai","authType":"oauth"}]}',
-    'Otter.ai Agent — connected to Otter.ai via MCP (OAuth required).
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Otter.ai agent connected via the Otter.ai MCP at https://mcp.otter.ai/mcp. Unlock your meeting intelligence. You authenticate via OAuth — the user will connect their account. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":4,"hair":4,"shirt":12,"pants":1,"accessory":0,"accent":9,"beard":0,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://mcp.otter.ai/mcp","name":"otter-ai","authType":"oauth"}]}',
+    'Otter.ai Agent — connected to Otter.ai via MCP (OAuth).
 
-Access Otter.ai''s meeting transcription platform via OAuth. Agents can fetch specific conversation transcripts by URL, search across all meeting transcripts, and retrieve user info.
+Access Otter.ai''s meeting transcription platform via OAuth. Agents can fetch specific conversation transcripts by URL, search across all meeting transcripts, and retrieve user info. Three tools available: fetch, search, and get user info.
 
 This agent can:
-• Fetch meeting transcripts by conversation URL
-• Search across all captured meetings
-• Retrieve Otter.ai user info
+• Access Otter.ai data and capabilities via MCP
+• Automate Otter.ai workflows from conversation
 
-To connect: Authenticate with your Otter.ai account via OAuth.',
+To connect: Click "Connect via OAuth" when hiring this agent.',
     'Otter.ai agent — Unlock your meeting intelligence. (OAuth)',
     'otter-ai,otter.ai,mcp,Communication',
     true,
@@ -2198,10 +2225,10 @@ To connect: Authenticate with your Otter.ai account via OAuth.',
     'TypeScript',
     'agent',
     'approved',
-    '["Fetch meeting transcripts by conversation URL","Search across all captured meetings","Retrieve Otter.ai user info"]',
+    '["Access Otter.ai data and capabilities via MCP","Automate Otter.ai workflows from conversation"]',
     '["Communication"]',
-    '["OAuth (https://help.otter.ai/hc/en-us/articles/35287607569687-Otter-MCP-Server)"]',
-    '[{"label":"Otter.ai MCP Server","url":"https://mcp.otter.ai/mcp"},{"label":"Otter MCP Setup Guide","url":"https://help.otter.ai/hc/en-us/articles/35287607569687-Otter-MCP-Server"}]',
+    '["Otter.ai account (OAuth connection required)"]',
+    '[{"label":"Otter.ai MCP Server","url":"https://mcp.otter.ai/mcp"}]',
     'https://icons.duckduckgo.com/ip3/otter.ai.ico'
   ),
   (
@@ -7200,4 +7227,30 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     '["ZoomInfo account (OAuth connection required)"]',
     '[{"label":"ZoomInfo MCP Server","url":"https://mcp.zoominfo.com/mcp"}]',
     'https://icons.duckduckgo.com/ip3/zoominfo.com.ico'
+  ),
+  (
+    'Google Maps Scraper Agent',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Google Maps Scraper agent connected via the Google Maps Scraper MCP at https://cloud.gmapsextractor.com/api/mcp. Search Google Maps businesses, fetch reviews, and retrieve photos via one secure MCP endpoint. You authenticate via an API key — the user will provide their key. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":1,"hairStyle":3,"hair":7,"shirt":4,"pants":1,"accessory":0,"accent":9,"beard":1,"eyeColor":0,"headFeature":0},"mcpServers":[{"url":"https://cloud.gmapsextractor.com/api/mcp","name":"google-maps-scraper","authType":"apikey","keyLabel":"API Key","keyPlaceholder":"Paste your gmapsextractor.com API key...","keyHelpUrl":"https://gmapsextractor.com/google-maps-scraper-mcp"}]}',
+    'Google Maps Scraper Agent — connected to Google Maps Scraper via MCP (API Key required).
+
+Remote MCP server by gmapsextractor.com that gives agents live Google Maps data — search businesses (name, address, phone, website, rating, review count), retrieve public reviews with filtering, and fetch public business photos. Uses Streamable HTTP transport with Bearer token auth. Free monthly requests available; paid plans for higher volume. Ideal for prospecting research, local market analysis, and listing enrichment.
+
+This agent can:
+• Access Google Maps Scraper data and capabilities via MCP
+• Search and retrieve information
+
+To connect: Get your API Key at https://gmapsextractor.com/google-maps-scraper-mcp',
+    'Google Maps Scraper agent — Search Google Maps businesses, fetch reviews, and retrieve photos via one secure MCP endpoint. (API Key)',
+    'google-maps-scraper,google maps scraper,mcp,Data & Analytics',
+    true,
+    null,
+    null,
+    'TypeScript',
+    'agent',
+    'approved',
+    '["Access Google Maps Scraper data and capabilities via MCP","Search and retrieve information"]',
+    '["Data & Analytics"]',
+    '["API Key (https://gmapsextractor.com/google-maps-scraper-mcp)"]',
+    '[{"label":"Google Maps Scraper MCP Server","url":"https://cloud.gmapsextractor.com/api/mcp"},{"label":"Get your API Key","url":"https://gmapsextractor.com/google-maps-scraper-mcp"}]',
+    'https://icons.duckduckgo.com/ip3/gmapsextractor.com.ico'
   );
