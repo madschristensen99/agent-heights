@@ -40,8 +40,8 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const MODELS_DIR = join(ROOT, "client", "public", "assets", "ai", "models");
-const OUTPUT_DIR = join(ROOT, "client", "public", "assets", "ai", "creatures3d");
+const MODELS_DIR = join(ROOT, "scripts", "assets", "models");
+const OUTPUT_DIR = join(ROOT, "scripts", "assets", "creatures3d");
 
 const THREE_PATH = join(ROOT, "node_modules", "three", "build", "three.module.js");
 const THREE_CORE_PATH = join(ROOT, "node_modules", "three", "build", "three.core.js");
@@ -137,17 +137,10 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   cam.position.set(0, Math.sin(elev) * 2, Math.cos(elev) * 2);
   cam.lookAt(0, 0, 0);
 
-  // Lighting — bright, even illumination so colors pop
-  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
-  keyLight.position.copy(cam.position);
-  scene.add(keyLight);
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  fillLight.position.set(-1, 0.5, -1);
-  scene.add(fillLight);
-  const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
-  rimLight.position.set(0, -0.3, 1);
-  scene.add(rimLight);
+  // MeshBasicMaterial ignores lighting — the Hunyuan 3D textures already have
+  // baked-in shading/highlights, so no dynamic lights are needed.
+  // (Previous MeshLambertMaterial + lights produced dark output on Three.js r155+
+  //  due to the physically-based lighting change.)
 
   // Load MTL materials first (if available), then OBJ
   const objLoader = new OBJLoader();
@@ -174,12 +167,13 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   });
   scene.add(model);
 
-  // Apply texture to all meshes using MeshLambertMaterial — gives directional
-  // shading (so faces/features are visible) without PBR darkening from MeshStandardMaterial.
+  // Apply texture to all meshes using MeshBasicMaterial — shows the texture at
+  // full brightness with no lighting darkening. The Hunyuan 3D textures already
+  // have baked-in directional shading, so 3D face features remain visible.
   if (texture) {
     model.traverse((child: any) => {
       if (child.isMesh) {
-        child.material = new THREE.MeshLambertMaterial({ map: texture });
+        child.material = new THREE.MeshBasicMaterial({ map: texture });
       }
     });
   }
@@ -222,11 +216,6 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   sheetCanvas.height = 128 * 4;
   const sheetCtx = sheetCanvas.getContext("2d")!;
 
-  // Compute average brightness of the spritesheet to auto-correct dark textures
-  const sampleCanvas = document.createElement("canvas");
-  sampleCanvas.width = 32; sampleCanvas.height = 32;
-  const sampleCtx = sampleCanvas.getContext("2d")!;
-
   for (let anim = 0; anim < 4; anim++) {
     for (let dir = 0; dir < 8; dir++) {
       model.rotation.y = dirRotations[dir];
@@ -237,36 +226,6 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
       renderer.render(scene, cam);
       sheetCtx.drawImage(renderer.domElement, dir * 128, anim * 128);
     }
-  }
-
-  // Auto-brighten: sample center frame, compute mean brightness, apply gamma correction if dark
-  sampleCtx.drawImage(sheetCanvas, 0, 0, 128, 128, 0, 0, 32, 32);
-  const sampleData = sampleCtx.getImageData(0, 0, 32, 32).data;
-  let sum = 0, count = 0;
-  for (let i = 0; i < sampleData.length; i += 4) {
-    if (sampleData[i + 3] > 0) {
-      sum += (sampleData[i] + sampleData[i + 1] + sampleData[i + 2]) / 3;
-      count++;
-    }
-  }
-  const avgBrightness = count > 0 ? sum / count : 128;
-  // Target brightness ~180/255; apply gamma correction if darker than 150
-  if (avgBrightness < 150 && count > 0) {
-    // We want: current^invGamma = target → invGamma = log(target)/log(current)
-    const target = 180 / 255;
-    const current = Math.max(avgBrightness / 255, 0.01);
-    const invGamma = Math.max(Math.log(target) / Math.log(current), 0.05);
-    const clampedInvGamma = Math.min(invGamma, 0.2); // cap at gamma=5 (invGamma=0.2)
-    const imgData = sheetCtx.getImageData(0, 0, sheetCanvas.width, sheetCanvas.height);
-    const d = imgData.data;
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] > 0) {
-        d[i]   = 255 * Math.pow(d[i]   / 255, clampedInvGamma);
-        d[i+1] = 255 * Math.pow(d[i+1] / 255, clampedInvGamma);
-        d[i+2] = 255 * Math.pow(d[i+2] / 255, clampedInvGamma);
-      }
-    }
-    sheetCtx.putImageData(imgData, 0, 0);
   }
 
   return sheetCanvas.toDataURL("image/png");
