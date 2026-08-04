@@ -340,6 +340,111 @@ const PROVIDER_NAME_MAP: Record<string, string> = {
   "StableSocial": "StableSocial - Reddit",
 };
 
+// Hand-crafted CharAppearance objects for recognizable premium services.
+// Maps service name (as it appears in the byService grouping) to a
+// CharAppearance that roughly matches the brand's colors/aesthetic.
+// Services not in this map get a deterministic hash-based appearance.
+const SERVICE_APPEARANCE_MAP: Record<string, { skin: number; hairStyle: number; hair: number; shirt: number; pants: number; accessory: number; accent: number; beard: number; eyeColor: number; headFeature: number }> = {
+  // Crypto / Finance — green themes
+  "CoinGecko": { skin: 0, hairStyle: 0, hair: 0, shirt: 2, pants: 1, accessory: 4, accent: 2, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Tavily": { skin: 0, hairStyle: 6, hair: 0, shirt: 2, pants: 3, accessory: 0, accent: 2, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Stocks": { skin: 0, hairStyle: 2, hair: 0, shirt: 2, pants: 0, accessory: 1, accent: 2, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Crypto": { skin: 0, hairStyle: 1, hair: 0, shirt: 2, pants: 1, accessory: 0, accent: 10, beard: 0, eyeColor: 0, headFeature: 0 },
+  "QuickNode": { skin: 0, hairStyle: 0, hair: 0, shirt: 12, pants: 1, accessory: 5, accent: 12, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Health": { skin: 1, hairStyle: 14, hair: 0, shirt: 2, pants: 0, accessory: 1, accent: 2, beard: 0, eyeColor: 0, headFeature: 0 },
+
+  // Blue / Teal themes
+  "Perplexity": { skin: 0, hairStyle: 6, hair: 6, shirt: 5, pants: 5, accessory: 1, accent: 5, beard: 0, eyeColor: 1, headFeature: 0 },
+  "Kalshi": { skin: 0, hairStyle: 2, hair: 0, shirt: 1, pants: 0, accessory: 1, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Google Scholar": { skin: 1, hairStyle: 5, hair: 0, shirt: 1, pants: 0, accessory: 1, accent: 1, beard: 1, eyeColor: 0, headFeature: 0 },
+  "AgentPhone": { skin: 0, hairStyle: 0, hair: 0, shirt: 1, pants: 0, accessory: 6, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 },
+  "AgentMail": { skin: 1, hairStyle: 7, hair: 0, shirt: 1, pants: 0, accessory: 1, accent: 9, beard: 0, eyeColor: 0, headFeature: 0 },
+  "AI Search": { skin: 0, hairStyle: 6, hair: 0, shirt: 1, pants: 0, accessory: 1, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Exa": { skin: 0, hairStyle: 6, hair: 0, shirt: 4, pants: 5, accessory: 1, accent: 4, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Allium": { skin: 0, hairStyle: 2, hair: 0, shirt: 8, pants: 0, accessory: 1, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Forex": { skin: 0, hairStyle: 0, hair: 0, shirt: 4, pants: 0, accessory: 1, accent: 4, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Apollo": { skin: 0, hairStyle: 0, hair: 0, shirt: 11, pants: 0, accessory: 1, accent: 11, beard: 0, eyeColor: 0, headFeature: 0 },
+  "People Data Labs": { skin: 1, hairStyle: 5, hair: 0, shirt: 1, pants: 0, accessory: 1, accent: 1, beard: 1, eyeColor: 0, headFeature: 0 },
+  "Serper": { skin: 0, hairStyle: 1, hair: 0, shirt: 8, pants: 5, accessory: 1, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 },
+  "DripStack": { skin: 0, hairStyle: 7, hair: 3, shirt: 5, pants: 4, accessory: 0, accent: 5, beard: 0, eyeColor: 0, headFeature: 0 },
+
+  // Red / Orange themes
+  "YouTube": { skin: 0, hairStyle: 1, hair: 3, shirt: 0, pants: 1, accessory: 4, accent: 0, beard: 0, eyeColor: 0, headFeature: 0 },
+  "StableSocial - Reddit": { skin: 0, hairStyle: 0, hair: 0, shirt: 11, pants: 1, accessory: 4, accent: 11, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Commodities": { skin: 0, hairStyle: 0, hair: 0, shirt: 11, pants: 2, accessory: 1, accent: 11, beard: 0, eyeColor: 0, headFeature: 0 },
+
+  // Purple / Pink themes
+  "Polymarket": { skin: 0, hairStyle: 3, hair: 5, shirt: 10, pants: 5, accessory: 0, accent: 6, beard: 0, eyeColor: 5, headFeature: 0 },
+  "AI Images": { skin: 2, hairStyle: 11, hair: 5, shirt: 6, pants: 2, accessory: 0, accent: 6, beard: 0, eyeColor: 5, headFeature: 0 },
+  "AI Video": { skin: 0, hairStyle: 1, hair: 6, shirt: 6, pants: 5, accessory: 0, accent: 6, beard: 0, eyeColor: 5, headFeature: 0 },
+  "AI Voice": { skin: 0, hairStyle: 0, hair: 0, shirt: 6, pants: 0, accessory: 6, accent: 6, beard: 0, eyeColor: 0, headFeature: 0 },
+  "AI Audio": { skin: 0, hairStyle: 0, hair: 0, shirt: 6, pants: 0, accessory: 6, accent: 6, beard: 0, eyeColor: 0, headFeature: 0 },
+  "AI Chat": { skin: 0, hairStyle: 6, hair: 6, shirt: 10, pants: 5, accessory: 1, accent: 6, beard: 0, eyeColor: 5, headFeature: 0 },
+  "AI Messages": { skin: 0, hairStyle: 3, hair: 0, shirt: 6, pants: 0, accessory: 6, accent: 6, beard: 0, eyeColor: 0, headFeature: 0 },
+  "AI Models": { skin: 0, hairStyle: 8, hair: 0, shirt: 10, pants: 5, accessory: 1, accent: 6, beard: 0, eyeColor: 5, headFeature: 0 },
+
+  // Dark / Tech themes
+  "Twitter (X)": { skin: 0, hairStyle: 0, hair: 6, shirt: 8, pants: 5, accessory: 0, accent: 7, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Messari": { skin: 0, hairStyle: 2, hair: 8, shirt: 8, pants: 5, accessory: 1, accent: 0, beard: 0, eyeColor: 0, headFeature: 0 },
+  "Alchemy": { skin: 1, hairStyle: 8, hair: 0, shirt: 8, pants: 5, accessory: 0, accent: 7, beard: 3, eyeColor: 1, headFeature: 0 },
+  "Modal Sandbox": { skin: 0, hairStyle: 3, hair: 8, shirt: 8, pants: 5, accessory: 5, accent: 7, beard: 0, eyeColor: 0, headFeature: 0 },
+  "EMC2 AI": { skin: 0, hairStyle: 10, hair: 6, shirt: 8, pants: 5, accessory: 0, accent: 0, beard: 0, eyeColor: 1, headFeature: 3 },
+  "BlockRun.AI": { skin: 0, hairStyle: 1, hair: 0, shirt: 8, pants: 5, accessory: 0, accent: 0, beard: 0, eyeColor: 1, headFeature: 0 },
+  "Otto AI": { skin: 0, hairStyle: 10, hair: 6, shirt: 8, pants: 5, accessory: 1, accent: 0, beard: 0, eyeColor: 1, headFeature: 0 },
+  "Arrays": { skin: 1, hairStyle: 5, hair: 0, shirt: 8, pants: 5, accessory: 0, accent: 4, beard: 1, eyeColor: 0, headFeature: 0 },
+  "Goldsky": { skin: 1, hairStyle: 5, hair: 0, shirt: 8, pants: 5, accessory: 0, accent: 11, beard: 1, eyeColor: 0, headFeature: 0 },
+  "Parallel": { skin: 0, hairStyle: 6, hair: 0, shirt: 8, pants: 5, accessory: 0, accent: 5, beard: 0, eyeColor: 1, headFeature: 0 },
+  "Notte": { skin: 0, hairStyle: 6, hair: 0, shirt: 8, pants: 5, accessory: 0, accent: 5, beard: 0, eyeColor: 1, headFeature: 0 },
+  "Coresignal": { skin: 0, hairStyle: 2, hair: 0, shirt: 8, pants: 5, accessory: 1, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 },
+
+  // Stable* family — dark with colored accents
+  "StableDomains": { skin: 0, hairStyle: 0, hair: 0, shirt: 8, pants: 5, accessory: 1, accent: 7, beard: 0, eyeColor: 0, headFeature: 0 },
+  "StableEmail": { skin: 1, hairStyle: 7, hair: 0, shirt: 8, pants: 0, accessory: 1, accent: 9, beard: 0, eyeColor: 0, headFeature: 0 },
+  "StableEnrich": { skin: 0, hairStyle: 2, hair: 0, shirt: 8, pants: 5, accessory: 1, accent: 7, beard: 0, eyeColor: 0, headFeature: 0 },
+  "StablePhone": { skin: 0, hairStyle: 0, hair: 0, shirt: 8, pants: 0, accessory: 6, accent: 1, beard: 0, eyeColor: 0, headFeature: 0 },
+  "StableTravel": { skin: 0, hairStyle: 3, hair: 4, shirt: 8, pants: 2, accessory: 4, accent: 11, beard: 0, eyeColor: 0, headFeature: 0 },
+
+  // Surf — beachy
+  "Surf": { skin: 0, hairStyle: 10, hair: 4, shirt: 1, pants: 4, accessory: 3, accent: 9, beard: 0, eyeColor: 3, headFeature: 0 },
+
+  // Gold / Brown
+  "vaults.fyi": { skin: 0, hairStyle: 0, hair: 4, shirt: 3, pants: 2, accessory: 0, accent: 3, beard: 0, eyeColor: 0, headFeature: 0 },
+};
+
+// Palette sizes — must match shared/types.ts
+const SKIN_COUNT = 12;
+const HAIR_STYLE_COUNT = 16;
+const HAIR_COLOR_COUNT = 12;
+const SHIRT_COUNT = 13;
+const PANTS_COUNT = 8;
+const ACCESSORY_COUNT = 7;
+const ACCENT_COUNT = 13;
+const BEARD_COUNT = 5;
+const EYE_COLOR_COUNT = 7;
+const HEAD_FEATURE_COUNT = 5;
+
+/** Generate a deterministic CharAppearance from a service name string.
+ *  Same name → same appearance every time. */
+function deterministicAppearance(name: string): { skin: number; hairStyle: number; hair: number; shirt: number; pants: number; accessory: number; accent: number; beard: number; eyeColor: number; headFeature: number } {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  }
+  const h = Math.abs(hash);
+  return {
+    skin: h % SKIN_COUNT,
+    hairStyle: (h >> 4) % HAIR_STYLE_COUNT,
+    hair: (h >> 8) % HAIR_COLOR_COUNT,
+    shirt: (h >> 12) % SHIRT_COUNT,
+    pants: (h >> 16) % PANTS_COUNT,
+    accessory: (h >> 20) % ACCESSORY_COUNT,
+    accent: (h >> 24) % ACCENT_COUNT,
+    beard: (h >> 28) % BEARD_COUNT,
+    eyeColor: (h >> 1) % EYE_COLOR_COUNT,
+    headFeature: (h >> 5) % HEAD_FEATURE_COUNT,
+  };
+}
+
 function prettifyName(seg: string): string {
   return SERVICE_NAME_MAP[seg] ?? seg
     .split(/[-_]/)
@@ -482,15 +587,16 @@ function generateSql(items: DiscoveryItem[]): string {
       provider.docsUrl ? `\n\nAPI docs: ${provider.docsUrl}` : "",
     ].join("");
 
+    const agentName = (PROVIDER_NAME_MAP[serviceName] ?? serviceName).slice(0, 80);
+    const description = serviceDescription;
+
     const agentConfig = {
       model: "claude-sonnet-4-20250514",
       systemPrompt,
       isPremium: true,
       circleServices,
+      appearance: SERVICE_APPEARANCE_MAP[agentName] ?? deterministicAppearance(agentName),
     };
-
-    const agentName = (PROVIDER_NAME_MAP[serviceName] ?? serviceName).slice(0, 80);
-    const description = serviceDescription;
     const summary = description.slice(0, 120);
     const tags = (provider.tags ?? []).slice(0, 10).join(",");
     const categories = categoryFromCircle(provider.category ?? "INFRASTRUCTURE");
@@ -549,7 +655,7 @@ function generateSql(items: DiscoveryItem[]): string {
     lines.push(`  ${imageUrl ? `'${escapeSql(imageUrl)}'` : 'NULL'},`);
     lines.push(`  'approved',`);
     lines.push(`  now()`);
-    lines.push(`) ON CONFLICT (name) DO NOTHING;`);
+    lines.push(`) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, image_url = EXCLUDED.image_url;`);
     lines.push(``);
   }
 
