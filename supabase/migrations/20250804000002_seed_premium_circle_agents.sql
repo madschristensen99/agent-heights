@@ -1767,9 +1767,11 @@ VALUES (
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, image_url = EXCLUDED.image_url;
 
 -- Agent 81: StableSocial (2 endpoint(s))
+-- Renamed from "StableSocial" to "StableSocial - Reddit" with Reddit favicon
+DELETE FROM heights_cloud_agents WHERE name = 'StableSocial';
 INSERT INTO heights_cloud_agents (name, description, summary, agent, language, use_cases, tags, is_free, price, price_usd, is_premium, category, requirements, links, image_url, status, created_at)
 VALUES (
-  'StableSocial',
+  'StableSocial - Reddit',
   'Reddit - Get comments on a post',
   'Reddit - Get comments on a post',
   '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a premium AI agent powered by StableSocial.\nReddit search and post data\n\nYou have access to the following paid API tools (use the tool names exactly as shown):- stablesocial__api_reddit_post_comments: Reddit - Get comments on a post ($0.0600/call, POST (requires: post_id))\n- stablesocial__api_reddit_search: Reddit - Search posts by keyword ($0.0600/call, POST (requires: keywords))\n\nEach API call deducts from the user''s subscription usage budget. Use calls wisely and always explain what you''re doing before making them.\n\nAPI docs: https://stablesocial.dev/docs","isPremium":true,"circleServices":[{"name":"stablesocial","endpoint":"https://stablesocial.dev/api/reddit/post-comments","pricePerCall":0.06,"description":"Reddit - Get comments on a post","method":"POST","tools":[{"name":"api_reddit_post_comments","description":"Reddit - Get comments on a post","inputSchema":{"type":"object","properties":{"cursor":{"type":"string","description":"Pagination cursor"},"post_id":{"type":"string","minLength":1,"description":"Reddit post ID"},"order_by":{"enum":["date_desc","date_asc","id_desc"],"type":"string","description":"Sort order"},"max_comments":{"type":"integer","default":50,"maximum":300,"minimum":-9007199254740991,"description":"Maximum number of comments"},"max_page_size":{"type":"integer","default":50,"maximum":9007199254740991,"minimum":-9007199254740991,"description":"Results per page"}},"required":["post_id"]}}]},{"name":"stablesocial","endpoint":"https://stablesocial.dev/api/reddit/search","pricePerCall":0.06,"description":"Reddit - Search posts by keyword","method":"POST","tools":[{"name":"api_reddit_search","description":"Reddit - Search posts by keyword","inputSchema":{"type":"object","properties":{"cursor":{"type":"string","description":"Pagination cursor"},"keywords":{"type":"string","minLength":1,"description":"Search keywords"},"max_posts":{"type":"integer","default":50,"maximum":9007199254740991,"minimum":-9007199254740991,"description":"Maximum posts to collect"},"max_page_size":{"type":"integer","default":50,"maximum":9007199254740991,"minimum":-9007199254740991,"description":"Results per page"}},"required":["keywords"]}}]}]}',
@@ -1783,7 +1785,7 @@ VALUES (
   '["Social Media"]'::jsonb,
   '[]'::jsonb,
   '[{"label":"Website","url":"https://stablesocial.dev"},{"label":"Docs","url":"https://stablesocial.dev/docs"}]'::jsonb,
-  'https://www.google.com/s2/favicons?domain=stablesocial.dev&sz=128',
+  'https://www.google.com/s2/favicons?domain=reddit.com&sz=128',
   'approved',
   now()
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, image_url = EXCLUDED.image_url;

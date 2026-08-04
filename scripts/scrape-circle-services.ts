@@ -328,6 +328,18 @@ const SERVICE_DOMAIN_MAP: Record<string, string> = {
   "serper-scrape": "serper.dev",
 };
 
+// Domain overrides for non-proxy providers (by provider name).
+// Used when the provider's own favicon isn't ideal (e.g. StableSocial → Reddit).
+const PROVIDER_DOMAIN_MAP: Record<string, string> = {
+  "StableSocial": "reddit.com",
+};
+
+// Name overrides for non-proxy providers (by provider name).
+// Used to rename agents for clarity (e.g. StableSocial → StableSocial - Reddit).
+const PROVIDER_NAME_MAP: Record<string, string> = {
+  "StableSocial": "StableSocial - Reddit",
+};
+
 function prettifyName(seg: string): string {
   return SERVICE_NAME_MAP[seg] ?? seg
     .split(/[-_]/)
@@ -477,7 +489,7 @@ function generateSql(items: DiscoveryItem[]): string {
       circleServices,
     };
 
-    const agentName = serviceName.slice(0, 80);
+    const agentName = (PROVIDER_NAME_MAP[serviceName] ?? serviceName).slice(0, 80);
     const description = serviceDescription;
     const summary = description.slice(0, 120);
     const tags = (provider.tags ?? []).slice(0, 10).join(",");
@@ -494,6 +506,8 @@ function generateSql(items: DiscoveryItem[]): string {
     } else if (subServiceSeg) {
       // Proxy sub-service without a domain override — use a letter avatar
       imageUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(agentName)}&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff`;
+    } else if (PROVIDER_DOMAIN_MAP[serviceName]) {
+      imageUrl = `https://www.google.com/s2/favicons?domain=${PROVIDER_DOMAIN_MAP[serviceName]}&sz=128`;
     } else if (provider.website) {
       try {
         const domain = new URL(provider.website).hostname;
