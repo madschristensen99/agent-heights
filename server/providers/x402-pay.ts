@@ -195,6 +195,14 @@ export async function payAndFetchWithOptions(
     if (options.headers) payOpts.headers = options.headers;
 
     const { data, status } = await gwClient.pay(url, payOpts);
+
+    // Handle async job pattern from Gateway
+    if (status === 202 && data?.pollUrl) {
+      console.log(`[x402] Gateway async job ${data.jobId} — polling...`);
+      const result = await pollAsyncJob(data.pollUrl, data.token);
+      return { data: result, status: result ? 200 : 202, cost: expectedPriceUsd };
+    }
+
     return { data, status, cost: expectedPriceUsd };
   } catch (gwErr) {
     const gwMsg = gwErr instanceof Error ? gwErr.message : String(gwErr);
@@ -306,7 +314,129 @@ async function directX402Pay(
   }
 
   const data = await paidResponse.json();
-  return { data, status: paidResponse.status, cost: 0 };
+  const status = paidResponse.status;
+
+  // Handle async job pattern (e.g. StableSocial returns 202 with pollUrl)
+  if (status === 202 && data?.pollUrl) {
+    console.log(`[x402] Async job ${data.jobId} — polling ${data.pollUrl}...`);
+    const result = await pollAsyncJob(data.pollUrl, data.token);
+    return { data: result, status: result ? 200 : 202, cost: 0 };
+  }
+
+  return { data, status, cost: 0 };
+}
+
+/**
+ * Poll an async x402 job until completion.
+ * Uses SIWX (Sign-In-With-X) wallet authentication per x402 v2 spec:
+ *   1. GET pollUrl → 402 with SIWX challenge in extensions
+ *   2. Sign EIP-4361 SIWE message with wallet private key (EIP-191)
+ *   3. Send flat SIWX payload in SIGN-IN-WITH-X header (base64 JSON)
+ *   4. Repeat until job status is "finished"/"completed" or timeout
+ */
+async function pollAsyncJob(pollUrl: string, _token: string | undefined, timeoutMs = 30_000): Promise<unknown> {
+  const deadline = Date.now() + timeoutMs;
+  const pk = getPrivateKey();
+  if (!pk) throw new Error("No private key for SIWX auth");
+
+  const { privateKeyToAccount } = await import("viem/accounts");
+  const account = privateKeyToAccount(pk as `0x${string}`);
+
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    attempt++;
+
+    // Step 1: Get SIWX challenge (nonce is single-use, so we need a fresh one each poll)
+    const challengeResp = await fetch(pollUrl);
+
+    if (challengeResp.ok) {
+      // No auth needed — return data directly
+      const jobData = await challengeResp.json();
+      if (isJobDone(jobData.status)) {
+        return jobData.data ?? jobData.result ?? jobData;
+      }
+      await sleep(2000);
+      continue;
+    }
+
+    if (challengeResp.status !== 402) {
+      throw new Error(`Poll failed: HTTP ${challengeResp.status}`);
+    }
+
+    const challenge = await challengeResp.json();
+    const siwxInfo = challenge.extensions?.["sign-in-with-x"]?.info;
+    if (!siwxInfo) {
+      throw new Error("Poll requires auth but no SIWX challenge provided");
+    }
+
+    // Step 2: Build EIP-4361 SIWE message and sign with EIP-191
+    const siweMessage = [
+      `${siwxInfo.domain} wants you to sign in with your Ethereum account:`,
+      account.address,
+      "",
+      siwxInfo.statement || "",
+      "",
+      `URI: ${siwxInfo.uri}`,
+      `Version: ${siwxInfo.version}`,
+      `Chain ID: ${siwxInfo.chainId.replace("eip155:", "")}`,
+      `Nonce: ${siwxInfo.nonce}`,
+      `Issued At: ${siwxInfo.issuedAt}`,
+      `Expiration Time: ${siwxInfo.expirationTime}`,
+    ].join("\n");
+
+    const signature = await account.signMessage({ message: siweMessage });
+
+    // Step 3: Build flat SIWX payload per x402 v2 spec
+    const siwxPayload = {
+      domain: siwxInfo.domain,
+      address: account.address,
+      statement: siwxInfo.statement,
+      uri: siwxInfo.uri,
+      version: siwxInfo.version,
+      chainId: siwxInfo.chainId,
+      type: siwxInfo.type,
+      nonce: siwxInfo.nonce,
+      issuedAt: siwxInfo.issuedAt,
+      expirationTime: siwxInfo.expirationTime,
+      signatureScheme: "eip191",
+      signature,
+    };
+
+    // Step 4: Poll with SIGN-IN-WITH-X header
+    const authedResp = await fetch(pollUrl, {
+      headers: {
+        "SIGN-IN-WITH-X": Buffer.from(JSON.stringify(siwxPayload)).toString("base64"),
+      },
+    });
+
+    if (authedResp.ok) {
+      const jobData = await authedResp.json();
+      if (isJobDone(jobData.status)) {
+        console.log(`[x402] Job completed on attempt ${attempt}`);
+        return jobData.data ?? jobData.result ?? jobData;
+      }
+      if (jobData.status === "failed") {
+        throw new Error(`Job failed: ${jobData.error ?? "unknown"}`);
+      }
+      // Still pending — wait before next poll (fresh challenge)
+      await sleep(2000);
+      continue;
+    }
+
+    // Auth failed — can't proceed
+    const errBody = await authedResp.text().catch(() => "");
+    throw new Error(`SIWX auth failed (attempt ${attempt}): HTTP ${authedResp.status} ${errBody.substring(0, 200)}`);
+  }
+
+  throw new Error(`Job polling timed out after ${timeoutMs / 1000}s (${attempt} attempts)`);
+}
+
+function isJobDone(status: string): boolean {
+  return status === "completed" || status === "finished" || status === "done" || status === "success";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Get our wallet's chain ID from the configured chain name */

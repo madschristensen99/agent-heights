@@ -149,7 +149,7 @@ export async function loadPremiumTools(
             return `API error: ${result.error}`;
           }
 
-          if (result.status !== 200) {
+          if (result.status !== 200 && result.status !== 202) {
             console.error(`[premium-proxy] ${service.name}.${def.name} returned status ${result.status}`);
             return `API returned HTTP ${result.status}`;
           }
