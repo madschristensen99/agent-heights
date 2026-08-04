@@ -118,7 +118,7 @@ function parseArgs(): { filter?: string; dryRun: boolean } {
  * Render a single creature's OBJ into a sprite sheet data URL.
  * Runs inside the Playwright browser context.
  */
-const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: string | null) => {
+const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: string | null, scaleMul: number = 1) => {
   const THREE = (window as any).THREE;
   const OBJLoader = (window as any).OBJLoader;
   const MTLLoader = (window as any).MTLLoader;
@@ -183,7 +183,7 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-  const scale = 1.3 / maxDim;
+  const scale = (1.3 / maxDim) * scaleMul;
   model.scale.setScalar(scale);
   model.position.x = -center.x * scale;
   model.position.z = -center.z * scale;
@@ -249,16 +249,17 @@ async function renderCreature(
   await page.waitForFunction(() => (window as any).__ready, { timeout: 15000 });
 
   const dataUrl = await page.evaluate(
-    (args: { fn: string; objUrl: string; mtlUrl: string | null; textureUrl: string | null }) => {
+    (args: { fn: string; objUrl: string; mtlUrl: string | null; textureUrl: string | null; scaleMul: number }) => {
       // eslint-disable-next-line no-eval
       const renderFn = eval(`(${args.fn})`);
-      return renderFn(args.objUrl, args.mtlUrl, args.textureUrl);
+      return renderFn(args.objUrl, args.mtlUrl, args.textureUrl, args.scaleMul);
     },
     {
       fn: RENDER_FN.toString(),
       objUrl: `${base}/model.obj`,
       mtlUrl: hasMtl ? `${base}/model.mtl` : null,
       textureUrl: hasTex ? `${base}/texture.png` : null,
+      scaleMul: creatureKey === "friendly_unicorn" ? 1.25 : 1,
     },
   );
 

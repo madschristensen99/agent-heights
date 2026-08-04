@@ -90,7 +90,8 @@ export class BootScene extends Phaser.Scene {
     // Re-enabled with fixed lighting (MeshBasicMaterial). Only slime for now.
     const creature3dVer = "?v=3d3";
     const creature3dKeys = [
-      "creature-slime",
+      "creature-slime", "creature-wolf", "creature-skeleton", "creature-imp",
+      "creature-wraith", "creature-fire-elemental",
       "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
     ];
     for (const key of creature3dKeys) {

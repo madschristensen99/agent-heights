@@ -7055,6 +7055,13 @@ export class OfficeScene extends Phaser.Scene {
       this.cameras.main.fadeOut(300, 10, 10, 30);
       this.cameras.main.once("camerafadeoutcomplete", () => {
         this.player.setPosition(teleportTo.x, teleportTo.y);
+        // Reload door chunks and paint synchronously so grass is visible
+        // through the doorway immediately after death teleport.
+        const doorChunks = this.world.getDoorChunkList();
+        for (let i = 0; i < Math.min(3, doorChunks.length); i++) {
+          this.world.loadSingleChunk(doorChunks[i].cx, doorChunks[i].cy);
+        }
+        this.world.processRenderJobsNow();
         this.cameras.main.fadeIn(400, 10, 10, 30);
         this.world.clearDeath(); // re-enable damage now that player is safe
       });
