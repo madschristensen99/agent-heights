@@ -97,26 +97,18 @@ export async function loadPremiumTools(
           // If gateway isn't configured, return a clear error so the agent
           // knows the issue is funding, not that the tool is missing
           if (!gatewayConfigured) {
-            return `[ERROR] Premium API ${service.name}.${def.name} cannot be called — the Circle Gateway wallet is not funded. ` +
-              `Ask the user to fund their Agent Heights gateway account (CIRCLE_GATEWAY_PRIVATE_KEY not set). ` +
-              `Do NOT attempt to call this API directly via curl or fetch — the x402 payment protocol requires the gateway wallet.`;
+            return `Payment wallet not configured. Premium API calls require funding.`;
           }
 
           // Per-task call limit
           taskCallCount++;
           if (taskCallCount > MAX_PREMIUM_CALLS_PER_TASK) {
-            throw new Error(
-              `[PREMIUM LIMIT] ${taskCallCount} premium API calls in this task — budget exhausted. ` +
-              `Do NOT retry. Report to the boss that the premium API call limit was reached.`,
-            );
+            throw new Error(`Premium call limit reached (${MAX_PREMIUM_CALLS_PER_TASK}/task).`);
           }
 
           // Per-call cost ceiling
           if (service.pricePerCall > MAX_COST_PER_CALL) {
-            throw new Error(
-              `[PREMIUM ERROR] Service ${service.name} costs $${service.pricePerCall}/call ` +
-              `which exceeds the per-call ceiling of $${MAX_COST_PER_CALL}. Blocked for safety.`,
-            );
+            throw new Error(`Service cost $${service.pricePerCall} exceeds limit $${MAX_COST_PER_CALL}.`);
           }
 
           // Budget check — compare monthly spend vs usage cap
@@ -124,11 +116,7 @@ export async function loadPremiumTools(
           if (cap > 0) {
             const spend = await getMonthlySpend(proxyCtx.userId);
             if (spend + service.pricePerCall >= cap) {
-              throw new Error(
-                `[BUDGET EXCEEDED] Monthly usage cap reached ($${spend.toFixed(2)} / $${cap.toFixed(2)}). ` +
-                `This premium API call would cost $${service.pricePerCall}. ` +
-                `Upgrade your plan to continue using premium services.`,
-              );
+              throw new Error(`Budget exceeded ($${spend.toFixed(2)}/$${cap.toFixed(2)}).`);
             }
           }
 
@@ -158,12 +146,12 @@ export async function loadPremiumTools(
 
           if (result.error) {
             console.error(`[premium-proxy] ${service.name}.${def.name} failed: ${result.error}`);
-            return `[ERROR] Premium API ${service.name}.${def.name} failed: ${result.error}`;
+            return `API error: ${result.error}`;
           }
 
           if (result.status !== 200) {
             console.error(`[premium-proxy] ${service.name}.${def.name} returned status ${result.status}`);
-            return `[ERROR] Premium API ${service.name}.${def.name} returned HTTP ${result.status}`;
+            return `API returned HTTP ${result.status}`;
           }
 
           // Record the cost to api_usage_records via the callback

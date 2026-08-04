@@ -63,22 +63,21 @@ async function getGatewayClient(): Promise<any> {
   return gatewayInitPromise;
 }
 
-// --- Direct x402 client (for non-Gateway services) ---
-let directClient: any = null;
-let directInitPromise: Promise<any> | null = null;
+// --- Direct x402 scheme (for non-Gateway services) ---
+let directScheme: any = null;
+let directSchemeInitPromise: Promise<any> | null = null;
 
-async function getDirectClient(): Promise<any> {
-  if (directClient) return directClient;
-  if (directInitPromise) return directInitPromise;
+async function getDirectScheme(): Promise<any> {
+  if (directScheme) return directScheme;
+  if (directSchemeInitPromise) return directSchemeInitPromise;
 
-  directInitPromise = (async () => {
+  directSchemeInitPromise = (async () => {
     const pk = getPrivateKey();
     if (!pk) throw new Error("X402_PRIVATE_KEY not set");
 
     const { privateKeyToAccount } = await import("viem/accounts");
     const account = privateKeyToAccount(pk as `0x${string}`);
 
-    const { x402Client } = await import("@x402/core/client");
     const { ExactEvmScheme } = await import("@x402/evm/exact/client");
 
     const signer = {
@@ -87,15 +86,12 @@ async function getDirectClient(): Promise<any> {
         account.signTypedData({ domain, types, message } as any),
     };
 
-    const scheme = new ExactEvmScheme(signer as any);
-    const client = new x402Client();
-    client.register("eip155:*", scheme);
-
-    console.log(`[x402] Direct x402 client initialized (address: ${account.address})`);
-    return client;
+    directScheme = new ExactEvmScheme(signer as any);
+    console.log(`[x402] Direct ExactEvmScheme initialized (address: ${account.address})`);
+    return directScheme;
   })();
 
-  return directInitPromise;
+  return directSchemeInitPromise;
 }
 
 export interface GatewayBalance {
@@ -223,11 +219,12 @@ export async function payAndFetchWithOptions(
 }
 
 /**
- * Direct x402 payment flow using ExactEvmScheme:
+ * Direct x402 payment flow using ExactEvmScheme (same pattern as GatewayClient.pay
+ * but with ExactEvmScheme instead of BatchEvmScheme):
  * 1. Send initial request → get 402
  * 2. Parse payment requirements from PAYMENT-REQUIRED header
  * 3. Sign EIP-3009 TransferWithAuthorization via ExactEvmScheme
- * 4. Retry with X-PAYMENT header → get 200 + data
+ * 4. Retry with PAYMENT-SIGNATURE header (v2) or X-PAYMENT (v1) → get 200 + data
  */
 async function directX402Pay(
   url: string,
@@ -235,7 +232,7 @@ async function directX402Pay(
   serializedBody: string | undefined,
   headers: Record<string, string>,
 ): Promise<PayResult> {
-  const client = await getDirectClient();
+  const scheme = await getDirectScheme();
 
   // Step 1: Initial request to get 402
   const initialResponse = await fetch(url, {
@@ -249,7 +246,7 @@ async function directX402Pay(
       const data = await initialResponse.json();
       return { data, status: initialResponse.status, cost: 0 };
     }
-    throw new Error(`Request failed with status ${initialResponse.status}`);
+    throw new Error(`HTTP ${initialResponse.status}`);
   }
 
   // Step 2: Parse payment requirements
@@ -275,17 +272,16 @@ async function directX402Pay(
   if (!matchingOption) {
     const acceptedNets = accepts.map((a: any) => a.network).join(", ");
     throw new Error(
-      `No matching payment option for eip155:${ourChainId}. ` +
-      `Service accepts: ${acceptedNets}. ` +
-      `Ensure your wallet has USDC on one of the accepted chains.`,
+      `No payment option for chain ${ourChainId}. Accepted: ${acceptedNets}`,
     );
   }
 
-  // Step 3: Create payment payload via x402Client
+  // Step 3: Create payment payload via ExactEvmScheme directly
   const x402Version = paymentRequired.x402Version ?? 2;
-  const paymentPayload = await client.createPaymentPayload(x402Version, matchingOption);
+  const paymentPayload = await scheme.createPaymentPayload(x402Version, matchingOption);
 
   // Step 4: Build payment header and retry
+  // v2 uses PAYMENT-SIGNATURE, v1 uses X-PAYMENT
   const paymentHeader = Buffer.from(
     JSON.stringify({
       ...paymentPayload,
@@ -294,18 +290,20 @@ async function directX402Pay(
     }),
   ).toString("base64");
 
+  const headerName = x402Version >= 2 ? "PAYMENT-SIGNATURE" : "X-PAYMENT";
+
   const paidResponse = await fetch(url, {
     method,
     headers: {
       ...headers,
-      "X-PAYMENT": paymentHeader,
+      [headerName]: paymentHeader,
     },
     body: serializedBody,
   });
 
   if (!paidResponse.ok) {
     const errorText = await paidResponse.text().catch(() => "");
-    throw new Error(`x402 payment failed: HTTP ${paidResponse.status} ${errorText}`);
+    throw new Error(`Payment rejected: HTTP ${paidResponse.status} ${errorText}`);
   }
 
   const data = await paidResponse.json();
