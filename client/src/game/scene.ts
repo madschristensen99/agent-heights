@@ -870,6 +870,16 @@ export class OfficeScene extends Phaser.Scene {
                 .setOrigin(0, 0)
                 .setDepth(0.5)
                 .setDisplaySize(dmW, dmH);
+              // Procedural "Welcome" text overlay
+              this.add.text(dmX + dmW / 2, dmY + dmH / 2, "Welcome", {
+                fontFamily: "Georgia, serif",
+                fontSize: "14px",
+                color: "#3a2a1a",
+                fontStyle: "bold italic",
+              })
+                .setOrigin(0.5)
+                .setDepth(0.55)
+                .setAlpha(0.8);
             } else {
               // Fallback: procedural doormat
               const dmG = this.add.graphics().setDepth(0.5);

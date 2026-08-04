@@ -239,7 +239,7 @@ const ASSETS: AssetDef[] = [
   tile("office_wall_3", "single large glass window pane filling entire frame, blue tinted glass, subtle reflection, metal frame around edges only, top-down view, tileable, seamless", 1108, 2),
   tile("kitchen_counter", "granite countertop, black speckled, top-down", 1109, 2),
   tile("office_helipad", "single helicopter landing pad viewed from directly above, one large white H marker centered in frame, one white circle ring around the H, dark weathered asphalt background, no repeating patterns, no tiling, fills entire frame", 1110, 2),
-  tile("office_doormat", "woven coir doormat with Welcome text in elegant serif font, natural brown coconut fiber bristles texture, dark border stitching, rectangular mat viewed from directly above, top-down, fills entire frame", 1111, 2),
+  tile("office_doormat", "woven coir doormat texture, natural brown coconut fiber bristles, dark border stitching around edges, rectangular mat viewed from directly above, top-down, fills entire frame, no text", 1111, 2),
 
   // ------------------------------------------------------- Tier 3: Office furniture (Nano Banana 2 + Bria RMBG)
 

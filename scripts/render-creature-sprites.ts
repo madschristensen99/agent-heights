@@ -131,9 +131,9 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
 
   const scene = new THREE.Scene();
 
-  // Orthographic camera — 45° elevation for a 2.5D top-down look
+  // Orthographic camera — 20° elevation for a more straight-on view
   const cam = new THREE.OrthographicCamera(-0.7, 0.7, 0.7, -0.7, 0.01, 100);
-  const elev = (45 * Math.PI) / 180;
+  const elev = (20 * Math.PI) / 180;
   cam.position.set(0, Math.sin(elev) * 2, Math.cos(elev) * 2);
   cam.lookAt(0, 0, 0);
 
