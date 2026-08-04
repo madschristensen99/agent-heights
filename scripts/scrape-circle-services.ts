@@ -645,7 +645,7 @@ function generateSql(items: DiscoveryItem[]): string {
     lines.push(`  'en',`);
     lines.push(`  '${escapeSql(useCasesJson)}'::jsonb,`);
     lines.push(`  '${escapeSql(tags)}',`);
-    lines.push(`  true,`);
+    lines.push(`  false,`);
     lines.push(`  NULL,`);
     lines.push(`  NULL,`);
     lines.push(`  true,`);
@@ -655,7 +655,7 @@ function generateSql(items: DiscoveryItem[]): string {
     lines.push(`  ${imageUrl ? `'${escapeSql(imageUrl)}'` : 'NULL'},`);
     lines.push(`  'approved',`);
     lines.push(`  now()`);
-    lines.push(`) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, image_url = EXCLUDED.image_url;`);
+    lines.push(`) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, is_free = EXCLUDED.is_free, image_url = EXCLUDED.image_url;`);
     lines.push(``);
   }
 
