@@ -77,7 +77,7 @@ export class MarketplaceBrowser {
         <button id="mq-close" style="background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer;">×</button>
       </div>
       <div style="padding: 0.25rem 1rem; border-bottom: 1px solid #222; display:flex; gap:0.25rem;">
-        <button id="mq-tab-agents" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#2a2a2a; color:#e0e0e0; cursor:pointer;">Agents</button>
+        <button id="mq-tab-agents" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#2a2a2a; color:#e0e0e0; cursor:pointer;">Curated</button>
         <button id="mq-tab-premium" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Premium</button>
         <button id="mq-tab-community" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Community MCPs</button>
       </div>
@@ -190,7 +190,7 @@ export class MarketplaceBrowser {
 
   private async load(): Promise<void> {
     const search = this.searchInput.value.trim();
-    const params = new URLSearchParams({ type: "agent" });
+    const params = new URLSearchParams({ type: "agent", premium: "false" });
     if (search) params.set("search", search);
 
     this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">Loading…</div>`;
@@ -303,7 +303,7 @@ export class MarketplaceBrowser {
 
       card.innerHTML = `
         <div style="display:flex; align-items:flex-start; gap:0.5rem;">
-          ${agent.image_url ? `<img src="${agent.image_url}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${this.letterAvatar(name, 40)}'" />` : ""}
+          ${agent.image_url ? `<img src="${agent.image_url}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${this.letterAvatar(name, 40)}'" />` : `<img src="${this.letterAvatar(name, 40)}" style="width:40px;height:40px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" />`}
           <div style="flex:1; min-width:0;">
             <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.15rem; display:flex; align-items:center; gap:0.3rem;">
               ${this.escape(name)}
@@ -409,7 +409,7 @@ export class MarketplaceBrowser {
     modal.innerHTML = `
       <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; overflow-y:auto; padding:1.5rem; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
         <div style="display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:1rem;">
-          ${agent.image_url ? `<img src="${agent.image_url}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" onerror="this.onerror=null;this.src='${this.letterAvatar(agent.name, 56)}'" />` : ""}
+          ${agent.image_url ? `<img src="${agent.image_url}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" onerror="this.onerror=null;this.src='${this.letterAvatar(agent.name, 56)}'" />` : `<img src="${this.letterAvatar(agent.name, 56)}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" />`}
           <div style="flex:1;">
             <h3 style="font-size:1.1rem; font-weight:700; margin:0 0 0.25rem;">${this.escape(agent.name)}</h3>
             <div style="font-size:0.8rem; color:#888;">${this.escape(agent.summary)}</div>
