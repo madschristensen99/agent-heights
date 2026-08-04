@@ -56,6 +56,8 @@ export interface DrawSurface {
   width: number;
   height: number;
   clip: { x: number; y: number; w: number; h: number } | null;
+  /** Optional: set the current depth layer for layered rendering. */
+  setLayer?: (n: number) => void;
   texProvider?: CharTextureProvider;
   componentProvider?: CharComponentProvider;
   set(x: number, y: number, hex: string): void;
@@ -86,6 +88,13 @@ export function mix(hex1: string, hex2: string, t: number): string {
 export const CW = 64;
 export const CH = 96;
 export const SHOE = "#3a3548";
+
+/** Depth layers for layered sprite rendering. */
+export const L_SHOES = 0;
+export const L_PANTS = 1;
+export const L_BODY = 2;
+export const L_HEAD = 3;
+export const CHAR_LAYERS = 4;
 
 export type Dir = "down" | "left" | "right" | "up";
 export const DIRS: Dir[] = ["down", "left", "right", "up"];
@@ -764,6 +773,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   // ===== ROUNDED CHIBI (64x96) — polished, dynamic outlines =====
 
   if (d === "down") {
+    s.setLayer?.(L_HEAD);
     // ---- HEAD: round dome with dynamic outline ----
     ciO(hx(32), hy(18), 17, pal.skin);
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
@@ -816,6 +826,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(33), by(36), skinDk);
 
     // ---- TORSO with gradient shading ----
+    s.setLayer?.(L_BODY);
     const tw = isFat ? (breathing ? 30 : 28) : (breathing ? 24 : 22);
     const tx = isFat ? (breathing ? 17 : 18) : (breathing ? 20 : 21);
     const _shirtDrawn = stampComponent("shirt", "default", "down", pose, pal.shirt);
@@ -857,6 +868,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(armRX + 1 + armSwingR), by(54), skinDk);
 
     // ---- LEGS & SHOES with soles ----
+    s.setLayer?.(L_PANTS);
     const _pantsDrawn = stampComponent("pants", "default", "down", pose, pal.pants);
     if (!_pantsDrawn) {
     if (stepping) {
@@ -882,6 +894,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.rect(lx(legRX), ly(58), 2, 14, pantsLi);
     }
     }
+    s.setLayer?.(L_SHOES);
     // Shoes (always drawn — not part of AI pants component)
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
@@ -906,10 +919,12 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(legRX + 6), ly(76), shoeDk);
     }
 
+    s.setLayer?.(L_HEAD);
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
     stampComponent("hair", pal.hairStyle, "down", pose, pal.hair, 35);
 
   } else if (d === "up") {
+    s.setLayer?.(L_HEAD);
     // ---- HEAD: all hair ----
     ciO(hx(32), hy(18), 17, pal.hair);
     rGradCi(hx(32), hy(18), 17, hairLi, hairDk, -4, -4);
@@ -927,6 +942,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(33), by(36), skinDk);
 
     // ---- TORSO (back) ----
+    s.setLayer?.(L_BODY);
     const utw = isFat ? 28 : 22;
     const utx = isFat ? 18 : 21;
     const _ushirtDrawn = stampComponent("shirt", "default", "up", pose, pal.shirt);
@@ -973,6 +989,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(uarmRX + 1 + armSwingR), by(54), skinDk);
 
     // ---- LEGS & SHOES with soles ----
+    s.setLayer?.(L_PANTS);
     const _upantsDrawn = stampComponent("pants", "default", "up", pose, pal.pants);
     if (!_upantsDrawn) {
     if (stepping) {
@@ -995,6 +1012,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.rect(lx(33), ly(58), 2, 14, pantsLi);
     }
     }
+    s.setLayer?.(L_SHOES);
     // Shoes (always drawn — not part of AI pants component)
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
@@ -1017,10 +1035,12 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(39), ly(76), shoeDk);
     }
 
+    s.setLayer?.(L_HEAD);
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
     stampComponent("hair", pal.hairStyle, "up", pose, pal.hair, 35);
 
   } else {
+    s.setLayer?.(L_HEAD);
     // ---- RIGHT PROFILE ----
     ciO(hx(32), hy(18), 17, pal.skin);
     rGradCi(hx(32), hy(18), 17, skinLi, skinDk, -4, -4);
@@ -1074,6 +1094,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(33), by(36), skinDk);
 
     // ---- TORSO (profile) ----
+    s.setLayer?.(L_BODY);
     const rtw = isFat ? 22 : 18;
     const rtx = isFat ? 21 : 23;
     const _rshirtDrawn = stampComponent("shirt", "default", "right", pose, pal.shirt);
@@ -1100,6 +1121,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     s.set(bx(rarmX + 1 + armSwing), by(55), skinDk);
 
     // ---- LEGS (profile) with soles ----
+    s.setLayer?.(L_PANTS);
     const rlegW = isFat ? 10 : 8;
     const _rpantsDrawn = stampComponent("pants", "default", "right", pose, pal.pants);
     if (!_rpantsDrawn) {
@@ -1122,6 +1144,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       vGradRR(lx(33), ly(58), rlegW, 14, 3, pantsMid, pantsDk);
     }
     }
+    s.setLayer?.(L_SHOES);
     // Shoes (always drawn — not part of AI pants component)
     if (stepping) {
       const leftUp = pose === 1 || pose === 5;
@@ -1140,6 +1163,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
       s.set(lx(31), ly(76), shoeDk);
     }
 
+    s.setLayer?.(L_HEAD);
     // Re-stamp hanging hair (ponytail tail, braids, long hair) over torso
     stampComponent("hair", pal.hairStyle, "right", pose, pal.hair, 35);
   }

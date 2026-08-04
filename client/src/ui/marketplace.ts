@@ -429,7 +429,8 @@ export class MarketplaceBrowser {
       : "";
 
     modal.innerHTML = `
-      <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; overflow-y:auto; padding:1.5rem; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
+      <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; display:flex; flex-direction:column; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
+        <div style="overflow-y:auto; flex:1; min-height:0; padding:1.5rem 1.5rem 0.5rem;">
         <div style="display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:1rem;">
           ${agent.image_url ? `<img src="${agent.image_url}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" onerror="this.onerror=null;this.src='${this.letterAvatar(agent.name, 56)}'" />` : `<img src="${this.letterAvatar(agent.name, 56)}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" />`}
           <div style="flex:1;">
@@ -476,7 +477,8 @@ export class MarketplaceBrowser {
           <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">⚡ Premium Agent</div>
           <div style="font-size:0.75rem; color:#aaa; line-height:1.4;">This agent uses paid API services. Costs are billed through your subscription — no crypto wallet needed. Your monthly premium allowance applies (Starter $0.50 · Pro $3.00 · Business $12.00).</div>
         </div>` : ""}
-        <div style="display:flex; gap:0.5rem;">
+        </div>
+        <div style="display:flex; gap:0.5rem; padding:1rem 1.5rem; border-top:1px solid #222;">
           <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;"${authRequiredServers.length > 0 ? " disabled" : ""}>Hire into HQ</button>
           <button id="mq-cancel" style="padding:0.6rem 1rem; border:1px solid #222; border-radius:0.5rem; background:#1a1a1a; color:#888; font-size:0.9rem; cursor:pointer;">Close</button>
         </div>

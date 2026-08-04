@@ -276,7 +276,7 @@ export class OfficeScene extends Phaser.Scene {
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
   private skyGfx!: Phaser.GameObjects.Graphics;
-  private clouds: { sprite: Phaser.GameObjects.Image; speed: number }[] = [];
+  private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; driftY: number; yBase: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
@@ -1588,16 +1588,19 @@ export class OfficeScene extends Phaser.Scene {
       const x = Math.random() * 2000 - 1000;
       const y = -200 - Math.random() * 400;
       const scale = 0.5 + Math.random() * 1.0;
-      const alpha = 0.4 + Math.random() * 0.35;
-      const speed = 5 + Math.random() * 15;
+      const baseAlpha = 0.4 + Math.random() * 0.35;
+      const speed = 3 + Math.random() * 7;
+      const phase = Math.random() * Math.PI * 2;
+      const fadeSpeed = 0.0003 + Math.random() * 0.0005;
+      const driftY = (Math.random() - 0.5) * 4;
 
       const sprite = this.add.image(x, y, cloudTex)
         .setOrigin(0.5, 0.5)
         .setDepth(-1.5)
         .setScale(scale)
-        .setAlpha(alpha);
+        .setAlpha(0);
 
-      this.clouds.push({ sprite, speed });
+      this.clouds.push({ sprite, speed, baseAlpha, phase, fadeSpeed, driftY, yBase: y });
     }
   }
 
@@ -1644,14 +1647,34 @@ export class OfficeScene extends Phaser.Scene {
     // Redraw sky gradient to cover the camera's current world view
     this.drawSkyGradient();
 
-    // Clouds: drift in world space, wrap around camera view edges
+    // Clouds: drift in world space, fade in/out, gentle vertical bob, wrap edges
     const cam = this.cameras.main;
     const view = cam.worldView;
+    const t = this.time.now;
     for (const c of this.clouds) {
+      // Horizontal drift
       c.sprite.x += c.speed * dt / 1000;
       const halfW = c.sprite.displayWidth / 2;
       if (c.sprite.x - halfW > view.x + view.width) {
         c.sprite.x = view.x - halfW;
+      }
+      // Vertical bob around yBase
+      c.sprite.y = c.yBase + Math.sin(t * 0.0002 + c.phase) * 15;
+      // Alpha lifecycle: smooth fade in and out
+      const cycle = 0.5 + 0.5 * Math.sin(t * c.fadeSpeed + c.phase);
+      const alpha = c.baseAlpha * cycle;
+      c.sprite.setAlpha(alpha);
+      // Respawn when faded out to near-zero
+      if (alpha < 0.01) {
+        c.sprite.x = view.x + Math.random() * view.width;
+        c.yBase = -200 - Math.random() * 400;
+        c.sprite.y = c.yBase;
+        c.baseAlpha = 0.4 + Math.random() * 0.35;
+        c.speed = 3 + Math.random() * 7;
+        c.phase = Math.random() * Math.PI * 2;
+        c.fadeSpeed = 0.0003 + Math.random() * 0.0005;
+        c.driftY = (Math.random() - 0.5) * 4;
+        c.sprite.setScale(0.5 + Math.random() * 1.0);
       }
     }
   }
@@ -6419,35 +6442,40 @@ export class OfficeScene extends Phaser.Scene {
     if (this.anims.exists(`${key}-work`)) return;
     const dirs: Dir[] = ["down", "left", "right", "up"];
     const FRAMES_PER_ROW = 8;
-    dirs.forEach((dir, row) => {
-      const base = row * FRAMES_PER_ROW;
+    const layerKeys = [key, `${key}:L0`, `${key}:L1`, `${key}:L2`, `${key}:L3`];
+    for (const lk of layerKeys) {
+      if (!this.textures.exists(lk)) continue;
+      if (this.anims.exists(`${lk}-work`)) continue;
+      dirs.forEach((dir, row) => {
+        const base = row * FRAMES_PER_ROW;
+        this.anims.create({
+          key: `${lk}-walk-${dir}`,
+          frames: this.anims.generateFrameNumbers(lk, {
+            frames: [base, base + 1, base + 2, base + 3, base + 4, base + 5],
+          }),
+          frameRate: 10,
+          repeat: -1,
+        });
+        const breathFrames = Array(24).fill(base + 6);
+        breathFrames.push(base + 7);
+        breathFrames.push(base + 6);
+        this.anims.create({
+          key: `${lk}-idle-${dir}`,
+          frames: this.anims.generateFrameNumbers(lk, {
+            frames: breathFrames,
+          }),
+          frameRate: 10,
+          repeat: -1,
+          repeatDelay: Math.random() * 2,
+        });
+      });
       this.anims.create({
-        key: `${key}-walk-${dir}`,
-        frames: this.anims.generateFrameNumbers(key, {
-          frames: [base, base + 1, base + 2, base + 3, base + 4, base + 5],
-        }),
-        frameRate: 10,
+        key: `${lk}-work`,
+        frames: this.anims.generateFrameNumbers(lk, { frames: [6, 7] }),
+        frameRate: 2.5,
         repeat: -1,
       });
-      const breathFrames = Array(24).fill(base + 6);
-      breathFrames.push(base + 7);
-      breathFrames.push(base + 6);
-      this.anims.create({
-        key: `${key}-idle-${dir}`,
-        frames: this.anims.generateFrameNumbers(key, {
-          frames: breathFrames,
-        }),
-        frameRate: 10,
-        repeat: -1,
-        repeatDelay: Math.random() * 2,
-      });
-    });
-    this.anims.create({
-      key: `${key}-work`,
-      frames: this.anims.generateFrameNumbers(key, { frames: [6, 7] }),
-      frameRate: 2.5,
-      repeat: -1,
-    });
+    }
   }
 
   /** Ensure all game animations exist — called on create() to handle scene restarts. */

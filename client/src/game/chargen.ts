@@ -19,7 +19,14 @@ import {
   DIRS,
   CW,
   CH,
+  L_SHOES,
+  L_PANTS,
+  L_BODY,
+  L_HEAD,
+  CHAR_LAYERS,
 } from "../../../shared/char-draw";
+
+export { CHAR_LAYERS, L_SHOES, L_PANTS, L_BODY, L_HEAD };
 
 export type { CharPalette };
 
@@ -293,17 +300,67 @@ class PixelSheet implements DrawSurface {
 // --------------------------------------------------------------- draw char
 // drawChar is now imported from shared/char-draw.ts
 
-function buildCharSheet(pal: CharPalette): PixelSheet {
+/** Wraps N PixelSheets and routes draw calls to the active layer. */
+class LayeredPixelSheet implements DrawSurface {
+  layers: PixelSheet[];
+  private cur = 0;
+  width: number;
+  height: number;
+  clip: { x: number; y: number; w: number; h: number } | null = null;
+  texProvider?: CharTextureProvider;
+  componentProvider?: CharComponentProvider;
+
+  constructor(w: number, h: number, numLayers: number) {
+    this.width = w;
+    this.height = h;
+    this.layers = [];
+    for (let i = 0; i < numLayers; i++) {
+      const sheet = new PixelSheet(w, h);
+      sheet.texProvider = charTexProvider;
+      sheet.componentProvider = charCompProvider;
+      this.layers.push(sheet);
+    }
+    this.texProvider = charTexProvider;
+    this.componentProvider = charCompProvider;
+  }
+
+  setLayer(n: number): void {
+    this.cur = n;
+    // Propagate clip to the new active layer
+    this.layers[this.cur].clip = this.clip;
+  }
+
+  private get active(): PixelSheet {
+    return this.layers[this.cur];
+  }
+
+  set(x: number, y: number, hex: string): void { this.active.set(x, y, hex); }
+  setAlpha(x: number, y: number, hex: string, a: number): void { this.active.setAlpha(x, y, hex, a); }
+  rect(x: number, y: number, w: number, h: number, hex: string): void { this.active.rect(x, y, w, h, hex); }
+  fillCircle(cx: number, cy: number, r: number, hex: string): void { this.active.fillCircle(cx, cy, r, hex); }
+  fillCircleAlpha(cx: number, cy: number, r: number, hex: string, a: number): void { this.active.fillCircleAlpha(cx, cy, r, hex, a); }
+  fillEllipse(cx: number, cy: number, rx: number, ry: number, hex: string): void { this.active.fillEllipse(cx, cy, rx, ry, hex); }
+  line(x0: number, y0: number, x1: number, y1: number, hex: string): void { this.active.line(x0, y0, x1, y1, hex); }
+  lineThick(x0: number, y0: number, x1: number, y1: number, hex: string, thick: number): void { this.active.lineThick(x0, y0, x1, y1, hex, thick); }
+  fillTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, hex: string): void { this.active.fillTriangle(x0, y0, x1, y1, x2, y2, hex); }
+  fillRoundedRect(x: number, y: number, w: number, h: number, r: number, hex: string): void { this.active.fillRoundedRect(x, y, w, h, r, hex); }
+  texturedRect(x: number, y: number, w: number, h: number, hex: string, tex: keyof CharTextureProvider): void { this.active.texturedRect(x, y, w, h, hex, tex); }
+
+  /** Flip all layers horizontally. */
+  flipH(x: number, y: number, w: number, h: number): void {
+    for (const layer of this.layers) layer.flipH(x, y, w, h);
+  }
+}
+
+function buildCharSheets(pal: CharPalette): PixelSheet[] {
   const cols = 8;
-  const s = new PixelSheet(CW * cols, CH * DIRS.length);
-  s.texProvider = charTexProvider;
-  s.componentProvider = charCompProvider;
+  const s = new LayeredPixelSheet(CW * cols, CH * DIRS.length, CHAR_LAYERS);
   DIRS.forEach((dir, row) => {
     for (let pose = 0; pose < cols; pose++) {
       sharedDrawChar(s, pose * CW, row * CH, pal, dir, pose);
     }
   });
-  return s;
+  return s.layers;
 }
 
 // --------------------------------------------------------- public API
@@ -313,18 +370,44 @@ export const CHAR_FRAME_H = CH;
 export const CHAR_FRAMES_PER_ROW = 8;
 
 /**
- * Generate a full character spritesheet and register it as a Phaser texture.
- * If the texture key already exists, it is replaced.
+ * Generate layered character spritesheets and register each layer as a
+ * Phaser texture. 4 textures are created: `${key}`, `${key}:L1`, `${key}:L2`, `${key}:L3`.
+ * The base `${key}` is a composite (all layers merged) for backwards compat.
+ * If the texture already exists, it is replaced.
  */
 export function generateCharTexture(scene: Phaser.Scene, key: string, ap: CharAppearance): void {
   const pal = appearanceToPalette(ap);
-  const sheet = buildCharSheet(pal);
-  const canvas = sheet.toCanvas();
+  const layers = buildCharSheets(pal);
+  const cols = CHAR_FRAMES_PER_ROW;
+  const rows = DIRS.length;
 
-  // If the texture already exists as a CanvasTexture, redraw it in place.
-  // This preserves the TextureSource so existing frame references and
-  // animations stay valid — destroying/recreating the texture leaves stale
-  // frame references that crash Phaser's renderer.
+  // Build a composite canvas (all layers merged) for the base key
+  const composite = document.createElement("canvas");
+  composite.width = CW * cols;
+  composite.height = CH * rows;
+  const compCtx = composite.getContext("2d")!;
+  for (const layer of layers) {
+    compCtx.drawImage(layer.toCanvas(), 0, 0);
+  }
+
+  // Register or refresh the base composite texture
+  registerCanvasTexture(scene, key, composite, cols, rows);
+
+  // Register each layer texture
+  for (let l = 0; l < layers.length; l++) {
+    const layerKey = `${key}:L${l}`;
+    registerCanvasTexture(scene, layerKey, layers[l].toCanvas(), cols, rows);
+  }
+}
+
+/** Register or refresh a canvas texture with frame grid. */
+function registerCanvasTexture(
+  scene: Phaser.Scene,
+  key: string,
+  canvas: HTMLCanvasElement,
+  cols: number,
+  rows: number,
+): void {
   if (scene.textures.exists(key)) {
     const existing = scene.textures.get(key);
     if (existing && typeof (existing as any).context !== "undefined") {
@@ -338,8 +421,6 @@ export function generateCharTexture(scene: Phaser.Scene, key: string, ap: CharAp
   }
   const tex = scene.textures.addCanvas(key, canvas);
   if (tex) {
-    const cols = CHAR_FRAMES_PER_ROW;
-    const rows = DIRS.length;
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         tex.add(row * cols + col, 0, col * CHAR_FRAME_W, row * CHAR_FRAME_H, CHAR_FRAME_W, CHAR_FRAME_H);
@@ -375,9 +456,14 @@ export function generateCharPreviewDataURL(ap: CharAppearance, scale = 3): strin
  */
 export function generateCharSheetDataURL(ap: CharAppearance, scale = 1): string {
   const pal = appearanceToPalette(ap);
-  const sheet = buildCharSheet(pal);
-  if (scale === 1) return sheet.toCanvas().toDataURL();
-  const srcCanvas = sheet.toCanvas();
+  const layers = buildCharSheets(pal);
+  const composite = document.createElement("canvas");
+  composite.width = CW * CHAR_FRAMES_PER_ROW;
+  composite.height = CH * DIRS.length;
+  const compCtx = composite.getContext("2d")!;
+  for (const layer of layers) compCtx.drawImage(layer.toCanvas(), 0, 0);
+  if (scale === 1) return composite.toDataURL();
+  const srcCanvas = composite;
   const canvas = document.createElement("canvas");
   canvas.width = srcCanvas.width * scale;
   canvas.height = srcCanvas.height * scale;

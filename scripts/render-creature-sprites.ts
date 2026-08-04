@@ -182,7 +182,12 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+  // Use the XZ diagonal so the model fits at all 8 rotation angles.
+  // When a model rotates around Y, its projected width can be up to
+  // sqrt(sx² + sz²) — larger than any single axis. Without this, elongated
+  // models like wolves get cropped at diagonal angles.
+  const xzDiag = Math.sqrt(size.x * size.x + size.z * size.z);
+  const maxDim = Math.max(size.y, xzDiag, 0.001);
   const scale = (1.3 / maxDim) * scaleMul;
   model.scale.setScalar(scale);
   model.position.x = -center.x * scale;

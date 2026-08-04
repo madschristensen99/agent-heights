@@ -3,12 +3,16 @@ import type { AgentInfo } from "../../../shared/types";
 import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID } from "../../../shared/types";
 import type { WorldTheme } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
+import { CHAR_LAYERS } from "./chargen";
 
 /** Returns the Phaser texture key for an agent's character sprite. */
 export function agentTextureKey(info: AgentInfo): string {
   if (info.appearance) return `char-custom-${info.id}`;
   return `char-${info.sprite}`;
 }
+
+/** Y-offset per layer for depth parallax (pixels). Lower layers are closer to viewer. */
+const LAYER_Y_OFFSETS = [0, -1, -2, -3];
 
 export const TILE_PX = 64;
 
@@ -218,12 +222,17 @@ export function createHintTag(scene: Phaser.Scene): HintTag {
 /** A hired agent walking around the office, driven by server state. */
 export class AgentNPC {
   container: Phaser.GameObjects.Container;
+  /** Primary sprite (body layer or single sprite) — used for interactivity. */
   sprite: Phaser.GameObjects.Sprite;
+  /** All layer sprites (when layered rendering is active). */
+  private layerSprites: Phaser.GameObjects.Sprite[] = [];
   private nameTag: NameTag;
   private bubble: Phaser.GameObjects.Sprite;
   private emoteSprite: Phaser.GameObjects.Sprite;
   private emoteUntil = 0;
   private shadow: Phaser.GameObjects.Ellipse;
+  private baseKey: string;
+  private useLayers: boolean;
 
   info: AgentInfo;
   private path: Tile[] = [];
@@ -260,9 +269,32 @@ export class AgentNPC {
 
     const feet = feetOf(spawn);
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
-    this.sprite = scene.add.sprite(0, 0, agentTextureKey(info), 0)
-      .setOrigin(0.5, 1)
-      .setScale(1);
+    this.baseKey = agentTextureKey(info);
+
+    // Check if layered textures exist for this character
+    this.useLayers = scene.textures.exists(`${this.baseKey}:L0`);
+
+    const containerChildren: Phaser.GameObjects.GameObject[] = [this.shadow];
+
+    if (this.useLayers) {
+      this.layerSprites = [];
+      for (let l = 0; l < CHAR_LAYERS; l++) {
+        const layerKey = `${this.baseKey}:L${l}`;
+        const spr = scene.add.sprite(0, LAYER_Y_OFFSETS[l], layerKey, 0)
+          .setOrigin(0.5, 1)
+          .setScale(1);
+        this.layerSprites.push(spr);
+        containerChildren.push(spr);
+      }
+      // Use body layer (L2) as the primary interactive sprite
+      this.sprite = this.layerSprites[2];
+    } else {
+      this.sprite = scene.add.sprite(0, 0, this.baseKey, 0)
+        .setOrigin(0.5, 1)
+        .setScale(1);
+      containerChildren.push(this.sprite);
+    }
+
     this.nameTag = createNameTag(scene, info.name, info.status);
     this.bubble = scene.add.sprite(-32, -104, "bubble", 0).setVisible(false).setFlipX(true);
 
@@ -270,14 +302,14 @@ export class AgentNPC {
       .setVisible(false)
       .setScale(1.5);
 
-    this.container = scene.add.container(feet.x, feet.y, [
-      this.shadow,
-      this.sprite,
+    containerChildren.push(
       this.nameTag.nameBg,
       this.nameTag.label,
       this.bubble,
       this.emoteSprite,
-    ]);
+    );
+
+    this.container = scene.add.container(feet.x, feet.y, containerChildren);
 
     this.sprite.setInteractive({ useHandCursor: true });
     this.sprite.on("pointerdown", () => onClick(this.info.id));
@@ -382,8 +414,20 @@ export class AgentNPC {
   }
 
   private play(key: string): void {
-    if (this.sprite.anims.currentAnim?.key !== key || !this.sprite.anims.isPlaying) {
-      this.sprite.play(key, true);
+    if (this.useLayers) {
+      // key is like "${baseKey}-walk-down" — convert to "${baseKey}:L${i}-walk-down"
+      const suffix = key.slice(this.baseKey.length + 1);
+      for (let i = 0; i < this.layerSprites.length; i++) {
+        const layerKey = `${this.baseKey}:L${i}-${suffix}`;
+        const spr = this.layerSprites[i];
+        if (spr.anims.currentAnim?.key !== layerKey || !spr.anims.isPlaying) {
+          spr.play(layerKey, true);
+        }
+      }
+    } else {
+      if (this.sprite.anims.currentAnim?.key !== key || !this.sprite.anims.isPlaying) {
+        this.sprite.play(key, true);
+      }
     }
   }
 
@@ -623,13 +667,16 @@ export class AgentNPC {
   }
 
   private hop(): void {
-    this.scene.tweens.add({
-      targets: this.sprite,
-      y: -24,
-      duration: 150,
-      yoyo: true,
-      ease: "Quad.out",
-    });
+    const targets = this.useLayers ? this.layerSprites : [this.sprite];
+    for (const spr of targets) {
+      this.scene.tweens.add({
+        targets: spr,
+        y: -24 + (this.useLayers ? LAYER_Y_OFFSETS[(this.layerSprites.indexOf(spr))] : 0),
+        duration: 150,
+        yoyo: true,
+        ease: "Quad.out",
+      });
+    }
   }
 
   private confetti(): void {
