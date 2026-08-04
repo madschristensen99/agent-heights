@@ -282,20 +282,6 @@ const SERVICE_DOMAIN_MAP: Record<string, string> = {
   scholar: "scholar.google.com",
   tavily: "tavily.com",
   exa: "exa.ai",
-  stocks: "nyse.com",
-  usstock: "nyse.com",
-  commodity: "markets.businessinsider.com",
-  crypto: "coingecko.com",
-  fx: "xe.com",
-  health: "blockrun.ai",
-  images: "blockrun.ai",
-  videos: "blockrun.ai",
-  audio: "blockrun.ai",
-  chat: "blockrun.ai",
-  voice: "blockrun.ai",
-  search: "blockrun.ai",
-  messages: "blockrun.ai",
-  models: "blockrun.ai",
   surf: "surf.com",
   // Orthogonal sub-services
   coresignal: "coresignal.com",
@@ -498,11 +484,16 @@ function generateSql(items: DiscoveryItem[]): string {
     const categories = categoryFromCircle(provider.category ?? "INFRASTRUCTURE");
 
     // Generate avatar image URL — prefer sub-service domain, fall back to provider website
+    // For proxy sub-services without their own domain, use a letter-avatar so they don't
+    // all show the proxy provider's logo.
     let imageUrl: string | null = null;
     const subServiceSeg = getSubServiceKey(serviceItems[0]);
     const overrideDomain = subServiceSeg ? SERVICE_DOMAIN_MAP[subServiceSeg] : null;
     if (overrideDomain) {
       imageUrl = `https://www.google.com/s2/favicons?domain=${overrideDomain}&sz=128`;
+    } else if (subServiceSeg) {
+      // Proxy sub-service without a domain override — use a letter avatar
+      imageUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(agentName)}&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff`;
     } else if (provider.website) {
       try {
         const domain = new URL(provider.website).hostname;
