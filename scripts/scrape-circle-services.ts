@@ -269,6 +269,79 @@ const SERVICE_NAME_MAP: Record<string, string> = {
   "serper-scrape": "Serper",
 };
 
+// Domain overrides for sub-services that are proxied through AIsa/BlockRun/etc.
+// Without this, they all get the proxy provider's favicon.
+const SERVICE_DOMAIN_MAP: Record<string, string> = {
+  coingecko: "coingecko.com",
+  twitter: "twitter.com",
+  youtube: "youtube.com",
+  perplexity: "perplexity.ai",
+  polymarket: "polymarket.com",
+  pm: "polymarket.com",
+  kalshi: "kalshi.com",
+  scholar: "scholar.google.com",
+  tavily: "tavily.com",
+  exa: "exa.ai",
+  stocks: "nyse.com",
+  usstock: "nyse.com",
+  commodity: "markets.businessinsider.com",
+  crypto: "coingecko.com",
+  fx: "xe.com",
+  health: "blockrun.ai",
+  images: "blockrun.ai",
+  videos: "blockrun.ai",
+  audio: "blockrun.ai",
+  chat: "blockrun.ai",
+  voice: "blockrun.ai",
+  search: "blockrun.ai",
+  messages: "blockrun.ai",
+  models: "blockrun.ai",
+  surf: "surf.com",
+  // Orthogonal sub-services
+  coresignal: "coresignal.com",
+  tomba: "tomba.io",
+  precip: "precip.ai",
+  predictleads: "predictleads.ai",
+  "brand-dev": "brand.dev",
+  icypeas: "icypeas.com",
+  "context-dev": "context.dev",
+  findymail: "findymail.com",
+  aviato: "aviato.ai",
+  apollo: "apollo.io",
+  bytemine: "bytemine.com",
+  contactout: "contactout.com",
+  notte: "notte.com",
+  peopledatalabs: "peopledatalabs.com",
+  "ocean-io": "ocean.io",
+  olostep: "olostep.com",
+  scrapegraphai: "scrapegraphai.com",
+  captaindata: "captaindata.com",
+  crustdata: "crustdata.com",
+  openmart: "openmart.ai",
+  tako: "tako.ai",
+  "company-enrich": "companyenrich.com",
+  rocketreach: "rocketreach.com",
+  baseten: "baseten.co",
+  didit: "didit.com",
+  "fantastic-jobs": "fantasticjobs.com",
+  fundable: "fundable.com",
+  "influencers-club": "influencers.club",
+  rivoter: "rivoter.com",
+  andi: "andi.io",
+  edges: "edges.ai",
+  fiber: "fiber.ai",
+  happenstance: "happenstance.com",
+  linkup: "linkup.ai",
+  nyne: "nyne.ai",
+  openfunnel: "openfunnel.com",
+  scrapecreators: "scrapecreators.com",
+  seltz: "seltz.com",
+  serper: "serper.dev",
+  sixtyfour: "sixtyfour.ai",
+  voygr: "voygr.com",
+  "serper-scrape": "serper.dev",
+};
+
 function prettifyName(seg: string): string {
   return SERVICE_NAME_MAP[seg] ?? seg
     .split(/[-_]/)
@@ -424,9 +497,13 @@ function generateSql(items: DiscoveryItem[]): string {
     const tags = (provider.tags ?? []).slice(0, 10).join(",");
     const categories = categoryFromCircle(provider.category ?? "INFRASTRUCTURE");
 
-    // Generate avatar image URL from the provider's website domain via Google's favicon service
+    // Generate avatar image URL — prefer sub-service domain, fall back to provider website
     let imageUrl: string | null = null;
-    if (provider.website) {
+    const subServiceSeg = getSubServiceKey(serviceItems[0]);
+    const overrideDomain = subServiceSeg ? SERVICE_DOMAIN_MAP[subServiceSeg] : null;
+    if (overrideDomain) {
+      imageUrl = `https://www.google.com/s2/favicons?domain=${overrideDomain}&sz=128`;
+    } else if (provider.website) {
       try {
         const domain = new URL(provider.website).hostname;
         imageUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
