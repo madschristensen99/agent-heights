@@ -7044,23 +7044,24 @@ export class OfficeScene extends Phaser.Scene {
     const isOwnerForNpc = myRoleForNpc === "owner" && this.store.roomId !== "hq2";
     if (isOwnerForNpc && now - this.lastNpcSyncSent > 200) {
       this.lastNpcSyncSent = now;
-      if (this.agentResources) {
-        const s = this.agentResources.getState();
-        this.net?.send({ type: "npc_update", npcId: AGENT_RESOURCES_ID, ...s });
-      }
-      if (this.hermes) {
-        const s = this.hermes.getState();
-        this.net?.send({ type: "npc_update", npcId: HERMES_ID, ...s });
-      }
-      if (this.wizard) {
-        const s = this.wizard.getState();
-        this.net?.send({ type: "npc_update", npcId: WIZARD_ID, ...s });
-      }
+      this.sendNpcStateIfChanged(this.agentResources, AGENT_RESOURCES_ID);
+      this.sendNpcStateIfChanged(this.hermes, HERMES_ID);
+      this.sendNpcStateIfChanged(this.wizard, WIZARD_ID);
     }
   }
 
   private _lastSentDir: Dir = "down";
   private lastNpcSyncSent = 0;
+  private lastNpcStates = new Map<string, string>();
+
+  private sendNpcStateIfChanged(npc: { getState(): { x: number; y: number; dir: Dir; state: string } } | null, npcId: string): void {
+    if (!npc || !this.net) return;
+    const s = npc.getState();
+    const key = `${s.x},${s.y},${s.dir},${s.state}`;
+    if (this.lastNpcStates.get(npcId) === key) return;
+    this.lastNpcStates.set(npcId, key);
+    this.net.send({ type: "npc_update", npcId, ...s });
+  }
 
   private syncRemotePlayers(): void {
     const storePlayers = this.store.roomPlayers;

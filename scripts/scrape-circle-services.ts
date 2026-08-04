@@ -365,10 +365,8 @@ function generateSql(items: DiscoveryItem[]): string {
         cleanSchema = { type: "object", properties: rawInput.properties, required: rawInput.required ?? [] };
       }
 
-      const fullToolName = slugify(serviceName) + "__" + toolName;
-
       return {
-        name: fullToolName,
+        name: slugify(serviceName),
         endpoint: item.resource,
         pricePerCall: priceUsd,
         description: item.metadata.description || provider.description,

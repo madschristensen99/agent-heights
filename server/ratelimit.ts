@@ -19,7 +19,7 @@ const LIMITS: Record<string, { max: number; refillPerSec: number }> = {
   assign_all: { max: 20, refillPerSec: 20 / 60 },
   chat: { max: 60, refillPerSec: 60 / 60 },
   player_move: { max: 600, refillPerSec: 10 },
-  npc_update: { max: 600, refillPerSec: 10 },
+  npc_update: { max: 300, refillPerSec: 5 },
   voice_ice: { max: 200, refillPerSec: 50 },
   voice_offer: { max: 20, refillPerSec: 2 },
   voice_answer: { max: 20, refillPerSec: 2 },
