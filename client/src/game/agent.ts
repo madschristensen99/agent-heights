@@ -1047,7 +1047,7 @@ export class WizardNPC {
 
   info!: AgentInfo;
   private dir: Dir = "down";
-  private texKey = "char-wizard";
+  private texKey = "char-0";
 
   constructor(
     scene: Phaser.Scene,
