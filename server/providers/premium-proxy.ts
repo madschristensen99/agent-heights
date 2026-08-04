@@ -12,7 +12,7 @@
  */
 
 import type { AgentTool } from "@cline/sdk";
-import { payAndFetchWithOptions, isCircleGatewayConfigured } from "./circle-gateway.js";
+import { payAndFetchWithOptions, isX402Configured } from "./x402-pay.js";
 import { getMonthlySpend } from "../usage.js";
 import { getUsageCap } from "../usage.js";
 import type { SubscriptionTier } from "../../shared/types.js";
@@ -76,7 +76,7 @@ export async function loadPremiumTools(
   services: CircleServiceConfig[],
   proxyCtx: PremiumProxyContext,
 ): Promise<AgentTool<any, any>[]> {
-  const gatewayConfigured = isCircleGatewayConfigured();
+  const gatewayConfigured = isX402Configured();
   if (!gatewayConfigured) {
     console.warn("[premium-proxy] Circle Gateway not configured — premium tools will be registered but calls will fail with funding error");
   }
