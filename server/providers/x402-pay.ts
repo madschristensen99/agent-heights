@@ -206,12 +206,7 @@ export async function payAndFetchWithOptions(
     return { data, status, cost: expectedPriceUsd };
   } catch (gwErr) {
     const gwMsg = gwErr instanceof Error ? gwErr.message : String(gwErr);
-    // If it's not a "no batching option" error, it's a real failure
-    if (!gwMsg.includes("No Gateway batching option") && !gwMsg.includes("not configured")) {
-      console.error(`[x402] Gateway pay failed for ${url}:`, gwMsg);
-      return { data: null, status: 0, cost: 0, error: gwMsg };
-    }
-    console.log(`[x402] Gateway not supported for ${url}, falling back to direct x402...`);
+    console.log(`[x402] Gateway pay failed for ${url}: ${gwMsg} — falling back to direct x402...`);
   }
 
   // --- Attempt 2: Direct x402 (exact scheme) ---
@@ -489,4 +484,54 @@ export function stopBalanceMonitor(): void {
     clearInterval(monitorInterval);
     monitorInterval = null;
   }
+}
+
+/** Auto-deposit threshold (USD). If Gateway available balance is below this on startup, deposit. */
+const AUTO_DEPOSIT_THRESHOLD = parseFloat(process.env.X402_AUTO_DEPOSIT_THRESHOLD ?? "2");
+/** Amount to auto-deposit when balance is low. */
+const AUTO_DEPOSIT_AMOUNT = parseFloat(process.env.X402_AUTO_DEPOSIT_AMOUNT ?? "5");
+/** How long to wait for deposit to be credited by Circle's attestation service (ms). */
+const DEPOSIT_WAIT_MS = parseInt(process.env.X402_DEPOSIT_WAIT_MS ?? "180000", 10);
+
+/** Check Gateway balance and auto-deposit if low. Polls until credited or timeout. */
+export async function ensureGatewayBalance(): Promise<void> {
+  if (!isX402Configured()) return;
+
+  const balance = await getGatewayBalance();
+  if (!balance) return;
+
+  const available = parseFloat(balance.gatewayAvailable);
+  if (available >= AUTO_DEPOSIT_THRESHOLD) {
+    console.log(`[x402] Gateway balance OK: ${balance.gatewayAvailable} USDC`);
+    return;
+  }
+
+  const walletUsdc = parseFloat(balance.walletUsdc);
+  if (walletUsdc < AUTO_DEPOSIT_AMOUNT) {
+    console.warn(`[x402] Wallet has only ${balance.walletUsdc} USDC — cannot auto-deposit ${AUTO_DEPOSIT_AMOUNT} USDC. Premium API calls will fail until funds are added.`);
+    return;
+  }
+
+  console.log(`[x402] Gateway balance low (${balance.gatewayAvailable} USDC) — depositing ${AUTO_DEPOSIT_AMOUNT} USDC...`);
+  const txHash = await depositToGateway(String(AUTO_DEPOSIT_AMOUNT));
+  if (!txHash) {
+    console.error(`[x402] Auto-deposit failed. Premium API calls will fail until manually funded.`);
+    return;
+  }
+  console.log(`[x402] Deposit tx confirmed: ${txHash}. Waiting for Circle to credit balance...`);
+
+  // Poll until balance is credited or timeout
+  const deadline = Date.now() + DEPOSIT_WAIT_MS;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 10000));
+    const updated = await getGatewayBalance();
+    if (updated) {
+      const newAvail = parseFloat(updated.gatewayAvailable);
+      if (newAvail >= AUTO_DEPOSIT_THRESHOLD) {
+        console.log(`[x402] Gateway balance credited: ${updated.gatewayAvailable} USDC`);
+        return;
+      }
+    }
+  }
+  console.warn(`[x402] Deposit not credited after ${DEPOSIT_WAIT_MS / 1000}s. Circle attestation may be delayed. Premium API calls may fail.`);
 }

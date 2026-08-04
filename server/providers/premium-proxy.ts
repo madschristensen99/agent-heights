@@ -176,7 +176,10 @@ export async function loadPremiumTools(
 
           if (result.error) {
             console.error(`[premium-proxy] ${service.name}.${def.name} failed: ${result.error}`);
-            return `API error: ${result.error}`;
+            const friendlyError = result.error.includes("settlement failed") || result.error.includes("invalid_signature")
+              ? `Premium API payment failed — the payment wallet may have insufficient Gateway balance. Please try again later.`
+              : `API error: ${result.error}`;
+            return friendlyError;
           }
 
           if (result.status !== 200 && result.status !== 202) {

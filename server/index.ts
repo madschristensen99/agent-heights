@@ -18,7 +18,7 @@ import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUs
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory, createOnrampUrl } from "./providers/cdp-solana.js";
 import { getAgentBalances as getCrossmintBalances, getAgentPolicy as getCrossmintPolicy, getAgentTxHistory as getCrossmintTxHistory, fundAgentWallet, createCrossmintOnrampUrl } from "./providers/crossmint-wallets.js";
-import { startBalanceMonitor as startCircleBalanceMonitor, isCircleGatewayConfigured } from "./providers/x402-pay.js";
+import { startBalanceMonitor as startCircleBalanceMonitor, isCircleGatewayConfigured, ensureGatewayBalance } from "./providers/x402-pay.js";
 import { TenantManager, HQ2_ROOM_ID, type UserSession } from "./tenant.js";
 import { ScreenshotManager } from "./providers/screenshot.js";
 import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
@@ -2902,6 +2902,7 @@ server.listen(SERVER_PORT, () => {
   if (isCircleGatewayConfigured()) {
     startCircleBalanceMonitor();
     console.log(`[agent-heights] Circle Gateway premium payments enabled`);
+    void ensureGatewayBalance().catch(err => console.error(`[agent-heights] Gateway auto-deposit failed:`, err));
   }
 
   // Restore user sessions at boot so agents resume immediately after a
