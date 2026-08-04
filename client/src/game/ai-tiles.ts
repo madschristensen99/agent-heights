@@ -7,7 +7,7 @@ import { TILE } from "../../../shared/types";
  */
 export const AI_TILE_TEXTURES: Record<number, string[]> = {
   [TILE.GRASS]: ["ai-grass_0", "ai-grass_1", "ai-grass_2", "ai-grass_3"],
-  [TILE.WALL]: ["ai-wall_0", "ai-wall_1", "ai-wall_2", "ai-wall_3"],
+  [TILE.WALL]: ["ai-wall_0", "ai-wall_1", "ai-wall_2", "ai-wall_3", "ai-wall_4"],
   [TILE.ROCK]: ["ai-rock_0", "ai-rock_1", "ai-rock_2", "ai-rock_3"],
   [TILE.ACID]: ["ai-acid_0", "ai-acid_1", "ai-acid_2", "ai-acid_3"],
   [TILE.PATH]: ["ai-path_0", "ai-path_1", "ai-path_2", "ai-path_3"],

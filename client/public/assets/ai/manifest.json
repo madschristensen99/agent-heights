@@ -724,5 +724,20 @@
     "size": 1024,
     "hasPBR": false,
     "hasSvg": false
+  },
+  {
+    "key": "wall_4",
+    "category": "tiles",
+    "model": "patina-material",
+    "files": {
+      "basecolor": "tiles/wall_4_basecolor.webp",
+      "normal": "tiles/wall_4_normal.webp",
+      "roughness": "tiles/wall_4_roughness.webp",
+      "metalness": "tiles/wall_4_metalness.webp",
+      "height": "tiles/wall_4_height.webp"
+    },
+    "size": 256,
+    "hasPBR": true,
+    "hasSvg": false
   }
 ]

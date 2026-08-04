@@ -21,7 +21,7 @@ const OUT_DIR = join(ROOT, "client", "public", "assets", "atlases");
 
 const TILE_KEYS = [
   "grass_0", "grass_1", "grass_2", "grass_3",
-  "wall_0", "wall_1", "wall_2", "wall_3",
+  "wall_0", "wall_1", "wall_2", "wall_3", "wall_4",
   "rock_0", "rock_1", "rock_2", "rock_3",
   "acid_0", "acid_1", "acid_2", "acid_3",
   "path_0", "path_1", "path_2", "path_3",

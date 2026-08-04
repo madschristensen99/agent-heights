@@ -668,10 +668,10 @@ export class OfficeScene extends Phaser.Scene {
 
           // Apply AI wall textures — specific texture per wall side, 50% opacity
           const tex = this.textures;
-          const brickKey = "ai-wall_2";       // red brick — left wall
-          const stoneKey = "ai-wall_0";       // gray stone — bottom wall
-          const mesoKey = "ai-wall_3";       // mesoamerican — right wall
-          const lightStoneKey = "ai-wall_1";  // light stone — top wall
+          const brickKey = "ai-wall_0";       // dark red brick — left wall
+          const stoneKey = "ai-wall_2";       // cobblestone — bottom wall
+          const mesoKey = "ai-wall_4";       // mesoamerican — right wall
+          const lightStoneKey = "ai-wall_1";  // gray concrete — top wall
           const drywallKey = mesoKey; // mesoamerican — right wall
           const hasBrick = tex.exists(brickKey);
           const hasStone = tex.exists(stoneKey);
