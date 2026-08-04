@@ -299,8 +299,8 @@ export class MarketplaceBrowser {
       const name = agent.name || "Untitled";
       const summary = agent.summary || "";
       const tags = (agent.tags || "").split(",").filter(Boolean).slice(0, 4);
-      const price = agent.is_free ? "Free" : agent.price_usd ? `$${agent.price_usd}` : "";
       const isPremium = agent.is_premium;
+      const price = isPremium ? "" : agent.is_free ? "Free" : agent.price_usd ? `$${agent.price_usd}` : "";
 
       // Parse circleServices to show per-call price on the card
       let premiumPriceLabel = "";
@@ -312,8 +312,8 @@ export class MarketplaceBrowser {
             const minPrice = Math.min(...services.map((s) => s.pricePerCall));
             const maxPrice = Math.max(...services.map((s) => s.pricePerCall));
             premiumPriceLabel = minPrice === maxPrice
-              ? `$${minPrice.toFixed(2)}/call`
-              : `$${minPrice.toFixed(2)}–$${maxPrice.toFixed(2)}/call`;
+              ? `$${minPrice.toFixed(4)}/call`
+              : `$${minPrice.toFixed(4)}–$${maxPrice.toFixed(4)}/call`;
           }
         } catch { /* not JSON */ }
       }
@@ -436,7 +436,7 @@ export class MarketplaceBrowser {
             <h3 style="font-size:1.1rem; font-weight:700; margin:0 0 0.25rem;">${this.escape(agent.name)}</h3>
             <div style="font-size:0.8rem; color:#888;">${this.escape(agent.summary)}</div>
             <div style="margin-top:0.35rem;">
-              <span style="font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:0.25rem; ${agent.is_free ? "background:#1a2a1a; color:#53b86b;" : "background:#2a2a1a; color:#c9852c;"}">${agent.is_free ? "Free" : agent.price_usd ? `$${agent.price_usd}` : "Paid"}</span>
+              <span style="font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:0.25rem; ${agent.is_free ? "background:#1a2a1a; color:#53b86b;" : agent.is_premium ? "background:#2a1a3a; color:#b388ff;" : "background:#2a2a1a; color:#c9852c;"}">${agent.is_free ? "Free" : agent.price_usd ? `$${agent.price_usd}` : agent.is_premium ? "Premium" : "Paid"}</span>
               ${agent.is_premium ? `<span style="font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:0.25rem; background:#2a1a3a; color:#b388ff; margin-left:0.25rem;">Premium</span>` : ""}
               ${agent.language ? `<span style="font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:0.25rem; background:#1a1a2a; color:#6b8acf; margin-left:0.25rem;">${this.escape(agent.language)}</span>` : ""}
             </div>
@@ -462,7 +462,7 @@ export class MarketplaceBrowser {
               return `<div style="padding:0.4rem 0.5rem; border:1px solid #2a1a3a; border-radius:0.375rem; background:#120d1a;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                   <span style="font-size:0.75rem; font-weight:600; color:#ccc;">${this.escape(s.name)}</span>
-                  <span style="font-size:0.7rem; font-weight:600; color:#b388ff;">$${s.pricePerCall.toFixed(2)}/call</span>
+                  <span style="font-size:0.7rem; font-weight:600; color:#b388ff;">$${s.pricePerCall.toFixed(4)}/call</span>
                 </div>
                 <div style="font-size:0.68rem; color:#777; margin-top:0.15rem;">${this.escape(s.description.slice(0, 100))}</div>
                 ${toolNames ? `<div style="font-size:0.62rem; color:#555; margin-top:0.2rem;">Tools: ${this.escape(toolNames)}</div>` : ""}

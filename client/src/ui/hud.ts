@@ -2555,8 +2555,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const minPrice = Math.min(...services.map((s) => s.pricePerCall));
       const maxPrice = Math.max(...services.map((s) => s.pricePerCall));
       const priceLabel = minPrice === maxPrice
-        ? `$${minPrice.toFixed(2)}/call`
-        : `$${minPrice.toFixed(2)}–$${maxPrice.toFixed(2)}/call`;
+        ? `$${minPrice.toFixed(4)}/call`
+        : `$${minPrice.toFixed(4)}–$${maxPrice.toFixed(4)}/call`;
       premiumSection.innerHTML = `
         <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:rgba(42,26,58,0.15);">
           <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">⚡ PREMIUM API SERVICES · ${priceLabel}</div>
@@ -2565,7 +2565,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               const toolNames = s.tools.map((t) => t.name).join(", ");
               return `<div style="display:flex; justify-content:space-between; align-items:center; padding:0.25rem 0.4rem; border:1px solid #2a1a3a; border-radius:0.3rem; background:rgba(18,13,26,0.5);">
                 <span style="font-size:0.7rem; color:#ccc;">${esc(s.name)}</span>
-                <span style="font-size:0.65rem; color:#b388ff; font-weight:600;">$${s.pricePerCall.toFixed(2)}/call</span>
+                <span style="font-size:0.65rem; color:#b388ff; font-weight:600;">$${s.pricePerCall.toFixed(4)}/call</span>
               </div>
               ${toolNames ? `<div style="font-size:0.6rem; color:#555; margin:-0.15rem 0 0.2rem 0.5rem;">Tools: ${esc(toolNames)}</div>` : ""}`;
             }).join("")}

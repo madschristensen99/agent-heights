@@ -99,11 +99,11 @@ export function MarketplaceView() {
                     <h3 className="font-medium text-gray-200 truncate">{agent.name}</h3>
                     <p className="text-xs text-muted mt-0.5">{agent.language}</p>
                   </div>
-                  {agent.is_free ? (
+                  {!agent.is_premium && (agent.is_free ? (
                     <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">Free</span>
                   ) : agent.price_usd != null ? (
                     <span className="text-xs bg-bg-hover text-gray-300 px-2 py-0.5 rounded-full">${agent.price_usd}</span>
-                  ) : null}
+                  ) : null)}
                   {agent.is_premium && (
                     <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">Premium</span>
                   )}
@@ -119,15 +119,15 @@ export function MarketplaceView() {
                     const minPrice = Math.min(...services.map((s) => s.pricePerCall));
                     const maxPrice = Math.max(...services.map((s) => s.pricePerCall));
                     const priceLabel = minPrice === maxPrice
-                      ? `$${minPrice.toFixed(2)}/call`
-                      : `$${minPrice.toFixed(2)}–$${maxPrice.toFixed(2)}/call`;
+                      ? `$${minPrice.toFixed(4)}/call`
+                      : `$${minPrice.toFixed(4)}–$${maxPrice.toFixed(4)}/call`;
                     return (
                       <div className="mt-2 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
                         <div className="text-xs text-purple-400 font-medium mb-1">⚡ {priceLabel}</div>
                         <div className="flex flex-wrap gap-1">
                           {services.slice(0, 4).map((s, i) => (
                             <span key={i} className="text-xs text-purple-300/70 bg-purple-500/10 px-1.5 py-0.5 rounded">
-                              {s.name} · ${s.pricePerCall.toFixed(2)}
+                              {s.name} · ${s.pricePerCall.toFixed(4)}
                             </span>
                           ))}
                         </div>
