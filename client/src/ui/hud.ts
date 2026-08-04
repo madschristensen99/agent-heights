@@ -1446,6 +1446,10 @@ export class Hud {
             <input type="checkbox" id="s-auto-cmd" ${s.cline.autoApproveCommands ? "checked" : ""} />
             <span>AUTO-APPROVE SHELL COMMANDS (unattended execution)</span>
           </label>
+          <label class="chk">
+            <input type="checkbox" id="s-review-handoff" ${s.cline.reviewBeforeHandoff ? "checked" : ""} />
+            <span>REQUIRE MANAGER REVIEW BEFORE TASK HANDOFFS (gates handoffs until approved)</span>
+          </label>
           <div class="sec">RAILWAY</div>
           <label class="chk">
             <input type="checkbox" id="s-railway" ${s.railway?.enabled ? "checked" : ""} />
@@ -1620,6 +1624,7 @@ export class Hud {
           cline: {
             maxIterations: Number((document.getElementById("s-turns") as HTMLInputElement).value) || 60,
             autoApproveCommands: (document.getElementById("s-auto-cmd") as HTMLInputElement).checked,
+            reviewBeforeHandoff: (document.getElementById("s-review-handoff") as HTMLInputElement).checked,
           },
           game: {
             idleWander: (document.getElementById("s-wander") as HTMLInputElement).checked,
@@ -1783,6 +1788,13 @@ export class Hud {
                 <option value="manager">Manager — splits big goals across the team</option>
                 <option value="devops">DevOps — manages Railway deployments & infrastructure</option>
               </select>
+            </label>
+            <label>SKILLS <span class="opt">(what tasks this agent can pick up)</span>
+              <div id="h-skills" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+                ${["frontend", "backend", "devops", "data", "writing", "research", "crypto"].map((s) =>
+                  `<label class="chk" style="font-size:0.75rem;"><input type="checkbox" class="h-skill" value="${s}" /> ${s.toUpperCase()}</label>`
+                ).join("")}
+              </div>
             </label>
             <label>SYSTEM PROMPT <span class="opt">(optional)</span>
               <textarea id="h-prompt" rows="3"
@@ -2410,7 +2422,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
       ${agent.role === "manager" ? "· 👔 MANAGER " : ""}
-      · ${agent.id === AGENT_RESOURCES_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : agent.id === WIZARD_ID ? "world builder" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done`;
+      · ${agent.id === AGENT_RESOURCES_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : agent.id === WIZARD_ID ? "world builder" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done
+      ${agent.skills && agent.skills.length ? `<div class="agent-skills">${agent.skills.map((s) => `<span class="skill-badge">${esc(s)}</span>`).join("")}</div>` : ""}`;
 
     // Agent Resources and Hermes can't be fired, vacationed, or fused
     const isNpc = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID || agent.id === WIZARD_ID;
@@ -3449,13 +3462,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (sig === this.lastBoardSig) return;
     this.lastBoardSig = sig;
 
-    const cols: Record<CardStatus, TaskCard[]> = { backlog: [], in_progress: [], done: [] };
+    const cols: Record<CardStatus, TaskCard[]> = { backlog: [], in_progress: [], done: [], paused: [] };
     for (const c of cards) cols[c.status].push(c);
 
     const colLabels: Record<CardStatus, string> = {
       backlog: "BACKLOG",
       in_progress: "IN PROGRESS",
       done: "DONE",
+      paused: "PAUSED",
     };
 
     const agentName = (id: string | null) => {
@@ -3483,17 +3497,21 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         ? `<button class="btn mini" data-move="${c.id}" data-status="backlog">↩ BACKLOG</button>`
         : c.status === "in_progress"
           ? `<button class="btn mini" data-move="${c.id}" data-status="done">✓ DONE</button>`
+        : c.status === "paused"
+          ? `<button class="btn mini" data-move="${c.id}" data-status="backlog">▶ RESUME</button>`
           : "";
 
       const typeIcon: Record<string, string> = { task: "📋", chat: "💬", review: "🔍", goal: "🎯" };
       const typeBadge = c.type ? `<span class="card-type-badge">${typeIcon[c.type] ?? "📋"}</span>` : "";
+      const catColors: Record<string, string> = { frontend: "#61dafb", backend: "#68a063", devops: "#326ce5", data: "#ff6b6b", writing: "#f9ca24", research: "#a78bfa", crypto: "#f7931a", general: "#9aa0b0" };
+      const catBadge = c.category ? `<span class="card-cat-badge" style="color:${catColors[c.category] ?? "#9aa0b0"}">${esc(c.category)}</span>` : "";
       const progressBar = (c.type === "goal" && c.progress != null && c.progress > 0)
         ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${c.progress}%"></div></div>`
         : "";
 
       return `
         <div class="board-card" data-card-id="${c.id}">
-          <div class="card-title">${typeBadge} ${esc(c.title)}</div>
+          <div class="card-title">${typeBadge} ${esc(c.title)} ${catBadge}</div>
           ${c.description ? `<div class="card-desc">${esc(c.description)}</div>` : ""}
           ${progressBar}
           <div class="card-footer">
@@ -3516,7 +3534,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       </div>`;
 
     document.getElementById("board-columns")!.innerHTML =
-      (["backlog", "in_progress", "done"] as CardStatus[]).map(colHtml).join("");
+      (["backlog", "in_progress", "done", "paused"] as CardStatus[]).map(colHtml).join("");
 
     // wire up card interactions
     document.querySelectorAll<HTMLElement>("[data-assign]").forEach((el) => {

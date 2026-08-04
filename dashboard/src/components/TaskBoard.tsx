@@ -7,6 +7,7 @@ const COLUMNS: { status: CardStatus; label: string; color: string }[] = [
   { status: "backlog", label: "Backlog", color: "border-l-muted" },
   { status: "in_progress", label: "In Progress", color: "border-l-status-thinking" },
   { status: "done", label: "Done", color: "border-l-status-done" },
+  { status: "paused", label: "Paused", color: "border-l-muted" },
 ];
 
 export function TaskBoard() {
@@ -78,7 +79,7 @@ export function TaskBoard() {
       )}
 
       <div className="flex-1 overflow-auto px-6 py-4">
-        <div className="grid grid-cols-3 gap-4 min-h-full">
+        <div className="grid grid-cols-4 gap-4 min-h-full">
           {COLUMNS.map((col) => {
             const cards = board.filter((c) => c.status === col.status);
             return (
@@ -135,7 +136,14 @@ function CardItem({
       onClick={() => setShowMenu(!showMenu)}
     >
       <div className="flex items-start justify-between gap-2">
-        <h4 className="text-sm font-medium text-gray-200 flex-1">{card.title}</h4>
+        <h4 className="text-sm font-medium text-gray-200 flex-1">
+          {card.title}
+          {card.category && card.category !== "general" && (
+            <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-muted bg-bg-input px-1.5 py-0.5 rounded">
+              {card.category}
+            </span>
+          )}
+        </h4>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
           className="opacity-0 group-hover:opacity-100 text-muted hover:text-status-error p-1"

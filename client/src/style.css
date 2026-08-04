@@ -1395,6 +1395,7 @@ kbd {
 .col-backlog .board-col-header { border-color: var(--amber); color: var(--amber); }
 .col-in_progress .board-col-header { border-color: var(--green); color: var(--green); }
 .col-done .board-col-header { border-color: var(--blue); color: var(--blue); }
+.col-paused .board-col-header { border-color: var(--dim); color: var(--dim); }
 
 .board-col-count {
   background: var(--panel);
@@ -1431,6 +1432,7 @@ kbd {
 .col-backlog .board-card { border-left: 3px solid var(--amber); }
 .col-in_progress .board-card { border-left: 3px solid var(--green); }
 .col-done .board-card { border-left: 3px solid var(--blue); opacity: 0.75; }
+.col-paused .board-card { border-left: 3px solid var(--dim); opacity: 0.6; }
 
 .card-title {
   font-size: 13px;
@@ -1452,6 +1454,37 @@ kbd {
 
 .card-type-badge {
   margin-right: 4px;
+}
+
+.card-cat-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge-soft);
+}
+
+.agent-skills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.skill-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge-soft);
+  color: var(--accent);
 }
 
 .card-progress-bar {

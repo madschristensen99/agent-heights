@@ -1038,7 +1038,7 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         case "hire":
-          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana, msg.crossmintWallet, msg.isPremium, msg.circleServices);
+          await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana, msg.crossmintWallet, msg.isPremium, msg.circleServices, msg.skills);
           break;
         case "update_agent": {
           if (msg.systemPrompt !== undefined) {

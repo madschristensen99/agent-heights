@@ -242,6 +242,8 @@ export interface AgentInfo {
   circleServices?: CircleServiceConfig[];
   /** Agent ID this agent is waiting at (when status is "waiting"). */
   waitingFor?: string | null;
+  /** Skill tags describing what this agent is good at (matched against card categories). */
+  skills?: TaskCategory[];
 }
 
 /** A premium API service from Circle's x402 marketplace. */
@@ -340,6 +342,7 @@ export interface FiredAgent {
   crossmintWallet?: boolean;
   isPremium?: boolean;
   circleServices?: CircleServiceConfig[];
+  skills?: TaskCategory[];
 }
 
 /** An agent on vacation — temporarily away with all data preserved. */
@@ -361,6 +364,7 @@ export interface VacationedAgent {
   mood?: AgentMood;
   deskIndex: number;
   vacationedAt: number;
+  skills?: TaskCategory[];
 }
 
 /** Persisted world state — seed + fired agents + vacationed agents + visited chunk data. */
@@ -511,7 +515,10 @@ export const WORLD_TILE_FRAMES = 24;
 /** Number of texture variants generated per tile type for visual variety. */
 export const WORLD_VARIANTS = 4;
 
-export type CardStatus = "backlog" | "in_progress" | "done";
+export type CardStatus = "backlog" | "in_progress" | "done" | "paused";
+
+/** Task categories used for agent-skill matching. */
+export type TaskCategory = "general" | "frontend" | "backend" | "devops" | "data" | "writing" | "research" | "crypto";
 
 /** A task saved across server restarts so agents can resume exactly where they left off. */
 export interface PendingTask {
@@ -535,6 +542,8 @@ export interface TaskCard {
   progress?: number; // 0-100
   originalAgentId?: string | null;
   revertedAt?: number | null;
+  autoCreated?: boolean;
+  category?: TaskCategory;
 }
 
 export interface AgentSchedule {
@@ -653,6 +662,8 @@ export interface GameSettings {
     maxIterations: number;
     /** If true, shell commands run without approval prompts. */
     autoApproveCommands: boolean;
+    /** If true, a manager must review work before it's handed off to the next agent. */
+    reviewBeforeHandoff: boolean;
   };
   game: {
     idleWander: boolean;
@@ -667,7 +678,7 @@ export interface GameSettings {
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
-  cline: { maxIterations: 60, autoApproveCommands: true },
+  cline: { maxIterations: 60, autoApproveCommands: true, reviewBeforeHandoff: false },
   game: { idleWander: true, theme: "classic" },
   railway: { enabled: true },
   mailboxPlatforms: [null, null, null, null, null, null],
@@ -747,7 +758,7 @@ export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean; crossmintWallet?: boolean; isPremium?: boolean; circleServices?: CircleServiceConfig[] }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean; crossmintWallet?: boolean; isPremium?: boolean; circleServices?: CircleServiceConfig[]; skills?: TaskCategory[] }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_new"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }
@@ -999,7 +1010,8 @@ export interface TierInfo {
   label: string;       // display label
   name: string;        // display name
   agentLimit: number;  // max agents (Infinity for unlimited)
-  usageCap: number;     // max monthly spend in cents (80% of price)
+  usageCap: number;     // max monthly LLM spend in cents (80% of price)
+  premiumCap: number;   // max monthly premium API spend in cents (separate budget)
   description: string;
   annualPrice: number;  // cents per year (10 months — 2 months free)
   annualLabel: string;  // display label for annual
@@ -1013,6 +1025,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     name: "Starter",
     agentLimit: 4,
     usageCap: 80,
+    premiumCap: 50,
     description: "Hire and manage up to 4 AI agents in your office.",
     annualPrice: 990,
     annualLabel: "$9.90/yr",
@@ -1024,6 +1037,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     name: "Pro",
     agentLimit: 6,
     usageCap: 400,
+    premiumCap: 300,
     description: "Hire and manage up to 6 AI agents in your office.",
     annualPrice: 4990,
     annualLabel: "$49.90/yr",
@@ -1035,6 +1049,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     name: "Business",
     agentLimit: 8,
     usageCap: 1600,
+    premiumCap: 1200,
     description: "Hire and manage up to 8 AI agents in your office.",
     annualPrice: 19990,
     annualLabel: "$199.90/yr",

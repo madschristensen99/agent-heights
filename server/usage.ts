@@ -159,3 +159,30 @@ export function getUsageCap(tier: SubscriptionTier | null): number {
   if (!tier) return 0;
   return SUBSCRIPTION_TIERS[tier].usageCap / 100; // convert cents to dollars
 }
+
+/** Get the monthly premium API cap in USD for a subscription tier. Returns 0 for no subscription. */
+export function getPremiumCap(tier: SubscriptionTier | null): number {
+  if (!tier) return 0;
+  return SUBSCRIPTION_TIERS[tier].premiumCap / 100; // convert cents to dollars
+}
+
+/** Get total premium API spend for the current calendar month for a user.
+ *  Premium calls are recorded with model starting with "circle:". */
+export async function getMonthlyPremiumSpend(userId: string): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { data, error } = await supabaseAdmin
+      .from("api_usage_records")
+      .select("total_cost")
+      .eq("user_id", userId)
+      .like("model", "circle:%")
+      .gte("created_at", startOfMonth.toISOString());
+    if (error || !data) return 0;
+    return data.reduce((sum, row) => sum + Number(row.total_cost ?? 0), 0);
+  } catch (err) {
+    console.error("[usage] getMonthlyPremiumSpend error:", err);
+    return 0;
+  }
+}

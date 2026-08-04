@@ -13,9 +13,39 @@
 
 import type { AgentTool } from "@cline/sdk";
 import { payAndFetchWithOptions, isX402Configured } from "./x402-pay.js";
-import { getMonthlySpend } from "../usage.js";
-import { getUsageCap } from "../usage.js";
+import { getMonthlyPremiumSpend, getPremiumCap } from "../usage.js";
 import type { SubscriptionTier } from "../../shared/types.js";
+
+/** In-memory premium spend cache per user — prevents race conditions where
+ *  concurrent calls all read the same stale DB value and overshoot the budget.
+ *  Keyed by userId, value is the running spend for the current month.
+ *  Initialized from DB on first access, incremented on each successful call. */
+const premiumSpendCache = new Map<string, { spend: number; month: number }>();
+
+/** Get cached premium spend, initializing from DB if needed. */
+async function getCachedPremiumSpend(userId: string): Promise<number> {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const cached = premiumSpendCache.get(userId);
+
+  // Cache hit for current month
+  if (cached && cached.month === currentMonth) {
+    return cached.spend;
+  }
+
+  // Cache miss or month changed — fetch from DB
+  const dbSpend = await getMonthlyPremiumSpend(userId);
+  premiumSpendCache.set(userId, { spend: dbSpend, month: currentMonth });
+  return dbSpend;
+}
+
+/** Increment the in-memory spend cache after a successful premium call. */
+function incrementSpendCache(userId: string, cost: number): void {
+  const cached = premiumSpendCache.get(userId);
+  if (cached) {
+    cached.spend += cost;
+  }
+}
 
 /** Maximum allowed cost per single API call (USD). */
 const MAX_COST_PER_CALL = parseFloat(process.env.CIRCLE_MAX_COST_PER_CALL ?? "0.50");
@@ -111,12 +141,12 @@ export async function loadPremiumTools(
             throw new Error(`Service cost $${service.pricePerCall} exceeds limit $${MAX_COST_PER_CALL}.`);
           }
 
-          // Budget check — compare monthly spend vs usage cap
-          const cap = getUsageCap(proxyCtx.subscriptionTier);
-          if (cap > 0) {
-            const spend = await getMonthlySpend(proxyCtx.userId);
-            if (spend + service.pricePerCall >= cap) {
-              throw new Error(`Budget exceeded ($${spend.toFixed(2)}/$${cap.toFixed(2)}).`);
+          // Budget check — compare monthly premium spend vs premium cap (separate from LLM budget)
+          const premiumCap = getPremiumCap(proxyCtx.subscriptionTier);
+          if (premiumCap > 0) {
+            const spend = await getCachedPremiumSpend(proxyCtx.userId);
+            if (spend + service.pricePerCall >= premiumCap) {
+              throw new Error(`Premium budget exceeded ($${spend.toFixed(2)}/$${premiumCap.toFixed(2)}).`);
             }
           }
 
@@ -152,6 +182,11 @@ export async function loadPremiumTools(
           if (result.status !== 200 && result.status !== 202) {
             console.error(`[premium-proxy] ${service.name}.${def.name} returned status ${result.status}`);
             return `API returned HTTP ${result.status}`;
+          }
+
+          // Increment in-memory spend cache immediately (prevents race conditions)
+          if (result.cost > 0) {
+            incrementSpendCache(proxyCtx.userId, result.cost);
           }
 
           // Record the cost to api_usage_records via the callback

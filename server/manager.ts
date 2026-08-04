@@ -28,6 +28,7 @@ import type {
   AgentACL,
   SubscriptionTier,
   CardType,
+  TaskCategory,
   OfficeMCPServer,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
@@ -328,6 +329,8 @@ export class AgentManager {
   private shuttingDown = false;
   /** Shared office state graph — structured cross-agent coordination. */
   private officeState = new OfficeState();
+  /** Pending handoffs waiting for manager review (keyed by worker agent ID). */
+  private pendingHandoffs = new Map<string, { targetId: string; task: string; result: string; cardId: string | null; notifyId?: string }>();
   /** Current subscription tier — set by server when payment status is loaded. */
   subscriptionTier: SubscriptionTier | null = null;
   /** Max agents allowed for this user's tier. */
@@ -478,6 +481,7 @@ export class AgentManager {
     }
     // any card that was in-progress when the server stopped goes back to backlog
     // UNLESS the agent has pending tasks to resume (the card will be re-assigned)
+    // Paused cards stay paused — they were intentionally stopped by the human
     const agentsWithPendingTasks = new Set(Object.keys(savedPendingTasks));
     for (const card of this.board.values()) {
       if (card.status === "in_progress") {
@@ -576,6 +580,7 @@ export class AgentManager {
       cline: {
         maxIterations: Math.min(500, Math.max(1, Math.round(Number(s?.cline?.maxIterations) || 60))),
         autoApproveCommands: s?.cline?.autoApproveCommands !== false,
+        reviewBeforeHandoff: s?.cline?.reviewBeforeHandoff === true,
       },
       game: {
         idleWander: s?.game?.idleWander !== false,
@@ -1200,7 +1205,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[]): Promise<void> {
+  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[], skills?: TaskCategory[]): Promise<void> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -1259,6 +1264,7 @@ export class AgentManager {
       circleServices: circleServices?.length ? circleServices : undefined,
       personality: traits,
       mood: "content",
+      skills: skills?.length ? skills : undefined,
     };
 
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
@@ -1294,7 +1300,7 @@ export class AgentManager {
   /** Hire an agent from Agent Resources's chat — broadcasts helicopter_delivery to client
    *  so the helicopter animation plays, then hires the agent server-side.
    *  Returns the new agent's id. */
-  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[]): Promise<string> {
+  async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[], skills?: TaskCategory[]): Promise<string> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     // Broadcast helicopter delivery to all clients so the animation plays
     this.broadcast({
@@ -1307,7 +1313,7 @@ export class AgentManager {
       alreadyHired: true,
     });
     // Hire the agent server-side (this creates the agent + broadcasts "agent" msg)
-    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana, crossmintWallet, isPremium, circleServices);
+    await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana, crossmintWallet, isPremium, circleServices, skills);
     // Find the agent we just hired by name
     const rt = [...this.agents.values()].find((a) => a.info.name === cleanName);
     return rt?.info.id ?? "";
@@ -1366,6 +1372,9 @@ export class AgentManager {
     const isPremium = infoA.isPremium || infoB.isPremium;
     const mergedCircleServices = [...(infoA.circleServices ?? []), ...(infoB.circleServices ?? [])];
 
+    // Merge skills — union of both agents' skills
+    const mergedSkills = [...new Set([...(infoA.skills ?? []), ...(infoB.skills ?? [])])];
+
     // Merge personality — average each trait
     const mergedPersonality = personality ?? {
       openness: ((infoA.personality?.openness ?? 0.5) + (infoB.personality?.openness ?? 0.5)) / 2,
@@ -1393,6 +1402,7 @@ export class AgentManager {
       crossmintWallet || undefined,
       isPremium || undefined,
       mergedCircleServices.length > 0 ? mergedCircleServices : undefined,
+      mergedSkills.length > 0 ? mergedSkills : undefined,
     );
 
     // Find the newly hired fused agent
@@ -1660,7 +1670,7 @@ export class AgentManager {
     }
     rt.abort.abort();
     if (rt.cardId) {
-      this.revertCard(rt.cardId);
+      this.stopCard(rt.cardId);
       rt.cardId = null;
     }
     rt.handoffTo = null;
@@ -1686,7 +1696,7 @@ export class AgentManager {
       if (rt.abort) {
         rt.abort.abort();
         if (rt.cardId) {
-          this.revertCard(rt.cardId);
+          this.stopCard(rt.cardId);
           rt.cardId = null;
         }
         rt.handoffTo = null;
@@ -1935,6 +1945,7 @@ export class AgentManager {
       mood: rt.info.mood,
       deskIndex: rt.info.deskIndex,
       vacationedAt: Date.now(),
+      skills: rt.info.skills,
     };
     this.vacationedAgents.set(vac.id, vac);
 
@@ -1982,6 +1993,7 @@ export class AgentManager {
       mcpServers: va.mcpServers,
       personality: va.personality,
       mood: va.mood ?? "content",
+      skills: va.skills,
     };
 
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
@@ -2030,6 +2042,7 @@ export class AgentManager {
       crossmintWallet: fa.crossmintWallet ?? false,
       isPremium: fa.isPremium ?? false,
       circleServices: fa.circleServices,
+      skills: fa.skills,
     };
 
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
@@ -2068,9 +2081,23 @@ export class AgentManager {
     this.save.setBoard([...this.board.values()]);
   }
 
+  /** Infer a task category from the task text by keyword matching. */
+  private inferCategory(task: string): TaskCategory {
+    const t = task.toLowerCase();
+    if (/\breact|vue|angular|svelte|frontend|css|tailwind|html|ui|component|button|layout|dashboard|frontend\b/.test(t)) return "frontend";
+    if (/\bapi|backend|server|endpoint|database|sql|node|python|express|rest|graphql|auth|middleware\b/.test(t)) return "backend";
+    if (/\bdeploy|docker|kubernetes|ci\/cd|pipeline|infrastructure|railway|nginx|devops\b/.test(t)) return "devops";
+    if (/\bdata|analytics|csv|json|parse|transform|etl|chart|graph|statistics\b/.test(t)) return "data";
+    if (/\bwrite|blog|article|content|copy|documentation|docs|story|essay\b/.test(t)) return "writing";
+    if (/\bresearch|investigate|analyze|study|survey|report|explore\b/.test(t)) return "research";
+    if (/\bsolana|ethereum|crypto|wallet|token|nft|blockchain|web3|defi|smart contract\b/.test(t)) return "crypto";
+    return "general";
+  }
+
   /** Create a board card automatically for a task assignment (not manually created by the user). */
   private autoCardFor(agentId: string, task: string, type: CardType = "task"): string {
     const title = task.length > 80 ? task.slice(0, 77) + "…" : task;
+    const category = this.inferCategory(task);
     const card: TaskCard = {
       id: randomUUID().slice(0, 8),
       title,
@@ -2081,6 +2108,8 @@ export class AgentManager {
       createdAt: Date.now(),
       type,
       progress: 0,
+      autoCreated: true,
+      category,
     };
     this.board.set(card.id, card);
     this.persistBoard();
@@ -2098,6 +2127,7 @@ export class AgentManager {
       status: "backlog",
       assignedAgentId: null,
       createdAt: Date.now(),
+      category: this.inferCategory(cleanTitle + " " + (description ?? "")),
     };
     this.board.set(card.id, card);
     this.persistBoard();
@@ -2142,6 +2172,10 @@ export class AgentManager {
       if (rt) rt.cardId = null;
       card.assignedAgentId = null;
     }
+    // resuming from paused: clear the revertedAt so cooldown doesn't block pickup
+    if (status === "backlog" && card.status === "paused") {
+      card.revertedAt = null;
+    }
     card.status = status;
     this.persistBoard();
     this.broadcast({ type: "card", card });
@@ -2178,6 +2212,23 @@ export class AgentManager {
     card.revertedAt = Date.now();
     this.persistBoard();
     this.broadcast({ type: "card", card });
+  }
+
+  /** Human stopped a task — pause the card so agents don't auto-pick it.
+   *  Auto-created cards are deleted instead since they were task-specific. */
+  private stopCard(cardId: string): void {
+    const card = this.board.get(cardId);
+    if (!card) return;
+    if (card.autoCreated) {
+      this.board.delete(cardId);
+      this.persistBoard();
+      this.broadcast({ type: "card_removed", cardId });
+    } else {
+      card.status = "paused";
+      card.assignedAgentId = null;
+      this.persistBoard();
+      this.broadcast({ type: "card", card });
+    }
   }
 
   /** Get the workspace directory path for an agent (used by file browser endpoints). */
@@ -2462,6 +2513,15 @@ export class AgentManager {
     this.checkStaleMail();
   }
 
+  /** Check if an agent's skills match a card's category.
+   *  Agents without skills can pick up anything (backward compat).
+   *  Cards with category "general" can be picked up by anyone. */
+  private agentCanHandleCard(rt: AgentRuntime, card: TaskCard): boolean {
+    if (!card.category || card.category === "general") return true;
+    if (!rt.info.skills || rt.info.skills.length === 0) return true;
+    return rt.info.skills.includes(card.category);
+  }
+
   /** An idle agent decides what to do autonomously. */
   private autonomousThink(rt: AgentRuntime): void {
     const p = rt.info.personality ?? DEFAULT_PERSONALITY;
@@ -2476,7 +2536,13 @@ export class AgentManager {
       );
       // Prefer cards with no original assignee (fresh) or cards past cooldown
       const pickable = backlog.filter(
-        (c) => !c.originalAgentId || !c.revertedAt || Date.now() - c.revertedAt > REVERT_COOLDOWN_MS,
+        (c) => (!c.originalAgentId || !c.revertedAt || Date.now() - c.revertedAt > REVERT_COOLDOWN_MS) &&
+        // Only delegate if some free worker has the right skills
+        [...this.agents.values()].some(
+          (a) => a.info.id !== rt.info.id && a.info.role !== "manager" &&
+          a.info.status === "idle" && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID && a.info.id !== WIZARD_ID &&
+          this.agentCanHandleCard(a, c),
+        ),
       );
       if (pickable.length > 0) {
         const card = pickable[0];
@@ -2498,7 +2564,7 @@ export class AgentManager {
     if (rt.info.role === "worker") {
       const REVERT_COOLDOWN_MS = 60_000;
       const backlog = [...this.board.values()].filter(
-        (c) => c.status === "backlog" && !c.assignedAgentId,
+        (c) => c.status === "backlog" && !c.assignedAgentId && this.agentCanHandleCard(rt, c),
       );
       if (backlog.length > 0 && p.conscientiousness > 0.4) {
         // Prefer cards originally assigned to this agent (their own reverted tasks)
@@ -2783,10 +2849,12 @@ export class AgentManager {
         wizardBranch: rt.info.id === WIZARD_ID ? (process.env.WIZARD_BRANCH ?? "main") : undefined,
         officeState: this.officeState,
         agentName: rt.info.name,
-        getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId })),
+        getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId, category: c.category })),
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);
           if (!card || card.status !== "backlog" || card.assignedAgentId) return false;
+          const claimer = this.agents.get(agentId);
+          if (claimer && !this.agentCanHandleCard(claimer, card)) return false;
           card.assignedAgentId = agentId;
           card.status = "in_progress";
           this.persistBoard();
@@ -2986,7 +3054,13 @@ export class AgentManager {
         // Don't notify managers when a manager completes a review — the verdict is already
         // handled by processReviewVerdict above. Notifying would create a recursive
         // review-of-review chain that loops indefinitely.
-        if (!(isManager && isReviewTask)) this.notifyManagersOfCompletion(rt, task, finalText, false);
+        if (!(isManager && isReviewTask)) {
+          // If review-before-handoff is enabled and the handoff was gated,
+          // completeHandoff already called notifyManagersOfCompletion — skip the duplicate.
+          if (!this.pendingHandoffs.has(rt.info.id)) {
+            this.notifyManagersOfCompletion(rt, task, finalText, false);
+          }
+        }
         // Release any agent that was waiting for this task to finish.
         if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
         this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
@@ -3278,6 +3352,8 @@ export class AgentManager {
       const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${ctx.originalTask.slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.`;
       this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback.`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} requested rework from ${ctx.agentName}.` });
+      // Discard any pending handoff — the rework will re-trigger it when complete
+      this.pendingHandoffs.delete(ctx.agentId);
       // Reuse the original card so the rework doesn't create a new orphaned card
       this.assign(ctx.agentId, reworkTask, undefined, ctx.cardId ?? undefined);
       return;
@@ -3306,11 +3382,34 @@ export class AgentManager {
           appendFile(inboxPath, entry, "utf-8").catch(() => {}),
         );
       }).catch(() => {});
+      // Release the pending handoff if one was gated
+      this.releasePendingHandoff(ctx.agentId);
       return;
     }
 
     // No clear verdict — default to approved
     this.log(mgr, "status", `Review complete — no explicit APPROVED/NEEDS REWORK verdict, defaulting to approved.`);
+    // Release the pending handoff if one was gated
+    this.releasePendingHandoff(ctx.agentId);
+  }
+
+  /** Deliver a pending handoff that was gated for manager review. */
+  private releasePendingHandoff(workerId: string): void {
+    const pending = this.pendingHandoffs.get(workerId);
+    if (!pending) return;
+    this.pendingHandoffs.delete(workerId);
+    const target = this.agents.get(pending.targetId);
+    if (!target) {
+      this.log({ info: { name: "System" } } as AgentRuntime, "status", `Pending handoff target no longer works here — discarding.`);
+      return;
+    }
+    const worker = this.agents.get(workerId);
+    if (!worker) return;
+    this.log(worker, "status", `Manager approved — delivering handoff to ${target.info.name}.`);
+    this.broadcast({ type: "toast", text: `Review approved — ${worker.info.name}'s handoff delivered to ${target.info.name}.` });
+    this.deliverHandoff(worker, target, pending.task, pending.result);
+    // If the worker was waiting for the target, release them now that the handoff is delivered
+    if (pending.notifyId) this.releaseWaitingAgent(pending.notifyId);
   }
 
   /** Forward a finished task's result to the agent chosen at assign time.
@@ -3325,6 +3424,37 @@ export class AgentManager {
       this.log(rt, "status", "Handoff skipped — that agent no longer works here.");
       return;
     }
+
+    // If review-before-handoff is enabled and a manager is available, gate the handoff
+    // pending manager review. The result won't be delivered to the target until approved.
+    if (this.settings.cline.reviewBeforeHandoff) {
+      const managers = [...this.agents.values()].filter(
+        (m) => m.info.role === "manager" && m.info.id !== rt.info.id,
+      );
+      if (managers.length > 0) {
+        const notifyId = rt.waitFor ? rt.info.id : undefined;
+        this.pendingHandoffs.set(rt.info.id, {
+          targetId,
+          task,
+          result,
+          cardId: rt.cardId,
+          notifyId,
+        });
+        this.log(rt, "status", `Holding handoff to ${target.info.name} — waiting for manager review before delivery.`);
+        this.broadcast({ type: "toast", text: `${rt.info.name}'s handoff to ${target.info.name} is pending manager review.` });
+        // Trigger a manager review of this work (notifies all managers; first to review releases the handoff)
+        this.notifyManagersOfCompletion(rt, task, result, false);
+        return;
+      }
+      // No manager available — fall through to immediate handoff
+      this.log(rt, "status", `No manager available for review — proceeding with direct handoff.`);
+    }
+
+    this.deliverHandoff(rt, target, task, result);
+  }
+
+  /** Deliver a handoff to the target agent immediately (no review gate). */
+  private deliverHandoff(rt: AgentRuntime, target: AgentRuntime, task: string, result: string): void {
     const workerWs = this.cwdFor(this.slugFor(rt), rt.info.id);
     const isDevopsTarget = target.info.role === "devops";
     const handoffTask = [

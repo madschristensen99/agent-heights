@@ -142,7 +142,7 @@ export async function makeTools(cwd: string, opts?: {
   sharedCwd?: string;
   workspaceRoot?: string;
   agentId?: string;
-  getBoard?: () => { id: string; title: string; status: string; assignedAgentId: string | null }[];
+  getBoard?: () => { id: string; title: string; status: string; assignedAgentId: string | null; category?: string }[];
   claimCard?: (cardId: string, agentId: string) => boolean;
   eventFeedPath?: string;
   submitState?: { called: boolean; verified: boolean; callCount: number };
@@ -557,12 +557,12 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.getBoard) {
     const readBoardTool: AgentTool<any, any> = {
       name: "read_board",
-      description: "Read the office task board. Returns all task cards with their status and assignee.",
+      description: "Read the office task board. Returns all task cards with their status and assignee. Cards in 'paused' status were stopped by the boss and are not available for pickup — do not attempt to claim them.",
       inputSchema: { type: "object", properties: {} },
       async execute() {
         const cards = opts.getBoard!();
         if (cards.length === 0) return "The task board is empty.";
-        return cards.map((c) => `[${c.status}] ${c.id}: ${c.title} (assigned: ${c.assignedAgentId ?? "unassigned"})`).join("\n");
+        return cards.map((c) => `[${c.status}] ${c.id}: ${c.title} (assigned: ${c.assignedAgentId ?? "unassigned"})${c.category ? ` [category: ${c.category}]` : ""}`).join("\n");
       },
     };
     boardTools.push(readBoardTool);
@@ -570,7 +570,7 @@ export async function makeTools(cwd: string, opts?: {
   if (opts?.claimCard && opts?.agentId) {
     const claimCardTool: AgentTool<any, any> = {
       name: "claim_card",
-      description: "Claim an unassigned task card from the board for yourself. The card must be in 'backlog' status and unassigned.",
+      description: "Claim an unassigned task card from the board for yourself. The card must be in 'backlog' status and unassigned. You can only claim cards whose category matches your skills (or cards with no category / 'general').",
       inputSchema: {
         type: "object",
         properties: {
