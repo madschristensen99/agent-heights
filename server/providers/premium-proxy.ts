@@ -76,9 +76,9 @@ export async function loadPremiumTools(
   services: CircleServiceConfig[],
   proxyCtx: PremiumProxyContext,
 ): Promise<AgentTool<any, any>[]> {
-  if (!isCircleGatewayConfigured()) {
-    console.warn("[premium-proxy] Circle Gateway not configured — premium tools disabled");
-    return [];
+  const gatewayConfigured = isCircleGatewayConfigured();
+  if (!gatewayConfigured) {
+    console.warn("[premium-proxy] Circle Gateway not configured — premium tools will be registered but calls will fail with funding error");
   }
 
   const allTools: AgentTool<any, any>[] = [];
@@ -94,6 +94,14 @@ export async function loadPremiumTools(
         description: `[Premium: $${service.pricePerCall}/call] ${def.description}`,
         inputSchema: def.inputSchema ?? { type: "object", properties: {} },
         async execute(input: any) {
+          // If gateway isn't configured, return a clear error so the agent
+          // knows the issue is funding, not that the tool is missing
+          if (!gatewayConfigured) {
+            return `[ERROR] Premium API ${service.name}.${def.name} cannot be called — the Circle Gateway wallet is not funded. ` +
+              `Ask the user to fund their Agent Heights gateway account (CIRCLE_GATEWAY_PRIVATE_KEY not set). ` +
+              `Do NOT attempt to call this API directly via curl or fetch — the x402 payment protocol requires the gateway wallet.`;
+          }
+
           // Per-task call limit
           taskCallCount++;
           if (taskCallCount > MAX_PREMIUM_CALLS_PER_TASK) {
