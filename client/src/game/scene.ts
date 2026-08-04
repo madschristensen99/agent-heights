@@ -676,8 +676,8 @@ export class OfficeScene extends Phaser.Scene {
           const hasStone = tex.exists(stoneKey);
           const hasLightStone = tex.exists(lightStoneKey);
           const hasDrywall = tex.exists(drywallKey);
-          const hasOfficeWall = tex.exists(AI_OFFICE_TEXTURES.wallClassic) || tex.exists(AI_OFFICE_TEXTURES.wallAgentHeights);
-          if (hasBrick || hasStone || hasLightStone || hasDrywall || hasOfficeWall) {
+          const hasInteriorWall = tex.exists("interior-wall-0");
+          if (hasBrick || hasStone || hasLightStone || hasDrywall || hasInteriorWall) {
             for (let y = 0; y < map.height; y++) {
               for (let x = 0; x < map.width; x++) {
                 const wt = walls.getTileAt(x, y);
@@ -691,18 +691,12 @@ export class OfficeScene extends Phaser.Scene {
                 else if (x === map.width - 1 && hasDrywall) wallKey = drywallKey; // right wall = drywall
                 else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
                 else {
-                  // Interior walls — apply themed office wall texture
-                  const officeWallKeys = [
-                    AI_OFFICE_TEXTURES.wallAgentHeights,
-                    AI_OFFICE_TEXTURES.wallBeige,
-                    AI_OFFICE_TEXTURES.wallBlue,
-                  ];
-                  const officeKey = this.theme === "agentHeights"
-                    ? officeWallKeys[(x + y) % officeWallKeys.length]
-                    : AI_OFFICE_TEXTURES.wallClassic;
-                  if (tex.exists(officeKey)) {
-                    wallKey = officeKey;
-                    wallAlpha = 0.85;
+                  // Interior walls — procedural textured walls with depth/shading
+                  const interiorKeys = ["interior-wall-0", "interior-wall-1", "interior-wall-2"];
+                  const intKey = interiorKeys[(x + y) % interiorKeys.length];
+                  if (tex.exists(intKey)) {
+                    wallKey = intKey;
+                    wallAlpha = 1;
                   }
                 }
                 if (wallKey) {

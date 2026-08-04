@@ -3794,6 +3794,68 @@ function drawEmoteSheet(ctx: CanvasRenderingContext2D, frameSize: number): void 
   }
 }
 
+/** Draw an interior wall tile with pseudo-3D depth — top highlight, bottom shadow,
+ *  subtle texture noise, and panel lines. Seamless left/right edges for tiling. */
+function drawInteriorWall(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  baseColor: number,
+  topColor: number,
+  bottomColor: number,
+  accentColor: number,
+): void {
+  // Vertical gradient — lighter at top (light from above), darker at bottom
+  const grad = ctx.createLinearGradient(0, 0, 0, size);
+  grad.addColorStop(0, rgba(topColor, 1));
+  grad.addColorStop(0.15, rgba(baseColor, 1));
+  grad.addColorStop(0.85, rgba(baseColor, 1));
+  grad.addColorStop(1, rgba(bottomColor, 1));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // Top edge highlight — simulates light catching the wall cap
+  ctx.fillStyle = rgba(topColor, 0.5);
+  ctx.fillRect(0, 0, size, 2);
+  ctx.fillStyle = rgba(topColor, 0.25);
+  ctx.fillRect(0, 2, size, 2);
+
+  // Bottom edge shadow — where wall meets floor
+  ctx.fillStyle = rgba(bottomColor, 0.6);
+  ctx.fillRect(0, size - 4, size, 4);
+  ctx.fillStyle = rgba(0x000000, 0.2);
+  ctx.fillRect(0, size - 2, size, 2);
+
+  // Left/right edge shadows — gives the wall thickness/angle
+  ctx.fillStyle = rgba(0x000000, 0.15);
+  ctx.fillRect(0, 0, 2, size);
+  ctx.fillRect(size - 2, 0, 2, size);
+
+  // Subtle texture noise — deterministic dots for a painted/plaster feel
+  ctx.fillStyle = rgba(accentColor, 0.08);
+  for (let i = 0; i < 24; i++) {
+    const nx = (i * 37 + 13) % size;
+    const ny = (i * 53 + 7) % size;
+    ctx.fillRect(nx, ny, 2, 2);
+  }
+  ctx.fillStyle = rgba(topColor, 0.05);
+  for (let i = 0; i < 16; i++) {
+    const nx = (i * 61 + 23) % size;
+    const ny = (i * 43 + 29) % size;
+    ctx.fillRect(nx, ny, 1, 1);
+  }
+
+  // Wainscot line — horizontal trim at ~70% height for architectural detail
+  const trimY = Math.floor(size * 0.7);
+  ctx.fillStyle = rgba(accentColor, 0.3);
+  ctx.fillRect(0, trimY, size, 1);
+  ctx.fillStyle = rgba(topColor, 0.15);
+  ctx.fillRect(0, trimY - 1, size, 1);
+
+  // Below wainscot — slightly darker band
+  ctx.fillStyle = rgba(bottomColor, 0.08);
+  ctx.fillRect(0, trimY + 1, size, size - trimY - 5);
+}
+
 // ============================================================
 // MAIN TEXTURE GENERATION ENTRY POINT
 // ============================================================
@@ -3815,6 +3877,7 @@ const ALL_PROC_KEYS = [
   "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "fountain-sheet",
   "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
   "emote-icons",
+  "interior-wall-0", "interior-wall-1", "interior-wall-2",
 ];
 
 /**
@@ -4150,6 +4213,26 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         const ct = createCanvasTexture(tex, "tennis-net", 64, 64);
         drawTennisNet(ct.getContext(), 64);
         ct.refresh();
+      }
+    },
+  });
+
+  // --- Interior wall textures ---
+  steps.push({
+    name: "Interior walls",
+    fn: () => {
+      const wallSize = 64;
+      const variants = [
+        { key: "interior-wall-0", base: 0x8a7a6a, top: 0xa89a88, bottom: 0x5a4a3a, accent: 0x6a5a4a },
+        { key: "interior-wall-1", base: 0x6a7a8a, top: 0x8a9aaa, bottom: 0x3a4a5a, accent: 0x4a5a6a },
+        { key: "interior-wall-2", base: 0x7a8a6a, top: 0x9aaa8a, bottom: 0x4a5a3a, accent: 0x5a6a4a },
+      ];
+      for (const v of variants) {
+        if (!tex.exists(v.key)) {
+          const ct = createCanvasTexture(tex, v.key, wallSize, wallSize);
+          drawInteriorWall(ct.getContext(), wallSize, v.base, v.top, v.bottom, v.accent);
+          ct.refresh();
+        }
       }
     },
   });
