@@ -1589,9 +1589,9 @@ export class OfficeScene extends Phaser.Scene {
       const y = -200 - Math.random() * 400;
       const scale = 0.5 + Math.random() * 1.0;
       const baseAlpha = 0.4 + Math.random() * 0.35;
-      const speed = 5 + Math.random() * 15;
+      const speed = 15 + Math.random() * 25;
       const phase = Math.random() * Math.PI * 2;
-      const fadeSpeed = 0.0003 + Math.random() * 0.0004;
+      const fadeSpeed = 0.0008 + Math.random() * 0.0007;
 
       const sprite = this.add.image(x, y, cloudTex)
         .setOrigin(0.5, 0.5)
@@ -1658,9 +1658,9 @@ export class OfficeScene extends Phaser.Scene {
         c.sprite.x = view.x - halfW;
       }
       // Vertical bob around yBase
-      c.sprite.y = c.yBase + Math.sin(t * 0.0002 + c.phase) * 15;
-      // Subtle alpha pulse: oscillates between 40% and 100% of baseAlpha (never fully invisible)
-      const pulse = 0.7 + 0.3 * Math.sin(t * c.fadeSpeed + c.phase);
+      c.sprite.y = c.yBase + Math.sin(t * 0.0004 + c.phase) * 25;
+      // Subtle alpha pulse: oscillates between 30% and 100% of baseAlpha (never fully invisible)
+      const pulse = 0.65 + 0.35 * Math.sin(t * c.fadeSpeed + c.phase);
       c.sprite.setAlpha(c.baseAlpha * pulse);
     }
   }
