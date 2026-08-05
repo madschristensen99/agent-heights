@@ -68,21 +68,21 @@ try {
 type ComponentType = "hair" | "beard" | "shirt" | "pants" | "accessory" | "headFeature";
 
 const COMPONENT_Y_OFFSET: Record<ComponentType, number> = {
-  hair: 0.25,
-  beard: 0.0,
-  shirt: -0.15,
-  pants: -0.30,
-  accessory: 0.25,
-  headFeature: 0.30,
+  hair: 0.40,
+  beard: 0.20,
+  shirt: -0.05,
+  pants: -0.25,
+  accessory: 0.40,
+  headFeature: 0.45,
 };
 
 const COMPONENT_SCALE: Record<ComponentType, number> = {
-  hair: 2.5,
-  beard: 1.5,
-  shirt: 2.0,
-  pants: 2.0,
-  accessory: 1.8,
-  headFeature: 1.8,
+  hair: 1.5,
+  beard: 0.8,
+  shirt: 1.2,
+  pants: 1.2,
+  accessory: 1.0,
+  headFeature: 1.0,
 };
 
 interface ComponentDef {
