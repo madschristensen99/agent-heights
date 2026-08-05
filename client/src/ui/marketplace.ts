@@ -429,7 +429,7 @@ export class MarketplaceBrowser {
       : "";
 
     modal.innerHTML = `
-      <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:85vh; width:90vw; display:flex; flex-direction:column; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
+      <div style="background:#111; border:1px solid #222; border-radius:0.75rem; max-width:520px; max-height:70vh; width:90vw; display:flex; flex-direction:column; box-sizing:border-box; overflow:hidden; color:#e0e0e0; font-family:'M PLUS Rounded 1c',system-ui,sans-serif;">
         <div style="overflow-y:auto; flex:1; min-height:0; padding:1.5rem 1.5rem 0.5rem;">
         <div style="display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:1rem;">
           ${agent.image_url ? `<img src="${agent.image_url}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" onerror="this.onerror=null;this.src='${this.letterAvatar(agent.name, 56)}'" />` : `<img src="${this.letterAvatar(agent.name, 56)}" style="width:56px;height:56px;border-radius:0.5rem;object-fit:cover;" />`}
@@ -458,15 +458,18 @@ export class MarketplaceBrowser {
           <div style="font-size:0.72rem; color:#aaa; line-height:1.4; margin-bottom:0.5rem;">This agent can call paid data APIs (StableSocial, CoinGecko, etc.). Each call costs a small amount, billed to your subscription — no crypto wallet needed.</div>
           <div style="font-size:0.7rem; font-weight:600; color:#888; margin-bottom:0.25rem;">SERVICES & PRICING</div>
           <div style="display:flex; flex-direction:column; gap:0.35rem;">
-            ${circleServices.map((s) => {
-              const toolNames = s.tools.map((t) => t.name).join(", ");
+            ${circleServices.map((s, si) => {
+              const toolCount = s.tools.length;
               return `<div style="padding:0.4rem 0.5rem; border:1px solid #2a1a3a; border-radius:0.375rem; background:#120d1a;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                   <span style="font-size:0.75rem; font-weight:600; color:#ccc;">${this.escape(s.name)}</span>
                   <span style="font-size:0.7rem; font-weight:600; color:#b388ff;">$${s.pricePerCall.toFixed(4)}/call</span>
                 </div>
                 <div style="font-size:0.68rem; color:#777; margin-top:0.15rem;">${this.escape(s.description.slice(0, 100))}</div>
-                ${toolNames ? `<div style="font-size:0.62rem; color:#555; margin-top:0.2rem;">Tools: ${this.escape(toolNames)}</div>` : ""}
+                ${toolCount > 0 ? `<div id="mq-premium-toggle-${si}" style="font-size:0.65rem; color:#b388ff; margin-top:0.25rem; cursor:pointer; user-select:none;">▸ ${toolCount} endpoint${toolCount > 1 ? "s" : ""}</div>
+                <div id="mq-premium-tools-${si}" style="display:none; max-height:120px; overflow-y:auto; margin-top:0.25rem; padding:0.35rem 0.5rem; border:1px solid #2a1a3a; border-radius:0.25rem; background:#0d0a14;">
+                  ${s.tools.map((t) => `<div style="font-size:0.62rem; color:#888; padding:0.1rem 0; border-bottom:1px solid #1a1525;">${this.escape(t.name)}${t.description ? ` <span style="color:#555;">— ${this.escape(t.description.slice(0, 60))}</span>` : ""}</div>`).join("")}
+                </div>` : ""}
               </div>`;
             }).join("")}
           </div>
@@ -478,7 +481,7 @@ export class MarketplaceBrowser {
           <div style="font-size:0.75rem; color:#aaa; line-height:1.4;">This agent uses paid API services. Costs are billed through your subscription — no crypto wallet needed. Your monthly premium allowance applies (Starter $0.50 · Pro $3.00 · Business $12.00).</div>
         </div>` : ""}
         </div>
-        <div style="display:flex; gap:0.5rem; padding:1rem 1.5rem; border-top:1px solid #222;">
+        <div style="display:flex; gap:0.5rem; padding:1rem 1.5rem; border-top:1px solid #222; flex-shrink:0;">
           <button id="mq-hire" style="flex:1; padding:0.6rem; border:none; border-radius:0.5rem; background:#e0e0e0; color:#0d0d0d; font-size:0.9rem; font-weight:600; cursor:pointer;"${authRequiredServers.length > 0 ? " disabled" : ""}>Hire into HQ</button>
           <button id="mq-cancel" style="padding:0.6rem 1rem; border:1px solid #222; border-radius:0.5rem; background:#1a1a1a; color:#888; font-size:0.9rem; cursor:pointer;">Close</button>
         </div>
@@ -486,6 +489,21 @@ export class MarketplaceBrowser {
     `;
 
     document.body.appendChild(modal);
+
+    // Wire up premium service endpoint toggles
+    circleServices.forEach((_, si) => {
+      const toggle = modal.querySelector(`#mq-premium-toggle-${si}`) as HTMLDivElement | null;
+      const toolsDiv = modal.querySelector(`#mq-premium-tools-${si}`) as HTMLDivElement | null;
+      if (toggle && toolsDiv) {
+        toggle.addEventListener("click", () => {
+          const expanded = toolsDiv.style.display !== "none";
+          toolsDiv.style.display = expanded ? "none" : "block";
+          toggle.textContent = expanded
+            ? `▸ ${toggle.textContent?.replace(/^[▾▸] /, "").trim() ?? ""}`
+            : `▾ ${toggle.textContent?.replace(/^[▾▸] /, "").trim() ?? ""}`;
+        });
+      }
+    });
 
     modal.querySelector("#mq-cancel")!.addEventListener("click", () => modal.remove());
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });

@@ -834,6 +834,11 @@ input.invalid {
 .modal .row.footer {
   border-top: 1px solid var(--panel-edge-soft);
   padding-top: 14px;
+  flex-shrink: 0;
+}
+
+.modal > .row:last-child {
+  flex-shrink: 0;
 }
 
 .modal .controls {
@@ -859,12 +864,17 @@ input.invalid {
 .modal.hire-modal {
   width: 620px;
   max-width: 92vw;
+  max-height: 85vh;
+  overflow: hidden;
 }
 
 .hire-layout {
   display: flex;
   gap: 20px;
   align-items: flex-start;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .hire-appearance {
