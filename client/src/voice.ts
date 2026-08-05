@@ -4,8 +4,8 @@ import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.
 import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 
-const MAX_VOICE_DISTANCE_INDOOR = 1200;
-const MAX_VOICE_DISTANCE_OUTDOOR = 2000;
+const MAX_VOICE_DISTANCE_INDOOR = 3600;
+const MAX_VOICE_DISTANCE_OUTDOOR = 6000;
 const SPEAKING_THRESHOLD = 0.02;
 
 interface VoicePeer {
@@ -40,7 +40,7 @@ function getRtcConfig(): RTCConfiguration {
 
 function distanceToGain(dist: number, maxDist: number): number {
   const t = Math.max(0, 1 - dist / maxDist);
-  return t * t;
+  return t;
 }
 
 function preferOpus(pc: RTCPeerConnection): void {
