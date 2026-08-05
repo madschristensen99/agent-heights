@@ -2671,8 +2671,9 @@ export class AgentManager {
     const colleagues = [...this.agents.values()]
       .filter((a) => a.info.id !== rt.info.id && a.info.id !== AGENT_RESOURCES_ID)
       .map((a) => {
+        const folder = `${this.slugFor(a)}-${a.info.id}`;
         const status = a.info.status === "idle" ? "idle" : `working on: ${a.info.task ?? "something"}`;
-        return `  - ${a.info.name}: ${status}`;
+        return `  - ${a.info.name} (folder: ${folder}): ${status}`;
       });
     const rosterLine = colleagues.length > 0
       ? `\nYour colleagues in the office today:\n${colleagues.join("\n")}`
@@ -2893,14 +2894,18 @@ export class AgentManager {
         saveMessages: (agentId: string, messages: unknown[]) => this.save.saveMessages(agentId, messages),
         loadMessages: (agentId: string) => this.save.loadMessages(agentId),
         clearMessages: (agentId: string) => this.save.clearMessages(agentId),
-        onPostMessage: (recipientFolder: string, fromFolder: string, message: string) => {
+        onPostMessage: (recipientFolder: string, fromFolder: string, message: string): string => {
           const target = this.agentByFolder(recipientFolder);
-          if (!target) return;
-          if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "waiting") return;
+          if (!target) return `Recipient "${recipientFolder}" not found in the office. Check your colleagues' folder names in the roster above.`;
           const sender = this.agentByFolder(fromFolder);
           const senderName = sender?.info.name ?? fromFolder;
           const reviewTask = `${senderName} sent you a message. Review it and respond if needed:\n\n"${message}"`;
+          if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "waiting") {
+            this.assign(target.info.id, reviewTask);
+            return `Message queued for ${target.info.name} — they're currently busy and will process your message when they finish their current task.`;
+          }
           this.assign(target.info.id, reviewTask);
+          return `Message delivered to ${target.info.name} — they've been assigned a task to review and respond.`;
         },
         onApiError: (type, details) => this.notifyApiError(rt, type, details),
         createSelfSchedule: (name: string, task: string, cronExpression: string) => {
@@ -3005,21 +3010,27 @@ export class AgentManager {
             // Track exact-signature duplicates
             const count = (toolCallCounts.get(sig) ?? 0) + 1;
             toolCallCounts.set(sig, count);
-            if (count >= MAX_DUPLICATE_TOOL_CALLS) {
+            // Exempt safe read-only polling tools from exact-duplicate loop detection.
+            // These tools take no (or minimal) input and legitimately need to be called
+            // repeatedly while waiting for a colleague's reply or checking board state.
+            const isPollingTool = ["read_messages", "read_board", "read_events"].includes(toolName);
+            if (!isPollingTool && count >= MAX_DUPLICATE_TOOL_CALLS) {
               abortReason = `Aborted: tool call repeated ${count} times — possible loop. Call: ${sig.slice(0, 100)}`;
               this.log(rt, "error", abortReason);
               abort.abort();
               return;
             }
             // Warn before the hard abort threshold so the user has visibility
-            if (count === MAX_DUPLICATE_TOOL_CALLS - 1) {
+            if (!isPollingTool && count === MAX_DUPLICATE_TOOL_CALLS - 1) {
               this.log(rt, "status", `⚠ Repeated tool call detected (${count}x): ${sig.slice(0, 80)}. One more repeat will abort the task.`);
             }
 
             // Track per-tool call counts (catches varied-input loops like calling get_file_contents on 15 different paths)
             const toolCount = (perToolCounts.get(toolName) ?? 0) + 1;
             perToolCounts.set(toolName, toolCount);
-            if (toolCount >= MAX_CALLS_PER_TOOL) {
+            // Polling tools get a higher budget since they legitimately need repeated calls
+            const toolLimit = isPollingTool ? 20 : MAX_CALLS_PER_TOOL;
+            if (toolCount >= toolLimit) {
               abortReason = `Aborted: tool "${toolName}" called ${toolCount} times — budget exhausted for this tool.`;
               this.log(rt, "error", abortReason);
               abort.abort();
@@ -3688,14 +3699,14 @@ export class AgentManager {
     const abort = new AbortController();
     rt.abort = abort;
 
-    // If no events arrive within 15s, the API call likely failed. Do a quick
+    // If no events arrive within 30s, the API call likely failed. Do a quick
     // health check to give a specific error (rate limit vs auth vs API down).
     let firstEventTimer: ReturnType<typeof setTimeout> | null = null;
     let gotFirstEvent = false;
     const firstEventTimeout = setTimeout(async () => {
       if (abort.signal.aborted || gotFirstEvent) return;
       // Quick API check — 5s timeout to not block too long
-      let reason = "No response from model within 15s";
+      let reason = "No response from model within 30s";
       try {
         const controller = new AbortController();
         const to = setTimeout(() => controller.abort(), 5000);
@@ -3910,9 +3921,9 @@ export class AgentManager {
     const firstEventTimer = setTimeout(() => {
       if (!abort.signal.aborted && !gotFirstEvent) {
         abort.abort();
-        this.log(rt, "error", "No response from model within 15s — try again.");
+        this.log(rt, "error", "No response from model within 30s — try again.");
       }
-    }, 15_000);
+    }, 30_000);
 
     try {
       const runner: ProviderRunner = pickRunner(rt.info.model);

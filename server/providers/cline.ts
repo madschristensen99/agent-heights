@@ -524,8 +524,8 @@ export async function makeTools(cwd: string, opts?: {
       const entry = JSON.stringify({ ts: Date.now(), from: fromFolder, message: input.message }) + "\n";
       await mkdir(dirname(recipientInbox), { recursive: true });
       await appendFile(recipientInbox, entry, "utf-8");
-      opts?.onPostMessage?.(recipient, fromFolder, input.message);
-      return `Message sent to ${recipient}`;
+      const deliveryStatus = opts?.onPostMessage?.(recipient, fromFolder, input.message);
+      return deliveryStatus ?? `Message sent to ${recipient}`;
     },
   };
 
