@@ -20,6 +20,13 @@ import type { ServerMsg, WorldTheme } from "../shared/types.js";
 
 const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
 const ASSET_UPGRADE_PRICE = 1999; // $19.99 in cents
+const SALES_TAX_PERCENT = parseFloat(process.env.SALES_TAX_PERCENT ?? "0");
+
+/** Calculate tax amount in cents for a given base price. */
+function calcTaxCents(baseCents: number): number {
+  if (SALES_TAX_PERCENT <= 0) return 0;
+  return Math.round(baseCents * SALES_TAX_PERCENT / 100);
+}
 
 /** Progress callback type — used to report generation progress to the client. */
 export type ProgressCallback = (stage: string, percent: number, label: string) => void;
@@ -59,22 +66,35 @@ export async function createAssetUpgradeCheckoutSession(
         .upsert({ user_id: userId, stripe_customer_id: customerId }, { onConflict: "user_id" });
     }
 
+    const taxCents = calcTaxCents(ASSET_UPGRADE_PRICE);
+    const lineItems: any[] = [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: ASSET_UPGRADE_PRICE,
+          product_data: {
+            name: "Agent Heights — AI World Graphics Upgrade",
+            description: "Upgrade your world from procedural to AI-generated high-fidelity assets. Includes tiles, objects, furniture, creatures, vehicle, and portal visuals.",
+          },
+        },
+      },
+    ];
+    if (taxCents > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: taxCents,
+          product_data: { name: `Sales Tax (${SALES_TAX_PERCENT}%)` },
+        },
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "payment",
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: ASSET_UPGRADE_PRICE,
-            product_data: {
-              name: "Agent Heights — AI World Graphics Upgrade",
-              description: "Upgrade your world from procedural to AI-generated high-fidelity assets. Includes tiles, objects, furniture, creatures, vehicle, and portal visuals.",
-            },
-          },
-        },
-      ],
+      line_items: lineItems,
       metadata: {
         userId,
         type: "asset_upgrade",

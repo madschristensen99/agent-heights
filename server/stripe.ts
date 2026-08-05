@@ -14,6 +14,14 @@ export const stripe: Stripe | null = isStripeConfigured
 
 const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
 
+const SALES_TAX_PERCENT = parseFloat(process.env.SALES_TAX_PERCENT ?? "0");
+
+/** Calculate tax amount in cents for a given base price. */
+function calcTaxCents(baseCents: number): number {
+  if (SALES_TAX_PERCENT <= 0) return 0;
+  return Math.round(baseCents * SALES_TAX_PERCENT / 100);
+}
+
 // ── Free trial: 2 minutes per day for authed users without a subscription ──
 // Users can look around and hire agents but cannot run inference (tasks/chat)
 const FREE_TRIAL_DURATION_MS = 2 * 60 * 1000;
@@ -181,23 +189,37 @@ export async function createSubscriptionCheckoutSession(
   try {
     const customerId = await getOrCreateStripeCustomer(userId, email);
 
+    const taxCents = calcTaxCents(unitAmount);
+    const lineItems: any[] = [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: unitAmount,
+          recurring: { interval },
+          product_data: {
+            name: `Agent Heights — ${tierInfo.name} Subscription (${periodLabel})`,
+            description: isAnnual ? `${tierInfo.description} Billed annually (2 months free).` : tierInfo.description,
+          },
+        },
+      },
+    ];
+    if (taxCents > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: taxCents,
+          recurring: { interval },
+          product_data: { name: `Sales Tax (${SALES_TAX_PERCENT}%)` },
+        },
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: unitAmount,
-            recurring: { interval },
-            product_data: {
-              name: `Agent Heights — ${tierInfo.name} Subscription (${periodLabel})`,
-              description: isAnnual ? `${tierInfo.description} Billed annually (2 months free).` : tierInfo.description,
-            },
-          },
-        },
-      ],
+      line_items: lineItems,
       metadata: { userId, type: "subscription", tier, billingPeriod },
       subscription_data: { metadata: { userId, tier, billingPeriod } },
       success_url: `${APP_URL}/?payment=subscription_success`,
