@@ -18,6 +18,7 @@ export class Net {
   onMessage: (msg: ServerMsg) => void = () => {};
   onStatus: (connected: boolean) => void = () => {};
   onRefreshToken: () => Promise<string | null> = async () => null;
+  onSessionExpired: () => void = () => { location.reload(); };
 
   setToken(token: string | null): void {
     this.token = token;
@@ -90,8 +91,8 @@ export class Net {
             this.retryMs = 500;
             setTimeout(() => this.connect(), this.retryMs);
           } else {
-            // No fresh token — reload to show login overlay
-            location.reload();
+            // No fresh token — delegate to caller (clears stale session, then reloads)
+            this.onSessionExpired();
           }
         });
         return;

@@ -34,6 +34,18 @@ export function onAuthChange(fn: AuthListener): () => void {
   return () => listeners.delete(fn);
 }
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return true;
+    const decoded = JSON.parse(atob(payload));
+    if (typeof decoded.exp !== "number") return true;
+    return Date.now() / 1000 > decoded.exp - 10;
+  } catch {
+    return true;
+  }
+}
+
 export async function initAuth(): Promise<void> {
   if (!client) {
     currentState = { session: null, loading: false };
@@ -48,7 +60,19 @@ export async function initAuth(): Promise<void> {
         setTimeout(() => resolve({ data: { session: null } }), 3000),
       ),
     ]);
-    currentState = { session: result.data.session, loading: false };
+    let session = result.data.session;
+    if (session?.access_token && isTokenExpired(session.access_token)) {
+      console.log("[auth] cached session token expired — attempting refresh");
+      const { data: refreshData, error: refreshError } = await client.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        console.log("[auth] refresh failed — clearing stale session");
+        await client.auth.signOut();
+        session = null;
+      } else {
+        session = refreshData.session;
+      }
+    }
+    currentState = { session, loading: false };
   } catch {
     currentState = { session: null, loading: false };
   }

@@ -4,7 +4,7 @@ import { OfficeScene } from "./game/scene";
 import { Net } from "./net";
 import { Store } from "./store";
 import { Hud } from "./ui/hud";
-import { initAuth, onAuthChange, getToken, isAuthEnabled, createAuthOverlay, refreshSession, getUserId } from "./auth";
+import { initAuth, onAuthChange, getToken, isAuthEnabled, createAuthOverlay, refreshSession, getUserId, signOut } from "./auth";
 import { createPaymentOverlay, updatePaymentState, refreshPaymentStatus, onPaymentChange } from "./payment";
 
 const isSpectator = new URLSearchParams(window.location.search).get("spectator") === "1";
@@ -34,6 +34,11 @@ net.onRefreshToken = async () => {
   const token = await refreshSession();
   if (token) net.setToken(token);
   return token;
+};
+net.onSessionExpired = async () => {
+  console.log("[net] session expired — clearing stale session and reloading");
+  await signOut();
+  location.reload();
 };
 
 const authOverlay = createAuthOverlay();
