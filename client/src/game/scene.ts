@@ -1581,13 +1581,15 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // --- Cloud sprites (12 instances, world-space above the office) ---
+    // --- Cloud sprites (12 instances, positioned within camera view) ---
     const cloudCount = 12;
     const now = this.time.now;
+    const cam = this.cameras.main;
+    const view = cam.worldView;
     for (let i = 0; i < cloudCount; i++) {
       const cloudTex = `cloud-${i % 3}`;
-      const x = Math.random() * 2000 - 1000;
-      const y = -200 - Math.random() * 400;
+      const x = view.x + Math.random() * view.width;
+      const y = view.y + 20 + Math.random() * (view.height * 0.4);
       const scale = 0.5 + Math.random() * 1.0;
       const baseAlpha = 0.45 + Math.random() * 0.35;
       const speed = 3 + Math.random() * 7;
@@ -1667,10 +1669,16 @@ export class OfficeScene extends Phaser.Scene {
       const cycle = 0.5 + 0.5 * Math.sin(elapsed * c.fadeSpeed - Math.PI / 2);
       const alpha = c.baseAlpha * cycle;
       c.sprite.setAlpha(alpha);
+      // Keep cloud yBase tracking the camera view (in case camera moves)
+      const viewTop = view.y + 20;
+      const viewMax = view.y + view.height * 0.4;
+      if (c.yBase < viewTop - 50 || c.yBase > viewMax + 50) {
+        c.yBase = viewTop + Math.random() * (viewMax - viewTop);
+      }
       // Respawn when faded out to near-zero (past the first full cycle)
       if (alpha < 0.01 && elapsed > 5000) {
         c.sprite.x = view.x + Math.random() * view.width;
-        c.yBase = -200 - Math.random() * 400;
+        c.yBase = viewTop + Math.random() * (viewMax - viewTop);
         c.sprite.y = c.yBase;
         c.baseAlpha = 0.45 + Math.random() * 0.35;
         c.speed = 3 + Math.random() * 7;

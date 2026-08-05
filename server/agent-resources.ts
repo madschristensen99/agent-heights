@@ -3,11 +3,40 @@ import type { AgentInfo, TaskCard } from "../shared/types.js";
 import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { json } from "./security.js";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 const MARKETPLACE_URL = process.env.MARKETPLACE_URL || "http://localhost:3000";
 
+/** Fetch approved marketplace agents from DB and build a summary for Agent Resources's system prompt. */
+async function buildMarketplaceAgentsSummary(): Promise<string> {
+  if (!isSupabaseConfigured) return CURATED_AGENTS_SUMMARY;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("heights_cloud_agents")
+      .select("name, description, summary, is_premium, tags, is_free, price_usd")
+      .eq("status", "approved")
+      .order("created_at", { ascending: false })
+      .range(0, 199);
+
+    if (error || !data || data.length === 0) return CURATED_AGENTS_SUMMARY;
+
+    const lines = data.map((r) => {
+      const name = String(r.name ?? "");
+      const desc = String(r.summary ?? r.description ?? "").slice(0, 150);
+      const premiumTag = r.is_premium ? " [PREMIUM]" : "";
+      const priceTag = !r.is_free && r.price_usd ? ` ($${r.price_usd}/mo)` : "";
+      return `- ${name}${premiumTag}${priceTag}: ${desc}`;
+    });
+
+    return `### Curated Marketplace Agents (hire via MARKET button)\n${lines.join("\n")}`;
+  } catch {
+    return CURATED_AGENTS_SUMMARY;
+  }
+}
+
 /** Build HQ context string to inject into Agent Resources's system prompt. */
-function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string): string {
+async function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string): Promise<string> {
   const roster = agents
     .filter((a) => a.id !== "agent-resources")
     .map((a) => `- ${a.name} (${a.model}, ${a.status}${a.task ? `, working on: ${a.task.slice(0, 60)}` : ""})`)
@@ -50,7 +79,7 @@ When the user asks about MCP servers or integrations — recommend from the cura
 If PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.
 Only suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.
 
-${CURATED_AGENTS_SUMMARY}
+${await buildMarketplaceAgentsSummary()}
 
 ### Curated MCP Server Catalog (installable on any agent)
 These are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.
@@ -105,7 +134,7 @@ export async function handleAgentResourcesRequest(
 
   // Build HQ context (curated knowledge is baked in)
   const hqCtx = await getHqContext();
-  let hqContextStr = hqCtx ? buildHqContext(hqCtx.agents, hqCtx.board, hqCtx.bossName) : undefined;
+  let hqContextStr = hqCtx ? await buildHqContext(hqCtx.agents, hqCtx.board, hqCtx.bossName) : undefined;
 
   // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
   // query, search PulseMCP and inject results into the context so Agent Resources can

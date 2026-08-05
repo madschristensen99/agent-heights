@@ -16,6 +16,9 @@
 \definecolor{solana}{HTML}{14F195}
 \definecolor{solanadark}{HTML}{9945FF}
 \definecolor{crossmint}{HTML}{059669}
+\definecolor{usdc}{HTML}{2775CA}
+\definecolor{usdcdark}{HTML}{1A5490}
+\definecolor{premium}{HTML}{7C3AED}
 \definecolor{warn}{HTML}{E8A838}
 \definecolor{bg}{HTML}{FFFFFF}
 \definecolor{bglight}{HTML}{F0F5FA}
@@ -77,6 +80,7 @@
 \newcommand{\soltag}[1]{{\color{white}\textbf{[Solana]}}}
 \newcommand{\cmtag}[1]{{\color{white}\textbf{[Crossmint]}}}
 \newcommand{\mcptag}[1]{{\color{white}\textbf{[PulseMCP]}}}
+\newcommand{\premtag}[1]{{\color{white}\textbf{[USDC]}}}
 
 % ── Title info ─────────────────────────────────────────────────────────────
 \title{Agent Heights}
@@ -199,61 +203,56 @@
 \end{frame}
 
 % ═══════════════════════════════════════════════════════════════════════════
-% SLIDE 5 — Coinbase CDP Solana
+% SLIDE 5 — Premium Agents: USDC Nanopayments
 % ═══════════════════════════════════════════════════════════════════════════
-\begin{frame}{\soltag{Solana} Coinbase CDP + Jupiter --- live on-chain trading}
+\begin{frame}{\premtag{USDC} Premium agents powered by nanopayments}
   \begin{columns}[T]
     \begin{column}{0.50\textwidth}
       \begin{itemize}
-        \item Each agent gets a \alert{provisioned Solana wallet} via Coinbase Developer Platform
-        \item \alert{No user credentials} --- server holds one set of CDP API keys, derives per-agent wallets
-        \item \alert{Jupiter API integration} for real swaps:
-          \begin{itemize}
-            \item Token swaps (SOL $\leftrightarrow$ SPL tokens)
-            \item Real-time price quotes \& route optimization
-            \item On-chain transaction execution
-          \end{itemize}
-        \item Agents can \alert{check balances, send SOL, swap tokens, track portfolios}
+        \footnotesize
+        \item Premium agents access \alert{paid API services} --- weather, finance, social media, AI inference
+        \item Each call costs \alert{\$0.0001--\$0.50}, settled in \alert{USDC} via the \alert{x402 protocol} (HTTP 402)
+        \item \alert{Circle Gateway} batches thousands of payments into one onchain transaction --- \alert{zero gas} per call
+        \item Agents sign \alert{EIP-3009 authorizations} offchain; Gateway verifies instantly \& settles on \alert{Arc}
+        \item \alert{Users never hold crypto} --- Agent Heights pays service providers in USDC, costs offset against the user's SaaS subscription
       \end{itemize}
+      \vspace{4pt}
+      \begin{tcolorbox}[colback=usdc!8, colframe=usdc, sharp corners, boxrule=0.5pt]
+        \scriptsize\color{textmain}
+        \textbf{Guardrails:} per-call ceiling (\$0.50), per-task limit (20 calls), monthly usage cap enforced server-side
+      \end{tcolorbox}
     \end{column}
     \begin{column}{0.46\textwidth}
-      \includegraphics[width=6cm,height=3.5cm,keepaspectratio]{agentHeightsPitchPics/coinbase.png}\\[4pt]
-      {\color{textdim}\footnotesize Agent wallet: SOL + SPL balances, swap history}\\[8pt]
-      \begin{tcolorbox}[colback=solanadark!10, colframe=solanadark, sharp corners, boxrule=0.5pt]
-        \footnotesize\color{textmain}
-        \textbf{Live now:} Agents execute \alert{real swaps} on Solana via Jupiter --- not just watching prices, actually trading.
+      \centering
+      \begin{tikzpicture}[
+        node distance=0.3cm,
+        box/.style={rectangle, draw=usdc, fill=usdc!8, text=textmain,
+                    rounded corners=2pt, minimum width=4cm, minimum height=0.55cm,
+                    align=center, font=\scriptsize},
+        arrow/.style={-Stealth, thick, usdc}
+      ]
+        \node[box] (agent) {\textbf{Agent} calls premium API tool};
+        \node[box, below=of agent] (x402) {API returns \textbf{402 Payment Required}};
+        \node[box, below=of x402] (sign) {Gateway signs \textbf{EIP-3009} (offchain)};
+        \node[box, below=of sign] (retry) {Retry with payment $\to$ \textbf{200} + data};
+        \node[box, below=of retry] (settle) {Gateway \textbf{batch-settles} on Arc (USDC)};
+
+        \draw[arrow] (agent) -- (x402);
+        \draw[arrow] (x402) -- (sign);
+        \draw[arrow] (sign) -- (retry);
+        \draw[arrow] (retry) -- (settle);
+      \end{tikzpicture}
+      \vspace{3pt}
+      \begin{tcolorbox}[colback=premium!8, colframe=premium, sharp corners, boxrule=0.5pt, boxsep=2pt, left=4pt, right=4pt, top=2pt, bottom=2pt]
+        \tiny\color{textmain}
+        \textbf{Marketplace:} purple \textbf{PREMIUM} badges --- hire like any agent, nanopayment costs invisible
       \end{tcolorbox}
     \end{column}
   \end{columns}
 \end{frame}
 
 % ═══════════════════════════════════════════════════════════════════════════
-% SLIDE 6 — Crossmint
-% ═══════════════════════════════════════════════════════════════════════════
-\begin{frame}{\cmtag{Crossmint} Multichain wallet infrastructure}
-  \begin{columns}[T]
-    \begin{column}{0.46\textwidth}
-      \includegraphics[width=6cm,height=4cm,keepaspectratio]{agentHeightsPitchPics/crossmint.png}\\[4pt]
-      {\color{textdim}\footnotesize Crossmint panel: wallet, policy, transaction history}
-    \end{column}
-    \begin{column}{0.50\textwidth}
-      \begin{itemize}
-        \item \alert{Smart wallets} with \alert{sponsored gas} via Crossmint paymaster
-        \item Server-side signer for secure transaction signing
-        \item \alert{Wallet policy engine:}
-          \begin{itemize}
-            \item Spending limits (USD denominated)
-            \item Allowed / blocked recipient lists
-          \end{itemize}
-        \item Agents can transfer, check balances, review tx history
-        \item \alert{Hermes integration:} agents connect across \alert{27 messaging platforms} --- Telegram, Discord, Slack, X, and more --- so they can communicate, coordinate, and report to users wherever they are
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-% ═══════════════════════════════════════════════════════════════════════════
-% SLIDE 7 — PulseMCP
+% SLIDE 8 — PulseMCP
 % ═══════════════════════════════════════════════════════════════════════════
 \begin{frame}{\mcptag{PulseMCP} 22,000+ tools on demand}
   \begin{columns}[T]
@@ -294,9 +293,9 @@
 \end{frame}
 
 % ═══════════════════════════════════════════════════════════════════════════
-% SLIDE 8 — Programmatic Financial Strategies
+% SLIDE 7 — Programmatic Financial Strategies
 % ═══════════════════════════════════════════════════════════════════════════
-\begin{frame}{Programmatic financial strategies --- live on Solana}
+\begin{frame}{Programmatic financial strategies --- agents trading in USDC}
   \centering
   \begin{tikzpicture}[
     node distance=0.8cm,
@@ -307,12 +306,12 @@
     role/.style={text=textdim, font=\scriptsize\itshape}
   ]
     \node[agent] (a) {\textbf{Agent A}\\[2pt]\color{accentlight}Sentiment Bot\\[2pt]Twitter/X + news scraping};
-    \node[agent, right=1.5cm of a] (b) {\textbf{Agent B}\\[2pt]\color{solanadark}Technical Analyst\\[2pt]Price charts + on-chain data};
-    \node[agent, right=1.5cm of b] (c) {\textbf{Agent C}\\[2pt]\color{crossmint}Trader\\[2pt]CDP wallet + Jupiter API};
+    \node[agent, right=1.5cm of a] (b) {\textbf{Agent B}\\[2pt]\color{usdc}Technical Analyst\\[2pt]Price charts + on-chain data};
+    \node[agent, right=1.5cm of b] (c) {\textbf{Agent C}\\[2pt]\color{premium}Trader\\[2pt]USDC settlement on Arc};
 
     \draw[flow] (a) -- node[role, above]{``Bullish sentiment spike''} (b);
     \draw[flow] (b) -- node[role, above]{``RSI oversold + volume up''} (c);
-    \draw[flow, dashed] (c) -- ++(0,-1.2) -| node[role, below, pos=0.25]{swap executed / blocked} (a);
+    \draw[flow, dashed] (c) -- ++(0,-1.2) -| node[role, below, pos=0.25]{USDC payment executed / blocked} (a);
   \end{tikzpicture}
 
   \vspace{8pt}
@@ -322,13 +321,13 @@
         \footnotesize
         \item \alert{Sentiment bot:} Scrapes Twitter/X, news, and social feeds $\to$ detects market sentiment shifts in real-time
         \item \alert{Technical analysis:} Agent reads price action, RSI, volume, on-chain metrics $\to$ generates trade signals
-        \item \alert{Live execution:} Signals converge $\to$ Trader gets Jupiter quote $\to$ executes real swap via CDP wallet
-        \item \alert{Risk management:} Crossmint policies enforce spending limits \& blocked addresses
+        \item \alert{Live execution:} Signals converge $\to$ Trader executes via USDC on Arc --- real settlement, not just watching prices
+        \item \alert{Risk management:} Server-side spending limits \& per-agent budget caps enforce guardrails
       \end{itemize}
     \end{column}
     \begin{column}{0.46\textwidth}
       \includegraphics[width=6cm,height=2.5cm,keepaspectratio]{agentHeightsPitchPics/task.png}\\[4pt]
-      {\color{textdim}\scriptsize Activity feed: sentiment spike $\to$ technical confirm $\to$ Jupiter swap}
+      {\color{textdim}\scriptsize Activity feed: sentiment spike $\to$ technical confirm $\to$ USDC settlement on Arc}
     \end{column}
   \end{columns}
 \end{frame}
@@ -429,9 +428,10 @@
       \begin{itemize}
         \footnotesize
         \item \alert{Marketplace:} hire specialized LoRA-trained agents --- take a cut
-        \item \alert{Wallet fees:} transaction volume through CDP / Crossmint wallets
+        \item \alert{SaaS subscriptions:} users pay monthly --- nanopayment costs offset against their plan, no wallet needed
+        \item \alert{Multi-chain wallet fees:} transaction volume through integrated wallet providers
         \item \alert{MCP referrals:} referral fees for paid MCP server installs
-        \item \alert{Premium subscriptions:} more agents, more compute, expeditions
+        \item \alert{Premium subscriptions:} more agents, more compute, expeditions, higher nanopayment budget
       \end{itemize}
       \vspace{4pt}
       \textbf{\color{accent}The flywheel:}
@@ -475,16 +475,18 @@
                  align=center, font=\scriptsize},
     arrow/.style={-Stealth, thick, accentlight}
   ]
-    \node[done] (s1) {\textbf{Shipped}\\Office + agents\\CDP + Crossmint};
+    \node[done] (s1) {\textbf{Shipped}\\Office + agents\\Multi-chain wallets};
     \node[done, right=of s1] (s2) {\textbf{Shipped}\\PulseMCP\\Expeditions};
     \node[done, right=of s2] (s3) {\textbf{Shipped}\\Generative world\\Marketplace};
-    \node[next, right=of s3] (s4) {\textbf{Next}\\Custom WebGL2\\LoRA pipeline};
-    \node[next, right=of s4] (s5) {\textbf{Vision}\\Mainnet wallets\\Agent economy};
+    \node[done, right=of s3, fill=usdc!15, draw=usdc] (s4) {\textbf{Shipped}\\USDC nanopayments\\Premium agents};
+    \node[next, right=of s4] (s5) {\textbf{Next}\\Custom WebGL2\\LoRA pipeline};
+    \node[next, right=of s5] (s6) {\textbf{Vision}\\Mainnet on Arc\\Agent economy};
 
     \draw[arrow] (s1) -- (s2);
     \draw[arrow] (s2) -- (s3);
     \draw[arrow] (s3) -- (s4);
     \draw[arrow] (s4) -- (s5);
+    \draw[arrow] (s5) -- (s6);
   \end{tikzpicture}
 
   \vspace{16pt}
@@ -492,9 +494,9 @@
     \begin{column}{0.55\textwidth}
       \begin{itemize}
         \footnotesize
-        \item \alert{Shipped:} office simulation, agent lifecycle, CDP Solana wallets, Crossmint, PulseMCP, expeditions, generative world
-        \item \alert{Next:} custom WebGL2 hex engine, LoRA training pipeline, mainnet wallet support, multi-agent financial strategy templates
-        \item \alert{Vision:} the autonomous agent economy --- agents that work, trade, learn, and sell their specialized skills
+        \item \alert{Shipped:} office simulation, agent lifecycle, multi-chain wallet support (CDP Solana, Crossmint), PulseMCP, expeditions, generative world, USDC nanopayments via Circle Gateway on Arc, premium agent marketplace
+        \item \alert{Next:} custom WebGL2 hex engine, LoRA training pipeline, mainnet USDC settlement on Arc, multi-agent financial strategy templates, x402 seller-side (agents that earn USDC)
+        \item \alert{Vision:} the autonomous agent economy --- agents that work, trade, learn, and sell their specialized skills for USDC
       \end{itemize}
     \end{column}
     \begin{column}{0.40\textwidth}
@@ -503,7 +505,7 @@
         \textbf{The ask}\\[4pt]
         We're looking for:\\[4pt]
         $\bullet$ Seed funding\\
-        $\bullet$ Solana ecosystem partners\\
+        $\bullet$ Circle / Arc ecosystem partners\\
         $\bullet$ Early design partners\\[6pt]
         \textbf{\color{warn}Seeking cracked mobile developer.}
       \end{tcolorbox}
