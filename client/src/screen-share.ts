@@ -129,7 +129,7 @@ export class ScreenShareManager {
 
     pc.onicecandidate = (ev) => {
       if (ev.candidate) {
-        this.sendFn({ type: "screen_share_ice", targetUserId: userId, candidate: ev.candidate.candidate });
+        this.sendFn({ type: "screen_share_ice", targetUserId: userId, candidate: JSON.stringify({ candidate: ev.candidate.candidate, sdpMid: ev.candidate.sdpMid, sdpMLineIndex: ev.candidate.sdpMLineIndex }) });
       }
     };
 
@@ -192,7 +192,7 @@ export class ScreenShareManager {
 
     pc.onicecandidate = (ev) => {
       if (ev.candidate) {
-        this.sendFn({ type: "screen_share_ice", targetUserId: userId, candidate: ev.candidate.candidate });
+        this.sendFn({ type: "screen_share_ice", targetUserId: userId, candidate: JSON.stringify({ candidate: ev.candidate.candidate, sdpMid: ev.candidate.sdpMid, sdpMLineIndex: ev.candidate.sdpMLineIndex }) });
       }
     };
 
@@ -222,7 +222,8 @@ export class ScreenShareManager {
     const peer = this.peers.get(fromUserId);
     if (!peer) return;
     try {
-      await peer.pc.addIceCandidate(new RTCIceCandidate({ candidate }));
+      const init = JSON.parse(candidate) as RTCIceCandidateInit;
+      await peer.pc.addIceCandidate(new RTCIceCandidate(init));
     } catch (err) {
       console.error(`[screen-share] failed to add ICE candidate from ${fromUserId}:`, err);
     }
