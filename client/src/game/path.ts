@@ -50,7 +50,7 @@ export function findPath(grid: Grid, start: Tile, goal: Tile): Tile[] {
         path.unshift({ x: k % grid.width, y: Math.floor(k / grid.width) });
       }
       path.shift(); // drop the start tile
-      return path;
+      return smoothPath(path, grid);
     }
 
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
@@ -71,4 +71,29 @@ export function findPath(grid: Grid, start: Tile, goal: Tile): Tile[] {
     }
   }
   return [];
+}
+
+/** Post-process A* path: collapse staircase L-patterns into diagonal steps. */
+function smoothPath(path: Tile[], grid: Grid): Tile[] {
+  if (path.length < 3) return path;
+  const result: Tile[] = [path[0]];
+  let i = 0;
+  while (i < path.length - 1) {
+    if (i + 2 < path.length) {
+      const a = path[i];
+      const c = path[i + 2];
+      // If a and c are diagonal neighbours, skip the intermediate L-step
+      if (Math.abs(c.x - a.x) === 1 && Math.abs(c.y - a.y) === 1) {
+        // Ensure both orthogonal corners are walkable (no cutting through walls)
+        if (grid.ok(a.x, c.y) && grid.ok(c.x, a.y)) {
+          result.push(c);
+          i += 2;
+          continue;
+        }
+      }
+    }
+    result.push(path[i + 1]);
+    i++;
+  }
+  return result;
 }
