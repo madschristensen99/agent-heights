@@ -366,7 +366,18 @@ export class MarketplaceBrowser {
         mcpServers = config.mcpServers;
       }
       if (config.circleServices && Array.isArray(config.circleServices)) {
-        circleServices = config.circleServices;
+        // Group services by name — CoinGecko has 14 separate entries each with 1 tool;
+        // merge them into a single card with all tools.
+        const sMap = new Map<string, { name: string; pricePerCall: number; description: string; tools: { name: string; description: string }[] }>();
+        for (const s of config.circleServices) {
+          const existing = sMap.get(s.name);
+          if (existing) {
+            existing.tools.push(...s.tools);
+          } else {
+            sMap.set(s.name, { name: s.name, pricePerCall: s.pricePerCall, description: s.description, tools: [...s.tools] });
+          }
+        }
+        circleServices = [...sMap.values()];
       }
     } catch { /* not JSON */ }
 

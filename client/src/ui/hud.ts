@@ -2551,9 +2551,20 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const premiumSection = document.getElementById("d-premium-section")!;
     if (agent.isPremium && agent.circleServices && agent.circleServices.length > 0) {
       premiumSection.hidden = false;
-      const services = agent.circleServices;
-      const minPrice = Math.min(...services.map((s) => s.pricePerCall));
-      const maxPrice = Math.max(...services.map((s) => s.pricePerCall));
+      // Group services by name — CoinGecko has 14 separate entries each with 1 tool;
+      // merge them into a single card with all tools.
+      const serviceMap = new Map<string, { name: string; pricePerCall: number; description: string; tools: { name: string; description: string }[] }>();
+      for (const s of agent.circleServices) {
+        const existing = serviceMap.get(s.name);
+        if (existing) {
+          existing.tools.push(...s.tools);
+        } else {
+          serviceMap.set(s.name, { name: s.name, pricePerCall: s.pricePerCall, description: s.description, tools: [...s.tools] });
+        }
+      }
+      const grouped = [...serviceMap.values()];
+      const minPrice = Math.min(...grouped.map((s) => s.pricePerCall));
+      const maxPrice = Math.max(...grouped.map((s) => s.pricePerCall));
       const priceLabel = minPrice === maxPrice
         ? `$${minPrice.toFixed(4)}/call`
         : `$${minPrice.toFixed(4)}–$${maxPrice.toFixed(4)}/call`;
@@ -2561,7 +2572,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:rgba(42,26,58,0.15);">
           <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">⚡ PREMIUM API SERVICES · ${priceLabel}</div>
           <div style="display:flex; flex-direction:column; gap:0.25rem;">
-            ${services.map((s, si) => {
+            ${grouped.map((s, si) => {
               const toolCount = s.tools.length;
               return `<div style="padding:0.25rem 0.4rem; border:1px solid #2a1a3a; border-radius:0.3rem; background:rgba(18,13,26,0.5);">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -2581,7 +2592,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         </div>
       `;
       // Wire up endpoint toggles
-      services.forEach((_, si) => {
+      grouped.forEach((_, si) => {
         const toggle = premiumSection.querySelector(`#hud-premium-toggle-${si}`) as HTMLDivElement | null;
         const toolsDiv = premiumSection.querySelector(`#hud-premium-tools-${si}`) as HTMLDivElement | null;
         if (toggle && toolsDiv) {
