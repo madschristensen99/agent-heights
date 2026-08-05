@@ -1665,26 +1665,40 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Generate a soft cloud texture using overlapping radial gradients. */
+  /** Generate a soft, fluffy cloud texture using overlapping radial gradients + blur. */
   private generateCloudTexture(key: string, variant: number): void {
-    const cw = 128;
-    const ch = 64;
+    const cw = 256;
+    const ch = 128;
     const canvas = document.createElement("canvas");
     canvas.width = cw;
     canvas.height = ch;
     const ctx = canvas.getContext("2d")!;
+    ctx.filter = "blur(8px)";
 
     const blobSets = [
-      [{ x: 32, y: 32, r: 20 }, { x: 48, y: 28, r: 24 }, { x: 64, y: 30, r: 22 }, { x: 80, y: 34, r: 18 }, { x: 56, y: 38, r: 26 }],
-      [{ x: 28, y: 34, r: 18 }, { x: 44, y: 30, r: 22 }, { x: 60, y: 32, r: 20 }, { x: 76, y: 36, r: 16 }, { x: 52, y: 40, r: 24 }],
-      [{ x: 36, y: 30, r: 22 }, { x: 52, y: 34, r: 26 }, { x: 68, y: 30, r: 20 }, { x: 84, y: 36, r: 18 }, { x: 60, y: 42, r: 22 }],
+      [
+        { x: 60, y: 70, r: 38 }, { x: 90, y: 58, r: 46 }, { x: 128, y: 62, r: 42 },
+        { x: 165, y: 68, r: 36 }, { x: 105, y: 78, r: 50 }, { x: 140, y: 82, r: 44 },
+        { x: 75, y: 80, r: 32 }, { x: 185, y: 76, r: 30 },
+      ],
+      [
+        { x: 55, y: 72, r: 34 }, { x: 85, y: 60, r: 42 }, { x: 120, y: 64, r: 38 },
+        { x: 155, y: 70, r: 32 }, { x: 100, y: 80, r: 46 }, { x: 135, y: 84, r: 40 },
+        { x: 175, y: 78, r: 28 }, { x: 70, y: 82, r: 28 },
+      ],
+      [
+        { x: 70, y: 66, r: 40 }, { x: 105, y: 72, r: 48 }, { x: 140, y: 60, r: 38 },
+        { x: 175, y: 72, r: 34 }, { x: 120, y: 84, r: 44 }, { x: 155, y: 80, r: 36 },
+        { x: 90, y: 82, r: 30 }, { x: 195, y: 80, r: 26 },
+      ],
     ];
     const blobs = blobSets[variant % 3];
 
     for (const blob of blobs) {
       const grad = ctx.createRadialGradient(blob.x, blob.y, 0, blob.x, blob.y, blob.r);
-      grad.addColorStop(0, "rgba(255, 255, 255, 0.9)");
-      grad.addColorStop(0.5, "rgba(255, 255, 255, 0.5)");
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.85)");
+      grad.addColorStop(0.3, "rgba(255, 255, 255, 0.6)");
+      grad.addColorStop(0.7, "rgba(255, 255, 255, 0.25)");
       grad.addColorStop(1, "rgba(255, 255, 255, 0)");
       ctx.fillStyle = grad;
       ctx.fillRect(blob.x - blob.r, blob.y - blob.r, blob.r * 2, blob.r * 2);

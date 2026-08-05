@@ -32,7 +32,7 @@ function normalizeCategory(cat: string): string {
   const c = cat.toLowerCase().trim();
   if (["trading", "finance", "payments", "banking", "crypto", "commerce", "defi", "wallet"].some((k) => c.includes(k))) return "Trading & Finance";
   if (["development", "git", "code", "infrastructure", "api", "debugging", "testing"].some((k) => c.includes(k))) return "Development";
-  if (["data", "analytics", "database"].some((k) => c.includes(k))) return "Data";
+  if (["data", "analytics", "database", "web"].some((k) => c.includes(k))) return "Data";
   if (["productivity", "automation", "scheduling", "project-management", "project management"].some((k) => c.includes(k))) return "Productivity";
   if (["communication", "support", "crm", "email", "chat"].some((k) => c.includes(k))) return "Communication";
   if (["design", "ui", "ux", "browser", "media", "content", "writing", "cms"].some((k) => c.includes(k))) return "Design";
