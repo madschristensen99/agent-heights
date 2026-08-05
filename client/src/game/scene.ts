@@ -19,7 +19,7 @@ import { md } from "../ui/md";
 import { getToken } from "../auth";
 import { VoiceManager } from "../voice";
 import { ScreenShareManager } from "../screen-share";
-import { WebcamManager } from "./webcam";
+import { WebcamManager } from "../webcam";
 import * as loadingOverlay from "./loading-overlay";
 
 const PLAYER_SPEED = 380;
