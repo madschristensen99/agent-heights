@@ -7187,8 +7187,8 @@ export class OfficeScene extends Phaser.Scene {
     const dx = Math.abs(this.player.x - this.lastSentX);
     const dy = Math.abs(this.player.y - this.lastSentY);
     const isMovingNow = dx > 2 || dy > 2 || this.playerDir !== this._lastSentDir;
-    // 100ms when moving, 500ms when idle
-    const sendInterval = isMovingNow ? 100 : 500;
+    // 50ms when moving (20Hz), 500ms when idle (2Hz)
+    const sendInterval = isMovingNow ? 50 : 500;
     if (now - this.lastPosSent > sendInterval) {
       if (isMovingNow) {
         this.net?.send({ type: "player_move", x: this.player.x, y: this.player.y, dir: this.playerDir });

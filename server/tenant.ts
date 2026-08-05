@@ -111,7 +111,7 @@ export class TenantManager {
   /** Per-room flush timers for position buffers. */
   private positionFlushTimers = new Map<string, ReturnType<typeof setInterval>>();
   /** Interval between position buffer flushes (ms). */
-  private static readonly POSITION_FLUSH_MS = 100;
+  private static readonly POSITION_FLUSH_MS = 50;
 
   constructor(private rootDir: string) {
     // Pre-seed the Agent Heights HQ organization

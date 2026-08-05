@@ -4,8 +4,8 @@ import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.
 import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 
-const MAX_VOICE_DISTANCE_INDOOR = 600;
-const MAX_VOICE_DISTANCE_OUTDOOR = 1000;
+const MAX_VOICE_DISTANCE_INDOOR = 1200;
+const MAX_VOICE_DISTANCE_OUTDOOR = 2000;
 const SPEAKING_THRESHOLD = 0.02;
 
 interface VoicePeer {
@@ -122,10 +122,11 @@ export class VoiceManager {
 
   private async ensureAudioContext(): Promise<AudioContext> {
     // Use shared context from AudioSystem if available (avoids dual-context issues on iOS)
-    if (!this.audioContext && this.externalContext) {
+    // Skip if the external context has been closed
+    if (!this.audioContext && this.externalContext && this.externalContext.state !== "closed") {
       this.audioContext = this.externalContext;
     }
-    if (!this.audioContext) {
+    if (!this.audioContext || this.audioContext.state === "closed") {
       this.audioContext = new AudioContext({ sampleRate: 48000 });
     }
     if (this.audioContext.state === "suspended") {
@@ -175,7 +176,7 @@ export class VoiceManager {
     for (const [userId, peer] of this.peers) {
       if (!peer.gainNode || !peer.analyser) {
         peer.gainNode = ctx.createGain();
-        peer.gainNode.gain.value = 0;
+        peer.gainNode.gain.value = 1; // Pass-through — analyser only, volume controlled via audioEl
         peer.analyser = ctx.createAnalyser();
         peer.analyser.fftSize = 256;
         // Analyser taps signal but does NOT route to destination (AEC fix)
@@ -203,8 +204,8 @@ export class VoiceManager {
     }
     this.peers.clear();
     this.sendFn({ type: "voice_listen_stop" });
-    if (!this._active && this.audioContext) {
-      this.audioContext.close();
+    if (!this._active && this.audioContext && this.audioContext !== this.externalContext) {
+      try { this.audioContext.close(); } catch {}
       this.audioContext = null;
     }
   }
@@ -286,7 +287,7 @@ export class VoiceManager {
     for (const [userId, peer] of this.peers) {
       if (!peer.gainNode || !peer.analyser) {
         peer.gainNode = ctx.createGain();
-        peer.gainNode.gain.value = 0;
+        peer.gainNode.gain.value = 1; // Pass-through — analyser only, volume controlled via audioEl
         peer.analyser = ctx.createAnalyser();
         peer.analyser.fftSize = 256;
         // Analyser taps signal but does NOT route to destination (AEC fix)
@@ -346,10 +347,11 @@ export class VoiceManager {
     }
     this.micTrack = null;
     this.processedStream = null;
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
+    // Only close the AudioContext if we created it (not the shared external one)
+    if (this.audioContext && this.audioContext !== this.externalContext) {
+      try { this.audioContext.close(); } catch {}
     }
+    this.audioContext = null;
     this.rnnoiseLoaded = false;
     this.sendFn({ type: "voice_stop" });
   }
@@ -396,7 +398,7 @@ export class VoiceManager {
     let recvHighpass: BiquadFilterNode | null = null;
     if (this.audioContext && this.audioContext.state === "running") {
       gainNode = this.audioContext.createGain();
-      gainNode.gain.value = 0;
+      gainNode.gain.value = 1; // Pass-through — analyser only, volume controlled via audioEl
       analyser = this.audioContext.createAnalyser();
       analyser.fftSize = 256;
       // Analyser taps the signal but does NOT route to destination

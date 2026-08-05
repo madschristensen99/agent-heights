@@ -69,11 +69,7 @@ export class WebcamManager {
           height: { ideal: 480 },
           frameRate: { ideal: 15, max: 30 },
         },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: false,
       });
     } catch (err) {
       console.error("[webcam] getUserMedia failed:", err);

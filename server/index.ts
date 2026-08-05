@@ -236,8 +236,8 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     const mime = MIME[extname(filePath)] ?? "application/octet-stream";
     const headers: Record<string, string> = applySecurityHeaders({ "Content-Type": mime });
     // Cache static assets aggressively (cache-busting via ?v= query params);
-    // keep index.html fresh so env injection picks up new values.
-    if (urlPath === "/index.html" || urlPath === "/") {
+    // keep index.html and .json config files fresh so updates are picked up.
+    if (urlPath === "/index.html" || urlPath === "/" || extname(filePath) === ".json") {
       headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
     } else {
       headers["Cache-Control"] = "public, max-age=31536000, immutable";

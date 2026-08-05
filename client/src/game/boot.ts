@@ -65,7 +65,7 @@ export class BootScene extends Phaser.Scene {
     // Fetch world-theme.json early so we know the asset tier before
     // deciding whether to load AI atlases + 3D creature spritesheets.
     try {
-      const themeRes = await fetch("assets/world-theme.json");
+      const themeRes = await fetch("assets/world-theme.json?v=" + Date.now());
       if (themeRes.ok) {
         const theme: WorldTheme = await themeRes.json();
         this.registry.set("worldTheme", theme);
