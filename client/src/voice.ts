@@ -198,9 +198,7 @@ export class VoiceManager {
       try {
         peer.pc.addTrack(sendTrack, sendStream);
         console.log("[voice] added mic track to existing peer", userId);
-        if (this.myUserId < userId) {
-          void this.initiateOffer(userId);
-        }
+        void this.initiateOffer(userId);
       } catch (err) {
         console.warn(`[voice] failed to add mic track to peer ${userId}:`, err);
       }
@@ -373,9 +371,9 @@ export class VoiceManager {
     if (!peer) {
       peer = this.createPeer(fromUserId, "Unknown");
     }
-    // Guard: ignore if already processing or connected (duplicate message)
-    if (peer.pc.signalingState !== "stable" || peer.connected) {
-      console.log("[voice] onOffer ignored — signalingState=", peer.pc.signalingState, "connected=", peer.connected);
+    // Guard: ignore if not in stable state (prevents glare / duplicate offers)
+    if (peer.pc.signalingState !== "stable") {
+      console.log("[voice] onOffer ignored — signalingState=", peer.pc.signalingState);
       return;
     }
     try {
