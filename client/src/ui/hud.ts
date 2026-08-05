@@ -686,8 +686,8 @@ export class Hud {
         }
         const maVoice = document.getElementById("ma-voice");
         if (maVoice) { maVoice.textContent = "🎙"; maVoice.classList.add("primary"); }
-      }).catch(() => {
-        this.store.toast("Microphone access denied — check browser settings.");
+      }).catch((err: any) => {
+        this.showMicPermissionHelp(err);
       });
     }
   }
@@ -709,6 +709,61 @@ export class Hud {
       this.speakerBtn.textContent = newMuted ? "🔇" : "🔊";
       this.speakerBtn.style.color = newMuted ? "#f44336" : "";
     }
+  }
+
+  private showMicPermissionHelp(err: any): void {
+    const isFirefox = navigator.userAgent.includes("Firefox");
+    const isChrome = navigator.userAgent.includes("Chrome") && !navigator.userAgent.includes("Edg");
+    const isEdge = navigator.userAgent.includes("Edg");
+    const isSafari = navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome");
+
+    const browserName = isFirefox ? "Firefox" : isEdge ? "Edge" : isChrome ? "Chrome" : isSafari ? "Safari" : "your browser";
+    const settingsUrl = isFirefox ? "about:preferences#privacy"
+      : isEdge ? "edge://settings/content/microphone"
+      : isChrome ? "chrome://settings/content/microphone"
+      : "";
+
+    const isDenied = err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError";
+    const isNotFound = err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError";
+
+    const title = isNotFound ? "No Microphone Found" : isDenied ? "Microphone Access Denied" : "Microphone Error";
+    const reason = isNotFound
+      ? "We couldn't detect a microphone on your device. Make sure a mic is plugged in and enabled in your OS settings."
+      : isDenied
+      ? `You previously denied microphone access for this site. You need to reset the permission in ${browserName} to use voice chat.`
+      : "An unexpected error occurred while accessing your microphone.";
+
+    const steps = isNotFound
+      ? "<li>Plug in a microphone or headset</li><li>Check your OS sound settings to ensure the mic is enabled</li><li>Refresh the page and try again</li>"
+      : settingsUrl
+      ? `<li>Click the button below to open ${browserName} microphone settings</li><li>Find this site in the "Block" list and change it to "Allow"</li><li>Refresh this page and click the 🎤 button again</li>`
+      : `<li>Open ${browserName} settings → Privacy → Microphone</li><li>Allow microphone access for this site</li><li>Refresh this page and click the 🎤 button again</li>`;
+
+    const modal = document.createElement("div");
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+    modal.innerHTML = `
+      <div style="background:#1a1a1a;border:1px solid #444;border-radius:0.75rem;padding:1.5rem;max-width:420px;width:90vw;color:#eee;">
+        <h3 style="margin:0 0 0.5rem;font-size:1.1rem;color:#f44336;">${title}</h3>
+        <p style="margin:0 0 1rem;font-size:0.85rem;color:#aaa;line-height:1.4;">${reason}</p>
+        <ol style="margin:0 0 1rem;padding-left:1.2rem;font-size:0.85rem;color:#ccc;line-height:1.6;">${steps}</ol>
+        <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+          ${settingsUrl ? `<button id="mic-settings-btn" style="padding:0.5rem 1rem;border:1px solid #3A8CD4;background:transparent;color:#3A8CD4;border-radius:0.4rem;cursor:pointer;font-size:0.8rem;">Open ${browserName} Settings</button>` : ""}
+          <button id="mic-close-btn" style="padding:0.5rem 1rem;border:1px solid #555;background:#333;color:#eee;border-radius:0.4rem;cursor:pointer;font-size:0.8rem;">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector("#mic-close-btn");
+    closeBtn?.addEventListener("click", () => modal.remove());
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+
+    const settingsBtn = modal.querySelector("#mic-settings-btn");
+    settingsBtn?.addEventListener("click", () => {
+      if (settingsUrl && !settingsUrl.startsWith("http")) {
+        window.open(settingsUrl, "_blank");
+      }
+    });
   }
 
   /** Global hotkeys: H hire · F feed · B board · , settings · ESC closes modals. */

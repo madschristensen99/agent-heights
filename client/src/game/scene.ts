@@ -8529,11 +8529,12 @@ export class OfficeScene extends Phaser.Scene {
       this.webcamVideoEl.autoplay = true;
       this.webcamVideoEl.playsInline = true;
       this.webcamVideoEl.muted = true;
-      this.webcamVideoEl.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;object-fit:cover;";
+      this.webcamVideoEl.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;object-fit:cover;width:0px;height:0px;overflow:hidden;";
       document.body.appendChild(this.webcamVideoEl);
     }
     this.webcamVideoEl.srcObject = stream;
     this.webcamVideoEl.style.display = "block";
+    this.updateProjectorVideoOverlays();
   }
 
   /** Detach the webcam video element from the projector. */
@@ -8551,11 +8552,13 @@ export class OfficeScene extends Phaser.Scene {
       this.screenShareVideoEl.autoplay = true;
       this.screenShareVideoEl.playsInline = true;
       this.screenShareVideoEl.muted = true;
-      this.screenShareVideoEl.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;object-fit:contain;";
+      this.screenShareVideoEl.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;object-fit:contain;width:0px;height:0px;overflow:hidden;";
       document.body.appendChild(this.screenShareVideoEl);
     }
     this.screenShareVideoEl.srcObject = stream;
     this.screenShareVideoEl.style.display = "block";
+    // Force an immediate overlay sizing so the element doesn't flash at intrinsic size
+    this.updateProjectorVideoOverlays();
   }
 
   /** Detach the screen share video element from the projector. */
