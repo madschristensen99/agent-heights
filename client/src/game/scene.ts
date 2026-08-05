@@ -276,7 +276,7 @@ export class OfficeScene extends Phaser.Scene {
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
   private skyGfx!: Phaser.GameObjects.Graphics;
-  private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; driftY: number; yBase: number }[] = [];
+  private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; yBase: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
   private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
@@ -1581,26 +1581,25 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // --- Cloud sprites (7 instances, world-space above the office) ---
-    const cloudCount = 7;
+    // --- Cloud sprites (10 instances, world-space above the office) ---
+    const cloudCount = 10;
     for (let i = 0; i < cloudCount; i++) {
       const cloudTex = `cloud-${i % 3}`;
       const x = Math.random() * 2000 - 1000;
       const y = -200 - Math.random() * 400;
       const scale = 0.5 + Math.random() * 1.0;
       const baseAlpha = 0.4 + Math.random() * 0.35;
-      const speed = 3 + Math.random() * 7;
+      const speed = 5 + Math.random() * 15;
       const phase = Math.random() * Math.PI * 2;
-      const fadeSpeed = 0.0003 + Math.random() * 0.0005;
-      const driftY = (Math.random() - 0.5) * 4;
+      const fadeSpeed = 0.0003 + Math.random() * 0.0004;
 
       const sprite = this.add.image(x, y, cloudTex)
         .setOrigin(0.5, 0.5)
         .setDepth(-1.5)
         .setScale(scale)
-        .setAlpha(0);
+        .setAlpha(baseAlpha);
 
-      this.clouds.push({ sprite, speed, baseAlpha, phase, fadeSpeed, driftY, yBase: y });
+      this.clouds.push({ sprite, speed, baseAlpha, phase, fadeSpeed, yBase: y });
     }
   }
 
@@ -1647,7 +1646,7 @@ export class OfficeScene extends Phaser.Scene {
     // Redraw sky gradient to cover the camera's current world view
     this.drawSkyGradient();
 
-    // Clouds: drift in world space, fade in/out, gentle vertical bob, wrap edges
+    // Clouds: drift in world space, subtle alpha pulse, gentle vertical bob, wrap edges
     const cam = this.cameras.main;
     const view = cam.worldView;
     const t = this.time.now;
@@ -1660,22 +1659,9 @@ export class OfficeScene extends Phaser.Scene {
       }
       // Vertical bob around yBase
       c.sprite.y = c.yBase + Math.sin(t * 0.0002 + c.phase) * 15;
-      // Alpha lifecycle: smooth fade in and out
-      const cycle = 0.5 + 0.5 * Math.sin(t * c.fadeSpeed + c.phase);
-      const alpha = c.baseAlpha * cycle;
-      c.sprite.setAlpha(alpha);
-      // Respawn when faded out to near-zero
-      if (alpha < 0.01) {
-        c.sprite.x = view.x + Math.random() * view.width;
-        c.yBase = -200 - Math.random() * 400;
-        c.sprite.y = c.yBase;
-        c.baseAlpha = 0.4 + Math.random() * 0.35;
-        c.speed = 3 + Math.random() * 7;
-        c.phase = Math.random() * Math.PI * 2;
-        c.fadeSpeed = 0.0003 + Math.random() * 0.0005;
-        c.driftY = (Math.random() - 0.5) * 4;
-        c.sprite.setScale(0.5 + Math.random() * 1.0);
-      }
+      // Subtle alpha pulse: oscillates between 40% and 100% of baseAlpha (never fully invisible)
+      const pulse = 0.7 + 0.3 * Math.sin(t * c.fadeSpeed + c.phase);
+      c.sprite.setAlpha(c.baseAlpha * pulse);
     }
   }
 
