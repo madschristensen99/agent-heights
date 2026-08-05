@@ -19,7 +19,8 @@ import { md } from "../ui/md";
 import { getToken } from "../auth";
 import { VoiceManager } from "../voice";
 import { ScreenShareManager } from "../screen-share";
-import { WebcamManager } from "../webcam";
+import { WebcamManager } from "./webcam";
+import * as loadingOverlay from "./loading-overlay";
 
 const PLAYER_SPEED = 380;
 
@@ -279,7 +280,7 @@ export class OfficeScene extends Phaser.Scene {
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; yBase: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
-  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; }>();
+  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; appearanceKey: string; prevX: number; prevY: number; labelX: number; labelY: number; }>();
   /** Voice chat manager — WebRTC proximity voice. */
   private voice: VoiceManager | null = null;
   /** Screen share manager — WebRTC screen sharing on projector. */
@@ -316,6 +317,7 @@ export class OfficeScene extends Phaser.Scene {
   private lastPosSent = 0;
   private lastSentX = 0;
   private lastSentY = 0;
+  private lastSpeakingCheck = 0;
 
   // ── Tap-to-walk + tap-to-interact ──
   private playerPath: Tile[] = [];
@@ -355,8 +357,10 @@ export class OfficeScene extends Phaser.Scene {
       this.store.onVoiceAnswer((fromUserId, sdp) => { void this.voice?.onAnswer(fromUserId, sdp); });
       this.store.onVoiceIce((fromUserId, candidate) => { void this.voice?.onIce(fromUserId, candidate); });
       this.store.onVoicePeerLeft((userId) => this.voice?.onPeerLeft(userId));
-      this.events.once("shutdown", () => { this.voice?.stop(); this.voice = null; this.store.sceneRef = null; });
+      this.events.once("shutdown", () => { this.voice?.stop(); this.voice?.stopListenOnly(); this.voice = null; this.store.sceneRef = null; });
       this.store.sceneRef = this as any;
+      // Auto-start listen-only mode so player hears nearby speakers without enabling mic
+      this.voice.startListenOnly().catch((err) => console.warn("[voice] auto listen-only failed:", err));
     }
     // Clean up projector iframe on scene shutdown/restart
     this.events.once("shutdown", () => this.destroyProjectorVideo());
@@ -483,38 +487,8 @@ export class OfficeScene extends Phaser.Scene {
     console.log(`[scene] create() start at ${performance.now().toFixed(0)}ms, roomId=${this.store.roomId}, initialDataReady=${this.store.initialDataReady}`);
 
     // Remove any stale overlay from a previous scene restart
-    document.getElementById("office-loading")?.remove();
-
-    // --- DOM loading overlay for phased office init ---
-    // Using DOM instead of Phaser Text avoids a canvas-texture crash that
-    // occurs when setText is called from delayedCall during scene init.
-    // The opaque blue background also hides the office being built behind it.
-    const loadOverlay = document.createElement("div");
-    loadOverlay.id = "office-loading";
-    loadOverlay.style.cssText = `
-      position: fixed; inset: 0; z-index: 9998;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      background: #a3bdd0;
-      font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
-    `;
-    loadOverlay.innerHTML = `
-      <div id="office-loading-label" style="color:#fff; font-size:20px; font-weight:600;
-        text-shadow:0 2px 4px rgba(0,0,0,0.3); margin-bottom:18px;">Building office…</div>
-      <div style="width:320px; height:24px; background:#222233; border-radius:6px; overflow:hidden;">
-        <div id="office-loading-fill" style="width:0%; height:100%; background:#4cb866;
-          border-radius:6px; transition:width 0.1s ease;"></div>
-      </div>
-    `;
-    document.body.appendChild(loadOverlay);
-
-    const loadLabel = loadOverlay.querySelector("#office-loading-label") as HTMLDivElement;
-    const loadFill = loadOverlay.querySelector("#office-loading-fill") as HTMLDivElement;
-
-    const updateLoadBar = (progress: number, label: string) => {
-      loadLabel.textContent = label;
-      loadFill.style.width = `${Math.round(progress * 100)}%`;
-    };
+    loadingOverlay.remove();
+    loadingOverlay.setSegment(0.7, 1.0);
 
     // register post-processing pipelines (once)
     try {
@@ -1441,7 +1415,7 @@ export class OfficeScene extends Phaser.Scene {
           this.cameras.main.fadeIn(400, 0, 0, 0);
 
           // Clean up loading overlay
-          loadOverlay.remove();
+          loadingOverlay.remove();
 
           // Synchronously load chunks at the player's current position so tile
           // data is ready immediately.  Canvas rendering happens via the
@@ -1483,7 +1457,7 @@ export class OfficeScene extends Phaser.Scene {
     const processNextPhase = () => {
       if (phaseIndex >= phases.length) {
         // All phases done — clean up loading overlay regardless of crashes
-        document.getElementById("office-loading")?.remove();
+        loadingOverlay.remove();
         return;
       }
 
@@ -1497,7 +1471,7 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       const progress = phaseIndex / totalPhases;
-      updateLoadBar(progress, `Building ${phase.name}…`);
+      loadingOverlay.updateProgress(progress, `Building ${phase.name}…`);
 
       // Run the phase on the next frame so the bar update renders first
       this.time.delayedCall(0, () => {
@@ -1509,24 +1483,24 @@ export class OfficeScene extends Phaser.Scene {
             result.then(() => {
               console.log(`[scene] phase "${phase.name}" done in ${(performance.now() - phaseStart).toFixed(0)}ms`);
               phaseIndex++;
-              updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+              loadingOverlay.updateProgress(phaseIndex / totalPhases, `Done: ${phase.name}`);
               this.time.delayedCall(0, processNextPhase);
             }).catch((err) => {
               console.error(`[scene] PHASE "${phase.name}" REJECTED:`, err);
               phaseIndex++;
-              updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+              loadingOverlay.updateProgress(phaseIndex / totalPhases, `Done: ${phase.name}`);
               this.time.delayedCall(0, processNextPhase);
             });
           } else {
             console.log(`[scene] phase "${phase.name}" done in ${(performance.now() - phaseStart).toFixed(0)}ms`);
             phaseIndex++;
-            updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+            loadingOverlay.updateProgress(phaseIndex / totalPhases, `Done: ${phase.name}`);
             this.time.delayedCall(0, processNextPhase);
           }
         } catch (err) {
           console.error(`[scene] PHASE "${phase.name}" CRASHED:`, err);
           phaseIndex++;
-          updateLoadBar(phaseIndex / totalPhases, `Done: ${phase.name}`);
+          loadingOverlay.updateProgress(phaseIndex / totalPhases, `Done: ${phase.name}`);
           this.time.delayedCall(0, processNextPhase);
         }
       });
@@ -1537,10 +1511,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Safety net: remove loading overlay after 20s no matter what
     this.time.delayedCall(20000, () => {
-      const ov = document.getElementById("office-loading");
-      if (ov) {
+      if (loadingOverlay.exists()) {
         console.warn("[scene] loading overlay still present after 20s — force removing");
-        ov.remove();
+        loadingOverlay.remove();
       }
     });
   }
@@ -7161,12 +7134,16 @@ export class OfficeScene extends Phaser.Scene {
     this.syncRemotePlayers();
 
     // ── Voice chat: update per-peer volumes and speaking indicators ──────
-    if (this.voice?.active && this.player) {
+    if (this.voice && (this.voice.active || this.voice.listening) && this.player) {
       const isOutdoor = this.world.isOutside(this.player.x, this.player.y);
       this.voice.updateVolumes(this.player.x, this.player.y, this.store.roomPlayers, isOutdoor);
-      const speaking = this.voice.getSpeakingPeers();
-      for (const [userId, icon] of this.speakingIcons) {
-        icon.setVisible(speaking.has(userId));
+      // Throttle speaking indicator checks to ~15Hz (every 66ms)
+      if (now - this.lastSpeakingCheck > 66) {
+        this.lastSpeakingCheck = now;
+        const speaking = this.voice.getSpeakingPeers();
+        for (const [userId, icon] of this.speakingIcons) {
+          icon.setVisible(speaking.has(userId));
+        }
       }
     }
 
@@ -7217,13 +7194,17 @@ export class OfficeScene extends Phaser.Scene {
         texKey = `remote-${userId}`;
       }
 
-      // If appearance changed, regenerate the texture
-      if (entry && p.appearance && JSON.stringify(entry.appearance) !== JSON.stringify(p.appearance)) {
-        generateCharTexture(this, texKey, p.appearance);
-        this.ensureCharAnimations(texKey);
-        entry.appearance = p.appearance;
-        entry.texKey = texKey;
-        entry.sprite.setTexture(texKey, 0);
+      // If appearance changed, regenerate the texture (compare cached key, not JSON.stringify per frame)
+      if (entry && p.appearance) {
+        const apKey = `${p.appearance.skin}-${p.appearance.hairStyle}-${p.appearance.hair}-${p.appearance.shirt}-${p.appearance.pants}-${p.appearance.accessory}-${p.appearance.accent}-${p.appearance.beard}-${p.appearance.eyeColor}-${p.appearance.headFeature}-${p.appearance.bodyType ?? 'normal'}`;
+        if (entry.appearanceKey !== apKey) {
+          generateCharTexture(this, texKey, p.appearance);
+          this.ensureCharAnimations(texKey);
+          entry.appearance = p.appearance;
+          entry.appearanceKey = apKey;
+          entry.texKey = texKey;
+          entry.sprite.setTexture(texKey, 0);
+        }
       }
 
       if (!entry) {
@@ -7251,7 +7232,8 @@ export class OfficeScene extends Phaser.Scene {
           .setScale(0.75)
           .setAlpha(0)
           .setDepth(10 + p.y + 0.1);
-        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null };
+        const apKey = p.appearance ? `${p.appearance.skin}-${p.appearance.hairStyle}-${p.appearance.hair}-${p.appearance.shirt}-${p.appearance.pants}-${p.appearance.accessory}-${p.appearance.accent}-${p.appearance.beard}-${p.appearance.eyeColor}-${p.appearance.headFeature}-${p.appearance.bodyType ?? 'normal'}` : '';
+        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null, appearanceKey: apKey, prevX: p.x, prevY: p.y, labelX: 0, labelY: 0 };
         this.remotePlayers.set(userId, entry);
 
         // Speaking indicator (hidden by default, shown when peer is talking)
@@ -7297,28 +7279,36 @@ export class OfficeScene extends Phaser.Scene {
       // Smoothly interpolate remote player position (skip during intro)
       const target = entry.sprite;
       if (!entry.intro) {
-        const lerp = 0.15;
+        // Detect actual movement from store data BEFORE lerp
+        const storeMoved = p.x !== entry.prevX || p.y !== entry.prevY;
+        entry.prevX = p.x;
+        entry.prevY = p.y;
+
+        const lerp = 0.25;
         target.x += (p.x - target.x) * lerp;
         target.y += (p.y - target.y) * lerp;
         target.setDepth(10 + target.y);
 
-        // Play walk/idle animation based on whether they're moving
-        const moving = Math.abs(p.x - target.x) > 1 || Math.abs(p.y - target.y) > 1;
-        const animKey = `${entry.texKey}-${moving ? "walk" : "idle"}-${p.dir}`;
+        // Play walk/idle animation based on whether store position is changing
+        const animKey = `${entry.texKey}-${storeMoved ? "walk" : "idle"}-${p.dir}`;
         if (target.anims.currentAnim?.key !== animKey) {
           target.play(animKey, true);
         }
       }
 
-      // Update name label
-      entry.label
-        .setPosition(target.x, target.y - 108)
-        .setDepth(10 + target.y + 0.1);
-      entry.nameBg
-        .clear()
-        .setPosition(target.x, target.y - 108)
-        .setDepth(10 + target.y);
-      {
+      // Update name label — only redraw graphics when position changed meaningfully
+      const labelX = target.x;
+      const labelY = target.y - 108;
+      entry.label.setPosition(labelX, labelY).setDepth(10 + target.y + 0.1);
+      const dx = Math.abs(labelX - entry.labelX);
+      const dy = Math.abs(labelY - entry.labelY);
+      if (dx > 1 || dy > 1 || entry.labelX === 0) {
+        entry.labelX = labelX;
+        entry.labelY = labelY;
+        entry.nameBg
+          .clear()
+          .setPosition(labelX, labelY)
+          .setDepth(10 + target.y);
         const w = entry.label.displayWidth + 22;
         const h = 22;
         const r = 5;
@@ -7330,6 +7320,8 @@ export class OfficeScene extends Phaser.Scene {
         entry.nameBg.fillRect(x + 2, y + 3, 3, h - 6);
         entry.nameBg.lineStyle(1, 0xffffff, 0.18);
         entry.nameBg.strokeRoundedRect(x, y, w, h, r);
+      } else {
+        entry.nameBg.setDepth(10 + target.y);
       }
 
       // Update speaking indicator position

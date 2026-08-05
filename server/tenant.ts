@@ -32,6 +32,7 @@ export interface UserSession {
   cleanup: () => void;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
   voiceActive: boolean;
+  voiceListening: boolean;
   screenShareActive: boolean;
   webcamActive: boolean;
   /** Live log subscriptions keyed by agentId — cleaned up on disconnect. */
@@ -514,6 +515,7 @@ export class TenantManager {
       cleanup: () => {},
       disconnectTimer: null,
       voiceActive: false,
+      voiceListening: false,
       screenShareActive: false,
       webcamActive: false,
       spectators: new Set(),

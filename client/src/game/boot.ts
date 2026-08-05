@@ -16,6 +16,7 @@ import {
   AI_TILE_TEXTURES, AI_OBJECT_TEXTURES,
 } from "./ai-tiles";
 import { SS_FACTOR } from "./world";
+import * as loadingOverlay from "./loading-overlay";
 import { setCharTextureProvider, setCharComponentProvider } from "./chargen";
 import type { CharTextureProvider, CharComponentProvider } from "../../../shared/char-draw";
 
@@ -26,8 +27,6 @@ import type { CharTextureProvider, CharComponentProvider } from "../../../shared
  * visibly as each category is generated.
  */
 export class BootScene extends Phaser.Scene {
-  private bar!: Phaser.GameObjects.Graphics;
-  private statusText!: Phaser.GameObjects.Text;
 
   constructor() {
     super("boot");
@@ -111,26 +110,8 @@ export class BootScene extends Phaser.Scene {
       }
     });
 
-    const w = this.scale.width;
-    const h = this.scale.height;
-    this.bar = this.add.graphics();
-    this.statusText = this.add
-      .text(w / 2, h / 2 - 40, "Loading assets…", {
-        fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        fontSize: "20px",
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setResolution(2);
-
     this.load.on("progress", (value: number) => {
-      this.bar.clear();
-      this.bar.fillStyle(0x222233, 1);
-      this.bar.fillRoundedRect(w / 2 - 160, h / 2, 320, 24, 6);
-      this.bar.fillStyle(0x3a8cd4, 1);
-      this.bar.fillRoundedRect(w / 2 - 160, h / 2, 320 * value, 24, 6);
+      loadingOverlay.setProgress(0.4 * value, "Loading assets…");
     });
 
     this.load.on("loaderror", (file: Phaser.Loader.File) => {
@@ -195,12 +176,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-    const barX = w / 2 - 160;
-    const barY = h / 2;
-    const barW = 320;
-    const barH = 24;
 
     // Unpack tile + sprite atlases into individual Phaser textures.
     // Hair atlas is NOT unpacked — we extract ImageData directly from it
@@ -362,14 +337,7 @@ export class BootScene extends Phaser.Scene {
     const texSteps = getTextureGenerationSteps(this);
     const totalSteps = texSteps.length + 1; // +1 for animations
 
-    const updateBar = (progress: number, label: string) => {
-      this.statusText.setText(label);
-      this.bar.clear();
-      this.bar.fillStyle(0x222233, 1);
-      this.bar.fillRoundedRect(barX, barY, barW, barH, 6);
-      this.bar.fillStyle(0x4cb866, 1);
-      this.bar.fillRoundedRect(barX, barY, barW * progress, barH, 6);
-    };
+    loadingOverlay.setSegment(0.4, 0.7);
 
     // Process steps in batches so the bar visibly progresses.
     // Heavy steps (Creatures, Beasts, Friendly, World objects) run individually;
@@ -386,7 +354,7 @@ export class BootScene extends Phaser.Scene {
 
     const processNextStep = () => {
       if (stepIndex >= allSteps.length) {
-        updateBar(1, "Ready!");
+        loadingOverlay.updateProgress(1, "Ready!");
         console.log(`[boot] texture steps done at ${performance.now().toFixed(0)}ms`);
         const store = this.game.registry.get("store") as Store | undefined;
         const startOffice = () => {
@@ -409,7 +377,7 @@ export class BootScene extends Phaser.Scene {
               if (!store || store.initialDataReady) {
                 startOfficeOnce();
               } else {
-                updateBar(1, "Connecting to server…");
+                loadingOverlay.updateProgress(1, "Connecting to server…");
                 this.time.delayedCall(10000, () => startOfficeOnce());
                 store.onInitialData(() => startOfficeOnce());
               }
@@ -426,7 +394,7 @@ export class BootScene extends Phaser.Scene {
           if (!store || store.initialDataReady) {
             startOffice();
           } else {
-            updateBar(1, "Connecting to server…");
+            loadingOverlay.updateProgress(1, "Connecting to server…");
             this.time.delayedCall(10000, () => startOffice());
             store.onInitialData(() => startOffice());
           }
@@ -436,14 +404,14 @@ export class BootScene extends Phaser.Scene {
 
       const step = allSteps[stepIndex];
       const progress = stepIndex / totalSteps;
-      updateBar(progress, `Generating ${step.name}…`);
+      loadingOverlay.updateProgress(progress, `Generating ${step.name}…`);
 
       // Run the step on the next frame so the bar update renders first
       this.time.delayedCall(0, () => {
         step.fn();
         stepIndex++;
         // Update bar to show this step completed
-        updateBar(stepIndex / totalSteps, `Done: ${step.name}`);
+        loadingOverlay.updateProgress(stepIndex / totalSteps, `Done: ${step.name}`);
         // Schedule next step on the following frame
         this.time.delayedCall(0, processNextStep);
       });

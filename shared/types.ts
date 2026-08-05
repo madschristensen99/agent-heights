@@ -826,10 +826,12 @@ export type ClientMsg =
   | { type: "github_create_file"; branchName: string; path: string; content: string; commitMessage: string }
   | { type: "github_delete_file"; branchName: string; path: string; sha: string; commitMessage: string }
   | { type: "voice_start" }
+  | { type: "voice_listen" }
   | { type: "voice_offer"; targetUserId: string; sdp: string }
   | { type: "voice_answer"; targetUserId: string; sdp: string }
   | { type: "voice_ice"; targetUserId: string; candidate: string }
   | { type: "voice_stop" }
+  | { type: "voice_listen_stop" }
   | { type: "projector_set_channel"; channel: string }
   | { type: "screen_share_start" }
   | { type: "screen_share_stop" }

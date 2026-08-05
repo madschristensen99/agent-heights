@@ -228,6 +228,7 @@ export class Hud {
   private renderQueued = false;
   private perfVisible = false;
   private voiceBtn: HTMLButtonElement | null = null;
+  private speakerBtn: HTMLButtonElement | null = null;
   private monacoEditor: any = null;
   private monacoFilePath: string | null = null;
   private codeEditorSig = "";
@@ -244,7 +245,8 @@ export class Hud {
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
         <button class="btn mini" id="worlds-btn">🌀 WORLDS</button>
-        <button class="btn mini" id="voice-btn" title="Toggle voice chat">🎤</button>
+        <button class="btn mini" id="voice-btn" title="Toggle microphone">🎤</button>
+        <button class="btn mini" id="speaker-btn" title="Toggle speaker (mute/unmute incoming audio)">🔊</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <button class="btn mini" id="help-btn" title="How to play">? HELP</button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
@@ -372,6 +374,11 @@ export class Hud {
     const voiceBtn = document.getElementById("voice-btn")! as HTMLButtonElement;
     voiceBtn.addEventListener("click", () => this.toggleVoice());
     this.voiceBtn = voiceBtn;
+
+    // ── Speaker mute toggle (incoming audio) ───────────────────────────
+    const speakerBtn = document.getElementById("speaker-btn")! as HTMLButtonElement;
+    speakerBtn.addEventListener("click", () => this.toggleSpeaker());
+    this.speakerBtn = speakerBtn;
 
     // User menu: show email + sign-out button (reactive to auth state)
     if (isAuthEnabled) {
@@ -660,7 +667,10 @@ export class Hud {
       return;
     }
     if (voice.active) {
+      // Mic on → turn off mic, fall back to listen-only
       voice.stop();
+      // Re-enter listen-only mode so we still hear others
+      voice.startListenOnly().catch(() => {});
       if (this.voiceBtn) {
         this.voiceBtn.textContent = "🎤";
         this.voiceBtn.style.color = "";
@@ -668,6 +678,7 @@ export class Hud {
       const maVoice = document.getElementById("ma-voice");
       if (maVoice) { maVoice.textContent = "🎤"; maVoice.classList.remove("primary"); }
     } else {
+      // Mic off → enable mic (upgrades from listen-only to full voice)
       voice.start().then(() => {
         if (this.voiceBtn) {
           this.voiceBtn.textContent = "🎙";
@@ -678,6 +689,25 @@ export class Hud {
       }).catch(() => {
         this.store.toast("Microphone access denied — check browser settings.");
       });
+    }
+  }
+
+  private toggleSpeaker(): void {
+    const scene = this.store.sceneRef;
+    if (!scene) {
+      this.store.toast("Voice chat unavailable — scene not ready.");
+      return;
+    }
+    const voice = scene.voice;
+    if (!voice) {
+      this.store.toast("Voice chat unavailable.");
+      return;
+    }
+    const newMuted = !voice.outputMuted;
+    voice.setOutputMuted(newMuted);
+    if (this.speakerBtn) {
+      this.speakerBtn.textContent = newMuted ? "🔇" : "🔊";
+      this.speakerBtn.style.color = newMuted ? "#f44336" : "";
     }
   }
 

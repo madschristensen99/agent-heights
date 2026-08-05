@@ -1,0 +1,6 @@
+newmtl Material
+Kd 0.800 0.800 0.800
+Ni 1.500
+d 1.0
+illum 1
+map_Kd texture_20250901.png

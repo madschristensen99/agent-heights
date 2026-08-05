@@ -2089,17 +2089,18 @@ wss.on("connection", async (ws, req) => {
         }
         case "voice_start": {
           sess.voiceActive = true;
+          sess.voiceListening = true;
           console.log(`[voice] voice_start from ${sess.user.id} in room ${sess.roomId}`);
           if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
           const myName = sess.player?.name ?? "Boss";
-          // Notify all voice-active peers in the room about the new user
+          // Notify all voice-enabled peers (mic on OR listening) in the room
           let peerCount = 0;
           for (const [pid] of room.players) {
             if (pid === sess.user.id) continue;
             const peerSess = tenants.get(pid);
-            if (peerSess && peerSess.voiceActive) {
+            if (peerSess && (peerSess.voiceActive || peerSess.voiceListening)) {
               peerCount++;
               console.log(`[voice] notifying peer ${pid} about ${sess.user.id}`);
               peerSess.broadcast({ type: "voice_peer", userId: sess.user.id, name: myName });
@@ -2107,19 +2108,56 @@ wss.on("connection", async (ws, req) => {
               sess.broadcast({ type: "voice_peer", userId: pid, name: peerSess.player?.name ?? "Boss" });
             }
           }
-          console.log(`[voice] voice_start: found ${peerCount} voice-active peers`);
+          console.log(`[voice] voice_start: found ${peerCount} voice peers`);
+          break;
+        }
+        case "voice_listen": {
+          sess.voiceListening = true;
+          console.log(`[voice] voice_listen from ${sess.user.id} in room ${sess.roomId}`);
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const myName = sess.player?.name ?? "Boss";
+          // Notify all voice-enabled peers about the new listener
+          let peerCount = 0;
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess && (peerSess.voiceActive || peerSess.voiceListening)) {
+              peerCount++;
+              peerSess.broadcast({ type: "voice_peer", userId: sess.user.id, name: myName });
+              sess.broadcast({ type: "voice_peer", userId: pid, name: peerSess.player?.name ?? "Boss" });
+            }
+          }
+          console.log(`[voice] voice_listen: found ${peerCount} voice peers`);
           break;
         }
         case "voice_stop": {
           if (!sess.voiceActive) break;
           sess.voiceActive = false;
+          sess.voiceListening = false;
           if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
           for (const [pid] of room.players) {
             if (pid === sess.user.id) continue;
             const peerSess = tenants.get(pid);
-            if (peerSess && peerSess.voiceActive) {
+            if (peerSess && (peerSess.voiceActive || peerSess.voiceListening)) {
+              peerSess.broadcast({ type: "voice_peer_left", userId: sess.user.id });
+            }
+          }
+          break;
+        }
+        case "voice_listen_stop": {
+          if (!sess.voiceListening || sess.voiceActive) break;
+          sess.voiceListening = false;
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          for (const [pid] of room.players) {
+            if (pid === sess.user.id) continue;
+            const peerSess = tenants.get(pid);
+            if (peerSess && (peerSess.voiceActive || peerSess.voiceListening)) {
               peerSess.broadcast({ type: "voice_peer_left", userId: sess.user.id });
             }
           }
@@ -2137,8 +2175,8 @@ wss.on("connection", async (ws, req) => {
             break;
           }
           const targetSess = tenants.get(msg.targetUserId);
-          if (!targetSess || !targetSess.voiceActive) {
-            console.warn(`[voice] ${msg.type}: target ${msg.targetUserId} not found or not voice-active`);
+          if (!targetSess || (!targetSess.voiceActive && !targetSess.voiceListening)) {
+            console.warn(`[voice] ${msg.type}: target ${msg.targetUserId} not found or not voice-enabled`);
             break;
           }
           console.log(`[voice] relaying ${msg.type} from ${sess.user.id} to ${msg.targetUserId}`);
@@ -2804,15 +2842,16 @@ wss.on("connection", async (ws, req) => {
       sess.agentLogSubscriptions.clear();
     }
     // Clean up voice state when the last client disconnects
-    if (sess.clients.size === 0 && sess.voiceActive) {
+    if (sess.clients.size === 0 && (sess.voiceActive || sess.voiceListening)) {
       sess.voiceActive = false;
+      sess.voiceListening = false;
       if (sess.roomId) {
         const room = tenants.getRoom(sess.roomId);
         if (room) {
           for (const [pid] of room.players) {
             if (pid === sess.user.id) continue;
             const peerSess = tenants.get(pid);
-            if (peerSess && peerSess.voiceActive) {
+            if (peerSess && (peerSess.voiceActive || peerSess.voiceListening)) {
               peerSess.broadcast({ type: "voice_peer_left", userId: sess.user.id });
             }
           }

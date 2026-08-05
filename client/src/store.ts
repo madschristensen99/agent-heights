@@ -138,7 +138,7 @@ export class Store {
   /** True once the server has delivered all initial data (snapshot, room_state, rooms_list). */
   initialDataReady = false;
   /** Reference to the OfficeScene — set during create() so the HUD can access VoiceManager. */
-  sceneRef: { voice: { active: boolean; muted: boolean; start: () => Promise<void>; stop: () => void; setMuted: (m: boolean) => void } } | null = null;
+  sceneRef: { voice: { active: boolean; listening: boolean; muted: boolean; outputMuted: boolean; start: () => Promise<void>; stop: () => void; setMuted: (m: boolean) => void; setOutputMuted: (m: boolean) => void; startListenOnly: () => Promise<void>; stopListenOnly: () => void } } | null = null;
   private initialDataCallbacks = new Set<() => void>();
 
   private listeners = new Set<Listener>();

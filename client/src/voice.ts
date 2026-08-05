@@ -1,4 +1,8 @@
 import type { ClientMsg } from "../../shared/types";
+import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
+import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url";
+import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
+import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 
 const MAX_VOICE_DISTANCE_INDOOR = 600;
 const MAX_VOICE_DISTANCE_OUTDOOR = 1000;
@@ -39,13 +43,20 @@ export class VoiceManager {
   private audioContext: AudioContext | null = null;
   private micStream: MediaStream | null = null;
   private micTrack: MediaStreamTrack | null = null;
+  private processedStream: MediaStream | null = null;
+  private rnnoiseNode: RnnoiseWorkletNode | null = null;
+  private highpassFilter: BiquadFilterNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
   private peers = new Map<string, VoicePeer>();
   private myUserId: string;
   private sendFn: (msg: ClientMsg) => void;
   private _active = false;
-  private _muted = false;
+  private _listening = false;
+  private _micMuted = false;
+  private _outputMuted = false;
   private _lastGainLog = 0;
   private speakingData: Uint8Array<ArrayBuffer> | null = null;
+  private rnnoiseLoaded = false;
 
   constructor(myUserId: string, sendFn: (msg: ClientMsg) => void) {
     this.myUserId = myUserId;
@@ -53,13 +64,72 @@ export class VoiceManager {
   }
 
   get active(): boolean { return this._active; }
-  get muted(): boolean { return this._muted; }
+  get listening(): boolean { return this._listening; }
+  get micMuted(): boolean { return this._micMuted; }
+  get outputMuted(): boolean { return this._outputMuted; }
+  get muted(): boolean { return this._micMuted; }
+
+  private async ensureAudioContext(): Promise<AudioContext> {
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext({ sampleRate: 48000 });
+    }
+    if (this.audioContext.state === "suspended") {
+      await this.audioContext.resume();
+    }
+    return this.audioContext;
+  }
+
+  private async ensureRnnoise(ctx: AudioContext): Promise<void> {
+    if (this.rnnoiseLoaded) return;
+    try {
+      const wasmBinary = await loadRnnoise({ url: rnnoiseWasmPath, simdUrl: rnnoiseSimdWasmPath });
+      await ctx.audioWorklet.addModule(rnnoiseWorkletPath);
+      this.rnnoiseNode = new RnnoiseWorkletNode(ctx, { wasmBinary, maxChannels: 1 });
+      this.rnnoiseLoaded = true;
+      console.log("[voice] RNNoise loaded successfully");
+    } catch (err) {
+      console.warn("[voice] RNNoise failed to load, falling back to browser DSP:", err);
+      this.rnnoiseNode = null;
+      this.rnnoiseLoaded = true;
+    }
+  }
+
+  async startListenOnly(): Promise<void> {
+    if (this._listening || this._active) return;
+    await this.ensureAudioContext();
+    this._listening = true;
+    console.log("[voice] listen-only started, userId=", this.myUserId);
+    this.sendFn({ type: "voice_listen" });
+  }
+
+  stopListenOnly(): void {
+    if (!this._listening || this._active) return;
+    this._listening = false;
+    for (const [id] of this.peers) {
+      this.closePeer(id);
+    }
+    this.peers.clear();
+    this.sendFn({ type: "voice_listen_stop" });
+    if (!this._active && this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+  }
 
   async start(): Promise<void> {
     if (this._active) return;
+    const ctx = await this.ensureAudioContext();
+
     try {
       this.micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 48000,
+          sampleSize: 16,
+        },
         video: false,
       });
     } catch (err) {
@@ -67,44 +137,118 @@ export class VoiceManager {
       throw err;
     }
     this.micTrack = this.micStream.getAudioTracks()[0] ?? null;
-    this.audioContext = new AudioContext();
-    if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
+
+    await this.ensureRnnoise(ctx);
+
+    const source = ctx.createMediaStreamSource(this.micStream);
+    const destination = ctx.createMediaStreamDestination();
+
+    if (this.rnnoiseNode) {
+      this.highpassFilter = ctx.createBiquadFilter();
+      this.highpassFilter.type = "highpass";
+      this.highpassFilter.frequency.value = 80;
+      this.compressor = ctx.createDynamicsCompressor();
+      this.compressor.threshold.value = -35;
+      this.compressor.knee.value = 12;
+      this.compressor.ratio.value = 3;
+      this.compressor.attack.value = 0.003;
+      this.compressor.release.value = 0.25;
+
+      source.connect(this.rnnoiseNode);
+      this.rnnoiseNode.connect(this.highpassFilter);
+      this.highpassFilter.connect(this.compressor);
+      this.compressor.connect(destination);
+      console.log("[voice] audio pipeline: mic → RNNoise → highpass(80Hz) → compressor → WebRTC");
+    } else {
+      this.highpassFilter = ctx.createBiquadFilter();
+      this.highpassFilter.type = "highpass";
+      this.highpassFilter.frequency.value = 80;
+      this.compressor = ctx.createDynamicsCompressor();
+      this.compressor.threshold.value = -35;
+      this.compressor.knee.value = 12;
+      this.compressor.ratio.value = 3;
+      this.compressor.attack.value = 0.003;
+      this.compressor.release.value = 0.25;
+
+      source.connect(this.highpassFilter);
+      this.highpassFilter.connect(this.compressor);
+      this.compressor.connect(destination);
+      console.log("[voice] audio pipeline: mic → highpass(80Hz) → compressor → WebRTC (no RNNoise)");
     }
+
+    this.processedStream = destination.stream;
+
+    const wasListening = this._listening;
     this._active = true;
-    this._muted = false;
+    this._listening = true;
+    this._micMuted = false;
     console.log("[voice] started, sending voice_start, userId=", this.myUserId);
     this.sendFn({ type: "voice_start" });
+
+    if (wasListening) {
+      this.recreatePeersWithMicTrack();
+    }
+  }
+
+  private recreatePeersWithMicTrack(): void {
+    for (const [userId, peer] of this.peers) {
+      const name = peer.name;
+      this.closePeer(userId);
+      this.peers.delete(userId);
+      this.createPeer(userId, name);
+      if (this.myUserId < userId) {
+        void this.initiateOffer(userId);
+      }
+    }
   }
 
   stop(): void {
     if (!this._active) return;
     this._active = false;
-    this._muted = false;
+    this._listening = false;
+    this._micMuted = false;
     for (const [id] of this.peers) {
       this.closePeer(id);
     }
     this.peers.clear();
+    if (this.rnnoiseNode) {
+      try { this.rnnoiseNode.disconnect(); } catch {}
+      this.rnnoiseNode = null;
+    }
+    if (this.highpassFilter) {
+      try { this.highpassFilter.disconnect(); } catch {}
+      this.highpassFilter = null;
+    }
+    if (this.compressor) {
+      try { this.compressor.disconnect(); } catch {}
+      this.compressor = null;
+    }
     if (this.micStream) {
       this.micStream.getTracks().forEach(t => t.stop());
       this.micStream = null;
     }
     this.micTrack = null;
+    this.processedStream = null;
     if (this.audioContext) {
       this.audioContext.close();
       this.audioContext = null;
     }
+    this.rnnoiseLoaded = false;
     this.sendFn({ type: "voice_stop" });
   }
 
   setMuted(muted: boolean): void {
-    this._muted = muted;
+    this._micMuted = muted;
     if (this.micTrack) this.micTrack.enabled = !muted;
   }
 
+  setOutputMuted(muted: boolean): void {
+    this._outputMuted = muted;
+  }
+
   onPeer(userId: string, name: string): void {
-    console.log("[voice] onPeer:", userId, name, "active=", this._active, "self=", userId === this.myUserId);
-    if (!this._active || userId === this.myUserId) return;
+    console.log("[voice] onPeer:", userId, name, "active=", this._active, "listening=", this._listening, "self=", userId === this.myUserId);
+    if ((!this._active && !this._listening) || userId === this.myUserId) return;
     if (this.peers.has(userId)) {
       const existing = this.peers.get(userId)!;
       existing.name = name;
@@ -129,12 +273,16 @@ export class VoiceManager {
     gainNode.connect(analyser);
     analyser.connect(this.audioContext!.destination);
 
-    // Add local mic track
-    if (this.micTrack && this.micStream) {
-      pc.addTrack(this.micTrack, this.micStream);
-      console.log("[voice] added local mic track to peer", userId, "enabled=", this.micTrack.enabled, "readyState=", this.micTrack.readyState);
-    } else {
+    // Add local mic track — use processed stream if available (RNNoise + filter), else raw mic
+    const sendStream = this.processedStream ?? this.micStream;
+    const sendTrack = sendStream?.getAudioTracks()[0] ?? null;
+    if (sendTrack && sendStream) {
+      pc.addTrack(sendTrack, sendStream);
+      console.log("[voice] added local track to peer", userId, "processed=", !!this.processedStream, "enabled=", sendTrack.enabled, "readyState=", sendTrack.readyState);
+    } else if (this._active) {
       console.warn("[voice] no mic track to add for peer", userId, "micTrack=", !!this.micTrack, "micStream=", !!this.micStream);
+    } else {
+      console.log("[voice] listen-only mode — no local track for peer", userId);
     }
 
     // Handle incoming remote track
@@ -209,8 +357,8 @@ export class VoiceManager {
   }
 
   async onOffer(fromUserId: string, sdp: string): Promise<void> {
-    console.log("[voice] onOffer from", fromUserId, "active=", this._active);
-    if (!this._active) return;
+    console.log("[voice] onOffer from", fromUserId, "active=", this._active, "listening=", this._listening);
+    if (!this._active && !this._listening) return;
     let peer = this.peers.get(fromUserId);
     if (!peer) {
       peer = this.createPeer(fromUserId, "Unknown");
@@ -291,7 +439,7 @@ export class VoiceManager {
       const dy = myY - p.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const gain = distanceToGain(dist, maxDist);
-      peer.gainNode.gain.value = this._muted ? 0 : gain;
+      peer.gainNode.gain.value = this._outputMuted ? 0 : gain;
       if (shouldLog) {
         // Check if remote audio data is actually flowing
         if (!this.speakingData) this.speakingData = new Uint8Array(new ArrayBuffer(256));
@@ -299,7 +447,7 @@ export class VoiceManager {
         let sum = 0;
         for (let i = 0; i < this.speakingData.length; i++) sum += this.speakingData[i];
         const avgLevel = sum / this.speakingData.length / 255;
-        console.log(`[voice] gain for ${userId}: ${gain.toFixed(3)} (dist=${dist.toFixed(0)}, max=${maxDist}, muted=${this._muted}, audioLevel=${avgLevel.toFixed(3)})`);
+        console.log(`[voice] gain for ${userId}: ${gain.toFixed(3)} (dist=${dist.toFixed(0)}, max=${maxDist}, outputMuted=${this._outputMuted}, audioLevel=${avgLevel.toFixed(3)})`);
       }
     }
   }
