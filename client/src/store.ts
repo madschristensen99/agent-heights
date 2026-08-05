@@ -127,6 +127,8 @@ export class Store {
   projectorChannel: string = "off";
   /** Access level for the current room: no_access, tour, talk, or manage. */
   accessLevel: RoomAccessLevel = "no_access";
+  /** Room type from the most recent room_state — available immediately, no rooms_list race. */
+  roomType: RoomType | null = null;
   pendingInvite: PendingInvite | null = null;
   privateOfficeId: string | null = null;
   roomsList: { roomId: string; name: string; isPrivate: boolean; roomType: RoomType; orgId?: string }[] = [];
@@ -138,6 +140,7 @@ export class Store {
   /** True if the current room is an organization room (uses the agentHeights theme). */
   get isOrgRoom(): boolean {
     if (!this.roomId) return false;
+    if (this.roomType) return this.roomType === "organization";
     return this.roomsList.some(r => r.roomId === this.roomId && r.roomType === "organization");
   }
 
@@ -218,6 +221,7 @@ export class Store {
     this.roomPlayers.clear();
     this.pendingInvite = null;
     this.privateOfficeId = null;
+    this.roomType = null;
     this.roomsList = [];
     this.orgsList = [];
     this.orgMembers = null;
@@ -1055,6 +1059,7 @@ export class Store {
         if (msg.privateOfficeId) this.privateOfficeId = msg.privateOfficeId;
         this.projectorChannel = msg.projectorChannel ?? "off";
         this.accessLevel = msg.accessLevel ?? "no_access";
+        this.roomType = msg.roomType ?? null;
         this.roomPlayers.clear();
         for (const p of msg.players) {
           this.roomPlayers.set(p.userId, p);

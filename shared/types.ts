@@ -936,7 +936,7 @@ export type ServerMsg =
   | { type: "crossmint_fund_result"; agentId: string; success: boolean; message: string }
   | { type: "crossmint_onramp_url"; agentId: string; url: string | null; error?: string }
   | { type: "refresh_token" }
-  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel }
+  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel; roomType?: RoomType }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }
   | { type: "player_left"; roomId: string; userId: string }
   | { type: "player_moved"; roomId: string; userId: string; x: number; y: number; dir: Dir }

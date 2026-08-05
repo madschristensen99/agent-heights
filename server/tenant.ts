@@ -832,9 +832,9 @@ export class TenantManager {
       sess.disconnectTimer = null;
     }
     // Reconnect to the room the user was in. If the grace period expired and
-    // roomId is null, fall back to their private office (where agents live)
-    // rather than HQ2.
-    const targetRoomId = sess.roomId ?? sess.privateOfficeId ?? HQ2_ROOM_ID;
+    // roomId is null, try lastRoomIds first, then fall back to their private
+    // office (where agents live) rather than HQ2.
+    const targetRoomId = sess.roomId ?? this.lastRoomIds.get(userId) ?? sess.privateOfficeId ?? HQ2_ROOM_ID;
     const room = this.rooms.get(targetRoomId);
     if (room && !room.players.has(userId)) {
       this.joinRoom(targetRoomId, sess.user, sess.player);

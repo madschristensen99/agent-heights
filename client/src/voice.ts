@@ -14,10 +14,12 @@ interface VoicePeer {
   pc: RTCPeerConnection;
   gainNode: GainNode | null;
   analyser: AnalyserNode | null;
+  recvHighpass: BiquadFilterNode | null;
   connected: boolean;
   speaking: boolean;
   remoteStream: MediaStream | null;
   audioEl: HTMLAudioElement | null;
+  currentVolume: number;
 }
 
 function getRtcConfig(): RTCConfiguration {
@@ -38,7 +40,47 @@ function getRtcConfig(): RTCConfiguration {
 
 function distanceToGain(dist: number, maxDist: number): number {
   const t = Math.max(0, 1 - dist / maxDist);
-  return t;
+  return t * t;
+}
+
+function preferOpus(pc: RTCPeerConnection): void {
+  try {
+    const transceivers = pc.getTransceivers();
+    for (const tr of transceivers) {
+      if (tr.sender.track?.kind === "audio" || tr.receiver.track?.kind === "audio") {
+        const caps = RTCRtpSender.getCapabilities("audio");
+        if (!caps) continue;
+        const opusCodecs = caps.codecs.filter(c => c.mimeType === "audio/opus");
+        const otherCodecs = caps.codecs.filter(c => c.mimeType !== "audio/opus");
+        tr.setCodecPreferences([...opusCodecs, ...otherCodecs]);
+      }
+    }
+  } catch (err) {
+    console.warn("[voice] setCodecPreferences failed:", err);
+  }
+}
+
+function mungeSdpForQuality(sdp: string): string {
+  const lines = sdp.split("\r\n");
+  const result: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("a=fmtp:") && line.includes("opus")) {
+      let newLine = line;
+      if (!newLine.includes("maxaveragebitrate=")) {
+        newLine += ";maxaveragebitrate=128000";
+      }
+      if (!newLine.includes("usedtx=")) {
+        newLine += ";usedtx=0";
+      }
+      if (!newLine.includes("minptime=")) {
+        newLine += ";minptime=10";
+      }
+      result.push(newLine);
+    } else {
+      result.push(line);
+    }
+  }
+  return result.join("\r\n");
 }
 
 export class VoiceManager {
@@ -129,26 +171,26 @@ export class VoiceManager {
     if (!this._listening && !this._active) return;
     const ctx = await this.ensureAudioContext();
     console.log("[voice] unlockAudio — context state:", ctx.state);
-    // Wire up any peers that have remote streams but no gain/analyser yet
+    // Wire up any peers that have remote streams but no analyser yet
     for (const [userId, peer] of this.peers) {
       if (!peer.gainNode || !peer.analyser) {
         peer.gainNode = ctx.createGain();
         peer.gainNode.gain.value = 0;
         peer.analyser = ctx.createAnalyser();
         peer.analyser.fftSize = 256;
+        // Analyser taps signal but does NOT route to destination (AEC fix)
         peer.gainNode.connect(peer.analyser);
-        peer.analyser.connect(ctx.destination);
-        console.log("[voice] unlockAudio — created gain/analyser for peer", userId);
+        console.log("[voice] unlockAudio — created analyser for peer", userId);
       }
       if (peer.remoteStream && peer.gainNode) {
-        // Create MediaStreamSource now that context is running
+        // Tap remote stream for speaking detection only
         const source = ctx.createMediaStreamSource(peer.remoteStream);
         source.connect(peer.gainNode);
-        console.log("[voice] unlockAudio — connected remote stream for peer", userId);
+        console.log("[voice] unlockAudio — tapped remote stream for peer", userId);
       }
       if (peer.audioEl) {
         void peer.audioEl.play().catch(() => {});
-        console.log("[voice] unlockAudio — playing fallback audio for peer", userId);
+        console.log("[voice] unlockAudio — playing audio for peer", userId);
       }
     }
   }
@@ -199,9 +241,9 @@ export class VoiceManager {
       this.highpassFilter.type = "highpass";
       this.highpassFilter.frequency.value = 80;
       this.compressor = ctx.createDynamicsCompressor();
-      this.compressor.threshold.value = -35;
-      this.compressor.knee.value = 12;
-      this.compressor.ratio.value = 3;
+      this.compressor.threshold.value = -25;
+      this.compressor.knee.value = 20;
+      this.compressor.ratio.value = 2;
       this.compressor.attack.value = 0.003;
       this.compressor.release.value = 0.25;
 
@@ -215,9 +257,9 @@ export class VoiceManager {
       this.highpassFilter.type = "highpass";
       this.highpassFilter.frequency.value = 80;
       this.compressor = ctx.createDynamicsCompressor();
-      this.compressor.threshold.value = -35;
-      this.compressor.knee.value = 12;
-      this.compressor.ratio.value = 3;
+      this.compressor.threshold.value = -25;
+      this.compressor.knee.value = 20;
+      this.compressor.ratio.value = 2;
       this.compressor.attack.value = 0.003;
       this.compressor.release.value = 0.25;
 
@@ -247,14 +289,14 @@ export class VoiceManager {
         peer.gainNode.gain.value = 0;
         peer.analyser = ctx.createAnalyser();
         peer.analyser.fftSize = 256;
+        // Analyser taps signal but does NOT route to destination (AEC fix)
         peer.gainNode.connect(peer.analyser);
-        peer.analyser.connect(ctx.destination);
-        console.log("[voice] start — created gain/analyser for peer", userId);
+        console.log("[voice] start — created analyser for peer", userId);
       }
       if (peer.remoteStream && peer.gainNode) {
         const src = ctx.createMediaStreamSource(peer.remoteStream);
         src.connect(peer.gainNode);
-        console.log("[voice] start — connected remote stream for peer", userId);
+        console.log("[voice] start — tapped remote stream for peer", userId);
       }
       if (peer.audioEl) {
         void peer.audioEl.play().catch(() => {});
@@ -347,19 +389,21 @@ export class VoiceManager {
     }
     const pc = new RTCPeerConnection(getRtcConfig());
 
-    // Create gain/analyser only if AudioContext is available and running
+    // Create analyser for speaking detection (NOT connected to destination —
+    // audio output goes through the <audio> element to preserve browser AEC).
     let gainNode: GainNode | null = null;
     let analyser: AnalyserNode | null = null;
+    let recvHighpass: BiquadFilterNode | null = null;
     if (this.audioContext && this.audioContext.state === "running") {
       gainNode = this.audioContext.createGain();
       gainNode.gain.value = 0;
       analyser = this.audioContext.createAnalyser();
       analyser.fftSize = 256;
+      // Analyser taps the signal but does NOT route to destination
       gainNode.connect(analyser);
-      analyser.connect(this.audioContext.destination);
-      console.log("[voice] created gain/analyser for peer", userId);
+      console.log("[voice] created analyser (no destination) for peer", userId);
     } else {
-      console.log("[voice] AudioContext not running — deferring gain/analyser for peer", userId, "ctxState=", this.audioContext?.state);
+      console.log("[voice] AudioContext not running — deferring analyser for peer", userId, "ctxState=", this.audioContext?.state);
     }
 
     // Add local mic track — use processed stream if available (RNNoise + filter), else raw mic
@@ -389,27 +433,31 @@ export class VoiceManager {
       const peer = this.peers.get(userId);
       if (peer) peer.remoteStream = remoteStream;
 
-      // If AudioContext is running, wire up the Web Audio graph now
+      // If AudioContext is running, tap the stream for speaking detection.
+      // The analyser is NOT connected to ctx.destination — audio output
+      // goes through the <audio> element to preserve browser AEC.
       if (this.audioContext && this.audioContext.state === "running" && peer?.gainNode) {
         const source = this.audioContext.createMediaStreamSource(remoteStream);
         source.connect(peer.gainNode);
-        console.log("[voice] remote stream connected to gain node for", userId);
+        console.log("[voice] remote stream tapped to analyser for", userId);
       } else {
-        console.log("[voice] AudioContext not running — deferring Web Audio wiring for", userId);
+        console.log("[voice] AudioContext not running — deferring analyser wiring for", userId);
       }
 
-      // Also create a hidden audio element as fallback — some browsers need this
-      // to keep the remote WebRTC stream decoded/alive, but we mute it so that
-      // actual audio output flows only through the gainNode (proximity volume).
+      // Primary audio output: unmuted <audio> element with volume control.
+      // This preserves the browser's acoustic echo cancellation (AEC) because
+      // the browser can correlate speaker output with mic input.
+      // Proximity volume is applied via audioEl.volume (0.0–1.0).
       const audioEl = document.createElement("audio");
       audioEl.autoplay = true;
-      audioEl.muted = true;
+      audioEl.muted = false;
+      audioEl.volume = 0;
       audioEl.srcObject = remoteStream;
       audioEl.style.display = "none";
       document.body.appendChild(audioEl);
-      console.log("[voice] created muted fallback audio element for", userId);
+      console.log("[voice] created audio output element for", userId);
       void audioEl.play().catch((err) => {
-        console.warn("[voice] fallback audio play() rejected for", userId, err);
+        console.warn("[voice] audio play() rejected for", userId, err);
       });
       if (peer) peer.audioEl = audioEl;
     };
@@ -438,8 +486,12 @@ export class VoiceManager {
       }
     };
 
-    const peer: VoicePeer = { userId, name, pc, gainNode, analyser, connected: false, speaking: false, remoteStream: null, audioEl: null };
+    const peer: VoicePeer = { userId, name, pc, gainNode, analyser, recvHighpass, connected: false, speaking: false, remoteStream: null, audioEl: null, currentVolume: 0 };
     this.peers.set(userId, peer);
+
+    // Force Opus codec for this transceiver
+    preferOpus(pc);
+
     return peer;
   }
 
@@ -449,9 +501,10 @@ export class VoiceManager {
     if (peer.pc.signalingState !== "stable") return;
     try {
       const offer = await peer.pc.createOffer();
-      await peer.pc.setLocalDescription(offer);
+      const mungedSdp = mungeSdpForQuality(offer.sdp!);
+      await peer.pc.setLocalDescription({ type: "offer", sdp: mungedSdp });
       console.log("[voice] sending offer to", userId);
-      this.sendFn({ type: "voice_offer", targetUserId: userId, sdp: offer.sdp! });
+      this.sendFn({ type: "voice_offer", targetUserId: userId, sdp: mungedSdp });
     } catch (err) {
       console.error(`[voice] failed to create offer for ${userId}:`, err);
     }
@@ -472,9 +525,10 @@ export class VoiceManager {
     try {
       await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp }));
       const answer = await peer.pc.createAnswer();
-      await peer.pc.setLocalDescription(answer);
+      const mungedSdp = mungeSdpForQuality(answer.sdp!);
+      await peer.pc.setLocalDescription({ type: "answer", sdp: mungedSdp });
       console.log("[voice] sending answer to", fromUserId);
-      this.sendFn({ type: "voice_answer", targetUserId: fromUserId, sdp: answer.sdp! });
+      this.sendFn({ type: "voice_answer", targetUserId: fromUserId, sdp: mungedSdp });
     } catch (err) {
       console.error(`[voice] failed to handle offer from ${fromUserId}:`, err);
     }
@@ -531,28 +585,44 @@ export class VoiceManager {
     const now = Date.now();
     const shouldLog = now - this._lastGainLog > 1000;
     if (shouldLog) this._lastGainLog = now;
+    const SMOOTH = 0.15;
+    const NOISE_GATE_THRESHOLD = 0.015;
     for (const [userId, peer] of this.peers) {
-      if (!peer.gainNode) continue;
       const p = players.get(userId);
       if (!p) {
-        peer.gainNode.gain.setTargetAtTime(0, this.audioContext!.currentTime, 0.1);
-        if (shouldLog) console.log(`[voice] gain for ${userId}: 0 (not in roomPlayers)`);
+        peer.currentVolume = peer.currentVolume * (1 - SMOOTH);
+        if (peer.audioEl) peer.audioEl.volume = this._outputMuted ? 0 : peer.currentVolume;
+        if (shouldLog) console.log(`[voice] vol for ${userId}: 0 (not in roomPlayers)`);
         continue;
       }
       const dx = myX - p.x;
       const dy = myY - p.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const gain = distanceToGain(dist, maxDist);
-      const targetGain = this._outputMuted ? 0 : gain;
-      peer.gainNode.gain.setTargetAtTime(targetGain, this.audioContext!.currentTime, 0.1);
-      if (shouldLog && peer.analyser) {
-        // Check if remote audio data is actually flowing
+
+      // Noise gate: check if remote peer is actually speaking
+      let isSpeaking = true;
+      if (peer.analyser && gain > 0.01) {
         if (!this.speakingData) this.speakingData = new Uint8Array(new ArrayBuffer(256));
         peer.analyser.getByteFrequencyData(this.speakingData);
         let sum = 0;
         for (let i = 0; i < this.speakingData.length; i++) sum += this.speakingData[i];
         const avgLevel = sum / this.speakingData.length / 255;
-        console.log(`[voice] gain for ${userId}: ${gain.toFixed(3)} (dist=${dist.toFixed(0)}, max=${maxDist}, outputMuted=${this._outputMuted}, audioLevel=${avgLevel.toFixed(3)})`);
+        isSpeaking = avgLevel > NOISE_GATE_THRESHOLD;
+      }
+
+      const targetGain = (this._outputMuted || !isSpeaking) ? 0 : gain;
+      // Manual smoothing to approximate setTargetAtTime behaviour
+      peer.currentVolume = peer.currentVolume + (targetGain - peer.currentVolume) * SMOOTH;
+      if (peer.audioEl) peer.audioEl.volume = peer.currentVolume;
+
+      if (shouldLog && peer.analyser) {
+        if (!this.speakingData) this.speakingData = new Uint8Array(new ArrayBuffer(256));
+        peer.analyser.getByteFrequencyData(this.speakingData);
+        let sum = 0;
+        for (let i = 0; i < this.speakingData.length; i++) sum += this.speakingData[i];
+        const avgLevel = sum / this.speakingData.length / 255;
+        console.log(`[voice] vol for ${userId}: ${peer.currentVolume.toFixed(3)} (dist=${dist.toFixed(0)}, max=${maxDist}, outputMuted=${this._outputMuted}, audioLevel=${avgLevel.toFixed(3)}, gate=${isSpeaking})`);
       }
     }
   }

@@ -886,6 +886,7 @@ wss.on("connection", async (ws, req) => {
       privateOfficeId: sess.privateOfficeId ?? undefined,
       projectorChannel: currentRoom.projectorChannel,
       accessLevel,
+      roomType: currentRoom.roomType,
     } satisfies ServerMsg));
   }
   sendRoomsList();
@@ -1860,6 +1861,7 @@ wss.on("connection", async (ws, req) => {
               privateOfficeId: sess.privateOfficeId ?? undefined,
               projectorChannel: room.projectorChannel,
               accessLevel: tenants.computeAccessLevel(room, sess.user.id),
+              roomType: room.roomType,
             });
             sendRoomsList();
             void sendOutfits(ws, sess);
@@ -1907,6 +1909,7 @@ wss.on("connection", async (ws, req) => {
             players,
             privateOfficeId: sess.privateOfficeId ?? undefined,
             accessLevel: joinAccessLevel,
+            roomType: room.roomType,
           });
           sendRoomsList();
           // Send mailbox + platform states for the joined room's manager
@@ -1974,6 +1977,7 @@ wss.on("connection", async (ws, req) => {
             privateOfficeId: sess.privateOfficeId ?? undefined,
             projectorChannel: room.projectorChannel,
             accessLevel: newAccessLevel,
+            roomType: room.roomType,
           });
           sendRoomsList();
           // Send agent snapshot from the room's manager (personal, org shared, or empty)
@@ -2121,6 +2125,7 @@ wss.on("connection", async (ws, req) => {
                   privateOfficeId: sess.privateOfficeId ?? undefined,
                   projectorChannel: room.projectorChannel,
                   accessLevel: inviteAccessLevel,
+                  roomType: room.roomType,
                 });
                 sendRoomsList();
                 // Send the room's agent snapshot
@@ -2903,6 +2908,7 @@ wss.on("connection", async (ws, req) => {
             privateOfficeId: sess.privateOfficeId ?? undefined,
             projectorChannel: room.projectorChannel,
             accessLevel: orgAccessLevel,
+            roomType: room.roomType,
           });
           sendRoomsList();
           // Send outfits for the org room's wardrobe

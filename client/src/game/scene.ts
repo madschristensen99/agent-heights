@@ -1829,6 +1829,7 @@ export class OfficeScene extends Phaser.Scene {
 
       this.store.currentWorld = null;
       this.store.worldTransitioning = false;
+      this.registry.remove("worldTheme");
 
       this.store.reset();
       this.scene.restart();
