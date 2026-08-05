@@ -282,7 +282,7 @@ export class OfficeScene extends Phaser.Scene {
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; yBase: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
-  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; appearanceKey: string; labelX: number; labelY: number; lastStoreX: number; lastStoreY: number; storeVx: number; storeVy: number; snapshots: { x: number; y: number; dir: Dir; t: number }[]; lastDir: Dir; }>();
+  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; appearanceKey: string; labelX: number; labelY: number; lastStoreX: number; lastStoreY: number; storeVx: number; storeVy: number; }>();
   /** Voice chat manager — WebRTC proximity voice. */
   private voice: VoiceManager | null = null;
   /** Screen share manager — WebRTC screen sharing on projector. */
@@ -7304,7 +7304,7 @@ export class OfficeScene extends Phaser.Scene {
           .setAlpha(0)
           .setDepth(10 + p.y + 0.1);
         const apKey = p.appearance ? `${p.appearance.skin}-${p.appearance.hairStyle}-${p.appearance.hair}-${p.appearance.shirt}-${p.appearance.pants}-${p.appearance.accessory}-${p.appearance.accent}-${p.appearance.beard}-${p.appearance.eyeColor}-${p.appearance.headFeature}-${p.appearance.bodyType ?? 'normal'}` : '';
-        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null, appearanceKey: apKey, labelX: 0, labelY: 0, lastStoreX: p.x, lastStoreY: p.y, storeVx: 0, storeVy: 0, snapshots: [{ x: p.x, y: p.y, dir: p.dir, t: performance.now() }], lastDir: p.dir };
+        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null, appearanceKey: apKey, labelX: 0, labelY: 0, lastStoreX: p.x, lastStoreY: p.y, storeVx: 0, storeVy: 0 };
         this.remotePlayers.set(userId, entry);
 
         // Speaking indicator (hidden by default, shown when peer is talking)
@@ -7347,82 +7347,36 @@ export class OfficeScene extends Phaser.Scene {
         });
       }
 
-      // Smoothly interpolate remote player position using snapshot buffer (skip during intro)
+      // Smoothly interpolate remote player position (skip during intro)
       const target = entry.sprite;
       if (!entry.intro) {
-        const nowMs = performance.now();
-
-        // Push new snapshot when store position or direction changes
-        const storeMoved = p.x !== entry.lastStoreX || p.y !== entry.lastStoreY || p.dir !== entry.lastDir;
+        // Detect store position change and compute velocity for dead reckoning
+        const storeMoved = p.x !== entry.lastStoreX || p.y !== entry.lastStoreY;
         if (storeMoved) {
-          entry.snapshots.push({ x: p.x, y: p.y, dir: p.dir, t: nowMs });
+          entry.storeVx = (p.x - entry.lastStoreX) * 10; // convert per-update delta to per-second velocity
+          entry.storeVy = (p.y - entry.lastStoreY) * 10;
           entry.lastStoreX = p.x;
           entry.lastStoreY = p.y;
-          entry.lastDir = p.dir;
-          // Keep only last 6 snapshots (~600ms at 10Hz)
-          if (entry.snapshots.length > 6) entry.snapshots.shift();
-        }
-
-        // Interpolate at a fixed delay behind real time for smoothness
-        const INTERP_DELAY = 120; // ms behind real time
-        const renderTime = nowMs - INTERP_DELAY;
-        const snaps = entry.snapshots;
-
-        let interpX: number, interpY: number, interpDir: Dir;
-
-        if (snaps.length < 2) {
-          // Not enough history — lerp directly to the latest snapshot
-          const snap = snaps[snaps.length - 1] ?? { x: p.x, y: p.y, dir: p.dir };
-          const lerp = 0.2;
-          interpX = target.x + (snap.x - target.x) * lerp;
-          interpY = target.y + (snap.y - target.y) * lerp;
-          interpDir = snap.dir;
         } else {
-          // Find the two snapshots that bracket renderTime
-          let s0 = snaps[snaps.length - 2];
-          let s1 = snaps[snaps.length - 1];
-          for (let i = snaps.length - 1; i >= 1; i--) {
-            if (snaps[i - 1].t <= renderTime) {
-              s0 = snaps[i - 1];
-              s1 = snaps[i];
-              break;
-            }
-          }
-
-          if (renderTime >= s1.t) {
-            // Ahead of latest snapshot — extrapolate using velocity between last two snaps
-            const dt = s1.t - s0.t;
-            if (dt > 0) {
-              const vx = (s1.x - s0.x) / dt;
-              const vy = (s1.y - s0.y) / dt;
-              const ahead = renderTime - s1.t;
-              interpX = s1.x + vx * ahead;
-              interpY = s1.y + vy * ahead;
-            } else {
-              interpX = s1.x;
-              interpY = s1.y;
-            }
-            interpDir = s1.dir;
-          } else {
-            // Interpolate between s0 and s1
-            const dt = s1.t - s0.t;
-            const alpha = dt > 0 ? (renderTime - s0.t) / dt : 0;
-            interpX = s0.x + (s1.x - s0.x) * alpha;
-            interpY = s0.y + (s1.y - s0.y) * alpha;
-            interpDir = alpha > 0.5 ? s1.dir : s0.dir;
-          }
+          // Decay velocity when no new update arrives (player likely stopped)
+          entry.storeVx *= 0.85;
+          entry.storeVy *= 0.85;
         }
 
-        // Smoothly move sprite toward interpolated position
-        const lerp = 0.35;
-        target.x += (interpX - target.x) * lerp;
-        target.y += (interpY - target.y) * lerp;
+        // Dead reckoning: extrapolate target position using last known velocity
+        const frameDt = this.game.loop.delta / 1000;
+        const predictedX = p.x + entry.storeVx * frameDt;
+        const predictedY = p.y + entry.storeVy * frameDt;
+
+        const lerp = 0.25;
+        target.x += (predictedX - target.x) * lerp;
+        target.y += (predictedY - target.y) * lerp;
         target.setDepth(10 + target.y);
 
-        // Play walk/idle based on whether the sprite is meaningfully moving
-        const distToTarget = Math.hypot(interpX - target.x, interpY - target.y);
-        const isMoving = distToTarget > 1.0;
-        const animKey = `${entry.texKey}-${isMoving ? "walk" : "idle"}-${interpDir}`;
+        // Play walk/idle based on whether the sprite is still meaningfully moving
+        const distToTarget = Math.hypot(predictedX - target.x, predictedY - target.y);
+        const isMoving = distToTarget > 1.5 || Math.hypot(entry.storeVx, entry.storeVy) > 15;
+        const animKey = `${entry.texKey}-${isMoving ? "walk" : "idle"}-${p.dir}`;
         if (target.anims.currentAnim?.key !== animKey) {
           target.play(animKey, true);
         }
