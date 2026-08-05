@@ -154,7 +154,9 @@ export class OfficeScene extends Phaser.Scene {
   private phoneBoothLight!: Phaser.GameObjects.Graphics;
   private webcam: WebcamManager | null = null;
   private webcamVideoEl: HTMLVideoElement | null = null;
+  private webcamVideoWrap: HTMLDivElement | null = null;
   private screenShareVideoEl: HTMLVideoElement | null = null;
+  private screenShareVideoWrap: HTMLDivElement | null = null;
   private webcamPresenterId: string | null = null;
   private webcamPresenterName: string | null = null;
   private inPhoneBooth = false;
@@ -5295,8 +5297,8 @@ export class OfficeScene extends Phaser.Scene {
     const sh = 288;
 
     // If webcam or screen share video is active, hide YouTube iframe
-    const hasWebcam = !!this.webcamVideoEl && this.webcamVideoEl.style.display !== "none";
-    const hasScreenShare = !!this.screenShareVideoEl && this.screenShareVideoEl.style.display !== "none";
+    const hasWebcam = !!this.webcamVideoWrap && this.webcamVideoWrap.style.display !== "none";
+    const hasScreenShare = !!this.screenShareVideoWrap && this.screenShareVideoWrap.style.display !== "none";
     if (hasWebcam || hasScreenShare) {
       if (this.projectorIframe) this.projectorIframe.style.display = "none";
       return;
@@ -5384,12 +5386,14 @@ export class OfficeScene extends Phaser.Scene {
       this.projectorIframe = null;
       this.projectorVideoId = null;
     }
-    if (this.webcamVideoEl) {
-      this.webcamVideoEl.remove();
+    if (this.webcamVideoWrap) {
+      this.webcamVideoWrap.remove();
+      this.webcamVideoWrap = null;
       this.webcamVideoEl = null;
     }
-    if (this.screenShareVideoEl) {
-      this.screenShareVideoEl.remove();
+    if (this.screenShareVideoWrap) {
+      this.screenShareVideoWrap.remove();
+      this.screenShareVideoWrap = null;
       this.screenShareVideoEl = null;
     }
   }
@@ -8525,15 +8529,18 @@ export class OfficeScene extends Phaser.Scene {
   /** Attach a remote webcam stream to a hidden video element for projector display. */
   private attachWebcamVideo(stream: MediaStream): void {
     if (!this.webcamVideoEl) {
+      this.webcamVideoWrap = document.createElement("div");
+      this.webcamVideoWrap.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;overflow:hidden;";
       this.webcamVideoEl = document.createElement("video");
       this.webcamVideoEl.autoplay = true;
       this.webcamVideoEl.playsInline = true;
       this.webcamVideoEl.muted = true;
-      this.webcamVideoEl.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;object-fit:cover;width:0px;height:0px;overflow:hidden;";
-      document.body.appendChild(this.webcamVideoEl);
+      this.webcamVideoEl.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;border:none;";
+      this.webcamVideoWrap.appendChild(this.webcamVideoEl);
+      document.body.appendChild(this.webcamVideoWrap);
     }
     this.webcamVideoEl.srcObject = stream;
-    this.webcamVideoEl.style.display = "block";
+    this.webcamVideoWrap!.style.display = "block";
     this.updateProjectorVideoOverlays();
   }
 
@@ -8541,23 +8548,27 @@ export class OfficeScene extends Phaser.Scene {
   private detachWebcamVideo(): void {
     if (this.webcamVideoEl) {
       this.webcamVideoEl.srcObject = null;
-      this.webcamVideoEl.style.display = "none";
+    }
+    if (this.webcamVideoWrap) {
+      this.webcamVideoWrap.style.display = "none";
     }
   }
 
   /** Attach a remote screen share stream to a hidden video element for projector display. */
   private attachScreenShareVideo(stream: MediaStream): void {
     if (!this.screenShareVideoEl) {
+      this.screenShareVideoWrap = document.createElement("div");
+      this.screenShareVideoWrap.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;overflow:hidden;";
       this.screenShareVideoEl = document.createElement("video");
       this.screenShareVideoEl.autoplay = true;
       this.screenShareVideoEl.playsInline = true;
       this.screenShareVideoEl.muted = true;
-      this.screenShareVideoEl.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;object-fit:contain;width:0px;height:0px;overflow:hidden;";
-      document.body.appendChild(this.screenShareVideoEl);
+      this.screenShareVideoEl.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;display:block;border:none;";
+      this.screenShareVideoWrap.appendChild(this.screenShareVideoEl);
+      document.body.appendChild(this.screenShareVideoWrap);
     }
     this.screenShareVideoEl.srcObject = stream;
-    this.screenShareVideoEl.style.display = "block";
-    // Force an immediate overlay sizing so the element doesn't flash at intrinsic size
+    this.screenShareVideoWrap!.style.display = "block";
     this.updateProjectorVideoOverlays();
   }
 
@@ -8565,7 +8576,9 @@ export class OfficeScene extends Phaser.Scene {
   private detachScreenShareVideo(): void {
     if (this.screenShareVideoEl) {
       this.screenShareVideoEl.srcObject = null;
-      this.screenShareVideoEl.style.display = "none";
+    }
+    if (this.screenShareVideoWrap) {
+      this.screenShareVideoWrap.style.display = "none";
     }
   }
 
@@ -8578,8 +8591,8 @@ export class OfficeScene extends Phaser.Scene {
     const sw = 480;
     const sh = 288;
 
-    const hasWebcam = !!this.webcamVideoEl && this.webcamVideoEl.style.display !== "none";
-    const hasScreenShare = !!this.screenShareVideoEl && this.screenShareVideoEl.style.display !== "none";
+    const hasWebcam = !!this.webcamVideoWrap && this.webcamVideoWrap.style.display !== "none";
+    const hasScreenShare = !!this.screenShareVideoWrap && this.screenShareVideoWrap.style.display !== "none";
 
     if (hasWebcam && hasScreenShare) {
       // Split-screen: left half = screen share, right half = webcam
@@ -8587,29 +8600,29 @@ export class OfficeScene extends Phaser.Scene {
       const ssRect = this.worldRectToScreen(px - sw / 2, py - sh / 2, halfW, sh);
       const wcRect = this.worldRectToScreen(px, py - sh / 2, halfW, sh);
 
-      this.screenShareVideoEl!.style.left = `${ssRect.x}px`;
-      this.screenShareVideoEl!.style.top = `${ssRect.y}px`;
-      this.screenShareVideoEl!.style.width = `${ssRect.w}px`;
-      this.screenShareVideoEl!.style.height = `${ssRect.h}px`;
+      this.screenShareVideoWrap!.style.left = `${ssRect.x}px`;
+      this.screenShareVideoWrap!.style.top = `${ssRect.y}px`;
+      this.screenShareVideoWrap!.style.width = `${ssRect.w}px`;
+      this.screenShareVideoWrap!.style.height = `${ssRect.h}px`;
 
-      this.webcamVideoEl!.style.left = `${wcRect.x}px`;
-      this.webcamVideoEl!.style.top = `${wcRect.y}px`;
-      this.webcamVideoEl!.style.width = `${wcRect.w}px`;
-      this.webcamVideoEl!.style.height = `${wcRect.h}px`;
+      this.webcamVideoWrap!.style.left = `${wcRect.x}px`;
+      this.webcamVideoWrap!.style.top = `${wcRect.y}px`;
+      this.webcamVideoWrap!.style.width = `${wcRect.w}px`;
+      this.webcamVideoWrap!.style.height = `${wcRect.h}px`;
     } else if (hasWebcam) {
       // Webcam only — full projector
       const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
-      this.webcamVideoEl!.style.left = `${rect.x}px`;
-      this.webcamVideoEl!.style.top = `${rect.y}px`;
-      this.webcamVideoEl!.style.width = `${rect.w}px`;
-      this.webcamVideoEl!.style.height = `${rect.h}px`;
+      this.webcamVideoWrap!.style.left = `${rect.x}px`;
+      this.webcamVideoWrap!.style.top = `${rect.y}px`;
+      this.webcamVideoWrap!.style.width = `${rect.w}px`;
+      this.webcamVideoWrap!.style.height = `${rect.h}px`;
     } else if (hasScreenShare) {
       // Screen share only — full projector
       const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
-      this.screenShareVideoEl!.style.left = `${rect.x}px`;
-      this.screenShareVideoEl!.style.top = `${rect.y}px`;
-      this.screenShareVideoEl!.style.width = `${rect.w}px`;
-      this.screenShareVideoEl!.style.height = `${rect.h}px`;
+      this.screenShareVideoWrap!.style.left = `${rect.x}px`;
+      this.screenShareVideoWrap!.style.top = `${rect.y}px`;
+      this.screenShareVideoWrap!.style.width = `${rect.w}px`;
+      this.screenShareVideoWrap!.style.height = `${rect.h}px`;
     }
   }
 

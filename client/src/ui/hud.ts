@@ -736,7 +736,7 @@ export class Hud {
     const steps = isNotFound
       ? "<li>Plug in a microphone or headset</li><li>Check your OS sound settings to ensure the mic is enabled</li><li>Refresh the page and try again</li>"
       : settingsUrl
-      ? `<li>Click the button below to open ${browserName} microphone settings</li><li>Find this site in the "Block" list and change it to "Allow"</li><li>Refresh this page and click the 🎤 button again</li>`
+      ? `<li>Copy the settings URL below and paste it in a new tab</li><li>Find this site in the "Block" list and change it to "Allow"</li><li>Refresh this page and click the 🎤 button again</li>`
       : `<li>Open ${browserName} settings → Privacy → Microphone</li><li>Allow microphone access for this site</li><li>Refresh this page and click the 🎤 button again</li>`;
 
     const modal = document.createElement("div");
@@ -746,8 +746,8 @@ export class Hud {
         <h3 style="margin:0 0 0.5rem;font-size:1.1rem;color:#f44336;">${title}</h3>
         <p style="margin:0 0 1rem;font-size:0.85rem;color:#aaa;line-height:1.4;">${reason}</p>
         <ol style="margin:0 0 1rem;padding-left:1.2rem;font-size:0.85rem;color:#ccc;line-height:1.6;">${steps}</ol>
+        ${settingsUrl ? `<div style="margin-bottom:1rem;"><input id="mic-url-input" readonly value="${settingsUrl}" style="width:100%;padding:0.4rem 0.6rem;background:#111;border:1px solid #333;border-radius:0.3rem;color:#8FC4E8;font-size:0.8rem;font-family:monospace;" /><button id="mic-copy-btn" style="margin-top:0.4rem;padding:0.3rem 0.8rem;border:1px solid #3A8CD4;background:transparent;color:#3A8CD4;border-radius:0.3rem;cursor:pointer;font-size:0.75rem;">Copy URL</button></div>` : ""}
         <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-          ${settingsUrl ? `<button id="mic-settings-btn" style="padding:0.5rem 1rem;border:1px solid #3A8CD4;background:transparent;color:#3A8CD4;border-radius:0.4rem;cursor:pointer;font-size:0.8rem;">Open ${browserName} Settings</button>` : ""}
           <button id="mic-close-btn" style="padding:0.5rem 1rem;border:1px solid #555;background:#333;color:#eee;border-radius:0.4rem;cursor:pointer;font-size:0.8rem;">Close</button>
         </div>
       </div>
@@ -758,10 +758,17 @@ export class Hud {
     closeBtn?.addEventListener("click", () => modal.remove());
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
 
-    const settingsBtn = modal.querySelector("#mic-settings-btn");
-    settingsBtn?.addEventListener("click", () => {
-      if (settingsUrl && !settingsUrl.startsWith("http")) {
-        window.open(settingsUrl, "_blank");
+    const copyBtn = modal.querySelector("#mic-copy-btn");
+    copyBtn?.addEventListener("click", () => {
+      const input = modal.querySelector("#mic-url-input") as HTMLInputElement | null;
+      if (input) {
+        input.select();
+        navigator.clipboard.writeText(input.value).then(() => {
+          if (copyBtn instanceof HTMLButtonElement) {
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => { copyBtn.textContent = "Copy URL"; }, 2000);
+          }
+        }).catch(() => {});
       }
     });
   }

@@ -186,18 +186,23 @@ export class VoiceManager {
     this.sendFn({ type: "voice_start" });
 
     if (wasListening) {
-      this.recreatePeersWithMicTrack();
+      this.addMicTrackToExistingPeers();
     }
   }
 
-  private recreatePeersWithMicTrack(): void {
+  private addMicTrackToExistingPeers(): void {
+    const sendStream = this.processedStream ?? this.micStream;
+    const sendTrack = sendStream?.getAudioTracks()[0] ?? null;
+    if (!sendTrack || !sendStream) return;
     for (const [userId, peer] of this.peers) {
-      const name = peer.name;
-      this.closePeer(userId);
-      this.peers.delete(userId);
-      this.createPeer(userId, name);
-      if (this.myUserId < userId) {
-        void this.initiateOffer(userId);
+      try {
+        peer.pc.addTrack(sendTrack, sendStream);
+        console.log("[voice] added mic track to existing peer", userId);
+        if (this.myUserId < userId) {
+          void this.initiateOffer(userId);
+        }
+      } catch (err) {
+        console.warn(`[voice] failed to add mic track to peer ${userId}:`, err);
       }
     }
   }
@@ -265,6 +270,11 @@ export class VoiceManager {
   }
 
   private createPeer(userId: string, name: string): VoicePeer {
+    const existing = this.peers.get(userId);
+    if (existing) {
+      console.warn("[voice] createPeer called for existing peer", userId, "— returning existing");
+      return existing;
+    }
     const pc = new RTCPeerConnection(getRtcConfig());
     const gainNode = this.audioContext!.createGain();
     gainNode.gain.value = 0;
