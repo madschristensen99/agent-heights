@@ -913,6 +913,18 @@ export class AgentManager {
       if (info) console.log(`[hermes] Model info: ${JSON.stringify(info)}`);
       else console.warn("[hermes] Could not retrieve model info from Hermes");
     }).catch(() => {});
+
+    // After autoReconfigure + gateway start, re-broadcast platform states with
+    // increasing delays so clients see the updated connection status once the
+    // gateway has had time to connect to each platform.
+    for (const delay of [5000, 10000, 15000]) {
+      setTimeout(async () => {
+        if (!this.hermesClient) return;
+        const states = await this.hermesClient.getPlatformStates(this.settings.mailboxPlatforms);
+        this.platformStates = states;
+        this.broadcast({ type: "platform_connection", states });
+      }, delay);
+    }
   }
 
   /** Get current platform connection states. */

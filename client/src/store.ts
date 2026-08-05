@@ -244,6 +244,8 @@ export class Store {
     this.worldsPanelOpen = false;
     this.worldSeed = 0;
     this.chunkOverrides = {};
+    this.platformStates = [];
+    this.platformMailboxes.clear();
     this.initialDataReady = false;
     this.emit();
   }

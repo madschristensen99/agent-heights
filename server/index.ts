@@ -749,6 +749,11 @@ wss.on("connection", async (ws, req) => {
       settings: sess.manager.settings,
       world: null,
     } satisfies ServerMsg));
+    // Still send mailbox + platform states from the user's personal manager
+    for (const mb of sess.manager.getMailboxSnapshots()) {
+      ws.send(JSON.stringify({ type: "mailbox_update", ...mb } satisfies ServerMsg));
+    }
+    ws.send(JSON.stringify({ type: "platform_connection", states: sess.manager.getPlatformConnectionStates() } satisfies ServerMsg));
   }
 
   // Tell the client whether they have an API key set
@@ -1788,6 +1793,14 @@ wss.on("connection", async (ws, req) => {
             accessLevel: joinAccessLevel,
           });
           sendRoomsList();
+          // Send mailbox + platform states for the joined room's manager
+          const joinRoomMgr = tenants.getRoomManager(msg.roomId);
+          if (joinRoomMgr) {
+            for (const mb of joinRoomMgr.getMailboxSnapshots()) {
+              sess.broadcast({ type: "mailbox_update", ...mb });
+            }
+            sess.broadcast({ type: "platform_connection", states: joinRoomMgr.getPlatformConnectionStates() });
+          }
           // Send outfits for the joined room's wardrobe
           void sendOutfits(ws, sess);
           // Re-broadcast active screen share / webcam state to the joining player
@@ -1873,6 +1886,14 @@ wss.on("connection", async (ws, req) => {
               schedules: [],
               world: null,
             });
+          }
+          // Send mailbox + platform states for the new room's manager
+          const switchRoomMgr = tenants.getRoomManager(msg.roomId);
+          if (switchRoomMgr) {
+            for (const mb of switchRoomMgr.getMailboxSnapshots()) {
+              sess.broadcast({ type: "mailbox_update", ...mb });
+            }
+            sess.broadcast({ type: "platform_connection", states: switchRoomMgr.getPlatformConnectionStates() });
           }
           // Send outfits for the new room's wardrobe
           void sendOutfits(ws, sess);

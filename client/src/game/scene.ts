@@ -280,7 +280,7 @@ export class OfficeScene extends Phaser.Scene {
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; yBase: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
-  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; appearanceKey: string; prevX: number; prevY: number; labelX: number; labelY: number; }>();
+  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; appearanceKey: string; labelX: number; labelY: number; lastStoreX: number; lastStoreY: number; storeVx: number; storeVy: number; }>();
   /** Voice chat manager — WebRTC proximity voice. */
   private voice: VoiceManager | null = null;
   /** Screen share manager — WebRTC screen sharing on projector. */
@@ -2349,7 +2349,7 @@ export class OfficeScene extends Phaser.Scene {
       if (tx < 0 || ty < 0 || tx >= this.grid.width || ty >= this.grid.height) {
         const wtx = Math.floor((p.x - this.world.offset.x) / TILE_PX);
         const wty = Math.floor((p.y - this.world.offset.y) / TILE_PX);
-        if (!this.world.isTileWalkable(wtx, wty)) return false;
+        if (!this.world.isTileWalkableLoaded(wtx, wty)) return false;
         continue;
       }
       return false;
@@ -7233,7 +7233,7 @@ export class OfficeScene extends Phaser.Scene {
           .setAlpha(0)
           .setDepth(10 + p.y + 0.1);
         const apKey = p.appearance ? `${p.appearance.skin}-${p.appearance.hairStyle}-${p.appearance.hair}-${p.appearance.shirt}-${p.appearance.pants}-${p.appearance.accessory}-${p.appearance.accent}-${p.appearance.beard}-${p.appearance.eyeColor}-${p.appearance.headFeature}-${p.appearance.bodyType ?? 'normal'}` : '';
-        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null, appearanceKey: apKey, prevX: p.x, prevY: p.y, labelX: 0, labelY: 0 };
+        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null, appearanceKey: apKey, labelX: 0, labelY: 0, lastStoreX: p.x, lastStoreY: p.y, storeVx: 0, storeVy: 0 };
         this.remotePlayers.set(userId, entry);
 
         // Speaking indicator (hidden by default, shown when peer is talking)
@@ -7279,18 +7279,33 @@ export class OfficeScene extends Phaser.Scene {
       // Smoothly interpolate remote player position (skip during intro)
       const target = entry.sprite;
       if (!entry.intro) {
-        // Detect actual movement from store data BEFORE lerp
-        const storeMoved = p.x !== entry.prevX || p.y !== entry.prevY;
-        entry.prevX = p.x;
-        entry.prevY = p.y;
+        // Detect store position change and compute velocity for dead reckoning
+        const storeMoved = p.x !== entry.lastStoreX || p.y !== entry.lastStoreY;
+        if (storeMoved) {
+          entry.storeVx = (p.x - entry.lastStoreX) * 10; // convert per-update delta to per-second velocity
+          entry.storeVy = (p.y - entry.lastStoreY) * 10;
+          entry.lastStoreX = p.x;
+          entry.lastStoreY = p.y;
+        } else {
+          // Decay velocity when no new update arrives (player likely stopped)
+          entry.storeVx *= 0.85;
+          entry.storeVy *= 0.85;
+        }
+
+        // Dead reckoning: extrapolate target position using last known velocity
+        const frameDt = this.game.loop.delta / 1000;
+        const predictedX = p.x + entry.storeVx * frameDt;
+        const predictedY = p.y + entry.storeVy * frameDt;
 
         const lerp = 0.25;
-        target.x += (p.x - target.x) * lerp;
-        target.y += (p.y - target.y) * lerp;
+        target.x += (predictedX - target.x) * lerp;
+        target.y += (predictedY - target.y) * lerp;
         target.setDepth(10 + target.y);
 
-        // Play walk/idle animation based on whether store position is changing
-        const animKey = `${entry.texKey}-${storeMoved ? "walk" : "idle"}-${p.dir}`;
+        // Play walk/idle based on whether the sprite is still meaningfully moving
+        const distToTarget = Math.hypot(predictedX - target.x, predictedY - target.y);
+        const isMoving = distToTarget > 1.5 || Math.hypot(entry.storeVx, entry.storeVy) > 15;
+        const animKey = `${entry.texKey}-${isMoving ? "walk" : "idle"}-${p.dir}`;
         if (target.anims.currentAnim?.key !== animKey) {
           target.play(animKey, true);
         }

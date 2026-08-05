@@ -1360,6 +1360,7 @@ export class WorldLayer {
   private worker: Worker | null = null;
   private pendingChunks = new Map<string, Chunk>();
   private workerRequested = new Set<string>();
+  private doorPreloaded = false;
 
   // --- Time-sliced chunk rendering ---
   // Chunk canvas painting is split across frames to avoid main-thread stalls.
@@ -1686,7 +1687,7 @@ export class WorldLayer {
 
   /** Check if a world tile is walkable without generating chunks.
    *  Returns false for unloaded chunks (safe default — caller just won't move there). */
-  private isTileWalkableLoaded(worldTileX: number, worldTileY: number): boolean {
+  isTileWalkableLoaded(worldTileX: number, worldTileY: number): boolean {
     if (worldTileY < 0) return false;
     const cx = Math.floor(worldTileX / CHUNK_SIZE);
     const cy = Math.floor(worldTileY / CHUNK_SIZE);
@@ -1751,7 +1752,9 @@ export class WorldLayer {
     if (!this.isOutside(px, py)) return 1;
     const { tx, ty } = this.pixelToTile(px, py);
     if (ty < 0) return 1;
-    return tileSpeed(this.getTileAt(tx, ty));
+    const tile = this.getTileAtLoaded(tx, ty);
+    if (tile < 0) return 1;
+    return tileSpeed(tile);
   }
 
   /** Check if the player can walk to a pixel position (world collision). */
@@ -1770,7 +1773,7 @@ export class WorldLayer {
         if (this.officeGrid?.ok(otx, oty)) continue;
         return false;
       }
-      if (!this.isTileWalkable(tx, ty)) return false;
+      if (!this.isTileWalkableLoaded(tx, ty)) return false;
     }
     return true;
   }
@@ -2037,6 +2040,8 @@ export class WorldLayer {
    *  Called when the player is inside the office so tile data is ready
    *  by the time they walk outside, without blocking the main thread. */
   preloadDoorChunksWorkerOnly(): void {
+    if (this.doorPreloaded) return;
+    this.doorPreloaded = true;
     const doorX = this.officeW / 2;
     const doorY = this.officeH + TILE_PX;
     const { tx, ty } = this.pixelToTile(doorX, doorY);
@@ -3019,9 +3024,9 @@ export class WorldLayer {
 
       // Check wall/tile collision or out of range
       const { tx: atx, ty: aty } = this.pixelToTile(this.arrow.x, this.arrow.y);
-      const arrowTile = this.getTileAt(atx, aty);
+      const arrowTile = this.getTileAtLoaded(atx, aty);
       const arrowDist = Math.hypot(this.arrow.x - playerX, this.arrow.y - playerY);
-      if (hitSomething || !isWalkable(arrowTile) || arrowDist > 400) {
+      if (hitSomething || (arrowTile >= 0 && !isWalkable(arrowTile)) || arrowDist > 400) {
         if (!hitSomething) {
           this.vfx.sparkBurst(this.arrow.x, this.arrow.y, 0x44ffdd, 6, 50);
         }
@@ -3036,7 +3041,8 @@ export class WorldLayer {
     // --- tile hazard damage (water, lava, void) ---
     if (outside) {
       const { tx, ty } = this.pixelToTile(playerX, playerY);
-      const tile = this.getTileAt(tx, ty);
+      const tile = this.getTileAtLoaded(tx, ty);
+      if (tile < 0) return; // chunk not loaded yet — skip damage check
       const dmg = tileDamage(tile) * (dt / 1000);
       if (dmg > 0 && !this.isDying && (dmg === Infinity || time > this.invulnUntil)) {
         const isVoid = dmg === Infinity;
