@@ -4488,9 +4488,11 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       for (const dep of deployments) {
         const statusColor = dep.status.toLowerCase().includes("deploy") || dep.status.toLowerCase().includes("active") || dep.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
         const isCurrent = this.store.currentWorld?.branchName === dep.branchName;
+        const isUpgraded = dep.assetUpgradeStatus === "ready";
+        const isGenerating = dep.assetUpgradeStatus === "generating" || (this.store.assetUpgradeStatus === "generating" && this.store.assetUpgradeDeploymentId === dep.branchName);
         html += `<div class="railway-project">`;
         html += `<div class="railway-project-header">`;
-        html += `<span class="railway-project-name">${esc(dep.branchName)}${isCurrent ? " <span style=\"color:#5ad6a0;font-size:11px;\">● you are here</span>" : ""}</span>`;
+        html += `<span class="railway-project-name">${esc(dep.branchName)}${isCurrent ? " <span style=\"color:#5ad6a0;font-size:11px;\">● you are here</span>" : ""}${isUpgraded ? " <span style=\"color:#b388ff;font-size:11px;\">✨ AI</span>" : ""}</span>`;
         if (dep.railwayServiceUrl) {
           html += `<a class="railway-service-url" href="${esc(dep.railwayServiceUrl)}" target="_blank">open ↗</a>`;
         }
@@ -4503,6 +4505,27 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           html += `<span style="margin-left:auto;font-size:11px;color:#5ad6a0;">Walk into the green portal to return</span>`;
         }
         html += `</div>`;
+
+        // Asset upgrade row
+        if (!isUpgraded && !isGenerating && dep.railwayServiceUrl) {
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #222;margin-top:4px;">`;
+          html += `<span style="font-size:11px;color:#888;">Procedural graphics</span>`;
+          html += `<button class="btn" id="worlds-upgrade-${esc(dep.branchName)}" style="font-size:11px;padding:3px 12px;margin-left:auto;border:1px solid #b388ff;background:#3a2a4a;color:#d0b0ff;font-weight:600;cursor:pointer;">✨ Upgrade — $19.99</button>`;
+          html += `</div>`;
+        } else if (isGenerating) {
+          const prog = this.store.assetUpgradeProgress;
+          const pct = prog?.percent ?? 0;
+          const label = prog?.label ?? "Generating…";
+          html += `<div style="padding:6px 0;border-top:1px solid #222;margin-top:4px;">`;
+          html += `<div style="font-size:11px;color:#b388ff;margin-bottom:4px;">✨ ${esc(label)} ${pct}%</div>`;
+          html += `<div style="width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden;"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#b388ff,#7c4dff);transition:width 0.3s;"></div></div>`;
+          html += `</div>`;
+        } else if (isUpgraded) {
+          html += `<div style="padding:4px 0;border-top:1px solid #222;margin-top:4px;">`;
+          html += `<span style="font-size:11px;color:#b388ff;">✨ AI graphics upgraded</span>`;
+          html += `</div>`;
+        }
+
         html += `</div>`;
       }
     }
@@ -4526,6 +4549,41 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           const scene = this.store.sceneRef as any;
           if (scene?.openPortal) {
             scene.openPortal(dep.branchName, dep.railwayServiceUrl!);
+          }
+        });
+      }
+    }
+
+    // Wire Upgrade buttons
+    for (const dep of deployments) {
+      if (!dep.railwayServiceUrl) continue;
+      if (dep.assetUpgradeStatus === "ready" || dep.assetUpgradeStatus === "generating") continue;
+      const upgradeBtn = document.getElementById(`worlds-upgrade-${dep.branchName}`);
+      if (upgradeBtn) {
+        upgradeBtn.addEventListener("click", async () => {
+          // Call Stripe checkout API
+          try {
+            const token = localStorage.getItem("auth_token") ?? "";
+            const res = await fetch("/api/asset-upgrade/checkout", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                deploymentId: dep.branchName,
+                branchName: dep.branchName,
+                repoFullName: dep.repoFullName,
+              }),
+            });
+            const data = await res.json();
+            if (data.url) {
+              window.location.href = data.url;
+            } else {
+              this.store.toast(`Upgrade checkout failed: ${data.error ?? "Unknown error"}`);
+            }
+          } catch (err) {
+            this.store.toast(`Upgrade checkout failed: ${err instanceof Error ? err.message : String(err)}`);
           }
         });
       }

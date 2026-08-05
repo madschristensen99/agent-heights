@@ -48,10 +48,13 @@ function incrementSpendCache(userId: string, cost: number): void {
 }
 
 /** Maximum allowed cost per single API call (USD). */
-const MAX_COST_PER_CALL = parseFloat(process.env.CIRCLE_MAX_COST_PER_CALL ?? "0.50");
+const MAX_COST_PER_CALL = parseFloat(process.env.CIRCLE_MAX_COST_PER_CALL ?? "0.30");
 
 /** Maximum premium API calls per task (prevents runaway spend). */
 const MAX_PREMIUM_CALLS_PER_TASK = parseInt(process.env.CIRCLE_MAX_CALLS_PER_TASK ?? "20", 10);
+
+/** Maximum total premium spend per task in USD (prevents runaway spend). */
+const MAX_TASK_SPEND = parseFloat(process.env.CIRCLE_MAX_TASK_SPEND ?? "0.50");
 
 export interface PremiumToolDef {
   name: string;
@@ -113,6 +116,7 @@ export async function loadPremiumTools(
 
   const allTools: AgentTool<any, any>[] = [];
   let taskCallCount = 0;
+  let taskSpend = 0;
 
   for (const service of services) {
     for (const def of service.tools) {
@@ -134,6 +138,11 @@ export async function loadPremiumTools(
           taskCallCount++;
           if (taskCallCount > MAX_PREMIUM_CALLS_PER_TASK) {
             throw new Error(`Premium call limit reached (${MAX_PREMIUM_CALLS_PER_TASK}/task).`);
+          }
+
+          // Per-task total spend limit
+          if (taskSpend + service.pricePerCall > MAX_TASK_SPEND) {
+            throw new Error(`Premium task spend limit reached ($${taskSpend.toFixed(2)}/$${MAX_TASK_SPEND.toFixed(2)}).`);
           }
 
           // Per-call cost ceiling
@@ -187,8 +196,9 @@ export async function loadPremiumTools(
             return `API returned HTTP ${result.status}`;
           }
 
-          // Increment in-memory spend cache immediately (prevents race conditions)
+          // Increment per-task spend tracker and in-memory spend cache immediately
           if (result.cost > 0) {
+            taskSpend += result.cost;
             incrementSpendCache(proxyCtx.userId, result.cost);
           }
 

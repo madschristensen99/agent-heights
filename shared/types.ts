@@ -422,6 +422,9 @@ export interface ThemeAgentWorkAnim {
   frameRate: number;
 }
 
+/** Asset fidelity tier — procedural (free) or AI-generated (paid upgrade). */
+export type AssetTier = "procedural" | "ai";
+
 /** Asset paths for a themed world — all relative to the branch root. */
 export interface ThemeAssets {
   tilesetPath: string;
@@ -429,6 +432,12 @@ export interface ThemeAssets {
   furnitureSpritesheetPath?: string;
   worldTileSpritesheetPath?: string;
   uiTexturePath?: string;
+  /** Asset fidelity tier — "procedural" (default) or "ai" after upgrade. */
+  assetTier?: AssetTier;
+  /** Custom vehicle sprite key (e.g. helicopter_top) — AI-generated if upgraded. */
+  vehicleSpriteKey?: string;
+  /** Custom portal sprite key — AI-generated if upgraded. */
+  portalSpriteKey?: string;
 }
 
 /** Office layout override for a themed world. */
@@ -708,6 +717,9 @@ export interface RailwayData {
   raw?: string;
 }
 
+/** Status of an AI asset upgrade job for a deployed world. */
+export type AssetUpgradeStatus = "none" | "generating" | "ready" | "failed";
+
 /** A world deployed to Railway — links a GitHub branch to a Railway service. */
 export interface WorldDeployment {
   branchName: string;
@@ -717,6 +729,8 @@ export interface WorldDeployment {
   railwayServiceUrl: string | null;
   status: string;
   createdAt: number;
+  /** AI asset upgrade status — "none" by default, "generating" during upgrade, "ready" when done. */
+  assetUpgradeStatus?: AssetUpgradeStatus;
 }
 
 /** A named CharAppearance snapshot saved by the user. */
@@ -847,6 +861,7 @@ export type ClientMsg =
   | { type: "agent_view_stop"; agentId: string }
   | { type: "agent_broadcast_start"; agentId: string }
   | { type: "agent_broadcast_stop" }
+  | { type: "upgrade_assets"; deploymentId: string }
   | { type: "agent_fs_list"; agentId: string; path: string }
   | { type: "agent_fs_read"; agentId: string; path: string }
   | { type: "agent_fs_write"; agentId: string; path: string; content: string }
@@ -925,6 +940,7 @@ export type ServerMsg =
   | { type: "player_joined"; roomId: string; player: PlayerPresence }
   | { type: "player_left"; roomId: string; userId: string }
   | { type: "player_moved"; roomId: string; userId: string; x: number; y: number; dir: Dir }
+  | { type: "players_moved"; roomId: string; updates: { userId: string; x: number; y: number; dir: Dir }[] }
   | { type: "room_invite"; roomId: string; roomName: string; fromUserId: string; fromName: string; role: "member" | "guest"; accessLevel?: RoomAccessLevel }
   | { type: "agent_acl_updated"; agentId: string; acl: AgentACL }
   | { type: "invite_response"; roomId: string; accepted: boolean; byUserId: string; byName: string }
@@ -995,7 +1011,11 @@ export type ServerMsg =
   | { type: "mcp_build_log"; serverId: string; line: string; stream: "stdout" | "stderr" }
   | { type: "deletion_scheduled"; scheduledDeletionAt: number }
   | { type: "deletion_cancelled" }
-  | { type: "fuse_effect"; agentAId: string; agentBId: string; fusedId: string };
+  | { type: "fuse_effect"; agentAId: string; agentBId: string; fusedId: string }
+  | { type: "asset_upgrade_started"; deploymentId: string }
+  | { type: "asset_upgrade_progress"; deploymentId: string; stage: string; percent: number; label: string }
+  | { type: "asset_upgrade_ready"; deploymentId: string }
+  | { type: "asset_upgrade_failed"; deploymentId: string; error: string };
 
 export const AGENT_MODELS = [
   { id: "kimi-k2.5", label: "Standard" },

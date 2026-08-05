@@ -84,6 +84,7 @@ if (isSpectator) {
 // Clean Stripe redirect params BEFORE initAuth so Supabase doesn't see them
 const _params = new URLSearchParams(window.location.search);
 const _paymentResult = _params.get("payment");
+const _upgradeDeployment = _params.get("deployment");
 if (_paymentResult) {
   history.replaceState({}, "", window.location.pathname);
 }
@@ -92,6 +93,15 @@ if (_paymentResult) {
 // so the session is likely ready before BootScene finishes.
 if (!isSpectator) {
   void initAuth();
+
+  // If we returned from a successful asset upgrade checkout, trigger generation
+  if (_paymentResult === "asset_upgrade_success" && _upgradeDeployment) {
+    // The send() method queues messages if WS isn't open yet
+    setTimeout(() => {
+      store.sendFn?.({ type: "upgrade_assets", deploymentId: _upgradeDeployment });
+      store.toast("AI asset upgrade started — generating high-fidelity graphics…");
+    }, 2000);
+  }
 
   // If we returned from a successful Stripe checkout, poll payment status
   // while suppressing the payment overlay (webhook may not have processed yet)

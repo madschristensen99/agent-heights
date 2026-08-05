@@ -23,11 +23,14 @@ export class AudioSystem {
     // Lazy init — AudioContext requires user gesture
   }
 
+  /** Expose the AudioContext so other systems (VoiceManager) can share it. */
+  get context(): AudioContext | null { return this.ctx; }
+
   /** Initialize the audio context (call on first user interaction). */
   init(): void {
     if (this.ctx) return;
     try {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 48000 });
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = 0.7;
       this.masterGain.connect(this.ctx.destination);

@@ -2101,9 +2101,11 @@ export class WorldLayer {
    *  Each hit is registered as a Phaser texture so renderChunk skips painting.
    *  Returns the number of cache hits. */
   async preloadCachedCanvases(coords: { cx: number; cy: number }[]): Promise<number> {
+    const tier = this.worldTheme?.assets?.assetTier ?? "ai";
     const entries = coords.map(c => ({
       texKey: this.chunkTexKey(c.cx, c.cy),
       ssFactor: SS_FACTOR,
+      assetTier: tier,
     }));
     const loaded = await preloadChunkCanvases(entries);
     let hits = 0;
@@ -2139,7 +2141,7 @@ export class WorldLayer {
     if (this.scene.textures.exists(texKey)) {
       this.scene.textures.remove(texKey);
     }
-    removeChunkCanvas(texKey, SS_FACTOR);
+    removeChunkCanvas(texKey, SS_FACTOR, this.worldTheme?.assets?.assetTier ?? "ai");
   }
 
   private renderChunk(chunk: Chunk): void {
@@ -2492,7 +2494,7 @@ export class WorldLayer {
 
         // Persist canvas to IndexedDB so repeat visits skip painting entirely
         const canvasEl = job.canvasTex.getSourceImage() as HTMLCanvasElement;
-        saveChunkCanvas(job.texKey, job.SS, canvasEl);
+        saveChunkCanvas(job.texKey, job.SS, canvasEl, this.worldTheme?.assets?.assetTier ?? "ai");
       } else {
         remaining.push(job);
       }

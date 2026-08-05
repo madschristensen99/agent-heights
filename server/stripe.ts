@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import { SUBSCRIPTION_TIERS, parseTier, AGENT_HEIGHTS_HQ_ADMINS, type SubscriptionTier, type BillingPeriod } from "../shared/types.js";
+import { handleAssetUpgradeWebhook } from "./asset-upgrade.js";
 
 const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
@@ -262,6 +263,11 @@ export async function handleStripeWebhook(
         if (session.metadata?.type === "entrance") {
           // Entrance fee removed — no-op, but keep for backward compat
           console.log(`[stripe] legacy entrance fee payment for user ${userId} — entrance fee removed, ignoring`);
+        }
+
+        if (session.metadata?.type === "asset_upgrade") {
+          await handleAssetUpgradeWebhook(session);
+          console.log(`[stripe] asset upgrade payment for user ${userId}, deployment ${session.metadata?.deploymentId}`);
         }
 
         if (session.metadata?.type === "subscription" && session.subscription) {

@@ -4,7 +4,7 @@ const SILENT_MSG_TYPES = new Set([
   "mcp_keys_status", "mcp_key_status", "platform_connection",
   "payment_status", "room_state", "rooms_list",
   "mail_digest", "platform_config_result", "outfits",
-  "api_key_status", "mailbox_update",
+  "api_key_status", "mailbox_update", "players_moved",
 ]);
 
 export class Net {

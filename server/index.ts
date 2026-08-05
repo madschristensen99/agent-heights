@@ -13,7 +13,7 @@ import { handleAgentResourcesRequest } from "./agent-resources.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway, deployWorldToRailway, listWorldDeployments, stopWorldDeployment } from "./providers/railway-mcp.js";
 import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken, listRepoDir, readRepoFile, writeRepoFile, createRepoFile, deleteRepoFile } from "./github.js";
-import { rateLimitAsync } from "./ratelimit.js";
+import { rateLimitAsync, rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
 import { startOAuthFlow, handleOAuthCallback, exchangeOAuthCode } from "./mcp-oauth.js";
 import { getAgentWalletAddress, getAgentBalances, getAgentPolicy, updateAgentPolicy, getAgentTxHistory, createOnrampUrl } from "./providers/cdp-solana.js";
@@ -25,12 +25,16 @@ import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBro
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial, nextTrialResetAt } from "./stripe.js";
+import { handleAssetUpgradeRequest, runAssetGenerationJob } from "./asset-upgrade.js";
 import { getUsageSummary } from "./usage.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
 import { scheduleDeletion, cancelDeletion, getDeletionStatus, processExpiredDeletions, GRACE_PERIOD_DAYS } from "./account.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
+
+/** High-frequency message types that use sync in-memory rate limiting (no Redis round-trip). */
+const FAST_PATH_TYPES = new Set(["player_move", "npc_update"]);
 
 // ── Saved outfits helpers ────────────────────────────────────────────────
 
@@ -318,9 +322,19 @@ const server = createServer((req, res) => {
     void handleStripeRequest(req, res).then((handled) => {
       if (!handled) {
         serveStatic(req, res).catch(() => {
-          res.writeHead(500, applySecurityHeaders());
-          res.end("Internal server error");
+          res.writeHead(500, applySecurityHeaders());          res.end("Internal server error");
         });
+      }
+    });
+    return;
+  }
+
+  // Asset upgrade routes (checkout, status)
+  if (req.url?.split("?")[0]?.startsWith("/api/asset-upgrade")) {
+    void handleAssetUpgradeRequest(req, res).then((handled) => {
+      if (!handled) {
+        res.writeHead(404, applySecurityHeaders());
+        res.end("Not found");
       }
     });
     return;
@@ -937,7 +951,11 @@ wss.on("connection", async (ws, req) => {
         }
       }
 
-      if (!(await rateLimitAsync(sess.user.id, msg.type))) {
+      // Fast path: high-frequency messages use sync in-memory rate limiting
+      const allowed = FAST_PATH_TYPES.has(msg.type)
+        ? rateLimit(sess.user.id, msg.type)
+        : await rateLimitAsync(sess.user.id, msg.type);
+      if (!allowed) {
         console.warn(`[rate-limit] BLOCKED user=${sess.user.id} type=${msg.type}`);
         // Throttle the "too many requests" toast itself — only one per 5s
         const rlKey = `rltoast:${sess.user.id}`;
@@ -1241,6 +1259,49 @@ wss.on("connection", async (ws, req) => {
             }
             // Create the new branch
             const branch = await createBranch(token, forkOwner, forkName, msg.branchName);
+
+            // Commit a minimal world-theme.json with assetTier: "procedural"
+            // so the deployed world starts with procedural graphics.
+            // The $19.99 upgrade changes this to "ai" and regenerates all assets.
+            const themeJson = JSON.stringify({
+              id: msg.branchName,
+              name: msg.branchName,
+              description: "A procedurally generated world.",
+              workMetaphor: "office",
+              arrivalMetaphor: "helicopter",
+              office: {
+                tilemapPath: "assets/tilemaps/office.json",
+                tilesetPath: "assets/tilesets/office.png",
+                floorTile: 0,
+                wallTile: 1,
+                doorTile: 2,
+              },
+              furniture: {},
+              worldgen: {
+                seed: Math.floor(Math.random() * 2147483647),
+                biomeScale: 0.003,
+                hostilityScale: 0.004,
+              },
+              interactables: {},
+              assets: {
+                tilesetPath: "assets/tilesets/world.png",
+                assetTier: "procedural",
+              },
+            }, null, 2);
+            try {
+              await createRepoFile(
+                token,
+                forkOwner,
+                forkName,
+                msg.branchName,
+                "client/public/assets/world-theme.json",
+                themeJson,
+                "Initialize world-theme.json (procedural tier)",
+              );
+            } catch (themeErr) {
+              console.warn("[github_fork] Failed to commit world-theme.json:", themeErr);
+            }
+
             sess.broadcast({
               type: "github_fork_created",
               fork: { owner: forkOwner, name: forkName, fullName: `${forkOwner}/${forkName}`, cloneUrl: `https://github.com/${forkOwner}/${forkName}.git`, branch: branch.name },
@@ -1327,6 +1388,61 @@ wss.on("connection", async (ws, req) => {
             const listResult = await listWorldDeployments();
             sess.broadcast({ type: "railway_deployments", deployments: listResult.deployments, error: null });
           }
+          break;
+        }
+        case "upgrade_assets": {
+          // Verify the user has paid for this upgrade
+          const { data: upgradeRow } = await supabaseAdmin
+            .from("heights_cloud_asset_upgrades")
+            .select("status, branch_name, repo_full_name")
+            .eq("deployment_id", msg.deploymentId)
+            .eq("user_id", sess.user.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!upgradeRow) {
+            sess.broadcast({ type: "asset_upgrade_failed", deploymentId: msg.deploymentId, error: "No payment found for this deployment. Please complete the $19.99 upgrade first." });
+            break;
+          }
+
+          // Fetch world-theme.json from the branch to get theme config
+          let worldTheme: import("../shared/types.js").WorldTheme | null = null;
+          try {
+            const mcpKeys = await getUserMcpKeys(sess.user.id);
+            const token = getGithubToken(sess.user.id, mcpKeys);
+            if (token) {
+              const user = await getAuthenticatedUser(token);
+              if (user) {
+                const fileResult = await readRepoFile(token, user.login, "agent-heights", upgradeRow.branch_name, "client/public/assets/world-theme.json");
+                if (fileResult?.content) {
+                  worldTheme = JSON.parse(fileResult.content);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn("[asset-upgrade] failed to fetch world-theme.json:", err);
+          }
+
+          sess.broadcast({ type: "asset_upgrade_started", deploymentId: msg.deploymentId });
+
+          // Run the generation job asynchronously
+          void runAssetGenerationJob(
+            msg.deploymentId,
+            upgradeRow.branch_name,
+            upgradeRow.repo_full_name,
+            worldTheme,
+            (stage, percent, label) => {
+              sess.broadcast({ type: "asset_upgrade_progress", deploymentId: msg.deploymentId, stage, percent, label });
+            },
+          ).then((result) => {
+            if (result.success) {
+              sess.broadcast({ type: "asset_upgrade_ready", deploymentId: msg.deploymentId });
+            } else {
+              sess.broadcast({ type: "asset_upgrade_failed", deploymentId: msg.deploymentId, error: result.error ?? "Unknown error" });
+            }
+          });
+
           break;
         }
         case "github_list_dir": {
@@ -2044,21 +2160,8 @@ wss.on("connection", async (ws, req) => {
         case "player_move": {
           const room = tenants.updatePlayerPosition(sess.user.id, msg.x, msg.y, msg.dir);
           if (room) {
-            // Broadcast to all other players in the room
-            for (const [pid] of room.players) {
-              if (pid === sess.user.id) continue;
-              const otherSess = tenants.get(pid);
-              if (otherSess) {
-                otherSess.broadcast({
-                  type: "player_moved",
-                  roomId: room.id,
-                  userId: sess.user.id,
-                  x: msg.x,
-                  y: msg.y,
-                  dir: msg.dir,
-                });
-              }
-            }
+            // Buffer position update — flushed as batched players_moved message every 100ms
+            tenants.bufferPlayerPosition(sess.user.id, msg.x, msg.y, msg.dir);
           }
           break;
         }

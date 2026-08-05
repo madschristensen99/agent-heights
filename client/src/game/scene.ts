@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, AgentResourcesNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
-import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme } from "../../../shared/types";
+import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -272,7 +272,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerLabel!: Phaser.GameObjects.Text;
   private playerNameBg!: Phaser.GameObjects.Graphics;
   private playerDir: Dir = "down";
-  private playerTexKey = "boss";
+  private playerTexKey = "boss-default";
   private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "SPACE", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
@@ -282,7 +282,7 @@ export class OfficeScene extends Phaser.Scene {
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; yBase: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
-  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; appearanceKey: string; labelX: number; labelY: number; lastStoreX: number; lastStoreY: number; storeVx: number; storeVy: number; }>();
+  private remotePlayers = new Map<string, { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; nameBg: Phaser.GameObjects.Graphics; intro?: boolean; texKey: string; appearance: CharAppearance | null; appearanceKey: string; labelX: number; labelY: number; lastStoreX: number; lastStoreY: number; storeVx: number; storeVy: number; snapshots: { x: number; y: number; dir: Dir; t: number }[]; lastDir: Dir; }>();
   /** Voice chat manager — WebRTC proximity voice. */
   private voice: VoiceManager | null = null;
   /** Screen share manager — WebRTC screen sharing on projector. */
@@ -361,7 +361,8 @@ export class OfficeScene extends Phaser.Scene {
       this.store.onVoicePeerLeft((userId) => this.voice?.onPeerLeft(userId));
       this.events.once("shutdown", () => { this.voice?.stop(); this.voice?.stopListenOnly(); this.voice = null; this.store.sceneRef = null; });
       this.store.sceneRef = this as any;
-      // Auto-start listen-only mode so player hears nearby speakers without enabling mic
+      // Auto-start listen-only mode so player hears nearby speakers without enabling mic.
+      // This only sends the voice_listen signal — AudioContext is created on first user gesture.
       this.voice.startListenOnly().catch((err) => console.warn("[voice] auto listen-only failed:", err));
     }
     // Clean up projector iframe on scene shutdown/restart
@@ -512,15 +513,21 @@ export class OfficeScene extends Phaser.Scene {
     // Sky gradient + drifting clouds (screen-fixed, behind everything)
     this.createSky();
 
-    // Initialize audio on first user interaction
-    this.input.once("pointerdown", () => {
+    // Initialize audio on first user interaction — also unlocks voice AudioContext.
+    // On mobile, Phaser's pointerdown may not fire if the user taps a DOM touch
+    // control (which calls preventDefault), so also listen for document touchstart.
+    const unlockAudio = () => {
       this.world?.audio.init();
       this.world?.audio.resume();
-    });
-    this.input.keyboard?.once("keydown", () => {
-      this.world?.audio.init();
-      this.world?.audio.resume();
-    });
+      // Share the AudioSystem's AudioContext with VoiceManager to avoid dual-context issues on iOS
+      if (this.world?.audio.context && this.voice) {
+        this.voice.setExternalContext(this.world.audio.context);
+      }
+      void this.voice?.unlockAudio();
+    };
+    this.input.once("pointerdown", unlockAudio);
+    this.input.keyboard?.once("keydown", unlockAudio);
+    document.addEventListener("touchstart", unlockAudio, { once: true, passive: true });
 
     // a theme change restarts the scene — drop everything the last run built
     this.npcs.clear();
@@ -1845,50 +1852,68 @@ export class OfficeScene extends Phaser.Scene {
     this.store.portalTarget = { branchName, url: worldUrl };
     this.store.toggleGitHubPanel(false);
 
-    // Create portal visual: layered glowing circles
+    // Create portal visual: AI sprite if available, else layered glowing circles
     const container = this.add.container(px, py);
     container.setDepth(9000);
 
-    // Outer glow ring
-    const outerRing = this.add.circle(0, 0, 36, 0x4a6a8a, 0.15)
-      .setStrokeStyle(3, 0x6a9ad6, 0.6);
-    // Inner swirling vortex
-    const innerRing = this.add.circle(0, 0, 24, 0x2a4a6a, 0.3)
-      .setStrokeStyle(2, 0x8fc9f0, 0.8);
-    // Core
-    const core = this.add.circle(0, 0, 14, 0x1a2a4a, 0.5)
-      .setStrokeStyle(1, 0xc0e0ff, 0.9);
+    const portalKey = "ai-portal";
+    if (this.textures.exists(portalKey)) {
+      const portalSprite = this.add.image(0, 0, portalKey)
+        .setOrigin(0.5, 0.5)
+        .setDisplaySize(80, 80);
+      container.add(portalSprite);
+      // Animate with a gentle pulse
+      this.tweens.add({
+        targets: portalSprite,
+        scale: { from: 1, to: 1.15 },
+        alpha: { from: 0.85, to: 1 },
+        duration: 1000,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+    } else {
+      // Outer glow ring
+      const outerRing = this.add.circle(0, 0, 36, 0x4a6a8a, 0.15)
+        .setStrokeStyle(3, 0x6a9ad6, 0.6);
+      // Inner swirling vortex
+      const innerRing = this.add.circle(0, 0, 24, 0x2a4a6a, 0.3)
+        .setStrokeStyle(2, 0x8fc9f0, 0.8);
+      // Core
+      const core = this.add.circle(0, 0, 14, 0x1a2a4a, 0.5)
+        .setStrokeStyle(1, 0xc0e0ff, 0.9);
 
-    container.add([outerRing, innerRing, core]);
+      container.add([outerRing, innerRing, core]);
 
-    // Animate: pulsing + rotation effect
-    this.tweens.add({
-      targets: outerRing,
-      scale: { from: 1, to: 1.3 },
-      alpha: { from: 0.15, to: 0.05 },
-      duration: 1200,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
-    this.tweens.add({
-      targets: innerRing,
-      scale: { from: 1, to: 0.8 },
-      alpha: { from: 0.3, to: 0.6 },
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
-    this.tweens.add({
-      targets: core,
-      scale: { from: 1, to: 1.15 },
-      alpha: { from: 0.5, to: 0.8 },
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
+      // Animate: pulsing + rotation effect
+      this.tweens.add({
+        targets: outerRing,
+        scale: { from: 1, to: 1.3 },
+        alpha: { from: 0.15, to: 0.05 },
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+      this.tweens.add({
+        targets: innerRing,
+        scale: { from: 1, to: 0.8 },
+        alpha: { from: 0.3, to: 0.6 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+      this.tweens.add({
+        targets: core,
+        scale: { from: 1, to: 1.15 },
+        alpha: { from: 0.5, to: 0.8 },
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+    }
 
     this.portalContainer = container;
 
@@ -1953,46 +1978,64 @@ export class OfficeScene extends Phaser.Scene {
     const px = spawn.x;
     const py = spawn.y;
 
-    // Create return portal visual (green-tinted to distinguish from entry portal)
+    // Create return portal visual: AI sprite if available, else green-tinted circles
     const container = this.add.container(px, py - 20);
     container.setDepth(9000);
 
-    const outerRing = this.add.circle(0, 0, 36, 0x2a6a4a, 0.15)
-      .setStrokeStyle(3, 0x5ad6a0, 0.6);
-    const innerRing = this.add.circle(0, 0, 24, 0x1a4a2a, 0.3)
-      .setStrokeStyle(2, 0x8ff0c0, 0.8);
-    const core = this.add.circle(0, 0, 14, 0x0a2a1a, 0.5)
-      .setStrokeStyle(1, 0xc0ffd0, 0.9);
+    const returnPortalKey = "ai-portal-return";
+    if (this.textures.exists(returnPortalKey)) {
+      const portalSprite = this.add.image(0, 0, returnPortalKey)
+        .setOrigin(0.5, 0.5)
+        .setDisplaySize(80, 80)
+        .setTint(0x5ad6a0);
+      container.add(portalSprite);
+      this.tweens.add({
+        targets: portalSprite,
+        scale: { from: 1, to: 1.15 },
+        alpha: { from: 0.85, to: 1 },
+        duration: 1000,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+    } else {
+      const outerRing = this.add.circle(0, 0, 36, 0x2a6a4a, 0.15)
+        .setStrokeStyle(3, 0x5ad6a0, 0.6);
+      const innerRing = this.add.circle(0, 0, 24, 0x1a4a2a, 0.3)
+        .setStrokeStyle(2, 0x8ff0c0, 0.8);
+      const core = this.add.circle(0, 0, 14, 0x0a2a1a, 0.5)
+        .setStrokeStyle(1, 0xc0ffd0, 0.9);
 
-    container.add([outerRing, innerRing, core]);
+      container.add([outerRing, innerRing, core]);
 
-    this.tweens.add({
-      targets: outerRing,
-      scale: { from: 1, to: 1.3 },
-      alpha: { from: 0.15, to: 0.05 },
-      duration: 1200,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
-    this.tweens.add({
-      targets: innerRing,
-      scale: { from: 1, to: 0.8 },
-      alpha: { from: 0.3, to: 0.6 },
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
-    this.tweens.add({
-      targets: core,
-      scale: { from: 1, to: 1.15 },
-      alpha: { from: 0.5, to: 0.8 },
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
+      this.tweens.add({
+        targets: outerRing,
+        scale: { from: 1, to: 1.3 },
+        alpha: { from: 0.15, to: 0.05 },
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+      this.tweens.add({
+        targets: innerRing,
+        scale: { from: 1, to: 0.8 },
+        alpha: { from: 0.3, to: 0.6 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+      this.tweens.add({
+        targets: core,
+        scale: { from: 1, to: 1.15 },
+        alpha: { from: 0.5, to: 0.8 },
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+    }
 
     this.portalContainer = container;
 
@@ -4138,6 +4181,19 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Draw a helicopter pad on the roof of the building, in a 3/4 diagonal perspective. */
   private drawHelipad(): void {
+    // Use AI helipad sprite if available (upgraded worlds)
+    const helipadKey = "ai-fur-helipad";
+    if (this.textures.exists(helipadKey)) {
+      const mapPxW = 30 * TILE_PX;
+      const cx = mapPxW / 2 + 240;
+      const padCY = -195;
+      this.add.image(cx, padCY, helipadKey)
+        .setOrigin(0.5, 0.5)
+        .setDisplaySize(480, 160)
+        .setDepth(-0.5);
+      return;
+    }
+
     const g = this.add.graphics().setDepth(-0.5);
 
     const mapPxW = 30 * TILE_PX; // 1920
@@ -6484,7 +6540,7 @@ export class OfficeScene extends Phaser.Scene {
       this.anims.create({ key: `${key}-hop`, frames: this.anims.generateFrameNumbers(key, { frames: [3, 1, 0] }), frameRate: 5, repeat: 0 });
     }
 
-    const sheets = ["boss", "char-agent-resources", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
+    const sheets = ["char-agent-resources", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
     const dirs: Dir[] = ["down", "left", "right", "up"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
@@ -6526,7 +6582,12 @@ export class OfficeScene extends Phaser.Scene {
       this.playerTexKey = key;
       return false;
     } else {
-      this.playerTexKey = "boss";
+      const key = "boss-default";
+      if (!this.textures.exists(key)) {
+        generateCharTexture(this, key, DEFAULT_APPEARANCE);
+        this.ensureCharAnimations(key);
+      }
+      this.playerTexKey = key;
       return false;
     }
   }
@@ -7120,12 +7181,15 @@ export class OfficeScene extends Phaser.Scene {
     }
     // trophy case & hall of fame proximity hints — handled by updateAllHints above
 
-    // ── Multiplayer: send boss position to server (10Hz) ────────────────
+    // ── Multiplayer: send boss position to server (adaptive 10Hz/2Hz) ───
     const now = time;
-    if (now - this.lastPosSent > 100) {
-      const dx = Math.abs(this.player.x - this.lastSentX);
-      const dy = Math.abs(this.player.y - this.lastSentY);
-      if (dx > 2 || dy > 2 || this.playerDir !== this._lastSentDir) {
+    const dx = Math.abs(this.player.x - this.lastSentX);
+    const dy = Math.abs(this.player.y - this.lastSentY);
+    const isMovingNow = dx > 2 || dy > 2 || this.playerDir !== this._lastSentDir;
+    // 100ms when moving, 500ms when idle
+    const sendInterval = isMovingNow ? 100 : 500;
+    if (now - this.lastPosSent > sendInterval) {
+      if (isMovingNow) {
         this.net?.send({ type: "player_move", x: this.player.x, y: this.player.y, dir: this.playerDir });
         this.lastSentX = this.player.x;
         this.lastSentY = this.player.y;
@@ -7193,7 +7257,7 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       // Determine the correct texture key for this player
-      let texKey = "boss";
+      let texKey = "boss-default";
       if (p.appearance) {
         texKey = `remote-${userId}`;
       }
@@ -7216,6 +7280,9 @@ export class OfficeScene extends Phaser.Scene {
         if (p.appearance) {
           generateCharTexture(this, texKey, p.appearance);
           this.ensureCharAnimations(texKey);
+        } else if (!this.textures.exists("boss-default")) {
+          generateCharTexture(this, "boss-default", DEFAULT_APPEARANCE);
+          this.ensureCharAnimations("boss-default");
         }
         const sprite = this.add.sprite(p.x, p.y - 200, texKey, 0)
           .setOrigin(0.5, 1)
@@ -7237,7 +7304,7 @@ export class OfficeScene extends Phaser.Scene {
           .setAlpha(0)
           .setDepth(10 + p.y + 0.1);
         const apKey = p.appearance ? `${p.appearance.skin}-${p.appearance.hairStyle}-${p.appearance.hair}-${p.appearance.shirt}-${p.appearance.pants}-${p.appearance.accessory}-${p.appearance.accent}-${p.appearance.beard}-${p.appearance.eyeColor}-${p.appearance.headFeature}-${p.appearance.bodyType ?? 'normal'}` : '';
-        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null, appearanceKey: apKey, labelX: 0, labelY: 0, lastStoreX: p.x, lastStoreY: p.y, storeVx: 0, storeVy: 0 };
+        entry = { sprite, label, nameBg, intro: true, texKey, appearance: p.appearance ?? null, appearanceKey: apKey, labelX: 0, labelY: 0, lastStoreX: p.x, lastStoreY: p.y, storeVx: 0, storeVy: 0, snapshots: [{ x: p.x, y: p.y, dir: p.dir, t: performance.now() }], lastDir: p.dir };
         this.remotePlayers.set(userId, entry);
 
         // Speaking indicator (hidden by default, shown when peer is talking)
@@ -7280,36 +7347,82 @@ export class OfficeScene extends Phaser.Scene {
         });
       }
 
-      // Smoothly interpolate remote player position (skip during intro)
+      // Smoothly interpolate remote player position using snapshot buffer (skip during intro)
       const target = entry.sprite;
       if (!entry.intro) {
-        // Detect store position change and compute velocity for dead reckoning
-        const storeMoved = p.x !== entry.lastStoreX || p.y !== entry.lastStoreY;
+        const nowMs = performance.now();
+
+        // Push new snapshot when store position or direction changes
+        const storeMoved = p.x !== entry.lastStoreX || p.y !== entry.lastStoreY || p.dir !== entry.lastDir;
         if (storeMoved) {
-          entry.storeVx = (p.x - entry.lastStoreX) * 10; // convert per-update delta to per-second velocity
-          entry.storeVy = (p.y - entry.lastStoreY) * 10;
+          entry.snapshots.push({ x: p.x, y: p.y, dir: p.dir, t: nowMs });
           entry.lastStoreX = p.x;
           entry.lastStoreY = p.y;
-        } else {
-          // Decay velocity when no new update arrives (player likely stopped)
-          entry.storeVx *= 0.85;
-          entry.storeVy *= 0.85;
+          entry.lastDir = p.dir;
+          // Keep only last 6 snapshots (~600ms at 10Hz)
+          if (entry.snapshots.length > 6) entry.snapshots.shift();
         }
 
-        // Dead reckoning: extrapolate target position using last known velocity
-        const frameDt = this.game.loop.delta / 1000;
-        const predictedX = p.x + entry.storeVx * frameDt;
-        const predictedY = p.y + entry.storeVy * frameDt;
+        // Interpolate at a fixed delay behind real time for smoothness
+        const INTERP_DELAY = 120; // ms behind real time
+        const renderTime = nowMs - INTERP_DELAY;
+        const snaps = entry.snapshots;
 
-        const lerp = 0.25;
-        target.x += (predictedX - target.x) * lerp;
-        target.y += (predictedY - target.y) * lerp;
+        let interpX: number, interpY: number, interpDir: Dir;
+
+        if (snaps.length < 2) {
+          // Not enough history — lerp directly to the latest snapshot
+          const snap = snaps[snaps.length - 1] ?? { x: p.x, y: p.y, dir: p.dir };
+          const lerp = 0.2;
+          interpX = target.x + (snap.x - target.x) * lerp;
+          interpY = target.y + (snap.y - target.y) * lerp;
+          interpDir = snap.dir;
+        } else {
+          // Find the two snapshots that bracket renderTime
+          let s0 = snaps[snaps.length - 2];
+          let s1 = snaps[snaps.length - 1];
+          for (let i = snaps.length - 1; i >= 1; i--) {
+            if (snaps[i - 1].t <= renderTime) {
+              s0 = snaps[i - 1];
+              s1 = snaps[i];
+              break;
+            }
+          }
+
+          if (renderTime >= s1.t) {
+            // Ahead of latest snapshot — extrapolate using velocity between last two snaps
+            const dt = s1.t - s0.t;
+            if (dt > 0) {
+              const vx = (s1.x - s0.x) / dt;
+              const vy = (s1.y - s0.y) / dt;
+              const ahead = renderTime - s1.t;
+              interpX = s1.x + vx * ahead;
+              interpY = s1.y + vy * ahead;
+            } else {
+              interpX = s1.x;
+              interpY = s1.y;
+            }
+            interpDir = s1.dir;
+          } else {
+            // Interpolate between s0 and s1
+            const dt = s1.t - s0.t;
+            const alpha = dt > 0 ? (renderTime - s0.t) / dt : 0;
+            interpX = s0.x + (s1.x - s0.x) * alpha;
+            interpY = s0.y + (s1.y - s0.y) * alpha;
+            interpDir = alpha > 0.5 ? s1.dir : s0.dir;
+          }
+        }
+
+        // Smoothly move sprite toward interpolated position
+        const lerp = 0.35;
+        target.x += (interpX - target.x) * lerp;
+        target.y += (interpY - target.y) * lerp;
         target.setDepth(10 + target.y);
 
-        // Play walk/idle based on whether the sprite is still meaningfully moving
-        const distToTarget = Math.hypot(predictedX - target.x, predictedY - target.y);
-        const isMoving = distToTarget > 1.5 || Math.hypot(entry.storeVx, entry.storeVy) > 15;
-        const animKey = `${entry.texKey}-${isMoving ? "walk" : "idle"}-${p.dir}`;
+        // Play walk/idle based on whether the sprite is meaningfully moving
+        const distToTarget = Math.hypot(interpX - target.x, interpY - target.y);
+        const isMoving = distToTarget > 1.0;
+        const animKey = `${entry.texKey}-${isMoving ? "walk" : "idle"}-${interpDir}`;
         if (target.anims.currentAnim?.key !== animKey) {
           target.play(animKey, true);
         }

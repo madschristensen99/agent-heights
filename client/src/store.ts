@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -115,6 +115,12 @@ export class Store {
   nextTrialAt: number | null = null;
   paymentRequired: { reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number } | null = null;
   scheduledDeletionAt: number | null = null;
+  /** Asset upgrade state for the current portal world. */
+  assetUpgradeStatus: AssetUpgradeStatus = "none";
+  assetUpgradeProgress: { stage: string; percent: number; label: string } | null = null;
+  assetUpgradeDeploymentId: string | null = null;
+  /** Listeners called when asset upgrade status changes. */
+  assetUpgradeListeners: (() => void)[] = [];
   roomId: string | null = null;
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
@@ -1021,6 +1027,28 @@ export class Store {
       case "deletion_cancelled":
         this.scheduledDeletionAt = null;
         break;
+      case "asset_upgrade_started":
+        this.assetUpgradeStatus = "generating";
+        this.assetUpgradeDeploymentId = msg.deploymentId;
+        this.assetUpgradeProgress = { stage: "init", percent: 0, label: "Starting…" };
+        for (const fn of this.assetUpgradeListeners) fn();
+        break;
+      case "asset_upgrade_progress":
+        this.assetUpgradeStatus = "generating";
+        this.assetUpgradeProgress = { stage: msg.stage, percent: msg.percent, label: msg.label };
+        for (const fn of this.assetUpgradeListeners) fn();
+        break;
+      case "asset_upgrade_ready":
+        this.assetUpgradeStatus = "ready";
+        this.assetUpgradeProgress = { stage: "complete", percent: 100, label: "Upgrade complete!" };
+        for (const fn of this.assetUpgradeListeners) fn();
+        break;
+      case "asset_upgrade_failed":
+        this.assetUpgradeStatus = "failed";
+        this.assetUpgradeProgress = null;
+        this.toast(`Asset upgrade failed: ${msg.error}`);
+        for (const fn of this.assetUpgradeListeners) fn();
+        break;
       case "room_state":
         this.roomId = msg.roomId;
         this.roomName = msg.name;
@@ -1049,6 +1077,17 @@ export class Store {
           existing.x = msg.x;
           existing.y = msg.y;
           existing.dir = msg.dir;
+        }
+        break;
+      }
+      case "players_moved": {
+        for (const u of msg.updates) {
+          const existing = this.roomPlayers.get(u.userId);
+          if (existing) {
+            existing.x = u.x;
+            existing.y = u.y;
+            existing.dir = u.dir;
+          }
         }
         break;
       }

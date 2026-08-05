@@ -106,6 +106,12 @@ export class TenantManager {
   private lastRoomIds = new Map<string, string>();
   /** In-progress session creations — prevents duplicate sessions from concurrent calls. */
   private pendingCreations = new Map<string, Promise<UserSession>>();
+  /** Per-room position update buffer: roomId -> Map(userId -> {x, y, dir}) */
+  private positionBuffers = new Map<string, Map<string, { x: number; y: number; dir: Dir }>>();
+  /** Per-room flush timers for position buffers. */
+  private positionFlushTimers = new Map<string, ReturnType<typeof setInterval>>();
+  /** Interval between position buffer flushes (ms). */
+  private static readonly POSITION_FLUSH_MS = 100;
 
   constructor(private rootDir: string) {
     // Pre-seed the Agent Heights HQ organization
@@ -454,6 +460,67 @@ export class TenantManager {
     }
   }
 
+  /** Buffer a player position update for batched flush. */
+  bufferPlayerPosition(userId: string, x: number, y: number, dir: Dir): void {
+    const sess = this.sessions.get(userId);
+    if (!sess?.roomId) return;
+    const roomId = sess.roomId;
+    let buf = this.positionBuffers.get(roomId);
+    if (!buf) {
+      buf = new Map();
+      this.positionBuffers.set(roomId, buf);
+    }
+    buf.set(userId, { x, y, dir });
+
+    // Ensure a flush timer is running for this room
+    if (!this.positionFlushTimers.has(roomId)) {
+      const timer = setInterval(() => this.flushPositionBuffer(roomId), TenantManager.POSITION_FLUSH_MS);
+      timer.unref?.();
+      this.positionFlushTimers.set(roomId, timer);
+    }
+  }
+
+  /** Flush buffered position updates as a single `players_moved` batch message. */
+  private flushPositionBuffer(roomId: string): void {
+    const buf = this.positionBuffers.get(roomId);
+    if (!buf || buf.size === 0) {
+      // Clean up empty buffer + timer
+      this.positionBuffers.delete(roomId);
+      const timer = this.positionFlushTimers.get(roomId);
+      if (timer) {
+        clearInterval(timer);
+        this.positionFlushTimers.delete(roomId);
+      }
+      return;
+    }
+
+    const updates = Array.from(buf.entries()).map(([userId, pos]) => ({
+      userId, x: pos.x, y: pos.y, dir: pos.dir,
+    }));
+    buf.clear();
+
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      this.positionBuffers.delete(roomId);
+      const timer = this.positionFlushTimers.get(roomId);
+      if (timer) {
+        clearInterval(timer);
+        this.positionFlushTimers.delete(roomId);
+      }
+      return;
+    }
+
+    // Serialize once, send raw string to all peers — bypasses broadcast() entirely
+    const data = JSON.stringify({ type: "players_moved", roomId, updates } satisfies ServerMsg);
+    for (const [pid] of room.players) {
+      const peerSess = this.sessions.get(pid);
+      if (!peerSess) continue;
+      for (const ws of peerSess.clients) {
+        if (ws.readyState === ws.OPEN) ws.send(data);
+      }
+    }
+  }
+
   async getOrCreate(user: AuthUser): Promise<UserSession> {
     const existing = this.sessions.get(user.id);
     if (existing) {
@@ -528,6 +595,10 @@ export class TenantManager {
     // not in their own office (HQ2, org rooms, or visiting another office).
     // Org room agents are broadcast by the shared org manager, not here.
     const AGENT_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "chat_cleared", "assembly", "emote", "agent_chat"]);
+    // Ephemeral high-frequency messages that should skip Redis pub/sub —
+    // they are delivered directly via forwardToRoomPeers or flushPositionBuffer.
+    // Redis would double-deliver (local + subscription callback) and add latency.
+    const SKIP_REDIS = new Set(["player_moved", "players_moved", "npc_state", "tile_updated", "player_appearance"]);
 
     const deliverLocal = (data: string) => {
       for (const ws of sess.clients) {
@@ -544,6 +615,15 @@ export class TenantManager {
         // Skip personal agent updates when user is not in their own office.
         // Org room agents are broadcast by the org manager directly to clients.
         if (AGENT_TYPES.has(msg.type) && sess.roomId !== sess.privateOfficeId) return;
+        // Ephemeral high-frequency messages skip Redis — delivered directly
+        // via forwardToRoomPeers or flushPositionBuffer to avoid double-delivery.
+        if (SKIP_REDIS.has(msg.type)) {
+          deliverLocal(data);
+          if (FORWARD_TYPES.has(msg.type)) {
+            this.forwardToRoomPeers(user.id, data);
+          }
+          return;
+        }
         deliverLocal(data);
         if (FORWARD_TYPES.has(msg.type)) {
           this.forwardToRoomPeers(user.id, data);

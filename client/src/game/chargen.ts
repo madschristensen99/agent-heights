@@ -274,17 +274,6 @@ class PixelSheet implements DrawSurface {
     }
   }
 
-  blurEdges(x: number, y: number, w: number, h: number, hex: string, a: number): void {
-    for (let xx = x; xx < x + w; xx++) {
-      this.setAlpha(xx, y, hex, a);
-      this.setAlpha(xx, y + h - 1, hex, a);
-    }
-    for (let yy = y; yy < y + h; yy++) {
-      this.setAlpha(x, yy, hex, a);
-      this.setAlpha(x + w - 1, yy, hex, a);
-    }
-  }
-
   toCanvas(): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = this.width;
@@ -451,24 +440,3 @@ export function generateCharPreviewDataURL(ap: CharAppearance, scale = 3): strin
   return canvas.toDataURL();
 }
 
-/**
- * Generate a full spritesheet data URL (for hire modal thumbnail-style preview).
- */
-export function generateCharSheetDataURL(ap: CharAppearance, scale = 1): string {
-  const pal = appearanceToPalette(ap);
-  const layers = buildCharSheets(pal);
-  const composite = document.createElement("canvas");
-  composite.width = CW * CHAR_FRAMES_PER_ROW;
-  composite.height = CH * DIRS.length;
-  const compCtx = composite.getContext("2d")!;
-  for (const layer of layers) compCtx.drawImage(layer.toCanvas(), 0, 0);
-  if (scale === 1) return composite.toDataURL();
-  const srcCanvas = composite;
-  const canvas = document.createElement("canvas");
-  canvas.width = srcCanvas.width * scale;
-  canvas.height = srcCanvas.height * scale;
-  const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(srcCanvas, 0, 0, srcCanvas.width, srcCanvas.height, 0, 0, srcCanvas.width * scale, srcCanvas.height * scale);
-  return canvas.toDataURL();
-}

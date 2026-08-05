@@ -6,8 +6,8 @@
  * IndexedDB before painting — if the blob exists, we load it as an image
  * and register it as a Phaser texture, skipping all canvas painting.
  *
- * Cache key: `${texKey}|ss${SS_FACTOR}` — includes supersample factor so
- * mobile (SS=1) and desktop (SS=2) caches don't collide.
+ * Cache key: `${texKey}|ss${SS_FACTOR}|tier${assetTier}` — includes supersample
+ * factor and asset tier so procedural and AI caches don't collide.
  */
 
 const DB_NAME = "agent-heights-chunks";
@@ -32,9 +32,9 @@ function getDB(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-/** Build the full cache key including supersample factor. */
-export function chunkCacheKey(texKey: string, ssFactor: number): string {
-  return `${texKey}|ss${ssFactor}`;
+/** Build the full cache key including supersample factor and asset tier. */
+export function chunkCacheKey(texKey: string, ssFactor: number, assetTier: string = "ai"): string {
+  return `${texKey}|ss${ssFactor}|tier${assetTier}`;
 }
 
 /** Store a canvas texture as a PNG blob in IndexedDB. Fire-and-forget. */
@@ -42,9 +42,10 @@ export async function saveChunkCanvas(
   texKey: string,
   ssFactor: number,
   canvas: HTMLCanvasElement,
+  assetTier: string = "ai",
 ): Promise<void> {
   try {
-    const key = chunkCacheKey(texKey, ssFactor);
+    const key = chunkCacheKey(texKey, ssFactor, assetTier);
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob((b) => resolve(b), "image/webp", 0.85),
     );
@@ -67,9 +68,10 @@ export async function saveChunkCanvas(
 export async function loadChunkCanvas(
   texKey: string,
   ssFactor: number,
+  assetTier: string = "ai",
 ): Promise<ImageBitmap | HTMLImageElement | null> {
   try {
-    const key = chunkCacheKey(texKey, ssFactor);
+    const key = chunkCacheKey(texKey, ssFactor, assetTier);
     const db = await getDB();
     const blob = await new Promise<Blob | undefined>((resolve) => {
       const tx = db.transaction(STORE_NAME, "readonly");
@@ -104,9 +106,10 @@ export async function loadChunkCanvas(
 export async function hasChunkCanvas(
   texKey: string,
   ssFactor: number,
+  assetTier: string = "ai",
 ): Promise<boolean> {
   try {
-    const key = chunkCacheKey(texKey, ssFactor);
+    const key = chunkCacheKey(texKey, ssFactor, assetTier);
     const db = await getDB();
     const count = await new Promise<number>((resolve) => {
       const tx = db.transaction(STORE_NAME, "readonly");
@@ -123,11 +126,11 @@ export async function hasChunkCanvas(
 /** Preload multiple chunk canvases from IndexedDB in parallel.
  *  Returns a map of texKey -> ImageBitmap/HTMLImageElement for hits. */
 export async function preloadChunkCanvases(
-  entries: { texKey: string; ssFactor: number }[],
+  entries: { texKey: string; ssFactor: number; assetTier?: string }[],
 ): Promise<Map<string, ImageBitmap | HTMLImageElement>> {
   const results = new Map<string, ImageBitmap | HTMLImageElement>();
-  const promises = entries.map(async ({ texKey, ssFactor }) => {
-    const img = await loadChunkCanvas(texKey, ssFactor);
+  const promises = entries.map(async ({ texKey, ssFactor, assetTier }) => {
+    const img = await loadChunkCanvas(texKey, ssFactor, assetTier);
     if (img) results.set(texKey, img);
   });
   await Promise.all(promises);
@@ -138,9 +141,10 @@ export async function preloadChunkCanvases(
 export async function removeChunkCanvas(
   texKey: string,
   ssFactor: number,
+  assetTier: string = "ai",
 ): Promise<void> {
   try {
-    const key = chunkCacheKey(texKey, ssFactor);
+    const key = chunkCacheKey(texKey, ssFactor, assetTier);
     const db = await getDB();
     await new Promise<void>((resolve) => {
       const tx = db.transaction(STORE_NAME, "readwrite");

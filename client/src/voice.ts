@@ -12,10 +12,12 @@ interface VoicePeer {
   userId: string;
   name: string;
   pc: RTCPeerConnection;
-  gainNode: GainNode;
-  analyser: AnalyserNode;
+  gainNode: GainNode | null;
+  analyser: AnalyserNode | null;
   connected: boolean;
   speaking: boolean;
+  remoteStream: MediaStream | null;
+  audioEl: HTMLAudioElement | null;
 }
 
 function getRtcConfig(): RTCConfiguration {
@@ -36,7 +38,7 @@ function getRtcConfig(): RTCConfiguration {
 
 function distanceToGain(dist: number, maxDist: number): number {
   const t = Math.max(0, 1 - dist / maxDist);
-  return t * t;
+  return t;
 }
 
 export class VoiceManager {
@@ -57,10 +59,17 @@ export class VoiceManager {
   private _lastGainLog = 0;
   private speakingData: Uint8Array<ArrayBuffer> | null = null;
   private rnnoiseLoaded = false;
+  private externalContext: AudioContext | null = null;
 
   constructor(myUserId: string, sendFn: (msg: ClientMsg) => void) {
     this.myUserId = myUserId;
     this.sendFn = sendFn;
+  }
+
+  /** Share an AudioContext from another system (e.g. AudioSystem) to avoid creating a second one. */
+  setExternalContext(ctx: AudioContext): void {
+    if (this.audioContext) return; // already have our own
+    this.externalContext = ctx;
   }
 
   get active(): boolean { return this._active; }
@@ -70,6 +79,10 @@ export class VoiceManager {
   get muted(): boolean { return this._micMuted; }
 
   private async ensureAudioContext(): Promise<AudioContext> {
+    // Use shared context from AudioSystem if available (avoids dual-context issues on iOS)
+    if (!this.audioContext && this.externalContext) {
+      this.audioContext = this.externalContext;
+    }
     if (!this.audioContext) {
       this.audioContext = new AudioContext({ sampleRate: 48000 });
     }
@@ -96,10 +109,48 @@ export class VoiceManager {
 
   async startListenOnly(): Promise<void> {
     if (this._listening || this._active) return;
-    await this.ensureAudioContext();
+    // Don't create AudioContext here — on mobile it will be suspended without
+    // a user gesture and MediaStreamSource nodes created while suspended won't
+    // produce audio even after resume. The AudioContext is created lazily in
+    // ensureAudioContext() which is called from start() (user gesture) or
+    // unlockAudio() (user gesture).
     this._listening = true;
     console.log("[voice] listen-only started, userId=", this.myUserId);
     this.sendFn({ type: "voice_listen" });
+  }
+
+  /**
+   * Unlock/resume the AudioContext within a user gesture.
+   * Creates the AudioContext if needed, resumes it, and wires up the Web Audio
+   * graph for any peers whose remote streams arrived before the context was
+   * available. Also explicitly plays any fallback <audio> elements.
+   */
+  async unlockAudio(): Promise<void> {
+    if (!this._listening && !this._active) return;
+    const ctx = await this.ensureAudioContext();
+    console.log("[voice] unlockAudio — context state:", ctx.state);
+    // Wire up any peers that have remote streams but no gain/analyser yet
+    for (const [userId, peer] of this.peers) {
+      if (!peer.gainNode || !peer.analyser) {
+        peer.gainNode = ctx.createGain();
+        peer.gainNode.gain.value = 0;
+        peer.analyser = ctx.createAnalyser();
+        peer.analyser.fftSize = 256;
+        peer.gainNode.connect(peer.analyser);
+        peer.analyser.connect(ctx.destination);
+        console.log("[voice] unlockAudio — created gain/analyser for peer", userId);
+      }
+      if (peer.remoteStream && peer.gainNode) {
+        // Create MediaStreamSource now that context is running
+        const source = ctx.createMediaStreamSource(peer.remoteStream);
+        source.connect(peer.gainNode);
+        console.log("[voice] unlockAudio — connected remote stream for peer", userId);
+      }
+      if (peer.audioEl) {
+        void peer.audioEl.play().catch(() => {});
+        console.log("[voice] unlockAudio — playing fallback audio for peer", userId);
+      }
+    }
   }
 
   stopListenOnly(): void {
@@ -188,6 +239,27 @@ export class VoiceManager {
     if (wasListening) {
       this.addMicTrackToExistingPeers();
     }
+
+    // Wire up any peers whose remote streams arrived before AudioContext was running
+    for (const [userId, peer] of this.peers) {
+      if (!peer.gainNode || !peer.analyser) {
+        peer.gainNode = ctx.createGain();
+        peer.gainNode.gain.value = 0;
+        peer.analyser = ctx.createAnalyser();
+        peer.analyser.fftSize = 256;
+        peer.gainNode.connect(peer.analyser);
+        peer.analyser.connect(ctx.destination);
+        console.log("[voice] start — created gain/analyser for peer", userId);
+      }
+      if (peer.remoteStream && peer.gainNode) {
+        const src = ctx.createMediaStreamSource(peer.remoteStream);
+        src.connect(peer.gainNode);
+        console.log("[voice] start — connected remote stream for peer", userId);
+      }
+      if (peer.audioEl) {
+        void peer.audioEl.play().catch(() => {});
+      }
+    }
   }
 
   private addMicTrackToExistingPeers(): void {
@@ -274,12 +346,21 @@ export class VoiceManager {
       return existing;
     }
     const pc = new RTCPeerConnection(getRtcConfig());
-    const gainNode = this.audioContext!.createGain();
-    gainNode.gain.value = 0;
-    const analyser = this.audioContext!.createAnalyser();
-    analyser.fftSize = 256;
-    gainNode.connect(analyser);
-    analyser.connect(this.audioContext!.destination);
+
+    // Create gain/analyser only if AudioContext is available and running
+    let gainNode: GainNode | null = null;
+    let analyser: AnalyserNode | null = null;
+    if (this.audioContext && this.audioContext.state === "running") {
+      gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 0;
+      analyser = this.audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      gainNode.connect(analyser);
+      analyser.connect(this.audioContext.destination);
+      console.log("[voice] created gain/analyser for peer", userId);
+    } else {
+      console.log("[voice] AudioContext not running — deferring gain/analyser for peer", userId, "ctxState=", this.audioContext?.state);
+    }
 
     // Add local mic track — use processed stream if available (RNNoise + filter), else raw mic
     const sendStream = this.processedStream ?? this.micStream;
@@ -301,24 +382,36 @@ export class VoiceManager {
         console.warn("[voice] no remote stream in ontrack");
         return;
       }
-      // Log track details for debugging
       const tracks = remoteStream.getAudioTracks();
       console.log("[voice] remote audio tracks:", tracks.length, tracks.map(t => `kind=${t.kind} enabled=${t.enabled} readyState=${t.readyState} muted=${t.muted}`));
-      // Ensure audioContext is running (may have been suspended by browser)
-      if (this.audioContext && this.audioContext.state === "suspended") {
-        void this.audioContext.resume();
+
+      // Store remote stream on peer for deferred wiring
+      const peer = this.peers.get(userId);
+      if (peer) peer.remoteStream = remoteStream;
+
+      // If AudioContext is running, wire up the Web Audio graph now
+      if (this.audioContext && this.audioContext.state === "running" && peer?.gainNode) {
+        const source = this.audioContext.createMediaStreamSource(remoteStream);
+        source.connect(peer.gainNode);
+        console.log("[voice] remote stream connected to gain node for", userId);
+      } else {
+        console.log("[voice] AudioContext not running — deferring Web Audio wiring for", userId);
       }
-      const source = this.audioContext!.createMediaStreamSource(remoteStream);
-      source.connect(gainNode);
-      console.log("[voice] remote stream connected to gain node for", userId);
+
       // Also create a hidden audio element as fallback — some browsers need this
-      // to actually decode/play the remote WebRTC audio stream.
+      // to keep the remote WebRTC stream decoded/alive, but we mute it so that
+      // actual audio output flows only through the gainNode (proximity volume).
       const audioEl = document.createElement("audio");
       audioEl.autoplay = true;
+      audioEl.muted = true;
       audioEl.srcObject = remoteStream;
       audioEl.style.display = "none";
       document.body.appendChild(audioEl);
-      console.log("[voice] created fallback audio element for", userId);
+      console.log("[voice] created muted fallback audio element for", userId);
+      void audioEl.play().catch((err) => {
+        console.warn("[voice] fallback audio play() rejected for", userId, err);
+      });
+      if (peer) peer.audioEl = audioEl;
     };
 
     // ICE candidates → relay to peer via server (send full candidate init)
@@ -345,7 +438,7 @@ export class VoiceManager {
       }
     };
 
-    const peer: VoicePeer = { userId, name, pc, gainNode, analyser, connected: false, speaking: false };
+    const peer: VoicePeer = { userId, name, pc, gainNode, analyser, connected: false, speaking: false, remoteStream: null, audioEl: null };
     this.peers.set(userId, peer);
     return peer;
   }
@@ -427,8 +520,10 @@ export class VoiceManager {
     const peer = this.peers.get(userId);
     if (!peer) return;
     peer.pc.close();
-    try { peer.gainNode.disconnect(); } catch {}
-    try { peer.analyser.disconnect(); } catch {}
+    if (peer.gainNode) { try { peer.gainNode.disconnect(); } catch {} }
+    if (peer.analyser) { try { peer.analyser.disconnect(); } catch {} }
+    if (peer.audioEl) { peer.audioEl.remove(); peer.audioEl = null; }
+    peer.remoteStream = null;
   }
 
   updateVolumes(myX: number, myY: number, players: Map<string, { x: number; y: number }>, isOutdoor: boolean): void {
@@ -437,9 +532,10 @@ export class VoiceManager {
     const shouldLog = now - this._lastGainLog > 1000;
     if (shouldLog) this._lastGainLog = now;
     for (const [userId, peer] of this.peers) {
+      if (!peer.gainNode) continue;
       const p = players.get(userId);
       if (!p) {
-        peer.gainNode.gain.value = 0;
+        peer.gainNode.gain.setTargetAtTime(0, this.audioContext!.currentTime, 0.1);
         if (shouldLog) console.log(`[voice] gain for ${userId}: 0 (not in roomPlayers)`);
         continue;
       }
@@ -447,8 +543,9 @@ export class VoiceManager {
       const dy = myY - p.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const gain = distanceToGain(dist, maxDist);
-      peer.gainNode.gain.value = this._outputMuted ? 0 : gain;
-      if (shouldLog) {
+      const targetGain = this._outputMuted ? 0 : gain;
+      peer.gainNode.gain.setTargetAtTime(targetGain, this.audioContext!.currentTime, 0.1);
+      if (shouldLog && peer.analyser) {
         // Check if remote audio data is actually flowing
         if (!this.speakingData) this.speakingData = new Uint8Array(new ArrayBuffer(256));
         peer.analyser.getByteFrequencyData(this.speakingData);
@@ -466,7 +563,7 @@ export class VoiceManager {
       this.speakingData = new Uint8Array(new ArrayBuffer(256));
     }
     for (const [userId, peer] of this.peers) {
-      if (!peer.connected) continue;
+      if (!peer.connected || !peer.analyser) continue;
       peer.analyser.getByteFrequencyData(this.speakingData);
       let sum = 0;
       for (let i = 0; i < this.speakingData.length; i++) {
