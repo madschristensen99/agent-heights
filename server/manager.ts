@@ -134,6 +134,19 @@ function isReworkTask(task: string): boolean {
   return /was reviewed by.*and needs revision/i.test(task);
 }
 
+/** Extract the true original task from a potentially nested rework task string.
+ *  Rework tasks wrap the original in: "Original task: "...". If that original
+ *  was itself a rework, recurse until we find the real root task. */
+function extractOriginalTask(task: string): string {
+  let current = task;
+  for (let i = 0; i < 5; i++) {
+    const match = current.match(/Original task:\s*"((?:[^"\\]|\\.)*)"/i);
+    if (!match) break;
+    current = match[1].replace(/\\"/g, '"');
+  }
+  return current;
+}
+
 /** Validate a 5-field cron expression and return a specific error message. */
 function validateCron(cron: string): { valid: boolean; error?: string } {
   const parts = cron.trim().split(/\s+/);
@@ -704,12 +717,15 @@ export class AgentManager {
     this.broadcast({ type: "agent", agent: info });
   }
 
-  /** Ensure the Wizard — the world-builder NPC — exists when WIZARD_GITHUB_PAT is set.
-   *  The Wizard has GitHub tools to read and modify files on the world's Git branch. */
+  /** Ensure the Wizard — the world-builder NPC — exists only in deployed world branches.
+   *  The Wizard has GitHub tools to read and modify files on the world's Git branch.
+   *  Only spawns when WIZARD_GITHUB_PAT is set AND the branch is not main/master
+   *  (the Wizard is a premium feature for world instances, not the generic HQ). */
   private ensureWizard(): void {
     const wizardPat = process.env.WIZARD_GITHUB_PAT;
     const wizardBranch = process.env.WIZARD_BRANCH ?? "main";
     if (!wizardPat) return;
+    if (wizardBranch === "main" || wizardBranch === "master") return;
 
     if (this.agents.has(WIZARD_ID)) {
       const rt = this.agents.get(WIZARD_ID)!;
@@ -1466,6 +1482,16 @@ export class AgentManager {
     if (!rt) return;
     const cleanTask = task.trim();
     if (!cleanTask) return;
+    // Wizard is a premium feature — require Pro or Business tier
+    if (agentId === WIZARD_ID && this.subscriptionTier !== "pro" && this.subscriptionTier !== "business") {
+      this.broadcast({
+        type: "payment_required",
+        reason: "subscription",
+        message: "The Wizard is a premium world-builder. Upgrade to the Pro plan ($4.99/mo) or higher to assign tasks to the Wizard.",
+        tier: this.subscriptionTier,
+      });
+      return;
+    }
 
     // Auto-create a board card if none was provided (makes every task visible on the board)
     const effectiveCardId = cardId ?? this.autoCardFor(agentId, cleanTask, reviewContext ? "review" : "task");
@@ -2719,7 +2745,7 @@ export class AgentManager {
       rosterLine,
       boardLine,
       stateLine,
-      `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
+      `You can message colleagues using post_message (specify their workspace folder name) and read your own messages with read_messages. If you're waiting for a colleague to respond, use wait_for_reply to pause for a while and check your inbox instead of calling read_messages repeatedly. Use the shared workspace tools (read_shared, write_shared, list_shared) for files multiple agents need to access.`,
       `You have a built-in browser! Use browse_url to navigate to any website, browser_screenshot to take a screenshot and visually inspect the page, browser_extract_text to read page content, browser_click to click elements, and browser_fill to fill input fields. When asked to look at, review, or test a website, use these tools.`,
       `=== API & TOOL BUDGET RULES (READ CAREFULLY) ===`,
       `You have a LIMITED number of tool calls per task. Wasting them on redundant API calls will cause your task to FAIL.`,
@@ -3042,6 +3068,7 @@ export class AgentManager {
             const isMcpTool = toolName.includes("__") || ![
               "read_files", "write_files", "list_files", "bash", "submit_and_exit",
               "read_shared", "write_shared", "list_shared", "post_message", "read_messages",
+              "wait_for_reply",
               "browse_url", "browser_screenshot", "browser_extract_text", "browser_click",
               "browser_fill", "read_board", "claim_card", "append_event",
               "create_schedule", "list_schedules", "update_schedule", "delete_schedule",
@@ -3401,12 +3428,12 @@ export class AgentManager {
     // Check for NEEDS REWORK first (APPROVED might appear in the body too)
     const reworkMatch = reviewText.match(/\bNEEDS?\s+REWORK\b[:\s]*([\s\S]*)/i);
     if (reworkMatch) {
-      const feedback = reworkMatch[1].trim().slice(0, 1000) || "No specific feedback provided.";
+      const feedback = reworkMatch[1].trim().slice(0, 500) || "No specific feedback provided.";
       target.reworkCount += 1;
       const reworkWarning = target.reworkCount >= MAX_REWORKS
         ? `\n\n⚠️ This is rework attempt #${target.reworkCount} — the maximum allowed. If this attempt fails, the task will be abandoned.`
         : `\n\n(Rework attempt #${target.reworkCount} of ${MAX_REWORKS}.)`;
-      const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${ctx.originalTask.slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.${reworkWarning}`;
+      const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${extractOriginalTask(ctx.originalTask).slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.${reworkWarning}`;
       this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback (rework #${target.reworkCount}).`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} requested rework from ${ctx.agentName}.` });
       // Discard any pending handoff — the rework will re-trigger it when complete
@@ -3646,6 +3673,16 @@ export class AgentManager {
     if (!rt) return;
     const clean = text.trim().slice(0, 2000);
     if (!clean) return;
+    // Wizard is a premium feature — require Pro or Business tier
+    if (agentId === WIZARD_ID && this.subscriptionTier !== "pro" && this.subscriptionTier !== "business") {
+      this.broadcast({
+        type: "payment_required",
+        reason: "subscription",
+        message: "The Wizard is a premium world-builder. Upgrade to the Pro plan ($4.99/mo) or higher to chat with the Wizard and shape your worlds.",
+        tier: this.subscriptionTier,
+      });
+      return;
+    }
     if (rt.info.status === "thinking" || rt.info.status === "working") {
       this.broadcast({ type: "toast", text: `${rt.info.name} is heads-down right now.` });
       return;

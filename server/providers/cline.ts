@@ -550,7 +550,41 @@ export async function makeTools(cwd: string, opts?: {
     },
   };
 
-  const baseWithMessaging = [...baseWithShared, postMessageTool, readMessagesTool];
+  const waitForReplyTool: AgentTool<any, any> = {
+    name: "wait_for_reply",
+    description: "Wait for a colleague's reply by sleeping for the specified seconds, then checking your inbox. Use this instead of calling read_messages repeatedly. Default wait is 30 seconds. If a message arrives during the wait, it will be returned immediately.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        seconds: { type: "number", description: "Seconds to wait before checking inbox (default: 30, max: 120)" },
+      },
+    },
+    async execute(input: any) {
+      const waitSec = Math.min(Math.max(Number(input.seconds) ?? 30, 5), 120);
+      const waitMs = waitSec * 1000;
+      const pollIntervalMs = 3000;
+      const deadline = Date.now() + waitMs;
+      while (Date.now() < deadline) {
+        try {
+          const content = await readFile(inboxPath, "utf-8");
+          if (content.trim()) {
+            const lines = content.trim().split("\n").filter(Boolean);
+            if (lines.length > 0) {
+              const messages = lines.map((line) => {
+                try { return JSON.parse(line); } catch { return null; }
+              }).filter(Boolean);
+              await unlink(inboxPath).catch(() => {});
+              return messages.map((m: any) => `[${new Date(m.ts).toISOString()}] From ${m.from}: ${m.message}`).join("\n");
+            }
+          }
+        } catch { /* inbox doesn't exist yet */ }
+        await new Promise((r) => setTimeout(r, Math.min(pollIntervalMs, deadline - Date.now())));
+      }
+      return `No reply received after waiting ${waitSec}s. Your inbox is still empty. You can continue with other work or try messaging the colleague again.`;
+    },
+  };
+
+  const baseWithMessaging = [...baseWithShared, postMessageTool, readMessagesTool, waitForReplyTool];
 
   // ── Task board tools (world awareness) ─────────────────────────────
   const boardTools: AgentTool<any, any>[] = [];

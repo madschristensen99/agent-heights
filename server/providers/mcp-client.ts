@@ -21,6 +21,11 @@ import type { AgentTool } from "@cline/sdk";
 
 const execFileAsync = promisify(execFile);
 
+/** Maximum characters of an MCP tool result to pass into conversation history.
+ *  ~50K chars ≈ 12.5K tokens — large enough for useful data, small enough to
+ *  avoid blowing the context window (262K token limit on most models). */
+const MAX_MCP_RESULT_CHARS = 50_000;
+
 // ── JSON-RPC types ──────────────────────────────────────────────────────
 
 interface JsonRpcRequest {
@@ -973,7 +978,10 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
                 return `[FUNDING ISSUE] ${result}\n\n⚠️ This API has a billing or funding problem. The office manager (Agent Resources) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
               }
 
-              return result || `(tool ${def.name} returned no output)`;
+              const truncatedResult = typeof result === "string" && result.length > MAX_MCP_RESULT_CHARS
+                ? result.slice(0, MAX_MCP_RESULT_CHARS) + `\n\n[... result truncated: ${result.length.toLocaleString()} chars total, showing first ${MAX_MCP_RESULT_CHARS.toLocaleString()} ...]`
+                : result;
+              return truncatedResult || `(tool ${def.name} returned no output)`;
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
 

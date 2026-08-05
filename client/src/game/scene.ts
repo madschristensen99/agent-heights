@@ -937,8 +937,8 @@ export class OfficeScene extends Phaser.Scene {
             );
           }
 
-          // Wizard — down-facing chair at the wizard's desk
-          if (this.wizardSeat) {
+          // Wizard — only present inside deployed worlds (premium world-builder NPC)
+          if (this.wizardSeat && this.store.currentWorld) {
             const wcx = this.wizardSeat.x * TILE_PX + TILE_PX / 2;
             const wcy = this.wizardSeat.y * TILE_PX + TILE_PX / 2;
             this.add
