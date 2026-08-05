@@ -1582,12 +1582,12 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // --- Cloud sprites (10 instances, world-space above the office) ---
-    const cloudCount = 10;
+    const cloudCount = 5;
     for (let i = 0; i < cloudCount; i++) {
       const cloudTex = `cloud-${i % 3}`;
       const x = Math.random() * 2000 - 1000;
       const y = -200 - Math.random() * 400;
-      const scale = 0.5 + Math.random() * 1.0;
+      const scale = (0.5 + Math.random() * 1.0) * 1.5;
       const baseAlpha = 0.4 + Math.random() * 0.35;
       const speed = 15 + Math.random() * 25;
       const phase = Math.random() * Math.PI * 2;
