@@ -2561,13 +2561,18 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:rgba(42,26,58,0.15);">
           <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">⚡ PREMIUM API SERVICES · ${priceLabel}</div>
           <div style="display:flex; flex-direction:column; gap:0.25rem;">
-            ${services.map((s) => {
-              const toolNames = s.tools.map((t) => t.name).join(", ");
-              return `<div style="display:flex; justify-content:space-between; align-items:center; padding:0.25rem 0.4rem; border:1px solid #2a1a3a; border-radius:0.3rem; background:rgba(18,13,26,0.5);">
-                <span style="font-size:0.7rem; color:#ccc;">${esc(s.name)}</span>
-                <span style="font-size:0.65rem; color:#b388ff; font-weight:600;">$${s.pricePerCall.toFixed(4)}/call</span>
-              </div>
-              ${toolNames ? `<div style="font-size:0.6rem; color:#555; margin:-0.15rem 0 0.2rem 0.5rem;">Tools: ${esc(toolNames)}</div>` : ""}`;
+            ${services.map((s, si) => {
+              const toolCount = s.tools.length;
+              return `<div style="padding:0.25rem 0.4rem; border:1px solid #2a1a3a; border-radius:0.3rem; background:rgba(18,13,26,0.5);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:0.7rem; color:#ccc;">${esc(s.name)}</span>
+                  <span style="font-size:0.65rem; color:#b388ff; font-weight:600;">$${s.pricePerCall.toFixed(4)}/call</span>
+                </div>
+                ${toolCount > 0 ? `<div id="hud-premium-toggle-${si}" style="font-size:0.6rem; color:#b388ff; margin-top:0.2rem; cursor:pointer; user-select:none;">▸ ${toolCount} endpoint${toolCount > 1 ? "s" : ""}</div>
+                <div id="hud-premium-tools-${si}" style="display:none; max-height:100px; overflow-y:auto; margin-top:0.2rem; padding:0.25rem 0.4rem; border:1px solid #2a1a3a; border-radius:0.25rem; background:rgba(13,10,20,0.6);">
+                  ${s.tools.map((t) => `<div style="font-size:0.58rem; color:#888; padding:0.08rem 0; border-bottom:1px solid #1a1525;">${esc(t.name)}</div>`).join("")}
+                </div>` : ""}
+              </div>`;
             }).join("")}
           </div>
           <div style="font-size:0.62rem; color:#666; margin-top:0.4rem; line-height:1.3;">
@@ -2575,6 +2580,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           </div>
         </div>
       `;
+      // Wire up endpoint toggles
+      services.forEach((_, si) => {
+        const toggle = premiumSection.querySelector(`#hud-premium-toggle-${si}`) as HTMLDivElement | null;
+        const toolsDiv = premiumSection.querySelector(`#hud-premium-tools-${si}`) as HTMLDivElement | null;
+        if (toggle && toolsDiv) {
+          toggle.addEventListener("click", () => {
+            const expanded = toolsDiv.style.display !== "none";
+            toolsDiv.style.display = expanded ? "none" : "block";
+            const label = toggle.textContent?.replace(/^[▾▸] /, "").trim() ?? "";
+            toggle.textContent = expanded ? `▸ ${label}` : `▾ ${label}`;
+          });
+        }
+      });
     } else {
       premiumSection.hidden = true;
       premiumSection.innerHTML = "";
