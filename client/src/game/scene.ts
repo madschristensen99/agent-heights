@@ -6998,14 +6998,23 @@ export class OfficeScene extends Phaser.Scene {
       const dx = targetPx.x - this.player.x;
       const dy = targetPx.y - this.player.y;
       const dist = Math.hypot(dx, dy);
-      // Check proximity to the first tile in path for advancement
-      const firstPx = this.playerPathOutdoor
-        ? this.world.worldTileToPixel(this.playerPath[0].x, this.playerPath[0].y)
-        : { x: this.playerPath[0].x * TILE_PX + TILE_PX / 2, y: this.playerPath[0].y * TILE_PX + TILE_PX / 2 };
-      const firstDist = Math.hypot(firstPx.x - this.player.x, firstPx.y - this.player.y);
-      if (firstDist < 14) {
-        // Reached this tile — advance to next
-        this.playerPath.shift();
+      // Check proximity to all tiles up to the look-ahead index for advancement.
+      // Only checking the first tile caused spinning: the player aims at the
+      // look-ahead tile (2 ahead) but may pass near tile 0 without getting
+      // within 14px, so the path never advanced and the player circled endlessly.
+      let advanceCount = 0;
+      for (let pi = 0; pi <= lookAheadIdx; pi++) {
+        const tp = this.playerPath[pi];
+        const tpx = this.playerPathOutdoor
+          ? this.world.worldTileToPixel(tp.x, tp.y)
+          : { x: tp.x * TILE_PX + TILE_PX / 2, y: tp.y * TILE_PX + TILE_PX / 2 };
+        if (Math.hypot(tpx.x - this.player.x, tpx.y - this.player.y) < 14) {
+          advanceCount = pi + 1;
+        }
+      }
+      if (advanceCount > 0) {
+        // Advance past all tiles we were close to
+        this.playerPath.splice(0, advanceCount);
         if (this.playerPath.length === 0) {
           // Path complete
           this.clearPathMarker();
@@ -7019,7 +7028,7 @@ export class OfficeScene extends Phaser.Scene {
             touchInput.action = "interact";
           }
         }
-      } else {
+      } else if (dist > 0) {
         vx = dx / dist;
         vy = dy / dist;
       }
