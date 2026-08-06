@@ -71,7 +71,7 @@ function dirFromVelocity(dx: number, dy: number): number {
  * overrides are re-applied on each loadChunk call.
  */
 const globalChunkCache = new Map<string, Chunk>();
-const MAX_CHUNKS_PER_FRAME = isLowEndDevice() ? 1 : 3; // load up to 3 chunks per frame
+const MAX_CHUNKS_PER_FRAME = 1; // load 1 chunk per frame — matching 1-chunk render limit
 
 /** State for a chunk being painted across multiple frames. */
 interface RenderJob {
@@ -2438,13 +2438,20 @@ export class WorldLayer {
     return job.currentRow >= CHUNK_SIZE;
   }
 
-  /** Paint all render jobs to completion (no time-slicing — chunks render in a single frame). */
+  /** Paint at most 1 render job per frame to avoid stalls. processRenderJobsNow flushes all. */
   private processRenderJobs(): void {
     if (this.renderingQueue.length === 0) return;
     const remaining: RenderJob[] = [];
+    let rendered = 0;
     for (const job of this.renderingQueue) {
       // Skip if texture was destroyed (chunk unloaded / scene restart) mid-render
       if (!this.scene.textures.exists(job.texKey)) continue;
+
+      // Only render 1 chunk per frame during gameplay
+      if (rendered >= 1) {
+        remaining.push(job);
+        continue;
+      }
 
       // Paint all rows for this chunk in one frame
       while (job.currentRow < CHUNK_SIZE) {
@@ -2464,6 +2471,7 @@ export class WorldLayer {
         const key = `${job.chunk.cx},${job.chunk.cy}`;
         this.chunkGraphics.set(key, job.container);
         this.chunkLights.set(key, job.chunkLightList);
+        rendered++;
 
         // Persist canvas to IndexedDB (deferred to idle callback to avoid main-thread jank)
         const canvasEl = job.canvasTex.getSourceImage() as HTMLCanvasElement;

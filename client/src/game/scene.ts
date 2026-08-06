@@ -1464,24 +1464,23 @@ export class OfficeScene extends Phaser.Scene {
           // Clean up loading overlay
           loadingOverlay.remove();
 
-          // Synchronously load chunks at the player's current position so tile
-          // data is ready immediately.  Canvas rendering happens via the
-          // time-sliced processRenderJobs() in the update loop — no main
-          // thread stall.  Also load the door chunk for when they're inside.
+          // Synchronously load ALL chunks at the player's current position so tile
+          // data and canvas textures are ready immediately.  This happens during
+          // the loading screen so the player starts with everything pre-rendered.
           const playerOutside = this.world.isOutside(this.player.x, this.player.y);
           if (playerOutside) {
             this.world.preloadChunksAt(this.player.x, this.player.y);
             const chunks = this.world.getChunksAt(this.player.x, this.player.y);
-            for (let i = 0; i < Math.min(3, chunks.length); i++) {
-              this.world.loadSingleChunk(chunks[i].cx, chunks[i].cy);
+            for (const c of chunks) {
+              this.world.loadSingleChunk(c.cx, c.cy);
             }
             this.world.processRenderJobsNow();
           } else {
             const doorChunks = this.world.getDoorChunkList();
-            for (let i = 0; i < Math.min(3, doorChunks.length); i++) {
-              this.world.loadSingleChunk(doorChunks[i].cx, doorChunks[i].cy);
+            for (const dc of doorChunks) {
+              this.world.loadSingleChunk(dc.cx, dc.cy);
             }
-            // Paint the door chunks synchronously so grass is visible
+            // Paint all door chunks synchronously so grass is visible
             // through the doorway immediately from inside the office.
             this.world.processRenderJobsNow();
           }
@@ -7375,7 +7374,9 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // ── Multiplayer: sync remote player sprites from store ──────────────
-    this.syncRemotePlayers();
+    if (this.store.roomPlayers.size > 1) {
+      this.syncRemotePlayers();
+    }
 
     // ── Voice chat: update per-peer volumes and speaking indicators ──────
     if (this.voice && (this.voice.active || this.voice.listening) && this.player) {

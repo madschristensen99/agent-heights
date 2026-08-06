@@ -103,11 +103,61 @@ function estimateTokens(messages: any[]): number {
   return Math.ceil(chars / 4);
 }
 
+/** Strip tool_result blocks whose tool_call_id has no matching tool_use, and strip
+ *  trailing tool_use blocks that have no matching tool_result. Prevents
+ *  "tool_call_id is not found" and incomplete-tool-use API errors. */
+function sanitizeMessages(messages: any[]): any[] {
+  // Collect all tool_use IDs present in the conversation
+  const toolUseIds = new Set<string>();
+  for (const msg of messages) {
+    if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === "tool_use" && part.id) toolUseIds.add(part.id);
+      }
+    }
+  }
+
+  // Strip orphaned tool_result blocks (no matching tool_use)
+  let sanitized = messages.map((msg: any) => {
+    if (msg.role !== "user" || !Array.isArray(msg.content)) return msg;
+    const hasOrphan = msg.content.some((p: any) => p.type === "tool_result" && p.tool_call_id && !toolUseIds.has(p.tool_call_id));
+    if (!hasOrphan) return msg;
+    const filtered = msg.content.filter((p: any) => !(p.type === "tool_result" && p.tool_call_id && !toolUseIds.has(p.tool_call_id)));
+    if (filtered.length === 0) return null;
+    return { ...msg, content: filtered };
+  }).filter((m: any) => m !== null);
+
+  // Strip trailing tool_use blocks with no matching tool_result
+  const toolResultIds = new Set<string>();
+  for (const msg of sanitized) {
+    if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === "tool_result" && part.tool_call_id) toolResultIds.add(part.tool_call_id);
+      }
+    }
+  }
+  if (sanitized.length > 0) {
+    const last = sanitized[sanitized.length - 1];
+    if (last.role === "assistant" && Array.isArray(last.content)) {
+      const hasUnmatched = last.content.some((p: any) => p.type === "tool_use" && p.id && !toolResultIds.has(p.id));
+      if (hasUnmatched) {
+        const filtered = last.content.filter((p: any) => !(p.type === "tool_use" && p.id && !toolResultIds.has(p.id)));
+        if (filtered.length === 0) {
+          sanitized = sanitized.slice(0, -1);
+        } else {
+          sanitized[sanitized.length - 1] = { ...last, content: filtered };
+        }
+      }
+    }
+  }
+  return sanitized;
+}
+
 /** Summarize older messages into a compact text block to save context window. */
 function compactMessages(messages: any[]): any[] {
-  if (messages.length <= MAX_MESSAGES && estimateTokens(messages) <= MAX_CONTEXT_CHARS) return messages;
+  if (messages.length <= MAX_MESSAGES && estimateTokens(messages) <= MAX_CONTEXT_CHARS) return sanitizeMessages(messages);
   const oldMessages = messages.slice(0, messages.length - KEEP_RECENT);
-  const recentMessages = messages.slice(messages.length - KEEP_RECENT);
+  const recentMessages = sanitizeMessages(messages.slice(messages.length - KEEP_RECENT));
 
   const summaryParts: string[] = [];
   for (const msg of oldMessages) {
@@ -134,7 +184,7 @@ function compactMessages(messages: any[]): any[] {
     content: [{ type: "text", text: `[Previous conversation summary — ${oldMessages.length} messages compacted]\n${summaryParts.join("\n")}` }],
   };
 
-  return [summaryMsg, ...recentMessages];
+  return sanitizeMessages([summaryMsg, ...recentMessages]);
 }
 
 export async function makeTools(cwd: string, opts?: {
@@ -1312,7 +1362,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         if (compacted.length !== stored.length) {
           console.log(`[cline:${agentId}] compacted ${stored.length} → ${compacted.length} messages`);
         }
-        agent.restore(compacted as any);
+        // Final safety pass: strip any orphaned tool_result/tool_use that survived compaction
+        const safe = sanitizeMessages(compacted);
+        if (safe.length !== compacted.length) {
+          console.log(`[cline:${agentId}] sanitized ${compacted.length} → ${safe.length} messages (stripped orphaned tool calls)`);
+        }
+        agent.restore(safe as any);
       }
 
       agents.set(agentId, agent);
@@ -1432,6 +1487,10 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.log(`[cline:${agentId}] runPromise rejected:`, errMsg);
+      // Clear the cached Agent instance — its internal conversation state may be
+      // corrupted (incomplete tool_use, orphaned tool_result).  Without this, the
+      // next task reuses the same instance and hits "tool_call_id is not found".
+      agents.delete(agentId);
       // Yield the error if we haven't already via run-failed event
       if (!queue.some(e => e.kind === "error")) {
         yield { kind: "error", text: truncate(errMsg, 300) };
