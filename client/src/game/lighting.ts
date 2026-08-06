@@ -121,9 +121,11 @@ export class LightingSystem {
     // remove post-pipelines so the GPU doesn't waste time on invisible effects.
     if (darknessFactor === 0) {
       if (this.pipelinesAttached) {
-        cam.removePostPipeline("BloomFX");
-        cam.removePostPipeline("ColorGrade");
-        cam.removePostPipeline("DOF");
+        try {
+          cam.removePostPipeline("BloomFX");
+          cam.removePostPipeline("ColorGrade");
+          cam.removePostPipeline("DOF");
+        } catch { /* pipelines may not exist on Canvas renderer / mobile */ }
         this.pipelinesAttached = false;
       }
       this.dayNightTint.setVisible(false);
@@ -135,9 +137,11 @@ export class LightingSystem {
 
     // Outside — re-attach post-pipelines if they were removed
     if (!this.pipelinesAttached) {
-      cam.setPostPipeline("BloomFX");
-      cam.setPostPipeline("ColorGrade");
-      cam.setPostPipeline("DOF");
+      try {
+        cam.setPostPipeline("BloomFX");
+        cam.setPostPipeline("ColorGrade");
+        cam.setPostPipeline("DOF");
+      } catch { /* pipelines may not exist on Canvas renderer / mobile */ }
       this.pipelinesAttached = true;
     }
 
