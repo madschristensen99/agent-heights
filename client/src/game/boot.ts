@@ -439,8 +439,9 @@ export class BootScene extends Phaser.Scene {
   }
 
   /** Unpack a texture atlas into individual Phaser image textures.
-   *  Uses addImage (not createCanvas) so WebGL mipmaps are generated,
-   *  preserving full detail at 4:1 minification (256px→64px tiles). */
+   *  Uses addImage for power-of-two textures (enables WebGL mipmaps for
+   *  sharp detail at 4:1 minification). Uses createCanvas for NPOT textures
+   *  (e.g. 64×96 character pieces) to avoid GL_INVALID_OPERATION mipmap errors. */
   private unpackAtlas(atlasKey: string, metaKey: string): void {
     if (!this.textures.exists(atlasKey)) return;
     const meta = this.cache.json.get(metaKey) as
@@ -455,7 +456,17 @@ export class BootScene extends Phaser.Scene {
       off.height = frame.h;
       const ctx = off.getContext("2d")!;
       ctx.drawImage(atlasImage, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
-      this.textures.addImage(texKey, off as unknown as HTMLImageElement);
+      const isPOT = (frame.w & (frame.w - 1)) === 0 && (frame.h & (frame.h - 1)) === 0;
+      if (isPOT) {
+        this.textures.addImage(texKey, off as unknown as HTMLImageElement);
+      } else {
+        const ct = this.textures.createCanvas(texKey, frame.w, frame.h);
+        if (ct) {
+          const cctx = ct.getContext();
+          cctx.drawImage(off, 0, 0);
+          ct.refresh();
+        }
+      }
     }
   }
 

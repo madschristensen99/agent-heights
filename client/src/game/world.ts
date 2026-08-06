@@ -1368,6 +1368,7 @@ export class WorldLayer {
   // --- Deferred IndexedDB saves ---
   private pendingSaves: { texKey: string; ss: number; canvas: HTMLCanvasElement; tier: string }[] = [];
   private saveTimerId: ReturnType<typeof setTimeout> | null = null;
+  private suppressSaves = false;
 
   private ghostDialog!: HintTag;
   private recruitedHint!: Phaser.GameObjects.Text;
@@ -1923,13 +1924,18 @@ export class WorldLayer {
     return this.renderingQueue.length > 0;
   }
 
-  /** Process all pending render jobs synchronously (flush, ignores time budget). */
+  /** Process all pending render jobs synchronously (flush, ignores time budget).
+   *  Suppresses IndexedDB saves — loading-screen chunks are in globalChunkCache
+   *  and don't need persistence (which would cause toBlob() jank during gameplay). */
   processRenderJobsNow(): void {
+    const prevSuppress = this.suppressSaves;
+    this.suppressSaves = true;
     while (this.renderingQueue.length > 0) {
       const prevLen = this.renderingQueue.length;
       this.processRenderJobs();
       if (this.renderingQueue.length === prevLen) break; // no progress — avoid infinite loop
     }
+    this.suppressSaves = prevSuppress;
   }
 
   /** Synchronously preload all chunks around the door exit. Call once after
@@ -2528,10 +2534,14 @@ export class WorldLayer {
         rendered++;
 
         // Queue canvas for deferred batch save to IndexedDB.
-        // Debounced by 5s so we don't trigger toBlob() during active gameplay.
-        const tier = this.worldTheme?.assets?.assetTier ?? "ai";
-        this.pendingSaves.push({ texKey: job.texKey, ss: job.SS, canvas: job.canvasTex.getSourceImage() as HTMLCanvasElement, tier });
-        this.scheduleSaveFlush();
+        // Skipped during loading screen (suppressSaves) — those chunks are
+        // in globalChunkCache and don't need persistence, which avoids
+        // toBlob() jank during the first ~15s of gameplay.
+        if (!this.suppressSaves) {
+          const tier = this.worldTheme?.assets?.assetTier ?? "ai";
+          this.pendingSaves.push({ texKey: job.texKey, ss: job.SS, canvas: job.canvasTex.getSourceImage() as HTMLCanvasElement, tier });
+          this.scheduleSaveFlush();
+        }
       } else {
         remaining.push(job);
       }
