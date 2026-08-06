@@ -1784,7 +1784,14 @@ export class WorldLayer {
         if (this.officeGrid?.ok(otx, oty)) continue;
         return false;
       }
-      if (!this.isTileWalkableLoaded(tx, ty)) return false;
+      if (!this.isTileWalkableLoaded(tx, ty)) {
+        // Chunk not loaded — request it from the worker (non-blocking) and
+        // be optimistic so the player isn't blocked while it generates.
+        const cx = Math.floor(tx / CHUNK_SIZE);
+        const cy = Math.floor(ty / CHUNK_SIZE);
+        this.requestChunk(cx, cy);
+        continue;
+      }
     }
     return true;
   }
