@@ -2441,7 +2441,7 @@ export class OfficeScene extends Phaser.Scene {
       if (tx < 0 || ty < 0 || tx >= this.grid.width || ty >= this.grid.height) {
         const wtx = Math.floor((p.x - this.world.offset.x) / TILE_PX);
         const wty = Math.floor((p.y - this.world.offset.y) / TILE_PX);
-        if (!this.world.isTileWalkable(wtx, wty)) return false;
+        if (!this.world.isTileWalkableLoaded(wtx, wty)) return false;
         continue;
       }
       return false;

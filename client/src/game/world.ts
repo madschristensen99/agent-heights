@@ -39,8 +39,8 @@ function isLowEndDevice(): boolean {
   return false;
 }
 
-/** Supersample factor: 1x on all devices (2048px chunk canvases, ~16MB each in GPU memory). */
-export const SS_FACTOR = 1;
+/** Supersample factor: 2x on desktop (128px tile resolution, sharp at zoom), 1x on mobile. */
+export const SS_FACTOR = isLowEndDevice() ? 1 : 2;
 
 // --- 3D creature spritesheet helpers ---
 // 3D sheets are 8 cols (S,SE,E,NE,N,NW,W,SW) × 4 rows (idle,walk1,walk2,attack) = 32 frames
@@ -59,9 +59,9 @@ function dirFromVelocity(dx: number, dy: number): number {
   return ((Math.round((Math.PI / 2 - Math.atan2(dy, dx)) / (Math.PI / 4)) % 8) + 8) % 8;
 }
 
-/** Chunk load radius: smaller on mobile to reduce memory and load time. */
-export const LOAD_RADIUS = isLowEndDevice() ? 1 : 2;
-const UNLOAD_RADIUS = LOAD_RADIUS + 1;
+/** Chunk load radius: 1 on all devices (3x3=9 chunks) to keep GPU memory bounded with SS_FACTOR=2. */
+export const LOAD_RADIUS = 1;
+const UNLOAD_RADIUS = LOAD_RADIUS + 2;
 
 /**
  * Global cache of generated chunk data, keyed by `${worldSeed}:${cx},${cy}`.
@@ -71,7 +71,7 @@ const UNLOAD_RADIUS = LOAD_RADIUS + 1;
  */
 const globalChunkCache = new Map<string, Chunk>();
 const MAX_CHUNKS_PER_FRAME = 1; // load 1 chunk per frame to avoid stacking render jobs
-const RENDER_ROW_BUDGET_MS = 8; // paint rows until this time budget is exceeded
+const RENDER_ROW_BUDGET_MS = 3; // paint rows until this time budget is exceeded
 
 /** State for a chunk being painted across multiple frames. */
 interface RenderJob {
@@ -1687,14 +1687,19 @@ export class WorldLayer {
   }
 
   /** Check if a world tile is walkable without generating chunks.
-   *  Returns false for unloaded chunks (safe default — caller just won't move there). */
+   *  Returns true (optimistic) for pending/worker-requested chunks to avoid invisible walls.
+   *  Only returns false for loaded chunks that are actually non-walkable, or tiles above the map. */
   isTileWalkableLoaded(worldTileX: number, worldTileY: number): boolean {
     if (worldTileY < 0) return false;
     const cx = Math.floor(worldTileX / CHUNK_SIZE);
     const cy = Math.floor(worldTileY / CHUNK_SIZE);
     const key = `${cx},${cy}`;
     const chunk = this.chunks.get(key);
-    if (!chunk) return false;
+    if (!chunk) {
+      // Chunk not loaded yet — if worker is generating it, be optimistic
+      if (this.pendingChunks.has(key) || this.workerRequested.has(key)) return true;
+      return false;
+    }
     const localX = ((worldTileX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((worldTileY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     return isWalkable(chunk.tiles[localY * CHUNK_SIZE + localX]);
@@ -1753,7 +1758,7 @@ export class WorldLayer {
     if (!this.isOutside(px, py)) return 1;
     const { tx, ty } = this.pixelToTile(px, py);
     if (ty < 0) return 1;
-    const tile = this.getTileAt(tx, ty);
+    const tile = this.getTileAtLoaded(tx, ty);
     if (tile < 0) return 1;
     return tileSpeed(tile);
   }
