@@ -39,12 +39,50 @@ async function buildMarketplaceAgentsSummary(): Promise<string> {
 async function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string): Promise<string> {
   const roster = agents
     .filter((a) => a.id !== "agent-resources")
-    .map((a) => `- ${a.name} (${a.model}, ${a.status}${a.task ? `, working on: ${a.task.slice(0, 60)}` : ""})`)
+    .map((a) => {
+      const skills = a.skills?.length ? ` [skills: ${a.skills.join(", ")}]` : "";
+      const caps = a.capabilities?.length ? ` [capabilities: ${a.capabilities.join(", ")}]` : "";
+      const perf = a.performanceBySkill && Object.keys(a.performanceBySkill).length > 0
+        ? ` [performance: ${Object.entries(a.performanceBySkill).map(([k, v]) => `${k}:${Math.round(v.successRate * 100)}%(${v.tasks})`).join(", ")}]`
+        : "";
+      return `- ${a.name} (${a.model}, ${a.status}${a.task ? `, working on: ${a.task.slice(0, 60)}` : ""})${skills}${caps}${perf}`;
+    })
     .join("\n") || "(no agents hired yet)";
 
   const cards = board.length > 0
-    ? board.map((c) => `- [${c.status}] ${c.title}${c.assignedAgentId ? ` (assigned)` : ""}`).join("\n")
+    ? board.map((c) => {
+        const phase = c.phase ? ` {${c.phase}}` : "";
+        const goal = c.parentGoalId ? ` →goal:${c.parentGoalId}` : "";
+        const deps = c.dependsOnCardIds?.length ? ` ⬅deps:${c.dependsOnCardIds.join(",")}` : "";
+        const due = c.dueDate ? ` ⏰${new Date(c.dueDate).toLocaleDateString()}` : "";
+        const est = c.estimatedMinutes ? ` ~${c.estimatedMinutes}min` : "";
+        return `- [${c.status}]${phase} ${c.title}${c.assignedAgentId ? ` (assigned)` : ""}${goal}${deps}${due}${est}`;
+      }).join("\n")
     : "(no task cards)";
+
+  // Capability gap analysis: extract required skills from active cards, compare against roster
+  const activeCards = board.filter((c) => c.status === "in_progress" || c.status === "backlog" || c.status === "review_pending");
+  const requiredSkills = new Set<string>();
+  for (const c of activeCards) {
+    if (c.category) requiredSkills.add(c.category);
+  }
+  const availableSkills = new Set<string>();
+  for (const a of agents) {
+    if (a.id === "agent-resources") continue;
+    a.skills?.forEach((s) => availableSkills.add(s));
+    a.capabilities?.forEach((c) => availableSkills.add(c));
+  }
+  const skillGaps = [...requiredSkills].filter((s) => !availableSkills.has(s));
+  const gapReport = skillGaps.length > 0
+    ? `\n### ⚠️ Capability Gaps Detected\nThe following skills are required by active tasks but no current agent has them:\n${skillGaps.map((s) => `- **${s}** — consider hiring an agent with this skill`).join("\n")}\n`
+    : "";
+
+  // Busy agent count for hiring urgency
+  const busyCount = agents.filter((a) => a.id !== "agent-resources" && (a.status === "thinking" || a.status === "working" || a.status === "waiting")).length;
+  const totalCount = agents.filter((a) => a.id !== "agent-resources").length;
+  const hiringUrgency = busyCount === totalCount && totalCount > 0
+    ? `\n### 🚨 Hiring Urgency\nAll ${totalCount} agents are currently busy. If there are pending tasks, consider hiring new talent using the hire_agent tool.\n`
+    : "";
 
   return `## Agent Heights Context
 
@@ -56,22 +94,29 @@ ${roster}
 
 ### Task Board
 ${cards}
-
+${gapReport}${hiringUrgency}
 ### About Agent Heights
 Agent Heights is a visual workspace where users hire AI agents (powered by Claude, GPT, etc.) to work on real coding tasks.
 Agents have individual workspaces, can be assigned tasks, collaborate via handoffs, and be organized with a task board.
 Users can browse the marketplace from inside Agent Heights and hire marketplace agents directly into their office.
 
 ### YOUR ROLE — Office Manager (IMPORTANT)
-You are Agent Resources, the office manager. You have three core responsibilities:
+You are Agent Resources, the office manager. You have four core responsibilities:
 
 1. **Answer questions directly.** When the user asks you a question, ANSWER IT DIRECTLY. Do NOT delegate research tasks to other agents. The user is talking to YOU because they want YOUR answer.
 
 2. **Decompose office goals.** When the boss gives the office a goal, you break it into subtasks for the team. You'll see the available workers in your task prompt. Respond with a JSON array of subtasks — each with a worker name, specific task, and optional dependency. The system will automatically assign them.
 
+   **Decomposition Rules (Graph Engineering Best Practices):**
+   - Only split work into parallel subtasks where the subtasks DON'T read each other's outputs.
+   - If a subtask needs another's result, mark it with dependsOn — it will be deferred until the prerequisite completes.
+   - For sequential work, assign to a single agent — don't fan out. Coordinated teams beat a single agent by ~80% on splittable work, but LOSE on sequential work (degrading 39-70%).
+   - After all parallel subtasks complete, you own the merge — synthesize results into one deliverable.
+   - For each subtask, you can optionally specify a "phase" (requirements, design, implementation, verification) to enforce V-model lifecycle gates.
+
 3. **Verify task completions.** When a worker completes or fails a task, you'll receive a review task. Review their work and respond with either APPROVED (if acceptable) or NEEDS REWORK: <specific feedback> (if they should retry). If a worker's task failed due to a rate limit, timeout, or API issue (not a quality problem), use NEEDS REWORK with "Retry the same task — the previous attempt failed due to a transient issue." Do NOT APPROVE a failed task unless you intentionally want to abandon it — a failed task means the work was NOT done, and approving it means accepting incomplete work.
 
-4. **Hire when understaffed.** If all workers are busy and there are pending tasks, you can use the hire_agent tool to bring in new talent. Pick a name, model, and brief system prompt for the new agent.
+4. **Hire when understaffed.** If all workers are busy and there are pending tasks, you can use the hire_agent tool to bring in new talent. Pick a name, model, and brief system prompt for the new agent. Check the capability gaps report above — if there are skill gaps, prioritize hiring agents with those missing skills.
 
 When the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.
 When the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.

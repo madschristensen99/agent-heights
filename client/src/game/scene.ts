@@ -112,6 +112,8 @@ export class OfficeScene extends Phaser.Scene {
   private doorTile: Tile = { x: 14, y: 17 };
   private boardTile: Tile = { x: 14, y: 2 };
   private boardHint!: HintTag;
+  private ganttTile: Tile = { x: 20, y: 2 };
+  private ganttHint!: HintTag;
   private coffeeTile: Tile = { x: 26, y: 2 };
   private coffeeUntil = 0;
   private coffeeHint!: HintTag;
@@ -123,6 +125,10 @@ export class OfficeScene extends Phaser.Scene {
   private projectorIframe: HTMLIFrameElement | null = null;
   private projectorVideoId: string | null = null;
   private projectorEmbedUrl: string | null = null;
+  /** Separate iframe for agent HTML broadcasts (interactive, unlike YouTube iframe). */
+  private projectorHtmlIframe: HTMLIFrameElement | null = null;
+  /** Agent whose HTML file is currently broadcasting (null = none). */
+  private agentBroadcastHtmlAgentId: string | null = null;
   private static readonly PROJECTOR_CHANNELS: { id: string; label: string; videoId?: string; embedUrl?: string }[] = [
     { id: "brainrot", label: "BRAINROT", videoId: "vTfD20dbxho" },
     { id: "chill",    label: "CHILL",    videoId: "hnsmzzQABBo" },
@@ -463,6 +469,25 @@ export class OfficeScene extends Phaser.Scene {
         }
       }
     });
+    this.store.onAgentBroadcastHtml((agentId, url) => {
+      this.agentBroadcastHtmlAgentId = agentId;
+      if (agentId && url) {
+        this.showProjectorHtmlIframe(url);
+      } else {
+        this.hideProjectorHtmlIframe();
+      }
+      // Update broadcast HTML button in file viewer if open
+      const htmlBtn = document.getElementById("av-fs-broadcast-html");
+      if (htmlBtn) {
+        if (agentId && agentId === this.agentViewAgentId) {
+          (htmlBtn as HTMLButtonElement).textContent = "Stop Broadcast";
+          (htmlBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5))";
+        } else {
+          (htmlBtn as HTMLButtonElement).textContent = "Broadcast to Screen";
+          (htmlBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, rgba(140,200,255,0.8), rgba(80,150,230,0.6))";
+        }
+      }
+    });
     this.events.once("shutdown", () => {
       this.closeAgentViewModal();
       if (this.mailboxConversation) {
@@ -470,6 +495,7 @@ export class OfficeScene extends Phaser.Scene {
         this.mailboxConversation = null;
       }
       this.hideProjectorAgentFrame();
+      this.hideProjectorHtmlIframe();
       this.closePortal();
       for (const overlay of this.monitorMatrixOverlays.values()) overlay.destroy();
       this.monitorMatrixOverlays.clear();
@@ -985,6 +1011,7 @@ export class OfficeScene extends Phaser.Scene {
 
           // --- task board on the front wall ---
           this.drawBoard();
+          this.drawGanttChart();
           this.drawProjector();
           this.drawPhoneBooth();
           this.drawScreenShareStation();
@@ -998,6 +1025,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawWardrobe();
           this.drawNemesisTerminal();
           this.boardHint = this.makeHint();
+          this.ganttHint = this.makeHint();
 
           this.coffeeHint = this.makeHint();
           this.fridgeHint = this.makeHint();
@@ -1026,7 +1054,7 @@ export class OfficeScene extends Phaser.Scene {
           this.phoneBoothHint = this.makeHint();
           this.screenShareHint = this.makeHint();
           this.allHints = [
-            this.boardHint, this.coffeeHint, this.fridgeHint, this.coolerHint,
+            this.boardHint, this.ganttHint, this.coffeeHint, this.fridgeHint, this.coolerHint,
             this.clockHint, this.vendingHint, this.sofaHint, this.filingHint,
             this.plantHint, this.mailboxHint, this.platformMailboxHint,
             this.redButtonHint, this.wardrobeHint, this.nemesisTerminalHint,
@@ -3796,6 +3824,12 @@ export class OfficeScene extends Phaser.Scene {
       add(this.boardHint, px.x, px.y, 160, "E: TASK BOARD", px.x, px.y + 64);
     }
 
+    // Gantt chart
+    if (!this.store.ganttOpen) {
+      const px = { x: this.ganttTile.x * TILE_PX + 32, y: this.ganttTile.y * TILE_PX + 52 };
+      add(this.ganttHint, px.x, px.y, 160, "E: GANTT CHART", px.x, px.y + 64);
+    }
+
     // Coffee
     {
       const px = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
@@ -5377,6 +5411,29 @@ export class OfficeScene extends Phaser.Scene {
       return;
     }
 
+    // HTML channel — hide YouTube iframe, reposition HTML iframe
+    if (channel === "html") {
+      if (this.projectorIframe) {
+        this.projectorIframe.src = "about:blank";
+        this.projectorIframe.style.display = "none";
+      }
+      this.projectorVideoId = null;
+      this.projectorEmbedUrl = null;
+      // Reposition HTML iframe over projector screen
+      if (this.projectorHtmlIframe && this.projectorHtmlIframe.style.display !== "none") {
+        const hpx = this.projectorTile.x * TILE_PX + 32;
+        const hpy = this.projectorTile.y * TILE_PX - 100;
+        const hsw = 480;
+        const hsh = 288;
+        const hrect = this.worldRectToScreen(hpx - hsw / 2, hpy - hsh / 2, hsw, hsh);
+        this.projectorHtmlIframe.style.left = `${hrect.x}px`;
+        this.projectorHtmlIframe.style.top = `${hrect.y}px`;
+        this.projectorHtmlIframe.style.width = `${hrect.w}px`;
+        this.projectorHtmlIframe.style.height = `${hrect.h}px`;
+      }
+      return;
+    }
+
     // Channel is off or unknown — stop video and hide iframe
     if (!videoId && !embedUrl) {
       if (this.projectorIframe) {
@@ -5386,6 +5443,7 @@ export class OfficeScene extends Phaser.Scene {
       this.projectorVideoId = null;
       this.projectorEmbedUrl = null;
       this.hideProjectorAgentFrame();
+      this.hideProjectorHtmlIframe();
       return;
     }
 
@@ -5533,6 +5591,96 @@ export class OfficeScene extends Phaser.Scene {
     boardZone.setDepth(3);
     boardZone.setInteractive({ useHandCursor: true });
     boardZone.on("pointerdown", () => this.store.toggleBoard(true));
+  }
+
+  /** Draw a simplified Gantt chart display on the front wall next to the task board. */
+  private drawGanttChart(): void {
+    const gx = this.ganttTile.x * TILE_PX + 32;
+    const gy = this.ganttTile.y * TILE_PX + 8;
+    const gw = 180;
+    const gh = 88;
+
+    const g = this.add.graphics().setDepth(3);
+    // outer frame — dark anodized aluminum (matching board style)
+    g.fillStyle(0x12121a, 1);
+    g.fillRoundedRect(gx - gw / 2 - 7, gy - 7, gw + 14, gh + 14, 8);
+    g.fillStyle(0x2a2a36, 1);
+    g.fillRoundedRect(gx - gw / 2 - 5, gy - 5, gw + 10, gh + 10, 6);
+    g.lineStyle(1, 0x4a4a56, 0.6);
+    g.strokeRoundedRect(gx - gw / 2 - 5, gy - 5, gw + 10, gh + 10, 6);
+    // inner display — dark screen
+    g.fillStyle(0x1a1a24, 1);
+    g.fillRoundedRect(gx - gw / 2, gy, gw, gh, 4);
+    // top highlight
+    g.fillStyle(0xffffff, 0.1);
+    g.fillRoundedRect(gx - gw / 2, gy, gw, 3, 4);
+
+    // title bar
+    g.fillStyle(0x3a8cd4, 0.8);
+    g.fillRect(gx - gw / 2 + 4, gy + 4, gw - 8, 12);
+    g.fillStyle(0xffffff, 0.9);
+    // simple "GANTT" text representation via small rectangles
+    const titleX = gx - gw / 2 + 8;
+    for (let i = 0; i < 5; i++) {
+      g.fillRect(titleX + i * 6, gy + 7, 4, 6);
+    }
+
+    // timeline grid lines (vertical)
+    const gridStart = gy + 20;
+    const gridEnd = gy + gh - 4;
+    const gridLeft = gx - gw / 2 + 8;
+    const gridRight = gx + gw / 2 - 8;
+    const gridW = gridRight - gridLeft;
+    g.lineStyle(1, 0x333344, 0.5);
+    for (let i = 0; i <= 6; i++) {
+      const x = gridLeft + (gridW / 6) * i;
+      g.lineBetween(x, gridStart, x, gridEnd);
+    }
+
+    // horizontal task bars (simplified — 4 rows)
+    const phaseColors = [0xa78bfa, 0xf9ca24, 0x4cb866, 0x3a8cd4];
+    const barH = 10;
+    const barGap = 4;
+    const barStartY = gridStart + 4;
+    for (let row = 0; row < 4; row++) {
+      const by = barStartY + row * (barH + barGap);
+      if (by + barH > gridEnd) break;
+      // each bar has different start position and width
+      const barStart = gridLeft + (gridW * (0.05 + row * 0.12));
+      const barWidth = gridW * (0.2 + row * 0.08);
+      // bar background (darker)
+      g.fillStyle(0x000000, 0.3);
+      g.fillRoundedRect(barStart + 1, by + 1, barWidth, barH, 2);
+      // bar fill (phase color)
+      g.fillStyle(phaseColors[row % phaseColors.length], 0.7);
+      g.fillRoundedRect(barStart, by, barWidth, barH, 2);
+      // top highlight
+      g.fillStyle(0xffffff, 0.15);
+      g.fillRoundedRect(barStart, by, barWidth, 2, 2);
+    }
+
+    // milestone diamond
+    const mx = gridLeft + gridW * 0.85;
+    const my = gridStart + 2;
+    g.fillStyle(0xe8a838, 0.9);
+    g.beginPath();
+    g.moveTo(mx, my);
+    g.lineTo(mx + 4, my + 4);
+    g.lineTo(mx, my + 8);
+    g.lineTo(mx - 4, my + 4);
+    g.closePath();
+    g.fillPath();
+
+    // now line
+    const nowX = gridLeft + gridW * 0.5;
+    g.lineStyle(1.5, 0xff6b6b, 0.7);
+    g.lineBetween(nowX, gridStart, nowX, gridEnd);
+
+    // Invisible interactive zone
+    const ganttZone = this.add.zone(gx, gy + gh / 2, gw + 14, gh + 14);
+    ganttZone.setDepth(3);
+    ganttZone.setInteractive({ useHandCursor: true });
+    ganttZone.on("pointerdown", () => this.store.toggleGantt(true));
   }
 
   /** Draw a trophy case on the wall — a wooden cabinet with empty cavities that fill with trophies. */
@@ -6989,6 +7137,17 @@ export class OfficeScene extends Phaser.Scene {
         if (boardDist < 160) {
           this.store.toggleBoard();
         } else {
+          // check the Gantt chart display
+          const ganttPx = { x: this.ganttTile.x * TILE_PX + 32, y: this.ganttTile.y * TILE_PX + 52 };
+          const ganttDist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            ganttPx.x,
+            ganttPx.y,
+          );
+          if (ganttDist < 160) {
+            this.store.toggleGantt();
+          } else {
           let best: { id: string; d: number } | null = null;
           for (const [id, npc] of this.npcs) {
             const d = Phaser.Math.Distance.Between(
@@ -7026,6 +7185,7 @@ export class OfficeScene extends Phaser.Scene {
             setTimeout(() => {
               (document.getElementById("d-chat") as HTMLInputElement | null)?.focus();
             }, 0);
+          }
           }
         }
       }
@@ -7630,6 +7790,7 @@ export class OfficeScene extends Phaser.Scene {
             <button id="av-fs-save" style="display:none;padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,220,120,0.7),rgba(60,180,80,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(20,100,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Save</button>
             <button id="av-fs-cancel-edit" style="display:none;padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Cancel</button>
             <button id="av-fs-download" style="padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,180,240,0.7),rgba(80,150,220,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(0,60,140,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">Download</button>
+            <button id="av-fs-broadcast-html" style="display:none;padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(140,200,255,0.8),rgba(80,150,230,0.6));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(0,60,140,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">Broadcast to Screen</button>
             <button id="av-fs-delete" style="padding:3px 12px;border:1px solid rgba(255,180,180,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,150,150,0.7),rgba(230,100,100,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(140,30,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Delete</button>
             <button id="av-fs-close-viewer" style="padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Back</button>
           </div>
@@ -7709,6 +7870,22 @@ export class OfficeScene extends Phaser.Scene {
           contentEl.style.color = "#1a3a5a";
         }
       }
+      // Show Broadcast to Screen button for HTML files
+      const broadcastHtmlBtn = document.getElementById("av-fs-broadcast-html");
+      if (broadcastHtmlBtn) {
+        if (path.endsWith(".html") || path.endsWith(".htm")) {
+          broadcastHtmlBtn.style.display = "inline-block";
+          if (this.agentBroadcastHtmlAgentId === agentId) {
+            broadcastHtmlBtn.textContent = "Stop Broadcast";
+            (broadcastHtmlBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5))";
+          } else {
+            broadcastHtmlBtn.textContent = "Broadcast to Screen";
+            (broadcastHtmlBtn as HTMLButtonElement).style.background = "linear-gradient(to bottom, rgba(140,200,255,0.8), rgba(80,150,230,0.6))";
+          }
+        } else {
+          broadcastHtmlBtn.style.display = "none";
+        }
+      }
     };
     this.store.onAgentFsContent(onContent);
     this.agentViewCleanup.push(() => this.store.offAgentFsContent(onContent));
@@ -7772,6 +7949,22 @@ export class OfficeScene extends Phaser.Scene {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+    });
+
+    // Wire Broadcast to Screen button for HTML files
+    document.getElementById("av-fs-broadcast-html")?.addEventListener("click", () => {
+      if (!this.agentFsCurrentFile) return;
+      const btn = document.getElementById("av-fs-broadcast-html") as HTMLButtonElement | null;
+      if (!btn) return;
+      if (this.agentBroadcastHtmlAgentId === agentId) {
+        if (this.net) this.net.send({ type: "agent_broadcast_stop" });
+        btn.textContent = "Broadcast to Screen";
+        btn.style.background = "linear-gradient(to bottom, rgba(140,200,255,0.8), rgba(80,150,230,0.6))";
+      } else {
+        if (this.net) this.net.send({ type: "agent_broadcast_html", agentId, filePath: this.agentFsCurrentFile });
+        btn.textContent = "Stop Broadcast";
+        btn.style.background = "linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5))";
+      }
     });
 
     document.getElementById("av-fs-delete")?.addEventListener("click", () => {
@@ -8428,8 +8621,9 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Render an agent screenshot frame onto the projector canvas. */
   private updateProjectorAgentFrame(frame: string): void {
-    // Hide YouTube iframe if visible
+    // Hide YouTube iframe and HTML iframe if visible
     if (this.projectorIframe) this.projectorIframe.style.display = "none";
+    this.hideProjectorHtmlIframe();
 
     const img = new Image();
     img.onload = () => {
@@ -8466,6 +8660,55 @@ export class OfficeScene extends Phaser.Scene {
   /** Hide the agent frame on the projector. */
   private hideProjectorAgentFrame(): void {
     if (this.projectorAgentImage) this.projectorAgentImage.setVisible(false);
+  }
+
+  /** Show an agent's HTML file on the projector as an interactive iframe. */
+  private showProjectorHtmlIframe(relativePath: string): void {
+    // Hide YouTube iframe and agent canvas frame
+    if (this.projectorIframe) this.projectorIframe.style.display = "none";
+    this.hideProjectorAgentFrame();
+
+    // Build full URL with auth token
+    const token = getToken();
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+    const fullUrl = `${window.location.origin}${relativePath}${tokenParam}`;
+
+    if (!this.projectorHtmlIframe) {
+      this.projectorHtmlIframe = document.createElement("iframe");
+      this.projectorHtmlIframe.style.cssText = `
+        position: fixed;
+        border: none;
+        pointer-events: auto;
+        z-index: 50;
+        border-radius: 3px;
+        display: none;
+      `;
+      this.projectorHtmlIframe.setAttribute("frameborder", "0");
+      this.projectorHtmlIframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+      document.body.appendChild(this.projectorHtmlIframe);
+    }
+
+    this.projectorHtmlIframe.src = fullUrl;
+
+    // Position over the projector screen
+    const px = this.projectorTile.x * TILE_PX + 32;
+    const py = this.projectorTile.y * TILE_PX - 100;
+    const sw = 480;
+    const sh = 288;
+    const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
+    this.projectorHtmlIframe.style.left = `${rect.x}px`;
+    this.projectorHtmlIframe.style.top = `${rect.y}px`;
+    this.projectorHtmlIframe.style.width = `${rect.w}px`;
+    this.projectorHtmlIframe.style.height = `${rect.h}px`;
+    this.projectorHtmlIframe.style.display = "block";
+  }
+
+  /** Hide the agent HTML iframe on the projector. */
+  private hideProjectorHtmlIframe(): void {
+    if (this.projectorHtmlIframe) {
+      this.projectorHtmlIframe.src = "about:blank";
+      this.projectorHtmlIframe.style.display = "none";
+    }
   }
 
   // ── Phone booth + webcam/screen share video overlay ──────────────────

@@ -1,6 +1,6 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
-import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, CharAppearance, MCPServerConfig, PersonalityTraits, AgentInfo } from "../../../shared/types";
+import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, TaskPhase, CharAppearance, MCPServerConfig, PersonalityTraits, AgentInfo } from "../../../shared/types";
 import { AGENT_MODELS, OFFICE_THEMES, AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
@@ -326,8 +326,40 @@ export class Hud {
           <button class="btn primary" id="board-add-btn">+ ADD CARD</button>
         </div>
       </div>
+      <div class="gantt-panel" id="gantt-panel" hidden>
+        <div class="panel-title" id="gantt-titlebar">
+          <span>GANTT CHART</span>
+          <button class="x" id="gantt-close">✕</button>
+        </div>
+        <div class="gantt-legend">
+          <span class="gantt-leg phase-requirements">Requirements</span>
+          <span class="gantt-leg phase-design">Design</span>
+          <span class="gantt-leg phase-implementation">Implementation</span>
+          <span class="gantt-leg phase-verification">Verification</span>
+          <span class="gantt-leg phase-done">Done</span>
+          <span class="gantt-leg gantt-milestone-leg">◆ Milestone</span>
+          <span class="gantt-leg gantt-critical-leg">━ Critical Path</span>
+        </div>
+        <div class="gantt-timeline" id="gantt-timeline"></div>
+      </div>
+      <div class="vmodel-panel" id="vmodel-panel" hidden>
+        <div class="panel-title" id="vmodel-titlebar">
+          <span>V-MODEL LIFECYCLE</span>
+          <button class="x" id="vmodel-close">✕</button>
+        </div>
+        <div class="vmodel-legend">
+          <span class="vmodel-leg phase-requirements">Requirements</span>
+          <span class="vmodel-leg phase-design">Design</span>
+          <span class="vmodel-leg phase-implementation">Implementation</span>
+          <span class="vmodel-leg phase-verification">Verification</span>
+          <span class="vmodel-leg phase-done">Done</span>
+          <span class="vmodel-leg vmodel-gate-passed">✓ Gate Passed</span>
+          <span class="vmodel-leg vmodel-gate-blocked">⊘ Gate Blocked</span>
+        </div>
+        <div class="vmodel-diagram" id="vmodel-diagram"></div>
+      </div>
       <div class="toasts" id="toasts"></div>
-      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · V voice · click an agent · ESC close · scroll to zoom</div>
+      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · G gantt · N v-model · V voice · click an agent · ESC close · scroll to zoom</div>
       <div class="hint touch">Tap an agent to talk · Tap objects to interact · Pinch to zoom · 2-finger drag to pan</div>
       <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
       <div class="mobile-panel-toggles">
@@ -438,6 +470,8 @@ export class Hud {
     this.bindDetail();
     this.bindFeed();
     this.bindBoard();
+    this.bindGantt();
+    this.bindVModel();
     this.bindHallOfFame();
     this.bindRailwayPanel();
     this.bindGitHubPanel();
@@ -825,6 +859,14 @@ export class Hud {
         case "b":
           e.preventDefault();
           this.store.toggleBoard();
+          break;
+        case "g":
+          e.preventDefault();
+          this.store.toggleGantt();
+          break;
+        case "n":
+          e.preventDefault();
+          this.store.toggleVModel();
           break;
         case ",":
           e.preventDefault();
@@ -1608,6 +1650,8 @@ export class Hud {
           </div>
           <div class="row">
             <button class="btn" id="s-board">📋 TASK BOARD</button>
+            <button class="btn" id="s-gantt">📊 GANTT CHART</button>
+            <button class="btn" id="s-vmodel">🔬 V-MODEL</button>
           </div>
           <div class="row">
             <button class="btn" id="s-quick-cline">⚡ INSTANT AGENT</button>
@@ -1620,6 +1664,8 @@ export class Hud {
             <div><kbd>H</kbd><span>hire an agent</span></div>
             <div><kbd>F</kbd><span>open / close the office feed</span></div>
             <div><kbd>B</kbd><span>open / close the task board</span></div>
+            <div><kbd>G</kbd><span>open / close the Gantt chart</span></div>
+            <div><kbd>N</kbd><span>open / close the V-model diagram</span></div>
             <div><kbd>,</kbd><span>open settings</span></div>
             <div><kbd>P</kbd><span>show FPS overlay</span></div>
             <div><kbd>ESC</kbd><span>close panels &amp; modals</span></div>
@@ -1674,6 +1720,16 @@ export class Hud {
     });
     document.getElementById("s-board")!.addEventListener("click", () => {
       this.store.toggleBoard();
+      modal.hidden = true;
+    });
+    const sGantt = document.getElementById("s-gantt");
+    if (sGantt) sGantt.addEventListener("click", () => {
+      this.store.toggleGantt();
+      modal.hidden = true;
+    });
+    const sVModel = document.getElementById("s-vmodel");
+    if (sVModel) sVModel.addEventListener("click", () => {
+      this.store.toggleVModel();
       modal.hidden = true;
     });
     document.getElementById("s-quick-cline")!.addEventListener("click", () => {
@@ -2322,6 +2378,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     this.renderDetail();
     this.renderFeed();
     this.renderBoard();
+    this.renderGantt();
+    this.renderVModel();
     this.renderAchievements();
     this.renderHallOfFame();
     this.renderRailwayPanel();
@@ -3620,12 +3678,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (sig === this.lastBoardSig) return;
     this.lastBoardSig = sig;
 
-    const cols: Record<CardStatus, TaskCard[]> = { backlog: [], in_progress: [], done: [], paused: [] };
+    const cols: Record<CardStatus, TaskCard[]> = { backlog: [], in_progress: [], review_pending: [], done: [], paused: [] };
     for (const c of cards) cols[c.status].push(c);
 
     const colLabels: Record<CardStatus, string> = {
       backlog: "BACKLOG",
       in_progress: "IN PROGRESS",
+      review_pending: "REVIEW",
       done: "DONE",
       paused: "PAUSED",
     };
@@ -3654,7 +3713,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const moveBtns = c.status === "done"
         ? `<button class="btn mini" data-move="${c.id}" data-status="backlog">↩ BACKLOG</button>`
         : c.status === "in_progress"
-          ? `<button class="btn mini" data-move="${c.id}" data-status="done">✓ DONE</button>`
+          ? `<button class="btn mini" data-move="${c.id}" data-status="review_pending">🔍 REVIEW</button>`
+          : c.status === "review_pending"
+            ? `<button class="btn mini" data-move="${c.id}" data-status="done">✓ DONE</button><button class="btn mini" data-move="${c.id}" data-status="in_progress">↩ REWORK</button>`
         : c.status === "paused"
           ? `<button class="btn mini" data-move="${c.id}" data-status="backlog">▶ RESUME</button>`
           : "";
@@ -3692,7 +3753,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       </div>`;
 
     document.getElementById("board-columns")!.innerHTML =
-      (["backlog", "in_progress", "done", "paused"] as CardStatus[]).map(colHtml).join("");
+      (["backlog", "in_progress", "review_pending", "done", "paused"] as CardStatus[]).map(colHtml).join("");
 
     // wire up card interactions
     document.querySelectorAll<HTMLElement>("[data-assign]").forEach((el) => {
@@ -3712,6 +3773,291 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         this.net.send({ type: "delete_card", cardId: el.dataset.delete! });
       });
     });
+  }
+
+  private bindGantt(): void {
+    document.getElementById("gantt-close")!.addEventListener("click", () => this.store.toggleGantt(false));
+  }
+
+  private lastGanttSig = "";
+
+  private renderGantt(): void {
+    const panel = document.getElementById("gantt-panel")!;
+    panel.hidden = !this.store.ganttOpen;
+    if (!this.store.ganttOpen) return;
+
+    const cards = [...this.store.board.values()].sort((a, b) => a.createdAt - b.createdAt);
+    const agents = [...this.store.agents.values()].filter(
+      (a) => a.id !== AGENT_RESOURCES_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
+    );
+    const deps = this.store.cardDependencies;
+
+    // signature for change detection
+    const sig =
+      this.store.ganttOpen + "|" +
+      cards.map((c) => c.id + c.status + c.phase + c.assignedAgentId + c.startedAt + c.dueDate + c.estimatedMinutes + c.parentGoalId).join(",") + "|" +
+      agents.map((a) => a.id + a.name + a.status).join(",") + "|" +
+      deps.map((d) => d.from + d.to + d.type).join(",");
+    if (sig === this.lastGanttSig) return;
+    this.lastGanttSig = sig;
+
+    const now = Date.now();
+    // Time range: from earliest startedAt (or now) to latest dueDate (or now + 24h)
+    let minTime = now;
+    let maxTime = now + 24 * 60 * 60 * 1000; // default 24h ahead
+    for (const c of cards) {
+      if (c.startedAt) minTime = Math.min(minTime, c.startedAt);
+      if (c.dueDate) maxTime = Math.max(maxTime, c.dueDate);
+      if (c.startedAt && c.estimatedMinutes) {
+        maxTime = Math.max(maxTime, c.startedAt + c.estimatedMinutes * 60 * 1000);
+      }
+    }
+    const span = Math.max(maxTime - minTime, 60 * 60 * 1000); // min 1h span
+    const PX_PER_MS = 0.08; // ~288px per hour
+    const timelineWidth = Math.max(span * PX_PER_MS, 600);
+
+    // Time axis labels (hourly)
+    const hourStep = span < 6 * 60 * 60 * 1000 ? 1 : span < 24 * 60 * 60 * 1000 ? 2 : 6;
+    const timeMarks: string[] = [];
+    for (let t = Math.floor(minTime / (hourStep * 60 * 60 * 1000)) * (hourStep * 60 * 60 * 1000); t <= maxTime; t += hourStep * 60 * 60 * 1000) {
+      const d = new Date(t);
+      const label = d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
+      const x = ((t - minTime) / span) * timelineWidth;
+      timeMarks.push(`<div class="gantt-time-mark" style="left:${x}px">${label}</div>`);
+    }
+
+    // Build a set of card IDs on the critical path (from office state graph, approximated by longest dependency chain)
+    const criticalPath = new Set<string>();
+    const visited = new Set<string>();
+    const findLongestChain = (cardId: string, chain: string[]): void => {
+      if (visited.has(cardId)) return;
+      visited.add(cardId);
+      const currentChain = [...chain, cardId];
+      // Check if any card depends on this one
+      const dependents = deps.filter((d) => d.from === cardId && d.type === "depends_on");
+      if (dependents.length === 0) {
+        if (currentChain.length > criticalPath.size) {
+          criticalPath.clear();
+          currentChain.forEach((id) => criticalPath.add(id));
+        }
+      } else {
+        for (const dep of dependents) {
+          findLongestChain(dep.to, currentChain);
+        }
+      }
+    };
+    // Find roots (cards that nothing depends on... actually find cards with no dependencies)
+    const hasDependency = new Set(deps.filter((d) => d.type === "depends_on").map((d) => d.to));
+    for (const c of cards) {
+      if (!hasDependency.has(c.id)) {
+        visited.clear();
+        findLongestChain(c.id, []);
+      }
+    }
+
+    // Goal cards as milestones
+    const goalCards = cards.filter((c) => c.type === "goal");
+
+    // Agent rows
+    const agentRows = agents.map((agent) => {
+      const agentCards = cards.filter((c) => c.assignedAgentId === agent.id && c.type !== "goal" && c.type !== "chat");
+      const bars = agentCards.map((c) => {
+        const start = c.startedAt ?? now;
+        const duration = (c.estimatedMinutes ?? 30) * 60 * 1000;
+        const end = c.dueDate ?? start + duration;
+        const x = ((start - minTime) / span) * timelineWidth;
+        const w = Math.max(((end - start) / span) * timelineWidth, 20);
+        const phase = c.phase ?? "implementation";
+        const isCritical = criticalPath.has(c.id);
+        const phaseClass = `phase-${phase}`;
+        const criticalClass = isCritical ? " gantt-critical" : "";
+        const title = esc(c.title.slice(0, 40));
+        return `<div class="gantt-bar ${phaseClass}${criticalClass}" style="left:${x}px;width:${w}px" title="${esc(c.title)}">${title}</div>`;
+      }).join("");
+      return `<div class="gantt-row"><div class="gantt-row-label">${esc(agent.name)}</div><div class="gantt-row-track" style="width:${timelineWidth}px">${bars}</div></div>`;
+    }).join("");
+
+    // Unassigned cards row
+    const unassignedCards = cards.filter((c) => !c.assignedAgentId && c.type !== "goal" && c.type !== "chat" && c.status !== "done");
+    const unassignedBars = unassignedCards.map((c) => {
+      const start = c.startedAt ?? c.createdAt;
+      const duration = (c.estimatedMinutes ?? 30) * 60 * 1000;
+      const end = c.dueDate ?? start + duration;
+      const x = ((start - minTime) / span) * timelineWidth;
+      const w = Math.max(((end - start) / span) * timelineWidth, 20);
+      const phase = c.phase ?? "implementation";
+      const title = esc(c.title.slice(0, 40));
+      return `<div class="gantt-bar phase-${phase} gantt-unassigned" style="left:${x}px;width:${w}px" title="${esc(c.title)}">${title}</div>`;
+    }).join("");
+    const unassignedRow = unassignedCards.length > 0
+      ? `<div class="gantt-row"><div class="gantt-row-label">Unassigned</div><div class="gantt-row-track" style="width:${timelineWidth}px">${unassignedBars}</div></div>`
+      : "";
+
+    // Milestones (goal cards)
+    const milestones = goalCards.map((c) => {
+      const x = c.dueDate ? ((c.dueDate - minTime) / span) * timelineWidth : ((c.createdAt - minTime) / span) * timelineWidth;
+      return `<div class="gantt-milestone" style="left:${x}px" title="${esc(c.title)}">◆</div>`;
+    }).join("");
+    const milestoneRow = goalCards.length > 0
+      ? `<div class="gantt-row gantt-milestone-row"><div class="gantt-row-label">Milestones</div><div class="gantt-row-track" style="width:${timelineWidth}px">${milestones}</div></div>`
+      : "";
+
+    // Now line
+    const nowX = ((now - minTime) / span) * timelineWidth;
+
+    // Dependency arrows (SVG overlay)
+    const cardPositions = new Map<string, { x: number; y: number; w: number }>();
+    let rowIdx = 0;
+    for (const agent of agents) {
+      for (const c of cards.filter((c) => c.assignedAgentId === agent.id && c.type !== "goal" && c.type !== "chat")) {
+        const start = c.startedAt ?? now;
+        const duration = (c.estimatedMinutes ?? 30) * 60 * 1000;
+        const end = c.dueDate ?? start + duration;
+        const x = ((start - minTime) / span) * timelineWidth;
+        const w = Math.max(((end - start) / span) * timelineWidth, 20);
+        cardPositions.set(c.id, { x: x + w, y: rowIdx * 36 + 18, w });
+      }
+      rowIdx++;
+    }
+    if (unassignedCards.length > 0) {
+      for (const c of unassignedCards) {
+        const start = c.startedAt ?? c.createdAt;
+        const duration = (c.estimatedMinutes ?? 30) * 60 * 1000;
+        const end = c.dueDate ?? start + duration;
+        const x = ((start - minTime) / span) * timelineWidth;
+        const w = Math.max(((end - start) / span) * timelineWidth, 20);
+        cardPositions.set(c.id, { x: x + w, y: rowIdx * 36 + 18, w });
+      }
+      rowIdx++;
+    }
+
+    const arrows = deps.filter((d) => d.type === "depends_on").map((d) => {
+      const from = cardPositions.get(d.from);
+      const to = cardPositions.get(d.to);
+      if (!from || !to) return "";
+      const x1 = from.x;
+      const y1 = from.y;
+      const x2 = to.x - to.w;
+      const y2 = to.y;
+      const midX = (x1 + x2) / 2;
+      return `<path d="M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}" class="gantt-dep-arrow" />`;
+    }).join("");
+    const arrowOverlay = arrows ? `<svg class="gantt-dep-overlay" style="width:${timelineWidth}px;height:${rowIdx * 36 + 40}px">${arrows}</svg>` : "";
+
+    const html = `
+      <div class="gantt-axis" style="width:${timelineWidth}px">
+        ${timeMarks.join("")}
+        <div class="gantt-now-line" style="left:${nowX}px">NOW</div>
+      </div>
+      <div class="gantt-rows-container">
+        <div class="gantt-rows">
+          ${agentRows}
+          ${unassignedRow}
+          ${milestoneRow}
+        </div>
+        ${arrowOverlay}
+      </div>`;
+
+    document.getElementById("gantt-timeline")!.innerHTML = html;
+  }
+
+  private bindVModel(): void {
+    document.getElementById("vmodel-close")!.addEventListener("click", () => this.store.toggleVModel(false));
+  }
+
+  private lastVModelSig = "";
+
+  private renderVModel(): void {
+    const panel = document.getElementById("vmodel-panel")!;
+    panel.hidden = !this.store.vmodelOpen;
+    if (!this.store.vmodelOpen) return;
+
+    const cards = [...this.store.board.values()].sort((a, b) => a.createdAt - b.createdAt);
+    const sig =
+      this.store.vmodelOpen + "|" +
+      cards.map((c) => c.id + c.status + c.phase + c.assignedAgentId + c.parentGoalId + (c.completionCriteria?.length ?? 0)).join(",");
+    if (sig === this.lastVModelSig) return;
+    this.lastVModelSig = sig;
+
+    const agents = [...this.store.agents.values()];
+    const agentName = (id: string | null) => id ? agents.find((a) => a.id === id)?.name ?? "?" : "—";
+
+    // Group cards by phase
+    const phases: TaskPhase[] = ["requirements", "design", "implementation", "verification", "done"];
+    const cardsByPhase = new Map<TaskPhase, TaskCard[]>();
+    for (const p of phases) cardsByPhase.set(p, []);
+    for (const c of cards) {
+      const phase = c.phase ?? "implementation";
+      if (cardsByPhase.has(phase)) cardsByPhase.get(phase)!.push(c);
+      else cardsByPhase.get("implementation")!.push(c);
+    }
+
+    // V-model layout: left side descends (requirements → design → implementation),
+    // right side ascends (verification → done), connected at the bottom by implementation
+    const cardList = (phase: TaskPhase): string => {
+      const items = cardsByPhase.get(phase) ?? [];
+      if (items.length === 0) return `<div class="vmodel-empty">No tasks</div>`;
+      return items.map((c) => {
+        const agent = agentName(c.assignedAgentId);
+        const isGoal = c.type === "goal";
+        const criteriaHtml = c.completionCriteria && c.completionCriteria.length > 0
+          ? `<div class="vmodel-criteria">${c.completionCriteria.map((cr) =>
+              `<div class="vmodel-criterion ${cr.checked ? "met" : "unmet"}">${cr.checked ? "✓" : "○"} ${esc(cr.text)}</div>`
+            ).join("")}</div>`
+          : "";
+        const gateIcon = c.status === "done" ? "✓" : c.status === "review_pending" ? "⊘" : "→";
+        const gateClass = c.status === "done" ? "vmodel-gate-passed" : c.status === "review_pending" ? "vmodel-gate-blocked" : "";
+        return `<div class="vmodel-card phase-${phase} ${isGoal ? "vmodel-goal" : ""}" title="${esc(c.description ?? c.title)}">
+          <div class="vmodel-card-header">
+            <span class="vmodel-card-title">${isGoal ? "◆ " : ""}${esc(c.title.slice(0, 50))}</span>
+            <span class="vmodel-gate ${gateClass}">${gateIcon}</span>
+          </div>
+          <div class="vmodel-card-meta">${agent}</div>
+          ${criteriaHtml}
+        </div>`;
+      }).join("");
+    };
+
+    // Count tasks per phase for badge
+    const count = (p: TaskPhase) => cardsByPhase.get(p)?.length ?? 0;
+
+    const html = `
+      <div class="vmodel-v-container">
+        <div class="vmodel-side vmodel-left">
+          <div class="vmodel-phase phase-requirements ${count("requirements") > 0 ? "active" : ""}">
+            <div class="vmodel-phase-label">Requirements <span class="vmodel-count">${count("requirements")}</span></div>
+            <div class="vmodel-cards">${cardList("requirements")}</div>
+          </div>
+          <div class="vmodel-connector vmodel-connector-down"></div>
+          <div class="vmodel-phase phase-design ${count("design") > 0 ? "active" : ""}">
+            <div class="vmodel-phase-label">Design <span class="vmodel-count">${count("design")}</span></div>
+            <div class="vmodel-cards">${cardList("design")}</div>
+          </div>
+          <div class="vmodel-connector vmodel-connector-down"></div>
+          <div class="vmodel-phase phase-implementation ${count("implementation") > 0 ? "active" : ""}">
+            <div class="vmodel-phase-label">Implementation <span class="vmodel-count">${count("implementation")}</span></div>
+            <div class="vmodel-cards">${cardList("implementation")}</div>
+          </div>
+        </div>
+        <div class="vmodel-bottom-connector"></div>
+        <div class="vmodel-side vmodel-right">
+          <div class="vmodel-phase phase-done ${count("done") > 0 ? "active" : ""}">
+            <div class="vmodel-phase-label">Done <span class="vmodel-count">${count("done")}</span></div>
+            <div class="vmodel-cards">${cardList("done")}</div>
+          </div>
+          <div class="vmodel-connector vmodel-connector-up"></div>
+          <div class="vmodel-phase phase-verification ${count("verification") > 0 ? "active" : ""}">
+            <div class="vmodel-phase-label">Verification <span class="vmodel-count">${count("verification")}</span></div>
+            <div class="vmodel-cards">${cardList("verification")}</div>
+          </div>
+          <div class="vmodel-connector vmodel-connector-up"></div>
+          <div class="vmodel-phase phase-implementation-mirror">
+            <div class="vmodel-phase-label vmodel-mirror-label">↕ Implementation</div>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById("vmodel-diagram")!.innerHTML = html;
   }
 
   private renderAchievements(): void {

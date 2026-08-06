@@ -6,6 +6,7 @@ import { Plus, Trash2, User } from "lucide-react";
 const COLUMNS: { status: CardStatus; label: string; color: string }[] = [
   { status: "backlog", label: "Backlog", color: "border-l-muted" },
   { status: "in_progress", label: "In Progress", color: "border-l-status-thinking" },
+  { status: "review_pending", label: "Review", color: "border-l-accent" },
   { status: "done", label: "Done", color: "border-l-status-done" },
   { status: "paused", label: "Paused", color: "border-l-muted" },
 ];
@@ -79,7 +80,7 @@ export function TaskBoard() {
       )}
 
       <div className="flex-1 overflow-auto px-6 py-4">
-        <div className="grid grid-cols-4 gap-4 min-h-full">
+        <div className="grid grid-cols-5 gap-4 min-h-full">
           {COLUMNS.map((col) => {
             const cards = board.filter((c) => c.status === col.status);
             return (

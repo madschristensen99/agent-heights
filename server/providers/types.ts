@@ -97,6 +97,8 @@ export interface RunContext {
   wizardGithubPat?: string;
   /** Git branch name for the Wizard to operate on (e.g. "worlds/erics-alley"). */
   wizardBranch?: string;
+  /** Called when an agent wants to broadcast an HTML file to the office projector. */
+  onBroadcastHtml?: (filePath: string) => void;
 }
 
 export type ProviderRunner = (

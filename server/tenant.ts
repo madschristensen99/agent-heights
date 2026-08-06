@@ -590,7 +590,7 @@ export class TenantManager {
 
     // ── Broadcast: Redis pub/sub (with in-memory fallback) ──────────────
     // Also forwards agent-related messages to visitors in the owner's room.
-    const FORWARD_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "toast", "emote", "agent_chat"]);
+    const FORWARD_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "toast", "emote", "agent_chat", "projector_state", "agent_broadcast_html_state", "agent_broadcast_state"]);
     // Agent-related types from the user's PERSONAL manager — skip when user is
     // not in their own office (HQ2, org rooms, or visiting another office).
     // Org room agents are broadcast by the shared org manager, not here.

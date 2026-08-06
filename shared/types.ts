@@ -244,6 +244,10 @@ export interface AgentInfo {
   waitingFor?: string | null;
   /** Skill tags describing what this agent is good at (matched against card categories). */
   skills?: TaskCategory[];
+  /** Structured capability tags (broader than TaskCategory — e.g. "testing", "api-design", "security"). */
+  capabilities?: string[];
+  /** Per-skill performance metrics for capability gap analysis and estimation. */
+  performanceBySkill?: Record<string, SkillPerformance>;
 }
 
 /** A premium API service from Circle's x402 marketplace. */
@@ -524,7 +528,25 @@ export const WORLD_TILE_FRAMES = 24;
 /** Number of texture variants generated per tile type for visual variety. */
 export const WORLD_VARIANTS = 4;
 
-export type CardStatus = "backlog" | "in_progress" | "done" | "paused";
+export type CardStatus = "backlog" | "in_progress" | "done" | "paused" | "review_pending";
+
+/** V-model lifecycle phases for structured task progression.
+ *  Each phase has exit criteria that must be met before advancing. */
+export type TaskPhase = "requirements" | "design" | "implementation" | "verification" | "done";
+
+/** A single exit criterion for a V-model phase gate. */
+export interface CompletionCriterion {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
+/** Skill performance metrics tracked per agent per skill area. */
+export interface SkillPerformance {
+  tasks: number;
+  successRate: number;  // 0-1
+  avgMinutes: number;
+}
 
 /** Task categories used for agent-skill matching. */
 export type TaskCategory = "general" | "frontend" | "backend" | "devops" | "data" | "writing" | "research" | "crypto";
@@ -553,6 +575,25 @@ export interface TaskCard {
   revertedAt?: number | null;
   autoCreated?: boolean;
   category?: TaskCategory;
+  // ── V-model / Gantt extensions ──────────────────────────
+  /** Links this subtask card to its parent goal card. */
+  parentGoalId?: string | null;
+  /** Current V-model lifecycle phase. */
+  phase?: TaskPhase;
+  /** Timestamp when execution began (for Gantt bar start). */
+  startedAt?: number | null;
+  /** Target completion timestamp (for Gantt milestone). */
+  dueDate?: number | null;
+  /** Estimated duration in minutes (from agent self-estimate or historical data). */
+  estimatedMinutes?: number | null;
+  /** Actual duration in minutes (filled on completion). */
+  actualMinutes?: number | null;
+  /** Exit criteria that must be met before advancing to the next phase. */
+  completionCriteria?: CompletionCriterion[];
+  /** Card IDs this card depends on (must complete before this can start). */
+  dependsOnCardIds?: string[];
+  /** Card IDs that block this card (derived from office state graph). */
+  blockedByCardIds?: string[];
 }
 
 export interface AgentSchedule {
@@ -788,6 +829,16 @@ export type ClientMsg =
   | { type: "assign_card"; cardId: string; agentId: string }
   | { type: "move_card"; cardId: string; status: CardStatus }
   | { type: "delete_card"; cardId: string }
+  | { type: "set_phase"; cardId: string; phase: TaskPhase }
+  | { type: "advance_phase"; cardId: string }
+  | { type: "set_due_date"; cardId: string; dueDate: number | null }
+  | { type: "set_estimate"; cardId: string; estimatedMinutes: number | null }
+  | { type: "toggle_criterion"; cardId: string; criterionId: string }
+  | { type: "add_criterion"; cardId: string; text: string }
+  | { type: "remove_criterion"; cardId: string; criterionId: string }
+  | { type: "link_subtask"; parentGoalId: string; subtaskCardId: string }
+  | { type: "set_card_dependency"; cardId: string; dependsOnCardId: string }
+  | { type: "remove_card_dependency"; cardId: string; dependsOnCardId: string }
   | { type: "recruit"; firedAgentId: string }
   | { type: "fuse"; agentA: string; agentB: string; name: string; systemPrompt: string; appearance?: CharAppearance; personality?: PersonalityTraits }
   | { type: "railway_query" }
@@ -861,6 +912,7 @@ export type ClientMsg =
   | { type: "agent_view_stop"; agentId: string }
   | { type: "agent_broadcast_start"; agentId: string }
   | { type: "agent_broadcast_stop" }
+  | { type: "agent_broadcast_html"; agentId: string; filePath: string }
   | { type: "upgrade_assets"; deploymentId: string }
   | { type: "agent_fs_list"; agentId: string; path: string }
   | { type: "agent_fs_read"; agentId: string; path: string }
@@ -986,6 +1038,7 @@ export type ServerMsg =
   | { type: "webcam_peer_left"; userId: string }
   | { type: "agent_frame"; agentId: string; frame: string }
   | { type: "agent_broadcast_state"; agentId: string | null }
+  | { type: "agent_broadcast_html_state"; agentId: string | null; url: string | null }
   | { type: "agent_fs_listing"; agentId: string; path: string; entries: { name: string; isDir: boolean; size: number; mtime: number }[] }
   | { type: "agent_fs_content"; agentId: string; path: string; content: string; error?: string }
   | { type: "agent_fs_result"; agentId: string; path: string; action: "write" | "delete" | "upload"; success: boolean; error?: string }
@@ -1015,7 +1068,10 @@ export type ServerMsg =
   | { type: "asset_upgrade_started"; deploymentId: string }
   | { type: "asset_upgrade_progress"; deploymentId: string; stage: string; percent: number; label: string }
   | { type: "asset_upgrade_ready"; deploymentId: string }
-  | { type: "asset_upgrade_failed"; deploymentId: string; error: string };
+  | { type: "asset_upgrade_failed"; deploymentId: string; error: string }
+  | { type: "gantt_update"; cards: TaskCard[]; dependencies: { from: string; to: string; type: string }[] }
+  | { type: "phase_gate"; cardId: string; phase: TaskPhase; approved: boolean; reviewerId: string; reviewerName: string }
+  | { type: "capability_gap"; gaps: { skill: string; requiredBy: string; suggestion: string }[] }
 
 export const AGENT_MODELS = [
   { id: "kimi-k2.5", label: "Standard" },

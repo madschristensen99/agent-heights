@@ -6,6 +6,8 @@ import { Sidebar, type View } from "./components/Sidebar";
 import { AgentFleet } from "./components/AgentFleet";
 import { AgentDetail } from "./components/AgentDetail";
 import { TaskBoard } from "./components/TaskBoard";
+import { GanttChart } from "./components/GanttChart";
+import { VModelDiagram } from "./components/VModelDiagram";
 import { Settings } from "./components/Settings";
 import { Toasts } from "./components/Toasts";
 import { ScheduleView } from "./components/ScheduleView";
@@ -28,7 +30,7 @@ function DashboardApp() {
 
   const handleViewChange = (v: View) => {
     setView(v);
-    if (v !== "agent" && v !== "files" && v !== "memory" && v !== "wallet") {
+    if (v !== "agent" && v !== "files" && v !== "memory" && v !== "wallet" && v !== "gantt" && v !== "vmodel") {
       setSelectedAgent(null);
     }
   };
@@ -57,6 +59,8 @@ function DashboardApp() {
         />
       )}
       {view === "board" && <TaskBoard />}
+      {view === "gantt" && <GanttChart />}
+      {view === "vmodel" && <VModelDiagram />}
       {view === "schedules" && <ScheduleView />}
       {view === "marketplace" && <MarketplaceView />}
       {view === "mcp" && <MCPManager />}

@@ -139,6 +139,14 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           setBoard((prev) => prev.filter((c) => c.id !== msg.cardId));
           break;
         }
+        case "gantt_update": {
+          setBoard(msg.cards);
+          break;
+        }
+        case "phase_gate":
+        case "capability_gap":
+          // These are handled by listeners in Phase 5 dashboard views
+          break;
         case "settings": {
           setSettings(msg.settings);
           break;

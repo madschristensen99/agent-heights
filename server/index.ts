@@ -471,6 +471,127 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // Agent workspace file server — serves files from an agent's workspace for iframe embedding
+  if (req.url?.split("?")[0]?.startsWith("/api/agent-workspace/")) {
+    const urlObj = new URL(req.url, `http://${req.headers.host}`);
+    const pathAfterPrefix = urlObj.pathname.slice("/api/agent-workspace/".length);
+    const slashIdx = pathAfterPrefix.indexOf("/");
+    if (slashIdx === -1) {
+      res.writeHead(400, applySecurityHeaders({ "Content-Type": "text/plain" }));
+      res.end("Missing file path");
+      return;
+    }
+    const agentId = pathAfterPrefix.slice(0, slashIdx);
+    const filePath = pathAfterPrefix.slice(slashIdx + 1);
+
+    const token = urlObj.searchParams.get("token");
+    if (!token) {
+      res.writeHead(401, applySecurityHeaders({ "Content-Type": "text/plain" }));
+      res.end("Unauthorized");
+      return;
+    }
+
+    void verifyToken(token).then(async (user) => {
+      if (!user) {
+        res.writeHead(403, applySecurityHeaders({ "Content-Type": "text/plain" }));
+        res.end("Invalid or expired token");
+        return;
+      }
+      const sess = tenants.get(user.id);
+      if (!sess) {
+        res.writeHead(404, applySecurityHeaders({ "Content-Type": "text/plain" }));
+        res.end("Session not found");
+        return;
+      }
+      const agentWs = sess.manager.getAgentWorkspace(agentId);
+      if (!agentWs) {
+        res.writeHead(404, applySecurityHeaders({ "Content-Type": "text/plain" }));
+        res.end("Agent workspace not found");
+        return;
+      }
+
+      // Path traversal protection
+      if (/(^|\/)\.\.(\/|$)/.test(filePath) || /[\x00-\x1f]/.test(filePath)) {
+        res.writeHead(400, applySecurityHeaders({ "Content-Type": "text/plain" }));
+        res.end("Invalid file path");
+        return;
+      }
+      const safePath = resolve(agentWs, filePath);
+      const rel = relative(agentWs, safePath);
+      if (rel.startsWith("..")) {
+        res.writeHead(403, applySecurityHeaders({ "Content-Type": "text/plain" }));
+        res.end("Path outside workspace");
+        return;
+      }
+
+      // Symlink protection
+      try {
+        const linkInfo = await lstat(safePath).catch(() => null);
+        if (linkInfo?.isSymbolicLink()) {
+          res.writeHead(403, applySecurityHeaders({ "Content-Type": "text/plain" }));
+          res.end("Symlinks are not allowed");
+          return;
+        }
+        let checkDir = safePath;
+        const wsRoot = resolve(agentWs);
+        while (checkDir !== wsRoot && checkDir !== dirname(checkDir)) {
+          const dirLink = await lstat(checkDir).catch(() => null);
+          if (dirLink?.isSymbolicLink()) {
+            res.writeHead(403, applySecurityHeaders({ "Content-Type": "text/plain" }));
+            res.end("Symlinks are not allowed");
+            return;
+          }
+          checkDir = dirname(checkDir);
+        }
+      } catch { /* file doesn't exist — 404 below */ }
+
+      // Content-Type mapping
+      const ext = extname(safePath).toLowerCase();
+      const contentTypes: Record<string, string> = {
+        ".html": "text/html; charset=utf-8",
+        ".htm": "text/html; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".mjs": "text/javascript; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".webp": "image/webp",
+        ".ico": "image/x-icon",
+        ".woff": "font/woff",
+        ".woff2": "font/woff2",
+        ".ttf": "font/ttf",
+        ".otf": "font/otf",
+        ".txt": "text/plain; charset=utf-8",
+        ".md": "text/plain; charset=utf-8",
+        ".csv": "text/csv; charset=utf-8",
+        ".xml": "application/xml; charset=utf-8",
+        ".pdf": "application/pdf",
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+      };
+      const contentType = contentTypes[ext] ?? "application/octet-stream";
+
+      try {
+        const data = await readFile(safePath);
+        res.writeHead(200, applySecurityHeaders({
+          "Content-Type": contentType,
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        }));
+        res.end(data);
+      } catch {
+        res.writeHead(404, applySecurityHeaders({ "Content-Type": "text/plain" }));
+        res.end("File not found");
+      }
+    });
+    return;
+  }
+
   // MCP catalog — curated server directory
   if (req.url?.split("?")[0]?.startsWith("/api/mcp-catalog")) {
     handleMcpCatalogRequest(req, res);
@@ -995,7 +1116,7 @@ wss.on("connection", async (ws, req) => {
 
       // Permission tiers: manage > talk > tour > no_access
       const MANAGE_ONLY = new Set(["hire", "assign", "assign_new", "assign_all", "stop", "stop_all", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "get_cdp_wallet", "get_cdp_policy", "set_cdp_policy", "get_cdp_tx_history", "create_cdp_onramp", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
-      const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
+      const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_broadcast_html", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
 
       if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
         sess.broadcast({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can look around but not manage agents. Ask an admin for talk access." : "Only room managers can do that." });
@@ -1177,6 +1298,36 @@ wss.on("connection", async (ws, req) => {
           break;
         case "delete_card":
           activeManager.deleteCard(msg.cardId);
+          break;
+        case "set_phase":
+          activeManager.setPhase(msg.cardId, msg.phase);
+          break;
+        case "advance_phase":
+          activeManager.advancePhase(msg.cardId);
+          break;
+        case "set_due_date":
+          activeManager.setDueDate(msg.cardId, msg.dueDate);
+          break;
+        case "set_estimate":
+          activeManager.setEstimate(msg.cardId, msg.estimatedMinutes);
+          break;
+        case "toggle_criterion":
+          activeManager.toggleCriterion(msg.cardId, msg.criterionId);
+          break;
+        case "add_criterion":
+          activeManager.addCriterion(msg.cardId, msg.text);
+          break;
+        case "remove_criterion":
+          activeManager.removeCriterion(msg.cardId, msg.criterionId);
+          break;
+        case "link_subtask":
+          activeManager.linkSubtask(msg.parentGoalId, msg.subtaskCardId);
+          break;
+        case "set_card_dependency":
+          activeManager.setCardDependency(msg.cardId, msg.dependsOnCardId);
+          break;
+        case "remove_card_dependency":
+          activeManager.removeCardDependency(msg.cardId, msg.dependsOnCardId);
           break;
         case "create_schedule":
           activeManager.createSchedule(msg.agentId, msg.name, msg.task, msg.cronExpression, msg.handoffTo);
@@ -2330,6 +2481,10 @@ wss.on("connection", async (ws, req) => {
             const otherSess = tenants.get(pid);
             if (otherSess) {
               otherSess.broadcast({ type: "projector_state", channel: msg.channel });
+              // Clear HTML broadcast state when switching to a non-html channel
+              if (msg.channel !== "html") {
+                otherSess.broadcast({ type: "agent_broadcast_html_state", agentId: null, url: null });
+              }
             }
           }
           break;
@@ -2496,6 +2651,7 @@ wss.on("connection", async (ws, req) => {
               if (peerSess) {
                 peerSess.broadcast({ type: "projector_state", channel: "agent" });
                 peerSess.broadcast({ type: "agent_broadcast_state", agentId: msg.agentId });
+                peerSess.broadcast({ type: "agent_broadcast_html_state", agentId: null, url: null });
               }
             }
           } else {
@@ -2521,6 +2677,55 @@ wss.on("connection", async (ws, req) => {
             const peerSess = tenants.get(pid);
             if (peerSess) {
               peerSess.broadcast({ type: "projector_state", channel: "off" });
+              peerSess.broadcast({ type: "agent_broadcast_state", agentId: null });
+              peerSess.broadcast({ type: "agent_broadcast_html_state", agentId: null, url: null });
+            }
+          }
+          break;
+        }
+        case "agent_broadcast_html": {
+          if (!sess.roomId) break;
+          const room = tenants.getRoom(sess.roomId);
+          if (!room) break;
+          const ownerSess = room.isPrivate ? tenants.get(room.ownerId) : sess;
+          if (!ownerSess) break;
+          const agent = [...ownerSess.manager["agents"].values()].find(a => a.info.id === msg.agentId);
+          if (!agent) break;
+
+          // Stop any existing screenshot broadcast for this agent
+          screenshots.stopBroadcast(msg.agentId);
+
+          // Verify the HTML file exists in the agent's workspace
+          const agentWs = ownerSess.manager.getAgentWorkspace(msg.agentId);
+          if (!agentWs) {
+            sess.broadcast({ type: "toast", text: "Agent workspace not found." });
+            break;
+          }
+          const fs = await import("node:fs/promises");
+          const filePath = msg.filePath.replace(/(^|\/)\.\.(\/|$)/g, "");
+          const fullPath = resolve(agentWs, filePath);
+          const rel = relative(agentWs, fullPath);
+          if (rel.startsWith("..")) {
+            sess.broadcast({ type: "toast", text: "Invalid file path." });
+            break;
+          }
+          try {
+            await fs.access(fullPath);
+          } catch {
+            sess.broadcast({ type: "toast", text: `File not found: ${filePath}` });
+            break;
+          }
+
+          // Build the relative URL path for the iframe — client appends its own auth token
+          const htmlPath = `/api/agent-workspace/${msg.agentId}/${filePath}`;
+
+          // Switch projector to html channel and notify all players
+          room.projectorChannel = "html";
+          for (const [pid] of room.players) {
+            const peerSess = tenants.get(pid);
+            if (peerSess) {
+              peerSess.broadcast({ type: "projector_state", channel: "html" });
+              peerSess.broadcast({ type: "agent_broadcast_html_state", agentId: msg.agentId, url: htmlPath });
               peerSess.broadcast({ type: "agent_broadcast_state", agentId: null });
             }
           }

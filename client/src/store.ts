@@ -63,6 +63,16 @@ export class Store {
   connected = false;
   serverRestarting = false;
   boardOpen = false;
+  ganttOpen = false;
+  vmodelOpen = false;
+  /** Card dependencies for Gantt chart rendering: { from, to, type }. */
+  cardDependencies: { from: string; to: string; type: string }[] = [];
+  /** Listener array for Gantt updates. */
+  ganttListeners: (() => void)[] = [];
+  /** Listener array for phase gate notifications. */
+  phaseGateListeners: ((cardId: string, phase: string, approved: boolean, reviewerName: string) => void)[] = [];
+  /** Listener array for capability gap reports. */
+  capabilityGapListeners: ((gaps: { skill: string; requiredBy: string; suggestion: string }[]) => void)[] = [];
   achievementsOpen = false;
   hallOfFameOpen = false;
   railwayPanelOpen = false;
@@ -125,6 +135,8 @@ export class Store {
   roomName: string = "";
   roomPlayers = new Map<string, PlayerPresence>();
   projectorChannel: string = "off";
+  /** HTML broadcast URL for the projector (relative path, client appends token). */
+  agentBroadcastHtmlUrl: string | null = null;
   /** Access level for the current room: no_access, tour, talk, or manage. */
   accessLevel: RoomAccessLevel = "no_access";
   /** Room type from the most recent room_state — available immediately, no rooms_list race. */
@@ -179,6 +191,7 @@ export class Store {
   private webcamPeerLeftListeners = new Set<(userId: string) => void>();
   private agentFrameListeners = new Set<(agentId: string, frame: string) => void>();
   private agentBroadcastStateListeners = new Set<(agentId: string | null) => void>();
+  private agentBroadcastHtmlListeners = new Set<(agentId: string | null, url: string | null) => void>();
   private agentFsListingListeners = new Set<(agentId: string, path: string, entries: { name: string; isDir: boolean; size: number; mtime: number }[]) => void>();
   private agentFsContentListeners = new Set<(agentId: string, path: string, content: string, error?: string) => void>();
   private agentFsResultListeners = new Set<(agentId: string, path: string, action: "write" | "delete" | "upload", success: boolean, error?: string) => void>();
@@ -384,6 +397,10 @@ export class Store {
     this.agentBroadcastStateListeners.add(fn);
   }
 
+  onAgentBroadcastHtml(fn: (agentId: string | null, url: string | null) => void): void {
+    this.agentBroadcastHtmlListeners.add(fn);
+  }
+
   onAgentFsListing(fn: (agentId: string, path: string, entries: { name: string; isDir: boolean; size: number; mtime: number }[]) => void): void {
     this.agentFsListingListeners.add(fn);
   }
@@ -529,6 +546,16 @@ export class Store {
 
   toggleBoard(open?: boolean): void {
     this.boardOpen = open ?? !this.boardOpen;
+    this.emit();
+  }
+
+  toggleGantt(open?: boolean): void {
+    this.ganttOpen = open ?? !this.ganttOpen;
+    this.emit();
+  }
+
+  toggleVModel(open?: boolean): void {
+    this.vmodelOpen = open ?? !this.vmodelOpen;
     this.emit();
   }
 
@@ -716,6 +743,21 @@ export class Store {
       case "card_removed":
         this.board.delete(msg.cardId);
         break;
+      case "gantt_update": {
+        // Update board cards from the gantt_update payload
+        for (const c of msg.cards) this.board.set(c.id, c);
+        this.cardDependencies = msg.dependencies;
+        for (const fn of this.ganttListeners) fn();
+        break;
+      }
+      case "phase_gate": {
+        for (const fn of this.phaseGateListeners) fn(msg.cardId, msg.phase, msg.approved, msg.reviewerName);
+        break;
+      }
+      case "capability_gap": {
+        for (const fn of this.capabilityGapListeners) fn(msg.gaps);
+        break;
+      }
       case "schedules":
         this.schedules = new Map(msg.schedules.map((s) => [s.id, s]));
         break;
@@ -1242,6 +1284,11 @@ export class Store {
       }
       case "agent_broadcast_state": {
         for (const fn of this.agentBroadcastStateListeners) fn(msg.agentId);
+        return;
+      }
+      case "agent_broadcast_html_state": {
+        this.agentBroadcastHtmlUrl = msg.url;
+        for (const fn of this.agentBroadcastHtmlListeners) fn(msg.agentId, msg.url);
         return;
       }
       case "agent_fs_listing": {

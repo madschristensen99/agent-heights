@@ -29,6 +29,7 @@ import type {
   SubscriptionTier,
   CardType,
   TaskCategory,
+  TaskPhase,
   OfficeMCPServer,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
@@ -1620,6 +1621,26 @@ export class AgentManager {
     this.log(rt, "status", `New task: ${cleanTask}`);
     if (target) this.log(rt, "status", `Will hand the result to ${target.info.name} when done.`);
     rt.cardId = cardId ?? null;
+    // V-model: set phase to implementation and record start time if not already set
+    if (rt.cardId) {
+      const card = this.board.get(rt.cardId);
+      if (card) {
+        if (!card.phase) {
+          card.phase = "implementation";
+        }
+        if (!card.startedAt && (card.phase === "implementation" || card.phase === "design" || card.phase === "requirements")) {
+          card.startedAt = Date.now();
+        }
+        // Estimate duration from historical data if not already set
+        if (!card.estimatedMinutes) {
+          const estimate = this.estimateTaskDuration(rt, cleanTask);
+          if (estimate) card.estimatedMinutes = estimate;
+        }
+        this.persistBoard();
+        this.broadcast({ type: "card", card });
+        this.broadcastGanttUpdate();
+      }
+    }
     void this.runTaskWithUsageCap(rt, cleanTask, isResume);
   }
 
@@ -1712,12 +1733,19 @@ export class AgentManager {
       return;
     }
 
-    // Fallback: broadcast the same task to everyone (old behavior)
-    this.broadcast({ type: "huddle", agentIds: free.map((rt) => rt.info.id) });
-    for (const rt of free) this.assign(rt.info.id, clean);
+    // Fallback: Yuki unavailable — route to a single agent (stop rule: sequential work shouldn't fan out)
+    const pick = free.sort((a, b) => {
+      // Prefer idle agents, then those with fewer completed tasks (less fatigued)
+      const aIdle = a.info.status === "idle" ? 0 : 1;
+      const bIdle = b.info.status === "idle" ? 0 : 1;
+      if (aIdle !== bIdle) return aIdle - bIdle;
+      return a.info.tasksDone - b.info.tasksDone;
+    })[0];
+    this.broadcast({ type: "huddle", agentIds: [pick.info.id] });
+    this.assign(pick.info.id, clean);
     this.broadcast({
       type: "toast",
-      text: `Task handed to ${free.length} agent${free.length > 1 ? "s" : ""}.`,
+      text: `Yuki unavailable — task routed to ${pick.info.name} (stop rule: no fan-out on sequential work).`,
     });
   }
 
@@ -2198,6 +2226,7 @@ export class AgentManager {
     this.board.set(card.id, card);
     this.persistBoard();
     this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
   }
 
   assignCard(cardId: string, agentId: string): void {
@@ -2219,6 +2248,7 @@ export class AgentManager {
     card.revertedAt = null;
     this.persistBoard();
     this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
     const task = card.description
       ? `${card.title}\n\n${card.description}`
       : card.title;
@@ -2245,6 +2275,7 @@ export class AgentManager {
     card.status = status;
     this.persistBoard();
     this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
   }
 
   deleteCard(cardId: string): void {
@@ -2257,6 +2288,171 @@ export class AgentManager {
     this.board.delete(cardId);
     this.persistBoard();
     this.broadcast({ type: "card_removed", cardId });
+    this.broadcastGanttUpdate();
+  }
+
+  // ── V-model / Gantt / dependency methods ───────────────────────
+
+  /** Set the V-model lifecycle phase on a card. */
+  setPhase(cardId: string, phase: TaskPhase): void {
+    const card = this.board.get(cardId);
+    if (!card) return;
+    card.phase = phase;
+    if (phase === "implementation" && !card.startedAt) {
+      card.startedAt = Date.now();
+    }
+    if (phase === "done" && card.startedAt) {
+      card.actualMinutes = Math.round((Date.now() - card.startedAt) / 60000);
+    }
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
+  }
+
+  /** Advance a card to the next V-model phase if exit criteria are met. */
+  advancePhase(cardId: string): void {
+    const card = this.board.get(cardId);
+    if (!card || !card.phase) return;
+    const phaseOrder: TaskPhase[] = ["requirements", "design", "implementation", "verification", "done"];
+    const currentIdx = phaseOrder.indexOf(card.phase);
+    if (currentIdx < 0 || currentIdx >= phaseOrder.length - 1) return;
+
+    // Check exit criteria
+    if (card.completionCriteria && card.completionCriteria.length > 0) {
+      const unchecked = card.completionCriteria.filter((c) => !c.checked);
+      if (unchecked.length > 0) {
+        this.broadcast({ type: "toast", text: `Cannot advance — ${unchecked.length} criterion unchecked.` });
+        return;
+      }
+    }
+
+    const nextPhase = phaseOrder[currentIdx + 1];
+    this.setPhase(cardId, nextPhase);
+    this.broadcast({ type: "toast", text: `Phase advanced to ${nextPhase}.` });
+
+    // Notify managers for verification phase gate
+    if (nextPhase === "verification") {
+      const cardOwner = card.assignedAgentId ? this.agents.get(card.assignedAgentId) : null;
+      if (cardOwner) {
+        this.notifyManagersOfCompletion(
+          cardOwner,
+          card.title,
+          "Phase advanced to verification — please review.",
+          false,
+        );
+      }
+    }
+  }
+
+  /** Set a due date on a card (for Gantt milestone positioning). */
+  setDueDate(cardId: string, dueDate: number | null): void {
+    const card = this.board.get(cardId);
+    if (!card) return;
+    card.dueDate = dueDate;
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
+  }
+
+  /** Set an estimated duration on a card (for Gantt bar width). */
+  setEstimate(cardId: string, estimatedMinutes: number | null): void {
+    const card = this.board.get(cardId);
+    if (!card) return;
+    card.estimatedMinutes = estimatedMinutes;
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
+  }
+
+  /** Toggle a completion criterion's checked state. */
+  toggleCriterion(cardId: string, criterionId: string): void {
+    const card = this.board.get(cardId);
+    if (!card || !card.completionCriteria) return;
+    const criterion = card.completionCriteria.find((c) => c.id === criterionId);
+    if (!criterion) return;
+    criterion.checked = !criterion.checked;
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+  }
+
+  /** Add a new completion criterion to a card. */
+  addCriterion(cardId: string, text: string): void {
+    const card = this.board.get(cardId);
+    if (!card) return;
+    if (!card.completionCriteria) card.completionCriteria = [];
+    card.completionCriteria.push({
+      id: randomUUID().slice(0, 8),
+      text: text.trim().slice(0, 300),
+      checked: false,
+    });
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+  }
+
+  /** Remove a completion criterion from a card. */
+  removeCriterion(cardId: string, criterionId: string): void {
+    const card = this.board.get(cardId);
+    if (!card || !card.completionCriteria) return;
+    card.completionCriteria = card.completionCriteria.filter((c) => c.id !== criterionId);
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+  }
+
+  /** Link a subtask card to its parent goal card. */
+  linkSubtask(parentGoalId: string, subtaskCardId: string): void {
+    const parent = this.board.get(parentGoalId);
+    const subtask = this.board.get(subtaskCardId);
+    if (!parent || !subtask) return;
+    if (parent.type !== "goal") {
+      this.broadcast({ type: "toast", text: "Parent card must be a goal type." });
+      return;
+    }
+    subtask.parentGoalId = parentGoalId;
+    this.persistBoard();
+    this.broadcast({ type: "card", card: subtask });
+    this.broadcastGanttUpdate();
+  }
+
+  /** Add a card-to-card dependency (this card can't start until the other completes). */
+  setCardDependency(cardId: string, dependsOnCardId: string): void {
+    const card = this.board.get(cardId);
+    const dependency = this.board.get(dependsOnCardId);
+    if (!card || !dependency) return;
+    if (cardId === dependsOnCardId) return;
+    if (!card.dependsOnCardIds) card.dependsOnCardIds = [];
+    if (card.dependsOnCardIds.includes(dependsOnCardId)) return;
+    card.dependsOnCardIds.push(dependsOnCardId);
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
+  }
+
+  /** Remove a card-to-card dependency. */
+  removeCardDependency(cardId: string, dependsOnCardId: string): void {
+    const card = this.board.get(cardId);
+    if (!card || !card.dependsOnCardIds) return;
+    card.dependsOnCardIds = card.dependsOnCardIds.filter((id) => id !== dependsOnCardId);
+    if (card.dependsOnCardIds.length === 0) card.dependsOnCardIds = undefined;
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
+  }
+
+  /** Broadcast a Gantt update with all cards and their dependencies. */
+  private broadcastGanttUpdate(): void {
+    const cards = [...this.board.values()];
+    const dependencies: { from: string; to: string; type: string }[] = [];
+    for (const card of cards) {
+      if (card.dependsOnCardIds) {
+        for (const depId of card.dependsOnCardIds) {
+          dependencies.push({ from: depId, to: card.id, type: "depends_on" });
+        }
+      }
+      if (card.parentGoalId) {
+        dependencies.push({ from: card.id, to: card.parentGoalId, type: "child_of" });
+      }
+    }
+    this.broadcast({ type: "gantt_update", cards, dependencies });
   }
 
   /** Task completed successfully — move the card to done. */
@@ -2267,6 +2463,7 @@ export class AgentManager {
     card.assignedAgentId = null;
     this.persistBoard();
     this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
   }
 
   /** Task failed or stopped — send the card back to backlog. */
@@ -2278,6 +2475,7 @@ export class AgentManager {
     card.revertedAt = Date.now();
     this.persistBoard();
     this.broadcast({ type: "card", card });
+    this.broadcastGanttUpdate();
   }
 
   /** Human stopped a task — pause the card so agents don't auto-pick it.
@@ -2289,11 +2487,13 @@ export class AgentManager {
       this.board.delete(cardId);
       this.persistBoard();
       this.broadcast({ type: "card_removed", cardId });
+      this.broadcastGanttUpdate();
     } else {
       card.status = "paused";
       card.assignedAgentId = null;
       this.persistBoard();
       this.broadcast({ type: "card", card });
+      this.broadcastGanttUpdate();
     }
   }
 
@@ -2914,6 +3114,12 @@ export class AgentManager {
         userId: this.userId,
         wizardGithubPat: rt.info.id === WIZARD_ID ? process.env.WIZARD_GITHUB_PAT : undefined,
         wizardBranch: rt.info.id === WIZARD_ID ? (process.env.WIZARD_BRANCH ?? "main") : undefined,
+        onBroadcastHtml: (filePath: string) => {
+          const htmlPath = `/api/agent-workspace/${rt.info.id}/${filePath}`;
+          this.broadcast({ type: "projector_state", channel: "html" });
+          this.broadcast({ type: "agent_broadcast_html_state", agentId: rt.info.id, url: htmlPath });
+          this.broadcast({ type: "agent_broadcast_state", agentId: null });
+        },
         officeState: this.officeState,
         agentName: rt.info.name,
         getBoard: () => [...this.board.values()].map((c) => ({ id: c.id, title: c.title, status: c.status, assignedAgentId: c.assignedAgentId, category: c.category })),
@@ -3206,6 +3412,7 @@ export class AgentManager {
         } else if (sawError) {
           rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
+          this.updateAgentSkillPerformance(rt, task, false, duration);
           // Auto-record task failure in the office state graph
           this.officeState.addNode("task", task.slice(0, 200), rt.info.id, rt.info.name, "failed");
           this.setStatus(rt, "error");
@@ -3225,10 +3432,32 @@ export class AgentManager {
           rt.info.tasksDone += 1;
           rt.taskHistory.unshift({ task, success: true, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
+          this.updateAgentSkillPerformance(rt, task, true, duration);
           // Auto-record task completion in the office state graph
           this.officeState.addNode("task", task.slice(0, 200), rt.info.id, rt.info.name, "done");
           this.setStatus(rt, "done");
-          if (rt.cardId) this.completeCard(rt.cardId);
+          if (rt.cardId) {
+            const card = this.board.get(rt.cardId);
+            if (card && card.phase && card.phase !== "done") {
+              // V-model: transition to verification phase instead of done
+              card.phase = "verification";
+              card.status = "review_pending";
+              if (card.startedAt) {
+                card.actualMinutes = Math.round((Date.now() - card.startedAt) / 60000);
+              }
+              this.persistBoard();
+              this.broadcast({ type: "card", card });
+              this.broadcastGanttUpdate();
+              // Notify managers for review
+              this.notifyManagersOfCompletion(rt, task, "Task complete — pending verification review.", false);
+            } else {
+              this.completeCard(rt.cardId);
+            }
+            // Check if all subtasks of a parent goal are complete (merge node)
+            if (card?.parentGoalId) {
+              this.checkGoalCompletion(card.parentGoalId);
+            }
+          }
           rt.cardId = null;
           this.updateScheduleResult(rt, true);
           if (rt.taskQueue.length > 0 && !this.shuttingDown) {
@@ -3347,9 +3576,10 @@ export class AgentManager {
     }
 
     // Track which workers are being assigned in this round (for dependency resolution)
-    const assigned = new Map<string, string>(); // workerName -> agentId
+    const assigned = new Map<string, { agentId: string; cardId: string }>(); // workerName -> { agentId, cardId }
     let sent = 0;
     const deferred: { name: string; subtask: string; dependsOn: string }[] = [];
+    const goalCardId = mgr.cardId;
 
     for (const item of plan) {
       const name = String((item as { name?: unknown })?.name ?? "").trim();
@@ -3374,20 +3604,33 @@ export class AgentManager {
         this.log(mgr, "status", `Skipped a subtask for "${name}" — nobody by that name.`);
         continue;
       }
+
+      // Create a subtask card linked to the goal card
+      const subtaskCard: TaskCard = {
+        id: randomUUID().slice(0, 8),
+        title: subtask.length > 80 ? subtask.slice(0, 77) + "…" : subtask,
+        description: subtask,
+        status: "backlog",
+        assignedAgentId: null,
+        createdAt: Date.now(),
+        type: "task",
+        parentGoalId: goalCardId ?? null,
+        phase: "implementation",
+        category: this.inferCategory(subtask),
+      };
+      this.board.set(subtaskCard.id, subtaskCard);
+      this.persistBoard();
+      this.broadcast({ type: "card", card: subtaskCard });
+
+      const taskText = `${subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`;
       if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "done" || target.info.status === "waiting") {
         // Queue it — the agent is busy
-        this.assign(
-          target.info.id,
-          `${subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`,
-        );
+        this.assign(target.info.id, taskText, undefined, subtaskCard.id);
         sent++;
         continue;
       }
-      this.assign(
-        target.info.id,
-        `${subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`,
-      );
-      assigned.set(name.toLowerCase(), target.info.id);
+      this.assign(target.info.id, taskText, undefined, subtaskCard.id);
+      assigned.set(name.toLowerCase(), { agentId: target.info.id, cardId: subtaskCard.id });
       sent++;
     }
 
@@ -3403,11 +3646,31 @@ export class AgentManager {
         (rt) => rt.info.name.toLowerCase() === d.dependsOn.toLowerCase(),
       );
       if (target && prereq) {
+        // Create a deferred subtask card with dependency link
+        const prereqEntry = assigned.get(d.dependsOn.toLowerCase());
+        const subtaskCard: TaskCard = {
+          id: randomUUID().slice(0, 8),
+          title: d.subtask.length > 80 ? d.subtask.slice(0, 77) + "…" : d.subtask,
+          description: d.subtask,
+          status: "backlog",
+          assignedAgentId: null,
+          createdAt: Date.now(),
+          type: "task",
+          parentGoalId: goalCardId ?? null,
+          phase: "implementation",
+          dependsOnCardIds: prereqEntry ? [prereqEntry.cardId] : undefined,
+          category: this.inferCategory(d.subtask),
+        };
+        this.board.set(subtaskCard.id, subtaskCard);
+        this.persistBoard();
+        this.broadcast({ type: "card", card: subtaskCard });
+
         // Queue the dependent task on the target, with handoff from the prerequisite
         this.assign(
           target.info.id,
           `${d.subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`,
           prereq.info.id,
+          subtaskCard.id,
         );
         this.log(mgr, "status", `Queued ${d.name}'s task — will start after ${d.dependsOn} completes.`);
         sent++;
@@ -3416,6 +3679,9 @@ export class AgentManager {
       }
     }
 
+    // Broadcast Gantt update with new cards and dependencies
+    this.broadcastGanttUpdate();
+
     this.log(mgr, "status", `Delegated ${sent} subtask${sent === 1 ? "" : "s"}.`);
     if (sent > 0) {
       this.broadcast({
@@ -3423,6 +3689,102 @@ export class AgentManager {
         text: `${mgr.info.name} delegated ${sent} subtask${sent === 1 ? "" : "s"}.`,
       });
     }
+  }
+
+  // ── Phase 2 helper methods: merge node, estimation, skill tracking ───────
+
+  /** Check if all subtasks of a parent goal are complete (or in verification/done).
+   *  If so, assign a merge/synthesis task to the manager (Yuki). */
+  private checkGoalCompletion(goalCardId: string): void {
+    const goalCard = this.board.get(goalCardId);
+    if (!goalCard || goalCard.type !== "goal") return;
+    // Find all subtask cards linked to this goal
+    const subtasks = [...this.board.values()].filter((c) => c.parentGoalId === goalCardId);
+    if (subtasks.length === 0) return;
+    // Check if all subtasks are done or in review_pending (verification)
+    const allComplete = subtasks.every((c) => c.status === "done" || c.status === "review_pending");
+    if (!allComplete) return;
+    // Don't trigger merge if the goal card is already done
+    if (goalCard.status === "done") return;
+    // Check if we've already assigned a merge task (avoid duplicates)
+    const existingMerge = [...this.board.values()].find(
+      (c) => c.parentGoalId === goalCardId && c.type === "review" && c.title.startsWith("Merge:"),
+    );
+    if (existingMerge) return;
+
+    // Collect subtask results from task history
+    const subtaskSummaries = subtasks.map((c) => {
+      const agent = c.assignedAgentId ? this.agents.get(c.assignedAgentId) : null;
+      return `- "${c.title}" — ${c.status}${agent ? ` (${agent.info.name})` : ""}`;
+    }).join("\n");
+
+    const yuki = this.agents.get(AGENT_RESOURCES_ID);
+    if (!yuki) return;
+    if (yuki.info.status === "thinking" || yuki.info.status === "working" || yuki.info.status === "waiting") {
+      this.log(yuki, "status", `All subtasks for goal "${goalCard.title.slice(0, 60)}" are complete or in review — merge task queued but Yuki is busy.`);
+      return;
+    }
+
+    // Create a merge card
+    const mergeCard: TaskCard = {
+      id: randomUUID().slice(0, 8),
+      title: `Merge: ${goalCard.title.slice(0, 60)}`,
+      description: `All subtasks for the goal "${goalCard.title}" have completed or are in verification. Synthesize the results into a final deliverable.\n\nSubtask statuses:\n${subtaskSummaries}`,
+      status: "in_progress",
+      assignedAgentId: yuki.info.id,
+      createdAt: Date.now(),
+      type: "review",
+      parentGoalId: goalCardId,
+      phase: "verification",
+    };
+    this.board.set(mergeCard.id, mergeCard);
+    this.persistBoard();
+    this.broadcast({ type: "card", card: mergeCard });
+    this.broadcastGanttUpdate();
+
+    this.log(yuki, "status", `All subtasks complete for "${goalCard.title.slice(0, 60)}" — starting merge/synthesis.`);
+    this.broadcast({ type: "toast", text: `All subtasks complete — Yuki is synthesizing results.` });
+
+    const mergeTask = `All subtasks for the goal "${goalCard.title}" have completed or are in verification. Synthesize the results into a final deliverable. Review each subtask's output and produce a unified summary.\n\nSubtask statuses:\n${subtaskSummaries}`;
+    this.startTask(yuki, mergeTask, undefined, mergeCard.id, false);
+  }
+
+  /** Estimate task duration in minutes from the agent's task history.
+   *  Returns null if insufficient data (< 3 similar tasks). */
+  private estimateTaskDuration(rt: AgentRuntime, task: string): number | null {
+    if (rt.taskHistory.length < 3) return null;
+    // Find successful tasks with similar keywords
+    const taskLower = task.toLowerCase();
+    const keywords = taskLower.split(/\s+/).filter((w) => w.length > 4);
+    if (keywords.length === 0) return null;
+    const similar = rt.taskHistory.filter(
+      (h) => h.success && h.durationMs > 0 &&
+        keywords.some((kw) => h.task.toLowerCase().includes(kw)),
+    );
+    if (similar.length < 3) return null;
+    // Use median duration
+    const durations = similar.map((h) => h.durationMs / 60000).sort((a, b) => a - b);
+    const mid = Math.floor(durations.length / 2);
+    const median = durations.length % 2 === 0
+      ? (durations[mid - 1] + durations[mid]) / 2
+      : durations[mid];
+    return Math.max(1, Math.round(median));
+  }
+
+  /** Update per-skill performance metrics on the agent based on task outcome. */
+  private updateAgentSkillPerformance(rt: AgentRuntime, task: string, success: boolean, durationMs: number): void {
+    const category = this.inferCategory(task);
+    if (!rt.info.performanceBySkill) rt.info.performanceBySkill = {};
+    const existing = rt.info.performanceBySkill[category] ?? { tasks: 0, successRate: 0, avgMinutes: 0 };
+    const totalTasks = existing.tasks + 1;
+    const totalSuccess = Math.round(existing.successRate * existing.tasks) + (success ? 1 : 0);
+    const totalMinutes = existing.avgMinutes * existing.tasks + (durationMs / 60000);
+    rt.info.performanceBySkill[category] = {
+      tasks: totalTasks,
+      successRate: totalSuccess / totalTasks,
+      avgMinutes: Math.round(totalMinutes / totalTasks),
+    };
+    this.persist();
   }
 
   /** Process a manager's review verdict (APPROVED or NEEDS REWORK) and act on it. */

@@ -1,6 +1,6 @@
-import { LayoutGrid, Users, KanbanSquare, Settings, Power, Clock, Store, Server, Skull } from "lucide-react";
+import { LayoutGrid, Users, KanbanSquare, Settings, Power, Clock, Store, Server, Skull, BarChart3, GitBranch } from "lucide-react";
 
-export type View = "fleet" | "agent" | "board" | "settings" | "schedules" | "marketplace" | "mcp" | "fired" | "files" | "memory" | "wallet";
+export type View = "fleet" | "agent" | "board" | "gantt" | "vmodel" | "settings" | "schedules" | "marketplace" | "mcp" | "fired" | "files" | "memory" | "wallet";
 
 interface SidebarProps {
   view: View;
@@ -18,6 +18,8 @@ export function Sidebar({ view, onViewChange, agentCount, boardCount, scheduleCo
   const navItems = [
     { id: "fleet" as View, icon: Users, label: "Fleet", badge: agentCount },
     { id: "board" as View, icon: KanbanSquare, label: "Task Board", badge: boardCount },
+    { id: "gantt" as View, icon: BarChart3, label: "Gantt Chart", badge: boardCount },
+    { id: "vmodel" as View, icon: GitBranch, label: "V-Model", badge: undefined },
     { id: "schedules" as View, icon: Clock, label: "Schedules", badge: scheduleCount },
     { id: "marketplace" as View, icon: Store, label: "Marketplace", badge: undefined },
     { id: "mcp" as View, icon: Server, label: "MCP Servers", badge: mcpCount },

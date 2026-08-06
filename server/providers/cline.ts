@@ -167,6 +167,7 @@ export async function makeTools(cwd: string, opts?: {
   listOfficeMcp?: () => { id: string; name: string; description: string; tools: { name: string; description: string }[]; builtByName: string; status: string }[];
   wizardGithubPat?: string;
   wizardBranch?: string;
+  onBroadcastHtml?: (filePath: string) => void;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -439,7 +440,38 @@ export async function makeTools(cwd: string, opts?: {
     },
   };
 
-  const base = [...builtinTools, ...browserTools, submitTool, writeFilesTool, listFilesTool];
+  const broadcastToScreenTool: AgentTool<any, any> = {
+    name: "broadcast_to_screen",
+    description:
+      "Broadcast an HTML file from your workspace to the office TV screen (projector) as an interactive iframe. The file must be a .html file in your workspace. Use this to share dashboards, reports, visualizations, or any HTML content with everyone in the room.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Path to the .html file relative to workspace root" },
+      },
+      required: ["path"],
+    },
+    async execute(input: any) {
+      if (!opts?.onBroadcastHtml) {
+        return "Broadcasting is not available in this context.";
+      }
+      const filePath = input.path as string;
+      if (!filePath.endsWith(".html") && !filePath.endsWith(".htm")) {
+        return "File must be a .html or .htm file.";
+      }
+      // Verify file exists
+      const full = safe(filePath);
+      try {
+        await import("node:fs/promises").then((fs) => fs.access(full));
+      } catch {
+        return `File not found: ${filePath}. Create the file first using write_files, then broadcast it.`;
+      }
+      opts.onBroadcastHtml(filePath);
+      return `Broadcasting ${filePath} to the office TV screen. Everyone in the room can now see it.`;
+    },
+  };
+
+  const base = [...builtinTools, ...browserTools, submitTool, writeFilesTool, listFilesTool, broadcastToScreenTool];
 
   // ── Shared workspace tools ─────────────────────────────────────────
   const sharedReadTool: AgentTool<any, any> = {
@@ -1230,6 +1262,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         listOfficeMcp: ctx.listOfficeMcp,
         wizardGithubPat: ctx.wizardGithubPat,
         wizardBranch: ctx.wizardBranch,
+        onBroadcastHtml: ctx.onBroadcastHtml,
       });
       const maxIter = isChat ? (wizardChatTools.length > 0 ? 10 : agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
