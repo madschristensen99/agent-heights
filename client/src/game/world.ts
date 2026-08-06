@@ -1568,7 +1568,7 @@ export class WorldLayer {
 
   /** Whether the player is outside the office map bounds (in the world). */
   isOutside(playerX: number, playerY: number): boolean {
-    return playerY >= this.officeH || playerX < 0 || playerX > this.officeW;
+    return playerY >= this.officeH || playerX < 0 || playerX >= this.officeW;
   }
 
   /** Gradual darkness factor (0 = inside office, 1 = full darkness).
@@ -1766,15 +1766,16 @@ export class WorldLayer {
     return tileSpeed(tile);
   }
 
-  private static _walkChecks = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
+  private static _walkChecks = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
 
   /** Check if the player can walk to a pixel position (world collision). */
   canWalk(px: number, py: number): boolean {
-    const halfW = 12;
+    const halfW = 18;
     const checks = WorldLayer._walkChecks;
     checks[0].x = px - halfW; checks[0].y = py - 2;
     checks[1].x = px + halfW; checks[1].y = py - 2;
-    checks[2].x = px; checks[2].y = py - 10;
+    checks[2].x = px; checks[2].y = py - 14;
+    checks[3].x = px; checks[3].y = py + 8;
     for (const p of checks) {
       const { tx, ty } = this.pixelToTile(p.x, p.y);
       if (ty < 0) {
@@ -1786,6 +1787,52 @@ export class WorldLayer {
       if (!this.isTileWalkableLoaded(tx, ty)) return false;
     }
     return true;
+  }
+
+  /** If the player is stuck inside a non-walkable tile (e.g. chunk loaded
+   *  after player walked into it), find the nearest walkable tile and
+   *  return the corrected pixel position. Returns null if no rescue needed. */
+  rescuePlayer(px: number, py: number): { x: number; y: number } | null {
+    const { tx, ty } = this.pixelToTile(px, py);
+    if (this.isTileWalkableLoaded(tx, ty)) return null;
+    // Scan expanding rings for the nearest walkable tile
+    for (let r = 1; r <= 3; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // ring only
+          if (this.isTileWalkableLoaded(tx + dx, ty + dy)) {
+            return this.worldTileToPixel(tx + dx, ty + dy);
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Build a local walkability grid for outdoor A* pathfinding.
+   *  Scans a radius×radius tile window around the player pixel position.
+   *  Unloaded chunks are treated as walkable (optimistic) to avoid blocking. */
+  buildLocalWalkGrid(px: number, py: number, radius: number): Grid {
+    const { tx: centerTx, ty: centerTy } = this.pixelToTile(px, py);
+    const size = radius * 2 + 1;
+    const walkable: boolean[][] = [];
+    for (let y = 0; y < size; y++) {
+      walkable[y] = [];
+      for (let x = 0; x < size; x++) {
+        const wtx = centerTx - radius + x;
+        const wty = centerTy - radius + y;
+        walkable[y][x] = this.isTileWalkableLoaded(wtx, wty);
+      }
+    }
+    return new Grid(size, size, walkable);
+  }
+
+  /** Convert a world tile coordinate back to pixel center, accounting for offset. */
+  worldTileToPixel(wtx: number, wty: number): { x: number; y: number } {
+    return {
+      x: wtx * TILE_PX + TILE_PX / 2 + this.offset.x,
+      y: wty * TILE_PX + TILE_PX / 2 + this.offset.y,
+    };
   }
 
   /** Load/unload chunks around the player. Loads at most MAX_CHUNKS_PER_FRAME per frame to avoid spikes.

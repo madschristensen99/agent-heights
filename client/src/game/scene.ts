@@ -22,7 +22,8 @@ import { ScreenShareManager } from "../screen-share";
 import { WebcamManager } from "../webcam";
 import * as loadingOverlay from "./loading-overlay";
 
-const PLAYER_SPEED = 380;
+const PLAYER_SPEED = 300;
+const ACCEL_LERP = 0.18;
 
 function hintLabel(text: string): string {
   return isTouchDevice() ? text.replace(/^E:\s*/, "TAP ") : text;
@@ -338,6 +339,9 @@ export class OfficeScene extends Phaser.Scene {
   private pendingInteract: boolean = false;
   private pendingAgentId: string | null = null;
   private pathMarker: Phaser.GameObjects.Arc | null = null;
+  private playerVx = 0;
+  private playerVy = 0;
+  private playerPathOutdoor = false;
 
   // ── Camera controls (pinch-zoom, pan, recenter) ──
   private cameraMode: "follow" | "free" = "follow";
@@ -1243,7 +1247,8 @@ export class OfficeScene extends Phaser.Scene {
 
           const cam = this.cameras.main;
           // no camera bounds — the world is infinite
-          cam.startFollow(this.player, false);
+          cam.startFollow(this.player, false, 0.1, 0.1);
+          cam.roundPixels = true;
           cam.setZoom(this.defaultZoom());
 
           // --- camera controls: pinch-zoom, wheel-zoom, pan, tap-to-walk ---
@@ -1332,7 +1337,10 @@ export class OfficeScene extends Phaser.Scene {
                 }
                 this.drawPlatformMailboxes();
               }
-              this.syncAgents();
+              if (this.store.agentsDirty) {
+                this.store.agentsDirty = false;
+                this.syncAgents();
+              }
               this.world.syncGhosts();
               this.updateChimneySmoke();
             });
@@ -2232,7 +2240,25 @@ export class OfficeScene extends Phaser.Scene {
     const targetTile = tileOf(worldPoint.x, worldPoint.y);
     const playerOutside = this.world.isOutside(this.player.x, this.player.y);
     if (playerOutside) {
+      // Try A* pathfinding on a local walkability grid
+      const { tx: startTx, ty: startTy } = this.world.pixelToTile(this.player.x, this.player.y);
+      const { tx: destTx, ty: destTy } = this.world.pixelToTile(worldPoint.x, worldPoint.y);
+      const radius = 15;
+      const localGrid = this.world.buildLocalWalkGrid(this.player.x, this.player.y, radius);
+      const destLocal = { x: destTx - startTx + radius, y: destTy - startTy + radius };
+      if (localGrid.ok(destLocal.x, destLocal.y)) {
+        const path = findPath(localGrid, { x: radius, y: radius }, destLocal);
+        if (path.length > 0) {
+          this.playerPath = path.map(t => ({ x: t.x + startTx - radius, y: t.y + startTy - radius }));
+          this.playerPathOutdoor = true;
+          this.playerTargetPx = null;
+          this.showPathMarkerPx(worldPoint.x, worldPoint.y);
+          return;
+        }
+      }
+      // Fall back to straight-line if pathfinding fails or destination unreachable
       this.playerPath = [];
+      this.playerPathOutdoor = false;
       this.playerTargetPx = { x: worldPoint.x, y: worldPoint.y };
       this.showPathMarkerPx(worldPoint.x, worldPoint.y);
     } else {
@@ -2244,6 +2270,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Walk player to a tile using A* pathfinding (office only). */
   private walkToTile(dest: Tile): void {
     this.playerTargetPx = null;
+    this.playerPathOutdoor = false;
     const start = tileOf(this.player.x, this.player.y);
     if (start.x === dest.x && start.y === dest.y) {
       this.playerPath = [];
@@ -2415,13 +2442,14 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** Check if the player can walk to a pixel position inside the office. */
-  private static _officeWalkChecks = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
+  private static _officeWalkChecks = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
   private canWalkOffice(px: number, py: number): boolean {
-    const halfW = 12;
+    const halfW = 18;
     const checks = OfficeScene._officeWalkChecks;
     checks[0].x = px - halfW; checks[0].y = py - 2;
     checks[1].x = px + halfW; checks[1].y = py - 2;
-    checks[2].x = px; checks[2].y = py - 10;
+    checks[2].x = px; checks[2].y = py - 14;
+    checks[3].x = px; checks[3].y = py + 8;
     for (const p of checks) {
       const tx = Math.floor(p.x / TILE_PX);
       const ty = Math.floor(p.y / TILE_PX);
@@ -6759,8 +6787,10 @@ export class OfficeScene extends Phaser.Scene {
       if (id === AGENT_RESOURCES_ID) {
         if (info.appearance) {
           const key = agentTextureKey(info);
-          generateCharTexture(this, key, info.appearance);
-          this.ensureCharAnimations(key);
+          if (!this.textures.exists(key)) {
+            generateCharTexture(this, key, info.appearance);
+            this.ensureCharAnimations(key);
+          }
         }
         this.agentResources?.sync(info);
         continue;
@@ -6768,8 +6798,10 @@ export class OfficeScene extends Phaser.Scene {
       if (id === HERMES_ID) {
         if (info.appearance) {
           const key = agentTextureKey(info);
-          generateCharTexture(this, key, info.appearance);
-          this.ensureCharAnimations(key);
+          if (!this.textures.exists(key)) {
+            generateCharTexture(this, key, info.appearance);
+            this.ensureCharAnimations(key);
+          }
         }
         this.hermes?.sync(info);
         continue;
@@ -6824,10 +6856,15 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     this.initialSyncDone = true;
+    // Build deskIndex→agent map once for monitor + chair loops
+    const deskAgentMap = new Map<number, AgentInfo>();
+    for (const a of this.store.agents.values()) {
+      if (a.deskIndex >= 0) deskAgentMap.set(a.deskIndex, a);
+    }
     // monitors glow whenever someone's at the desk — working or just typing;
     // they only go dark during the post-task break (done/error linger)
     this.monitors.forEach((m, i) => {
-      const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
+      const agent = deskAgentMap.get(i);
       if (!agent) {
         // Unassigned desk — black screen
         m?.setFrame("2").clearTint();
@@ -6844,7 +6881,7 @@ export class OfficeScene extends Phaser.Scene {
     // chairs: face up (toward desk) if assigned, face down if unassigned
     this.chairs.forEach((chair, i) => {
       if (!chair) return;
-      const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
+      const agent = deskAgentMap.get(i);
       if (agent) {
         chair.setTexture(resolveChairTex(this, CHAIR_TEX_UP));
       } else {
@@ -6927,6 +6964,8 @@ export class OfficeScene extends Phaser.Scene {
       this.player.setPosition(boothPx.x, boothPx.y);
       this.player.setVisible(false);
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
+      this.playerVx = 0;
+      this.playerVy = 0;
       // skip movement but still update NPCs and other systems
     } else {
     const left = this.cursors.left.isDown || this.keys.A.isDown;
@@ -6948,14 +6987,23 @@ export class OfficeScene extends Phaser.Scene {
       this.clearPathMarker();
     }
 
-    // Tap-to-walk: follow A* path inside office, or straight-line outside
+    // Tap-to-walk: follow A* path (indoor or outdoor)
     if (this.playerPath.length > 0) {
-      const next = this.playerPath[0];
-      const targetPx = { x: next.x * TILE_PX + TILE_PX / 2, y: next.y * TILE_PX + TILE_PX / 2 };
+      // Look-ahead: aim 2 tiles ahead for smoother curves through diagonal shortcuts
+      const lookAheadIdx = Math.min(2, this.playerPath.length - 1);
+      const next = this.playerPath[lookAheadIdx];
+      const targetPx = this.playerPathOutdoor
+        ? this.world.worldTileToPixel(next.x, next.y)
+        : { x: next.x * TILE_PX + TILE_PX / 2, y: next.y * TILE_PX + TILE_PX / 2 };
       const dx = targetPx.x - this.player.x;
       const dy = targetPx.y - this.player.y;
       const dist = Math.hypot(dx, dy);
-      if (dist < 8) {
+      // Check proximity to the first tile in path for advancement
+      const firstPx = this.playerPathOutdoor
+        ? this.world.worldTileToPixel(this.playerPath[0].x, this.playerPath[0].y)
+        : { x: this.playerPath[0].x * TILE_PX + TILE_PX / 2, y: this.playerPath[0].y * TILE_PX + TILE_PX / 2 };
+      const firstDist = Math.hypot(firstPx.x - this.player.x, firstPx.y - this.player.y);
+      if (firstDist < 14) {
         // Reached this tile — advance to next
         this.playerPath.shift();
         if (this.playerPath.length === 0) {
@@ -7006,17 +7054,26 @@ export class OfficeScene extends Phaser.Scene {
       this.clearPathMarker();
     }
 
-    if (vx !== 0 && vy !== 0 && (left || right || up || down)) {
-      vx *= 0.7071;
-      vy *= 0.7071;
+    // Normalize diagonal movement for all input sources (keyboard, touch, tap-to-walk)
+    if (vx !== 0 && vy !== 0) {
+      const len = Math.hypot(vx, vy);
+      vx /= len;
+      vy /= len;
     }
+
+    // Smooth acceleration/deceleration toward target velocity
+    this.playerVx += (vx - this.playerVx) * ACCEL_LERP;
+    this.playerVy += (vy - this.playerVy) * ACCEL_LERP;
+    // Deadzone snap to prevent micro-drift
+    if (Math.abs(this.playerVx) < 0.02) this.playerVx = 0;
+    if (Math.abs(this.playerVy) < 0.02) this.playerVy = 0;
 
     const tileSpeedMult = outside ? this.world.getTileSpeedAt(this.player.x, this.player.y) : 1;
     const speed = (time < this.coffeeUntil ? PLAYER_SPEED * 2 : time < this.sofaUntil ? PLAYER_SPEED * 1.5 : PLAYER_SPEED) * tileSpeedMult;
 
     // always use manual movement for consistent feel
-    const stepX = vx * speed * (dt / 1000);
-    const stepY = vy * speed * (dt / 1000);
+    const stepX = this.playerVx * speed * (dt / 1000);
+    const stepY = this.playerVy * speed * (dt / 1000);
 
     // Sub-step movement to prevent tunneling through walls on large frames.
     // Collision checks only verify the endpoint, so a single big step can
@@ -7043,9 +7100,16 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    if (vx !== 0 || vy !== 0) {
+    // Rescue: if a chunk loaded under the player and they're stuck in a wall,
+    // push them to the nearest walkable tile
+    if (outside) {
+      const rescue = this.world.rescuePlayer(this.player.x, this.player.y);
+      if (rescue) this.player.setPosition(rescue.x, rescue.y);
+    }
+
+    if (this.playerVx !== 0 || this.playerVy !== 0) {
       this.playerDir =
-        Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
+        Math.abs(this.playerVx) > Math.abs(this.playerVy) ? (this.playerVx > 0 ? "right" : "left") : this.playerVy > 0 ? "down" : "up";
       this.player.play(`${this.playerTexKey}-walk-${this.playerDir}`, true);
     } else {
       this.player.play(`${this.playerTexKey}-idle-${this.playerDir}`, true);
@@ -7230,7 +7294,7 @@ export class OfficeScene extends Phaser.Scene {
     // --- world layer: chunks, ghosts, compass, recruit ---
     this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
     const spacePressed = Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
-    this.world.update(time, dt, this.player.x, this.player.y, ePressed, vx, vy, this.playerDir, spacePressed);
+    this.world.update(time, dt, this.player.x, this.player.y, ePressed, this.playerVx, this.playerVy, this.playerDir, spacePressed);
     this.world.vfx.updateSmoke();
 
     // Q: teleport back to office when outside

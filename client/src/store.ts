@@ -165,6 +165,7 @@ export class Store {
   private initialDataCallbacks = new Set<() => void>();
 
   private listeners = new Set<Listener>();
+  agentsDirty = false;
   private toastListeners = new Set<(text: string) => void>();
   private huddleListeners = new Set<(agentIds: string[]) => void>();
   private heliListeners = new Set<(agent: HelicopterDelivery) => void>();
@@ -674,6 +675,7 @@ export class Store {
         const prev = this.agents.get(msg.agent.id);
         const isNew = !prev;
         this.agents.set(msg.agent.id, msg.agent);
+        this.agentsDirty = true;
         if (isNew) {
           const count = this.agents.size;
           if (count >= 1) achievements.unlock("first_hire");
@@ -706,6 +708,7 @@ export class Store {
       case "agent_removed":
         this.agents.delete(msg.agentId);
         this.logs.delete(msg.agentId);
+        this.agentsDirty = true;
         if (this.selectedId === msg.agentId) this.selectedId = null;
         // Remove any schedules belonging to the fired agent
         for (const s of [...this.schedules.values()]) {
