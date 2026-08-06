@@ -1776,17 +1776,17 @@ export class WorldLayer {
     checks[1].x = px + halfW; checks[1].y = py - 2;
     checks[2].x = px; checks[2].y = py - 14;
     checks[3].x = px; checks[3].y = py + 8;
-    for (const p of checks) {
+    for (let i = 0; i < checks.length; i++) {
+      const p = checks[i];
       const { tx, ty } = this.pixelToTile(p.x, p.y);
       if (ty < 0) {
         const otx = Math.floor(p.x / TILE_PX);
         const oty = Math.floor(p.y / TILE_PX);
         if (this.officeGrid?.ok(otx, oty)) continue;
+        console.log(`[canWalk-BLOCK] px=${px.toFixed(0)} py=${py.toFixed(0)} check[${i}] p=(${p.x.toFixed(0)},${p.y.toFixed(0)}) ty=${ty} otx=${otx} oty=${oty} gridOk=${this.officeGrid?.ok(otx,oty)} gridW=${this.officeGrid?.width} gridH=${this.officeGrid?.height}`);
         return false;
       }
       if (!this.isTileWalkableLoaded(tx, ty)) {
-        // Chunk not loaded — request it from the worker (non-blocking) and
-        // be optimistic so the player isn't blocked while it generates.
         const cx = Math.floor(tx / CHUNK_SIZE);
         const cy = Math.floor(ty / CHUNK_SIZE);
         this.requestChunk(cx, cy);
