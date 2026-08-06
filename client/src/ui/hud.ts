@@ -4845,8 +4845,32 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     html += `<button class="x" id="worlds-close">✕</button>`;
     html += `</div>`;
 
+    // ── World Templates ──
+    if (this.store.worldTemplates.length > 0) {
+      html += `<div style="padding:8px 12px 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">World Templates</div>`;
+      for (const tpl of this.store.worldTemplates) {
+        html += `<div class="railway-project" style="border:1px solid #333;background:#1a1a24;">`;
+        html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px;">`;
+        html += `<span style="font-size:28px;line-height:1;">${esc(tpl.icon)}</span>`;
+        html += `<div style="flex:1;min-width:0;">`;
+        html += `<div style="font-size:14px;font-weight:600;color:#e0e0e0;">${esc(tpl.name)}</div>`;
+        html += `<div style="font-size:11px;color:#888;margin-top:2px;">${esc(tpl.description)}</div>`;
+        html += `</div>`;
+        if (this.store.worldGenerating) {
+          html += `<span style="font-size:11px;color:#e8a838;white-space:nowrap;">⏳ ${esc(this.store.worldGenerating.message)}</span>`;
+        } else {
+          html += `<button class="btn" id="worlds-gen-${esc(tpl.id)}" style="font-size:11px;padding:4px 12px;border:1px solid #4a8a4a;background:#2a4a2a;color:#a0e0a0;white-space:nowrap;cursor:pointer;font-weight:600;">Generate World</button>`;
+        }
+        html += `</div>`;
+        html += `</div>`;
+      }
+      html += `<div style="height:1px;background:#222;margin:8px 0;"></div>`;
+    }
+
+    // ── Your Worlds (deployments) ──
+    html += `<div style="padding:0 12px 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Your Worlds</div>`;
     if (deployments.length === 0) {
-      html += `<div style="padding:20px;text-align:center;color:#888;font-size:14px;">No worlds deployed yet.<br><span style="font-size:12px;">Fork a world and deploy it from the server racks.</span></div>`;
+      html += `<div style="padding:20px;text-align:center;color:#888;font-size:14px;">No worlds deployed yet.<br><span style="font-size:12px;">Generate a world from a template above.</span></div>`;
     } else {
       for (const dep of deployments) {
         const statusColor = dep.status.toLowerCase().includes("deploy") || dep.status.toLowerCase().includes("active") || dep.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
@@ -4901,6 +4925,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     document.getElementById("worlds-close")!.addEventListener("click", () => {
       this.store.toggleWorldsPanel(false);
     });
+
+    // Wire Generate World buttons (templates)
+    for (const tpl of this.store.worldTemplates) {
+      const btn = document.getElementById(`worlds-gen-${tpl.id}`);
+      if (btn) {
+        btn.addEventListener("click", () => {
+          if (this.net) this.net.send({ type: "generate_world", templateId: tpl.id });
+        });
+      }
+    }
 
     // Wire Open Portal buttons
     for (const dep of deployments) {

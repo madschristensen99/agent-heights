@@ -1766,14 +1766,15 @@ export class WorldLayer {
     return tileSpeed(tile);
   }
 
+  private static _walkChecks = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
+
   /** Check if the player can walk to a pixel position (world collision). */
   canWalk(px: number, py: number): boolean {
     const halfW = 12;
-    const checks = [
-      { x: px - halfW, y: py - 2 },
-      { x: px + halfW, y: py - 2 },
-      { x: px, y: py - 10 },
-    ];
+    const checks = WorldLayer._walkChecks;
+    checks[0].x = px - halfW; checks[0].y = py - 2;
+    checks[1].x = px + halfW; checks[1].y = py - 2;
+    checks[2].x = px; checks[2].y = py - 10;
     for (const p of checks) {
       const { tx, ty } = this.pixelToTile(p.x, p.y);
       if (ty < 0) {
@@ -1782,7 +1783,7 @@ export class WorldLayer {
         if (this.officeGrid?.ok(otx, oty)) continue;
         return false;
       }
-      if (!this.isTileWalkable(tx, ty)) return false;
+      if (!this.isTileWalkableLoaded(tx, ty)) return false;
     }
     return true;
   }

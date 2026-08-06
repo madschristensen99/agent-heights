@@ -475,6 +475,17 @@ export interface WorldTheme {
   assets: ThemeAssets;
 }
 
+/** A world template — a concept prompt the Wizard uses to build a world. */
+export interface WorldTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  conceptPrompt: string;
+  referenceDoc?: string;
+  sortOrder: number;
+}
+
 /** Chunk side length in tiles. */
 export const CHUNK_SIZE = 32;
 
@@ -940,7 +951,9 @@ export type ClientMsg =
   | { type: "list_office_mcp" }
   | { type: "unregister_mcp_server"; serverId: string }
   | { type: "delete_account" }
-  | { type: "cancel_deletion" };
+  | { type: "cancel_deletion" }
+  | { type: "generate_world"; templateId: string; worldName?: string }
+  | { type: "list_world_templates" };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1072,6 +1085,10 @@ export type ServerMsg =
   | { type: "gantt_update"; cards: TaskCard[]; dependencies: { from: string; to: string; type: string }[] }
   | { type: "phase_gate"; cardId: string; phase: TaskPhase; approved: boolean; reviewerId: string; reviewerName: string }
   | { type: "capability_gap"; gaps: { skill: string; requiredBy: string; suggestion: string }[] }
+  | { type: "world_templates"; templates: WorldTemplate[] }
+  | { type: "world_generating"; worldName: string; stage: string; message: string }
+  | { type: "world_generated"; deployment: WorldDeployment; conceptPrompt: string }
+  | { type: "world_gen_error"; error: string }
 
 export const AGENT_MODELS = [
   { id: "kimi-k2.5", label: "Standard" },

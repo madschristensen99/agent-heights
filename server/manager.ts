@@ -762,6 +762,26 @@ export class AgentManager {
     this.persist();
     this.broadcast({ type: "agent", agent: info });
     console.log(`[manager] Wizard NPC spawned (branch: ${wizardBranch})`);
+
+    // Auto-assign wizard-task.txt if it exists (committed during world generation)
+    try {
+      const taskPath = join(process.cwd(), "wizard-task.txt");
+      if (existsSync(taskPath)) {
+        const conceptPrompt = readFileSync(taskPath, "utf-8").trim();
+        if (conceptPrompt) {
+          console.log(`[manager] Wizard: found wizard-task.txt (${conceptPrompt.length} chars), auto-assigning…`);
+          // Defer assignment slightly so the client has time to connect
+          setTimeout(() => {
+            const wizardRt = this.agents.get(WIZARD_ID);
+            if (wizardRt && wizardRt.info.status === "idle") {
+              this.assign(WIZARD_ID, conceptPrompt);
+            }
+          }, 3000);
+        }
+      }
+    } catch (err) {
+      console.warn(`[manager] Wizard: failed to read wizard-task.txt:`, err);
+    }
   }
 
   /** Load persisted mail events from the save state, or seed test data on a fresh server. */

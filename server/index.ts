@@ -12,6 +12,7 @@ import { searchPulseMCPStructured } from "./pulsemcp.js";
 import { handleAgentResourcesRequest } from "./agent-resources.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway, deployWorldToRailway, listWorldDeployments, stopWorldDeployment } from "./providers/railway-mcp.js";
+import { listWorldTemplates, generateWorld } from "./world-templates.js";
 import { getAuthenticatedUser, forkSourceRepo, createBranch, listBranches, deleteBranch, getGithubToken, listRepoDir, readRepoFile, writeRepoFile, createRepoFile, deleteRepoFile } from "./github.js";
 import { rateLimitAsync, rateLimit } from "./ratelimit.js";
 import { setUserApiKey, deleteUserApiKey, setUserMcpKey, deleteUserMcpKey, getUserMcpKeys, getUserMcpKeyUrls } from "./apikeys.js";
@@ -1521,6 +1522,40 @@ wss.on("connection", async (ws, req) => {
         case "railway_list_deployments": {
           const result = await listWorldDeployments();
           sess.broadcast({ type: "railway_deployments", deployments: result.deployments, error: result.error });
+          break;
+        }
+        case "list_world_templates": {
+          const result = await listWorldTemplates();
+          sess.broadcast({ type: "world_templates", templates: result.templates, error: null } as any);
+          if (result.error) {
+            console.warn("[world-templates] Failed to list templates:", result.error);
+          }
+          break;
+        }
+        case "generate_world": {
+          const mcpKeys = await getUserMcpKeys(sess.user.id);
+          const token = getGithubToken(sess.user.id, mcpKeys);
+          if (!token) {
+            sess.broadcast({ type: "world_gen_error", error: "No GitHub token found. Add a GitHub MCP key in Settings." } as any);
+            break;
+          }
+          try {
+            const worldName = msg.worldName;
+            sess.broadcast({ type: "world_generating", worldName: worldName ?? "world", stage: "forking", message: "Forking repo and creating branch…" } as any);
+
+            const result = await generateWorld(msg.templateId, token, worldName);
+
+            if (result.error || !result.deployment) {
+              sess.broadcast({ type: "world_gen_error", error: result.error ?? "Unknown error" } as any);
+            } else {
+              sess.broadcast({ type: "world_generated", deployment: result.deployment, conceptPrompt: result.conceptPrompt } as any);
+              // Refresh deployments list
+              const deps = await listWorldDeployments();
+              sess.broadcast({ type: "railway_deployments", deployments: deps.deployments, error: deps.error });
+            }
+          } catch (err) {
+            sess.broadcast({ type: "world_gen_error", error: err instanceof Error ? err.message : String(err) } as any);
+          }
           break;
         }
         case "railway_stop_deployment": {

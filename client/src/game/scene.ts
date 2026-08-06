@@ -330,6 +330,7 @@ export class OfficeScene extends Phaser.Scene {
   private lastSentX = 0;
   private lastSentY = 0;
   private lastSpeakingCheck = 0;
+  private lastHintUpdate = 0;
 
   // ── Tap-to-walk + tap-to-interact ──
   private playerPath: Tile[] = [];
@@ -1242,7 +1243,7 @@ export class OfficeScene extends Phaser.Scene {
 
           const cam = this.cameras.main;
           // no camera bounds — the world is infinite
-          cam.startFollow(this.player, true);
+          cam.startFollow(this.player, false);
           cam.setZoom(this.defaultZoom());
 
           // --- camera controls: pinch-zoom, wheel-zoom, pan, tap-to-walk ---
@@ -1812,7 +1813,7 @@ export class OfficeScene extends Phaser.Scene {
   recenterCamera(): void {
     this.cameraMode = "follow";
     this.userZoom = null;
-    this.cameras.main.startFollow(this.player, true);
+    this.cameras.main.startFollow(this.player, false);
     this.cameras.main.setZoom(this.defaultZoom());
   }
 
@@ -2414,13 +2415,13 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** Check if the player can walk to a pixel position inside the office. */
+  private static _officeWalkChecks = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
   private canWalkOffice(px: number, py: number): boolean {
     const halfW = 12;
-    const checks = [
-      { x: px - halfW, y: py - 2 },
-      { x: px + halfW, y: py - 2 },
-      { x: px, y: py - 10 },
-    ];
+    const checks = OfficeScene._officeWalkChecks;
+    checks[0].x = px - halfW; checks[0].y = py - 2;
+    checks[1].x = px + halfW; checks[1].y = py - 2;
+    checks[2].x = px; checks[2].y = py - 10;
     for (const p of checks) {
       const tx = Math.floor(p.x / TILE_PX);
       const ty = Math.floor(p.y / TILE_PX);
@@ -6886,7 +6887,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.ready) return;
     // cap dt so a lag spike (chunk gen, GC, tab switch) doesn't cause a
     // teleport-length step that tunnels through collision
-    dt = Math.min(dt, 100);
+    dt = Math.min(dt, 50);
 
     // Sky gradient + cloud drift — world-space, follows camera view
     this.updateSky(dt);
@@ -7295,7 +7296,10 @@ export class OfficeScene extends Phaser.Scene {
 
     // office proximity hints — unified: show only the closest interactable
     if (!outside) {
-      this.updateAllHints(time);
+      if (time - this.lastHintUpdate > 100) {
+        this.lastHintUpdate = time;
+        this.updateAllHints(time);
+      }
     } else {
       for (const h of this.allHints) h.setVisible(false);
     }

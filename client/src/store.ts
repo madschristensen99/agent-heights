@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -97,6 +97,8 @@ export class Store {
   worldTransitioning = false;
   portalTarget: { branchName: string; url: string } | null = null;
   worldsPanelOpen = false;
+  worldTemplates: WorldTemplate[] = [];
+  worldGenerating: { worldName: string; stage: string; message: string } | null = null;
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
@@ -265,6 +267,8 @@ export class Store {
     this.worldTransitioning = false;
     this.portalTarget = null;
     this.worldsPanelOpen = false;
+    this.worldTemplates = [];
+    this.worldGenerating = null;
     this.worldSeed = 0;
     this.chunkOverrides = {};
     this.platformStates = [];
@@ -588,6 +592,7 @@ export class Store {
     this.worldsPanelOpen = open ?? !this.worldsPanelOpen;
     if (this.worldsPanelOpen) {
       this.sendFn?.({ type: "railway_list_deployments" });
+      this.sendFn?.({ type: "list_world_templates" });
     }
     this.emit();
   }
@@ -848,6 +853,24 @@ export class Store {
       case "railway_deployments":
         this.deployments = msg.deployments;
         if (msg.error) this.toast(`Railway: ${msg.error}`);
+        break;
+      case "world_templates":
+        this.worldTemplates = msg.templates;
+        break;
+      case "world_generating":
+        this.worldGenerating = { worldName: msg.worldName, stage: msg.stage, message: msg.message };
+        this.toast(msg.message);
+        break;
+      case "world_generated":
+        this.worldGenerating = null;
+        this.toast(`World generated: ${msg.deployment.branchName}`);
+        if (msg.deployment.railwayServiceUrl) {
+          this.toast(`Live at: ${msg.deployment.railwayServiceUrl}`);
+        }
+        break;
+      case "world_gen_error":
+        this.worldGenerating = null;
+        this.toast(`World generation failed: ${msg.error}`);
         break;
       case "railway_deploy_started":
         this.deployingBranch = msg.branchName;
