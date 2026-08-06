@@ -18,15 +18,15 @@
  */
 
 function getPrivateKey(): string | null {
-  return process.env.CIRCLE_GATEWAY_PRIVATE_KEY ?? null;
+  return process.env.X402_PRIVATE_KEY ?? process.env.CIRCLE_GATEWAY_PRIVATE_KEY ?? null;
 }
 
 function getChain(): string {
-  return process.env.CIRCLE_CHAIN ?? "baseSepolia";
+  return process.env.X402_CHAIN ?? process.env.CIRCLE_CHAIN ?? "baseSepolia";
 }
 
 function getBalanceAlertThreshold(): number {
-  return parseFloat(process.env.CIRCLE_BALANCE_ALERT_THRESHOLD ?? "5");
+  return parseFloat(process.env.X402_BALANCE_ALERT_THRESHOLD ?? process.env.CIRCLE_BALANCE_ALERT_THRESHOLD ?? "5");
 }
 
 export function isCircleGatewayConfigured(): boolean {
@@ -43,7 +43,7 @@ async function getClient(): Promise<any> {
 
   initPromise = (async () => {
     const pk = getPrivateKey();
-    if (!pk) throw new Error("CIRCLE_GATEWAY_PRIVATE_KEY not set");
+    if (!pk) throw new Error("X402_PRIVATE_KEY (or CIRCLE_GATEWAY_PRIVATE_KEY) not set");
 
     const { GatewayClient } = await import("@circle-fin/x402-batching/client");
     gatewayClient = new GatewayClient({
@@ -142,7 +142,7 @@ export async function payAndFetchWithOptions(
   options: { method?: string; body?: unknown; headers?: Record<string, string> },
 ): Promise<PayResult> {
   if (!isCircleGatewayConfigured()) {
-    return { data: null, status: 0, cost: 0, error: "Circle Gateway not configured — CIRCLE_GATEWAY_PRIVATE_KEY not set" };
+    return { data: null, status: 0, cost: 0, error: "Circle Gateway not configured — X402_PRIVATE_KEY (or CIRCLE_GATEWAY_PRIVATE_KEY) not set" };
   }
   try {
     const client = await getClient();
