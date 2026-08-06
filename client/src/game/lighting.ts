@@ -37,6 +37,7 @@ export class LightingSystem {
   private brightnessBoost!: Phaser.GameObjects.Rectangle;
   private lightContainer: Phaser.GameObjects.Container;
   private playerLight: LightSource | null = null;
+  private pipelinesAttached = true;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -114,6 +115,32 @@ export class LightingSystem {
    *  @param darknessFactor 0 = fully lit (inside office), 1 = full night darkness
    *  @param nightFactor 0 = day, 1 = full night (from day/night cycle) */
   update(time: number, playerX: number, playerY: number, darknessFactor: number, nightFactor: number): void {
+    const cam = this.scene.cameras.main;
+
+    // Inside the office (darknessFactor === 0): skip all lighting work and
+    // remove post-pipelines so the GPU doesn't waste time on invisible effects.
+    if (darknessFactor === 0) {
+      if (this.pipelinesAttached) {
+        cam.removePostPipeline("BloomFX");
+        cam.removePostPipeline("ColorGrade");
+        cam.removePostPipeline("DOF");
+        this.pipelinesAttached = false;
+      }
+      this.dayNightTint.setVisible(false);
+      this.ambientDarkness.setVisible(false);
+      this.brightnessBoost.setVisible(false);
+      if (this.playerLight) this.playerLight.sprite.setVisible(false);
+      return;
+    }
+
+    // Outside — re-attach post-pipelines if they were removed
+    if (!this.pipelinesAttached) {
+      cam.setPostPipeline("BloomFX");
+      cam.setPostPipeline("ColorGrade");
+      cam.setPostPipeline("DOF");
+      this.pipelinesAttached = true;
+    }
+
     // Brightness boost: peaks just outside the office, fades over ~15 tiles
     const brightnessFactor = darknessFactor > 0 ? Math.max(0, 1 - darknessFactor * 7) : 0;
     this.brightnessBoost.setFillStyle(0xffd88a, brightnessFactor * 0.06);
@@ -130,7 +157,6 @@ export class LightingSystem {
     this.brightnessBoost.setVisible(!showOverlays && brightnessFactor > 0);
 
     // Resize overlays to cover the full camera world view (handles zoom-out)
-    const cam = this.scene.cameras.main;
     const view = cam.worldView;
     this.dayNightTint.setSize(view.width, view.height).setPosition(view.x, view.y);
     this.ambientDarkness.setSize(view.width, view.height).setPosition(view.x, view.y);
@@ -149,7 +175,6 @@ export class LightingSystem {
 
     // Dynamically adjust bloom pipeline — at night, lower threshold and boost strength
     // so light sources radiate and glow intensely against the darkness.
-    // Inside the office, bloom stays at default (subtle) settings.
     const bloomPipe = cam.getPostPipeline("BloomFX") as unknown as { setStrength: (n: number) => void; setThreshold: (n: number) => void } | undefined;
     if (bloomPipe && typeof bloomPipe.setStrength === "function") {
       const nightBloom = nightFactor * delayedDarkness;

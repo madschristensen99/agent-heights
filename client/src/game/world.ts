@@ -1362,9 +1362,12 @@ export class WorldLayer {
   private workerRequested = new Set<string>();
   private doorPreloaded = false;
 
-  // --- Time-sliced chunk rendering ---
-  // Chunk canvas painting is split across frames to avoid main-thread stalls.
+  // --- Chunk rendering ---
   private renderingQueue: RenderJob[] = [];
+
+  // --- Deferred IndexedDB saves ---
+  private pendingSaves: { texKey: string; ss: number; canvas: HTMLCanvasElement; tier: string }[] = [];
+  private saveTimerId: ReturnType<typeof setTimeout> | null = null;
 
   private ghostDialog!: HintTag;
   private recruitedHint!: Phaser.GameObjects.Text;
@@ -2511,20 +2514,39 @@ export class WorldLayer {
         this.chunkLights.set(key, job.chunkLightList);
         rendered++;
 
-        // Persist canvas to IndexedDB (deferred to idle callback to avoid main-thread jank)
-        const canvasEl = job.canvasTex.getSourceImage() as HTMLCanvasElement;
+        // Queue canvas for deferred batch save to IndexedDB.
+        // Debounced by 5s so we don't trigger toBlob() during active gameplay.
         const tier = this.worldTheme?.assets?.assetTier ?? "ai";
-        const ric = (globalThis as any).requestIdleCallback;
-        if (ric) {
-          ric(() => saveChunkCanvas(job.texKey, job.SS, canvasEl, tier), { timeout: 2000 });
-        } else {
-          setTimeout(() => saveChunkCanvas(job.texKey, job.SS, canvasEl, tier), 0);
-        }
+        this.pendingSaves.push({ texKey: job.texKey, ss: job.SS, canvas: job.canvasTex.getSourceImage() as HTMLCanvasElement, tier });
+        this.scheduleSaveFlush();
       } else {
         remaining.push(job);
       }
     }
     this.renderingQueue = remaining;
+  }
+
+  /** Debounce batch save — flushes all pending canvas saves 5s after the last render. */
+  private scheduleSaveFlush(): void {
+    if (this.saveTimerId) clearTimeout(this.saveTimerId);
+    this.saveTimerId = setTimeout(() => {
+      this.saveTimerId = null;
+      const batch = this.pendingSaves.splice(0);
+      if (batch.length === 0) return;
+      const ric = (globalThis as any).requestIdleCallback;
+      const flush = () => {
+        for (const item of batch) {
+          if (this.scene.textures.exists(item.texKey)) {
+            saveChunkCanvas(item.texKey, item.ss, item.canvas, item.tier);
+          }
+        }
+      };
+      if (ric) {
+        ric(flush, { timeout: 10000 });
+      } else {
+        setTimeout(flush, 0);
+      }
+    }, 5000);
   }
 
   /** Create the display image, water sprites, and light sources for a finished chunk. */

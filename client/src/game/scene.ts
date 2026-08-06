@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, AgentResourcesNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
-import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE } from "../../../shared/types";
+import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -320,6 +320,8 @@ export class OfficeScene extends Phaser.Scene {
   /** Matrix rain canvas width/height. */
   private static MATRIX_W = 128;
   private static MATRIX_H = 80;
+  private matrixRainLastUpdate = 0;
+  private matrixRainWorkingDesks = new Set<number>();
   /** Speaking indicator icons above remote players. */
   private speakingIcons = new Map<string, Phaser.GameObjects.Text>();
   /** Tracks the last roomId the scene rendered — used to detect room changes. */
@@ -1723,10 +1725,15 @@ export class OfficeScene extends Phaser.Scene {
 
     // monitor glows: pulse for working agents
     const pulse = 0.15 + Math.sin(time * 0.003) * 0.05;
+    // Build deskIndex→agent map once instead of [...values()].find() per monitor
+    const deskAgentMap = new Map<number, { status: AgentStatus; deskIndex: number }>();
+    for (const agent of this.store.agents.values()) {
+      if (agent.deskIndex >= 0) deskAgentMap.set(agent.deskIndex, agent);
+    }
     this.monitors.forEach((m, i) => {
       const glow = this.monitorGlows[i];
       if (!glow) return;
-      const agent = [...this.store.agents.values()].find((a) => a.deskIndex === i);
+      const agent = deskAgentMap.get(i);
       if (agent && agent.status !== "idle" && agent.status !== "waiting") {
         const color = getThemeStatusColors(this.worldTheme)[agent.status];
         glow.setPosition(m.x, m.y + 4);
@@ -3799,15 +3806,10 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /** Update proximity hints — show only the closest interactable. */
+  private hintCandidates: { hint: HintTag; dist: number; label: string; hx: number; hy: number }[] = [];
   private updateAllHints(time: number): void {
-    interface Candidate {
-      hint: HintTag;
-      dist: number;
-      label: string;
-      hx: number;
-      hy: number;
-    }
-    const candidates: Candidate[] = [];
+    const candidates = this.hintCandidates;
+    candidates.length = 0;
     const add = (
       hint: HintTag,
       cx: number, cy: number, radius: number,
@@ -4034,7 +4036,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Hide all, then show only the closest
     for (const h of this.allHints) h.setVisible(false);
-    let best: Candidate | null = null;
+    let best: { hint: HintTag; dist: number; label: string; hx: number; hy: number } | null = null;
     for (const c of candidates) {
       if (!best || c.dist < best.dist) best = c;
     }
@@ -8950,7 +8952,8 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private updateMatrixRain(_time: number): void {
-    const workingDesks = new Set<number>();
+    const workingDesks = this.matrixRainWorkingDesks;
+    workingDesks.clear();
     for (const agent of this.store.agents.values()) {
       if (agent.deskIndex >= 0 && agent.status !== "idle" && agent.status !== "done" && agent.status !== "error" && agent.status !== "waiting") {
         workingDesks.add(agent.deskIndex);
@@ -8965,53 +8968,62 @@ export class OfficeScene extends Phaser.Scene {
       return;
     }
 
-    // Init columns if needed
-    if (this.matrixColumns.length === 0) this.initMatrixRain();
+    // Throttle canvas painting + GPU texture upload to 15fps (every 66ms).
+    // Overlay visibility/positioning still happens every frame below.
+    const shouldPaint = _time - this.matrixRainLastUpdate >= 66;
+    if (shouldPaint) {
+      this.matrixRainLastUpdate = _time;
 
-    // Create texture if needed
-    if (!this.textures.exists(this.monitorMatrixTexKey)) {
-      const ct = this.textures.createCanvas(this.monitorMatrixTexKey, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
-      if (!ct) return;
-    }
+      paintBlock: {
+        // Init columns if needed
+        if (this.matrixColumns.length === 0) this.initMatrixRain();
 
-    // Update matrix rain canvas
-    const tex = this.textures.get(this.monitorMatrixTexKey) as Phaser.Textures.CanvasTexture;
-    const canvas = tex.getSourceImage() as HTMLCanvasElement;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+        // Create texture if needed
+        if (!this.textures.exists(this.monitorMatrixTexKey)) {
+          const ct = this.textures.createCanvas(this.monitorMatrixTexKey, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
+          if (!ct) break paintBlock;
+        }
 
-    // Fade previous frame
-    ctx.fillStyle = "rgba(0,0,0,0.15)";
-    ctx.fillRect(0, 0, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
+        // Update matrix rain canvas
+        const tex = this.textures.get(this.monitorMatrixTexKey) as Phaser.Textures.CanvasTexture;
+        const canvas = tex.getSourceImage() as HTMLCanvasElement;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) break paintBlock;
 
-    // Draw falling characters
-    const charSet = "01ABCDEF<>/{}[]#$%&*+-=";
-    ctx.font = "6px monospace";
-    for (let col = 0; col < this.matrixColumns.length; col++) {
-      const mc = this.matrixColumns[col];
-      const x = col * 6;
-      const y = Math.floor(mc.y) * 6;
+        // Fade previous frame
+        ctx.fillStyle = "rgba(0,0,0,0.15)";
+        ctx.fillRect(0, 0, OfficeScene.MATRIX_W, OfficeScene.MATRIX_H);
 
-      // Bright leading character
-      ctx.fillStyle = "#ccffcc";
-      ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, y);
+        // Draw falling characters
+        const charSet = "01ABCDEF<>/{}[]#$%&*+-=";
+        ctx.font = "6px monospace";
+        for (let col = 0; col < this.matrixColumns.length; col++) {
+          const mc = this.matrixColumns[col];
+          const x = col * 6;
+          const y = Math.floor(mc.y) * 6;
 
-      // Trailing dimmer characters
-      ctx.fillStyle = "rgba(0,255,0,0.5)";
-      for (let trail = 1; trail < 5; trail++) {
-        const ty = y - trail * 6;
-        if (ty < 0) break;
-        ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, ty);
+          // Bright leading character
+          ctx.fillStyle = "#ccffcc";
+          ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, y);
+
+          // Trailing dimmer characters
+          ctx.fillStyle = "rgba(0,255,0,0.5)";
+          for (let trail = 1; trail < 5; trail++) {
+            const ty = y - trail * 6;
+            if (ty < 0) break;
+            ctx.fillText(charSet[Math.floor(Math.random() * charSet.length)], x, ty);
+          }
+
+          // Advance column
+          mc.y += mc.speed;
+          if (mc.y > OfficeScene.MATRIX_H) {
+            mc.y = -Math.random() * 15;
+            mc.speed = 0.5 + Math.random() * 1.0;
+          }
+        }
+        tex.refresh();
       }
-
-      // Advance column
-      mc.y += mc.speed;
-      if (mc.y > OfficeScene.MATRIX_H) {
-        mc.y = -Math.random() * 15;
-        mc.speed = 0.5 + Math.random() * 1.0;
-      }
     }
-    tex.refresh();
 
     // Create/update overlays for working monitors
     for (const deskIdx of workingDesks) {
