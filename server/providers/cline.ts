@@ -929,7 +929,7 @@ export async function makeTools(cwd: string, opts?: {
   }
   const baseWithSchedules = [...baseWithWorld, ...scheduleTools];
 
-  // ── Agent hiring tool (only for Agent Resources / Yuki) ───────────
+  // ── Agent hiring tool (only for Agent Resources) ───────────
   const hireTools: AgentTool<any, any>[] = [];
   if (opts?.hireAgent) {
     const hireAgentTool: AgentTool<any, any> = {

@@ -110,9 +110,9 @@ export class OfficeScene extends Phaser.Scene {
   private wizardSeat: Tile | null = null;
   private spawnTile: Tile = { x: 14, y: 16 };
   private doorTile: Tile = { x: 14, y: 17 };
-  private boardTile: Tile = { x: 14, y: 1 };
+  private boardTile: Tile = { x: 14, y: 0 };
   private boardHint!: HintTag;
-  private ganttTile: Tile = { x: 22, y: 1 };
+  private ganttTile: Tile = { x: 20, y: 0 };
   private ganttHint!: HintTag;
   private coffeeTile: Tile = { x: 26, y: 2 };
   private coffeeUntil = 0;
@@ -277,6 +277,7 @@ export class OfficeScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Sprite;
   private playerLabel!: Phaser.GameObjects.Text;
   private playerNameBg!: Phaser.GameObjects.Graphics;
+  private lastPlayerNameBgKey = "";
   private playerDir: Dir = "down";
   private playerTexKey = "boss-default";
   private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "SPACE", Phaser.Input.Keyboard.Key>;
@@ -285,6 +286,7 @@ export class OfficeScene extends Phaser.Scene {
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
   private skyGfx!: Phaser.GameObjects.Graphics;
+  private lastSkyView: { x: number; y: number; w: number; h: number } | null = null;
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; yBase: number }[] = [];
 
   /** Multiplayer: remote player sprites keyed by userId. */
@@ -757,10 +759,12 @@ export class OfficeScene extends Phaser.Scene {
           // Remove old clock tile from furniture layer (clock moved to west wall)
           furniture.removeTileAt(6, 1, false);
 
-          // Remove wall pictures / posters / papers from the board & gantt area (y=1, x=9..26)
-          for (let rx = 9; rx <= 26; rx++) {
-            const ft = furniture.getTileAt(rx, 1);
-            if (ft) furniture.removeTileAt(rx, 1, false);
+          // Remove wall pictures / posters / papers from the board & gantt area (y=0..2, x=9..26)
+          for (let ry = 0; ry <= 2; ry++) {
+            for (let rx = 9; rx <= 26; rx++) {
+              const ft = furniture.getTileAt(rx, ry);
+              if (ft) furniture.removeTileAt(rx, ry, false);
+            }
           }
 
           // Scan for server rack tiles (GID 35 = tile ID 34) for E-interaction
@@ -1235,7 +1239,7 @@ export class OfficeScene extends Phaser.Scene {
 
           const cam = this.cameras.main;
           // no camera bounds — the world is infinite
-          cam.startFollow(this.player, true);
+          cam.startFollow(this.player, false, 0.12, 0.12);
           cam.setZoom(this.defaultZoom());
 
           // --- camera controls: pinch-zoom, wheel-zoom, pan, tap-to-walk ---
@@ -1623,6 +1627,14 @@ export class OfficeScene extends Phaser.Scene {
   private drawSkyGradient(): void {
     const cam = this.cameras.main;
     const view = cam.worldView;
+    if (this.lastSkyView &&
+        this.lastSkyView.x === view.x &&
+        this.lastSkyView.y === view.y &&
+        this.lastSkyView.w === view.width &&
+        this.lastSkyView.h === view.height) {
+      return;
+    }
+    this.lastSkyView = { x: view.x, y: view.y, w: view.width, h: view.height };
     this.skyGfx.clear();
 
     // Gradient stops (top to bottom)
@@ -1812,7 +1824,7 @@ export class OfficeScene extends Phaser.Scene {
   recenterCamera(): void {
     this.cameraMode = "follow";
     this.userZoom = null;
-    this.cameras.main.startFollow(this.player, true);
+    this.cameras.main.startFollow(this.player, false, 0.12, 0.12);
     this.cameras.main.setZoom(this.defaultZoom());
   }
 
@@ -7061,7 +7073,11 @@ export class OfficeScene extends Phaser.Scene {
       this.playerLabel.setText(playerName);
     }
     const accentColor = time < this.coffeeUntil ? 0xb0741f : time < this.sofaUntil ? 0x9a7acb : 0x3a8cd4;
-    this.drawPlayerNameBg(accentColor);
+    const nameBgKey = `${accentColor}|${playerName}`;
+    if (nameBgKey !== this.lastPlayerNameBgKey) {
+      this.lastPlayerNameBgKey = nameBgKey;
+      this.drawPlayerNameBg(accentColor);
+    }
     this.playerLabel
       .setPosition(this.player.x, this.player.y - 108)
       .setDepth(10 + this.player.y);

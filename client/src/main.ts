@@ -136,7 +136,7 @@ const game = new Phaser.Game({
     height: "100%",
   },
   physics: { default: "arcade", arcade: { fixedStep: false } },
-  fps: { smoothStep: false },
+  fps: { smoothStep: true },
   input: isSpectator ? { windowEvents: false, keyboard: false, mouse: false, touch: false } : { windowEvents: false },
   scene: [BootScene, OfficeScene],
 });

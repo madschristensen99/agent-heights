@@ -1685,8 +1685,8 @@ export class AgentManager {
     this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null, next.notifyOnComplete ?? undefined, next.waitFor ?? undefined);
   }
 
-  /** Hand a goal to the office — Yuki decomposes it into subtasks for the team.
-   *  Falls back to broadcasting the same task to everyone if Yuki is unavailable. */
+  /** Hand a goal to the office — Agent Resources decomposes it into subtasks for the team.
+   *  Falls back to broadcasting the same task to everyone if Agent Resources is unavailable. */
   assignAll(task: string): void {
     const clean = task.trim();
     if (!clean) return;
@@ -1722,18 +1722,18 @@ export class AgentManager {
       agentIds: free.map((rt) => rt.info.id),
     });
 
-    // Try to route through Yuki for decomposition
-    const yuki = this.agents.get(AGENT_RESOURCES_ID);
-    if (yuki && yuki.info.status !== "thinking" && yuki.info.status !== "working" && yuki.info.status !== "waiting") {
-      this.log(yuki, "status", `Office goal received — decomposing for the team.`);
+    // Try to route through Agent Resources for decomposition
+    const agentResources = this.agents.get(AGENT_RESOURCES_ID);
+    if (agentResources && agentResources.info.status !== "thinking" && agentResources.info.status !== "working" && agentResources.info.status !== "waiting") {
+      this.log(agentResources, "status", `Office goal received — decomposing for the team.`);
       this.broadcast({ type: "huddle", agentIds: free.map((rt) => rt.info.id) });
-      // Assign to Yuki with the goal card — her managerBrief will handle decomposition
-      this.startTask(yuki, clean, undefined, goalCard.id, false);
-      this.broadcast({ type: "toast", text: `Office goal sent to Yuki for delegation.` });
+      // Assign to Agent Resources with the goal card — its managerBrief will handle decomposition
+      this.startTask(agentResources, clean, undefined, goalCard.id, false);
+      this.broadcast({ type: "toast", text: `Office goal sent to Agent Resources for delegation.` });
       return;
     }
 
-    // Fallback: Yuki unavailable — route to a single agent (stop rule: sequential work shouldn't fan out)
+    // Fallback: Agent Resources unavailable — route to a single agent (stop rule: sequential work shouldn't fan out)
     const pick = free.sort((a, b) => {
       // Prefer idle agents, then those with fewer completed tasks (less fatigued)
       const aIdle = a.info.status === "idle" ? 0 : 1;
@@ -1745,7 +1745,7 @@ export class AgentManager {
     this.assign(pick.info.id, clean);
     this.broadcast({
       type: "toast",
-      text: `Yuki unavailable — task routed to ${pick.info.name} (stop rule: no fan-out on sequential work).`,
+      text: `Agent Resources unavailable — task routed to ${pick.info.name} (stop rule: no fan-out on sequential work).`,
     });
   }
 
@@ -2794,63 +2794,7 @@ export class AgentManager {
     // Update mood
     this.updateMood(rt);
 
-    // 1. Managers: check for backlog cards to delegate
-    if (rt.info.role === "manager") {
-      const REVERT_COOLDOWN_MS = 60_000;
-      const backlog = [...this.board.values()].filter(
-        (c) => c.status === "backlog" && !c.assignedAgentId,
-      );
-      // Prefer cards with no original assignee (fresh) or cards past cooldown
-      const pickable = backlog.filter(
-        (c) => (!c.originalAgentId || !c.revertedAt || Date.now() - c.revertedAt > REVERT_COOLDOWN_MS) &&
-        // Only delegate if some free worker has the right skills
-        [...this.agents.values()].some(
-          (a) => a.info.id !== rt.info.id && a.info.role !== "manager" &&
-          a.info.status === "idle" && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID && a.info.id !== WIZARD_ID &&
-          this.agentCanHandleCard(a, c),
-        ),
-      );
-      if (pickable.length > 0) {
-        const card = pickable[0];
-        const free = [...this.agents.values()].filter(
-          (a) => a.info.id !== rt.info.id && a.info.role !== "manager" &&
-          a.info.status === "idle" && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== HERMES_ID && a.info.id !== WIZARD_ID,
-        );
-        if (free.length > 0) {
-          this.log(rt, "status", `Picked up backlog card "${card.title}" — delegating to the team.`);
-          this.broadcast({ type: "emote", agentId: rt.info.id, emote: "📋" });
-          // Assign the card to the manager for planning, then it delegates
-          this.assignCard(card.id, rt.info.id);
-          return;
-        }
-      }
-    }
-
-    // 2. Workers: pick up unassigned backlog cards
-    if (rt.info.role === "worker") {
-      const REVERT_COOLDOWN_MS = 60_000;
-      const backlog = [...this.board.values()].filter(
-        (c) => c.status === "backlog" && !c.assignedAgentId && this.agentCanHandleCard(rt, c),
-      );
-      if (backlog.length > 0 && p.conscientiousness > 0.4) {
-        // Prefer cards originally assigned to this agent (their own reverted tasks)
-        const own = backlog.filter((c) => c.originalAgentId === rt.info.id);
-        // Then fresh cards (no original assignee) or cards past cooldown
-        const pickable = backlog.filter(
-          (c) => !c.originalAgentId || c.originalAgentId === rt.info.id ||
-                 (c.revertedAt && Date.now() - c.revertedAt > REVERT_COOLDOWN_MS),
-        );
-        const card = own[0] ?? pickable[0];
-        if (card) {
-          this.log(rt, "status", `Picked up backlog card "${card.title}" on my own initiative.`);
-          this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
-          this.assignCard(card.id, rt.info.id);
-          return;
-        }
-      }
-    }
-
-    // 3. Devops (Hermes): monitor office task health and alert on stuck/error cards
+    // 1. Devops (Hermes): monitor office task health and alert on stuck/error cards
     if (rt.info.role === "devops") {
       const errorCards = [...this.board.values()].filter(
         (c) => c.status === "backlog" && c.assignedAgentId === null && c.type !== "chat" && c.type !== "goal",
@@ -2871,19 +2815,19 @@ export class AgentManager {
       }
     }
 
-    // 3. Curious agents: show a thinking emote
+    // 2. Curious agents: show a thinking emote
     if (p.openness > 0.6 && Math.random() < 0.3) {
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
       return;
     }
 
-    // 5. Bored agents: show a bored emote
+    // 3. Bored agents: show a bored emote
     if (rt.info.mood === "bored" && Math.random() < 0.3) {
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💤" });
       return;
     }
 
-    // 6. Default: occasional idle emote
+    // 4. Default: occasional idle emote
     if (Math.random() < 0.15) {
       const emotes = ["💭", "☕", "📝"];
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: pick(emotes) });
@@ -3694,7 +3638,7 @@ export class AgentManager {
   // ── Phase 2 helper methods: merge node, estimation, skill tracking ───────
 
   /** Check if all subtasks of a parent goal are complete (or in verification/done).
-   *  If so, assign a merge/synthesis task to the manager (Yuki). */
+   *  If so, assign a merge/synthesis task to Agent Resources. */
   private checkGoalCompletion(goalCardId: string): void {
     const goalCard = this.board.get(goalCardId);
     if (!goalCard || goalCard.type !== "goal") return;
@@ -3718,10 +3662,10 @@ export class AgentManager {
       return `- "${c.title}" — ${c.status}${agent ? ` (${agent.info.name})` : ""}`;
     }).join("\n");
 
-    const yuki = this.agents.get(AGENT_RESOURCES_ID);
-    if (!yuki) return;
-    if (yuki.info.status === "thinking" || yuki.info.status === "working" || yuki.info.status === "waiting") {
-      this.log(yuki, "status", `All subtasks for goal "${goalCard.title.slice(0, 60)}" are complete or in review — merge task queued but Yuki is busy.`);
+    const agentResources = this.agents.get(AGENT_RESOURCES_ID);
+    if (!agentResources) return;
+    if (agentResources.info.status === "thinking" || agentResources.info.status === "working" || agentResources.info.status === "waiting") {
+      this.log(agentResources, "status", `All subtasks for goal "${goalCard.title.slice(0, 60)}" are complete or in review — merge task queued but Agent Resources is busy.`);
       return;
     }
 
@@ -3731,7 +3675,7 @@ export class AgentManager {
       title: `Merge: ${goalCard.title.slice(0, 60)}`,
       description: `All subtasks for the goal "${goalCard.title}" have completed or are in verification. Synthesize the results into a final deliverable.\n\nSubtask statuses:\n${subtaskSummaries}`,
       status: "in_progress",
-      assignedAgentId: yuki.info.id,
+      assignedAgentId: agentResources.info.id,
       createdAt: Date.now(),
       type: "review",
       parentGoalId: goalCardId,
@@ -3742,11 +3686,11 @@ export class AgentManager {
     this.broadcast({ type: "card", card: mergeCard });
     this.broadcastGanttUpdate();
 
-    this.log(yuki, "status", `All subtasks complete for "${goalCard.title.slice(0, 60)}" — starting merge/synthesis.`);
-    this.broadcast({ type: "toast", text: `All subtasks complete — Yuki is synthesizing results.` });
+    this.log(agentResources, "status", `All subtasks complete for "${goalCard.title.slice(0, 60)}" — starting merge/synthesis.`);
+    this.broadcast({ type: "toast", text: `All subtasks complete — Agent Resources is synthesizing results.` });
 
     const mergeTask = `All subtasks for the goal "${goalCard.title}" have completed or are in verification. Synthesize the results into a final deliverable. Review each subtask's output and produce a unified summary.\n\nSubtask statuses:\n${subtaskSummaries}`;
-    this.startTask(yuki, mergeTask, undefined, mergeCard.id, false);
+    this.startTask(agentResources, mergeTask, undefined, mergeCard.id, false);
   }
 
   /** Estimate task duration in minutes from the agent's task history.
