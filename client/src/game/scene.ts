@@ -1239,7 +1239,7 @@ export class OfficeScene extends Phaser.Scene {
 
           const cam = this.cameras.main;
           // no camera bounds — the world is infinite
-          cam.startFollow(this.player, false, 0.12, 0.12);
+          cam.startFollow(this.player, true);
           cam.setZoom(this.defaultZoom());
 
           // --- camera controls: pinch-zoom, wheel-zoom, pan, tap-to-walk ---
@@ -1824,7 +1824,7 @@ export class OfficeScene extends Phaser.Scene {
   recenterCamera(): void {
     this.cameraMode = "follow";
     this.userZoom = null;
-    this.cameras.main.startFollow(this.player, false, 0.12, 0.12);
+    this.cameras.main.startFollow(this.player, true);
     this.cameras.main.setZoom(this.defaultZoom());
   }
 
@@ -2441,7 +2441,7 @@ export class OfficeScene extends Phaser.Scene {
       if (tx < 0 || ty < 0 || tx >= this.grid.width || ty >= this.grid.height) {
         const wtx = Math.floor((p.x - this.world.offset.x) / TILE_PX);
         const wty = Math.floor((p.y - this.world.offset.y) / TILE_PX);
-        if (!this.world.isTileWalkableLoaded(wtx, wty)) return false;
+        if (!this.world.isTileWalkable(wtx, wty)) return false;
         continue;
       }
       return false;
@@ -6901,7 +6901,6 @@ export class OfficeScene extends Phaser.Scene {
 
   update(time: number, dt: number): void {
     if (!this.ready) return;
-    const _frameStart = performance.now();
     // cap dt so a lag spike (chunk gen, GC, tab switch) doesn't cause a
     // teleport-length step that tunnels through collision
     dt = Math.min(dt, 100);
@@ -7247,14 +7246,8 @@ export class OfficeScene extends Phaser.Scene {
     // --- world layer: chunks, ghosts, compass, recruit ---
     this.registry.set("playerPos", { x: this.player.x, y: this.player.y });
     const spacePressed = Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
-    const _worldStart = performance.now();
     this.world.update(time, dt, this.player.x, this.player.y, ePressed, vx, vy, this.playerDir, spacePressed);
-    const _worldTime = performance.now() - _worldStart;
     this.world.vfx.updateSmoke();
-    const _frameTime = performance.now() - _frameStart;
-    if (_frameTime > 20) {
-      console.log(`[scene] SLOW FRAME: ${_frameTime.toFixed(0)}ms total, world=${_worldTime.toFixed(0)}ms, dt=${dt.toFixed(0)}, outside=${this.world.isOutside(this.player.x, this.player.y)}, renderJobs=${this.world.hasRenderJobs()}`);
-    }
 
     // Q: teleport back to office when outside
     let qPressed = Phaser.Input.Keyboard.JustDown(this.keys.Q);
