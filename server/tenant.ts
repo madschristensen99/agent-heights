@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel } from "../shared/types.js";
-import { AGENT_HEIGHTS_HQ_SLUG, AGENT_HEIGHTS_HQ_ADMINS } from "../shared/types.js";
+import { COMMAND_CENTER_SLUG, COMMAND_CENTER_ADMINS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
 import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
@@ -114,28 +114,28 @@ export class TenantManager {
   private static readonly POSITION_FLUSH_MS = 50;
 
   constructor(private rootDir: string) {
-    // Pre-seed the Agent Heights HQ organization
-    const hqOrgId = "org-agent-heights-hq";
-    const hqOrg: OrgEntry = {
-      id: hqOrgId,
-      name: "Agent Heights HQ",
-      slug: AGENT_HEIGHTS_HQ_SLUG,
+    // Pre-seed the Command Center organization
+    const ccOrgId = "org-command-center";
+    const ccOrg: OrgEntry = {
+      id: ccOrgId,
+      name: "Command Center",
+      slug: COMMAND_CENTER_SLUG,
       githubOrg: "agent-heights",
       createdAt: Date.now(),
       members: new Map(),
     };
-    this.orgs.set(hqOrgId, hqOrg);
-    this.orgsBySlug.set(AGENT_HEIGHTS_HQ_SLUG, hqOrgId);
+    this.orgs.set(ccOrgId, ccOrg);
+    this.orgsBySlug.set(COMMAND_CENTER_SLUG, ccOrgId);
 
-    // Create the global HQ2 room — it IS the Agent Heights HQ org room
+    // Create the global HQ2 room — it IS the Command Center org room
     this.rooms.set(HQ2_ROOM_ID, {
       id: HQ2_ROOM_ID,
-      name: "Agent Heights HQ",
+      name: "Command Center",
       ownerId: "system",
       players: new Map(),
       isPrivate: false,
       roomType: "organization",
-      orgId: hqOrgId,
+      orgId: ccOrgId,
       projectorChannel: "off",
       invitedUsers: new Map(),
     });
@@ -682,20 +682,20 @@ export class TenantManager {
 
   /** Process org memberships for a user (admin auto-add + pending email invitations). */
   private processOrgMemberships(user: AuthUser): void {
-    // Auto-add whitelisted admins to the Agent Heights HQ organization
-    if (user.email && AGENT_HEIGHTS_HQ_ADMINS.includes(user.email)) {
-      const hqOrg = this.orgsBySlug.get(AGENT_HEIGHTS_HQ_SLUG);
-      if (hqOrg) {
-        const org = this.orgs.get(hqOrg);
+    // Auto-add whitelisted admins to the Command Center organization
+    if (user.email && COMMAND_CENTER_ADMINS.includes(user.email)) {
+      const ccOrg = this.orgsBySlug.get(COMMAND_CENTER_SLUG);
+      if (ccOrg) {
+        const org = this.orgs.get(ccOrg);
         if (org && !org.members.has(user.id)) {
           org.members.set(user.id, {
-            orgId: hqOrg,
+            orgId: ccOrg,
             userId: user.id,
             userEmail: user.email,
             role: "admin",
             joinedAt: Date.now(),
           });
-          console.log(`[agent-heights] auto-added ${user.email} as admin to Agent Heights HQ org`);
+          console.log(`[agent-heights] auto-added ${user.email} as admin to Command Center org`);
         }
       }
     }

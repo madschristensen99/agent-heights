@@ -703,11 +703,11 @@ export interface OrgMember {
   joinedAt: number;
 }
 
-/** Pre-seeded organization slug for Agent Heights' own HQ. */
-export const AGENT_HEIGHTS_HQ_SLUG = "agent-heights-hq";
+/** Pre-seeded organization slug for the Command Center. */
+export const COMMAND_CENTER_SLUG = "command-center";
 
-/** Admin emails whitelisted for the Agent Heights HQ organization. */
-export const AGENT_HEIGHTS_HQ_ADMINS = [
+/** Admin emails whitelisted for the Command Center organization. */
+export const COMMAND_CENTER_ADMINS = [
   "remseechannel@gmail.com",
   "madschristensen99@icloud.com",
 ];

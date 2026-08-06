@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
-import { SUBSCRIPTION_TIERS, parseTier, AGENT_HEIGHTS_HQ_ADMINS, type SubscriptionTier, type BillingPeriod } from "../shared/types.js";
+import { SUBSCRIPTION_TIERS, parseTier, COMMAND_CENTER_ADMINS, type SubscriptionTier, type BillingPeriod } from "../shared/types.js";
 import { handleAssetUpgradeWebhook } from "./asset-upgrade.js";
 
 const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
@@ -73,7 +73,7 @@ export interface PaymentStatus {
 
 export async function getUserPaymentStatus(userId: string, email?: string | null): Promise<PaymentStatus> {
   // Admin emails get business tier automatically (no Stripe payment required)
-  if (email && AGENT_HEIGHTS_HQ_ADMINS.includes(email.toLowerCase())) {
+  if (email && COMMAND_CENTER_ADMINS.includes(email.toLowerCase())) {
     return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "business", agentLimit: SUBSCRIPTION_TIERS.business.agentLimit, usageCap: SUBSCRIPTION_TIERS.business.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null, nextTrialAt: null };
   }
 
