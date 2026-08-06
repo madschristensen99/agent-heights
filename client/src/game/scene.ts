@@ -110,9 +110,9 @@ export class OfficeScene extends Phaser.Scene {
   private wizardSeat: Tile | null = null;
   private spawnTile: Tile = { x: 14, y: 16 };
   private doorTile: Tile = { x: 14, y: 17 };
-  private boardTile: Tile = { x: 14, y: 2 };
+  private boardTile: Tile = { x: 14, y: 1 };
   private boardHint!: HintTag;
-  private ganttTile: Tile = { x: 20, y: 2 };
+  private ganttTile: Tile = { x: 22, y: 1 };
   private ganttHint!: HintTag;
   private coffeeTile: Tile = { x: 26, y: 2 };
   private coffeeUntil = 0;
@@ -722,8 +722,8 @@ export class OfficeScene extends Phaser.Scene {
             }
           }
 
-          // Draw windows on the top wall — hardcoded positions (excludes tiles under TV/projector)
-          const windowXs = [1, 2, 10, 11, 12, 15, 18, 20, 21, 22, 23, 25, 28];
+          // Draw windows on the top wall — hardcoded positions (excludes tiles under board/gantt/projector)
+          const windowXs = [1, 2, 28];
           for (const x of windowXs) {
             const wx = x * TILE_PX;
             const wy = 1 * TILE_PX;
@@ -756,6 +756,12 @@ export class OfficeScene extends Phaser.Scene {
 
           // Remove old clock tile from furniture layer (clock moved to west wall)
           furniture.removeTileAt(6, 1, false);
+
+          // Remove wall pictures / posters / papers from the board & gantt area (y=1, x=9..26)
+          for (let rx = 9; rx <= 26; rx++) {
+            const ft = furniture.getTileAt(rx, 1);
+            if (ft) furniture.removeTileAt(rx, 1, false);
+          }
 
           // Scan for server rack tiles (GID 35 = tile ID 34) for E-interaction
           this.serverRackTiles = [];

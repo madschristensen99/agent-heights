@@ -226,6 +226,7 @@ export class Hud {
   private feedExpanded = false;
   private rosterCollapsed = false;
   private renderQueued = false;
+  private tourBannerDismissed = false;
   private perfVisible = false;
   private voiceBtn: HTMLButtonElement | null = null;
   private speakerBtn: HTMLButtonElement | null = null;
@@ -2393,15 +2394,31 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
   private renderTourBanner(): void {
     let banner = document.getElementById("tour-banner") as HTMLElement | null;
     if (this.store.accessLevel === "tour") {
+      if (this.tourBannerDismissed) {
+        if (banner) banner.remove();
+        return;
+      }
       if (!banner) {
         banner = document.createElement("div");
         banner.id = "tour-banner";
-        banner.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:500;padding:0.8rem 1.2rem;border-radius:10px;background:rgba(20,20,30,0.92);border:1px solid rgba(88,200,102,0.4);color:#8fc9f0;font-size:0.9rem;text-align:center;pointer-events:none;backdrop-filter:blur(4px);";
-        banner.innerHTML = "🎬 <strong>Tour Mode</strong> — You can look around but not interact.<br>Ask an admin for talk access to chat with agents.";
+        banner.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:500;padding:0.8rem 1.2rem;border-radius:10px;background:var(--panel);border:1px solid var(--accent);color:var(--text);font-size:0.9rem;text-align:center;backdrop-filter:blur(4px);box-shadow:0 4px 16px rgba(0,0,0,0.12);display:flex;align-items:center;gap:10px;";
+        const text = document.createElement("span");
+        text.innerHTML = "🎬 <strong>Tour Mode</strong> — You can look around but not interact.<br>Ask an admin for talk access to chat with agents.";
+        banner.appendChild(text);
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "✕";
+        closeBtn.style.cssText = "flex-shrink:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dim);background:var(--panel-soft);color:var(--dim);cursor:pointer;font-size:13px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;";
+        closeBtn.title = "Dismiss";
+        closeBtn.addEventListener("click", () => {
+          this.tourBannerDismissed = true;
+          banner!.remove();
+        });
+        banner.appendChild(closeBtn);
         document.body.appendChild(banner);
       }
-    } else if (banner) {
-      banner.remove();
+    } else {
+      if (banner) banner.remove();
+      this.tourBannerDismissed = false;
     }
   }
 
