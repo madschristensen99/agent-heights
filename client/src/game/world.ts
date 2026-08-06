@@ -1776,14 +1776,12 @@ export class WorldLayer {
     checks[1].x = px + halfW; checks[1].y = py - 2;
     checks[2].x = px; checks[2].y = py - 14;
     checks[3].x = px; checks[3].y = py + 8;
-    for (let i = 0; i < checks.length; i++) {
-      const p = checks[i];
+    for (const p of checks) {
       const { tx, ty } = this.pixelToTile(p.x, p.y);
       if (ty < 0) {
         const otx = Math.floor(p.x / TILE_PX);
         const oty = Math.floor(p.y / TILE_PX);
         if (this.officeGrid?.ok(otx, oty)) continue;
-        console.log(`[canWalk-BLOCK] px=${px.toFixed(0)} py=${py.toFixed(0)} check[${i}] p=(${p.x.toFixed(0)},${p.y.toFixed(0)}) ty=${ty} otx=${otx} oty=${oty} gridOk=${this.officeGrid?.ok(otx,oty)} gridW=${this.officeGrid?.width} gridH=${this.officeGrid?.height}`);
         return false;
       }
       if (!this.isTileWalkableLoaded(tx, ty)) {
@@ -1801,6 +1799,10 @@ export class WorldLayer {
    *  return the corrected pixel position. Returns null if no rescue needed. */
   rescuePlayer(px: number, py: number): { x: number; y: number } | null {
     const { tx, ty } = this.pixelToTile(px, py);
+    // Don't rescue inside the office — isTileWalkableLoaded returns false for
+    // office tiles (ty < 0), which would falsely trigger a rescue and teleport
+    // the player away from the door.
+    if (ty < 0) return null;
     if (this.isTileWalkableLoaded(tx, ty)) return null;
     // Scan expanding rings for the nearest walkable tile
     for (let r = 1; r <= 3; r++) {
