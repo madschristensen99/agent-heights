@@ -1183,7 +1183,7 @@ export class OfficeScene extends Phaser.Scene {
       },
       {
         name: "world layer",
-        fn: () => {
+        fn: async () => {
           this.sceneStart = this.time.now;
 
           this.mapPx = { w: map.widthInPixels, h: map.heightInPixels };
@@ -1191,13 +1191,14 @@ export class OfficeScene extends Phaser.Scene {
           this.world = new WorldLayer(this, this.store, this.game.registry.get("net"), map.widthInPixels, map.heightInPixels);
           this.world.setOfficeGrid(this.grid);
 
-          // Kick off door chunk generation in the background worker and preload
-          // any cached canvas textures from IndexedDB.  Both are fire-and-forget
-          // — the actual chunk loading happens after this.ready = true so the
-          // player can move immediately.
+          // Request worker generation for all door chunks and preload any cached
+          // canvas textures from IndexedDB. Then wait for the worker to finish
+          // generating all chunks and render them — all during the loading screen
+          // so the game is fully responsive when the loading screen ends.
           const doorChunks = this.world.getDoorChunkList();
           this.world.preGenerateChunks(doorChunks);
-          this.world.preloadCachedCanvases(doorChunks);
+          await this.world.preloadCachedCanvases(doorChunks);
+          await this.world.waitForChunksAndRender(doorChunks);
         },
       },
       {
@@ -1464,26 +1465,7 @@ export class OfficeScene extends Phaser.Scene {
           // Clean up loading overlay
           loadingOverlay.remove();
 
-          // Synchronously load ALL chunks at the player's current position so tile
-          // data and canvas textures are ready immediately.  This happens during
-          // the loading screen so the player starts with everything pre-rendered.
-          const playerOutside = this.world.isOutside(this.player.x, this.player.y);
-          if (playerOutside) {
-            this.world.preloadChunksAt(this.player.x, this.player.y);
-            const chunks = this.world.getChunksAt(this.player.x, this.player.y);
-            for (const c of chunks) {
-              this.world.loadSingleChunk(c.cx, c.cy);
-            }
-            this.world.processRenderJobsNow();
-          } else {
-            const doorChunks = this.world.getDoorChunkList();
-            for (const dc of doorChunks) {
-              this.world.loadSingleChunk(dc.cx, dc.cy);
-            }
-            // Paint all door chunks synchronously so grass is visible
-            // through the doorway immediately from inside the office.
-            this.world.processRenderJobsNow();
-          }
+          // All chunks are already pre-loaded and rendered during the "world layer" phase.
 
           // Schedule golf ball cleanup after chunks have had time to load
           // via the update loop's updateChunks.  Non-blocking.

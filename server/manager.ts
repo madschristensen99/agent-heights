@@ -3252,18 +3252,25 @@ export class AgentManager {
 
       // a stale or corrupted conversation shouldn't brick the agent forever
       const isStaleSessionError = /session|resume|conversation|thread|tool_call_id|invalid.*request/i.test(firstErrorText);
+      const isToolCallIdError = /tool_call_id.*not.*found/i.test(firstErrorText);
       const isTokenLimitError = /token.*limit|exceeded.*limit/i.test(firstErrorText);
-      if (sawError && hadSession && ((isStaleSessionError && !gotEvents) || isTokenLimitError)) {
+      // tool_call_id errors can occur mid-conversation (after valid events) when
+      // compaction or restore leaves orphaned tool_result blocks.  Allow retry
+      // for these even when gotEvents is true — the corrupted state is cleared.
+      const canRetryStale = (isStaleSessionError && !gotEvents) || isToolCallIdError;
+      if (sawError && hadSession && (canRetryStale || isTokenLimitError)) {
         rt.info.sessionId = null;
         clearAllMemory(rt.info.id);
         void this.save.clearMessages(rt.info.id);
         this.persist();
-        // Retry once with a fresh session for stale session errors (not token limit)
-        if (isStaleSessionError && !gotEvents && !rt.retryAttempted) {
+        // Retry once with a fresh session for stale session / tool_call_id errors (not token limit)
+        if (canRetryStale && !rt.retryAttempted) {
           rt.retryAttempted = true;
           rt.freshStart = true;
           shouldRetry = true;
-          this.log(rt, "status", "Stale session detected — retrying with a fresh conversation.");
+          this.log(rt, "status", isToolCallIdError
+            ? "Corrupted tool_call_id detected — retrying with a fresh conversation."
+            : "Stale session detected — retrying with a fresh conversation.");
         } else {
           this.log(rt, "status", isTokenLimitError
             ? "Context window exceeded — starting a fresh conversation next task (previous conversation archived)."
