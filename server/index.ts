@@ -582,6 +582,8 @@ const server = createServer((req, res) => {
         res.writeHead(200, applySecurityHeaders({
           "Content-Type": contentType,
           "Cache-Control": "no-store, no-cache, must-revalidate",
+          "X-Frame-Options": "SAMEORIGIN",
+          "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; frame-ancestors 'self';",
         }));
         res.end(data);
       } catch {
