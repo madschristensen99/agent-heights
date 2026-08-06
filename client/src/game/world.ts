@@ -42,6 +42,10 @@ function isLowEndDevice(): boolean {
 /** Supersample factor: 2x on desktop (128px tile resolution, sharp at zoom), 1x on mobile. */
 export const SS_FACTOR = isLowEndDevice() ? 1 : 2;
 
+/** Chunk load radius: 2 on desktop (5x5=25 chunks), 1 on mobile (3x3=9 chunks). */
+export const LOAD_RADIUS = isLowEndDevice() ? 1 : 2;
+const UNLOAD_RADIUS = LOAD_RADIUS + 1;
+
 // --- 3D creature spritesheet helpers ---
 // 3D sheets are 8 cols (S,SE,E,NE,N,NW,W,SW) × 4 rows (idle,walk1,walk2,attack) = 32 frames
 // Frame index = anim * 8 + dir
@@ -59,9 +63,6 @@ function dirFromVelocity(dx: number, dy: number): number {
   return ((Math.round((Math.PI / 2 - Math.atan2(dy, dx)) / (Math.PI / 4)) % 8) + 8) % 8;
 }
 
-/** Chunk load radius: 1 on all devices (3x3=9 chunks) to keep GPU memory bounded with SS_FACTOR=2. */
-export const LOAD_RADIUS = 1;
-const UNLOAD_RADIUS = LOAD_RADIUS + 2;
 
 /**
  * Global cache of generated chunk data, keyed by `${worldSeed}:${cx},${cy}`.
@@ -70,8 +71,7 @@ const UNLOAD_RADIUS = LOAD_RADIUS + 2;
  * overrides are re-applied on each loadChunk call.
  */
 const globalChunkCache = new Map<string, Chunk>();
-const MAX_CHUNKS_PER_FRAME = 1; // load 1 chunk per frame to avoid stacking render jobs
-const RENDER_ROW_BUDGET_MS = 3; // paint rows until this time budget is exceeded
+const MAX_CHUNKS_PER_FRAME = isLowEndDevice() ? 1 : 3; // load up to 3 chunks per frame
 
 /** State for a chunk being painted across multiple frames. */
 interface RenderJob {
@@ -1361,7 +1361,6 @@ export class WorldLayer {
   private pendingChunks = new Map<string, Chunk>();
   private workerRequested = new Set<string>();
   private doorPreloaded = false;
-  private _insideFrameCount = 0;
 
   // --- Time-sliced chunk rendering ---
   // Chunk canvas painting is split across frames to avoid main-thread stalls.
@@ -2439,29 +2438,17 @@ export class WorldLayer {
     return job.currentRow >= CHUNK_SIZE;
   }
 
-  /** Paint render jobs using a time budget to avoid frame stalls. */
+  /** Paint all render jobs to completion (no time-slicing — chunks render in a single frame). */
   private processRenderJobs(): void {
     if (this.renderingQueue.length === 0) return;
     const remaining: RenderJob[] = [];
-    const renderStart = performance.now();
-    let budgetExceeded = false;
     for (const job of this.renderingQueue) {
       // Skip if texture was destroyed (chunk unloaded / scene restart) mid-render
       if (!this.scene.textures.exists(job.texKey)) continue;
 
-      // If budget already exceeded, just keep this job for next frame
-      if (budgetExceeded) {
-        remaining.push(job);
-        continue;
-      }
-
-      // Paint rows until time budget is exceeded or job is complete
+      // Paint all rows for this chunk in one frame
       while (job.currentRow < CHUNK_SIZE) {
         const done = this.paintRenderRow(job);
-        if (performance.now() - renderStart > RENDER_ROW_BUDGET_MS) {
-          budgetExceeded = true;
-          break;
-        }
         if (done) break;
       }
 
@@ -2883,11 +2870,7 @@ export class WorldLayer {
       this.updateChunks(playerX, playerY, vx, vy);
     } else {
       this.preloadDoorChunksWorkerOnly();
-      // Process render jobs at reduced rate while inside office to keep frames smooth
-      this._insideFrameCount = (this._insideFrameCount ?? 0) + 1;
-      if (this._insideFrameCount % 3 === 0) {
-        this.processRenderJobs();
-      }
+      this.processRenderJobs();
     }
 
     // update ghosts

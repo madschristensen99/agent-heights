@@ -661,7 +661,7 @@ VALUES (
   '["Trading & Finance"]'::jsonb,
   '[]'::jsonb,
   '[{"label":"Website","url":"https://blockrun.ai"},{"label":"Docs","url":"https://blockrun.ai/docs"}]'::jsonb,
-  'https://www.google.com/s2/favicons?domain=surf.com&sz=128',
+  'https://api.dicebear.com/7.x/initials/svg?seed=Surf&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff',
   'approved',
   now()
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, is_free = EXCLUDED.is_free, image_url = EXCLUDED.image_url;
@@ -771,7 +771,7 @@ VALUES (
   '["Research"]'::jsonb,
   '[]'::jsonb,
   '[{"label":"Website","url":"https://www.orthogonal.com"},{"label":"Docs","url":"https://www.orthogonal.com/discover"}]'::jsonb,
-  'https://www.google.com/s2/favicons?domain=andi.io&sz=128',
+  'https://api.dicebear.com/7.x/initials/svg?seed=Andi&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff',
   'approved',
   now()
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, is_free = EXCLUDED.is_free, image_url = EXCLUDED.image_url;
@@ -815,7 +815,7 @@ VALUES (
   '["Social Media"]'::jsonb,
   '[]'::jsonb,
   '[{"label":"Website","url":"https://www.orthogonal.com"},{"label":"Docs","url":"https://www.orthogonal.com/discover"}]'::jsonb,
-  'https://www.google.com/s2/favicons?domain=aviato.ai&sz=128',
+  'https://api.dicebear.com/7.x/initials/svg?seed=Aviato&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff',
   'approved',
   now()
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, is_free = EXCLUDED.is_free, image_url = EXCLUDED.image_url;
@@ -1079,7 +1079,7 @@ VALUES (
   '["data enrichment"]'::jsonb,
   '[]'::jsonb,
   '[{"label":"Website","url":"https://www.orthogonal.com"},{"label":"Docs","url":"https://www.orthogonal.com/discover"}]'::jsonb,
-  'https://www.google.com/s2/favicons?domain=fantasticjobs.com&sz=128',
+  'https://api.dicebear.com/7.x/initials/svg?seed=Fantastic%20Jobs&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff',
   'approved',
   now()
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, is_free = EXCLUDED.is_free, image_url = EXCLUDED.image_url;
@@ -1343,7 +1343,7 @@ VALUES (
   '["data enrichment"]'::jsonb,
   '[]'::jsonb,
   '[{"label":"Website","url":"https://www.orthogonal.com"},{"label":"Docs","url":"https://www.orthogonal.com/discover"}]'::jsonb,
-  'https://www.google.com/s2/favicons?domain=openfunnel.com&sz=128',
+  'https://api.dicebear.com/7.x/initials/svg?seed=OpenFunnel&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff',
   'approved',
   now()
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, is_free = EXCLUDED.is_free, image_url = EXCLUDED.image_url;
@@ -1431,7 +1431,7 @@ VALUES (
   '["data enrichment"]'::jsonb,
   '[]'::jsonb,
   '[{"label":"Website","url":"https://www.orthogonal.com"},{"label":"Docs","url":"https://www.orthogonal.com/discover"}]'::jsonb,
-  'https://www.google.com/s2/favicons?domain=predictleads.ai&sz=128',
+  'https://api.dicebear.com/7.x/initials/svg?seed=PredictLeads&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff',
   'approved',
   now()
 ) ON CONFLICT (name) DO UPDATE SET agent = EXCLUDED.agent, is_premium = EXCLUDED.is_premium, is_free = EXCLUDED.is_free, image_url = EXCLUDED.image_url;

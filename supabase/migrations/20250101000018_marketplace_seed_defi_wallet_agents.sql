@@ -82,7 +82,7 @@ To connect: Get your Talken API key from the Talken dashboard.',
     '["trading","finance","defi","wallet"]',
     '["Talken account","Talken API Key"]',
     '[{"label":"Talken Documentation","url":"https://docs.talken.io/"},{"label":"Talken Dashboard","url":"https://talken.io/"}]',
-    'https://icons.duckduckgo.com/ip3/talken.io.ico'
+    'https://api.dicebear.com/7.x/initials/svg?seed=Talken%20Swap%20Agent&backgroundColor=1e293b,312e81,3730a3,5b21b6,6d28d9&textColor=ffffff'
   ),
   (
     'Phantom Wallet Agent',
