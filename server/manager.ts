@@ -5044,6 +5044,7 @@ export class AgentManager {
    *  If Hermes is busy, fall back to direct skill-based routing.
    *  If no agents are idle, the message is queued for retry. */
   routePlatformEvent(platform: string, sender: string, text: string): void {
+    console.log(`[manager] routePlatformEvent: platform=${platform}, sender=${sender}, text="${text.slice(0, 80)}"`);
     // 0. Auto-screenshot: if the user asks for a photo/screenshot/pic, send one immediately
     const lowerText = text.toLowerCase();
     const screenshotKeywords = ["screenshot", "photo", "pic of", "picture of", "what does it look like", "show me the office"];
@@ -5077,11 +5078,13 @@ export class AgentManager {
     // 2. Try Hermes triage — if he's idle, let him decide who handles it
     const hermes = this.agents.get(HERMES_ID);
     if (hermes && hermes.info.status === "idle") {
+      console.log(`[manager] Delivering mail to Hermes for triage (idle)`);
       this.deliverMailToHermes(platform, sender, text);
       return;
     }
 
     // 3. Hermes is busy — fall back to direct routing
+    console.log(`[manager] Hermes is ${hermes?.info.status ?? "missing"} — falling back to direct routing`);
     const pick = this.pickAgentForMail(text);
     if (!pick) {
       this.mailQueue.push({ platform, sender, text, ts: Date.now(), retries: 0 });
@@ -5119,6 +5122,7 @@ export class AgentManager {
 
   /** Hermes delegates a task to a specific agent by name. */
   private delegateTaskToAgent(hermesRt: AgentRuntime, agentName: string, task: string): string {
+    console.log(`[manager] delegateTaskToAgent: agentName="${agentName}", task="${task.slice(0, 80)}"`);
     const target = [...this.agents.values()].find(
       (rt) => rt.info.name.toLowerCase() === agentName.toLowerCase().trim(),
     );

@@ -272,6 +272,13 @@ export class HermesClient {
         sessions = [];
       }
       const events: PlatformEvent[] = [];
+      const newSids = sessions.filter(s => {
+        const sid = s.session_id ?? s.id;
+        return sid && !this.lastSessionIds.has(sid);
+      });
+      if (newSids.length > 0) {
+        console.log(`[hermes-client] getNewMessages: ${sessions.length} sessions, ${newSids.length} new — platforms: ${sessions.map(s => s.platform ?? s.source ?? "?").join(",")}`);
+      }
 
       for (const sess of sessions) {
         const sid = sess.session_id ?? sess.id;
@@ -285,7 +292,11 @@ export class HermesClient {
 
         // Only process sessions from messaging platforms (not CLI)
         const platform = sess.platform ?? sess.source;
-        if (!platform || platform === "cli" || platform === "local") continue;
+        if (!platform || platform === "cli" || platform === "local") {
+          console.log(`[hermes-client] Skipping session ${sid}: platform=${platform ?? "undefined"}`);
+          continue;
+        }
+        console.log(`[hermes-client] New platform session ${sid}: platform=${platform}, chatId=${sess.chat_id ?? sess.chatId ?? "none"}, sender=${sess.username ?? sess.user_name ?? "none"}`);
 
         // Capture chat_id for reply routing (Telegram needs numeric chat_id)
         const chatId = sess.chat_id ?? sess.chatId ?? sess.channel_id ?? null;
@@ -299,8 +310,12 @@ export class HermesClient {
             headers: this.authHeaders(),
             signal: AbortSignal.timeout(5000),
           });
-          if (!msgRes.ok) continue;
+          if (!msgRes.ok) {
+            console.log(`[hermes-client] GET messages for ${sid} failed: HTTP ${msgRes.status}`);
+            continue;
+          }
           const messages = await msgRes.json() as any[];
+          console.log(`[hermes-client] Session ${sid}: ${messages.length} messages, roles: ${messages.map(m => m.role).join(",")}`);
           for (const msg of messages) {
             if (msg.role === "user") {
               const text = (msg.content ?? msg.text ?? "").slice(0, 500);
