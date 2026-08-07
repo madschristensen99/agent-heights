@@ -70,5 +70,17 @@ WHERE name IN (
   'Zoom Agent',
   'Zapier Agent',
   'Wyndham Hotels and Resorts Agent',
-  'WordPress.com Agent'
+  'WordPress.com Agent',
+  -- Session 2 continued: more removals
+  'Verisk Underwriting Intelligence Agent',
+  'Verisk XactRestore Agent',
+  'Viator Agent',
+  'Resy Agent',
+  'Adobe Experience Manager Agent',
+  'Adobe for creativity Agent',
+  'Adobe Journey Optimizer Agent',
+  'Brave Search Agent',
+  'Box Agent',
+  'BoardWise Agent',
+  'BioRender Agent'
 );
