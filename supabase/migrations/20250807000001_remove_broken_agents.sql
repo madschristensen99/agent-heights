@@ -1,9 +1,74 @@
--- Remove broken/non-functional curated agents from the marketplace
--- Talken, Phantom, and WAIaaS agents don't work and are being removed from the curated list
+-- Remove broken/non-functional curated agents from the marketplace.
+-- These agents were removed across multiple sessions because their MCP servers
+-- don't work (404, 400, timeout, DNS failure, WAF block, or require manual registration).
 
 DELETE FROM heights_cloud_agents
 WHERE name IN (
+  -- Original broken agents
   'Talken Swap Agent',
   'Phantom Wallet Agent',
-  'WAIaaS DeFi Agent'
+  'WAIaaS DeFi Agent',
+  -- Session 1: MCP servers down or requiring manual registration
+  'Taskrabbit Booking Assistance Agent',
+  'Airwallex Agent',
+  'Aiera Agent',
+  'QuickBooks Agent',
+  'TurboTax Agent',
+  'Booking.com Agent',
+  'Expedia Agent',
+  'StubHub Agent',
+  'Square Agent',
+  'Solve Intelligence Agent',
+  'AllTrails Agent',
+  'Audible Agent',
+  'Home Assistant Agent',
+  'Clockwise Agent',
+  'Ahrefs Agent',
+  'D&B Risk Analytics Agent',
+  'Ramp Data Agent',
+  'tldraw Agent',
+  'Chronograph Agent',
+  'Definely Agent',
+  'Guidepoint Agent',
+  'ZipRecruiter Agent',
+  'Kiwi.com Agent',
+  'Trivago Agent',
+  'Adobe Marketing Agent Agent',
+  -- Session 2: additional non-functional or removed agents
+  'Tropic Agent',
+  'Xero Agent',
+  'Third Bridge Agent',
+  'Spotify Agent',
+  'SignNow Agent',
+  'pg-aiguide Agent',
+  'AWS Marketplace Agent',
+  'B12 Agent',
+  'Blockscout Agent',
+  'lastminute.com Agent',
+  'Crypto.com Agent',
+  'DocuSign Agent',
+  'Thumbtack Agent',
+  'Quartr Agent',
+  'Quo Agent',
+  'PitchBook Agent',
+  'Figma Agent',
+  'Open Targets Agent',
+  'Supermetrics Agent',
+  'Brex Agent',
+  'Coupler.io Agent',
+  'Goodnotes Agent',
+  'Granted Agent',
+  'Harvey Agent',
+  'Krisp Agent',
+  'Lawve AI Agent',
+  'Slack Agent',
+  'ZoomInfo Agent',
+  'Wix Agent',
+  -- Session 2 continued: more broken/removed agents
+  'Base44 Agent',
+  'Bigdata.com Agent',
+  'Zoom Agent',
+  'Zapier Agent',
+  'Wyndham Hotels and Resorts Agent',
+  'WordPress.com Agent'
 );
