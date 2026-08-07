@@ -1172,7 +1172,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.similarweb.com",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://www.similarweb.com/corp/api/",
   },
   {
     id: "granola",
