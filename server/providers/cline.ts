@@ -1363,11 +1363,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
       const maxIter = isChat ? (wizardChatTools.length > 0 ? 10 : agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
-        providerId: "openai-compatible",
+        providerId: "deepseek",
         modelId: model,
         apiKey: providerConfig.apiKey,
         baseUrl: providerConfig.baseUrl,
         headers: providerConfig.headers,
+        options: { thinking: false },
         systemPrompt: ctx.systemPrompt,
         tools,
         maxIterations: maxIter,

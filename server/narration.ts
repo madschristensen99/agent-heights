@@ -98,6 +98,7 @@ Write a 1-2 sentence message from Hermes to the platform user about this event.`
         ],
         max_tokens: 150,
         temperature: 0.8,
+        thinking: { type: "disabled" },
       }),
       signal: AbortSignal.timeout(10_000),
     });

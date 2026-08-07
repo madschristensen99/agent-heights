@@ -17,7 +17,7 @@ export interface ProviderConfig {
   headers: Record<string, string>;
 }
 
-const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_KEY ?? "";
 const DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash";
 
