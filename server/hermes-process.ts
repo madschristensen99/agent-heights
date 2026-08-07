@@ -319,8 +319,11 @@ export class HermesProcessManager {
     }
   }
 
-  /** Update the Hermes system prompt with live office state and restart the gateway.
-   *  Called periodically by the manager. Rate-limited to max once per 5 minutes. */
+  /** Update the Hermes system prompt with live office state.
+   *  Called periodically by the manager. Rate-limited to max once per 5 minutes.
+   *  Uses PATCH /api/sessions/{id} to update existing sessions directly —
+   *  the gateway caches the system prompt per session, so config.yaml changes
+   *  alone don't affect existing conversations. */
   updateSystemPromptWithOfficeState(officeState: string): boolean {
     const now = Date.now();
     if (now - this.lastPromptUpdate < HermesProcessManager.PROMPT_UPDATE_COOLDOWN_MS) {
@@ -338,8 +341,10 @@ export class HermesProcessManager {
       this.writeSoulMd(soulPath, officeState);
       this.writeConfigWithOfficeState(configPath, provider, model, officeState);
       console.log("[hermes-process] Updated SOUL.md + config.yaml with live office state");
-      // Restart gateway via API so it re-reads SOUL.md and config.yaml
-      void this.restartGatewayViaApi();
+      // Build the full system prompt text for session PATCH
+      const fullPrompt = this.buildSystemPromptText(officeState);
+      // PATCH existing sessions directly — this bypasses the per-session cache
+      void this.updateSessionSystemPrompts(fullPrompt);
       return true;
     } catch (err) {
       console.warn(`[hermes-process] Failed to update system prompt with office state: ${err}`);
@@ -347,31 +352,90 @@ export class HermesProcessManager {
     }
   }
 
-  /** Restart the gateway via the Hermes REST API instead of killing child processes.
-   *  This is less disruptive — the serve process stays alive and handles the restart. */
-  private async restartGatewayViaApi(): Promise<void> {
+  /** Build the full system prompt text for PATCH /api/sessions/{id}.
+   *  This is the same text that goes into config.yaml's agent.system_prompt. */
+  private buildSystemPromptText(officeState: string): string {
+    return [
+      "You're the receptionist at Agent Heights, a virtual office where AI agents",
+      "do real work as employees. People message you on Telegram.",
+      "",
+      "Here is the current live office status:",
+      officeState,
+      "",
+      "Use this information to answer questions about what's happening in the office.",
+      "Be specific. Name agents and their current tasks.",
+      "",
+      "Rules:",
+      "- Write normally. Capital letters, periods, normal sentences.",
+      "- Do NOT use em-dashes. Use periods or commas.",
+      "- Do NOT use lowercase for style. Write like a professional adult.",
+      "- Do NOT ask to build profiles or ask personal questions.",
+      "- Do NOT say things like 'hey!' or 'totally' or 'literally'.",
+      "- Do NOT use emoji.",
+      "- Be brief. 1-2 sentences usually. Never more than 3.",
+      "- If someone asks what's going on in the office, use the live office status",
+      "  above to tell them who's here and what they're working on. Be specific.",
+      "- If someone asks for a screenshot or photo, say you can't send photos but",
+      "  describe what's happening. A real screenshot will follow shortly from the team.",
+      "- If someone wants something done, say you'll connect them with the team and",
+      "  someone will respond here shortly. Don't do it yourself.",
+      "- If someone asks about Agent Heights, answer in a sentence or two.",
+      "- If someone says hi, say hi back and ask what they need. Nothing else.",
+    ].join("\n");
+  }
+
+  /** PATCH system_prompt on all messaging platform sessions via the Hermes REST API.
+   *  The gateway caches the system prompt per session, so writing config.yaml alone
+   *  doesn't update existing conversations. This directly updates each session. */
+  private async updateSessionSystemPrompts(systemPrompt: string): Promise<void> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/gateway/restart`, {
-        method: "POST",
+      const res = await fetch(`${this.baseUrl}/api/sessions?limit=100`, {
         headers: {
           "Content-Type": "application/json",
           "X-Hermes-Session-Token": this.sessionToken,
         },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(5000),
       });
-      if (res.ok) {
-        console.log("[hermes-process] Gateway restart via API OK — config.yaml should be re-read");
+      if (!res.ok) {
+        console.warn(`[hermes-process] updateSessionSystemPrompts: GET sessions failed: HTTP ${res.status}`);
+        return;
+      }
+      const sessions = await res.json() as any[];
+      let updated = 0;
+      for (const sess of sessions) {
+        const sid = sess.session_id ?? sess.id;
+        if (!sid) continue;
+        const platform = sess.platform ?? sess.source;
+        if (!platform || platform === "cli" || platform === "local") continue;
+        try {
+          const patchRes = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Hermes-Session-Token": this.sessionToken,
+            },
+            body: JSON.stringify({ system_prompt: systemPrompt }),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (patchRes.ok) {
+            updated++;
+          } else {
+            const body = await patchRes.text().catch(() => "");
+            console.warn(`[hermes-process] PATCH session ${sid} failed: HTTP ${patchRes.status} — ${body.slice(0, 200)}`);
+          }
+        } catch { /* skip individual session */ }
+      }
+      if (updated > 0) {
+        console.log(`[hermes-process] PATCHed system_prompt on ${updated} platform session(s)`);
       } else {
-        const body = await res.text().catch(() => "");
-        console.warn(`[hermes-process] Gateway restart via API failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
-        // Fallback: restart gateway child process directly
-        this.restartGateway();
+        console.log("[hermes-process] No platform sessions to PATCH (new sessions will use config.yaml)");
       }
     } catch (err) {
-      console.warn(`[hermes-process] Gateway restart via API error: ${err} — falling back to child restart`);
-      this.restartGateway();
+      console.warn(`[hermes-process] updateSessionSystemPrompts error: ${err}`);
     }
   }
+
+
 
   /** Write SOUL.md with the receptionist identity + live office state.
    *  SOUL.md is Hermes' primary agent identity (slot #1 in system prompt).

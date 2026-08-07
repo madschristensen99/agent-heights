@@ -332,36 +332,47 @@ export class HermesClient {
     }
   }
 
-  /** Delete all messaging platform sessions so new ones are created with updated SOUL.md.
-   *  Existing sessions cache the old system prompt — deleting them forces a fresh start. */
-  async deleteAllPlatformSessions(): Promise<number> {
+  /** Update system_prompt on all messaging platform sessions via PATCH /api/sessions/{id}.
+   *  The gateway caches the system prompt per session — writing config.yaml alone
+   *  doesn't update existing sessions. This PATCHes each session directly.
+   *  Returns the number of sessions updated. */
+  async updateSessionSystemPrompts(systemPrompt: string): Promise<number> {
     try {
       const res = await fetch(`${this.baseUrl}/api/sessions?limit=100`, {
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(5000),
       });
-      if (!res.ok) return 0;
+      if (!res.ok) {
+        console.warn(`[hermes-client] updateSessionSystemPrompts: GET sessions failed: HTTP ${res.status}`);
+        return 0;
+      }
       const sessions = await res.json() as any[];
-      let deleted = 0;
+      let updated = 0;
       for (const sess of sessions) {
         const sid = sess.session_id ?? sess.id;
         if (!sid) continue;
         const platform = sess.platform ?? sess.source;
-        // Only delete messaging platform sessions (not CLI/local)
+        // Only update messaging platform sessions (not CLI/local)
         if (!platform || platform === "cli" || platform === "local") continue;
         try {
-          const delRes = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}`, {
-            method: "DELETE",
+          const patchRes = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}`, {
+            method: "PATCH",
             headers: this.authHeaders(),
+            body: JSON.stringify({ system_prompt: systemPrompt }),
             signal: AbortSignal.timeout(5000),
           });
-          if (delRes.ok) deleted++;
-        } catch { /* skip */ }
+          if (patchRes.ok) {
+            updated++;
+          } else {
+            const body = await patchRes.text().catch(() => "");
+            console.warn(`[hermes-client] PATCH session ${sid} failed: HTTP ${patchRes.status} — ${body.slice(0, 200)}`);
+          }
+        } catch { /* skip individual session */ }
       }
-      if (deleted > 0) {
-        console.log(`[hermes-client] Deleted ${deleted} platform session(s) to force SOUL.md refresh`);
+      if (updated > 0) {
+        console.log(`[hermes-client] Updated system_prompt on ${updated} platform session(s)`);
       }
-      return deleted;
+      return updated;
     } catch {
       return 0;
     }
