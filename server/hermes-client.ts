@@ -332,6 +332,41 @@ export class HermesClient {
     }
   }
 
+  /** Delete all messaging platform sessions so new ones are created with updated SOUL.md.
+   *  Existing sessions cache the old system prompt — deleting them forces a fresh start. */
+  async deleteAllPlatformSessions(): Promise<number> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/sessions?limit=100`, {
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return 0;
+      const sessions = await res.json() as any[];
+      let deleted = 0;
+      for (const sess of sessions) {
+        const sid = sess.session_id ?? sess.id;
+        if (!sid) continue;
+        const platform = sess.platform ?? sess.source;
+        // Only delete messaging platform sessions (not CLI/local)
+        if (!platform || platform === "cli" || platform === "local") continue;
+        try {
+          const delRes = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}`, {
+            method: "DELETE",
+            headers: this.authHeaders(),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (delRes.ok) deleted++;
+        } catch { /* skip */ }
+      }
+      if (deleted > 0) {
+        console.log(`[hermes-client] Deleted ${deleted} platform session(s) to force SOUL.md refresh`);
+      }
+      return deleted;
+    } catch {
+      return 0;
+    }
+  }
+
   /** Send a message to a platform via `hermes send` CLI (no REST endpoint exists for this). */
   async sendMessage(platform: string, target: string, text: string): Promise<boolean> {
     try {
