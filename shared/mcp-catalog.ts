@@ -2909,18 +2909,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.razorpay.com/mcp",
   },
   {
-    id: "resy",
-    name: "Resy",
-    summary: "Find and book restaurants instantly",
-    description: "Resy helps users find and book restaurants instantly. Its connector brings restaurant availability, dining preferences, and booking context into assistant workflows for planning meals and comparing options.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["lifestyle"],
-    icon: "https://cdn.simpleicons.org/resy/white",
-    url: "https://apigw.americanexpress.com/dining/v1/mcp",
-  },
-  {
     id: "rillet",
     name: "Rillet",
     summary: "Query your live GL and financials in plain English",
