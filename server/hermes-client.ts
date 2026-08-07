@@ -346,7 +346,20 @@ export class HermesClient {
         console.warn(`[hermes-client] updateSessionSystemPrompts: GET sessions failed: HTTP ${res.status}`);
         return 0;
       }
-      const sessions = await res.json() as any[];
+      const raw = await res.json();
+      // The API may return a bare array, a paginated object, or { sessions: [...] }
+      let sessions: any[];
+      if (Array.isArray(raw)) {
+        sessions = raw;
+      } else if (raw && typeof raw === "object") {
+        sessions = raw.sessions ?? raw.data ?? raw.items ?? raw.results ?? [];
+        if (!Array.isArray(sessions)) {
+          console.warn(`[hermes-client] updateSessionSystemPrompts: unexpected response shape: ${JSON.stringify(raw).slice(0, 300)}`);
+          sessions = [];
+        }
+      } else {
+        sessions = [];
+      }
       let updated = 0;
       for (const sess of sessions) {
         const sid = sess.session_id ?? sess.id;

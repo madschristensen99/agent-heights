@@ -400,7 +400,20 @@ export class HermesProcessManager {
         console.warn(`[hermes-process] updateSessionSystemPrompts: GET sessions failed: HTTP ${res.status}`);
         return;
       }
-      const sessions = await res.json() as any[];
+      const raw = await res.json();
+      // The API may return a bare array, a paginated object, or { sessions: [...] }
+      let sessions: any[];
+      if (Array.isArray(raw)) {
+        sessions = raw;
+      } else if (raw && typeof raw === "object") {
+        sessions = raw.sessions ?? raw.data ?? raw.items ?? raw.results ?? [];
+        if (!Array.isArray(sessions)) {
+          console.warn(`[hermes-process] updateSessionSystemPrompts: unexpected response shape: ${JSON.stringify(raw).slice(0, 300)}`);
+          sessions = [];
+        }
+      } else {
+        sessions = [];
+      }
       let updated = 0;
       for (const sess of sessions) {
         const sid = sess.session_id ?? sess.id;
@@ -428,7 +441,7 @@ export class HermesProcessManager {
       if (updated > 0) {
         console.log(`[hermes-process] PATCHed system_prompt on ${updated} platform session(s)`);
       } else {
-        console.log("[hermes-process] No platform sessions to PATCH (new sessions will use config.yaml)");
+        console.log(`[hermes-process] No platform sessions to PATCH (found ${sessions.length} total sessions, new sessions will use config.yaml)`);
       }
     } catch (err) {
       console.warn(`[hermes-process] updateSessionSystemPrompts error: ${err}`);
