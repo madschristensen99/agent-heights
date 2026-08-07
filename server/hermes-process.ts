@@ -297,34 +297,8 @@ export class HermesProcessManager {
     }, 1000);
   }
 
-  /** Restart the hermes serve process so it re-reads config.yaml with updated system prompt.
-   *  Also restarts the gateway child process after serve is ready. */
-  private restartServe(): void {
-    console.log("[hermes-process] Restarting serve process to pick up new config.yaml...");
-    // Kill gateway first
-    if (this.gatewayChild) {
-      this.gatewayChild.kill("SIGTERM");
-      this.gatewayChild = null;
-    }
-    // Kill serve process
-    if (this.child) {
-      this.child.kill("SIGTERM");
-      this.child = null;
-    }
-    this.ready = false;
-    // Delay 2s before respawning to let processes fully exit
-    setTimeout(() => {
-      if (this.started) {
-        this.spawnHermes();
-        void this.waitForReady().then(() => {
-          if (this.started) this.spawnGateway();
-        });
-      }
-    }, 2000);
-  }
-
   private lastPromptUpdate = 0;
-  private static readonly PROMPT_UPDATE_COOLDOWN_MS = 120_000; // 2 minutes
+  private static readonly PROMPT_UPDATE_COOLDOWN_MS = 300_000; // 5 minutes
 
   /** Write office state into config.yaml system prompt WITHOUT restarting the gateway.
    *  Used before gateway start so the config is correct from the beginning. */
@@ -343,7 +317,7 @@ export class HermesProcessManager {
   }
 
   /** Update the Hermes system prompt with live office state and restart the gateway.
-   *  Called periodically by the manager. Rate-limited to max once per 2 minutes. */
+   *  Called periodically by the manager. Rate-limited to max once per 5 minutes. */
   updateSystemPromptWithOfficeState(officeState: string): boolean {
     const now = Date.now();
     if (now - this.lastPromptUpdate < HermesProcessManager.PROMPT_UPDATE_COOLDOWN_MS) {
@@ -359,12 +333,39 @@ export class HermesProcessManager {
       const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
       this.writeConfigWithOfficeState(configPath, provider, model, officeState);
       console.log("[hermes-process] Updated config.yaml with live office state in system prompt");
-      // Restart the serve process (not just gateway) so it re-reads config.yaml
-      this.restartServe();
+      // Use the Hermes REST API to restart the gateway (less disruptive than killing processes)
+      // The serve process may re-read config.yaml when handling the restart request
+      void this.restartGatewayViaApi();
       return true;
     } catch (err) {
       console.warn(`[hermes-process] Failed to update system prompt with office state: ${err}`);
       return false;
+    }
+  }
+
+  /** Restart the gateway via the Hermes REST API instead of killing child processes.
+   *  This is less disruptive — the serve process stays alive and handles the restart. */
+  private async restartGatewayViaApi(): Promise<void> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/gateway/restart`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Hermes-Session-Token": this.sessionToken,
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) {
+        console.log("[hermes-process] Gateway restart via API OK — config.yaml should be re-read");
+      } else {
+        const body = await res.text().catch(() => "");
+        console.warn(`[hermes-process] Gateway restart via API failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
+        // Fallback: restart gateway child process directly
+        this.restartGateway();
+      }
+    } catch (err) {
+      console.warn(`[hermes-process] Gateway restart via API error: ${err} — falling back to child restart`);
+      this.restartGateway();
     }
   }
 
