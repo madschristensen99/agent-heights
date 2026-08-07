@@ -11,7 +11,8 @@ export type NarrationEvent =
   | "task_started"
   | "task_completed"
   | "task_failed"
-  | "proactive_update";
+  | "proactive_update"
+  | "screenshot_request";
 
 export interface NarrationContext {
   /** The agent the event is about. */
@@ -21,7 +22,7 @@ export interface NarrationContext {
   /** The event type. */
   event: NarrationEvent;
   /** Full office roster: name, status, current task. */
-  roster: { name: string; status: string; task: string | null }[];
+  roster?: { name: string; status: string; task: string | null }[];
   /** Optional: the platform user's original message that triggered this. */
   userMessage?: string;
   /** Optional: the agent's final output (for task_completed). */
@@ -47,6 +48,7 @@ Rules:
 - For task_completed: say the agent finished and briefly mention the outcome.
 - For task_failed: say the agent ran into trouble and what happened. Be honest but not alarming.
 - For proactive_update: give a quick status check on how things are going.
+- For screenshot_request: say here's a live look at the office and briefly describe what's happening.
 
 Examples:
 - "Alice just picked up your request. She's diving into the codebase now."
@@ -65,8 +67,9 @@ export async function generateNarration(ctx: NarrationContext): Promise<string> 
 
   try {
     const config = getProviderConfig();
-    const rosterStr = ctx.roster.length > 0
-      ? ctx.roster.map(r => `  - ${r.name}: ${r.status}${r.task ? `, working on: ${r.task.slice(0, 80)}` : ""}`).join("\n")
+    const roster = ctx.roster ?? [];
+    const rosterStr = roster.length > 0
+      ? roster.map(r => `  - ${r.name}: ${r.status}${r.task ? `, working on: ${r.task.slice(0, 80)}` : ""}`).join("\n")
       : "  (no other agents)";
 
     const elapsedStr = ctx.elapsedMs ? ` Working for ${Math.round(ctx.elapsedMs / 60000)} min.` : "";
@@ -142,5 +145,9 @@ function fallbackNarration(ctx: NarrationContext): string {
         ? `${ctx.agentName}'s still working on your request, about ${min} min in.`
         : `${ctx.agentName}'s still working on your request.`;
     }
+    case "screenshot_request":
+      return `Here's a live look at the office. ${ctx.agentName} is available if you need anything.`;
+    default:
+      return `${ctx.agentName} has an update regarding your request.`;
   }
 }

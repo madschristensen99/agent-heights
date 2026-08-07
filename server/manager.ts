@@ -1,5 +1,6 @@
-import { mkdirSync, rmSync, existsSync, readFileSync, appendFileSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { generateOfficeScreenshot, type OfficeSnapshotAgent } from "./office-screenshot.js";
 import { generateNarration, type NarrationContext } from "./narration.js";
@@ -385,6 +386,8 @@ export class AgentManager {
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private proactiveUpdateTimer: ReturnType<typeof setInterval> | null = null;
   private static readonly PROACTIVE_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  private soulRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly SOUL_REFRESH_MS = 60_000; // 60 seconds
   private proactiveLastSent = new Map<string, number>(); // key: platform:sender → last sent timestamp
   private firedAgents = new Map<string, FiredAgent>();
   private vacationedAgents = new Map<string, VacationedAgent>();
@@ -619,6 +622,10 @@ export class AgentManager {
 
     // Start proactive platform update timer
     this.proactiveUpdateTimer = setInterval(() => this.tickProactiveUpdates(), AgentManager.PROACTIVE_UPDATE_INTERVAL_MS);
+
+    // Start SOUL.md refresh — injects live office state into Hermes receptionist context
+    this.refreshSoulMd();
+    this.soulRefreshTimer = setInterval(() => this.refreshSoulMd(), AgentManager.SOUL_REFRESH_MS);
 
     // Resume pending tasks for agents that were interrupted by a server restart
     let resumedAny = false;
@@ -1221,6 +1228,10 @@ export class AgentManager {
     if (this.proactiveUpdateTimer) {
       clearInterval(this.proactiveUpdateTimer);
       this.proactiveUpdateTimer = null;
+    }
+    if (this.soulRefreshTimer) {
+      clearInterval(this.soulRefreshTimer);
+      this.soulRefreshTimer = null;
     }
   }
 
@@ -4927,12 +4938,91 @@ export class AgentManager {
     return { rt: picked, reason: `no skill match, assigned to ${picked.info.name}` };
   }
 
+  /** Write live office state to ~/.hermes/SOUL.md so the Hermes receptionist LLM
+   *  has real-time context about who's in the office and what they're doing.
+   *  Called every 60s. The static identity section is preserved; only the
+   *  dynamic "Live Office Status" section is updated. */
+  private refreshSoulMd(): void {
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const soulPath = join(hermesHome, "SOUL.md");
+
+      // Build live office status
+      const agents = [...this.agents.values()]
+        .filter((a) => a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID)
+        .map((a) => {
+          const status = a.info.status === "idle"
+            ? "idle"
+            : a.info.status === "working" || a.info.status === "thinking"
+              ? `working on: ${a.info.task ?? "a task"}`
+              : a.info.status === "error"
+                ? "dealing with an error"
+                : a.info.status;
+          return `- ${a.info.name}: ${status}`;
+        });
+
+      const cards = [...this.board.values()];
+      const activeCards = cards
+        .filter((c) => c.status === "in_progress" || c.status === "review_pending")
+        .map((c) => {
+          const assignee = c.assignedAgentId ? this.agents.get(c.assignedAgentId)?.info.name ?? "someone" : "unassigned";
+          return `- ${c.title} (assigned to: ${assignee}, status: ${c.status})`;
+        });
+
+      const recentDone = [...this.agents.values()]
+        .flatMap((a) => a.logs)
+        .filter((l) => l.kind === "status" && l.text.includes("completed"))
+        .slice(-5)
+        .map((l) => `- ${l.text}`)
+        .join("\n");
+
+      const officeSection = [
+        "## Live Office Status",
+        "",
+        `Updated: ${new Date().toISOString()}`,
+        "",
+        `### Agents in the office (${agents.length})`,
+        "",
+        agents.length > 0 ? agents.join("\n") : "- The office is empty right now.",
+        "",
+        activeCards.length > 0 ? `### Active tasks (${activeCards.length})\n\n${activeCards.join("\n")}\n` : "",
+        recentDone ? `### Recent completions\n\n${recentDone}\n` : "",
+      ].filter(Boolean).join("\n");
+
+      // Read existing SOUL.md, replace everything after "## Live Office Status"
+      let existing = "";
+      if (existsSync(soulPath)) {
+        existing = readFileSync(soulPath, "utf-8");
+      }
+      const marker = "## Live Office Status";
+      const staticPart = existing.includes(marker)
+        ? existing.slice(0, existing.indexOf(marker)).trimEnd()
+        : existing;
+
+      const content = staticPart + "\n\n" + officeSection + "\n";
+      writeFileSync(soulPath, content, "utf-8");
+    } catch (err) {
+      // Non-critical — don't log every 60s if it fails
+    }
+  }
+
   /** Route a platform event to Hermes for triage first, then to the best idle agent.
    *  If there's already an assigned agent for this platform, forward the follow-up to them.
    *  If Hermes is idle, he gets the message as a triage task and decides who handles it.
    *  If Hermes is busy, fall back to direct skill-based routing.
    *  If no agents are idle, the message is queued for retry. */
   routePlatformEvent(platform: string, sender: string, text: string): void {
+    // 0. Auto-screenshot: if the user asks for a photo/screenshot/pic, send one immediately
+    const lowerText = text.toLowerCase();
+    const screenshotKeywords = ["screenshot", "photo", "pic of", "picture of", "what does it look like", "show me the office"];
+    if (screenshotKeywords.some((kw) => lowerText.includes(kw))) {
+      this.sendNarratedScreenshot(platform, sender, {
+        agentName: "Office",
+        task: "Live office screenshot requested by user",
+        event: "screenshot_request",
+      }).catch((err) => console.warn(`[manager] Auto-screenshot failed: ${err}`));
+    }
+
     // 1. Follow-up: if there's already an agent assigned to this platform, forward the message
     const assignedId = this.platformAssignedAgent.get(platform);
     if (assignedId) {
@@ -5073,6 +5163,16 @@ export class AgentManager {
   /** Generate a narrated office screenshot and send it to a platform user. */
   private async sendNarratedScreenshot(platform: string, target: string, narrationCtx: NarrationContext): Promise<void> {
     try {
+      // Fill in roster from live agent state if not already provided
+      if (!narrationCtx.roster) {
+        narrationCtx.roster = [...this.agents.values()]
+          .filter((a) => a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID)
+          .map((a) => ({
+            name: a.info.name,
+            status: a.info.status,
+            task: a.info.task,
+          }));
+      }
       const caption = await generateNarration(narrationCtx);
       const agents: OfficeSnapshotAgent[] = [...this.agents.values()].map((rt) => ({
         info: rt.info,
