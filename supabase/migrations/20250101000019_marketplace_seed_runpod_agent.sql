@@ -34,4 +34,5 @@ To connect: Get your Runpod API key from the Runpod dashboard → Settings → A
     '["Runpod account","Runpod API Key"]',
     '[{"label":"Runpod API Keys","url":"https://docs.runpod.io/get-started/api-keys"},{"label":"Runpod MCP Server","url":"https://github.com/runpod/runpod-mcp"}]',
     'https://icons.duckduckgo.com/ip3/runpod.io.ico'
-  );
+  )
+ON CONFLICT (name) DO NOTHING;

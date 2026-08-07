@@ -5,18 +5,18 @@
 
 -- ── agent_logs ─────────────────────────────────────────────────────────────
 
-ALTER TABLE public.sprite_heights_agent_logs
+ALTER TABLE public.agent_heights_agent_logs
   ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
 
-CREATE INDEX IF NOT EXISTS idx_sprite_heights_agent_logs_agent_active
-  ON public.sprite_heights_agent_logs (agent_id, ts DESC)
+CREATE INDEX IF NOT EXISTS idx_agent_heights_agent_logs_agent_active
+  ON public.agent_heights_agent_logs (agent_id, ts DESC)
   WHERE archived = FALSE;
 
 -- ── conversation_messages ──────────────────────────────────────────────────
 
-ALTER TABLE public.sprite_heights_conversation_messages
+ALTER TABLE public.agent_heights_conversation_messages
   ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_conversation_messages_agent_active
-  ON public.sprite_heights_conversation_messages (agent_id, seq)
+  ON public.agent_heights_conversation_messages (agent_id, seq)
   WHERE archived = FALSE;

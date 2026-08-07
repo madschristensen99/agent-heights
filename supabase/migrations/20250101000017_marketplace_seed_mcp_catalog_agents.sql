@@ -7253,4 +7253,5 @@ To connect: Get your API Key at https://gmapsextractor.com/google-maps-scraper-m
     '["API Key (https://gmapsextractor.com/google-maps-scraper-mcp)"]',
     '[{"label":"Google Maps Scraper MCP Server","url":"https://cloud.gmapsextractor.com/api/mcp"},{"label":"Get your API Key","url":"https://gmapsextractor.com/google-maps-scraper-mcp"}]',
     'https://icons.duckduckgo.com/ip3/gmapsextractor.com.ico'
-  );
+  )
+ON CONFLICT (name) DO NOTHING;

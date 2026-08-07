@@ -4,6 +4,6 @@
 -- database still reference the old org_id. Update them so they show up in the
 -- wardrobe again.
 
-UPDATE public.sprite_heights_saved_outfits
+UPDATE public.agent_heights_saved_outfits
   SET org_id = 'org-agent-heights-hq'
   WHERE org_id = 'org-sprite-heights-hq';

@@ -681,7 +681,7 @@ export class MarketplaceBrowser {
 
     if (!search) {
       this.content.innerHTML = `<div style="text-align:center;color:#666;padding:2rem;">
-        <div style="font-size:0.9rem; margin-bottom:0.5rem;">🔍 Search 22,000+ community MCP servers</div>
+        <div style="font-size:0.9rem; margin-bottom:0.5rem;">🔍 Search 22,000+ community MCP servers from <a href="https://www.pulsemcp.com/" target="_blank" rel="noopener">PulseMCP</a></div>
         <div style="font-size:0.75rem; color:#888;">Type a keyword like "hyperliquid", "trading", "database"…</div>
       </div>`;
       return;

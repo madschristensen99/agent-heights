@@ -175,4 +175,5 @@ To start: Clone the mcp-technical-analysis repo and run the setup script. No API
     '["Clone mcp-technical-analysis repo and run setup script"]',
     '[{"label":"GitHub","url":"https://github.com/fajararrizki/mcp-technical-analysis"},{"label":"PulseMCP","url":"https://www.pulsemcp.com/servers/fajararrizki-geartrade-technical-analysis"}]',
     'https://icons.duckduckgo.com/ip3/binance.com.ico'
-  );
+  )
+ON CONFLICT (name) DO NOTHING;

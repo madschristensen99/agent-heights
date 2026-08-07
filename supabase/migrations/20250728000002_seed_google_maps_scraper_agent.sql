@@ -38,4 +38,5 @@ Perfect for:
     '["Google Maps Scraper API key (get yours at gmapsextractor.com)"]',
     '[{"label":"Google Maps Scraper MCP","url":"https://gmapsextractor.com/google-maps-scraper-mcp"},{"label":"Get API Key","url":"https://gmapsextractor.com/google-maps-scraper-mcp"}]',
     'https://www.google.com/s2/favicons?domain=gmapsextractor.com&sz=128'
-  );
+  )
+ON CONFLICT (name) DO NOTHING;

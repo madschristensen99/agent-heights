@@ -44,4 +44,5 @@ Perfect for:
     '["Crossmint API key configured on server","Server signer secret configured on server"]',
     '[{"label":"Crossmint Console","url":"https://www.crossmint.com/console"},{"label":"Crossmint Wallets API Docs","url":"https://docs.crossmint.com/wallets/quickstart"}]',
     'https://www.google.com/s2/favicons?domain=crossmint.com&sz=128'
-  );
+  )
+ON CONFLICT (name) DO NOTHING;

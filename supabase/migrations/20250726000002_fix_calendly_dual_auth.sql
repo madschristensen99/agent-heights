@@ -62,4 +62,5 @@ To connect: Generate a Personal Access Token at https://calendly.com/integration
   '["Personal Access Token (https://calendly.com/integrations/api_webhooks)"]',
   '[{"label":"Calendly MCP Server","url":"https://mcp.calendly.com"},{"label":"Get your Personal Access Token","url":"https://calendly.com/integrations/api_webhooks"},{"label":"Calendly Developer Docs","url":"https://developer.calendly.com"}]',
   'https://icons.duckduckgo.com/ip3/calendly.com.ico'
-);
+)
+ON CONFLICT (name) DO NOTHING;

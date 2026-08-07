@@ -41,4 +41,5 @@ Perfect for:
     '["Massive API token (get yours at joinmassive.com)"]',
     '[{"label":"Massive Web Render API","url":"https://docs.joinmassive.com/web-render"},{"label":"Get API Token","url":"https://joinmassive.com"},{"label":"Pricing","url":"https://joinmassive.com/pricing"}]',
     'https://www.google.com/s2/favicons?domain=joinmassive.com&sz=128'
-  );
+  )
+ON CONFLICT (name) DO NOTHING;
