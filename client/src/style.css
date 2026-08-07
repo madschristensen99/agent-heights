@@ -189,6 +189,8 @@ body {
   width: 250px;
   max-height: 36vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .roster.collapsed {
@@ -366,6 +368,9 @@ body {
   max-height: calc(100vh - 200px);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .detail .x {
@@ -422,6 +427,8 @@ body {
 
 .logs {
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: var(--panel-soft);
   border: 1px solid var(--panel-edge-soft);
   border-radius: var(--radius-sm);
@@ -479,16 +486,21 @@ body {
 }
 
 .detail #d-mcp-section,
+.detail #d-premium-section,
 .detail #d-cdp-section,
 .detail #d-crossmint-section {
   max-height: 180px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   flex-shrink: 0;
 }
 
 .detail #d-schedules {
   max-height: 240px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   flex-shrink: 0;
 }
 
@@ -3040,6 +3052,9 @@ kbd {
   .detail {
     width: 300px;
     max-height: calc(100vh - 160px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .modal.onboard,
@@ -3087,6 +3102,9 @@ kbd {
     gap: 8px;
     padding-top: calc(6px + var(--safe-top));
     font-size: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .logo {
@@ -3138,6 +3156,9 @@ kbd {
     padding: 12px;
     padding-bottom: calc(12px + var(--safe-bottom));
     z-index: 40;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .feed:not(.mobile-show) {
@@ -3160,13 +3181,22 @@ kbd {
   /* ── Detail: full-width overlay ── */
   .detail {
     position: fixed;
-    top: calc(48px + var(--safe-top));
+    top: calc(96px + var(--safe-top));
     left: calc(8px + var(--safe-left));
     right: calc(8px + var(--safe-right));
     width: auto;
     max-width: none;
     max-height: calc(100vh - 120px);
     z-index: 40;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  /* ── Detail button row: wrap on mobile ── */
+  .detail .row {
+    flex-wrap: wrap;
   }
 
   /* ── Hire button: move to be part of mobile actions ── */
