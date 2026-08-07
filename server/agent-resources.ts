@@ -44,6 +44,7 @@ async function buildMarketplaceAgentsSummary(): Promise<string> {
       .from("heights_cloud_agents")
       .select("name, description, summary, is_premium, tags, is_free, price_usd")
       .eq("status", "approved")
+      .eq("search_type", "agent")
       .order("created_at", { ascending: false })
       .range(0, 199);
 

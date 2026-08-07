@@ -174,6 +174,7 @@ export async function handleMarketplaceRequest(
         .from("heights_cloud_agents")
         .select("*")
         .eq("status", "approved")
+        .eq("search_type", "agent")
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
