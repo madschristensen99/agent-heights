@@ -8,7 +8,7 @@
 --   2. Adds a new "Calendly (Personal Token) Agent" for the personal access token flow
 
 -- 1. Switch the existing Calendly Agent to OAuth
-UPDATE public.swarms_cloud_agents
+UPDATE public.heights_cloud_agents
 SET
   agent = '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Calendly agent connected via the Calendly MCP at https://mcp.calendly.com. You manage scheduling, events, and availability. You authenticate via OAuth — the user will connect their Calendly account. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":6,"hair":3,"shirt":0,"pants":0,"accessory":0,"accent":8,"beard":2,"eyeColor":1,"headFeature":0},"mcpServers":[{"url":"https://mcp.calendly.com","name":"calendly","authType":"oauth"}]}',
   description = 'Calendly Agent — connected to Calendly via MCP (OAuth required).
@@ -29,9 +29,9 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
 WHERE name = 'Calendly Agent';
 
 -- 2. Add a Personal Token variant for users who prefer API keys
-DELETE FROM public.swarms_cloud_agents WHERE name = 'Calendly (Personal Token) Agent';
+DELETE FROM public.heights_cloud_agents WHERE name = 'Calendly (Personal Token) Agent';
 
-INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
+INSERT INTO public.heights_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
 VALUES (
   'Calendly (Personal Token) Agent',
   '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Calendly agent connected via the Calendly MCP at https://mcp.calendly.com using a Personal Access Token. You manage scheduling, events, availability, and webhook subscriptions. You authenticate with a personal access token — the user will provide their token from https://calendly.com/integrations/api_webhooks. When asked to perform actions, always confirm destructive operations with the user first. Be helpful, precise, and thorough in your responses.","provider":"cline","source":"agent-heights","appearance":{"skin":3,"hairStyle":2,"hair":5,"shirt":9,"pants":3,"accessory":1,"accent":8,"beard":0,"eyeColor":4,"headFeature":0},"mcpServers":[{"url":"https://mcp.calendly.com","name":"calendly-pat","authType":"apikey","keyLabel":"Personal Access Token","keyPlaceholder":"eyJ...","keyHelpUrl":"https://calendly.com/integrations/api_webhooks"}]}',

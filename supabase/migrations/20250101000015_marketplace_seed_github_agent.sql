@@ -2,7 +2,7 @@
 -- This agent manages repositories, issues, pull requests, and code search
 -- via the GitHub MCP at https://api.githubcopilot.com/mcp/ using PAT auth.
 
-INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
+INSERT INTO public.heights_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
 VALUES
   (
     'GitHub Agent',

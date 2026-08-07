@@ -300,19 +300,22 @@ export class HermesProcessManager {
   private lastPromptUpdate = 0;
   private static readonly PROMPT_UPDATE_COOLDOWN_MS = 300_000; // 5 minutes
 
-  /** Write office state into config.yaml system prompt WITHOUT restarting the gateway.
-   *  Used before gateway start so the config is correct from the beginning. */
+  /** Write office state into SOUL.md and config.yaml WITHOUT restarting the gateway.
+   *  Used before gateway start so the system prompt is correct from the beginning.
+   *  SOUL.md is the primary mechanism — Hermes reads it as slot #1 in the system prompt. */
   writeOfficeState(officeState: string): void {
     this.currentOfficeState = officeState;
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       const configPath = join(hermesHome, "config.yaml");
+      const soulPath = join(hermesHome, "SOUL.md");
       const provider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
       const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
+      this.writeSoulMd(soulPath, officeState);
       this.writeConfigWithOfficeState(configPath, provider, model, officeState);
-      console.log("[hermes-process] Wrote config.yaml with live office state (no restart)");
+      console.log("[hermes-process] Wrote SOUL.md + config.yaml with live office state (no restart)");
     } catch (err) {
-      console.warn(`[hermes-process] Failed to write office state to config: ${err}`);
+      console.warn(`[hermes-process] Failed to write office state: ${err}`);
     }
   }
 
@@ -329,12 +332,13 @@ export class HermesProcessManager {
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       const configPath = join(hermesHome, "config.yaml");
+      const soulPath = join(hermesHome, "SOUL.md");
       const provider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
       const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
+      this.writeSoulMd(soulPath, officeState);
       this.writeConfigWithOfficeState(configPath, provider, model, officeState);
-      console.log("[hermes-process] Updated config.yaml with live office state in system prompt");
-      // Use the Hermes REST API to restart the gateway (less disruptive than killing processes)
-      // The serve process may re-read config.yaml when handling the restart request
+      console.log("[hermes-process] Updated SOUL.md + config.yaml with live office state");
+      // Restart gateway via API so it re-reads SOUL.md and config.yaml
       void this.restartGatewayViaApi();
       return true;
     } catch (err) {
@@ -367,6 +371,46 @@ export class HermesProcessManager {
       console.warn(`[hermes-process] Gateway restart via API error: ${err} — falling back to child restart`);
       this.restartGateway();
     }
+  }
+
+  /** Write SOUL.md with the receptionist identity + live office state.
+   *  SOUL.md is Hermes' primary agent identity (slot #1 in system prompt).
+   *  The Hermes framework reads this file and injects it into every conversation —
+   *  the LLM doesn't read the file, the framework does. */
+  private writeSoulMd(soulPath: string, officeState: string): void {
+    const content = [
+      "# Agent Heights Receptionist",
+      "",
+      "You're the receptionist at Agent Heights, a virtual office where AI agents",
+      "do real work as employees. People message you on Telegram.",
+      "",
+      "## Live Office Status",
+      "",
+      officeState,
+      "",
+      "Use this information to answer questions about what's happening in the office.",
+      "Be specific. Name agents and their current tasks.",
+      "",
+      "## Rules",
+      "",
+      "- Write normally. Capital letters, periods, normal sentences.",
+      "- Do NOT use em-dashes. Use periods or commas.",
+      "- Do NOT use lowercase for style. Write like a professional adult.",
+      "- Do NOT ask to build profiles or ask personal questions.",
+      "- Do NOT say things like 'hey!' or 'totally' or 'literally'.",
+      "- Do NOT use emoji.",
+      "- Be brief. 1-2 sentences usually. Never more than 3.",
+      "- If someone asks what's going on in the office, use the live office status",
+      "  above to tell them who's here and what they're working on. Be specific.",
+      "- If someone asks for a screenshot or photo, say you can't send photos but",
+      "  describe what's happening. A real screenshot will follow shortly from the team.",
+      "- If someone wants something done, say you'll connect them with the team and",
+      "  someone will respond here shortly. Don't do it yourself.",
+      "- If someone asks about Agent Heights, answer in a sentence or two.",
+      "- If someone says hi, say hi back and ask what they need. Nothing else.",
+      "",
+    ].join("\n");
+    writeFileSync(soulPath, content, "utf-8");
   }
 
   /** Build config.yaml with office state embedded in system_prompt as a double-quoted

@@ -108,11 +108,9 @@ const FEATURED_AGENTS = [
   "Runpod GPU",
   "Massive Web Scraper",
   "Google Maps Scraper",
-  "Slack",
   "Notion",
   "Linear",
   "Stripe",
-  "Figma",
   "HubSpot",
   "Atlassian (Jira & Confluence)",
   "Tavily",
@@ -130,18 +128,34 @@ const FEATURED_AGENTS = [
   "Canva",
 ];
 
-function agentPriority(name: string): number {
+/** Premium agents to surface first in the premium tab. */
+const FEATURED_PREMIUM_AGENTS = [
+  "Kalshi",
+  "Polymarket",
+  "Perplexity",
+  "Tavily",
+  "Apollo",
+  "Twitter (X)",
+  "YouTube",
+  "CoinGecko",
+  "Messari",
+  "AI Models",
+  "StableSocial - Reddit",
+];
+
+function agentPriority(name: string, featured: string[] = FEATURED_AGENTS): number {
   const lower = name.toLowerCase();
-  for (let i = 0; i < FEATURED_AGENTS.length; i++) {
-    if (lower === FEATURED_AGENTS[i].toLowerCase()) return i;
+  for (let i = 0; i < featured.length; i++) {
+    if (lower === featured[i].toLowerCase()) return i;
   }
-  return FEATURED_AGENTS.length;
+  return featured.length;
 }
 
-function sortAgents(agents: MarketplaceAgent[]): MarketplaceAgent[] {
+function sortAgents(agents: MarketplaceAgent[], usePremiumFeatured = false): MarketplaceAgent[] {
+  const featured = usePremiumFeatured ? FEATURED_PREMIUM_AGENTS : FEATURED_AGENTS;
   return agents.sort((a, b) => {
-    const pa = agentPriority(a.name);
-    const pb = agentPriority(b.name);
+    const pa = agentPriority(a.name, featured);
+    const pb = agentPriority(b.name, featured);
     if (pa !== pb) return pa - pb;
     return a.name.localeCompare(b.name);
   });
@@ -195,7 +209,7 @@ export async function handleMarketplaceRequest(
         return true;
       }
 
-      const agents = sortAgents((data ?? []).map((r) => mapAgent(r as Record<string, unknown>)));
+      const agents = sortAgents((data ?? []).map((r) => mapAgent(r as Record<string, unknown>)), premium === "true");
       json(res, 200, { agents, count: agents.length });
       return true;
     }

@@ -2,10 +2,10 @@
 -- Connects to the Runpod API via MCP (stdio, API Key required).
 
 -- Delete any existing agent with this name first (idempotent re-seed)
-DELETE FROM public.swarms_cloud_agents
+DELETE FROM public.heights_cloud_agents
 WHERE name = 'Runpod GPU Agent';
 
-INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
+INSERT INTO public.heights_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
 VALUES
   (
     'Runpod GPU Agent',

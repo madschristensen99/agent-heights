@@ -3,7 +3,7 @@
 -- The Robinhood and Yahoo Finance agents are seeded in earlier migrations;
 -- the GitHub Agent is seeded in 20250101000015.
 
-DELETE FROM public.swarms_cloud_agents
+DELETE FROM public.heights_cloud_agents
 WHERE name IN (
   'Code Review Sentinel',
   'Data Analyst Pro',

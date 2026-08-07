@@ -3,7 +3,7 @@
 -- Stdio agents use command/args with envVars for credentials; remote agents use OAuth.
 
 -- Delete any existing agents with these names first (idempotent re-seed)
-DELETE FROM public.swarms_cloud_agents
+DELETE FROM public.heights_cloud_agents
 WHERE name IN (
   'Coinbase Solana Agent',
   'Coinbase DeFi Trader',
@@ -13,7 +13,7 @@ WHERE name IN (
   'Crypto Technical Analysis Agent'
 );
 
-INSERT INTO public.swarms_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
+INSERT INTO public.heights_cloud_agents (name, agent, description, summary, tags, is_free, price, price_usd, language, search_type, status, use_cases, category, requirements, links, image_url)
 VALUES
   (
     'Coinbase Solana Agent',
