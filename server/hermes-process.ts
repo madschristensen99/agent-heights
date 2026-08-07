@@ -40,6 +40,7 @@ export class HermesProcessManager {
   private gatewayRestarting = false; // true when restartGateway() is handling the restart
 
   private platformEnvVars: Record<string, string> = {};
+  private currentOfficeState: string | null = null;
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
@@ -136,6 +137,14 @@ export class HermesProcessManager {
   }
 
   private writeConfig(configPath: string, provider: string, model: string): void {
+    // If office state was already set (via writeOfficeState before start()),
+    // include it in the config so ensureHermesConfig doesn't overwrite it
+    if (this.currentOfficeState) {
+      this.writeConfigWithOfficeState(configPath, provider, model, this.currentOfficeState);
+      console.log(`[hermes-process] Wrote config.yaml with ${provider}/${model} + office state system prompt`);
+      return;
+    }
+
     // Preserve existing platform config (enabled flags, etc.) from the current config.yaml
     // so Telegram/Discord/etc. survive redeploys. The credentials are in .env (persistent volume).
     let preservedPlatforms = "";
@@ -288,12 +297,39 @@ export class HermesProcessManager {
     }, 1000);
   }
 
+  /** Restart the hermes serve process so it re-reads config.yaml with updated system prompt.
+   *  Also restarts the gateway child process after serve is ready. */
+  private restartServe(): void {
+    console.log("[hermes-process] Restarting serve process to pick up new config.yaml...");
+    // Kill gateway first
+    if (this.gatewayChild) {
+      this.gatewayChild.kill("SIGTERM");
+      this.gatewayChild = null;
+    }
+    // Kill serve process
+    if (this.child) {
+      this.child.kill("SIGTERM");
+      this.child = null;
+    }
+    this.ready = false;
+    // Delay 2s before respawning to let processes fully exit
+    setTimeout(() => {
+      if (this.started) {
+        this.spawnHermes();
+        void this.waitForReady().then(() => {
+          if (this.started) this.spawnGateway();
+        });
+      }
+    }, 2000);
+  }
+
   private lastPromptUpdate = 0;
   private static readonly PROMPT_UPDATE_COOLDOWN_MS = 120_000; // 2 minutes
 
   /** Write office state into config.yaml system prompt WITHOUT restarting the gateway.
    *  Used before gateway start so the config is correct from the beginning. */
   writeOfficeState(officeState: string): void {
+    this.currentOfficeState = officeState;
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       const configPath = join(hermesHome, "config.yaml");
@@ -314,6 +350,7 @@ export class HermesProcessManager {
       return false;
     }
     this.lastPromptUpdate = now;
+    this.currentOfficeState = officeState;
 
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
@@ -322,7 +359,8 @@ export class HermesProcessManager {
       const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
       this.writeConfigWithOfficeState(configPath, provider, model, officeState);
       console.log("[hermes-process] Updated config.yaml with live office state in system prompt");
-      this.restartGateway();
+      // Restart the serve process (not just gateway) so it re-reads config.yaml
+      this.restartServe();
       return true;
     } catch (err) {
       console.warn(`[hermes-process] Failed to update system prompt with office state: ${err}`);
