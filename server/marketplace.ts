@@ -96,6 +96,58 @@ function sanitizeSearch(s: string): string {
   return s.replace(/[,()]/g, " ").trim();
 }
 
+/** Agents we want to surface first — high-value, popular, or flagship.
+ *  Matched case-insensitively against the agent name. */
+const FEATURED_AGENTS = [
+  "Yahoo Finance Agent",
+  "GitHub Agent",
+  "Robinhood Trading Agent",
+  "Coinbase Solana Agent",
+  "Crossmint Wallet Agent",
+  "AgentWallet Trader",
+  "Runpod GPU Agent",
+  "Massive Web Scraper",
+  "Google Maps Scraper",
+  "Slack Agent",
+  "Notion Agent",
+  "Linear Agent",
+  "Stripe Agent",
+  "Figma Agent",
+  "HubSpot Agent",
+  "Atlassian (Jira & Confluence) Agent",
+  "Tavily Agent",
+  "FireCrawl Agent",
+  "Supabase Agent",
+  "Vercel Agent",
+  "GitLab Agent",
+  "Airtable Agent",
+  "n8n Agent",
+  "Hugging Face Agent",
+  "Sentry Agent",
+  "PostHog Agent",
+  "Twilio Agent",
+  "PayPal Agent",
+  "Calendly Agent",
+  "Canva Agent",
+];
+
+function agentPriority(name: string): number {
+  const lower = name.toLowerCase();
+  for (let i = 0; i < FEATURED_AGENTS.length; i++) {
+    if (lower === FEATURED_AGENTS[i].toLowerCase()) return i;
+  }
+  return FEATURED_AGENTS.length;
+}
+
+function sortAgents(agents: MarketplaceAgent[]): MarketplaceAgent[] {
+  return agents.sort((a, b) => {
+    const pa = agentPriority(a.name);
+    const pb = agentPriority(b.name);
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export async function handleMarketplaceRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -143,7 +195,7 @@ export async function handleMarketplaceRequest(
         return true;
       }
 
-      const agents = (data ?? []).map((r) => mapAgent(r as Record<string, unknown>));
+      const agents = sortAgents((data ?? []).map((r) => mapAgent(r as Record<string, unknown>)));
       json(res, 200, { agents, count: agents.length });
       return true;
     }

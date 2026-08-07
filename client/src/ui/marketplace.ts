@@ -77,8 +77,8 @@ export class MarketplaceBrowser {
         <button id="mq-close" style="background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer;">×</button>
       </div>
       <div style="padding: 0.25rem 1rem; border-bottom: 1px solid #222; display:flex; gap:0.25rem;">
-        <button id="mq-tab-agents" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#2a2a2a; color:#e0e0e0; cursor:pointer;">Curated</button>
-        <button id="mq-tab-premium" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Premium</button>
+        <button id="mq-tab-agents" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#2a2a2a; color:#e0e0e0; cursor:pointer;">Curated <span id="mq-tab-count-agents" style="font-size:0.65rem; color:#888;"></span></button>
+        <button id="mq-tab-premium" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Premium <span id="mq-tab-count-premium" style="font-size:0.65rem; color:#888;"></span></button>
         <button id="mq-tab-community" style="flex:1; padding:0.4rem; font-size:0.8rem; font-weight:600; border:none; border-radius:0.375rem 0.375rem 0 0; background:#1a1a1a; color:#888; cursor:pointer;">Community MCPs</button>
       </div>
       <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #222;">
@@ -149,6 +149,8 @@ export class MarketplaceBrowser {
     if (this.currentTab === "agents") void this.load();
     else if (this.currentTab === "premium") void this.loadPremium();
     else void this.renderCommunity();
+    // Fetch count for the other agent tab so both counts are visible
+    void this.fetchOtherTabCount();
     if (!localStorage.getItem("agent-heights-market-seen")) {
       localStorage.setItem("agent-heights-market-seen", "1");
       this.showWelcomeBanner();
@@ -201,6 +203,7 @@ export class MarketplaceBrowser {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: MarketplaceResult = await res.json();
       this.allAgents = data.agents ?? [];
+      this.updateTabCount("agents", this.allAgents.length);
       this.renderCategoryChips();
       this.renderAgents();
     } catch {
@@ -223,6 +226,7 @@ export class MarketplaceBrowser {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: MarketplaceResult = await res.json();
       this.allAgents = data.agents ?? [];
+      this.updateTabCount("premium", this.allAgents.length);
       this.renderCategoryChips();
       this.renderAgents();
     } catch {
@@ -230,31 +234,53 @@ export class MarketplaceBrowser {
     }
   }
 
+  private updateTabCount(tab: "agents" | "premium", count: number): void {
+    const el = this.panel.querySelector(`#mq-tab-count-${tab}`) as HTMLSpanElement | null;
+    if (el) el.textContent = count > 0 ? `(${count})` : "";
+  }
+
+  /** Fetch just the count for the non-active agent tab so both counts show. */
+  private async fetchOtherTabCount(): Promise<void> {
+    const otherTab = this.currentTab === "agents" ? "premium" : "agents";
+    const premium = otherTab === "premium" ? "true" : "false";
+    try {
+      const res = await fetch(`/api/marketplace?type=agent&premium=${premium}`);
+      if (!res.ok) return;
+      const data: MarketplaceResult = await res.json();
+      this.updateTabCount(otherTab, data.count ?? 0);
+    } catch { /* ignore */ }
+  }
+
   private renderCategoryChips(): void {
-    const found = new Set<string>();
+    const found = new Map<string, number>();
     for (const a of this.allAgents) {
       for (const c of a.category ?? []) {
-        found.add(normalizeCategory(c));
+        const norm = normalizeCategory(c);
+        found.set(norm, (found.get(norm) ?? 0) + 1);
       }
     }
-    const cats = ["All", ...KNOWN_CATEGORIES.filter((c) => c !== "All" && found.has(c))];
+    const totalCount = this.allAgents.length;
+    const cats: { label: string; count: number }[] = [
+      { label: "All", count: totalCount },
+      ...KNOWN_CATEGORIES.filter((c) => c !== "All" && found.has(c)).map((c) => ({ label: c, count: found.get(c)! })),
+    ];
     // Add any categories from agents that didn't match known ones
-    for (const c of found) {
-      if (!cats.includes(c)) cats.push(c);
+    for (const [c, count] of found) {
+      if (!cats.some((cat) => cat.label === c)) cats.push({ label: c, count });
     }
 
     this.categoryChips.innerHTML = "";
-    for (const cat of cats) {
+    for (const { label, count } of cats) {
       const chip = document.createElement("button");
-      chip.textContent = cat;
+      chip.textContent = `${label} (${count})`;
       chip.style.cssText = `
         padding: 0.25rem 0.6rem; font-size: 0.72rem; border: 1px solid #222;
-        background: ${cat === this.currentCategory ? "#2a2a2a" : "#1a1a1a"};
-        color: ${cat === this.currentCategory ? "#e0e0e0" : "#888"};
+        background: ${label === this.currentCategory ? "#2a2a2a" : "#1a1a1a"};
+        color: ${label === this.currentCategory ? "#e0e0e0" : "#888"};
         border-radius: 0.375rem; cursor: pointer; white-space: nowrap;
       `;
       chip.addEventListener("click", () => {
-        this.currentCategory = cat;
+        this.currentCategory = label;
         this.renderCategoryChips();
         this.renderAgents();
       });
