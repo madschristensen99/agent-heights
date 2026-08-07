@@ -623,7 +623,7 @@ export class AgentManager {
     this.proactiveUpdateTimer = setInterval(() => this.tickProactiveUpdates(), AgentManager.PROACTIVE_UPDATE_INTERVAL_MS);
 
     // Start SOUL.md refresh — injects live office state into Hermes receptionist context
-    this.refreshSoulMd();
+    // The initial call happens at the end of startHermesGateway() once hermesProcess is ready
     this.soulRefreshTimer = setInterval(() => this.refreshSoulMd(), AgentManager.SOUL_REFRESH_MS);
 
     // Resume pending tasks for agents that were interrupted by a server restart
@@ -992,6 +992,9 @@ export class AgentManager {
         this.broadcast({ type: "platform_connection", states });
       }, delay);
     }
+
+    // Now that hermesProcess is ready, inject live office state into the system prompt
+    this.refreshSoulMd();
   }
 
   /** Get current platform connection states. */
