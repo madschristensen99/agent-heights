@@ -850,7 +850,11 @@ export class OfficeScene extends Phaser.Scene {
               const spr = this.add
                 .sprite(mx, my, MONITOR_TEX, "0")
                 .setDepth(10 + (obj.y ?? 0) - 10);
-              spr.setInteractive({ useHandCursor: true });
+              if (isTouchDevice()) {
+                spr.setInteractive({ hitArea: new Phaser.Geom.Rectangle(0, 0, TILE_PX, TILE_PX), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+              } else {
+                spr.setInteractive({ useHandCursor: true });
+              }
               spr.on("pointerdown", () => this.openAgentViewModal(idx));
               this.monitors[idx] = spr;
             }
@@ -1799,7 +1803,7 @@ export class OfficeScene extends Phaser.Scene {
   private defaultZoom(): number {
     const z = Math.max(this.scale.width / this.mapPx.w, this.scale.height / this.mapPx.h);
     if (isTouchDevice() && Math.min(this.scale.width, this.scale.height) < 480) {
-      return Math.max(1, Math.min(z, 1.0));
+      return Math.max(1, Math.min(z, 1.5));
     }
     return Math.max(1, Math.ceil(z));
   }
@@ -7708,6 +7712,7 @@ export class OfficeScene extends Phaser.Scene {
     const existing = document.getElementById("agent-view-modal");
     if (existing) existing.remove();
 
+    const isNarrow = Math.min(window.innerWidth, window.innerHeight) < 480;
     const modal = document.createElement("div");
     modal.id = "agent-view-modal";
     modal.style.cssText = `
@@ -7715,19 +7720,24 @@ export class OfficeScene extends Phaser.Scene {
       background: rgba(20,50,100,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1000;
       display: flex; align-items: center; justify-content: center;
     `;
+    const modalMaxW = isNarrow ? '100vw' : '90vw';
+    const modalMaxH = isNarrow ? '100vh' : '90vh';
+    const modalRadius = isNarrow ? '0' : '14px';
+    const contentW = isNarrow ? '100%' : '900px';
+    const contentH = isNarrow ? 'calc(100vh - 44px)' : '560px';
     modal.innerHTML = `
-      <div style="background: linear-gradient(to bottom, rgba(235,245,255,0.95), rgba(200,225,250,0.9)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.6); border-radius: 14px; padding: 0; max-width: 90vw; max-height: 90vh; position: relative; display:flex; flex-direction:column; box-shadow: 0 12px 48px rgba(0,80,180,0.2), inset 0 1px 0 rgba(255,255,255,0.8);">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: linear-gradient(to bottom, rgba(120,180,240,0.7), rgba(80,140,220,0.5)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 13px 13px 0 0; border-bottom: 1px solid rgba(255,255,255,0.4);">
-          <div>
-            <span style="color: #ffffff; font-weight: bold; font-size: 1.1rem; text-shadow: 0 1px 3px rgba(0,60,140,0.4);">${agent.name}</span>
+      <div style="background: linear-gradient(to bottom, rgba(235,245,255,0.95), rgba(200,225,250,0.9)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.6); border-radius: ${modalRadius}; padding: 0; max-width: ${modalMaxW}; max-height: ${modalMaxH}; width: ${isNarrow ? '100vw' : 'auto'}; height: ${isNarrow ? '100vh' : 'auto'}; position: relative; display:flex; flex-direction:column; box-shadow: 0 12px 48px rgba(0,80,180,0.2), inset 0 1px 0 rgba(255,255,255,0.8); overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: ${isNarrow ? '6px 10px' : '8px 16px'}; background: linear-gradient(to bottom, rgba(120,180,240,0.7), rgba(80,140,220,0.5)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: ${isNarrow ? '0' : '13px 13px 0 0'}; border-bottom: 1px solid rgba(255,255,255,0.4);${isNarrow ? 'flex-wrap:wrap;gap:4px;' : ''}">
+          <div style="${isNarrow ? 'flex:1;min-width:0;' : ''}">
+            <span style="color: #ffffff; font-weight: bold; font-size: ${isNarrow ? '0.9rem' : '1.1rem'}; text-shadow: 0 1px 3px rgba(0,60,140,0.4);">${agent.name}</span>
             <span style="color: rgba(255,255,255,0.8); font-size: 0.8rem; margin-left: 8px; text-shadow: 0 1px 2px rgba(0,60,140,0.3);">${agent.status.toUpperCase()}</span>
           </div>
-          <div style="display: flex; gap: 6px;">
-            <button id="agent-view-broadcast" style="padding: 5px 14px; border: 1px solid rgba(255,255,255,0.4); border-radius: 16px; background: linear-gradient(to bottom, rgba(140,200,255,0.8), rgba(80,150,230,0.6)); color: #fff; font-size: 0.8rem; cursor: pointer; text-shadow: 0 1px 2px rgba(0,60,140,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);">Broadcast to Projector</button>
-            <button id="agent-view-close" style="padding: 5px 14px; border: 1px solid rgba(255,180,180,0.5); border-radius: 16px; background: linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5)); color: #fff; font-size: 0.8rem; cursor: pointer; text-shadow: 0 1px 2px rgba(140,30,30,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);">Close</button>
+          <div style="display: flex; gap: 6px;${isNarrow ? 'flex-shrink:0;' : ''}">
+            <button id="agent-view-broadcast" style="padding: ${isNarrow ? '4px 10px' : '5px 14px'}; border: 1px solid rgba(255,255,255,0.4); border-radius: 16px; background: linear-gradient(to bottom, rgba(140,200,255,0.8), rgba(80,150,230,0.6)); color: #fff; font-size: ${isNarrow ? '0.7rem' : '0.8rem'}; cursor: pointer; text-shadow: 0 1px 2px rgba(0,60,140,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);">${isNarrow ? 'Broadcast' : 'Broadcast to Projector'}</button>
+            <button id="agent-view-close" style="padding: ${isNarrow ? '4px 10px' : '5px 14px'}; border: 1px solid rgba(255,180,180,0.5); border-radius: 16px; background: linear-gradient(to bottom, rgba(255,150,150,0.7), rgba(230,100,100,0.5)); color: #fff; font-size: ${isNarrow ? '0.7rem' : '0.8rem'}; cursor: pointer; text-shadow: 0 1px 2px rgba(140,30,30,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);">Close</button>
           </div>
         </div>
-        <div id="agent-view-tabs" style="display:flex;gap:2px;padding:4px 10px;background:linear-gradient(to bottom,rgba(220,235,250,0.6),rgba(200,220,245,0.4));border-bottom:1px solid rgba(255,255,255,0.3);">
+        <div id="agent-view-tabs" style="display:flex;gap:2px;padding:4px 10px;background:linear-gradient(to bottom,rgba(220,235,250,0.6),rgba(200,220,245,0.4));border-bottom:1px solid rgba(255,255,255,0.3);${isNarrow ? 'overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;' : ''}">
           <button class="av-tab" data-tab="screen" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;border:1px solid rgba(255,255,255,0.5);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(220,240,255,0.7));color:#1a6bb0;font-size:0.78rem;cursor:pointer;font-weight:bold;text-shadow:0 1px 0 rgba(255,255,255,0.8);box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="tg-sc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ec8ee"/><stop offset="1" stop-color="#2a8cd4"/></linearGradient><linearGradient id="tg-sb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0f0f0"/><stop offset="1" stop-color="#b0b0b0"/></linearGradient></defs><rect x="1" y="1" width="14" height="10" rx="1.5" fill="url(#tg-sb)" stroke="#888" stroke-width="0.5"/><rect x="2.5" y="2.5" width="11" height="7" rx="0.5" fill="url(#tg-sc)"/><rect x="2.5" y="2.5" width="11" height="2.5" rx="0.5" fill="rgba(255,255,255,0.35)"/><rect x="5.5" y="11.5" width="5" height="1.5" rx="0.3" fill="#aaa"/><rect x="3.5" y="13.5" width="9" height="1.2" rx="0.4" fill="#999"/></svg> Screen</button>
           <button class="av-tab" data-tab="files" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.78rem;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="tg-fl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="0.5" stop-color="#f5cc60"/><stop offset="1" stop-color="#d8a830"/></linearGradient></defs><path d="M1 4 Q1 3 2 3 L5.5 3 Q6 3 6.5 3.5 L8 5 L14 5 Q15 5 15 6 L15 13 Q15 14 14 14 L2 14 Q1 14 1 13 Z" fill="url(#tg-fl)" stroke="#c08820" stroke-width="0.5"/><rect x="1" y="6" width="14" height="0.8" fill="rgba(255,255,255,0.5)"/><path d="M1 7 L15 7 L15 13 Q15 14 14 14 L2 14 Q1 14 1 13 Z" fill="url(#tg-fl)" opacity="0.7"/></svg> Files</button>
           <button class="av-tab" data-tab="terminal" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.78rem;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="tg-tt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8e8e8"/><stop offset="1" stop-color="#b8b8b8"/></linearGradient><linearGradient id="tg-ts" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a2a3a"/><stop offset="1" stop-color="#0a1525"/></linearGradient></defs><rect x="1" y="1" width="14" height="11" rx="1.5" fill="url(#tg-tt)" stroke="#888" stroke-width="0.5"/><rect x="1" y="1" width="14" height="3" rx="1.5" fill="#c8c8c8"/><circle cx="3" cy="2.5" r="0.8" fill="#ff6058"/><circle cx="5" cy="2.5" r="0.8" fill="#ffbd2e"/><circle cx="7" cy="2.5" r="0.8" fill="#28ca42"/><rect x="2.5" y="5" width="11" height="6" rx="0.5" fill="url(#tg-ts)"/><path d="M3.5 7 L5 8.5 L3.5 10" stroke="#5dd55d" stroke-width="0.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="5.5" y="9.5" width="4" height="0.8" fill="#5dd55d" rx="0.2"/></svg> Terminal</button>
@@ -7736,7 +7746,7 @@ export class OfficeScene extends Phaser.Scene {
           <button class="av-tab" data-tab="memory" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.78rem;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="tg-mc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a8c8e8"/><stop offset="0.5" stop-color="#78a8d0"/><stop offset="1" stop-color="#5088b8"/></linearGradient></defs><rect x="2" y="3" width="12" height="8" rx="1" fill="url(#tg-mc)" stroke="#406890" stroke-width="0.5"/><rect x="3.5" y="4.5" width="9" height="5" rx="0.5" fill="#2a5878" opacity="0.6"/><rect x="3" y="11" width="1" height="2.5" fill="#888"/><rect x="5.5" y="11" width="1" height="2.5" fill="#888"/><rect x="8" y="11" width="1" height="2.5" fill="#888"/><rect x="10.5" y="11" width="1" height="2.5" fill="#888"/><rect x="4.5" y="5.5" width="2" height="1" fill="#5dd55d" rx="0.2"/><rect x="7.5" y="5.5" width="2" height="1" fill="#ffcc44" rx="0.2"/><rect x="4.5" y="7.5" width="2" height="1" fill="#5dd5ff" rx="0.2"/><rect x="7.5" y="7.5" width="2" height="1" fill="#ff8844" rx="0.2"/></svg> Memory</button>
           <button class="av-tab" data-tab="stats" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;border:1px solid rgba(180,200,225,0.4);border-bottom:none;border-radius:10px 10px 0 0;background:linear-gradient(to bottom,rgba(200,220,245,0.5),rgba(180,205,235,0.3));color:#4a7a9a;font-size:0.78rem;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="tg-s1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ec8ee"/><stop offset="1" stop-color="#2a8cd4"/></linearGradient><linearGradient id="tg-s2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5dd55d"/><stop offset="1" stop-color="#2a8c2a"/></linearGradient><linearGradient id="tg-s3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffcc88"/><stop offset="1" stop-color="#e8a830"/></linearGradient></defs><rect x="2" y="9" width="3" height="5" rx="0.5" fill="url(#tg-s1)" stroke="#2a8cd4" stroke-width="0.3"/><rect x="6.5" y="6" width="3" height="8" rx="0.5" fill="url(#tg-s2)" stroke="#2a8c2a" stroke-width="0.3"/><rect x="11" y="3" width="3" height="11" rx="0.5" fill="url(#tg-s3)" stroke="#e8a830" stroke-width="0.3"/><rect x="2" y="9" width="3" height="1.5" fill="rgba(255,255,255,0.35)" rx="0.3"/><rect x="6.5" y="6" width="3" height="1.5" fill="rgba(255,255,255,0.35)" rx="0.3"/><rect x="11" y="3" width="3" height="1.5" fill="rgba(255,255,255,0.35)" rx="0.3"/></svg> Stats</button>
         </div>
-        <div id="agent-view-content" style="width: 900px; height: 560px; background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(240,248,255,0.9)); border-radius: 0 0 12px 12px; overflow: hidden;">
+        <div id="agent-view-content" style="width: ${contentW}; height: ${contentH}; max-width: 100%; background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(240,248,255,0.9)); border-radius: 0 0 ${isNarrow ? '0' : '12px'} 12px; overflow: hidden;">
         </div>
         ${agent.task ? `<div style="color: #4a7a9a; font-size: 0.75rem; margin: 6px 14px 10px; text-shadow: 0 1px 0 rgba(255,255,255,0.5);">Task: ${agent.task}</div>` : ""}
       </div>
@@ -7859,10 +7869,10 @@ export class OfficeScene extends Phaser.Scene {
             <input id="av-fs-upload-input" type="file" style="display:none;" />
           </label>
         </div>
-        <div id="av-fs-listing" style="flex:1;overflow-y:auto;padding:4px 0;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));"></div>
+        <div id="av-fs-listing" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:4px 0;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));"></div>
         <div id="av-fs-viewer" style="display:none;flex:1;overflow:hidden;border-top:1px solid rgba(255,255,255,0.4);flex-direction:column;">
-          <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
-            <span id="av-fs-filename" style="color:#1a6bb0;font-size:0.75rem;flex:1;font-weight:bold;text-shadow:0 1px 0 rgba(255,255,255,0.5);"></span>
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);flex-wrap:wrap;">
+            <span id="av-fs-filename" style="color:#1a6bb0;font-size:0.75rem;flex:1;min-width:120px;font-weight:bold;text-shadow:0 1px 0 rgba(255,255,255,0.5);"></span>
             <button id="av-fs-edit" style="padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,220,120,0.7),rgba(60,180,80,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(20,100,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Edit</button>
             <button id="av-fs-save" style="display:none;padding:3px 12px;border:1px solid rgba(255,255,255,0.4);border-radius:14px;background:linear-gradient(to bottom,rgba(120,220,120,0.7),rgba(60,180,80,0.5));color:#fff;font-size:0.7rem;cursor:pointer;text-shadow:0 1px 2px rgba(20,100,30,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">Save</button>
             <button id="av-fs-cancel-edit" style="display:none;padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Cancel</button>
@@ -8133,7 +8143,7 @@ export class OfficeScene extends Phaser.Scene {
             <input id="av-term-autoscroll" type="checkbox" checked /> Auto-scroll
           </label>
         </div>
-        <div id="av-terminal-log" style="flex:1;overflow-y:auto;padding:8px 14px;background:linear-gradient(to bottom,#0a1525,#0d1a30);"></div>
+        <div id="av-terminal-log" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:8px 14px;background:linear-gradient(to bottom,#0a1525,#0d1a30);"></div>
       </div>
     `;
 
@@ -8319,7 +8329,7 @@ export class OfficeScene extends Phaser.Scene {
   private renderChatTab(agentId: string, content: HTMLElement): void {
     content.innerHTML = `
       <div style="width:100%;height:100%;display:flex;flex-direction:column;font-family:'Segoe UI',Tahoma,sans-serif;color:#1a3a5a;font-size:0.8rem;">
-        <div id="av-chat-log" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));"></div>
+        <div id="av-chat-log" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:14px;display:flex;flex-direction:column;gap:10px;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));"></div>
         <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:linear-gradient(to bottom,rgba(255,255,255,0.6),rgba(220,240,255,0.4));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid rgba(255,255,255,0.4);">
           <input id="av-chat-input" type="text" placeholder="Say something to the agent..." style="flex:1;padding:8px 14px;border:1px solid rgba(255,255,255,0.5);border-radius:20px;background:rgba(255,255,255,0.7);color:#1a3a5a;font-size:0.8rem;font-family:'Segoe UI',Tahoma,sans-serif;box-shadow:inset 0 1px 2px rgba(0,60,140,0.1);" />
           <button id="av-chat-send" style="padding:8px 18px;border:1px solid rgba(255,255,255,0.4);border-radius:18px;background:linear-gradient(to bottom,rgba(120,180,240,0.7),rgba(80,150,220,0.5));color:#fff;font-size:0.8rem;cursor:pointer;text-shadow:0 1px 2px rgba(0,60,140,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);">Send</button>
@@ -8392,7 +8402,7 @@ export class OfficeScene extends Phaser.Scene {
           <span id="av-mem-count" style="color:#7aaac0;font-size:0.65rem;"></span>
           <button id="av-mem-refresh" style="margin-left:auto;padding:3px 12px;border:1px solid rgba(255,255,255,0.5);border-radius:14px;background:linear-gradient(to bottom,rgba(255,255,255,0.8),rgba(220,240,255,0.5));color:#4a7a9a;font-size:0.7rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);">Refresh</button>
         </div>
-        <div id="av-mem-list" style="flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));">
+        <div id="av-mem-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:10px 14px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(to bottom,rgba(255,255,255,0.9),rgba(245,250,255,0.8));">
           <div style="color:#7aaac0;font-size:0.7rem;padding:20px;text-align:center;">Loading conversation history...</div>
         </div>
       </div>

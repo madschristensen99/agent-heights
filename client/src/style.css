@@ -3908,3 +3908,32 @@ kbd {
   0%, 100% { box-shadow: 0 0 0 0 rgba(79, 157, 222, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(79, 157, 222, 0); }
 }
+
+/* --------------------------------------------------- agent view modal */
+
+#agent-view-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+@media (max-width: 480px) {
+  #agent-view-modal {
+    height: 100dvh;
+  }
+
+  #agent-view-content {
+    height: calc(100dvh - 44px) !important;
+  }
+
+  #agent-view-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .av-tab {
+    flex-shrink: 0 !important;
+    min-width: 64px;
+  }
+}
