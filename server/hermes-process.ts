@@ -109,13 +109,9 @@ export class HermesProcessManager {
       const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
       console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, apiKey=${apiKey ? "set (" + apiKey.slice(0, 8) + "...)" : "NOT SET"}, provider=${provider}, model=${model}`);
 
-      // Only write config.yaml if it's missing or the provider/model has changed
+      // Always write config.yaml to ensure clean config (old config may be corrupt on persistent volume)
       if (apiKey) {
-        if (!existsSync(configPath) || this.configNeedsUpdate(configPath, provider, model)) {
-          this.writeConfig(configPath, provider, model);
-        } else {
-          console.log(`[hermes-process] config.yaml already up to date — not overwriting`);
-        }
+        this.writeConfig(configPath, provider, model);
       }
 
       // List /app/ag/ and hermes home contents for diagnostics
@@ -136,22 +132,6 @@ export class HermesProcessManager {
       }
     } catch (err) {
       console.warn(`[hermes-process] Failed to write Hermes config: ${err}`);
-    }
-  }
-
-  /** Check if config.yaml has the correct provider/model. */
-  private configNeedsUpdate(configPath: string, provider: string, model: string): boolean {
-    try {
-      const existing = readFileSync(configPath, "utf-8");
-      const hasProvider = existing.includes(`provider: ${provider}`);
-      const hasModel = existing.includes(`default: ${model}`) || existing.includes(`model: ${model}`);
-      if (hasProvider && hasModel) {
-        return false;
-      }
-      console.log(`[hermes-process] config.yaml needs update: provider=${provider} model=${model} (existing hasProvider=${hasProvider} hasModel=${hasModel})`);
-      return true;
-    } catch {
-      return true;
     }
   }
 
@@ -198,10 +178,6 @@ export class HermesProcessManager {
       "    You're the receptionist at Agent Heights, a virtual office where AI agents",
       "    do real work as employees. People message you on Telegram.",
       "    ",
-      "    Your SOUL.md file has live office status. Read it to answer questions about",
-      "    what's happening in the office. It updates every minute with who's working",
-      "    on what, active tasks, and recent completions.",
-      "    ",
       "    Rules:",
       "    - Write normally. Capital letters, periods, normal sentences.",
       "    - Do NOT use em-dashes. Use periods or commas.",
@@ -210,11 +186,10 @@ export class HermesProcessManager {
       "    - Do NOT say things like 'hey!' or 'totally' or 'literally'.",
       "    - Do NOT use emoji.",
       "    - Be brief. 1-2 sentences usually. Never more than 3.",
-      "    - If someone asks what's going on in the office, READ SOUL.md and tell them",
-      "    who's here and what they're working on. Be specific. Name agents and tasks.",
+      "    - If someone asks what's going on in the office, tell them you'll check",
+      "    with the team and someone will respond shortly.",
       "    - If someone asks for a screenshot or photo, say you can't send photos but",
-      "    describe what's happening in the office from SOUL.md. A real screenshot",
-      "    will follow shortly from the team.",
+      "    describe what's happening. A real screenshot will follow shortly from the team.",
       "    - If someone wants something done, say you'll connect them with the team and",
       "    someone will respond here shortly. Don't do it yourself.",
       "    - If someone asks about Agent Heights, answer in a sentence or two.",
@@ -228,49 +203,6 @@ export class HermesProcessManager {
     }
     writeFileSync(configPath, config.join("\n"), "utf-8");
     console.log(`[hermes-process] Wrote config.yaml with ${provider}/${model} + Agent Heights system prompt` + (preservedPlatforms.trim() ? " + preserved platforms" : ""));
-
-    // Write SOUL.md — Hermes's primary identity file
-    const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-    const soulPath = join(hermesHome, "SOUL.md");
-    const soulContent = [
-      "# Agent Heights Receptionist",
-      "",
-      "You work the front desk at Agent Heights, a virtual office where AI agents do",
-      "real work as employees. People message you on Telegram.",
-      "",
-      "## Writing style",
-      "",
-      "- Write normal English. Capital letters at the start of sentences. Periods at the end.",
-      "- Do NOT use em-dashes. Use periods or commas instead.",
-      "- Do NOT write in lowercase for style. Use proper capitalization.",
-      "- Do NOT use emoji.",
-      "- Do NOT say 'hey!' or 'totally' or 'literally' or 'super' or 'awesome'.",
-      "- Do NOT ask to build a profile or ask personal questions. Ever.",
-      "- Be brief. 1-2 sentences. 3 max. No bullet points or headers in messages.",
-      "- Sound like a professional receptionist at a real company. Not casual. Not quirky.",
-      "",
-      "## What to do",
-      "",
-      "- Someone says hi: say hi, ask what they need. Stop there.",
-      "- Someone wants something done: say you'll connect them with the team and someone",
-      "  will respond here shortly. Don't do it yourself.",
-      "- Someone asks about Agent Heights: answer in a sentence or two.",
-      "- Someone wants to talk to a specific agent: say you'll forward the message.",
-      "- Someone asks what's going on in the office: READ the Live Office Status section",
-      "  below. Tell them who's here and what they're working on. Be specific. Name",
-      "  agents and their current tasks. If the office is empty, say so.",
-      "- Someone asks for a screenshot or photo: say you can't send photos yourself, but",
-      "  describe what's happening in the office from the Live Office Status section.",
-      "  Tell them a real screenshot will follow shortly from the team.",
-      "",
-      "## About Agent Heights",
-      "",
-      "It's a browser game where you manage an office of AI agents. Each agent has a",
-      "role and workspace. You hire them, give them tasks, and watch them work in",
-      "real-time. Agents use real AI models and tools.",
-    ].join("\n");
-    writeFileSync(soulPath, soulContent, "utf-8");
-    console.log("[hermes-process] Wrote SOUL.md with Agent Heights receptionist identity");
   }
 
   /** Check if the Hermes gateway is reachable. */
@@ -359,6 +291,21 @@ export class HermesProcessManager {
   private lastPromptUpdate = 0;
   private static readonly PROMPT_UPDATE_COOLDOWN_MS = 120_000; // 2 minutes
 
+  /** Write office state into config.yaml system prompt WITHOUT restarting the gateway.
+   *  Used before gateway start so the config is correct from the beginning. */
+  writeOfficeState(officeState: string): void {
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const configPath = join(hermesHome, "config.yaml");
+      const provider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
+      const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
+      this.writeConfigWithOfficeState(configPath, provider, model, officeState);
+      console.log("[hermes-process] Wrote config.yaml with live office state (no restart)");
+    } catch (err) {
+      console.warn(`[hermes-process] Failed to write office state to config: ${err}`);
+    }
+  }
+
   /** Update the Hermes system prompt with live office state and restart the gateway.
    *  Called periodically by the manager. Rate-limited to max once per 2 minutes. */
   updateSystemPromptWithOfficeState(officeState: string): boolean {
@@ -371,89 +318,97 @@ export class HermesProcessManager {
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       const configPath = join(hermesHome, "config.yaml");
-
       const provider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
       const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
-
-      // Preserve existing platform config
-      let preservedPlatforms = "";
-      if (existsSync(configPath)) {
-        const existing = readFileSync(configPath, "utf-8");
-        const lines = existing.split("\n");
-        let inPlatforms = false;
-        let platformsIndent = "";
-        for (const line of lines) {
-          if (/^platforms:\s*$/.test(line) || /^messaging:\s*$/.test(line)) {
-            inPlatforms = true;
-            platformsIndent = "";
-            preservedPlatforms += line + "\n";
-            continue;
-          }
-          if (inPlatforms) {
-            if (line.trim() === "") { preservedPlatforms += "\n"; continue; }
-            const indent = line.match(/^(\s+)/)?.[1] ?? "";
-            if (indent.length > 0 && (platformsIndent === "" || indent.startsWith(platformsIndent))) {
-              if (platformsIndent === "") platformsIndent = indent;
-              preservedPlatforms += line + "\n";
-            } else {
-              inPlatforms = false;
-            }
-          }
-        }
-      }
-
-      const systemPromptLines = [
-        "You're the receptionist at Agent Heights, a virtual office where AI agents",
-        "do real work as employees. People message you on Telegram.",
-        "",
-        "Here is the current live office status:",
-        ...officeState.split("\n"),
-        "",
-        "Use this information to answer questions about what's happening in the office.",
-        "Be specific. Name agents and their current tasks.",
-        "",
-        "Rules:",
-        "- Write normally. Capital letters, periods, normal sentences.",
-        "- Do NOT use em-dashes. Use periods or commas.",
-        "- Do NOT use lowercase for style. Write like a professional adult.",
-        "- Do NOT ask to build profiles or ask personal questions.",
-        "- Do NOT say things like 'hey!' or 'totally' or 'literally'.",
-        "- Do NOT use emoji.",
-        "- Be brief. 1-2 sentences usually. Never more than 3.",
-        "- If someone asks what's going on in the office, use the live office status",
-        "  above to tell them who's here and what they're working on. Be specific.",
-        "- If someone asks for a screenshot or photo, say you can't send photos but",
-        "  describe what's happening. A real screenshot will follow shortly from the team.",
-        "- If someone wants something done, say you'll connect them with the team and",
-        "  someone will respond here shortly. Don't do it yourself.",
-        "- If someone asks about Agent Heights, answer in a sentence or two.",
-        "- If someone says hi, say hi back and ask what they need. Nothing else.",
-      ];
-
-      const config = [
-        "model:",
-        `  provider: ${provider}`,
-        `  default: ${model}`,
-        "agent:",
-        "  system_prompt: |",
-        ...systemPromptLines.map((l) => `    ${l}`),
-        "telegram:",
-        "  require_mention: false",
-        "",
-      ];
-      if (preservedPlatforms.trim()) {
-        config.push(preservedPlatforms.trimEnd(), "");
-      }
-      writeFileSync(configPath, config.join("\n"), "utf-8");
+      this.writeConfigWithOfficeState(configPath, provider, model, officeState);
       console.log("[hermes-process] Updated config.yaml with live office state in system prompt");
-
-      // Restart gateway so new system prompt takes effect
       this.restartGateway();
       return true;
     } catch (err) {
       console.warn(`[hermes-process] Failed to update system prompt with office state: ${err}`);
       return false;
     }
+  }
+
+  /** Build config.yaml with office state embedded in system_prompt as a double-quoted
+   *  YAML string. This is the safest way to embed arbitrary text in YAML — no block
+   *  scalar indentation issues, no colon-as-mapping issues. */
+  private writeConfigWithOfficeState(configPath: string, provider: string, model: string, officeState: string): void {
+    // Preserve existing platform config
+    let preservedPlatforms = "";
+    if (existsSync(configPath)) {
+      const existing = readFileSync(configPath, "utf-8");
+      const lines = existing.split("\n");
+      let inPlatforms = false;
+      let platformsIndent = "";
+      for (const line of lines) {
+        if (/^platforms:\s*$/.test(line) || /^messaging:\s*$/.test(line)) {
+          inPlatforms = true;
+          platformsIndent = "";
+          preservedPlatforms += line + "\n";
+          continue;
+        }
+        if (inPlatforms) {
+          if (line.trim() === "") { preservedPlatforms += "\n"; continue; }
+          const indent = line.match(/^(\s+)/)?.[1] ?? "";
+          if (indent.length > 0 && (platformsIndent === "" || indent.startsWith(platformsIndent))) {
+            if (platformsIndent === "") platformsIndent = indent;
+            preservedPlatforms += line + "\n";
+          } else {
+            inPlatforms = false;
+          }
+        }
+      }
+    }
+
+    const promptText = [
+      "You're the receptionist at Agent Heights, a virtual office where AI agents",
+      "do real work as employees. People message you on Telegram.",
+      "",
+      "Here is the current live office status:",
+      officeState,
+      "",
+      "Use this information to answer questions about what's happening in the office.",
+      "Be specific. Name agents and their current tasks.",
+      "",
+      "Rules:",
+      "- Write normally. Capital letters, periods, normal sentences.",
+      "- Do NOT use em-dashes. Use periods or commas.",
+      "- Do NOT use lowercase for style. Write like a professional adult.",
+      "- Do NOT ask to build profiles or ask personal questions.",
+      "- Do NOT say things like 'hey!' or 'totally' or 'literally'.",
+      "- Do NOT use emoji.",
+      "- Be brief. 1-2 sentences usually. Never more than 3.",
+      "- If someone asks what's going on in the office, use the live office status",
+      "  above to tell them who's here and what they're working on. Be specific.",
+      "- If someone asks for a screenshot or photo, say you can't send photos but",
+      "  describe what's happening. A real screenshot will follow shortly from the team.",
+      "- If someone wants something done, say you'll connect them with the team and",
+      "  someone will respond here shortly. Don't do it yourself.",
+      "- If someone asks about Agent Heights, answer in a sentence or two.",
+      "- If someone says hi, say hi back and ask what they need. Nothing else.",
+    ].join("\n");
+
+    // Escape for YAML double-quoted string: backslashes first, then double quotes, then newlines
+    const escaped = promptText
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n");
+
+    const config = [
+      "model:",
+      `  provider: ${provider}`,
+      `  default: ${model}`,
+      "agent:",
+      `  system_prompt: "${escaped}"`,
+      "telegram:",
+      "  require_mention: false",
+      "",
+    ];
+    if (preservedPlatforms.trim()) {
+      config.push(preservedPlatforms.trimEnd(), "");
+    }
+    writeFileSync(configPath, config.join("\n"), "utf-8");
   }
 
   /** Spawn the hermes serve child process. */

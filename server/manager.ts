@@ -888,6 +888,10 @@ export class AgentManager {
       }
     } catch { /* best effort */ }
 
+    // Write office state to config.yaml BEFORE the gateway starts,
+    // so the system prompt is correct from the very first message
+    this.writeOfficeStateNow();
+
     await this.hermesProcess.start();
 
     // Only create one polling client per Manager instance
@@ -4940,54 +4944,67 @@ export class AgentManager {
     return { rt: picked, reason: `no skill match, assigned to ${picked.info.name}` };
   }
 
+  /** Build live office state string from current agent and task data. */
+  private buildOfficeState(): string {
+    const agents = [...this.agents.values()]
+      .filter((a) => a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID)
+      .map((a) => {
+        const status = a.info.status === "idle"
+          ? "idle"
+          : a.info.status === "working" || a.info.status === "thinking"
+            ? `working on ${a.info.task ?? "a task"}`
+            : a.info.status === "error"
+              ? "dealing with an error"
+              : a.info.status;
+        return `- ${a.info.name} - ${status}`;
+      });
+
+    const cards = [...this.board.values()];
+    const activeCards = cards
+      .filter((c) => c.status === "in_progress" || c.status === "review_pending")
+      .map((c) => {
+        const assignee = c.assignedAgentId ? this.agents.get(c.assignedAgentId)?.info.name ?? "someone" : "unassigned";
+        return `- ${c.title} (assigned to ${assignee}, status ${c.status})`;
+      });
+
+    const recentDone = [...this.agents.values()]
+      .flatMap((a) => a.logs)
+      .filter((l) => l.kind === "status" && l.text.includes("completed"))
+      .slice(-5)
+      .map((l) => `- ${l.text}`)
+      .join("\n");
+
+    return [
+      `Updated ${new Date().toISOString()}`,
+      "",
+      `Agents in the office (${agents.length})`,
+      agents.length > 0 ? agents.join("\n") : "- The office is empty right now.",
+      "",
+      activeCards.length > 0 ? `Active tasks (${activeCards.length})\n${activeCards.join("\n")}\n` : "",
+      recentDone ? `Recent completions\n${recentDone}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  /** Write office state to config.yaml without restarting the gateway.
+   *  Called before gateway start so the system prompt is correct from the beginning. */
+  private writeOfficeStateNow(): void {
+    try {
+      if (this.hermesProcess) {
+        this.hermesProcess.writeOfficeState(this.buildOfficeState());
+      }
+    } catch {
+      // Non-critical
+    }
+  }
+
   /** Build live office state and inject it into the Hermes gateway system prompt.
    *  Called every 60s. The Hermes gateway LLM has no file access, so we must
    *  embed office context directly in config.yaml's system_prompt and restart
    *  the gateway. Rate-limited to max once per 2 minutes inside hermes-process. */
   private refreshSoulMd(): void {
     try {
-      // Build live office status text
-      const agents = [...this.agents.values()]
-        .filter((a) => a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID)
-        .map((a) => {
-          const status = a.info.status === "idle"
-            ? "idle"
-            : a.info.status === "working" || a.info.status === "thinking"
-              ? `working on ${a.info.task ?? "a task"}`
-              : a.info.status === "error"
-                ? "dealing with an error"
-                : a.info.status;
-          return `- ${a.info.name} - ${status}`;
-        });
-
-      const cards = [...this.board.values()];
-      const activeCards = cards
-        .filter((c) => c.status === "in_progress" || c.status === "review_pending")
-        .map((c) => {
-          const assignee = c.assignedAgentId ? this.agents.get(c.assignedAgentId)?.info.name ?? "someone" : "unassigned";
-          return `- ${c.title} (assigned to ${assignee}, status ${c.status})`;
-        });
-
-      const recentDone = [...this.agents.values()]
-        .flatMap((a) => a.logs)
-        .filter((l) => l.kind === "status" && l.text.includes("completed"))
-        .slice(-5)
-        .map((l) => `- ${l.text}`)
-        .join("\n");
-
-      const officeState = [
-        `Updated ${new Date().toISOString()}`,
-        "",
-        `Agents in the office (${agents.length})`,
-        agents.length > 0 ? agents.join("\n") : "- The office is empty right now.",
-        "",
-        activeCards.length > 0 ? `Active tasks (${activeCards.length})\n${activeCards.join("\n")}\n` : "",
-        recentDone ? `Recent completions\n${recentDone}` : "",
-      ].filter(Boolean).join("\n");
-
-      // Push to Hermes gateway via config.yaml system prompt update
       if (this.hermesProcess) {
-        this.hermesProcess.updateSystemPromptWithOfficeState(officeState);
+        this.hermesProcess.updateSystemPromptWithOfficeState(this.buildOfficeState());
       }
     } catch {
       // Non-critical
