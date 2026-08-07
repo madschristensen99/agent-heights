@@ -261,7 +261,16 @@ export class HermesClient {
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) return [];
-      const sessions = await res.json() as any[];
+      const raw = await res.json();
+      let sessions: any[];
+      if (Array.isArray(raw)) {
+        sessions = raw;
+      } else if (raw && typeof raw === "object") {
+        sessions = raw.sessions ?? raw.data ?? raw.items ?? raw.results ?? [];
+        if (!Array.isArray(sessions)) sessions = [];
+      } else {
+        sessions = [];
+      }
       const events: PlatformEvent[] = [];
 
       for (const sess of sessions) {
@@ -326,68 +335,15 @@ export class HermesClient {
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) return [];
-      return await res.json() as any[];
+      const raw = await res.json();
+      if (Array.isArray(raw)) return raw;
+      if (raw && typeof raw === "object") {
+        const arr = raw.sessions ?? raw.data ?? raw.items ?? raw.results ?? [];
+        return Array.isArray(arr) ? arr : [];
+      }
+      return [];
     } catch {
       return [];
-    }
-  }
-
-  /** Update system_prompt on all messaging platform sessions via PATCH /api/sessions/{id}.
-   *  The gateway caches the system prompt per session — writing config.yaml alone
-   *  doesn't update existing sessions. This PATCHes each session directly.
-   *  Returns the number of sessions updated. */
-  async updateSessionSystemPrompts(systemPrompt: string): Promise<number> {
-    try {
-      const res = await fetch(`${this.baseUrl}/api/sessions?limit=100`, {
-        headers: this.authHeaders(),
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!res.ok) {
-        console.warn(`[hermes-client] updateSessionSystemPrompts: GET sessions failed: HTTP ${res.status}`);
-        return 0;
-      }
-      const raw = await res.json();
-      // The API may return a bare array, a paginated object, or { sessions: [...] }
-      let sessions: any[];
-      if (Array.isArray(raw)) {
-        sessions = raw;
-      } else if (raw && typeof raw === "object") {
-        sessions = raw.sessions ?? raw.data ?? raw.items ?? raw.results ?? [];
-        if (!Array.isArray(sessions)) {
-          console.warn(`[hermes-client] updateSessionSystemPrompts: unexpected response shape: ${JSON.stringify(raw).slice(0, 300)}`);
-          sessions = [];
-        }
-      } else {
-        sessions = [];
-      }
-      let updated = 0;
-      for (const sess of sessions) {
-        const sid = sess.session_id ?? sess.id;
-        if (!sid) continue;
-        const platform = sess.platform ?? sess.source;
-        // Only update messaging platform sessions (not CLI/local)
-        if (!platform || platform === "cli" || platform === "local") continue;
-        try {
-          const patchRes = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}`, {
-            method: "PATCH",
-            headers: this.authHeaders(),
-            body: JSON.stringify({ system_prompt: systemPrompt }),
-            signal: AbortSignal.timeout(5000),
-          });
-          if (patchRes.ok) {
-            updated++;
-          } else {
-            const body = await patchRes.text().catch(() => "");
-            console.warn(`[hermes-client] PATCH session ${sid} failed: HTTP ${patchRes.status} — ${body.slice(0, 200)}`);
-          }
-        } catch { /* skip individual session */ }
-      }
-      if (updated > 0) {
-        console.log(`[hermes-client] Updated system_prompt on ${updated} platform session(s)`);
-      }
-      return updated;
-    } catch {
-      return 0;
     }
   }
 

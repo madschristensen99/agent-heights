@@ -321,9 +321,10 @@ export class HermesProcessManager {
 
   /** Update the Hermes system prompt with live office state.
    *  Called periodically by the manager. Rate-limited to max once per 5 minutes.
-   *  Uses PATCH /api/sessions/{id} to update existing sessions directly —
-   *  the gateway caches the system prompt per session, so config.yaml changes
-   *  alone don't affect existing conversations. */
+   *  Writes config.yaml + SOUL.md, then deletes existing Telegram sessions so
+   *  new ones are created with the updated system prompt. The gateway is NOT
+   *  restarted — pairing state lives in pairing/ directory, separate from
+   *  sessions in state.db, so deleting sessions preserves pairing. */
   updateSystemPromptWithOfficeState(officeState: string): boolean {
     const now = Date.now();
     if (now - this.lastPromptUpdate < HermesProcessManager.PROMPT_UPDATE_COOLDOWN_MS) {
@@ -341,10 +342,13 @@ export class HermesProcessManager {
       this.writeSoulMd(soulPath, officeState);
       this.writeConfigWithOfficeState(configPath, provider, model, officeState);
       console.log("[hermes-process] Updated SOUL.md + config.yaml with live office state");
-      // Build the full system prompt text for session PATCH
-      const fullPrompt = this.buildSystemPromptText(officeState);
-      // PATCH existing sessions directly — this bypasses the per-session cache
-      void this.updateSessionSystemPrompts(fullPrompt);
+      // Delete existing platform sessions so new ones pick up the updated config.yaml.
+      // The gateway caches the system prompt per session — the only way to refresh
+      // is to delete the session. The gateway will create a new session on the next
+      // message, using the updated config.yaml system_prompt.
+      // Pairing state is in pairing/ directory, NOT in state.db — so it's preserved.
+      // The gateway is NOT restarted — Telegram connection stays alive.
+      void this.resetPlatformSessions();
       return true;
     } catch (err) {
       console.warn(`[hermes-process] Failed to update system prompt with office state: ${err}`);
@@ -352,42 +356,13 @@ export class HermesProcessManager {
     }
   }
 
-  /** Build the full system prompt text for PATCH /api/sessions/{id}.
-   *  This is the same text that goes into config.yaml's agent.system_prompt. */
-  private buildSystemPromptText(officeState: string): string {
-    return [
-      "You're the receptionist at Agent Heights, a virtual office where AI agents",
-      "do real work as employees. People message you on Telegram.",
-      "",
-      "Here is the current live office status:",
-      officeState,
-      "",
-      "Use this information to answer questions about what's happening in the office.",
-      "Be specific. Name agents and their current tasks.",
-      "",
-      "Rules:",
-      "- Write normally. Capital letters, periods, normal sentences.",
-      "- Do NOT use em-dashes. Use periods or commas.",
-      "- Do NOT use lowercase for style. Write like a professional adult.",
-      "- Do NOT ask to build profiles or ask personal questions.",
-      "- Do NOT say things like 'hey!' or 'totally' or 'literally'.",
-      "- Do NOT use emoji.",
-      "- Be brief. 1-2 sentences usually. Never more than 3.",
-      "- If someone asks what's going on in the office, use the live office status",
-      "  above to tell them who's here and what they're working on. Be specific.",
-      "- If someone asks for a screenshot or photo, say you can't send photos but",
-      "  describe what's happening. A real screenshot will follow shortly from the team.",
-      "- If someone wants something done, say you'll connect them with the team and",
-      "  someone will respond here shortly. Don't do it yourself.",
-      "- If someone asks about Agent Heights, answer in a sentence or two.",
-      "- If someone says hi, say hi back and ask what they need. Nothing else.",
-    ].join("\n");
-  }
-
-  /** PATCH system_prompt on all messaging platform sessions via the Hermes REST API.
-   *  The gateway caches the system prompt per session, so writing config.yaml alone
-   *  doesn't update existing conversations. This directly updates each session. */
-  private async updateSessionSystemPrompts(systemPrompt: string): Promise<void> {
+  /** Delete all messaging platform sessions via DELETE /api/sessions/{id}.
+   *  This forces the gateway to create new sessions with the updated config.yaml
+   *  system_prompt on the next message from each user.
+   *  Pairing state is stored in pairing/ directory, separate from sessions (state.db),
+   *  so deleting sessions does NOT break Telegram pairing.
+   *  The gateway is NOT restarted — the Telegram connection stays alive. */
+  private async resetPlatformSessions(): Promise<void> {
     try {
       const res = await fetch(`${this.baseUrl}/api/sessions?limit=100`, {
         headers: {
@@ -397,54 +372,52 @@ export class HermesProcessManager {
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) {
-        console.warn(`[hermes-process] updateSessionSystemPrompts: GET sessions failed: HTTP ${res.status}`);
+        console.warn(`[hermes-process] resetPlatformSessions: GET sessions failed: HTTP ${res.status}`);
         return;
       }
       const raw = await res.json();
-      // The API may return a bare array, a paginated object, or { sessions: [...] }
       let sessions: any[];
       if (Array.isArray(raw)) {
         sessions = raw;
       } else if (raw && typeof raw === "object") {
         sessions = raw.sessions ?? raw.data ?? raw.items ?? raw.results ?? [];
         if (!Array.isArray(sessions)) {
-          console.warn(`[hermes-process] updateSessionSystemPrompts: unexpected response shape: ${JSON.stringify(raw).slice(0, 300)}`);
+          console.warn(`[hermes-process] resetPlatformSessions: unexpected response shape: ${JSON.stringify(raw).slice(0, 300)}`);
           sessions = [];
         }
       } else {
         sessions = [];
       }
-      let updated = 0;
+      let deleted = 0;
       for (const sess of sessions) {
         const sid = sess.session_id ?? sess.id;
         if (!sid) continue;
         const platform = sess.platform ?? sess.source;
         if (!platform || platform === "cli" || platform === "local") continue;
         try {
-          const patchRes = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}`, {
-            method: "PATCH",
+          const delRes = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}`, {
+            method: "DELETE",
             headers: {
               "Content-Type": "application/json",
               "X-Hermes-Session-Token": this.sessionToken,
             },
-            body: JSON.stringify({ system_prompt: systemPrompt }),
             signal: AbortSignal.timeout(5000),
           });
-          if (patchRes.ok) {
-            updated++;
+          if (delRes.ok) {
+            deleted++;
           } else {
-            const body = await patchRes.text().catch(() => "");
-            console.warn(`[hermes-process] PATCH session ${sid} failed: HTTP ${patchRes.status} — ${body.slice(0, 200)}`);
+            const body = await delRes.text().catch(() => "");
+            console.warn(`[hermes-process] DELETE session ${sid} failed: HTTP ${delRes.status} — ${body.slice(0, 200)}`);
           }
         } catch { /* skip individual session */ }
       }
-      if (updated > 0) {
-        console.log(`[hermes-process] PATCHed system_prompt on ${updated} platform session(s)`);
+      if (deleted > 0) {
+        console.log(`[hermes-process] Deleted ${deleted} platform session(s) — new sessions will use updated config.yaml`);
       } else {
-        console.log(`[hermes-process] No platform sessions to PATCH (found ${sessions.length} total sessions, new sessions will use config.yaml)`);
+        console.log(`[hermes-process] No platform sessions to delete (found ${sessions.length} total sessions)`);
       }
     } catch (err) {
-      console.warn(`[hermes-process] updateSessionSystemPrompts error: ${err}`);
+      console.warn(`[hermes-process] resetPlatformSessions error: ${err}`);
     }
   }
 
