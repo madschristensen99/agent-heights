@@ -305,6 +305,8 @@ interface QueuedTask {
   waitFor?: string | null;
   /** If true, start a fresh conversation when this queued task runs. */
   freshStart?: boolean;
+  /** Platform context for tasks delegated from a messaging platform (Telegram, etc.). */
+  platformContext?: { platform: string; sender: string } | null;
 }
 
 interface TaskHistoryEntry {
@@ -1493,7 +1495,7 @@ export class AgentManager {
     this.broadcast({ type: "toast", text: `${rt.info.name}'s system prompt updated.` });
   }
 
-  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string; cardId?: string | null } | null, notifyOnComplete?: string, waitFor?: string): void {
+  assign(agentId: string, task: string, handoffTo?: string, cardId?: string, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string; cardId?: string | null } | null, notifyOnComplete?: string, waitFor?: string, platformContext?: { platform: string; sender: string } | null): void {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     const cleanTask = task.trim();
@@ -1522,6 +1524,7 @@ export class AgentManager {
         reviewContext: reviewContext ?? null,
         notifyOnComplete: notifyOnComplete ?? null,
         waitFor: waitFor ?? null,
+        platformContext: platformContext ?? null,
       });
       const pos = rt.taskQueue.length;
       this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task queued (#${pos}).` });
@@ -1529,6 +1532,10 @@ export class AgentManager {
       return;
     }
 
+    // Set platform context on the runtime for immediate tasks
+    if (platformContext) {
+      rt.platformContext = { ...platformContext };
+    }
     this.startTask(rt, cleanTask, handoffTo, effectiveCardId, false, scheduleId, reviewContext, notifyOnComplete, waitFor);
   }
 
@@ -1685,6 +1692,10 @@ export class AgentManager {
     } else {
       this.log(rt, "status", `Starting queued task: ${next.task}`);
     }
+    // Restore platform context from the queued task — this ensures the right
+    // task's output gets sent back to the platform user, not whichever task
+    // happened to finish first.
+    rt.platformContext = next.platformContext ?? null;
     this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null, next.notifyOnComplete ?? undefined, next.waitFor ?? undefined);
   }
 
@@ -3334,6 +3345,22 @@ export class AgentManager {
         this.logEvent("task_error", `${rt.info.name} failed: "${task.slice(0, 100)}" — ${firstErrorText.slice(0, 100)}`);
         // Release any agent that was waiting for this task, even on failure.
         if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
+        // Send error reply to platform user so they're not left in silence
+        if (rt.platformContext) {
+          const { platform, sender } = rt.platformContext;
+          const errorReply = `${rt.info.name} ran into an issue and couldn't complete the task. Someone will follow up shortly.`;
+          console.log(`[manager] Sending error reply to ${sender} via ${platform}`);
+          this.emitPlatformEvent(platform, "outbound", rt.info.name, errorReply);
+          if (this.hermesClient) {
+            this.hermesClient.sendMessage(platform, sender, errorReply).catch((err) =>
+              console.warn(`[manager] Error reply failed: ${err}`)
+            );
+          }
+          this.proactiveLastSent.delete(`${platform}:${sender}`);
+          this.platformAssignedAgent.delete(platform);
+          this.broadcastMailboxUpdate(platform);
+          rt.platformContext = null;
+        }
       }
     } catch (err) {
       if (!abort.signal.aborted) {
@@ -5079,6 +5106,12 @@ export class AgentManager {
       `Use delegate_task to assign it to the best colleague, or request_hire if nobody has the right skills.`,
       `If you delegate, include the full context of the request in the task description.`,
       `The assigned agent's response will be automatically sent back to ${sender} on ${platform}.`,
+      ``,
+      `Available agents in the office:`,
+      [...this.agents.values()]
+        .filter((rt) => rt.info.id !== HERMES_ID && rt.info.id !== AGENT_RESOURCES_ID)
+        .map((rt) => `- ${rt.info.name} (${rt.info.status})`)
+        .join("\n"),
     ].join("\n");
     this.log(hermes, "status", `📬 Sorting mail from ${sender} via ${platform}`);
     this.assign(hermes.info.id, task);
@@ -5097,14 +5130,15 @@ export class AgentManager {
           .join(", ")
       }`;
     }
-    // Transfer platform context from Hermes to the target agent, then clear Hermes's
-    if (hermesRt.platformContext) {
-      target.platformContext = { ...hermesRt.platformContext };
+    // Transfer platform context from Hermes to the target agent via assign(),
+    // so it's stored on the queued task entry if the agent is busy.
+    const platformCtx = hermesRt.platformContext;
+    if (platformCtx) {
       hermesRt.platformContext = null;
-      this.platformAssignedAgent.set(target.platformContext.platform, target.info.id);
-      this.broadcastMailboxUpdate(target.platformContext.platform);
+      this.platformAssignedAgent.set(platformCtx.platform, target.info.id);
+      this.broadcastMailboxUpdate(platformCtx.platform);
     }
-    this.assign(target.info.id, task);
+    this.assign(target.info.id, task, undefined, undefined, undefined, undefined, undefined, undefined, platformCtx);
     this.log(hermesRt, "status", `Delegated task to ${target.info.name}: ${task.slice(0, 80)}`);
     return `Delegated task to ${target.info.name}. They'll handle it now.`;
   }
