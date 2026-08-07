@@ -936,13 +936,6 @@ export class AgentManager {
       console.warn(`[hermes] Auto-start gateway failed: ${err}`);
     });
 
-    // Delete existing platform sessions so new ones are created with the updated SOUL.md.
-    // Existing sessions cache the old system prompt — without this, the receptionist
-    // won't pick up the office state until the session naturally resets.
-    this.hermesClient.deleteAllPlatformSessions().catch((err) => {
-      console.warn(`[hermes] Failed to delete old sessions: ${err}`);
-    });
-
     // Auto-reconfigure platforms from persisted .env credentials (survives redeploy)
     this.autoReconfigurePlatforms();
 
