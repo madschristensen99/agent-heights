@@ -4953,11 +4953,11 @@ export class AgentManager {
           const status = a.info.status === "idle"
             ? "idle"
             : a.info.status === "working" || a.info.status === "thinking"
-              ? `working on: ${a.info.task ?? "a task"}`
+              ? `working on ${a.info.task ?? "a task"}`
               : a.info.status === "error"
                 ? "dealing with an error"
                 : a.info.status;
-          return `- ${a.info.name}: ${status}`;
+          return `- ${a.info.name} - ${status}`;
         });
 
       const cards = [...this.board.values()];
@@ -4965,7 +4965,7 @@ export class AgentManager {
         .filter((c) => c.status === "in_progress" || c.status === "review_pending")
         .map((c) => {
           const assignee = c.assignedAgentId ? this.agents.get(c.assignedAgentId)?.info.name ?? "someone" : "unassigned";
-          return `- ${c.title} (assigned to: ${assignee}, status: ${c.status})`;
+          return `- ${c.title} (assigned to ${assignee}, status ${c.status})`;
         });
 
       const recentDone = [...this.agents.values()]
@@ -4976,13 +4976,13 @@ export class AgentManager {
         .join("\n");
 
       const officeState = [
-        `Updated: ${new Date().toISOString()}`,
+        `Updated ${new Date().toISOString()}`,
         "",
-        `Agents in the office (${agents.length}):`,
+        `Agents in the office (${agents.length})`,
         agents.length > 0 ? agents.join("\n") : "- The office is empty right now.",
         "",
-        activeCards.length > 0 ? `Active tasks (${activeCards.length}):\n${activeCards.join("\n")}\n` : "",
-        recentDone ? `Recent completions:\n${recentDone}` : "",
+        activeCards.length > 0 ? `Active tasks (${activeCards.length})\n${activeCards.join("\n")}\n` : "",
+        recentDone ? `Recent completions\n${recentDone}` : "",
       ].filter(Boolean).join("\n");
 
       // Push to Hermes gateway via config.yaml system prompt update
