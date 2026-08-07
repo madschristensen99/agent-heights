@@ -1,11 +1,39 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AgentInfo, TaskCard } from "../shared/types.js";
-import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
+import { CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
+import { fetchCatalog } from "./mcp-store.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { json } from "./security.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 const MARKETPLACE_URL = process.env.MARKETPLACE_URL || "http://localhost:3000";
+
+/** Build a compact categorized summary of the curated MCP catalog from DB. */
+async function catalogSummary(): Promise<string> {
+  const catalog = await fetchCatalog();
+  if (catalog.length === 0) return "(catalog unavailable)";
+
+  const byCategory: Record<string, { name: string; summary: string; auth: string }[]> = {};
+  for (const s of catalog) {
+    const entry = { name: s.name, summary: s.summary, auth: s.authType };
+    for (const cat of s.category) {
+      if (!byCategory[cat]) byCategory[cat] = [];
+      if (!byCategory[cat].some((e) => e.name === s.name)) {
+        byCategory[cat].push(entry);
+      }
+    }
+  }
+  const lines: string[] = [];
+  for (const cat of Object.keys(byCategory).sort()) {
+    const items = byCategory[cat];
+    lines.push(`  ${cat}:`);
+    for (const item of items) {
+      const authTag = item.auth === "open" ? " (no auth)" : item.auth === "oauth" ? " (OAuth)" : " (API key)";
+      lines.push(`    - ${item.name}${authTag}: ${item.summary}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 /** Fetch approved marketplace agents from DB and build a summary for Agent Resources's system prompt. */
 async function buildMarketplaceAgentsSummary(): Promise<string> {
@@ -128,7 +156,7 @@ ${await buildMarketplaceAgentsSummary()}
 
 ### Curated MCP Server Catalog (installable on any agent)
 These are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.
-${catalogSummary()}
+${await catalogSummary()}
 
 ### Dynamic Discovery via PulseMCP
 Beyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).

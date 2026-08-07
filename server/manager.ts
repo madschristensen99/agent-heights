@@ -1,6 +1,5 @@
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { generateOfficeScreenshot, type OfficeSnapshotAgent } from "./office-screenshot.js";
 import { generateNarration, type NarrationContext } from "./narration.js";
@@ -37,13 +36,14 @@ import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
 import { runTextTools, clearTextToolMemory, getAgentConversations } from "./providers/text-tools.js";
-import { HermesClient } from "./hermes-client.js";
-import { HermesProcessManager } from "./hermes-process.js";
+import { HermesClient, PLATFORM_ENV_VAR_MAP } from "./hermes-client.js";
+import { HermesProcessManager, syncHermesEnvFile } from "./hermes-process.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
 import { recordUsage, getMonthlySpend, getUsageCap } from "./usage.js";
-import { catalogSummary, CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
+import { CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
+import { fetchCatalog } from "./mcp-store.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
 import { parseStoredToken, refreshMcpToken } from "./mcp-oauth.js";
 import { getAgentAccount, getAgentBalances as getCdpBalances } from "./providers/cdp-solana.js";
@@ -51,6 +51,33 @@ import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCr
 import type { CircleServiceConfig } from "./providers/premium-proxy.js";
 import { OfficeState } from "./office-state.js";
 import { registerServer, listServers, getServerConfigs, unregisterServer, loadServers, restartServer } from "./mcp-forge.js";
+
+/** Build a compact categorized summary of the curated MCP catalog from DB. */
+async function catalogSummary(): Promise<string> {
+  const catalog = await fetchCatalog();
+  if (catalog.length === 0) return "(catalog unavailable)";
+
+  const byCategory: Record<string, { name: string; summary: string; auth: string }[]> = {};
+  for (const s of catalog) {
+    const entry = { name: s.name, summary: s.summary, auth: s.authType };
+    for (const cat of s.category) {
+      if (!byCategory[cat]) byCategory[cat] = [];
+      if (!byCategory[cat].some((e) => e.name === s.name)) {
+        byCategory[cat].push(entry);
+      }
+    }
+  }
+  const lines: string[] = [];
+  for (const cat of Object.keys(byCategory).sort()) {
+    const items = byCategory[cat];
+    lines.push(`  ${cat}:`);
+    for (const item of items) {
+      const authTag = item.auth === "open" ? " (no auth)" : item.auth === "oauth" ? " (OAuth)" : " (API key)";
+      lines.push(`    - ${item.name}${authTag}: ${item.summary}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 /**
  * Detect if a message to Agent Resources is a question/conversation vs a task command.
@@ -364,6 +391,9 @@ export class AgentManager {
   private platformStates: PlatformConnectionState[] = [];
   private hermesClient: HermesClient | null = null;
   private hermesProcess: HermesProcessManager | null = null;
+  /** Timestamp of the last gateway restart triggered by configurePlatform. */
+  private lastGatewayRestartAt = 0;
+  private static readonly GATEWAY_RESTART_COOLDOWN_MS = 30_000;
   /** Undelivered mail waiting for an idle agent. */
   private mailQueue: { platform: string; sender: string; text: string; ts: number; retries: number }[] = [];
   private shuttingDown = false;
@@ -869,14 +899,7 @@ export class AgentManager {
             console.log(`[manager] Saved TELEGRAM_HOME_CHANNEL=${event.chatId} to platform credentials`);
             // Also write to Hermes .env immediately so it takes effect without restart
             try {
-              const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-              const envPath = join(hermesHome, ".env");
-              if (existsSync(envPath)) {
-                let envContent = readFileSync(envPath, "utf-8");
-                const lines = envContent.split("\n").filter((l) => !l.startsWith("TELEGRAM_HOME_CHANNEL="));
-                lines.push(`TELEGRAM_HOME_CHANNEL=${event.chatId}`);
-                writeFileSync(envPath, lines.join("\n"), "utf-8");
-              }
+              syncHermesEnvFile(merged);
             } catch { /* best effort */ }
           }
         }
@@ -895,26 +918,28 @@ export class AgentManager {
     this.autoReconfigurePlatforms();
 
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
-    const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY;
-    if (kimiKey) {
+    const apiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY;
+    const modelProvider = process.env.HERMES_MODEL_PROVIDER ?? "kimi-coding";
+    const modelName = process.env.HERMES_MODEL_NAME ?? "kimi-k2.7-code";
+    if (apiKey) {
       // Test direct API connectivity to verify key + network from inside the container
       fetch("https://api.moonshot.ai/v1/models", {
-        headers: { Authorization: `Bearer ${kimiKey}` },
+        headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(10000),
       }).then(async (res) => {
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
           const modelIds = Array.isArray(data?.data) ? data.data.map((m: any) => m.id).join(",") : "unknown";
-          console.log(`[hermes] Kimi API direct test: OK (HTTP ${res.status}), models: ${modelIds.slice(0, 200)}`);
+          console.log(`[hermes] LLM API direct test: OK (HTTP ${res.status}), models: ${modelIds.slice(0, 200)}`);
         } else {
           const body = await res.text().catch(() => "");
-          console.warn(`[hermes] Kimi API direct test: FAILED (HTTP ${res.status}): ${body.slice(0, 200)}`);
+          console.warn(`[hermes] LLM API direct test: FAILED (HTTP ${res.status}): ${body.slice(0, 200)}`);
         }
       }).catch((err) => {
-        console.warn(`[hermes] Kimi API direct test: CONNECTION ERROR: ${err}`);
+        console.warn(`[hermes] LLM API direct test: CONNECTION ERROR: ${err}`);
       });
 
-      this.hermesClient!.configureModel("kimi-coding", "kimi-k2.7-code").then((ok) => {
+      this.hermesClient!.configureModel(modelProvider, modelName).then((ok) => {
         if (ok) {
           // Restart gateway so new model config takes effect for all sessions
           // (Hermes docs: "Restart the gateway if you want to force all sessions to pick up the change")
@@ -954,10 +979,10 @@ export class AgentManager {
   }
 
   /** Auto-reconfigure platforms from persisted credentials in save.json after redeploy.
-   *  The .env file gets wiped on redeploy, but save.json in users/<id>/ag/ persists. */
+   *  The .env file gets wiped on redeploy, but save.json in users/<id>/ag/ persists.
+   *  Handles all platforms in PLATFORM_ENV_VAR_MAP, not just Telegram/Discord/Slack. */
   private autoReconfigurePlatforms(): void {
     try {
-      // Read credentials from save.json (persists on volume in users/<id>/ag/)
       const savedCreds = this.save.getPlatformCredentials();
       console.log(`[hermes] autoReconfigurePlatforms: saved credentials: ${Object.keys(savedCreds).join(", ") || "(none)"}`);
       console.log(`[hermes] autoReconfigurePlatforms: mailboxPlatforms=${JSON.stringify(this.settings.mailboxPlatforms)}`);
@@ -967,59 +992,47 @@ export class AgentManager {
         return;
       }
 
-      // Write saved credentials to Hermes .env so the gateway can use them
-      // Also write home channel env vars so /sethome persists across redeploys
-      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-      const envPath = join(hermesHome, ".env");
-      let envContent = "";
-      if (existsSync(envPath)) {
-        envContent = readFileSync(envPath, "utf-8");
-      }
-      // Write all saved credentials (tokens + home channel IDs)
-      for (const [varName, value] of Object.entries(savedCreds)) {
-        // Remove any existing line with this var name, then append fresh value
-        const lines = envContent.split("\n").filter((l) => !l.startsWith(`${varName}=`));
-        lines.push(`${varName}=${value}`);
-        envContent = lines.join("\n");
-        console.log(`[hermes] autoReconfigurePlatforms: wrote ${varName} to .env from save.json`);
-      }
-      writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
+      // Write all saved credentials to Hermes .env atomically
+      syncHermesEnvFile(savedCreds);
 
       // Check each configured mailbox platform for saved credentials
       const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
       for (const platform of platforms) {
         const lower = platform.toLowerCase();
-        if (lower === "telegram" && savedCreds.TELEGRAM_BOT_TOKEN) {
-          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Telegram from save.json`);
-          this.hermesClient?.configurePlatform(platform, { bot_token: savedCreds.TELEGRAM_BOT_TOKEN }).then((result) => {
-            if (result.success) {
-              console.log(`[hermes] autoReconfigurePlatforms: Telegram re-enabled successfully`);
-              // configurePlatform already restarts the gateway — no need for explicit restartGateway()
-              // If we don't have TELEGRAM_HOME_CHANNEL yet, try to get it from recent sessions
-              if (!savedCreds.TELEGRAM_HOME_CHANNEL) {
-                setTimeout(() => this.proactivelyCaptureHomeChannel("telegram"), 5000);
-              }
-            } else {
-              console.warn(`[hermes] autoReconfigurePlatforms: Telegram re-enable failed: ${result.error}`);
-            }
-          }).catch((err) => console.warn(`[hermes] autoReconfigurePlatforms: error: ${err}`));
-        } else if (lower === "discord" && savedCreds.DISCORD_BOT_TOKEN) {
-          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Discord from save.json`);
-          this.hermesClient?.configurePlatform(platform, { bot_token: savedCreds.DISCORD_BOT_TOKEN }).then((result) => {
-            if (result.success) {
-              console.log(`[hermes] autoReconfigurePlatforms: Discord re-enabled successfully`);
-            }
-          }).catch(() => {});
-        } else if (lower === "slack" && savedCreds.SLACK_BOT_TOKEN) {
-          console.log(`[hermes] autoReconfigurePlatforms: re-enabling Slack from save.json`);
-          const creds: Record<string, string> = { bot_token: savedCreds.SLACK_BOT_TOKEN, signing_secret: savedCreds.SLACK_APP_TOKEN ?? "" };
-          if (savedCreds.SLACK_ALLOWED_USERS) creds.allowed_users = savedCreds.SLACK_ALLOWED_USERS;
-          this.hermesClient?.configurePlatform(platform, creds).then((result) => {
-            if (result.success) {
-              console.log(`[hermes] autoReconfigurePlatforms: Slack re-enabled successfully`);
-            }
-          }).catch(() => {});
+        const varMap = PLATFORM_ENV_VAR_MAP[lower];
+        if (!varMap) continue;
+
+        // Reverse-map: env var name → our credential field key
+        const envToCredKey: Record<string, string> = {};
+        for (const [credKey, envVar] of Object.entries(varMap)) {
+          envToCredKey[envVar] = credKey;
         }
+
+        // Build credentials object from saved env vars
+        const creds: Record<string, string> = {};
+        let hasAny = false;
+        for (const [envVar, credKey] of Object.entries(envToCredKey)) {
+          const value = savedCreds[envVar];
+          if (value) {
+            creds[credKey] = value;
+            hasAny = true;
+          }
+        }
+
+        if (!hasAny) continue;
+
+        console.log(`[hermes] autoReconfigurePlatforms: re-enabling ${platform} from save.json`);
+        this.hermesClient?.configurePlatform(platform, creds).then((result) => {
+          if (result.success) {
+            console.log(`[hermes] autoReconfigurePlatforms: ${platform} re-enabled successfully`);
+            // For Telegram, try to capture home channel if not yet saved
+            if (lower === "telegram" && !savedCreds.TELEGRAM_HOME_CHANNEL) {
+              setTimeout(() => this.proactivelyCaptureHomeChannel("telegram"), 5000);
+            }
+          } else {
+            console.warn(`[hermes] autoReconfigurePlatforms: ${platform} re-enable failed: ${result.error}`);
+          }
+        }).catch((err) => console.warn(`[hermes] autoReconfigurePlatforms: ${platform} error: ${err}`));
       }
     } catch (err) {
       console.warn(`[hermes] autoReconfigurePlatforms: error: ${err}`);
@@ -1047,15 +1060,8 @@ export class AgentManager {
             void this.save.flushNow();
             console.log(`[hermes] proactivelyCaptureHomeChannel: captured ${envVar}=${chatId} from sessions`);
             // Write to .env so it takes effect on next gateway restart
-            const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-            const envPath = join(hermesHome, ".env");
-            if (existsSync(envPath)) {
-              let envContent = readFileSync(envPath, "utf-8");
-              const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
-              lines.push(`${envVar}=${chatId}`);
-              writeFileSync(envPath, lines.join("\n"), "utf-8");
-              console.log(`[hermes] proactivelyCaptureHomeChannel: wrote ${envVar} to .env`);
-            }
+            syncHermesEnvFile(merged);
+            console.log(`[hermes] proactivelyCaptureHomeChannel: wrote ${envVar} to .env`);
           } else {
             console.log(`[hermes] proactivelyCaptureHomeChannel: ${envVar} already set to ${chatId}`);
           }
@@ -1079,34 +1085,18 @@ export class AgentManager {
       return { success: false, error: "Hermes Agent gateway is not running. It should auto-start with the server — check server logs for [hermes-process] errors." };
     }
 
-    // Always write credentials directly to ~/.hermes/.env so they survive redeploys
-    // Do this BEFORE the API call so even if Hermes API fails, the token is persisted
+    // Write credentials to ~/.hermes/.env BEFORE the API call so even if Hermes
+    // API fails, the token is persisted. Also save to save.json for redeploy survival.
     try {
-      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-      const envPath = join(hermesHome, ".env");
-      let envContent = "";
-      if (existsSync(envPath)) {
-        envContent = readFileSync(envPath, "utf-8");
-      }
-      const envVarMap: Record<string, Record<string, string>> = {
-        telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
-        discord: { bot_token: "DISCORD_BOT_TOKEN" },
-        slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" },
-      };
-      const varMap = envVarMap[platform.toLowerCase()] ?? {};
-      const credVarsToSave: Record<string, string> = {};
-      for (const [credKey, envVar] of Object.entries(varMap)) {
-        const value = credentials[credKey];
-        if (!value) continue;
-        const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
-        lines.push(`${envVar}=${value}`);
-        envContent = lines.join("\n");
-        credVarsToSave[envVar] = value;
-        console.log(`[manager] Wrote ${envVar} to ${envPath}`);
-      }
-      writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
+      syncHermesEnvFile(this.save.getPlatformCredentials(), { [platform]: credentials });
 
-      // Save credentials to the user's save.json (persists on the volume in users/<id>/ag/)
+      // Save credentials to save.json (persists on the volume / DB)
+      const envVarMap = PLATFORM_ENV_VAR_MAP[platform.toLowerCase()] ?? {};
+      const credVarsToSave: Record<string, string> = {};
+      for (const [credKey, envVar] of Object.entries(envVarMap)) {
+        const value = credentials[credKey];
+        if (value) credVarsToSave[envVar] = value;
+      }
       if (Object.keys(credVarsToSave).length > 0) {
         const existing = this.save.getPlatformCredentials();
         const merged = { ...existing, ...credVarsToSave };
@@ -1120,64 +1110,25 @@ export class AgentManager {
 
     const result = await this.hermesClient.configurePlatform(platform, credentials);
 
-    // Re-write credentials to .env AFTER the API call too — the Hermes API
-    // may have overwritten .env, wiping our token
+    // Re-write .env AFTER the API call — Hermes API may have overwritten .env,
+    // wiping our token. syncHermesEnvFile merges everything atomically.
     try {
-      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-      const envPath = join(hermesHome, ".env");
-      let envContent = "";
-      if (existsSync(envPath)) {
-        envContent = readFileSync(envPath, "utf-8");
-      }
-      const envVarMap: Record<string, Record<string, string>> = {
-        telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
-        discord: { bot_token: "DISCORD_BOT_TOKEN" },
-        slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" },
-      };
-      const varMap = envVarMap[platform.toLowerCase()] ?? {};
-      let wroteAny = false;
-      for (const [credKey, envVar] of Object.entries(varMap)) {
-        const value = credentials[credKey];
-        if (!value) continue;
-        // Check if the env var is already present and correct
-        const existingLine = envContent.split("\n").find((l) => l.startsWith(`${envVar}=`));
-        if (existingLine === `${envVar}=${value}`) continue; // already correct
-        // Remove existing line if present, then append
-        const lines = envContent.split("\n").filter((l) => !l.startsWith(`${envVar}=`));
-        lines.push(`${envVar}=${value}`);
-        envContent = lines.join("\n");
-        wroteAny = true;
-        console.log(`[manager] Re-wrote ${envVar} to ${envPath} after API call`);
-      }
-      if (wroteAny) {
-        // Also ensure KIMI_API_KEY is still there (Hermes API might have wiped it)
-        const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
-        if (kimiKey && !envContent.includes("KIMI_API_KEY=")) {
-          envContent += (envContent.endsWith("\n") ? "" : "\n") + `KIMI_API_KEY=${kimiKey}\n`;
-          console.log(`[manager] Re-added KIMI_API_KEY to ${envPath}`);
-        }
-        // Restore home channel from saved credentials (Hermes API may have wiped it)
-        const savedCreds = this.save.getPlatformCredentials();
-        for (const [varName, value] of Object.entries(savedCreds)) {
-          if (varName.endsWith("_HOME_CHANNEL") && !envContent.includes(`${varName}=`)) {
-            envContent += (envContent.endsWith("\n") ? "" : "\n") + `${varName}=${value}\n`;
-            console.log(`[manager] Restored ${varName} to ${envPath} from saved credentials`);
-          }
-        }
-        writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
-        // Log final .env keys for debugging
-        const finalKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
-        console.log(`[manager] Final .env keys after configure: ${finalKeys.join(", ")}`);
-      }
+      syncHermesEnvFile(this.save.getPlatformCredentials(), { [platform]: credentials });
     } catch (err) {
       console.warn(`[manager] Failed to re-write credentials to .env after API call: ${err}`);
     }
 
     // After configuring, restart the gateway process so it picks up the new credentials
+    // Rate-limited: skip restart if one happened within the cooldown window
     if (result.success) {
-      console.log(`[manager] Platform ${platform} configured — restarting gateway process`);
-
-      this.hermesProcess?.restartGateway();
+      const now = Date.now();
+      if (now - this.lastGatewayRestartAt < AgentManager.GATEWAY_RESTART_COOLDOWN_MS) {
+        console.log(`[manager] Platform ${platform} configured — skipping gateway restart (cooldown: ${Math.round((AgentManager.GATEWAY_RESTART_COOLDOWN_MS - (now - this.lastGatewayRestartAt)) / 1000)}s left)`);
+      } else {
+        this.lastGatewayRestartAt = now;
+        console.log(`[manager] Platform ${platform} configured — restarting gateway process`);
+        this.hermesProcess?.restartGateway();
+      }
       // Wait a few seconds for the gateway to connect, then poll for fresh status
       setTimeout(async () => {
         if (this.hermesClient) {
@@ -4232,7 +4183,7 @@ export class AgentManager {
       : "(no task cards)";
 
     // Build the knowledge-rich system prompt
-    let knowledgeContext = `${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog\n${catalogSummary()}`;
+    let knowledgeContext = `${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog\n${await catalogSummary()}`;
 
     // Dynamic PulseMCP pre-search for tool-finding queries
     if (shouldSearchPulseMCP(text)) {
@@ -4378,7 +4329,7 @@ export class AgentManager {
       ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
       : "(no task cards)";
 
-    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a virtual office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Agent Resources, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
+    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a virtual office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Agent Resources, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${await catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
 
     // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
     // query, search PulseMCP and inject results into the context.

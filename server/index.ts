@@ -597,7 +597,13 @@ const server = createServer((req, res) => {
 
   // MCP catalog — curated server directory
   if (req.url?.split("?")[0]?.startsWith("/api/mcp-catalog")) {
-    handleMcpCatalogRequest(req, res);
+    handleMcpCatalogRequest(req, res).catch(err => {
+      console.error("[mcp-catalog] Error:", err);
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Internal server error" }));
+      }
+    });
     return;
   }
 
@@ -899,6 +905,25 @@ wss.on("connection", async (ws, req) => {
 
   // Send saved outfits
   void sendOutfits(ws, sess);
+
+  // Send achievement progress from DB (so it syncs across devices)
+  if (isSupabaseConfigured) {
+    try {
+      const { data: achRow } = await supabaseAdmin
+        .from("heights_cloud_achievements")
+        .select("unlocked, stats, sets")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      ws.send(JSON.stringify({
+        type: "achievements_sync",
+        unlocked: achRow?.unlocked ?? [],
+        stats: achRow?.stats ?? {},
+        sets: achRow?.sets ?? {},
+      } satisfies ServerMsg));
+    } catch (err) {
+      console.error("[achievements] failed to load from DB:", err);
+    }
+  }
 
   // Send payment status so the client can gate UI (subscription + free trial)
   let freeTrialTimer: ReturnType<typeof setTimeout> | null = null;
@@ -3192,6 +3217,24 @@ wss.on("connection", async (ws, req) => {
           const ok = await manager.unregisterForgeServer(msg.serverId);
           if (!ok) {
             sess.broadcast({ type: "toast", text: "MCP server not found or already removed." });
+          }
+          break;
+        }
+        case "achievement_update": {
+          if (!isSupabaseConfigured) break;
+          try {
+            await supabaseAdmin
+              .from("heights_cloud_achievements")
+              .upsert({
+                user_id: sess.user.id,
+                unlocked: msg.unlocked,
+                stats: msg.stats,
+                sets: msg.sets,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: "user_id" });
+            ws.send(JSON.stringify({ type: "achievements_saved" } satisfies ServerMsg));
+          } catch (err) {
+            console.error("[achievements] failed to save to DB:", err);
           }
           break;
         }
