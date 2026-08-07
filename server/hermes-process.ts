@@ -356,6 +356,106 @@ export class HermesProcessManager {
     }, 1000);
   }
 
+  private lastPromptUpdate = 0;
+  private static readonly PROMPT_UPDATE_COOLDOWN_MS = 120_000; // 2 minutes
+
+  /** Update the Hermes system prompt with live office state and restart the gateway.
+   *  Called periodically by the manager. Rate-limited to max once per 2 minutes. */
+  updateSystemPromptWithOfficeState(officeState: string): boolean {
+    const now = Date.now();
+    if (now - this.lastPromptUpdate < HermesProcessManager.PROMPT_UPDATE_COOLDOWN_MS) {
+      return false;
+    }
+    this.lastPromptUpdate = now;
+
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const configPath = join(hermesHome, "config.yaml");
+
+      const provider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
+      const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
+
+      // Preserve existing platform config
+      let preservedPlatforms = "";
+      if (existsSync(configPath)) {
+        const existing = readFileSync(configPath, "utf-8");
+        const lines = existing.split("\n");
+        let inPlatforms = false;
+        let platformsIndent = "";
+        for (const line of lines) {
+          if (/^platforms:\s*$/.test(line) || /^messaging:\s*$/.test(line)) {
+            inPlatforms = true;
+            platformsIndent = "";
+            preservedPlatforms += line + "\n";
+            continue;
+          }
+          if (inPlatforms) {
+            if (line.trim() === "") { preservedPlatforms += "\n"; continue; }
+            const indent = line.match(/^(\s+)/)?.[1] ?? "";
+            if (indent.length > 0 && (platformsIndent === "" || indent.startsWith(platformsIndent))) {
+              if (platformsIndent === "") platformsIndent = indent;
+              preservedPlatforms += line + "\n";
+            } else {
+              inPlatforms = false;
+            }
+          }
+        }
+      }
+
+      const systemPromptLines = [
+        "You're the receptionist at Agent Heights, a virtual office where AI agents",
+        "do real work as employees. People message you on Telegram.",
+        "",
+        "Here is the current live office status:",
+        officeState,
+        "",
+        "Use this information to answer questions about what's happening in the office.",
+        "Be specific. Name agents and their current tasks.",
+        "",
+        "Rules:",
+        "- Write normally. Capital letters, periods, normal sentences.",
+        "- Do NOT use em-dashes. Use periods or commas.",
+        "- Do NOT use lowercase for style. Write like a professional adult.",
+        "- Do NOT ask to build profiles or ask personal questions.",
+        "- Do NOT say things like 'hey!' or 'totally' or 'literally'.",
+        "- Do NOT use emoji.",
+        "- Be brief. 1-2 sentences usually. Never more than 3.",
+        "- If someone asks what's going on in the office, use the live office status",
+        "  above to tell them who's here and what they're working on. Be specific.",
+        "- If someone asks for a screenshot or photo, say you can't send photos but",
+        "  describe what's happening. A real screenshot will follow shortly from the team.",
+        "- If someone wants something done, say you'll connect them with the team and",
+        "  someone will respond here shortly. Don't do it yourself.",
+        "- If someone asks about Agent Heights, answer in a sentence or two.",
+        "- If someone says hi, say hi back and ask what they need. Nothing else.",
+      ];
+
+      const config = [
+        "model:",
+        `  provider: ${provider}`,
+        `  default: ${model}`,
+        "agent:",
+        "  system_prompt: >",
+        ...systemPromptLines.map((l) => `    ${l}`),
+        "telegram:",
+        "  require_mention: false",
+        "",
+      ];
+      if (preservedPlatforms.trim()) {
+        config.push(preservedPlatforms.trimEnd(), "");
+      }
+      writeFileSync(configPath, config.join("\n"), "utf-8");
+      console.log("[hermes-process] Updated config.yaml with live office state in system prompt");
+
+      // Restart gateway so new system prompt takes effect
+      this.restartGateway();
+      return true;
+    } catch (err) {
+      console.warn(`[hermes-process] Failed to update system prompt with office state: ${err}`);
+      return false;
+    }
+  }
+
   /** Spawn the hermes serve child process. */
   private spawnHermes(): void {
     const args = ["serve", "--port", String(this.port)];

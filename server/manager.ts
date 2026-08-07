@@ -1,6 +1,5 @@
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { generateOfficeScreenshot, type OfficeSnapshotAgent } from "./office-screenshot.js";
 import { generateNarration, type NarrationContext } from "./narration.js";
@@ -4938,16 +4937,13 @@ export class AgentManager {
     return { rt: picked, reason: `no skill match, assigned to ${picked.info.name}` };
   }
 
-  /** Write live office state to ~/.hermes/SOUL.md so the Hermes receptionist LLM
-   *  has real-time context about who's in the office and what they're doing.
-   *  Called every 60s. The static identity section is preserved; only the
-   *  dynamic "Live Office Status" section is updated. */
+  /** Build live office state and inject it into the Hermes gateway system prompt.
+   *  Called every 60s. The Hermes gateway LLM has no file access, so we must
+   *  embed office context directly in config.yaml's system_prompt and restart
+   *  the gateway. Rate-limited to max once per 2 minutes inside hermes-process. */
   private refreshSoulMd(): void {
     try {
-      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
-      const soulPath = join(hermesHome, "SOUL.md");
-
-      // Build live office status
+      // Build live office status text
       const agents = [...this.agents.values()]
         .filter((a) => a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID)
         .map((a) => {
@@ -4976,33 +4972,22 @@ export class AgentManager {
         .map((l) => `- ${l.text}`)
         .join("\n");
 
-      const officeSection = [
-        "## Live Office Status",
-        "",
+      const officeState = [
         `Updated: ${new Date().toISOString()}`,
         "",
-        `### Agents in the office (${agents.length})`,
-        "",
+        `Agents in the office (${agents.length}):`,
         agents.length > 0 ? agents.join("\n") : "- The office is empty right now.",
         "",
-        activeCards.length > 0 ? `### Active tasks (${activeCards.length})\n\n${activeCards.join("\n")}\n` : "",
-        recentDone ? `### Recent completions\n\n${recentDone}\n` : "",
+        activeCards.length > 0 ? `Active tasks (${activeCards.length}):\n${activeCards.join("\n")}\n` : "",
+        recentDone ? `Recent completions:\n${recentDone}` : "",
       ].filter(Boolean).join("\n");
 
-      // Read existing SOUL.md, replace everything after "## Live Office Status"
-      let existing = "";
-      if (existsSync(soulPath)) {
-        existing = readFileSync(soulPath, "utf-8");
+      // Push to Hermes gateway via config.yaml system prompt update
+      if (this.hermesProcess) {
+        this.hermesProcess.updateSystemPromptWithOfficeState(officeState);
       }
-      const marker = "## Live Office Status";
-      const staticPart = existing.includes(marker)
-        ? existing.slice(0, existing.indexOf(marker)).trimEnd()
-        : existing;
-
-      const content = staticPart + "\n\n" + officeSection + "\n";
-      writeFileSync(soulPath, content, "utf-8");
-    } catch (err) {
-      // Non-critical — don't log every 60s if it fails
+    } catch {
+      // Non-critical
     }
   }
 
