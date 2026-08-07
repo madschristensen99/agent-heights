@@ -128,13 +128,41 @@ export class AchievementTracker {
   private stats: Record<string, number> = {};
   private sets: Record<string, Set<string>> = {};
   private listeners = new Set<(def: AchievementDef) => void>();
+  /** Callback to send achievement state to the server via WS. */
+  private sendFn: ((data: { unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }) => void) | null = null;
+  /** Debounce timer for WS saves. */
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Set the WS send callback so achievement changes can be persisted server-side. */
+  setSendFn(fn: ((data: { unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }) => void) | null): void {
+    this.sendFn = fn;
+  }
+
+  /** Merge server-synced state into local state (union for unlocked/sets, max for stats). */
+  syncFromServer(data: { unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }): void {
+    // Merge unlocked (union)
+    for (const id of data.unlocked) this.unlocked.add(id);
+    // Merge stats (take max)
+    for (const [k, v] of Object.entries(data.stats)) {
+      this.stats[k] = Math.max(this.stats[k] ?? 0, v);
+    }
+    // Merge sets (union)
+    for (const [k, arr] of Object.entries(data.sets)) {
+      if (!this.sets[k]) this.sets[k] = new Set();
+      for (const v of arr) this.sets[k].add(v);
+    }
+    this.saveLocal();
+    // If we had local data that wasn't on the server, push it up
+    this.scheduleServerSave();
+  }
 
   unlock(id: string): boolean {
     if (this.unlocked.has(id)) return false;
     const def = ACHIEVEMENTS.find((a) => a.id === id);
     if (!def || def.comingSoon) return false;
     this.unlocked.add(id);
-    this.save();
+    this.saveLocal();
+    this.scheduleServerSave();
     for (const fn of this.listeners) fn(def);
     return true;
   }
@@ -145,11 +173,13 @@ export class AchievementTracker {
 
   incStat(key: string, amount = 1): number {
     this.stats[key] = (this.stats[key] ?? 0) + amount;
+    this.scheduleServerSave();
     return this.stats[key];
   }
 
   setStat(key: string, value: number): void {
     this.stats[key] = value;
+    this.scheduleServerSave();
   }
 
   getStat(key: string): number {
@@ -159,6 +189,7 @@ export class AchievementTracker {
   addToSet(key: string, value: string): number {
     if (!this.sets[key]) this.sets[key] = new Set();
     this.sets[key].add(value);
+    this.scheduleServerSave();
     return this.sets[key].size;
   }
 
@@ -186,7 +217,30 @@ export class AchievementTracker {
     return ACHIEVEMENTS.filter((a) => !a.comingSoon).length;
   }
 
-  save(): void {
+  /** Serialize current state for WS transmission. */
+  serialize(): { unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> } {
+    return {
+      unlocked: [...this.unlocked],
+      stats: this.stats,
+      sets: Object.fromEntries(
+        Object.entries(this.sets).map(([k, v]) => [k, [...v]]),
+      ),
+    };
+  }
+
+  /** Debounced send of achievement state to the server. */
+  private scheduleServerSave(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      if (this.sendFn) {
+        this.sendFn(this.serialize());
+      }
+    }, 2000);
+  }
+
+  /** Save to localStorage (always — acts as offline cache). */
+  saveLocal(): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         unlocked: [...this.unlocked],
@@ -196,6 +250,11 @@ export class AchievementTracker {
         ),
       }));
     } catch { /* localStorage might be unavailable */ }
+  }
+
+  /** Legacy alias — now just saves locally. */
+  save(): void {
+    this.saveLocal();
   }
 
   load(): void {

@@ -5,7 +5,7 @@
  * a 1-2 sentence narration in Hermes's voice, using live office state as context.
  */
 
-import { getProviderConfig, hasApiKey } from "./providers/api-config.js";
+import { getProviderConfig, hasApiKey, resolveModel } from "./providers/api-config.js";
 
 export type NarrationEvent =
   | "task_started"
@@ -91,7 +91,7 @@ Write a 1-2 sentence message from Hermes to the platform user about this event.`
         ...config.headers,
       },
       body: JSON.stringify({
-        model: "kimi-k2.5",
+        model: resolveModel("deepseek-v4-flash", config.name),
         messages: [
           { role: "system", content: NARRATION_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },

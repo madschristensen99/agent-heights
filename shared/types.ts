@@ -953,7 +953,8 @@ export type ClientMsg =
   | { type: "delete_account" }
   | { type: "cancel_deletion" }
   | { type: "generate_world"; templateId: string; worldName?: string }
-  | { type: "list_world_templates" };
+  | { type: "list_world_templates" }
+  | { type: "achievement_update"; unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1089,9 +1090,12 @@ export type ServerMsg =
   | { type: "world_generating"; worldName: string; stage: string; message: string }
   | { type: "world_generated"; deployment: WorldDeployment; conceptPrompt: string }
   | { type: "world_gen_error"; error: string }
+  | { type: "achievements_sync"; unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }
+  | { type: "achievements_saved" };
 
 export const AGENT_MODELS = [
-  { id: "kimi-k2.5", label: "Standard" },
+  { id: "deepseek-v4-flash", label: "Standard" },
+  { id: "kimi-k2.5", label: "Vision" },
 ] as const;
 
 // --------------------------------------------------- subscription tiers ---

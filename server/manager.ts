@@ -930,12 +930,15 @@ export class AgentManager {
     this.autoReconfigurePlatforms();
 
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
-    const apiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY;
-    const modelProvider = process.env.HERMES_MODEL_PROVIDER ?? "kimi-coding";
-    const modelName = process.env.HERMES_MODEL_NAME ?? "kimi-k2.7-code";
+    const apiKey = process.env.DEEPSEEK_KEY ?? process.env.KIMI_KEY ?? process.env.KIMI_API_KEY;
+    const modelProvider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
+    const modelName = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
+    const apiBaseUrl = apiKey === process.env.DEEPSEEK_KEY
+      ? "https://api.deepseek.com"
+      : "https://api.moonshot.ai/v1";
     if (apiKey) {
       // Test direct API connectivity to verify key + network from inside the container
-      fetch("https://api.moonshot.ai/v1/models", {
+      fetch(`${apiBaseUrl}/models`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(10000),
       }).then(async (res) => {
@@ -963,7 +966,7 @@ export class AgentManager {
         console.warn(`[hermes] Model config failed: ${err}`);
       });
     } else {
-      console.warn("[hermes] KIMI_KEY is NOT SET — Hermes agent will not be able to call LLM");
+      console.warn("[hermes] DEEPSEEK_KEY (or KIMI_KEY) is NOT SET — Hermes agent will not be able to call LLM");
     }
 
     // Log current model info for diagnostics
@@ -4062,7 +4065,7 @@ export class AgentManager {
         });
         clearTimeout(to);
         if (res.status === 429) reason = `Rate limited by ${pc.name} API (429) — too many requests`;
-        else if (res.status === 401 || res.status === 403) reason = `Auth error (${res.status}) — check your KIMI_KEY`;
+        else if (res.status === 401 || res.status === 403) reason = `Auth error (${res.status}) — check your DEEPSEEK_KEY`;
         else if (res.ok) reason = "API is up but model is not responding — try a different model";
         else reason = `API returned status ${res.status}`;
       } catch {

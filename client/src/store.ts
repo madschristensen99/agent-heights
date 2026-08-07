@@ -44,6 +44,15 @@ export interface PendingInvite {
 export class Store {
   /** Set by main.ts so the store can send WS messages (e.g. for OAuth). */
   sendFn: ((msg: ClientMsg) => void) | null = null;
+  /** Wire achievement WS sync as soon as sendFn is assigned. */
+  private _achievementsWired = false;
+  wireAchievements(): void {
+    if (this._achievementsWired || !this.sendFn) return;
+    this._achievementsWired = true;
+    achievements.setSendFn((data) => {
+      this.sendFn?.({ type: "achievement_update", ...data });
+    });
+  }
   agents = new Map<string, AgentInfo>();
   logs = new Map<string, LogEntry[]>();
   board = new Map<string, TaskCard>();
@@ -1394,6 +1403,14 @@ export class Store {
       }
       case "mcp_build_log": {
         for (const fn of this.forgeBuildLogListeners) fn(msg.serverId, msg.line, msg.stream);
+        return;
+      }
+      case "achievements_sync": {
+        achievements.syncFromServer({ unlocked: msg.unlocked, stats: msg.stats, sets: msg.sets });
+        return;
+      }
+      case "achievements_saved": {
+        // Server confirmed persistence — nothing to do
         return;
       }
     }

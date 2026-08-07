@@ -651,3 +651,275 @@ When the stream grows:
 - **Replay system** — Record the world state stream (not video) and
   allow replaying any moment in the office's history. Viewers can
   scrub through the timeline like a DVR.
+
+---
+
+## 14. Agent-as-Streamer via MCP (Alternative Architecture)
+
+The architecture in sections 2–12 describes a **server-side camera**
+pointed at the office. An alternative approach is to give an agent
+**MCP tools to control its own stream** — the agent is the streamer,
+not just the subject.
+
+### Concept
+
+A curated marketplace agent (e.g. "Stream Agent") is hired with a
+**Streaming MCP server** attached — same pattern as Robinhood Trading
+MCP or GitHub MCP. The MCP exposes streaming tools the agent calls
+autonomously:
+
+| Tool | Purpose |
+|------|---------|
+| `start_stream` | Begin RTMP broadcast to YouTube/Twitch (FFmpeg on server) |
+| `stop_stream` | End the stream |
+| `capture_frame` | Grab current game canvas around the agent, feed to RTMP pipeline |
+| `narrate` | Generate TTS audio from text, mix into stream audio track |
+| `get_chat_messages` | Pull recent messages from YouTube/Twitch chat |
+| `send_chat_reply` | Post a message to the stream chat |
+| `get_viewer_stats` | Viewer count, likes, etc. |
+
+The agent's **system prompt** defines its streamer personality. The
+agent's LLM brain handles "what to do" — explore, narrate, respond to
+chat. The MCP tools handle "how to broadcast."
+
+### Why This Fits the Existing Architecture
+
+Everything already exists — this is one more MCP server in the catalog:
+
+- **`MCPCatalogServer`** entry in `shared/mcp-catalog.ts` — add a
+  "Streaming" entry with `nativeIntegration: true`
+- **Seed migration** in Supabase — creates the marketplace listing
+  (same pattern as the 100+ existing curated agents)
+- **`hire()`** in `server/manager.ts` already accepts `mcpServers`
+  param — no changes needed
+- **`loadMCPTools()`** in `server/providers/mcp-client.ts` already
+  discovers and wraps MCP tools as agent tools
+- **`ScreenshotManager`** in `server/providers/screenshot.ts` already
+  captures frames from agent browsers — could feed the RTMP pipeline
+- **Narration** in `server/narration.ts` already generates LLM
+  commentary — could pipe to TTS → stream audio
+- **ElevenLabs TTS** already integrated (see
+  `docs/ELEVENLABS_INTEGRATION.md`) — `SPOKEN:` prefix pattern could
+  drive stream narration
+
+### The Streaming MCP Server
+
+A standalone package wrapping FFmpeg + TTS + platform APIs. Two flavors:
+
+**Option A: stdio MCP** (runs on the Agent Heights server)
+- Spawns as a child process via `npx @agent-heights/streaming-mcp`
+- Direct access to FFmpeg, game canvas snapshots (sent via WS from
+  client), and TTS APIs
+- Tools: `start_stream`, `stop_stream`, `push_frame`, `narrate`,
+  `get_chat`, `send_chat`, `get_stats`
+
+**Option B: remote MCP** (hosted service)
+- HTTP/SSE endpoint like `https://stream-mcp.agentheights.com/mcp`
+- Handles RTMP encoding, TTS, platform API integration
+- The agent calls it like any other remote MCP (Notion, GitHub, etc.)
+
+Option A is simpler for a first version — direct access to the
+server's FFmpeg and the client's canvas frames via existing WS
+infrastructure.
+
+### Data Flow
+
+```
+1. User hires "Stream Agent" from marketplace
+   → agent arrives with streaming MCP attached
+
+2. User assigns task: "Stream your exploration of the world"
+   → agent's LLM starts making decisions (move, look, narrate)
+
+3. Agent calls MCP tools:
+   → start_stream(rtmp_url, stream_key)
+   → capture_frame()  ← server asks client for canvas snapshot via WS
+   → narrate("I see a forest ahead, let's check it out")  ← TTS → audio
+   → get_chat_messages()  ← reads YouTube/Twitch chat
+   → send_chat_reply("Yeah I've been exploring for about 10 minutes")
+   → stop_stream()
+
+4. Client renders the agent moving in the world
+   → sends canvas frames to server via existing WS infrastructure
+   → server feeds frames to FFmpeg → RTMP → YouTube/Twitch
+```
+
+### Relationship to the Office Broadcast Architecture
+
+The two approaches are complementary:
+
+- **Office broadcast** (sections 2–12): Server-side camera captures
+  the whole office. No agent involvement in streaming. Good for 24/7
+  ambient office content.
+- **Agent-as-streamer** (this section): Agent controls its own stream
+  via MCP tools. Agent is the content creator. Good for personality-
+  driven, exploration-based content.
+
+Both can coexist — the office broadcast runs 24/7, and individual
+agents can spin up their own streams when they have something
+interesting to show.
+
+---
+
+## 15. Agent World Exploration (Prerequisite)
+
+Agent-as-streamer is compelling when the agent can **leave the office
+and explore the procedural world**. Currently agents are office-bound:
+
+- `AgentSprite` (`client/src/game/agent.ts`) pathfinds on an office
+  grid, walks to desks and break spots
+- The procedural world (`client/src/game/world.ts`, `worldgen.ts`) is
+  player-only — chunk-based, dynamically loaded, separate grid
+- `autonomousThink` (`server/manager.ts`) only fires emotes (💡, 💤, 💭)
+  — no real autonomous behavior
+
+### What's Needed
+
+| Component | Effort | Risk |
+|-----------|--------|------|
+| `"explorer"` agent role + server decision loop | Medium | Medium — mostly server logic |
+| Client `WorldAgentSprite` — world pathfinding + movement | Medium | Medium — extends existing A* pathfinding |
+| In-game livestream — projector canvas capture + HUD feed | Medium | Medium — reuses screenshot infrastructure |
+| External livestream — narration events + client snapshot upload | Low | Low — extends existing narration |
+| Server-side world perception (shared worldgen) | High | Medium — needs extracting worldgen from client bundle |
+| Autonomous decision loop (LLM-driven) | Medium | Medium — LLM cost/latency |
+
+### Hybrid World Perception
+
+Server uses shared `generateChunk()` for terrain awareness (it's
+seed-based math, no Phaser deps). Client reports dynamic state
+(creatures, health, items, position). Server knows terrain, client
+knows live game state.
+
+### Decision Engine
+
+Every 5–15 seconds, the agent gets an LLM prompt describing its
+surroundings and chooses an action:
+
+```
+You are {name}, an explorer in a procedural world.
+Current situation:
+- Biome: {biome} (hostility level: {level})
+- Health: {hp}/100
+- Nearby features: {list of notable tiles within 10-tile radius}
+- Inventory: {items}
+- Tiles explored: {count}
+- Last 3 decisions: {history}
+
+What do you want to do next? Choose one:
+- move (direction)
+- investigate (feature)
+- rest
+- head_back
+- fight
+- screenshot
+
+Respond with JSON: {"action": "...", "target": "...", "reasoning": "..."}
+```
+
+The LLM also generates **commentary** — first-person streamer
+monologue. This goes through TTS (ElevenLabs) and becomes the audio
+track of the stream.
+
+### Stream Persona
+
+The agent's `systemPrompt` at hire time defines its streamer
+personality:
+
+- **The Explorer**: calm, curious, nature-documentary style
+- **The Speedrunner**: aggressive, risk-taking, tries to go far fast
+- **The Collector**: obsessively picks up every item, narrates inventory
+- **The Storyteller**: invents lore about the world, roleplays as a character
+
+Personality traits (`PersonalityTraits` on `AgentInfo`) modulate the
+commentary style. High openness = more wonder at discoveries. High
+neuroticism = more panic near danger.
+
+---
+
+## 16. Reservations & Risks
+
+### 30fps video over WebSocket is rough
+
+The existing `agent_frame` infrastructure sends JPEG screenshots at
+~1–2fps. A real livestream needs 30fps. At 720p, that's ~2MB/s of
+base64 frames over WS. This will strain the connection and server
+memory. The alternative — WebRTC/WHIP directly from the client
+browser — bypasses the server entirely, but then the MCP server can't
+control the stream start/stop.
+
+### The client must stay open
+
+If frames come from the client canvas, closing the browser tab kills
+the stream. This isn't a 24/7 autonomous streamer — it's "while
+you're in the game, your agent streams." For true 24/7 streaming
+you'd need a headless browser running the client (same as the office
+broadcast approach in sections 2–12).
+
+### TTS + LLM latency
+
+Each narration cycle is: LLM generates commentary (2–5s) → TTS
+synthesizes audio (1–3s). Commentary is always 3–8 seconds behind the
+action. Human streamers have delay too, but this is on top of the
+existing RTMP buffer. Could feel sluggish.
+
+### Continuous API cost
+
+A 1-hour stream = ~240–720 LLM calls (decisions + chat responses) +
+~240–720 TTS calls. At current pricing that's potentially $5–15/hour
+in API costs alone. Who pays? The user's subscription? The agent's
+wallet?
+
+### Platform OAuth complexity
+
+YouTube Live and Twitch streaming require OAuth with specific scopes
+(broadcast management, chat read/write). The existing OAuth flow
+handles Robinhood, but YouTube/Twitch token refresh and broadcast
+lifecycle management is more involved — you need to create broadcast
+events, bind video streams, transition broadcast states.
+
+### Agent world exploration is new game mechanics
+
+Agents can't leave the office today. Making them roam the world means
+a new client sprite class that pathfinds on world chunks, server-side
+world perception, and a decision loop that drives movement. This is
+genuine new game mechanics, not just wiring up an MCP.
+
+---
+
+## 17. Recommended Phased Approach
+
+Decouple streaming from world exploration:
+
+### Phase 1: Streaming MCP + Player Gameplay Narration
+
+Build the streaming MCP + canvas capture + platform OAuth. Prove you
+can stream the **player's** gameplay to YouTube/Twitch via an agent's
+MCP tools. No world exploration needed — the agent is a "director"
+narrating what the player does.
+
+- Streaming MCP server (FFmpeg + TTS + platform APIs) — known tech
+- Platform OAuth (YouTube/Twitch) — token lifecycle complexity
+- Canvas capture pipeline (client → server → RTMP) — bandwidth/perf
+- Agent narrates player's actions using existing narration patterns
+
+**Ships something useful early. De-risks the hard part separately.**
+
+### Phase 2: Agent World Exploration
+
+Build agent world exploration separately. Once agents can roam the
+world, the streaming MCP already exists and just works.
+
+- `"explorer"` role + server decision loop
+- Client `WorldAgentSprite` — world pathfinding + movement
+- Server-side world perception (shared worldgen extraction)
+- Autonomous decision loop (LLM-driven, with cost controls)
+
+### Phase 3: Full Autonomous Streamer
+
+Combine Phase 1 + Phase 2. The agent explores the world and streams
+its own journey with TTS narration and chat interaction.
+
+- Audience interaction (chat → agent awareness → commentary)
+- Stream persona system (personality-driven commentary)
+- Cost management (budget-aware streaming, auto-stop on budget exhaustion)

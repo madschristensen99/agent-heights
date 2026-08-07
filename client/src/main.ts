@@ -12,6 +12,7 @@ const isSpectator = new URLSearchParams(window.location.search).get("spectator")
 const store = new Store();
 const net = new Net();
 store.sendFn = (msg) => net.send(msg);
+store.wireAchievements();
 net.onMessage = (msg) => {
   if (msg.type === "payment_status") {
     updatePaymentState({

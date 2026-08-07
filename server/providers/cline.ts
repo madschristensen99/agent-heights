@@ -17,12 +17,47 @@ import { loadCrossmintWalletTools } from "./crossmint-wallets.js";
 import { loadPremiumTools, type CircleServiceConfig, type PremiumProxyContext } from "./premium-proxy.js";
 import { recordUsage } from "../usage.js";
 import { loadWizardTools } from "./wizard-tools.js";
-import { getProviderConfig, resolveModel, hasApiKey } from "./api-config.js";
+import { getProviderConfig, getVisionProviderConfig, resolveModel, hasApiKey, hasVisionApiKey, isVisionCapable } from "./api-config.js";
 import { browserNavigate, browserScreenshot, browserExtractText, browserClick, browserFill } from "./browser.js";
 
 const execFileAsync = promisify(execFile);
 
 const providerConfig = getProviderConfig();
+const visionProviderConfig = getVisionProviderConfig();
+
+/** Use Kimi to describe a browser screenshot as text (for non-vision primary models). */
+async function describeScreenshotWithKimi(base64Frame: string, agentId: string): Promise<string> {
+  const visionModel = "kimi-k2.5";
+  const dataUrl = `data:image/jpeg;base64,${base64Frame}`;
+  const res = await fetch(`${visionProviderConfig.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...visionProviderConfig.headers,
+    },
+    body: JSON.stringify({
+      model: visionModel,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe what you see in this browser screenshot. Focus on the page layout, visible text, buttons, forms, and any errors or dialogs. Be concise but thorough." },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      max_tokens: 1024,
+      temperature: 0.3,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(`Kimi vision API error ${res.status}: ${errText.slice(0, 200)}`);
+  }
+  const data = await res.json() as any;
+  return data.choices?.[0]?.message?.content ?? "(no description)";
+}
 
 /** Whether bubblewrap sandboxing is available (checked at startup). */
 let bwrapAvailable: boolean | null = null;
@@ -218,6 +253,7 @@ export async function makeTools(cwd: string, opts?: {
   wizardGithubPat?: string;
   wizardBranch?: string;
   onBroadcastHtml?: (filePath: string) => void;
+  model?: string;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -374,13 +410,22 @@ export async function makeTools(cwd: string, opts?: {
       async execute() {
         try {
           const frame = await browserScreenshot(opts?.agentId ?? "unknown");
-          // Return image content for vision-capable models (Kimi K2.5, Claude, GPT-4o).
-          // The SDK's AgentImagePart format is { type: "image", image: dataUrl, mediaType }.
-          // If the model/provider doesn't support image content, it falls back to text.
-          return [
-            { type: "text", text: `Screenshot captured from the browser. The image is shown below for visual inspection.` },
-            { type: "image", image: `data:image/jpeg;base64,${frame}`, mediaType: "image/jpeg" },
-          ];
+          const resolvedModel = resolveModel(opts?.model ?? "deepseek-v4-flash", providerConfig.name);
+          // If the primary model supports vision, return image content directly.
+          if (isVisionCapable(resolvedModel)) {
+            return [
+              { type: "text", text: `Screenshot captured from the browser. The image is shown below for visual inspection.` },
+              { type: "image", image: `data:image/jpeg;base64,${frame}`, mediaType: "image/jpeg" },
+            ];
+          }
+          // Primary model (e.g. DeepSeek V4 Flash) doesn't support vision.
+          // Use Kimi to describe the screenshot, return the text description.
+          if (hasVisionApiKey()) {
+            const description = await describeScreenshotWithKimi(frame, opts?.agentId ?? "unknown");
+            return `Screenshot captured from the browser. Kimi vision analysis:\n\n${description}`;
+          }
+          // No vision provider available — return a placeholder
+          return `Screenshot captured but the primary model (${resolvedModel}) does not support vision and no vision provider (KIMI_KEY) is configured. Use browser_extract_text instead to read page content.`;
         } catch (err) {
           return `Screenshot failed: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -989,7 +1034,7 @@ export async function makeTools(cwd: string, opts?: {
         type: "object",
         properties: {
           name: { type: "string", description: "A short name for the new agent (max 24 chars)" },
-          model: { type: "string", description: "The model to use (e.g. 'claude-sonnet-4-20250514', 'gpt-4o', 'kimi-k2.7-code')" },
+          model: { type: "string", description: "The model to use (e.g. 'deepseek-v4-flash', 'claude-sonnet-4-20250514', 'gpt-4o')" },
           systemPrompt: { type: "string", description: "A brief system prompt describing the agent's role and expertise (max 2000 chars)" },
         },
         required: ["name", "model", "systemPrompt"],
@@ -1157,7 +1202,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
   if (!hasApiKey()) {
     yield {
       kind: "error",
-      text: "No API key set. Set KIMI_KEY in your environment.",
+      text: "No API key set. Set DEEPSEEK_KEY in your environment.",
     };
     return;
   }
@@ -1213,7 +1258,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           async execute(input: any) {
             try {
               const name = String(input.name ?? "").slice(0, 24);
-              const model = String(input.model ?? "kimi-k2.5");
+              const model = String(input.model ?? "deepseek-v4-flash");
               const systemPrompt = String(input.systemPrompt ?? "");
               const mcpServers = Array.isArray(input.mcpServers) ? input.mcpServers : undefined;
               const id = await ctx.hireAgent!(name, model, systemPrompt, mcpServers);
@@ -1267,6 +1312,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         sharedCwd: ctx.sharedCwd,
         workspaceRoot: resolve(ctx.cwd, ".."),
         agentId,
+        model: ctx.model,
         getBoard: ctx.getBoard,
         claimCard: ctx.claimCard,
         eventFeedPath: ctx.eventFeedPath,

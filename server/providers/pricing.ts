@@ -25,10 +25,12 @@ const PRICING: Record<string, ModelPricing> = {
   "kimi-k2.7-code": { inputPer1M: 0.6, outputPer1M: 2.4 },
   "kimi-k2.7-code-highspeed": { inputPer1M: 0.6, outputPer1M: 2.4 },
   "kimi-k3": { inputPer1M: 0.6, outputPer1M: 2.4 },
+  "deepseek-v4-flash": { inputPer1M: 0.07, outputPer1M: 0.28 },
+  "deepseek-v4-pro": { inputPer1M: 0.27, outputPer1M: 1.10 },
   "openrouter/tencent/hy3:free": { inputPer1M: 0, outputPer1M: 0 },
 };
 
-const DEFAULT_PRICING: ModelPricing = { inputPer1M: 3.0, outputPer1M: 15.0 };
+const DEFAULT_PRICING: ModelPricing = { inputPer1M: 0.07, outputPer1M: 0.28 };
 
 export function calculateCost(
   model: string,

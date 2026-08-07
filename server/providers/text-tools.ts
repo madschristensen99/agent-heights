@@ -195,7 +195,7 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
   if (!hasApiKey()) {
     yield {
       kind: "error",
-      text: "No API key set. Set KIMI_KEY in your environment.",
+      text: "No API key set. Set DEEPSEEK_KEY in your environment.",
     };
     return;
   }

@@ -104,9 +104,9 @@ export class HermesProcessManager {
       if (!existsSync(hermesHome)) mkdirSync(hermesHome, { recursive: true });
       const configPath = join(hermesHome, "config.yaml");
 
-      const apiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
-      const provider = process.env.HERMES_MODEL_PROVIDER ?? "kimi-coding";
-      const model = process.env.HERMES_MODEL_NAME ?? "kimi-k2.7-code";
+      const apiKey = process.env.DEEPSEEK_KEY ?? process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
+      const provider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
+      const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
       console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, apiKey=${apiKey ? "set (" + apiKey.slice(0, 8) + "...)" : "NOT SET"}, provider=${provider}, model=${model}`);
 
       // Only write config.yaml if it's missing or the provider/model has changed
@@ -277,6 +277,7 @@ export class HermesProcessManager {
       env: {
         ...process.env,
         HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
+        DEEPSEEK_API_KEY: process.env.DEEPSEEK_KEY ?? "",
         KIMI_API_KEY: process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "",
         GATEWAY_ALLOW_ALL_USERS: "true",
       },
@@ -347,11 +348,12 @@ export class HermesProcessManager {
       env: {
         ...process.env,
         HERMES_DASHBOARD_SESSION_TOKEN: this.sessionToken,
-        // Pass our Kimi key to Hermes under the env var name it expects
+        // Pass DeepSeek key (primary) + Kimi key (vision fallback) to Hermes
+        DEEPSEEK_API_KEY: process.env.DEEPSEEK_KEY ?? "",
         KIMI_API_KEY: process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "",
       },
     });
-    console.log(`[hermes-process] Env: KIMI_API_KEY=${process.env.KIMI_KEY ? "set" : "NOT SET"}, HERMES_HOME=${process.env.HERMES_HOME ?? join(homedir(), ".hermes")}`);
+    console.log(`[hermes-process] Env: DEEPSEEK_API_KEY=${process.env.DEEPSEEK_KEY ? "set" : "NOT SET"}, KIMI_API_KEY=${process.env.KIMI_KEY ? "set" : "NOT SET"}, HERMES_HOME=${process.env.HERMES_HOME ?? join(homedir(), ".hermes")}`);
 
     this.child.stdout?.on("data", (data: Buffer) => {
       const lines = data.toString().trim().split("\n");
@@ -507,7 +509,11 @@ export function syncHermesEnvFile(savedCreds: Record<string, string>, platformCr
     // Collect all env vars to write into a single map for deduplication
     const varsToWrite: Record<string, string> = {};
 
-    // 1. KIMI_API_KEY
+    // 1. DEEPSEEK_API_KEY (primary LLM) + KIMI_API_KEY (vision fallback)
+    const deepseekKey = process.env.DEEPSEEK_KEY ?? "";
+    if (deepseekKey) {
+      varsToWrite["DEEPSEEK_API_KEY"] = deepseekKey;
+    }
     const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
     if (kimiKey) {
       varsToWrite["KIMI_API_KEY"] = kimiKey;
