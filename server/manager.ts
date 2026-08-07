@@ -355,6 +355,18 @@ interface AgentRuntime {
   reworkCount: number;
 }
 
+/** Keyword expansion for TaskCategory values used in skill-based mail routing. */
+const TASK_CATEGORY_KEYWORDS: Record<string, string[]> = {
+  frontend: ["frontend", "ui", "css", "html", "react", "vue", "design", "layout", "styling", "component", "tailwind"],
+  backend: ["backend", "api", "server", "database", "sql", "endpoint", "rest", "graphql", "microservice", "auth"],
+  devops: ["devops", "docker", "kubernetes", "deploy", "ci", "cd", "pipeline", "infra", "terraform", "cloud"],
+  data: ["data", "analytics", "chart", "graph", "statistics", "ml", "model", "dataset", "query", "etl"],
+  writing: ["writing", "content", "blog", "article", "copy", "documentation", "docs", "summary", "report"],
+  research: ["research", "search", "analyze", "investigate", "study", "compare", "evaluate", "review"],
+  crypto: ["crypto", "blockchain", "solana", "ethereum", "token", "wallet", "defi", "nft", "smart contract", "web3"],
+  general: [],
+};
+
 export class AgentManager {
   private agents = new Map<string, AgentRuntime>();
   private board = new Map<string, TaskCard>();
@@ -4761,8 +4773,8 @@ export class AgentManager {
     }));
   }
 
-  /** Build a skill profile string for an agent from system prompt, MCP servers, and task history.
-   *  This is used to score how well an agent matches an incoming message. */
+  /** Build a skill profile string for an agent from system prompt, MCP servers, task history,
+   *  structured skills, and capabilities. Used to score how well an agent matches an incoming message. */
   private agentSkillProfile(rt: AgentRuntime): string {
     const parts: string[] = [];
 
@@ -4781,6 +4793,20 @@ export class AgentManager {
           } catch { /* not a URL */ }
         }
       }
+    }
+
+    // Structured skills (TaskCategory) — expand into keyword-rich phrases
+    if (rt.info.skills) {
+      for (const skill of rt.info.skills) {
+        parts.push(skill);
+        const keywords = TASK_CATEGORY_KEYWORDS[skill];
+        if (keywords) parts.push(keywords.join(" "));
+      }
+    }
+
+    // Capabilities — broader structured tags (e.g. "testing", "api-design", "security")
+    if (rt.info.capabilities) {
+      parts.push(rt.info.capabilities.join(" "));
     }
 
     // Task history shows what the agent has actually worked on
@@ -4825,6 +4851,25 @@ export class AgentManager {
             if (domain && domain !== "api" && lowerText.includes(domain)) score += 5;
           } catch { /* not a URL */ }
         }
+      }
+    }
+
+    // Bonus: structured skill match (TaskCategory keywords)
+    if (rt.info.skills) {
+      for (const skill of rt.info.skills) {
+        const keywords = TASK_CATEGORY_KEYWORDS[skill];
+        if (!keywords) continue;
+        for (const kw of keywords) {
+          if (lowerText.includes(kw)) score += 4;
+        }
+      }
+    }
+
+    // Bonus: capabilities match (structured tags)
+    if (rt.info.capabilities) {
+      for (const cap of rt.info.capabilities) {
+        const capLower = cap.toLowerCase();
+        if (capLower.length > 3 && lowerText.includes(capLower)) score += 3;
       }
     }
 

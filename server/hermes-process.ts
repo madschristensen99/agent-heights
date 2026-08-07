@@ -11,9 +11,10 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { PLATFORM_ENV_VAR_MAP } from "./hermes-client.js";
 
 const HERMES_BASE_URL = process.env.HERMES_BASE_URL ?? "http://127.0.0.1:9119";
 const RESTART_DELAY_MS = 3_000;
@@ -96,24 +97,26 @@ export class HermesProcessManager {
     this.spawnGateway();
   }
 
-  /** Ensure Hermes has config.yaml and .env with the Kimi API key. */
+  /** Ensure Hermes has config.yaml and .env with the LLM API key. */
   private ensureHermesConfig(): void {
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       if (!existsSync(hermesHome)) mkdirSync(hermesHome, { recursive: true });
       const configPath = join(hermesHome, "config.yaml");
-      const envPath = join(hermesHome, ".env");
 
-      const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
-      console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, kimiKey=${kimiKey ? "set (" + kimiKey.slice(0, 8) + "...)" : "NOT SET"}`);
+      const apiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
+      const provider = process.env.HERMES_MODEL_PROVIDER ?? "kimi-coding";
+      const model = process.env.HERMES_MODEL_NAME ?? "kimi-k2.7-code";
+      console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, apiKey=${apiKey ? "set (" + apiKey.slice(0, 8) + "...)" : "NOT SET"}, provider=${provider}, model=${model}`);
 
-      // Always write config.yaml to ensure correct provider (volume may have stale config from previous deploy)
-      if (kimiKey) {
-        this.writeConfig(configPath);
+      // Only write config.yaml if it's missing or the provider/model has changed
+      if (apiKey) {
+        if (!existsSync(configPath) || this.configNeedsUpdate(configPath, provider, model)) {
+          this.writeConfig(configPath, provider, model);
+        } else {
+          console.log(`[hermes-process] config.yaml already up to date — not overwriting`);
+        }
       }
-
-      // Restore platform credentials from save.json (handled by manager.autoReconfigurePlatforms)
-      // No file-based backup needed — save.json in users/<id>/ag/ persists on the volume
 
       // List /app/ag/ and hermes home contents for diagnostics
       const volumeRoot = "/app/ag";
@@ -127,42 +130,32 @@ export class HermesProcessManager {
       } catch { /* ignore */ }
 
       // Write/merge .env with KIMI_API_KEY + restored platform credentials
-      if (kimiKey) {
-        let envContent = "";
-        if (existsSync(envPath)) {
-          envContent = readFileSync(envPath, "utf-8");
-          const existingKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
-          console.log(`[hermes-process] Existing .env keys: ${existingKeys.join(", ") || "(none)"}`);
-        }
-
-        // Check if KIMI_API_KEY is already in .env
-        if (!envContent.includes("KIMI_API_KEY=")) {
-          envContent += (envContent && !envContent.endsWith("\n") ? "\n" : "") + `KIMI_API_KEY=${kimiKey}\n`;
-          console.log("[hermes-process] Wrote KIMI_API_KEY to ~/.hermes/.env");
-        } else {
-          console.log("[hermes-process] KIMI_API_KEY already in ~/.hermes/.env — not overwriting");
-        }
-
-        // Write platform env vars (tokens + home channels) from saved credentials
-        for (const [varName, value] of Object.entries(this.platformEnvVars)) {
-          const lines = envContent.split("\n").filter((l) => !l.startsWith(`${varName}=`));
-          lines.push(`${varName}=${value}`);
-          envContent = lines.join("\n");
-          console.log(`[hermes-process] Wrote ${varName} to .env from saved credentials`);
-        }
-
-        writeFileSync(envPath, envContent.endsWith("\n") ? envContent : envContent + "\n", "utf-8");
-
-        // Log final .env keys (from the actual written content)
-        const finalKeys = envContent.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
-        console.log(`[hermes-process] Final .env keys: ${finalKeys.join(", ") || "(none)"}`);
+      // Uses the unified syncHermesEnvFile function (atomic write, single source of truth)
+      if (apiKey) {
+        syncHermesEnvFile(this.platformEnvVars);
       }
     } catch (err) {
       console.warn(`[hermes-process] Failed to write Hermes config: ${err}`);
     }
   }
 
-  private writeConfig(configPath: string): void {
+  /** Check if config.yaml has the correct provider/model. */
+  private configNeedsUpdate(configPath: string, provider: string, model: string): boolean {
+    try {
+      const existing = readFileSync(configPath, "utf-8");
+      const hasProvider = existing.includes(`provider: ${provider}`);
+      const hasModel = existing.includes(`default: ${model}`) || existing.includes(`model: ${model}`);
+      if (hasProvider && hasModel) {
+        return false;
+      }
+      console.log(`[hermes-process] config.yaml needs update: provider=${provider} model=${model} (existing hasProvider=${hasProvider} hasModel=${hasModel})`);
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
+  private writeConfig(configPath: string, provider: string, model: string): void {
     // Preserve existing platform config (enabled flags, etc.) from the current config.yaml
     // so Telegram/Discord/etc. survive redeploys. The credentials are in .env (persistent volume).
     let preservedPlatforms = "";
@@ -198,8 +191,8 @@ export class HermesProcessManager {
 
     const config = [
       "model:",
-      "  provider: kimi-coding",
-      "  default: kimi-k2.7-code",
+      `  provider: ${provider}`,
+      `  default: ${model}`,
       "agent:",
       "  system_prompt: >",
       "    You're the receptionist at Agent Heights. It's a game where AI agents work in",
@@ -223,7 +216,7 @@ export class HermesProcessManager {
       config.push(preservedPlatforms.trimEnd(), "");
     }
     writeFileSync(configPath, config.join("\n"), "utf-8");
-    console.log("[hermes-process] Wrote config.yaml with kimi-coding/kimi-k2.7-code + Agent Heights system prompt" + (preservedPlatforms.trim() ? " + preserved platforms" : ""));
+    console.log(`[hermes-process] Wrote config.yaml with ${provider}/${model} + Agent Heights system prompt` + (preservedPlatforms.trim() ? " + preserved platforms" : ""));
 
     // Write SOUL.md — Hermes's primary identity file
     const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
@@ -482,5 +475,86 @@ export class HermesProcessManager {
   /** Is the Hermes gateway currently ready? */
   isReady(): boolean {
     return this.ready;
+  }
+}
+
+/**
+ * Single authoritative function for writing the Hermes ~/.hermes/.env file.
+ *
+ * Merges credentials from savedCreds (save.json / DB) into the existing .env,
+ * ensures KIMI_API_KEY is present, and writes atomically (temp + rename).
+ *
+ * Call this before gateway start, after platform config API calls, and after
+ * any credential change. This replaces the triple-write workaround that was
+ * spread across hermes-process.ts and manager.ts.
+ *
+ * @param savedCreds — credential env vars from save.json (e.g. { TELEGRAM_BOT_TOKEN: "...", TELEGRAM_HOME_CHANNEL: "..." })
+ * @param platformCredentials — optional: our credential field keys per platform (e.g. { telegram: { bot_token: "..." } })
+ *   to also write via PLATFORM_ENV_VAR_MAP mapping
+ */
+export function syncHermesEnvFile(savedCreds: Record<string, string>, platformCredentials?: Record<string, Record<string, string>>): void {
+  try {
+    const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+    if (!existsSync(hermesHome)) mkdirSync(hermesHome, { recursive: true });
+    const envPath = join(hermesHome, ".env");
+
+    // Start from existing .env content (if any)
+    let envContent = "";
+    if (existsSync(envPath)) {
+      envContent = readFileSync(envPath, "utf-8");
+    }
+
+    // Collect all env vars to write into a single map for deduplication
+    const varsToWrite: Record<string, string> = {};
+
+    // 1. KIMI_API_KEY
+    const kimiKey = process.env.KIMI_KEY ?? process.env.KIMI_API_KEY ?? "";
+    if (kimiKey) {
+      varsToWrite["KIMI_API_KEY"] = kimiKey;
+    }
+
+    // 2. Saved credentials from save.json (already in env-var form)
+    for (const [varName, value] of Object.entries(savedCreds)) {
+      varsToWrite[varName] = value;
+    }
+
+    // 3. Platform credentials passed in our credential-field-key form
+    if (platformCredentials) {
+      for (const [platform, creds] of Object.entries(platformCredentials)) {
+        const varMap = PLATFORM_ENV_VAR_MAP[platform.toLowerCase()] ?? {};
+        for (const [credKey, envVar] of Object.entries(varMap)) {
+          const value = creds[credKey];
+          if (value) {
+            varsToWrite[envVar] = value;
+          }
+        }
+      }
+    }
+
+    // Merge: remove existing lines for all vars we're writing, then append
+    const varsToReplace = new Set(Object.keys(varsToWrite));
+    const lines = envContent.split("\n").filter((l) => {
+      const eqIdx = l.indexOf("=");
+      if (eqIdx === -1) return true;
+      const key = l.slice(0, eqIdx);
+      return !varsToReplace.has(key);
+    });
+
+    for (const [varName, value] of Object.entries(varsToWrite)) {
+      lines.push(`${varName}=${value}`);
+    }
+
+    const finalContent = lines.join("\n");
+    const content = finalContent.endsWith("\n") ? finalContent : finalContent + "\n";
+
+    // Atomic write: write to temp file, then rename
+    const tmpPath = envPath + ".tmp";
+    writeFileSync(tmpPath, content, "utf-8");
+    renameSync(tmpPath, envPath);
+
+    const finalKeys = content.split("\n").filter(l => l.match(/^[A-Z_]+=/)).map(l => l.split("=")[0]);
+    console.log(`[hermes-process] syncHermesEnvFile: wrote ${finalKeys.join(", ") || "(none)"} to ${envPath}`);
+  } catch (err) {
+    console.warn(`[hermes-process] syncHermesEnvFile failed: ${err}`);
   }
 }

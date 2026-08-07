@@ -2,7 +2,8 @@
  * Hermes Agent Gateway Client
  *
  * Connects to a running `hermes serve` instance (default port 9119) via its REST API.
- * Polls platform connection status and recent sessions for inbound messages.
+ * Uses fs.watch on gateway_state.json for real-time platform state updates and
+ * a fast poll loop (5s) for new session/message detection.
  *
  * The Hermes Agent is a real AI agent by Nous Research that has a messaging gateway
  * supporting Telegram, Discord, Slack, WhatsApp, Signal, Email, and more.
@@ -11,18 +12,22 @@
 
 import type { PlatformConnectionState, PlatformEvent } from "../shared/types.js";
 import { getPlatformEntry } from "../shared/types.js";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, watch } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
 const HERMES_BASE_URL = process.env.HERMES_BASE_URL ?? "http://127.0.0.1:9119";
-const POLL_INTERVAL_MS = 10_000; // 10 seconds
+const SESSION_POLL_MS = 5_000; // 5 seconds — fast session polling for new messages
+const STATE_POLL_FALLBACK_MS = 30_000; // 30 seconds — fallback if fs.watch fails
 
 /**
  * Mapping from our platform credential field keys to Hermes env var names.
  * Hermes stores credentials in ~/.hermes/.env and reads them at gateway startup.
+ *
+ * Shared across hermes-process.ts (env file sync) and manager.ts (credential
+ * configuration) so there is one authoritative source for the mapping.
  */
-const PLATFORM_ENV_VAR_MAP: Record<string, Record<string, string>> = {
+export const PLATFORM_ENV_VAR_MAP: Record<string, Record<string, string>> = {
   telegram: { bot_token: "TELEGRAM_BOT_TOKEN" },
   discord: { bot_token: "DISCORD_BOT_TOKEN" },
   slack: { bot_token: "SLACK_BOT_TOKEN", signing_secret: "SLACK_APP_TOKEN", allowed_users: "SLACK_ALLOWED_USERS" }, // signing_secret field actually receives the app-level token (xapp-)
@@ -69,8 +74,12 @@ export class HermesClient {
   private baseUrl: string;
   private sessionToken: string | null;
   private polling = false;
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private sessionPollTimer: ReturnType<typeof setInterval> | null = null;
+  private statePollTimer: ReturnType<typeof setInterval> | null = null;
+  private stateWatcher: ReturnType<typeof watch> | null = null;
+  private stateWatchDebounce: ReturnType<typeof setTimeout> | null = null;
   private lastSessionIds: Set<string> = new Set();
+  private static readonly MAX_SESSION_IDS = 200;
   private onPlatformUpdate: ((states: PlatformConnectionState[]) => void) | null = null;
   private onPlatformEvent: ((event: PlatformEvent) => void) | null = null;
   private mailboxPlatforms: (string | null)[] = [null, null, null, null, null, null];
@@ -94,7 +103,10 @@ export class HermesClient {
     this.mailboxPlatforms = platforms;
   }
 
-  /** Start polling the Hermes serve API for status and new messages. */
+  /** Start watching gateway_state.json + polling for new messages.
+   *  Platform states are pushed via fs.watch (real-time, no polling).
+   *  Sessions are polled at SESSION_POLL_MS (5s) since Hermes has no SSE endpoint.
+   *  Falls back to state polling if fs.watch fails (Docker inotify issues). */
   start(
     onPlatformUpdate: (states: PlatformConnectionState[]) => void,
     onPlatformEvent: (event: PlatformEvent) => void,
@@ -102,16 +114,76 @@ export class HermesClient {
     this.onPlatformUpdate = onPlatformUpdate;
     this.onPlatformEvent = onPlatformEvent;
     this.polling = true;
-    this.poll();
-    this.pollTimer = setInterval(() => this.poll(), POLL_INTERVAL_MS);
-    console.log(`[hermes-client] Started polling ${this.baseUrl}`);
+
+    // 1. Start fs.watch on gateway_state.json for real-time platform state updates
+    this.startStateWatcher();
+
+    // 2. Fast poll for new messages (Hermes has no SSE/streaming endpoint)
+    this.pollSessions();
+    this.sessionPollTimer = setInterval(() => this.pollSessions(), SESSION_POLL_MS);
+
+    // 3. Initial state fetch
+    this.pollStates();
+
+    console.log(`[hermes-client] Started: fs.watch on gateway_state.json + ${SESSION_POLL_MS / 1000}s session poll on ${this.baseUrl}`);
+  }
+
+  /** Watch gateway_state.json for real-time platform state changes. */
+  private startStateWatcher(): void {
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const statePath = join(hermesHome, "gateway_state.json");
+      if (!existsSync(statePath)) {
+        console.log(`[hermes-client] gateway_state.json not found at ${statePath} — falling back to state polling`);
+        this.startStatePollFallback();
+        return;
+      }
+      this.stateWatcher = watch(statePath, { persistent: false }, (eventType) => {
+        if (eventType !== "change") return;
+        if (!this.polling) return;
+        // Debounce: coalesce rapid writes into a single state fetch
+        if (this.stateWatchDebounce) clearTimeout(this.stateWatchDebounce);
+        this.stateWatchDebounce = setTimeout(() => {
+          this.stateWatchDebounce = null;
+          this.pollStates();
+        }, 500);
+      });
+      this.stateWatcher.on("error", (err) => {
+        console.warn(`[hermes-client] fs.watch error on gateway_state.json: ${err} — falling back to state polling`);
+        this.stateWatcher = null;
+        this.startStatePollFallback();
+      });
+      console.log(`[hermes-client] Watching ${statePath} for real-time platform state changes`);
+    } catch (err) {
+      console.warn(`[hermes-client] Failed to start fs.watch: ${err} — falling back to state polling`);
+      this.startStatePollFallback();
+    }
+  }
+
+  /** Fallback: poll platform states every 30s (used when fs.watch fails). */
+  private startStatePollFallback(): void {
+    if (this.statePollTimer) return; // already running
+    this.statePollTimer = setInterval(() => this.pollStates(), STATE_POLL_FALLBACK_MS);
+    console.log(`[hermes-client] State polling fallback started (${STATE_POLL_FALLBACK_MS / 1000}s interval)`);
   }
 
   stop(): void {
     this.polling = false;
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
+    if (this.sessionPollTimer) {
+      clearInterval(this.sessionPollTimer);
+      this.sessionPollTimer = null;
+    }
+    if (this.statePollTimer) {
+      clearInterval(this.statePollTimer);
+      this.statePollTimer = null;
+    }
+    if (this.stateWatcher) {
+      this.stateWatcher.close();
+      this.stateWatcher = null;
+    }
+    if (this.stateWatchDebounce) {
+      clearTimeout(this.stateWatchDebounce);
+      this.stateWatchDebounce = null;
     }
   }
 
@@ -196,6 +268,11 @@ export class HermesClient {
         const sid = sess.session_id ?? sess.id;
         if (!sid || this.lastSessionIds.has(sid)) continue;
         this.lastSessionIds.add(sid);
+        // Evict oldest entries to prevent unbounded growth
+        if (this.lastSessionIds.size > HermesClient.MAX_SESSION_IDS) {
+          const oldest = this.lastSessionIds.values().next().value;
+          if (oldest) this.lastSessionIds.delete(oldest);
+        }
 
         // Only process sessions from messaging platforms (not CLI)
         const platform = sess.platform ?? sess.source;
@@ -499,17 +576,19 @@ export class HermesClient {
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   }
 
-  private async poll(): Promise<void> {
+  /** Poll for new sessions/messages only. */
+  private async pollSessions(): Promise<void> {
     if (!this.polling) return;
-
-    // 1. Poll platform connection states
-    const states = await this.getPlatformStates(this.mailboxPlatforms);
-    this.onPlatformUpdate?.(states);
-
-    // 2. Poll for new messages
     const newEvents = await this.getNewMessages();
     for (const ev of newEvents) {
       this.onPlatformEvent?.(ev);
     }
+  }
+
+  /** Poll platform connection states and notify the listener. */
+  private async pollStates(): Promise<void> {
+    if (!this.polling || !this.onPlatformUpdate) return;
+    const states = await this.getPlatformStates(this.mailboxPlatforms);
+    this.onPlatformUpdate(states);
   }
 }
