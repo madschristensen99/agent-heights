@@ -82,7 +82,17 @@ export class HermesClient {
   private static readonly MAX_SESSION_IDS = 200;
   private onPlatformUpdate: ((states: PlatformConnectionState[]) => void) | null = null;
   private onPlatformEvent: ((event: PlatformEvent) => void) | null = null;
-  private mailboxPlatforms: (string | null)[] = [null, null, null, null, null, null];
+  mailboxPlatforms: (string | null)[] = [null, null, null, null, null, null];
+
+  private static _instance: HermesClient | null = null;
+
+  /** Get the singleton instance. Only one polling client should exist per process. */
+  static getInstance(baseUrl?: string, sessionToken?: string | null): HermesClient {
+    if (!HermesClient._instance) {
+      HermesClient._instance = new HermesClient(baseUrl, sessionToken);
+    }
+    return HermesClient._instance;
+  }
 
   constructor(baseUrl?: string, sessionToken?: string | null) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
@@ -111,6 +121,11 @@ export class HermesClient {
     onPlatformUpdate: (states: PlatformConnectionState[]) => void,
     onPlatformEvent: (event: PlatformEvent) => void,
   ): void {
+    // Guard against multiple start() calls — only one polling loop should run
+    if (this.polling) {
+      console.log(`[hermes-client] Already polling — skipping duplicate start()`);
+      return;
+    }
     this.onPlatformUpdate = onPlatformUpdate;
     this.onPlatformEvent = onPlatformEvent;
     this.polling = true;
@@ -169,6 +184,7 @@ export class HermesClient {
 
   stop(): void {
     this.polling = false;
+    HermesClient._instance = null;
     if (this.sessionPollTimer) {
       clearInterval(this.sessionPollTimer);
       this.sessionPollTimer = null;
@@ -296,7 +312,7 @@ export class HermesClient {
           console.log(`[hermes-client] Skipping session ${sid}: platform=${platform ?? "undefined"}`);
           continue;
         }
-        console.log(`[hermes-client] New platform session ${sid}: platform=${platform}, chatId=${sess.chat_id ?? sess.chatId ?? "none"}, sender=${sess.username ?? sess.user_name ?? "none"}`);
+        console.log(`[hermes-client] New platform session ${sid}: platform=${platform}, chatId=${sess.chat_id ?? sess.chatId ?? "none"}, sender=${sess.username ?? sess.user_name ?? "none"}, keys=${Object.keys(sess).join(",")}`);
 
         // Capture chat_id for reply routing (Telegram needs numeric chat_id)
         const chatId = sess.chat_id ?? sess.chatId ?? sess.channel_id ?? null;
@@ -314,7 +330,16 @@ export class HermesClient {
             console.log(`[hermes-client] GET messages for ${sid} failed: HTTP ${msgRes.status}`);
             continue;
           }
-          const messages = await msgRes.json() as any[];
+          const msgRaw = await msgRes.json();
+          let messages: any[];
+          if (Array.isArray(msgRaw)) {
+            messages = msgRaw;
+          } else if (msgRaw && typeof msgRaw === "object") {
+            messages = msgRaw.messages ?? msgRaw.data ?? msgRaw.items ?? msgRaw.results ?? [];
+            if (!Array.isArray(messages)) messages = [];
+          } else {
+            messages = [];
+          }
           console.log(`[hermes-client] Session ${sid}: ${messages.length} messages, roles: ${messages.map(m => m.role).join(",")}`);
           for (const msg of messages) {
             if (msg.role === "user") {

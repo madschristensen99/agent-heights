@@ -896,11 +896,11 @@ export class AgentManager {
 
     await this.hermesProcess.start();
 
-    // Only create one polling client per Manager instance
+    // Only create one polling client per process (singleton)
     if (this.hermesClient) return;
 
-    // Now start the polling client that talks to the Hermes REST API
-    this.hermesClient = new HermesClient(
+    // Use singleton — multiple Manager instances share one polling client
+    this.hermesClient = HermesClient.getInstance(
       undefined,
       this.hermesProcess.getSessionToken(),
     );
