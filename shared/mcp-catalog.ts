@@ -165,26 +165,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.hubspot.com",
     keyLabel: "Private App Token",
     keyPlaceholder: "pat-...",
-    keyHelpUrl: "https://app.hubspot.com/settings/api/private-apps",
-  },
-  {
-    id: "grafana",
-    name: "Grafana",
-    summary: "Search dashboards, query Prometheus metrics, fetch data.",
-    description:
-      "Integrates with Grafana to enable searching dashboards, fetching datasource information, querying Prometheus metrics, and visualizing observability data.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["monitoring", "devops"],
-    icon: "https://cdn.simpleicons.org/grafana",
-    visitorsPerWeek: "140k",
-    url: "https://mcp.grafana.com/sse",
-    keyLabel: "Access Token",
-    keyPlaceholder: "glsa_...",
-    keyHelpUrl: "https://grafana.com/docs/grafana/latest/administration/service-accounts/",
-  },
-  {
+  },  {
     id: "mongodb",
     name: "MongoDB",
     summary: "Comprehensive database operations for MongoDB.",
@@ -282,25 +263,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/gitlab",
     visitorsPerWeek: "62k",
     url: "https://gitlab.com/api/v4/mcp",
-  },
-  {
-    id: "brave-search",
-    name: "Brave Search",
-    summary: "Web and local search via Brave Search API.",
-    description:
-      "Enables agents to perform web searches and local business searches using the Brave Search API. Good for research tasks, fact-checking, and finding current information.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["search", "web"],
-    icon: "https://cdn.simpleicons.org/brave",
-    visitorsPerWeek: "—",
-    url: "https://mcp.brave.com/sse",
-    keyLabel: "API Key",
-    keyPlaceholder: "BSA...",
-    keyHelpUrl: "https://brave.com/search/api/",
-  },
-  {
+  },  {
     id: "tavily",
     name: "Tavily",
     summary: "AI-optimized web search and extraction.",
@@ -315,7 +278,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.tavily.com/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "tvly-...",
-    keyHelpUrl: "https://app.tavily.com/api-key",
   },
   {
     id: "fal-ai",
@@ -598,18 +560,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
   // ── Tier 3: Additional Remote MCPs from mcpservers.org ───────────────
 
   {
-    id: "asana",
-    name: "Asana",
-    summary: "Tasks, projects, workspaces.",
-    description: "Manage tasks, projects, and workspaces in Asana. Agents can create tasks, assign work, track project progress, and query workspace data.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["productivity", "project-management"],
-    icon: "https://cdn.simpleicons.org/asana",
-    url: "https://mcp.asana.com/v2/mcp",
-  },
-  {
     id: "atlassian",
     name: "Atlassian (Jira & Confluence)",
     summary: "Jira, Confluence, Compass — Atlassian suite.",
@@ -632,20 +582,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["design", "productivity"],
     icon: "https://cdn.simpleicons.org/canva",
     url: "https://mcp.canva.com/mcp",
-  },
-  {
-    id: "cloudflare",
-    name: "Cloudflare",
-    summary: "Workers, KV, R2, D1, DNS, account APIs.",
-    description: "Deploy, configure, and interrogate your resources on the Cloudflare developer platform (Workers, KV, R2, D1, DNS). Agents can manage deployments, configure DNS, and inspect analytics.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["cloud", "devops", "hosting"],
-    icon: "https://cdn.simpleicons.org/cloudflare/white",
-    url: "https://mcp.cloudflare.com/mcp",
-  },
-  {
+  },  {
     id: "deepwiki",
     name: "DeepWiki by Devin",
     summary: "AI-powered codebase context and answers.",
@@ -701,48 +638,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyLabel: "Personal API Key",
     keyPlaceholder: "phx_...",
     keyHelpUrl: "https://us.posthog.com/settings/user-api-keys",
-  },
-  {
-    id: "shopify",
-    name: "Shopify",
-    summary: "Build, manage, and analyze your Shopify store.",
-    description: "Manage your Shopify store — products, orders, customers, inventory, and analytics. Agents can update product listings, process orders, and analyze sales data.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["commerce", "business"],
-    icon: "https://cdn.simpleicons.org/shopify/white",
-    url: "https://setup.shopify.com/mcp",
-  },
-  {
-    id: "zapier",
-    name: "Zapier",
-    summary: "Actions across 8,000+ apps.",
-    description: "Connect AI agents to Zapier's ecosystem of 8,000+ app integrations. Agents can create, trigger, and manage automated workflows across countless services.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["automation", "productivity"],
-    icon: "https://cdn.simpleicons.org/zapier",
-    url: "https://mcp.zapier.com/api/v1/connect",
-    keyLabel: "API Key",
-    keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://developer.zapier.com/api/v1/docs/",
-  },
-  {
-    id: "zoom",
-    name: "Zoom",
-    summary: "Meetings, recordings, summaries.",
-    description: "Manage Zoom meetings, recordings, and summaries. Agents can schedule meetings, retrieve transcripts, and access meeting analytics.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["communication", "productivity"],
-    icon: "https://cdn.simpleicons.org/zoom/white",
-    url: "https://mcp.zoom.us/mcp/zoom/streamable",
-    keyHelpUrl: "https://marketplace.zoom.us/",
-  },
-  {
+  },  {
     id: "twilio",
     name: "Twilio",
     summary: "Build communications and customer engagement.",
@@ -768,23 +664,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["finance", "payments"],
     icon: "https://cdn.simpleicons.org/paypal/white",
     url: "https://mcp.paypal.com/mcp",
-  },
-  {
-    id: "webflow",
-    name: "Webflow",
-    summary: "Sites, CMS, publishing.",
-    description: "Manage Webflow sites, CMS collections, and publishing. Agents can update content, publish changes, and manage site structure.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["design", "hosting", "cms"],
-    icon: "https://cdn.simpleicons.org/webflow/white",
-    url: "https://mcp.webflow.com/mcp",
-    keyLabel: "Access Token",
-    keyPlaceholder: "Paste access token...",
-    keyHelpUrl: "https://developers.webflow.com/data/docs/access-tokens",
-  },
-  {
+  },  {
     id: "netlify",
     name: "Netlify",
     summary: "Create, deploy, manage, and secure websites.",
@@ -852,20 +732,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyLabel: "Personal Access Token",
     keyPlaceholder: "eyJ...",
     keyHelpUrl: "https://calendly.com/integrations/api_webhooks",
-  },
-  {
-    id: "cal-com",
-    name: "Cal.com",
-    summary: "Connect AI clients to Cal.com scheduling.",
-    description: "Connect to Cal.com scheduling through the Model Context Protocol. Agents can manage events, check availability, and book meetings.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["productivity", "scheduling"],
-    icon: "https://cdn.simpleicons.org/calcom/white",
-    url: "https://mcp.cal.com/sse",
-  },
-  {
+  },  {
     id: "hugging-face",
     name: "Hugging Face",
     summary: "Access the HF Hub and thousands of Gradio Apps.",
@@ -879,23 +746,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyLabel: "Access Token",
     keyPlaceholder: "hf_...",
     keyHelpUrl: "https://huggingface.co/settings/tokens",
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    summary: "Models, pricing, credits, test prompts.",
-    description: "Access OpenRouter's model marketplace. Agents can query available models, check pricing, manage credits, and run test prompts across multiple LLM providers.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["ai", "development"],
-    icon: "https://cdn.simpleicons.org/openrouter/white",
-    url: "https://mcp.openrouter.ai/sse",
-    keyLabel: "API Key",
-    keyPlaceholder: "sk-or-...",
-    keyHelpUrl: "https://openrouter.ai/keys",
-  },
-  {
+  },  {
     id: "postman",
     name: "Postman",
     summary: "Give API context to your coding agents.",
@@ -960,32 +811,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
     keyHelpUrl: "https://www.mermaidchart.com/app/settings/api-keys",
-  },
-  {
-    id: "strava",
-    name: "Strava",
-    summary: "Activities, fitness trends, training load, and goals.",
-    description: "Access Strava activities, fitness trends, training load, and goals. Agents can query workout data, analyze performance, and track fitness progress.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["fitness", "health"],
-    icon: "https://cdn.simpleicons.org/strava/white",
-    url: "https://mcp.strava.com/mcp",
-  },
-  {
-    id: "uber",
-    name: "Uber",
-    summary: "Get Uber price & time estimates for any ride option.",
-    description: "Access Uber ride estimates, pricing, and timing. Agents can query ride options, estimate costs, and check availability for any location.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["transport", "lifestyle"],
-    icon: "https://cdn.simpleicons.org/uber/white",
-    url: "https://mcp.uber.com/claude/rides-3p/mcp",
-  },
-  {
+  },  {
     id: "instacart",
     name: "Instacart",
     summary: "Groceries and more delivered as fast as 30 minutes.",
@@ -1022,7 +848,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.intercom.com/mcp",
     keyLabel: "Access Token",
     keyPlaceholder: "dGsk_...",
-    keyHelpUrl: "https://developers.intercom.com/docs/references/authentication/",
   },
   {
     id: "pagerduty",
@@ -1067,7 +892,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.honeycomb.io/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://docs.honeycomb.io/manage-api-keys/",
   },
   {
     id: "mixpanel",
@@ -1097,7 +921,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.amplitude.com/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://amplitude.com/docs/find-amplitude-api-id-and-key",
   },
   {
     id: "ramp",
@@ -1139,7 +962,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.apollo.io/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://app.apollo.io/settings/integrations/api-key",
   },
   {
     id: "attio",
@@ -1223,7 +1045,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.wix.com/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://dev.wix.com/docs/go/api/wix-business-management/app-keys",
   },
   {
     id: "make",
@@ -1281,23 +1102,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyLabel: "API Key",
     keyPlaceholder: "ml_...",
     keyHelpUrl: "https://mintlify.com/docs/api",
-  },
-  {
-    id: "browserbase",
-    name: "Browserbase",
-    summary: "Automate browser interactions in the cloud.",
-    description: "Automate browser interactions in the cloud — web navigation, data extraction, form filling, and more. Agents can control headless browsers without local setup.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["browser", "automation", "web"],
-    icon: "https://cdn.simpleicons.org/browserbase/white",
-    url: "https://mcp.browserbase.com/sse",
-    keyLabel: "API Key",
-    keyPlaceholder: "bb_...",
-    keyHelpUrl: "https://www.browserbase.com/settings",
-  },
-  {
+  },  {
     id: "parallel-search",
     name: "Parallel Search",
     summary: "Real-time web search and content extraction.",
@@ -1310,7 +1115,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.parallel.ai/sse",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://parallel.ai/settings",
   },
   {
     id: "mercury",
@@ -1340,7 +1144,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://api.ahrefs.com/mcp/mcp",
     keyLabel: "API Token",
     keyPlaceholder: "Paste API token...",
-    keyHelpUrl: "https://ahrefs.com/api/profile",
   },
   {
     id: "semrush",
@@ -1355,7 +1158,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.semrush.com/claude/v1/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://www.semrush.com/kb/41-api-keys",
   },
   {
     id: "similarweb",
@@ -1397,7 +1199,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://api.fireflies.ai/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://app.fireflies.ai/api/webhooks",
   },
   {
     id: "otter-ai",
@@ -1425,23 +1226,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
     keyHelpUrl: "https://gamma.app/docs/api",
-  },
-  {
-    id: "gusto-payroll",
-    name: "Workable",
-    summary: "Your AI assistant for Hiring and HR.",
-    description: "Access Workable's HR and hiring platform. Agents can manage job postings, search candidates, and track hiring pipelines.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["hr", "business"],
-    icon: "https://cdn.simpleicons.org/workable/white",
-    url: "https://mcp.workable.com/sse",
-    keyLabel: "API Key",
-    keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://dev.workable.com/",
-  },
-  {
+  },  {
     id: "indeed",
     name: "Indeed",
     summary: "Job search and listings.",
@@ -1454,24 +1239,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://mcp.indeed.com/claude/mcp",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://developers.indeed.com/",
-  },
-  {
-    id: "survey-monkey",
-    name: "SurveyMonkey",
-    summary: "Design surveys, collect responses, and analyze results.",
-    description: "Access SurveyMonkey's survey platform. Agents can create surveys, collect responses, and analyze results data.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["research", "business"],
-    icon: "https://cdn.simpleicons.org/surveymonkey/white",
-    url: "https://mcp.surveymonkey.com/sse",
-    keyLabel: "Access Token",
-    keyPlaceholder: "Paste access token...",
-    keyHelpUrl: "https://developer.surveymonkey.com/api/v3/",
-  },
-  {
+  },  {
     id: "cloudinary",
     name: "Cloudinary",
     summary: "Manage, transform and deliver your images & videos.",
@@ -1484,7 +1252,6 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     url: "https://asset-management.mcp.cloudinary.com/sse",
     keyLabel: "API Key",
     keyPlaceholder: "Paste API key...",
-    keyHelpUrl: "https://cloudinary.com/documentation/api_keys",
   },
   {
     id: "godot",
@@ -1872,20 +1639,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["development"],
     icon: "https://cdn.simpleicons.org/carta/white",
     url: "https://mcp.app.carta.com/mcp",
-  },
-  {
-    id: "cash-app",
-    name: "Cash App",
-    summary: "Discover local food spots and order with a conversation",
-    description: "Order by Cash App brings local food ordering into assistant workflows. It helps users discover nearby restaurants, compare menus, customize orders, and check out through supported clients while keeping the ordering experience inside the conversation.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["lifestyle"],
-    icon: "https://cdn.simpleicons.org/cashapp/white",
-    url: "https://connect.squareup.com/v2/mcp/cash-app",
-  },
-  {
+  },  {
     id: "cb-insights",
     name: "CB Insights",
     summary: "Predictive intelligence on private companies",
@@ -1896,20 +1650,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["analytics"],
     icon: "https://cdn.simpleicons.org/cbinsights/white",
     url: "https://mcp.cbinsights.com",
-  },
-  {
-    id: "chronograph",
-    name: "Chronograph",
-    summary: "Interact with your Chronograph data directly in Claude",
-    description: "Chronograph connects private-investment portfolio data to assistant workflows. Its connector lets users query portfolio information, analyze investments, search entities, retrieve performance metrics, and access Chronograph help documentation from programmatic portfolio context.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["database","hr"],
-    icon: "https://cdn.simpleicons.org/chronograph/white",
-    url: "https://ai.chronograph.pe/mcp",
-  },
-  {
+  },  {
     id: "circleback",
     name: "Circleback",
     summary: "Meeting notes, transcripts, action items",
@@ -2196,20 +1937,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["sales","ai"],
     icon: "https://cdn.simpleicons.org/dayai/white",
     url: "https://day.ai/api/mcp",
-  },
-  {
-    id: "definely",
-    name: "Definely",
-    summary: "Structured contract review tools for legal teams",
-    description: "Definely provides structured contract review tools for legal teams. Its connector brings legal-document context into assistant workflows so users can review clauses, reason over agreement language, and support contract analysis with a purpose-built legal toolset.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["legal"],
-    icon: "https://cdn.simpleicons.org/definely/white",
-    url: "https://mcp.eu.definely.com/api/proxy/core-mcp",
-  },
-  {
+  },  {
     id: "descrybe-legal-engine",
     name: "Descrybe Legal Engine",
     summary: "Ground your work in clean, structured U.S. primary law",
@@ -2532,20 +2260,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     category: ["search","documentation"],
     icon: "https://cdn.simpleicons.org/graphosmcptools/white",
     url: "https://mcp.apollographql.com",
-  },
-  {
-    id: "guidepoint",
-    name: "Guidepoint",
-    summary: "Real-time access to trusted expert knowledge",
-    description: "Guidepoint provides access to trusted expert knowledge for research and decision-making. Its connector brings expert-network context into assistant workflows so users can incorporate specialist insight into business, market, and diligence analysis.",
-    transport: "remote",
-    authType: "oauth",
-    isOfficial: true,
-    category: ["documentation"],
-    icon: "https://cdn.simpleicons.org/guidepoint/white",
-    url: "https://clapi.guidepoint.io/mcp-server/v1/mcp",
-  },
-  {
+  },  {
     id: "guru",
     name: "Guru",
     summary: "Company knowledge, cards, answers",
@@ -3833,42 +3548,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     icon: "https://cdn.simpleicons.org/coinbase/white",
     nativeIntegration: true,
     nativeIntegrationNote: "Auto-provisioned Solana wallet via Coinbase CDP SDK. Server-side credentials — no user setup needed.",
-  },
-  {
-    id: "talken-agentic-wallet",
-    name: "Talken Agentic Wallet",
-    summary: "Multi-chain wallet for agents: swap, bridge, stake, trade perps on Hyperliquid & Polymarket.",
-    description:
-      "Talken Agentic Wallet is a multi-chain MPC wallet designed for AI agents. Supports 10+ chains including Ethereum, Arbitrum, Solana, Bitcoin, and TRON. Features DEX aggregation swaps, cross-chain bridges (Circle CCTP, LayerZero), Hyperliquid perpetual futures and spot trading, Polymarket prediction markets, staking, and gasless transactions (pay fees in USDC/USDT). Available as npm package with 95+ MCP tools.",
-    transport: "stdio",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["defi", "wallet", "trading", "crypto"],
-    icon: "https://cdn.simpleicons.org/talken",
-    command: "npx",
-    args: ["-y", "@talken/agentic-wallet"],
-    envVars: [
-      { name: "TALKEN_API_KEY", description: "Talken API Key (from talken.io dashboard)", isRequired: true },
-    ],
-    keyLabel: "Talken API Key",
-    keyPlaceholder: "tk_...",
-    keyHelpUrl: "https://docs.talken.io/",
-  },
-  {
-    id: "phantom-mcp",
-    name: "Phantom",
-    summary: "Agent wallet for Solana & EVM: sign transactions, transfer tokens, swap, and trade perps.",
-    description:
-      "Phantom MCP server gives AI agents a dedicated wallet to sign transactions, transfer tokens, and interact on-chain across Solana, Ethereum, Bitcoin, and Sui. Agents receive a new dedicated wallet on authentication — not the user's personal wallet. Includes simulate-then-sign flow, token balances with USD pricing, and perp trading. Auth is handled internally via phantom_login tool (opens browser). No API key or OAuth setup needed — the server manages its own sessions.",
-    transport: "stdio",
-    authType: "open",
-    isOfficial: true,
-    category: ["defi", "wallet", "trading", "crypto"],
-    icon: "https://cdn.simpleicons.org/phantom",
-    command: "npx",
-    args: ["-y", "@phantom/mcp-server@latest"],
-  },
-  {
+  },  {
     id: "agentwallet-mcp",
     name: "AgentWallet",
     summary: "Permissionless agent wallets: create, sign, broadcast on EVM + Solana with built-in guards.",
@@ -3886,30 +3566,8 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     ],
     keyLabel: "AgentWallet API Key",
     keyPlaceholder: "aw_...",
-    keyHelpUrl: "https://hifriendbot.com",
-  },
-  {
-    id: "waiaas",
-    name: "WAIaaS",
-    summary: "Self-hosted wallet daemon: swap, bridge, stake, lend across EVM + Solana with policy engine.",
-    description:
-      "WAIaaS (Wallet AI as a Service) is a self-hosted daemon that gives AI agents secure, policy-controlled access to crypto wallets across EVM and Solana chains. 42 MCP tools, 13+ DeFi protocols (Jupiter, 0x, LI.FI, Lido, Jito, Aave V3, Kamino, Pendle, Drift, Hyperliquid, Across Bridge, Polymarket). Default-deny policy engine with spending limits, token/contract allowlists, time-delay approvals, and kill switch. Private keys encrypted with Argon2id. Runs locally — your keys, your machine.",
-    transport: "stdio",
-    authType: "apikey",
-    isOfficial: false,
-    category: ["defi", "wallet", "trading", "crypto", "infrastructure"],
-    icon: "https://cdn.simpleicons.org/waiaas",
-    command: "npx",
-    args: ["-y", "@waiaas/sdk", "mcp"],
-    envVars: [
-      { name: "WAIaaS_API_URL", description: "WAIaaS daemon URL (default: http://localhost:3839)", isRequired: true },
-      { name: "WAIaaS_SESSION_TOKEN", description: "JWT session token from the daemon", isRequired: true },
-    ],
-    keyLabel: "WAIaaS Connection",
-    keyPlaceholder: "Paste connection details...",
-    keyHelpUrl: "https://waiaas.ai/",
-  },
-  {
+    keyHelpUrl: "https://hifriendbot.com/developer/",
+  },  {
     id: "runpod-api",
     name: "Runpod API",
     summary: "Manage Pods, serverless endpoints, storage, and GPU infrastructure.",
@@ -4000,27 +3658,7 @@ export const MCP_CATALOG: MCPCatalogServer[] = [
     nativeIntegration: true,
     nativeIntegrationNote:
       "Web browser station: show fetched page content rendering on the agent's monitor. Search results appear as a list. Geo-targeting dropdown visible in the UI.",
-  },
-  {
-    id: "google-maps-scraper",
-    name: "Google Maps Scraper",
-    summary: "Search Google Maps businesses, fetch reviews, and retrieve photos via one secure MCP endpoint.",
-    description:
-      "Remote MCP server by gmapsextractor.com that gives agents live Google Maps data — search businesses (name, address, phone, website, rating, review count), retrieve public reviews with filtering, and fetch public business photos. Uses Streamable HTTP transport with Bearer token auth. Free monthly requests available; paid plans for higher volume. Ideal for prospecting research, local market analysis, and listing enrichment.",
-    transport: "remote",
-    authType: "apikey",
-    isOfficial: true,
-    category: ["search", "web", "data"],
-    icon: "https://cdn.simpleicons.org/googlemaps/white",
-    url: "https://cloud.gmapsextractor.com/api/mcp",
-    keyLabel: "API Key",
-    keyPlaceholder: "Paste your gmapsextractor.com API key...",
-    keyHelpUrl: "https://gmapsextractor.com/google-maps-scraper-mcp",
-    nativeIntegration: true,
-    nativeIntegrationNote:
-      "Map station: show a mini Google Maps view on the agent's monitor with pins for search results. Reviews scroll as cards. Photos appear in a gallery sidebar.",
-  },
-];
+  },];
 
 // ── Helper functions ───────────────────────────────────────────────────
 
@@ -4093,10 +3731,7 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Robinhood Trading Agent: Trade executor — receives trade signal handoffs from analysis agents, confirms with boss, places trades via Robinhood MCP (OAuth). Always requires human confirmation before executing.
 - GitHub Agent: Dev agent — manage repos, issues, PRs, and code search via GitHub MCP. Requires Personal Access Token.
 - Coinbase DeFi Trader: Trading agent — place orders, manage portfolios, convert USDC/USD via Coinbase MCP. Requires CDP API key (2 fields from downloaded JSON file).
-- Talken Swap Agent: Multi-chain DeFi agent — DEX swaps, cross-chain bridges, Hyperliquid perps, Polymarket, staking via Talken MCP. Requires Talken API key.
-- Phantom Wallet Agent: Solana & EVM wallet agent — transfers, swaps, perps via Phantom MCP (stdio, auto-auth). Dedicated agent wallet, fund before transacting.
 - AgentWallet Trader: Permissionless wallet agent — create wallets, send tokens, x402 payments on 9 EVM chains + Solana. No KYC. Requires AgentWallet API key.
-- WAIaaS DeFi Agent: Self-hosted DeFi agent — 13+ protocols (Jupiter, 0x, Aave V3, Lido, etc.) with policy engine and 6-stage tx pipeline. Requires local daemon + session token.
 - Runpod GPU Agent: Cloud infrastructure agent — launch GPU Pods, deploy serverless endpoints, manage storage via Runpod MCP. Requires Runpod API key.
 - Massive Web Scraper: Data agent — captcha solving, JS rendering, geo-targeting (195+ countries), Google search with structured results via Massive MCP. For sites that block standard browsers. Requires Massive API token.
 - Google Maps Scraper: Data agent — search Google Maps for businesses, retrieve reviews and photos, structure results for prospecting and market analysis via gmapsextractor.com MCP. Requires Google Maps Scraper API key.
