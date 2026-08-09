@@ -342,6 +342,13 @@ export class HermesProcessManager {
       this.writeSoulMd(soulPath, officeState);
       this.writeConfigWithOfficeState(configPath, provider, model, officeState);
       console.log("[hermes-process] Updated SOUL.md + config.yaml with live office state");
+      // Only delete sessions if the office state actually changed — deleting
+      // sessions causes the "No home channel" notification to re-appear for
+      // Telegram users on every new session.
+      if (this.currentOfficeState === officeState) {
+        console.log("[hermes-process] Office state unchanged — skipping session reset");
+        return true;
+      }
       // Delete existing platform sessions so new ones pick up the updated config.yaml.
       // The gateway caches the system prompt per session — the only way to refresh
       // is to delete the session. The gateway will create a new session on the next

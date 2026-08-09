@@ -341,6 +341,10 @@ export class HermesClient {
             messages = [];
           }
           console.log(`[hermes-client] Session ${sid}: ${messages.length} messages, roles: ${messages.map(m => m.role).join(",")}`);
+          if (messages.length > 0) {
+            const sample = messages[0];
+            console.log(`[hermes-client] Sample message keys: ${Object.keys(sample).join(",")}, meta=${JSON.stringify(sample.metadata ?? sample.meta ?? sample.extra ?? "none").slice(0, 200)}`);
+          }
           for (const msg of messages) {
             if (msg.role === "user") {
               const text = (msg.content ?? msg.text ?? "").slice(0, 500);

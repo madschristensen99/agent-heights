@@ -12,14 +12,17 @@
  * Run with: pnpm assets
  */
 import { PNG } from "pngjs";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import {
   drawChar,
   mix,
   type CharPalette,
   type DrawSurface,
+  type CharTextureProvider,
+  type CharComponentProvider,
   type Dir,
   DIRS,
   CW,
@@ -35,6 +38,8 @@ class Sheet implements DrawSurface {
   png: PNG;
   /** Optional clip region — drawing outside this rect is discarded. */
   clip: { x: number; y: number; w: number; h: number } | null = null;
+  texProvider?: CharTextureProvider;
+  componentProvider?: CharComponentProvider;
   constructor(
     public w: number,
     public h: number,
@@ -1572,9 +1577,72 @@ const HERMES_PALETTE: CharPalette = {
 
 // ------------------------------------------------------------- char sheet builder
 
+async function loadComponentAtlas(
+  atlasPath: string,
+  metaPath: string,
+  prefix: string,
+): Promise<Record<string, ImageData[]>> {
+  const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as {
+    frames: Record<string, { x: number; y: number; w: number; h: number }>;
+  };
+  const { data: raw, info } = await sharp(atlasPath)
+    .raw()
+    .ensureAlpha()
+    .toBuffer({ resolveWithObject: true });
+  const aw = info.width;
+
+  const byStyle: Record<string, ImageData[]> = {};
+  const prefixRe = new RegExp(`^${prefix}-(.+?)_(down|right|up)_(\\d+)$`);
+  for (const [key, frame] of Object.entries(meta.frames)) {
+    const match = key.match(prefixRe);
+    if (!match) continue;
+    const [, style, dir, poseStr] = match;
+    const dirIndex = dir === "down" ? 0 : dir === "right" ? 1 : 2;
+    const pose = parseInt(poseStr);
+    const frameIndex = dirIndex * 8 + pose;
+    if (!byStyle[style]) byStyle[style] = new Array(24);
+    const { x, y, w, h } = frame;
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const si = ((y + py) * aw + (x + px)) * 4;
+        const di = (py * w + px) * 4;
+        data[di] = raw[si];
+        data[di + 1] = raw[si + 1];
+        data[di + 2] = raw[si + 2];
+        data[di + 3] = raw[si + 3];
+      }
+    }
+    byStyle[style][frameIndex] = { data, width: w, height: h } as ImageData;
+  }
+  return byStyle;
+}
+
+let aiComponentProvider: CharComponentProvider | undefined;
+
+async function loadAiComponents(): Promise<CharComponentProvider | undefined> {
+  const atlasDir = join(ASSETS, "atlases");
+  try {
+    const [hair, beard, shirt, pants, accessory, headFeature] = await Promise.all([
+      loadComponentAtlas(join(atlasDir, "ai-hair-atlas.webp"), join(atlasDir, "ai-hair-atlas.json"), "ai-hair"),
+      loadComponentAtlas(join(atlasDir, "ai-beard-atlas.webp"), join(atlasDir, "ai-beard-atlas.json"), "ai-beard"),
+      loadComponentAtlas(join(atlasDir, "ai-shirt-atlas.webp"), join(atlasDir, "ai-shirt-atlas.json"), "ai-shirt"),
+      loadComponentAtlas(join(atlasDir, "ai-pants-atlas.webp"), join(atlasDir, "ai-pants-atlas.json"), "ai-pants"),
+      loadComponentAtlas(join(atlasDir, "ai-accessory-atlas.webp"), join(atlasDir, "ai-accessory-atlas.json"), "ai-accessory"),
+      loadComponentAtlas(join(atlasDir, "ai-headFeature-atlas.webp"), join(atlasDir, "ai-headFeature-atlas.json"), "ai-headFeature"),
+    ]);
+    console.log("[assets] Loaded AI component atlases for character generation");
+    return { hair, beard, shirt, pants, accessory, headFeature };
+  } catch (e) {
+    console.warn("[assets] Could not load AI component atlases — using procedural fallback:", e);
+    return undefined;
+  }
+}
+
 function buildCharSheet(pal: CharPalette): Sheet {
   const cols = 8;
   const s = new Sheet(CW * cols, CH * DIRS.length);
+  s.componentProvider = aiComponentProvider;
   DIRS.forEach((dir, row) => {
     for (let pose = 0; pose < cols; pose++) {
       drawChar(s, pose * CW, row * CH, pal, dir, pose);
@@ -2650,34 +2718,41 @@ function buildWorldTileset(): Sheet {
 
 // -------------------------------------------------------------------- main
 
-const PREVIEWS = join(ROOT, "scripts", "previews");
+async function main() {
+  const PREVIEWS = join(ROOT, "scripts", "previews");
 
-const tileset = buildTileset(drawers);
-tileset.save(join(ASSETS, "tilesets", "office.png"));
-tileset.preview(join(PREVIEWS, "tileset.png"), 2);
+  const tileset = buildTileset(drawers);
+  tileset.save(join(ASSETS, "tilesets", "office.png"));
+  tileset.preview(join(PREVIEWS, "tileset.png"), 2);
 
-const agentHeightsTileset = buildTileset(agentHeightsDrawers);
-agentHeightsTileset.save(join(ASSETS, "tilesets", "agentHeights.png"));
-agentHeightsTileset.preview(join(PREVIEWS, "tileset-agentHeights.png"), 2);
+  const agentHeightsTileset = buildTileset(agentHeightsDrawers);
+  agentHeightsTileset.save(join(ASSETS, "tilesets", "agentHeights.png"));
+  agentHeightsTileset.preview(join(PREVIEWS, "tileset-agentHeights.png"), 2);
 
-CHAR_PALETTES.forEach((pal, i) => {
-  const sheet = buildCharSheet(pal);
-  sheet.save(join(ASSETS, "characters", `char-${i}.png`));
-  if (i === 0) sheet.preview(join(PREVIEWS, "char-0.png"), 6);
-});
-buildCharSheet(BOSS_PALETTE).save(join(ASSETS, "characters", "boss.png"));
-buildCharSheet(AGENT_RESOURCES_PALETTE).save(join(ASSETS, "characters", "char-agent-resources.png"));
-buildCharSheet(HERMES_PALETTE).save(join(ASSETS, "characters", "char-hermes.png"));
+  // Load AI component atlases before generating character spritesheets
+  aiComponentProvider = await loadAiComponents();
 
-const worldTileset = buildWorldTileset();
-worldTileset.save(join(ASSETS, "tilesets", "world.png"));
-worldTileset.preview(join(PREVIEWS, "tileset-world.png"), 2);
+  CHAR_PALETTES.forEach((pal, i) => {
+    const sheet = buildCharSheet(pal);
+    sheet.save(join(ASSETS, "characters", `char-${i}.png`));
+    if (i === 0) sheet.preview(join(PREVIEWS, "char-0.png"), 6);
+  });
+  buildCharSheet(BOSS_PALETTE).save(join(ASSETS, "characters", "boss.png"));
+  buildCharSheet(AGENT_RESOURCES_PALETTE).save(join(ASSETS, "characters", "char-agent-resources.png"));
+  buildCharSheet(HERMES_PALETTE).save(join(ASSETS, "characters", "char-hermes.png"));
 
-buildMonitor().save(join(ASSETS, "sprites", "monitor.png"));
-buildBubble().save(join(ASSETS, "sprites", "bubble.png"));
+  const worldTileset = buildWorldTileset();
+  worldTileset.save(join(ASSETS, "tilesets", "world.png"));
+  worldTileset.preview(join(PREVIEWS, "tileset-world.png"), 2);
 
-mkdirSync(join(ASSETS, "maps"), { recursive: true });
-writeFileSync(join(ASSETS, "maps", "office.json"), JSON.stringify(buildMap(CLASSIC)));
-writeFileSync(join(ASSETS, "maps", "agentHeights.json"), JSON.stringify(buildMap(AGENT_HEIGHTS)));
+  buildMonitor().save(join(ASSETS, "sprites", "monitor.png"));
+  buildBubble().save(join(ASSETS, "sprites", "bubble.png"));
 
-console.log("assets written to", ASSETS);
+  mkdirSync(join(ASSETS, "maps"), { recursive: true });
+  writeFileSync(join(ASSETS, "maps", "office.json"), JSON.stringify(buildMap(CLASSIC)));
+  writeFileSync(join(ASSETS, "maps", "agentHeights.json"), JSON.stringify(buildMap(AGENT_HEIGHTS)));
+
+  console.log("assets written to", ASSETS);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
