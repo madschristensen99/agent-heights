@@ -331,6 +331,7 @@ export class HermesProcessManager {
       return false;
     }
     this.lastPromptUpdate = now;
+    const prevState = this.currentOfficeState;
     this.currentOfficeState = officeState;
 
     try {
@@ -345,7 +346,7 @@ export class HermesProcessManager {
       // Only delete sessions if the office state actually changed — deleting
       // sessions causes the "No home channel" notification to re-appear for
       // Telegram users on every new session.
-      if (this.currentOfficeState === officeState) {
+      if (prevState === officeState) {
         console.log("[hermes-process] Office state unchanged — skipping session reset");
         return true;
       }

@@ -1,5 +1,6 @@
 import { mkdirSync, rmSync, existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { generateOfficeScreenshot, type OfficeSnapshotAgent } from "./office-screenshot.js";
 import { generateNarration, type NarrationContext } from "./narration.js";
@@ -1100,9 +1101,52 @@ export class AgentManager {
     }
   }
 
-  /** Query Hermes sessions API to find a chat ID for the given platform and save it as home channel. */
+  /** Query Hermes sessions API to find a chat ID for the given platform and save it as home channel.
+   *  Also checks channel_directory.json and .env for home channel set by /sethome. */
   private async proactivelyCaptureHomeChannel(platform: string): Promise<void> {
     try {
+      // First, check if Hermes already has a home channel in .env (set by /sethome)
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const envPath = join(hermesHome, ".env");
+      const envVar = `${platform.toUpperCase()}_HOME_CHANNEL`;
+      try {
+        const envContent = readFileSync(envPath, "utf-8");
+        const match = envContent.match(new RegExp(`^${envVar}=(.+)$`, "m"));
+        if (match?.[1]?.trim()) {
+          const chatId = match[1].trim();
+          const existing = this.save.getPlatformCredentials();
+          if (existing[envVar] !== chatId) {
+            const merged = { ...existing, [envVar]: chatId };
+            this.save.setPlatformCredentials(merged);
+            void this.save.flushNow();
+            console.log(`[hermes] proactivelyCaptureHomeChannel: found ${envVar}=${chatId} in Hermes .env — saved to persist across redeploys`);
+          }
+          return;
+        }
+      } catch { /* .env not found or unreadable */ }
+
+      // Also check channel_directory.json
+      const channelDirPath = join(hermesHome, "channel_directory.json");
+      try {
+        if (existsSync(channelDirPath)) {
+          const channelDir = JSON.parse(readFileSync(channelDirPath, "utf-8"));
+          const platEntry = channelDir[platform.toLowerCase()] ?? channelDir[platform];
+          if (platEntry?.chat_id) {
+            const chatId = String(platEntry.chat_id);
+            const existing = this.save.getPlatformCredentials();
+            if (existing[envVar] !== chatId) {
+              const merged = { ...existing, [envVar]: chatId };
+              this.save.setPlatformCredentials(merged);
+              void this.save.flushNow();
+              console.log(`[hermes] proactivelyCaptureHomeChannel: found ${envVar}=${chatId} in channel_directory.json — saved to persist across redeploys`);
+              syncHermesEnvFile(merged);
+            }
+            return;
+          }
+        }
+      } catch { /* channel_directory.json not found or invalid */ }
+
+      // Fall back to sessions API
       const sessions = await this.hermesClient?.getRecentSessions();
       if (!sessions || sessions.length === 0) {
         console.log(`[hermes] proactivelyCaptureHomeChannel: no sessions found for ${platform}`);
