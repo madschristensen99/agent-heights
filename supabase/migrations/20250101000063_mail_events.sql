@@ -26,13 +26,21 @@ CREATE INDEX IF NOT EXISTS idx_mail_events_user_status
 ALTER TABLE public.agent_heights_mail_events ENABLE ROW LEVEL SECURITY;
 
 -- Policy: users can only see their own mail events
-CREATE POLICY "mail_events_owner_select" ON public.agent_heights_mail_events
-  FOR SELECT USING (auth.uid()::text = user_id);
-CREATE POLICY "mail_events_owner_insert" ON public.agent_heights_mail_events
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id);
-CREATE POLICY "mail_events_owner_update" ON public.agent_heights_mail_events
-  FOR UPDATE USING (auth.uid()::text = user_id);
-CREATE POLICY "mail_events_owner_delete" ON public.agent_heights_mail_events
-  FOR DELETE USING (auth.uid()::text = user_id);
+DO $$ BEGIN
+  CREATE POLICY "mail_events_owner_select" ON public.agent_heights_mail_events
+    FOR SELECT USING (auth.uid()::text = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "mail_events_owner_insert" ON public.agent_heights_mail_events
+    FOR INSERT WITH CHECK (auth.uid()::text = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "mail_events_owner_update" ON public.agent_heights_mail_events
+    FOR UPDATE USING (auth.uid()::text = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "mail_events_owner_delete" ON public.agent_heights_mail_events
+    FOR DELETE USING (auth.uid()::text = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Service role bypasses RLS (used by the server)

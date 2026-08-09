@@ -38,6 +38,7 @@ export class LightingSystem {
   private lightContainer: Phaser.GameObjects.Container;
   private playerLight: LightSource | null = null;
   private pipelinesAttached = true;
+  private resizeHandler: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -64,11 +65,12 @@ export class LightingSystem {
       .setOrigin(0, 0)
       .setDepth(845);
 
-    scene.scale.on("resize", () => {
-      this.brightnessBoost.setSize(scene.scale.width, scene.scale.height);
-      this.dayNightTint.setSize(scene.scale.width, scene.scale.height);
-      this.ambientDarkness.setSize(scene.scale.width, scene.scale.height);
-    });
+    this.resizeHandler = () => {
+      if (this.brightnessBoost?.active) this.brightnessBoost.setSize(scene.scale.width, scene.scale.height);
+      if (this.dayNightTint?.active) this.dayNightTint.setSize(scene.scale.width, scene.scale.height);
+      if (this.ambientDarkness?.active) this.ambientDarkness.setSize(scene.scale.width, scene.scale.height);
+    };
+    scene.scale.on("resize", this.resizeHandler);
   }
 
   /** Add a dynamic light source that follows a target. */
@@ -235,6 +237,10 @@ export class LightingSystem {
   }
 
   destroy(): void {
+    if (this.resizeHandler) {
+      this.scene.scale.off("resize", this.resizeHandler);
+      this.resizeHandler = null;
+    }
     for (const light of this.lights) light.sprite.destroy();
     this.lights = [];
     this.playerLight = null;
