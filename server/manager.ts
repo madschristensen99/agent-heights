@@ -933,10 +933,19 @@ export class AgentManager {
       },
     );
 
-    // Auto-start the messaging gateway so previously saved credentials reconnect
-    this.hermesClient.startGateway().catch((err) => {
-      console.warn(`[hermes] Auto-start gateway failed: ${err}`);
-    });
+    // Auto-start the messaging gateway if not already running
+    // (hermesProcess.start() already starts it, but this is a belt-and-suspenders
+    // call in case the process crashed. Skip if already running to avoid restart.)
+    {
+      const anyConnected = this.platformStates.some((s) => s.connected);
+      if (!anyConnected) {
+        this.hermesClient.startGateway().catch((err) => {
+          console.warn(`[hermes] Auto-start gateway failed: ${err}`);
+        });
+      } else {
+        console.log(`[hermes] Gateway already running with connected platforms — skipping auto-start`);
+      }
+    }
 
     // Auto-reconfigure platforms from persisted .env credentials (survives redeploy)
     this.autoReconfigurePlatforms();
@@ -967,7 +976,8 @@ export class AgentManager {
       });
 
       this.hermesClient!.configureModel(modelProvider, modelName).then((ok) => {
-        if (ok) {
+        if (ok && !AgentManager.modelConfigDone) {
+          AgentManager.modelConfigDone = true;
           // Restart gateway so new model config takes effect for all sessions
           // (Hermes docs: "Restart the gateway if you want to force all sessions to pick up the change")
           this.hermesClient?.startGateway().catch((err) => {
@@ -1008,10 +1018,20 @@ export class AgentManager {
     return this.platformStates;
   }
 
+  private static autoReconfigureDone = false;
+  private static modelConfigDone = false;
+
   /** Auto-reconfigure platforms from persisted credentials in save.json after redeploy.
    *  The .env file gets wiped on redeploy, but save.json in users/<id>/ag/ persists.
-   *  Handles all platforms in PLATFORM_ENV_VAR_MAP, not just Telegram/Discord/Slack. */
+   *  Handles all platforms in PLATFORM_ENV_VAR_MAP, not just Telegram/Discord/Slack.
+   *  Runs only once per process — multiple Manager instances would otherwise each
+   *  trigger a gateway restart, sending "Gateway shutting down" notifications. */
   private autoReconfigurePlatforms(): void {
+    if (AgentManager.autoReconfigureDone) {
+      console.log("[hermes] autoReconfigurePlatforms: already done this process — skipping");
+      return;
+    }
+    AgentManager.autoReconfigureDone = true;
     try {
       const savedCreds = this.save.getPlatformCredentials();
       console.log(`[hermes] autoReconfigurePlatforms: saved credentials: ${Object.keys(savedCreds).join(", ") || "(none)"}`);
@@ -1050,6 +1070,17 @@ export class AgentManager {
         }
 
         if (!hasAny) continue;
+
+        // Skip reconfiguration if the platform is already connected —
+        // calling configurePlatform restarts the gateway, which sends
+        // annoying "Gateway shutting down" notifications to Telegram users.
+        const alreadyConnected = this.platformStates.some(
+          (s) => s.platform.toLowerCase() === lower && s.connected,
+        );
+        if (alreadyConnected) {
+          console.log(`[hermes] autoReconfigurePlatforms: ${platform} already connected — skipping (avoids gateway restart notification)`);
+          continue;
+        }
 
         console.log(`[hermes] autoReconfigurePlatforms: re-enabling ${platform} from save.json`);
         this.hermesClient?.configurePlatform(platform, creds).then((result) => {

@@ -544,25 +544,46 @@ export class HermesClient {
       }
       console.log(`[hermes-client] PUT /api/messaging/platforms/${platformId} OK — credentials saved`);
 
-      // Start (or restart) the gateway so it picks up the new credentials
-      // Use start first (works if gateway was stopped), then fall back to restart
-      let gatewayRes = await fetch(`${this.baseUrl}/api/gateway/start`, {
-        method: "POST",
-        headers: this.authHeaders(),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!gatewayRes.ok) {
-        // Gateway may already be running — try restart instead
-        gatewayRes = await fetch(`${this.baseUrl}/api/gateway/restart`, {
+      // Check if the platform is already connected — if so, skip gateway restart
+      // to avoid sending "Gateway shutting down" notifications to Telegram users.
+      let platformAlreadyConnected = false;
+      try {
+        const statusRes = await fetch(`${this.baseUrl}/api/status`, {
+          headers: this.authHeaders(),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (statusRes.ok) {
+          const statusData = await statusRes.json() as any;
+          const platState = statusData.gateway_platforms?.[platformId];
+          if (platState?.state === "connected") {
+            platformAlreadyConnected = true;
+          }
+        }
+      } catch { /* best effort */ }
+
+      if (platformAlreadyConnected) {
+        console.log(`[hermes-client] ${platform} already connected — skipping gateway restart (avoids shutdown notification)`);
+      } else {
+        // Start (or restart) the gateway so it picks up the new credentials
+        // Use start first (works if gateway was stopped), then fall back to restart
+        let gatewayRes = await fetch(`${this.baseUrl}/api/gateway/start`, {
           method: "POST",
           headers: this.authHeaders(),
           signal: AbortSignal.timeout(15000),
         });
-      }
-      if (!gatewayRes.ok) {
-        console.warn(`[hermes-client] Platform configured but gateway start/restart returned HTTP ${gatewayRes.status}`);
-      } else {
-        console.log(`[hermes-client] Gateway start/restart OK after platform config`);
+        if (!gatewayRes.ok) {
+          // Gateway may already be running — try restart instead
+          gatewayRes = await fetch(`${this.baseUrl}/api/gateway/restart`, {
+            method: "POST",
+            headers: this.authHeaders(),
+            signal: AbortSignal.timeout(15000),
+          });
+        }
+        if (!gatewayRes.ok) {
+          console.warn(`[hermes-client] Platform configured but gateway start/restart returned HTTP ${gatewayRes.status}`);
+        } else {
+          console.log(`[hermes-client] Gateway start/restart OK after platform config`);
+        }
       }
 
       // Wait 3s for gateway to connect to the platform, then dump status for debugging
