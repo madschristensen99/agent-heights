@@ -174,13 +174,13 @@ drawText(img, subtitle, subX + 2, titleY + 7 * titleScale + 30 + 2, subScale, 60
 drawText(img, subtitle, subX, titleY + 7 * titleScale + 30, subScale, 160, 165, 180);
 
 // ── Character sprites along the bottom ────────────────────────────────────
-const charFiles = ["char-0.png", "char-1.png", "char-2.png", "char-3.png", "char-4.png", "char-5.png", "char-6.png", "char-7.png"];
+const charFiles = ["char-0.png", "char-1.png", "char-2.png", "char-3.png", "char-4.png", "char-5.png"];
 const FRAME_W = 64;
 const FRAME_H = 96;
-const charScale = 2;
-const charGap = 24;
+const charScale = 3;
+const charGap = 8;
 const charStartX = Math.floor((W - (charFiles.length * FRAME_W * charScale + (charFiles.length - 1) * charGap)) / 2);
-const charY = 330;
+const charY = 300;
 for (let i = 0; i < charFiles.length; i++) {
   const char = loadPNG(join(assetsDir, "characters", charFiles[i]));
   // Extract the first frame (top-left 64×96 region of the spritesheet)
