@@ -180,12 +180,13 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
     display: flex; gap: 12px; justify-content: center; margin-bottom: 1.2rem;
     position: relative; z-index: 1;
   `;
+  const spriteVersion = Date.now();
   for (let i = 0; i < 4; i++) {
     const sprite = document.createElement("div");
     sprite.style.cssText = `
-      width: 56px; height: 84px;
-      background-image: url(/assets/characters/char-${i}.png);
-      background-size: 448px 336px;
+      width: 64px; height: 96px;
+      background-image: url(/assets/characters/char-${i}.png?v=${spriteVersion});
+      background-size: 512px 384px;
       background-position: 0 0;
       background-repeat: no-repeat;
       image-rendering: pixelated;
