@@ -196,8 +196,6 @@ for (let i = 0; i < charFiles.length; i++) {
     }
   }
   const px = charStartX + i * (FRAME_W * charScale + charGap);
-  // Shadow under each character
-  fillRect(img, px + 8, charY + FRAME_H * charScale - 8, FRAME_W * charScale - 16, 12, 0, 0, 0);
   blend(img, frame, px, charY, charScale);
 }
 
