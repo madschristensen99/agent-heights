@@ -949,7 +949,7 @@ export class AgentManager {
     }
 
     // Auto-reconfigure platforms from persisted .env credentials (survives redeploy)
-    this.autoReconfigurePlatforms();
+    await this.autoReconfigurePlatforms();
 
     // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
     const apiKey = process.env.DEEPSEEK_KEY ?? process.env.KIMI_KEY ?? process.env.KIMI_API_KEY;
@@ -1027,7 +1027,7 @@ export class AgentManager {
    *  Handles all platforms in PLATFORM_ENV_VAR_MAP, not just Telegram/Discord/Slack.
    *  Runs only once per process — multiple Manager instances would otherwise each
    *  trigger a gateway restart, sending "Gateway shutting down" notifications. */
-  private autoReconfigurePlatforms(): void {
+  private async autoReconfigurePlatforms(): Promise<void> {
     if (AgentManager.autoReconfigureDone) {
       console.log("[hermes] autoReconfigurePlatforms: already done this process — skipping");
       return;
@@ -1072,9 +1072,38 @@ export class AgentManager {
 
         if (!hasAny) continue;
 
-        // Skip reconfiguration if the platform is already connected —
-        // calling configurePlatform restarts the gateway, which sends
-        // annoying "Gateway shutting down" notifications to Telegram users.
+        // Check if the credentials are already in Hermes .env — if so, the gateway
+        // already has them and we can skip configurePlatform entirely (which would
+        // restart the gateway and send "Gateway shutting down" notifications).
+        const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+        const envPath = join(hermesHome, ".env");
+        let credsAlreadyInEnv = false;
+        try {
+          if (existsSync(envPath)) {
+            const envContent = readFileSync(envPath, "utf-8");
+            // Check if all required env vars for this platform are present
+            const requiredVars = Object.values(varMap);
+            credsAlreadyInEnv = requiredVars.every(envVar => {
+              const pattern = new RegExp(`^${envVar}=.+`, "m");
+              return pattern.test(envContent);
+            });
+          }
+        } catch { /* best effort */ }
+
+        if (credsAlreadyInEnv) {
+          console.log(`[hermes] autoReconfigurePlatforms: ${platform} credentials already in .env — skipping configurePlatform (avoids gateway restart)`);
+          // Still try to capture home channel if not yet saved
+          if (lower === "telegram" && !savedCreds.TELEGRAM_HOME_CHANNEL) {
+            setTimeout(() => this.proactivelyCaptureHomeChannel("telegram"), 5000);
+          }
+          continue;
+        }
+
+        // Wait briefly for platform states to be populated (pollStates is async).
+        if (this.platformStates.length === 0) {
+          console.log(`[hermes] autoReconfigurePlatforms: waiting for platform states...`);
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
         const alreadyConnected = this.platformStates.some(
           (s) => s.platform.toLowerCase() === lower && s.connected,
         );
