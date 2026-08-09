@@ -143,7 +143,7 @@ class Sheet implements DrawSurface {
     d[i] = Math.round(d[i] * (1 - a) + r * a);
     d[i + 1] = Math.round(d[i + 1] * (1 - a) + g * a);
     d[i + 2] = Math.round(d[i + 2] * (1 - a) + b * a);
-    // alpha channel stays 255 (opaque) since background is always filled
+    d[i + 3] = 255;
   }
 
   /** Filled circle using midpoint algorithm. */
