@@ -130,7 +130,7 @@ for (let y = 0; y < H; y++) {
 }
 
 // Tile the office floor across the bottom third as a subtle background
-const tileset = loadPNG(join(assetsDir, "tilesets", "office.png"));
+const tileset = loadPNG(join(assetsDir, "tilesets", "agentHeights.png"));
 const TILE = 64;
 const FLOOR_SCALE = 2;
 const floorY = Math.floor(H * 0.72);
@@ -174,29 +174,30 @@ drawText(img, subtitle, subX + 2, titleY + 7 * titleScale + 30 + 2, subScale, 60
 drawText(img, subtitle, subX, titleY + 7 * titleScale + 30, subScale, 160, 165, 180);
 
 // ── Character sprites along the bottom ────────────────────────────────────
-const charFiles = ["char-0.png", "char-1.png", "char-2.png", "char-3.png", "char-4.png"];
-const charScale = 4;
-const charSpacing = 200;
-const charTotalW = charFiles.length * charSpacing - (charSpacing - 64 * charScale);
-const charStartX = Math.floor((W - (charFiles.length * 64 * charScale + (charFiles.length - 1) * 40)) / 2);
-const charY = 340;
+const charFiles = ["char-0.png", "char-1.png", "char-2.png", "char-3.png", "char-4.png", "char-5.png", "char-6.png", "char-7.png"];
+const FRAME_W = 64;
+const FRAME_H = 96;
+const charScale = 2;
+const charGap = 24;
+const charStartX = Math.floor((W - (charFiles.length * FRAME_W * charScale + (charFiles.length - 1) * charGap)) / 2);
+const charY = 330;
 for (let i = 0; i < charFiles.length; i++) {
   const char = loadPNG(join(assetsDir, "characters", charFiles[i]));
-  // Extract the first frame (top-left 64×64 region of the spritesheet)
-  const frame = new PNG.PNG({ width: 64, height: 64 });
-  for (let yy = 0; yy < 64; yy++) {
-    for (let xx = 0; xx < 64; xx++) {
+  // Extract the first frame (top-left 64×96 region of the spritesheet)
+  const frame = new PNG.PNG({ width: FRAME_W, height: FRAME_H });
+  for (let yy = 0; yy < FRAME_H; yy++) {
+    for (let xx = 0; xx < FRAME_W; xx++) {
       const si = (yy * char.width + xx) * 4;
-      const di = (yy * 64 + xx) * 4;
+      const di = (yy * FRAME_W + xx) * 4;
       frame.data[di] = char.data[si];
       frame.data[di + 1] = char.data[si + 1];
       frame.data[di + 2] = char.data[si + 2];
       frame.data[di + 3] = char.data[si + 3];
     }
   }
-  const px = charStartX + i * (64 * charScale + 40);
+  const px = charStartX + i * (FRAME_W * charScale + charGap);
   // Shadow under each character
-  fillRect(img, px + 8, charY + 64 * charScale - 8, 64 * charScale - 16, 12, 0, 0, 0);
+  fillRect(img, px + 8, charY + FRAME_H * charScale - 8, FRAME_W * charScale - 16, 12, 0, 0, 0);
   blend(img, frame, px, charY, charScale);
 }
 
