@@ -1641,16 +1641,17 @@ export class WorldLayer {
     this.store.chunkOverrides[key][tileIndex] = newTile;
     // Invalidate cached canvas texture so renderChunk redraws with the new tile
     this.invalidateChunkTexture(cx, cy);
-    // re-render the chunk to reflect the change
+    // Keep old container visible while re-rendering to avoid flicker
     const oldContainer = this.chunkGraphics.get(key);
-    if (oldContainer) {
-      oldContainer.destroy(true);
-      this.chunkGraphics.delete(key);
-    }
+    this.chunkGraphics.delete(key);
     this.removeChunkLights(key);
     this.renderChunk(chunk);
-    // Flush the render job immediately so the chunk doesn't disappear for a frame
+    // Flush the render job immediately so the new chunk is fully painted
     this.processRenderJobsNow();
+    // Now destroy the old container after the new one is ready
+    if (oldContainer) {
+      oldContainer.destroy(true);
+    }
   }
 
   /** Apply a tile update received from another player via the server. */
