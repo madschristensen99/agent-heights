@@ -1649,6 +1649,8 @@ export class WorldLayer {
     }
     this.removeChunkLights(key);
     this.renderChunk(chunk);
+    // Flush the render job immediately so the chunk doesn't disappear for a frame
+    this.processRenderJobsNow();
   }
 
   /** Apply a tile update received from another player via the server. */
