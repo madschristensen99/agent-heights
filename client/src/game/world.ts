@@ -1802,18 +1802,23 @@ export class WorldLayer {
    *  after player walked into it), find the nearest walkable tile and
    *  return the corrected pixel position. Returns null if no rescue needed. */
   rescuePlayer(px: number, py: number): { x: number; y: number } | null {
-    // Only rescue if the player's CENTER is on a non-walkable loaded tile.
-    // Edge body points can legitimately overlap adjacent obstacles when
-    // standing next to them — that's not stuck, that's normal proximity.
-    // The center being inside a wall/tree means the player is truly embedded
-    // (e.g. chunk loaded under them after they walked in optimistically).
+    // Only rescue if the player is truly stuck — i.e. they can't move in
+    // ANY cardinal direction.  This happens when a chunk loads under the
+    // player after they walked in optimistically and they're surrounded by
+    // non-walkable tiles.  If they can still move in some direction, let
+    // normal collision handle it — teleporting is jarring.
     const { tx, ty } = this.pixelToTile(px, py);
     if (ty < 0) return null;
-    if (this.isTileWalkableLoaded(tx, ty)) return null;
+    // Check if the player can move in any cardinal direction
+    const nudge = TILE_PX * 0.5;
+    if (this.canWalk(px + nudge, py)) return null;
+    if (this.canWalk(px - nudge, py)) return null;
+    if (this.canWalk(px, py + nudge)) return null;
+    if (this.canWalk(px, py - nudge)) return null;
+    // Truly stuck — find nearest walkable tile
     const cx = Math.floor(tx / CHUNK_SIZE);
     const cy = Math.floor(ty / CHUNK_SIZE);
     if (!this.chunks.has(`${cx},${cy}`)) return null; // chunk not loaded → not stuck
-    // Scan expanding rings for the nearest walkable tile
     for (let r = 1; r <= 3; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
