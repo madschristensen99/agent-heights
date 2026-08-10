@@ -897,8 +897,16 @@ export class AgentManager {
 
     await this.hermesProcess.start();
 
-    // Only create one polling client per process (singleton)
-    if (this.hermesClient) return;
+    // Only run the polling client setup + gateway auto-start + auto-reconfigure
+    // ONCE per process. Multiple AgentManager instances (one per user session)
+    // would each call startGateway() and autoReconfigurePlatforms(), causing
+    // multiple gateway restarts and "Gateway shutting down" Telegram notifications.
+    if (AgentManager.hermesGatewayInitialized) {
+      // Still set hermesClient on this instance so it can use it
+      this.hermesClient = HermesClient.getInstance();
+      return;
+    }
+    AgentManager.hermesGatewayInitialized = true;
 
     // Use singleton — multiple Manager instances share one polling client
     this.hermesClient = HermesClient.getInstance(
@@ -1021,6 +1029,7 @@ export class AgentManager {
 
   private static autoReconfigureDone = false;
   private static modelConfigDone = false;
+  private static hermesGatewayInitialized = false;
 
   /** Auto-reconfigure platforms from persisted credentials in save.json after redeploy.
    *  The .env file gets wiped on redeploy, but save.json in users/<id>/ag/ persists.
