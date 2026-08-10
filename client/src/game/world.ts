@@ -1787,8 +1787,10 @@ export class WorldLayer {
       if (!this.isTileWalkableLoaded(tx, ty)) {
         const cx = Math.floor(tx / CHUNK_SIZE);
         const cy = Math.floor(ty / CHUNK_SIZE);
+        const key = `${cx},${cy}`;
+        if (this.chunks.has(key)) return false; // chunk loaded → tile genuinely blocked
         this.requestChunk(cx, cy);
-        continue;
+        continue; // chunk not loaded yet → optimistic
       }
     }
     return true;

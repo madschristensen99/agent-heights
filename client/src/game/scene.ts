@@ -7096,7 +7096,8 @@ export class OfficeScene extends Phaser.Scene {
     const subX = stepX / subSteps;
     const subY = stepY / subSteps;
     for (let i = 0; i < subSteps; i++) {
-      if (outside) {
+      const outNow = this.world.isOutside(this.player.x, this.player.y);
+      if (outNow) {
         if (subX !== 0 && this.world.canWalk(this.player.x + subX, this.player.y)) {
           this.player.x += subX;
         }
@@ -7115,7 +7116,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Rescue: if a chunk loaded under the player and they're stuck in a wall,
     // push them to the nearest walkable tile
-    if (outside) {
+    if (this.world.isOutside(this.player.x, this.player.y)) {
       const rescue = this.world.rescuePlayer(this.player.x, this.player.y);
       if (rescue) this.player.setPosition(rescue.x, rescue.y);
     }
