@@ -1802,38 +1802,24 @@ export class WorldLayer {
    *  after player walked into it), find the nearest walkable tile and
    *  return the corrected pixel position. Returns null if no rescue needed. */
   rescuePlayer(px: number, py: number): { x: number; y: number } | null {
-    // Use the same 4 body check points as canWalk to determine if the player
-    // is actually stuck on a non-walkable tile.  Checking only the center pixel
-    // causes false rescues when the center is on a tree but all body points are
-    // on walkable ground, resulting in a janky bounce-back effect.
-    const halfW = 18;
-    const checks = [
-      { x: px - halfW, y: py - 2 },
-      { x: px + halfW, y: py - 2 },
-      { x: px, y: py - 14 },
-      { x: px, y: py + 8 },
-    ];
-    let stuckTx = 0, stuckTy = 0, stuck = false;
-    for (const p of checks) {
-      const { tx, ty } = this.pixelToTile(p.x, p.y);
-      if (ty < 0) continue;
-      if (!this.isTileWalkableLoaded(tx, ty)) {
-        const cx = Math.floor(tx / CHUNK_SIZE);
-        const cy = Math.floor(ty / CHUNK_SIZE);
-        if (this.chunks.has(`${cx},${cy}`)) {
-          stuckTx = tx; stuckTy = ty; stuck = true;
-          break;
-        }
-      }
-    }
-    if (!stuck) return null;
+    // Only rescue if the player's CENTER is on a non-walkable loaded tile.
+    // Edge body points can legitimately overlap adjacent obstacles when
+    // standing next to them — that's not stuck, that's normal proximity.
+    // The center being inside a wall/tree means the player is truly embedded
+    // (e.g. chunk loaded under them after they walked in optimistically).
+    const { tx, ty } = this.pixelToTile(px, py);
+    if (ty < 0) return null;
+    if (this.isTileWalkableLoaded(tx, ty)) return null;
+    const cx = Math.floor(tx / CHUNK_SIZE);
+    const cy = Math.floor(ty / CHUNK_SIZE);
+    if (!this.chunks.has(`${cx},${cy}`)) return null; // chunk not loaded → not stuck
     // Scan expanding rings for the nearest walkable tile
     for (let r = 1; r <= 3; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // ring only
-          if (this.isTileWalkableLoaded(stuckTx + dx, stuckTy + dy)) {
-            return this.worldTileToPixel(stuckTx + dx, stuckTy + dy);
+          if (this.isTileWalkableLoaded(tx + dx, ty + dy)) {
+            return this.worldTileToPixel(tx + dx, ty + dy);
           }
         }
       }
