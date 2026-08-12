@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { onAuthChange, signInWithPassword, signUpWithEmail, signInWithGoogle, signInWithGitHub, isAuthEnabled } from "../lib/auth";
+import { onAuthChange, signInWithPassword, signUpWithEmail, signInWithGoogle, signInWithGitHub, resetPasswordForEmail, isAuthEnabled } from "../lib/auth";
 
 export function LoginScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -100,6 +100,30 @@ export function LoginScreen() {
           >
             {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
           </p>
+          {!isSignUp && (
+            <p
+              className="text-center text-xs text-muted cursor-pointer hover:text-accent transition-colors"
+              onClick={async () => {
+                if (!email) {
+                  setStatus("Enter your email above first.");
+                  setStatusColor("text-status-error");
+                  return;
+                }
+                setStatus("Sending reset link...");
+                setStatusColor("text-muted");
+                const { error } = await resetPasswordForEmail(email);
+                if (error) {
+                  setStatus(error);
+                  setStatusColor("text-status-error");
+                } else {
+                  setStatus("Check your email for a password reset link.");
+                  setStatusColor("text-accent");
+                }
+              }}
+            >
+              Forgot password?
+            </p>
+          )}
 
           {status && <p className={`text-center text-sm ${statusColor}`}>{status}</p>}
         </div>

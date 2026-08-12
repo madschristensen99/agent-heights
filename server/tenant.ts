@@ -17,6 +17,7 @@ import {
   serverId,
 } from "./redis.js";
 import type { WebSocket } from "ws";
+import { sendWelcomeEmail, isEmailConfigured } from "./email.js";
 
 export interface UserSession {
   user: AuthUser;
@@ -560,6 +561,13 @@ export class TenantManager {
       const file = new SaveFile(userDir);
       save = file;
       saved = file.load();
+    }
+
+    // Send welcome email to new users (no saved data = first session)
+    if (isEmailConfigured && user.email && !saved) {
+      void sendWelcomeEmail(user.email).catch((err) =>
+        console.error("[tenant] welcome email failed:", err),
+      );
     }
 
     const session = new SessionLogger(userDir);

@@ -148,6 +148,14 @@ export async function signOut(): Promise<void> {
   await client.auth.signOut();
 }
 
+export async function resetPasswordForEmail(email: string): Promise<{ error: string | null }> {
+  if (!client) return { error: "Auth not configured" };
+  const { error } = await client.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+  return { error: error?.message ?? null };
+}
+
 // ── login overlay UI ──────────────────────────────────────────────────────
 
 export function createAuthOverlay(): { show: () => void; hide: () => void } {
@@ -229,6 +237,9 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
       <p id="auth-toggle" style="margin-top:1rem;font-size:0.85rem;color:#7a8090;cursor:pointer;">
         Don't have an account? <span style="color:#58c866;">Sign up</span>
       </p>
+      <p id="auth-forgot" style="margin-top:0.3rem;font-size:0.8rem;color:#555;cursor:pointer;">
+        <span style="color:#7a8090;">Forgot password?</span>
+      </p>
       <div id="auth-status" style="margin-top:0.5rem;font-size:0.85rem;min-height:1.2em;"></div>
     </div>
   `;
@@ -248,6 +259,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   const toggleEl = overlay.querySelector("#auth-toggle") as HTMLParagraphElement;
   const githubBtn = overlay.querySelector("#auth-github") as HTMLButtonElement;
   const googleBtn = overlay.querySelector("#auth-google") as HTMLButtonElement;
+  const forgotEl = overlay.querySelector("#auth-forgot") as HTMLParagraphElement;
 
   let isSignUp = false;
   const welcomeText = overlay.querySelector("#auth-welcome") as HTMLParagraphElement;
@@ -300,6 +312,25 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
   googleBtn.addEventListener("click", async () => {
     const { error } = await signInWithGoogle();
     if (error) { status.textContent = error; status.style.color = "#e05d5d"; }
+  });
+
+  forgotEl.addEventListener("click", async () => {
+    const email = emailInput.value.trim();
+    if (!email) {
+      status.textContent = "Enter your email above first.";
+      status.style.color = "#e05d5d";
+      return;
+    }
+    status.textContent = "Sending reset link…";
+    status.style.color = "#7a8090";
+    const { error } = await resetPasswordForEmail(email);
+    if (error) {
+      status.textContent = error;
+      status.style.color = "#e05d5d";
+    } else {
+      status.textContent = "Check your email for a password reset link.";
+      status.style.color = "#58c866";
+    }
   });
 
   emailInput.addEventListener("keydown", (e) => {

@@ -1,5 +1,6 @@
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import { stripe, isStripeConfigured } from "./stripe.js";
+import { sendDeletionWarningEmail } from "./email.js";
 
 const GRACE_PERIOD_DAYS = 30;
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
@@ -27,6 +28,13 @@ export async function scheduleDeletion(userId: string): Promise<{ error: string 
 
     if (error) return { error: error.message, scheduledDeletionAt: null };
 
+    // Fetch user email for notification
+    let userEmail: string | null = null;
+    try {
+      const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId);
+      userEmail = userData.user?.email ?? null;
+    } catch { /* non-fatal */ }
+
     // Cancel Stripe subscription at period end (don't cancel immediately —
     // user might change their mind during the grace period)
     if (isStripeConfigured && stripe) {
@@ -52,6 +60,16 @@ export async function scheduleDeletion(userId: string): Promise<{ error: string 
       } catch (err) {
         console.error("[account] failed to cancel Stripe subscription for deletion:", err);
       }
+    }
+
+    // Send deletion warning email
+    if (userEmail) {
+      const deletionDate = new Date(now + GRACE_PERIOD_MS).toLocaleDateString("en-US", {
+        year: "numeric", month: "long", day: "numeric",
+      });
+      void sendDeletionWarningEmail(userEmail, deletionDate).catch((err) =>
+        console.error("[account] deletion warning email failed:", err),
+      );
     }
 
     return { error: null, scheduledDeletionAt: now + GRACE_PERIOD_MS };

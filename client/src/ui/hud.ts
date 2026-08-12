@@ -233,6 +233,8 @@ export class Hud {
   private monacoEditor: any = null;
   private monacoFilePath: string | null = null;
   private codeEditorSig = "";
+  private lastWardrobeOpen = false;
+  private wardrobeBuilder: CharBuilder | null = null;
 
   constructor(
     private store: Store,
@@ -486,6 +488,9 @@ export class Hud {
     store.subscribe(() => this.scheduleRender());
     store.onForgeUpdate(() => this.scheduleRender());
     store.onToast((text) => this.toast(text));
+    store.outfitUpdateListeners.push(() => {
+      if (this.store.wardrobeOpen) this.refreshOutfitList();
+    });
     achievements.onUnlock((def) => {
       this.toast(`🏆 ${def.name} — ${def.desc}`);
     });
@@ -2387,7 +2392,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     this.renderGitHubPanel();
     this.renderCodeEditor();
     this.renderWorldsPanel();
-    this.renderWardrobe();
+    if (this.store.wardrobeOpen !== this.lastWardrobeOpen) {
+      this.lastWardrobeOpen = this.store.wardrobeOpen;
+      this.renderWardrobe();
+    }
     this.renderForgePanel();
   }
 
@@ -4992,11 +5000,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (!this.store.wardrobeOpen) {
       modal.hidden = true;
       modal.innerHTML = "";
+      this.wardrobeBuilder = null;
       return;
     }
 
     const current = this.store.player?.appearance ?? DEFAULT_APPEARANCE;
     const builder = new CharBuilder("wd", current, () => {});
+    this.wardrobeBuilder = builder;
 
     const editable = this.store.wardrobeEditable;
 
@@ -5107,6 +5117,41 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         this.net.send({ type: "update_appearance", appearance: ap });
       }
       this.store.toggleWardrobe(false);
+    });
+  }
+
+  private refreshOutfitList(): void {
+    const listEl = document.getElementById("wd-outfit-list");
+    if (!listEl) return;
+    const editable = this.store.wardrobeEditable;
+    const outfits = this.store.outfits;
+    if (outfits.length === 0) {
+      listEl.innerHTML = `<p class="outfit-empty">No saved outfits yet.${editable ? " Randomize and save one!" : ""}</p>`;
+      return;
+    }
+    listEl.innerHTML = outfits.map((o) => `
+      <div class="outfit-item" data-id="${o.id}">
+        <div class="outfit-thumb" style="background-image:url('${generateCharPreviewDataURL(o.appearance, 2)}')"></div>
+        <span class="outfit-name">${o.name}</span>
+        <button class="outfit-load" data-id="${o.id}" title="Load into builder">▶ LOAD</button>
+        ${editable ? `<button class="outfit-delete" data-id="${o.id}" title="Delete">✕</button>` : ""}
+      </div>`).join("");
+    listEl.querySelectorAll<HTMLElement>(".outfit-load").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const outfit = this.store.outfits.find((o) => o.id === id);
+        if (outfit && this.wardrobeBuilder) {
+          this.wardrobeBuilder.setAppearance(outfit.appearance);
+          this.toast(`Loaded "${outfit.name}"`);
+        }
+      });
+    });
+    listEl.querySelectorAll<HTMLElement>(".outfit-delete").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.net.send({ type: "delete_outfit", id: btn.dataset.id! });
+      });
     });
   }
 

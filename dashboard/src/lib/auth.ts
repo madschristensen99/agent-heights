@@ -116,3 +116,11 @@ export async function signOut(): Promise<void> {
   if (!client) return;
   await client.auth.signOut();
 }
+
+export async function resetPasswordForEmail(email: string): Promise<{ error: string | null }> {
+  if (!client) return { error: "Auth not configured" };
+  const { error } = await client.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+  return { error: error?.message ?? null };
+}

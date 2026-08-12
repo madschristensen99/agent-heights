@@ -39,6 +39,7 @@
     "monaco-editor": "^0.56.0",
     "phaser": "^3.90.0",
     "playwright": "^1.61.1",
+    "resend": "^6.19.0",
     "stripe": "^22.3.0",
     "three": "^0.185.1",
     "viem": "^2.21.0",

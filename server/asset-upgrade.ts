@@ -17,6 +17,7 @@
 import { stripe, isStripeConfigured } from "./stripe.js";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import type { ServerMsg, WorldTheme } from "../shared/types.js";
+import { sendAssetUpgradeCompleteEmail, sendAssetUpgradeFailedEmail } from "./email.js";
 
 const APP_URL = process.env.VITE_APP_URL ?? process.env.PUBLIC_URL ?? "";
 const ASSET_UPGRADE_PRICE = 1999; // $19.99 in cents
@@ -226,6 +227,28 @@ export async function runAssetGenerationJob(
     }
 
     onProgress("complete", 100, "Upgrade complete!");
+
+    // Send completion email
+    try {
+      const { data: upgradeRow } = await supabaseAdmin
+        .from("heights_cloud_asset_upgrades")
+        .select("user_id")
+        .eq("deployment_id", deploymentId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (upgradeRow?.user_id) {
+        const { data: u } = await supabaseAdmin.auth.admin.getUserById(upgradeRow.user_id);
+        if (u.user?.email) {
+          void sendAssetUpgradeCompleteEmail(u.user.email, deploymentId).catch((err) =>
+            console.error("[asset-upgrade] completion email failed:", err),
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[asset-upgrade] failed to send completion email:", err);
+    }
+
     return { success: true };
   } catch (err) {
     console.error("[asset-upgrade] generation failed:", err);
@@ -240,7 +263,29 @@ export async function runAssetGenerationJob(
         .eq("deployment_id", deploymentId);
     }
 
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
+    // Send failure email
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    try {
+      const { data: upgradeRow } = await supabaseAdmin
+        .from("heights_cloud_asset_upgrades")
+        .select("user_id")
+        .eq("deployment_id", deploymentId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (upgradeRow?.user_id) {
+        const { data: u } = await supabaseAdmin.auth.admin.getUserById(upgradeRow.user_id);
+        if (u.user?.email) {
+          void sendAssetUpgradeFailedEmail(u.user.email, deploymentId, errorMsg).catch((err) =>
+            console.error("[asset-upgrade] failure email failed:", err),
+          );
+        }
+      }
+    } catch (emailErr) {
+      console.error("[asset-upgrade] failed to send failure email:", emailErr);
+    }
+
+    return { success: false, error: errorMsg };
   }
 }
 

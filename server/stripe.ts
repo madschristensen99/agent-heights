@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import { SUBSCRIPTION_TIERS, parseTier, COMMAND_CENTER_ADMINS, type SubscriptionTier, type BillingPeriod } from "../shared/types.js";
 import { handleAssetUpgradeWebhook } from "./asset-upgrade.js";
+import { sendSubscriptionConfirmationEmail, sendSubscriptionCanceledEmail } from "./email.js";
 
 const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
@@ -306,6 +307,25 @@ export async function handleStripeWebhook(
               updated_at: new Date().toISOString(),
             }, { onConflict: "user_id" });
           console.log(`[stripe] subscription started for user ${userId}, status=${sub.status}, tier=${tier}, period_end=${sub.items.data[0]?.current_period_end ?? null}`);
+
+          // Send confirmation email
+          try {
+            const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId);
+            const email = userData.user?.email;
+            if (email) {
+              const tierLabel = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : "Starter";
+              const billingPeriod = session.metadata?.billingPeriod ?? "monthly";
+              const tierInfo = tier ? SUBSCRIPTION_TIERS[tier] : null;
+              const price = billingPeriod === "annual"
+                ? `$${(tierInfo?.annualPrice ?? 0) / 100}/yr`
+                : `$${(tierInfo?.price ?? 0) / 100}/mo`;
+              void sendSubscriptionConfirmationEmail(email, tierLabel, billingPeriod, price).catch((err) =>
+                console.error("[stripe] confirmation email failed:", err),
+              );
+            }
+          } catch (err) {
+            console.error("[stripe] failed to fetch user email for confirmation:", err);
+          }
         }
         break;
       }
@@ -347,6 +367,19 @@ export async function handleStripeWebhook(
           })
           .eq("user_id", userId);
         console.log(`[stripe] subscription canceled for user ${userId}`);
+
+        // Send cancellation email
+        try {
+          const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId);
+          const email = userData.user?.email;
+          if (email) {
+            void sendSubscriptionCanceledEmail(email).catch((err) =>
+              console.error("[stripe] cancellation email failed:", err),
+            );
+          }
+        } catch (err) {
+          console.error("[stripe] failed to fetch user email for cancellation:", err);
+        }
         break;
       }
 
