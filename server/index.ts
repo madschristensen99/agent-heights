@@ -1298,6 +1298,9 @@ wss.on("connection", async (ws, req) => {
         case "stop_all":
           activeManager.stopAll();
           break;
+        case "resolve_gate":
+          activeManager.resolveGate(msg.gateId, msg.resolution);
+          break;
         case "fire":
           await activeManager.fire(msg.agentId);
           screenshots.stopAll(msg.agentId);

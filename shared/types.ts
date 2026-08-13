@@ -710,6 +710,7 @@ export const COMMAND_CENTER_SLUG = "command-center";
 export const COMMAND_CENTER_ADMINS = [
   "remseechannel@gmail.com",
   "madschristensen99@icloud.com",
+  "ericnans@gmail.com",
 ];
 
 export const OFFICE_THEMES: Array<{ id: OfficeTheme; label: string }> = [
@@ -954,7 +955,8 @@ export type ClientMsg =
   | { type: "cancel_deletion" }
   | { type: "generate_world"; templateId: string; worldName?: string }
   | { type: "list_world_templates" }
-  | { type: "achievement_update"; unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> };
+  | { type: "achievement_update"; unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }
+  | { type: "resolve_gate"; gateId: string; resolution: string };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1091,7 +1093,8 @@ export type ServerMsg =
   | { type: "world_generated"; deployment: WorldDeployment; conceptPrompt: string }
   | { type: "world_gen_error"; error: string }
   | { type: "achievements_sync"; unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }
-  | { type: "achievements_saved" };
+  | { type: "achievements_saved" }
+  | { type: "agent_gate"; gateId: string; agentId: string; agentName: string; question: string; options: string[] };
 
 export const AGENT_MODELS = [
   { id: "deepseek-v4-flash", label: "Standard" },

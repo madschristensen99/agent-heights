@@ -82,6 +82,10 @@ export class Store {
   phaseGateListeners: ((cardId: string, phase: string, approved: boolean, reviewerName: string) => void)[] = [];
   /** Listener array for capability gap reports. */
   capabilityGapListeners: ((gaps: { skill: string; requiredBy: string; suggestion: string }[]) => void)[] = [];
+  /** Current pending decision gate from an agent (null if none). */
+  pendingGate: { gateId: string; agentId: string; agentName: string; question: string; options: string[] } | null = null;
+  /** Listener array for decision gate notifications. */
+  gateListeners: (() => void)[] = [];
   achievementsOpen = false;
   hallOfFameOpen = false;
   railwayPanelOpen = false;
@@ -535,6 +539,14 @@ export class Store {
     this.sendFn?.({ type: "list_office_mcp" });
   }
 
+  /** Resolve a pending decision gate from an agent. */
+  resolveGate(resolution: string): void {
+    if (!this.pendingGate) return;
+    this.sendFn?.({ type: "resolve_gate", gateId: this.pendingGate.gateId, resolution });
+    this.pendingGate = null;
+    this.emit();
+  }
+
   /** Unregister a forge server. */
   unregisterForgeServer(serverId: string): void {
     this.sendFn?.({ type: "unregister_mcp_server", serverId });
@@ -774,6 +786,11 @@ export class Store {
       }
       case "capability_gap": {
         for (const fn of this.capabilityGapListeners) fn(msg.gaps);
+        break;
+      }
+      case "agent_gate": {
+        this.pendingGate = { gateId: msg.gateId, agentId: msg.agentId, agentName: msg.agentName, question: msg.question, options: msg.options };
+        for (const fn of this.gateListeners) fn();
         break;
       }
       case "schedules":

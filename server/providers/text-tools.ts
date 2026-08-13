@@ -235,6 +235,7 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
       listSelfSchedules: ctx.listSelfSchedules,
       updateSelfSchedule: ctx.updateSelfSchedule,
       deleteSelfSchedule: ctx.deleteSelfSchedule,
+      requestGate: ctx.requestGate,
     });
 
     // Build system prompt with tool descriptions
@@ -386,6 +387,10 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
 
         // Execute the tool
         try {
+          // Yield a heartbeat before long tool executions to reset the manager's
+          // 90s idle timer. The generator blocks during await tool.execute(),
+          // so without this, tools taking >90s would false-abort the task.
+          yield { kind: "heartbeat", text: `running ${call.name}` };
           const rawResult = await tool.execute(call.input, {
             agentId,
             iteration: iter,

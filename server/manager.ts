@@ -356,6 +356,8 @@ interface AgentRuntime {
   retryAttempted: boolean;
   /** Number of times the current task has been sent back for rework by a manager. */
   reworkCount: number;
+  /** Pending decision gate: blocks the task until the boss resolves it. */
+  pendingGate: { id: string; resolve: (answer: string) => void; timer: ReturnType<typeof setTimeout> } | null;
 }
 
 /** Keyword expansion for TaskCategory values used in skill-based mail routing. */
@@ -538,7 +540,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -726,7 +728,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
     this.agents.set(AGENT_RESOURCES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -763,7 +765,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -808,7 +810,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("wizard", WIZARD_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
     this.agents.set(WIZARD_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -1442,7 +1444,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -2148,6 +2150,19 @@ export class AgentManager {
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
     rt.taskQueue = [];
 
+    // Clean up any board cards still assigned to this agent
+    for (const card of this.board.values()) {
+      if (card.assignedAgentId === agentId) {
+        if (card.status === "in_progress") {
+          card.status = "backlog";
+        }
+        card.assignedAgentId = null;
+        this.persistBoard();
+        this.broadcast({ type: "card", card });
+      }
+    }
+    this.broadcastGanttUpdate();
+
     const vac: VacationedAgent = {
       id: rt.info.id,
       name: rt.info.name,
@@ -2220,7 +2235,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2269,7 +2284,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2360,9 +2375,8 @@ export class AgentManager {
     const card = this.board.get(cardId);
     const rt = this.agents.get(agentId);
     if (!card || !rt) return;
-    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "waiting") {
-      this.broadcast({ type: "toast", text: `${rt.info.name} is already busy.` });
-      return;
+    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
+      this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task will be queued.` });
     }
     // unassign any previous agent from this card
     if (card.assignedAgentId && card.assignedAgentId !== agentId) {
@@ -2389,10 +2403,16 @@ export class AgentManager {
       this.broadcast({ type: "toast", text: "Assign an agent to the card first." });
       return;
     }
+    // If the card is in_progress and being moved away, stop the agent working on it
+    if (card.status === "in_progress" && card.assignedAgentId && status !== "in_progress") {
+      const rt = this.agents.get(card.assignedAgentId);
+      if (rt && rt.cardId === cardId) {
+        rt.cardId = null; // prevent stopCard from moving this card again
+        this.stop(card.assignedAgentId);
+      }
+    }
     // moving back to backlog unassigns the agent
     if (status === "backlog" && card.assignedAgentId) {
-      const rt = this.agents.get(card.assignedAgentId);
-      if (rt) rt.cardId = null;
       card.assignedAgentId = null;
     }
     // resuming from paused: clear the revertedAt so cooldown doesn't block pickup
@@ -2410,7 +2430,12 @@ export class AgentManager {
     if (!card) return;
     if (card.assignedAgentId) {
       const rt = this.agents.get(card.assignedAgentId);
-      if (rt) rt.cardId = null;
+      if (rt && rt.cardId === cardId) {
+        rt.cardId = null; // prevent stopCard from reverting this card
+        this.stop(card.assignedAgentId);
+      } else if (rt) {
+        rt.cardId = null;
+      }
     }
     this.board.delete(cardId);
     this.persistBoard();
@@ -2640,6 +2665,21 @@ export class AgentManager {
   getAgentLogs(agentId: string): LogEntry[] {
     const rt = this.agents.get(agentId);
     return rt ? [...rt.logs] : [];
+  }
+
+  /** Resolve a pending decision gate for an agent (called when the boss answers). */
+  resolveGate(gateId: string, resolution: string): boolean {
+    for (const rt of this.agents.values()) {
+      if (rt.pendingGate?.id === gateId) {
+        clearTimeout(rt.pendingGate.timer);
+        const resolve = rt.pendingGate.resolve;
+        rt.pendingGate = null;
+        this.log(rt, "status", `Boss answered: "${resolution}"`);
+        resolve(resolution);
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Get an agent's task info: current task, queue, and history. */
@@ -3290,6 +3330,22 @@ export class AgentManager {
             isChat: false,
           });
         },
+        requestGate: (question: string, options: string[]): Promise<string> => {
+          return new Promise((resolve) => {
+            const gateId = randomUUID();
+            this.broadcast({ type: "agent_gate", gateId, agentId: rt.info.id, agentName: rt.info.name, question, options });
+            this.log(rt, "status", `Asked the boss: "${question}" (options: ${options.join(", ")})`);
+            // Auto-resolve after 5 minutes with the first option (best judgment fallback)
+            const timer = setTimeout(() => {
+              if (rt.pendingGate?.id === gateId) {
+                rt.pendingGate = null;
+                this.log(rt, "status", "Boss didn't respond in 5 minutes — proceeding with best judgment.");
+                resolve(options[0]);
+              }
+            }, 5 * 60 * 1000);
+            rt.pendingGate = { id: gateId, resolve, timer };
+          });
+        },
       });
 
       // Track tool calls to detect redundant loops and budget exhaustion
@@ -3300,6 +3356,7 @@ export class AgentManager {
       for await (const ev of events) {
         if (abort.signal.aborted) return;
         resetIdleTimer();
+        if (ev.kind === "heartbeat") continue; // reset idle timer only — no logging, no tracking
         if (rt.info.status === "thinking") this.setStatus(rt, "working");
         console.log(`[manager:${rt.info.id}] event: kind=${ev.kind} text=${ev.text?.slice(0, 100)}`);
 
@@ -3419,7 +3476,11 @@ export class AgentManager {
         if (!(isManager && isReviewTask)) {
           // If review-before-handoff is enabled and the handoff was gated,
           // completeHandoff already called notifyManagersOfCompletion — skip the duplicate.
-          if (!this.pendingHandoffs.has(rt.info.id)) {
+          // Also skip if this is a V-model card — the finally block will notify
+          // managers with the V-model-specific "pending verification review" message.
+          const vmCard = rt.cardId ? this.board.get(rt.cardId) : null;
+          const isVModel = vmCard?.phase && vmCard.phase !== "done";
+          if (!this.pendingHandoffs.has(rt.info.id) && !isVModel) {
             this.notifyManagersOfCompletion(rt, task, finalText, false);
           }
         }
@@ -3482,6 +3543,12 @@ export class AgentManager {
       }
     } finally {
       if (idleTimer) clearTimeout(idleTimer);
+      // Clean up any pending decision gate
+      if (rt.pendingGate) {
+        clearTimeout(rt.pendingGate.timer);
+        rt.pendingGate.resolve("Task was aborted — use your best judgment.");
+        rt.pendingGate = null;
+      }
       console.log(`[manager:${rt.info.id}] finally: sawError=${sawError} aborted=${abort.signal.aborted} exists=${this.agents.has(rt.info.id)}`);
       rt.abort = null;
       // Clear platform context if the task was aborted (already cleared on success above)
@@ -3536,6 +3603,7 @@ export class AgentManager {
               // V-model: transition to verification phase instead of done
               card.phase = "verification";
               card.status = "review_pending";
+              card.assignedAgentId = null;
               if (card.startedAt) {
                 card.actualMinutes = Math.round((Date.now() - card.startedAt) / 60000);
               }
@@ -3559,8 +3627,12 @@ export class AgentManager {
           } else {
             rt.doneTimer = setTimeout(() => {
               rt.info.task = null;
-              this.setStatus(rt, "idle");
-              this.persist();
+              if (rt.taskQueue.length > 0) {
+                this.drainQueue(rt);
+              } else {
+                this.setStatus(rt, "idle");
+                this.persist();
+              }
             }, DONE_LINGER_MS);
           }
         }
@@ -3915,10 +3987,10 @@ export class AgentManager {
       target.reworkCount = 0;
       this.log(mgr, "status", `Review verdict: APPROVED — ${ctx.agentName}'s work accepted.`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} approved ${ctx.agentName}'s work.` });
-      // Move the original card to done if it's still in backlog (e.g. worker failed but manager accepts)
+      // Move the original card to done if it's still in backlog or review_pending
       if (ctx.cardId) {
         const card = this.board.get(ctx.cardId);
-        if (card && card.status === "backlog") {
+        if (card && (card.status === "backlog" || card.status === "review_pending")) {
           this.completeCard(ctx.cardId);
         }
       }
@@ -3943,6 +4015,13 @@ export class AgentManager {
     // No clear verdict — default to approved
     target.reworkCount = 0;
     this.log(mgr, "status", `Review complete — no explicit APPROVED/NEEDS REWORK verdict, defaulting to approved.`);
+    // Move the original card to done if it's still in backlog or review_pending
+    if (ctx.cardId) {
+      const card = this.board.get(ctx.cardId);
+      if (card && (card.status === "backlog" || card.status === "review_pending")) {
+        this.completeCard(ctx.cardId);
+      }
+    }
     // Release the pending handoff if one was gated
     this.releasePendingHandoff(ctx.agentId);
   }
@@ -4305,7 +4384,7 @@ export class AgentManager {
           gotFirstEvent = true;
           if (firstEventTimer) clearTimeout(firstEventTimer);
         }
-        if (ev.kind === "result") continue;
+        if (ev.kind === "result" || ev.kind === "heartbeat") continue;
         this.log(rt, ev.kind, ev.text);
       }
     } catch (err) {
@@ -4457,7 +4536,7 @@ export class AgentManager {
           gotFirstEvent = true;
           clearTimeout(firstEventTimer);
         }
-        if (ev.kind === "result") continue;
+        if (ev.kind === "result" || ev.kind === "heartbeat") continue;
         this.log(rt, ev.kind, ev.text);
       }
     } catch (err) {

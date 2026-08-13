@@ -254,6 +254,7 @@ export async function makeTools(cwd: string, opts?: {
   wizardBranch?: string;
   onBroadcastHtml?: (filePath: string) => void;
   model?: string;
+  requestGate?: (question: string, options: string[]) => Promise<string>;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -711,7 +712,48 @@ export async function makeTools(cwd: string, opts?: {
     },
   };
 
-  const baseWithMessaging = [...baseWithShared, postMessageTool, readMessagesTool, waitForReplyTool];
+  const askManagerTool: AgentTool<any, any> = {
+    name: "ask_manager",
+    description:
+      "Ask the boss (your manager) a blocking question when you need a decision before proceeding. " +
+      "Provide a clear question and a list of possible options. The boss will choose one. " +
+      "Use this when you're stuck on an ambiguous requirement, need approval for an approach, " +
+      "or must choose between alternatives that affect the task outcome.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The question to ask the boss" },
+        options: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of possible answers for the boss to choose from (2-6 options)",
+          minItems: 2,
+          maxItems: 6,
+        },
+      },
+      required: ["question", "options"],
+    },
+    async execute(input: any) {
+      if (!opts?.requestGate) {
+        return "Unable to reach the boss right now. Use your best judgment to proceed.";
+      }
+      const question = String(input.question ?? "").trim();
+      const options = Array.isArray(input.options)
+        ? input.options.map((o: any) => String(o)).filter(Boolean)
+        : [];
+      if (!question || options.length < 2) {
+        return "Invalid question or options. Provide a clear question and at least 2 options.";
+      }
+      try {
+        const answer = await opts.requestGate(question, options);
+        return `The boss answered: "${answer}"`;
+      } catch {
+        return "The boss didn't respond in time. Use your best judgment to proceed.";
+      }
+    },
+  };
+
+  const baseWithMessaging = [...baseWithShared, postMessageTool, readMessagesTool, waitForReplyTool, askManagerTool];
 
   // ── Task board tools (world awareness) ─────────────────────────────
   const boardTools: AgentTool<any, any>[] = [];
@@ -1359,6 +1401,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         wizardGithubPat: ctx.wizardGithubPat,
         wizardBranch: ctx.wizardBranch,
         onBroadcastHtml: ctx.onBroadcastHtml,
+        requestGate: ctx.requestGate,
       });
       const maxIter = isChat ? (wizardChatTools.length > 0 ? 10 : agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
@@ -1427,6 +1470,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     let resolveQueue: (() => void) | null = null;
     let done = false;
     let lastText = "";
+    let toolHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
     const enqueue = (ev: TaskEvent) => {
       queue.push(ev);
@@ -1458,9 +1502,19 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           const tc = ev.toolCall;
           const inputStr = truncate(JSON.stringify(tc.input ?? ""), 120);
           enqueue({ kind: "tool", text: `${tc.toolName} ${inputStr}` });
+          // Emit heartbeats every 15s during long tool executions to prevent
+          // the manager's 90s idle timer from false-aborting agents running
+          // slow operations (npm install, git clone, long MCP API calls).
+          if (toolHeartbeatTimer) clearInterval(toolHeartbeatTimer);
+          const toolName = tc.toolName;
+          toolHeartbeatTimer = setInterval(() => {
+            if (ctx.abort.signal.aborted) return;
+            enqueue({ kind: "heartbeat", text: `running ${toolName}` });
+          }, 15_000);
           break;
         }
         case "tool-completed": {
+          if (toolHeartbeatTimer) { clearInterval(toolHeartbeatTimer); toolHeartbeatTimer = null; }
           console.log(`[cline:${agentId}] tool-completed: ${ev.toolCall?.toolName} result=${JSON.stringify(ev.result ?? "").slice(0, 200)}`);
           break;
         }
@@ -1512,6 +1566,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
     ctx.abort.signal.removeEventListener("abort", onAbort);
     unsub();
+    if (toolHeartbeatTimer) { clearInterval(toolHeartbeatTimer); toolHeartbeatTimer = null; }
 
     // If aborted, return immediately without waiting for runPromise.
     // runPromise may be blocked on an in-flight tool call (especially MCP tools)
