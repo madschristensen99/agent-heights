@@ -562,6 +562,7 @@ export async function handleOAuthCallback(
       redirect_uri: flow.redirectUri,
       client_id: flow.clientId,
       code_verifier: flow.codeVerifier,
+      resource: flow.serverUrl,
     };
 
     const tokenHeaders: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };

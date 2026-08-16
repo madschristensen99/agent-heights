@@ -393,7 +393,9 @@ class HttpMCPClient {
       isError?: boolean;
     };
     if (result.isError) {
-      throw new Error(this.extractText(result) || `MCP tool ${name} returned an error`);
+      const errText = this.extractText(result);
+      console.error(`[mcp:${this.label}] tool ${name} returned error: ${errText.slice(0, 300)}`);
+      throw new Error(errText || `MCP tool ${name} returned an error`);
     }
     return this.extractText(result);
   }
