@@ -222,49 +222,67 @@ async function serveDashboard(req: IncomingMessage, res: ServerResponse): Promis
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
   let urlPath = req.url?.split("?")[0] ?? "/";
-  if (urlPath === "/") urlPath = "/index.html";
 
-  const filePath = normalize(join(distDir, urlPath));
-  if (!filePath.startsWith(distDir)) {
-    res.writeHead(403, applySecurityHeaders());
-    res.end("Forbidden");
-    return;
+  // Serve the static landing page at / (no login required, for Google OAuth verification)
+  if (urlPath === "/") {
+    try {
+      const landingPath = join(distDir, "landing.html");
+      const data = await readFile(landingPath);
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate" }));
+      res.end(data);
+      return;
+    } catch {
+      // landing.html missing — fall through to SPA index.html
+      urlPath = "/index.html";
+    }
   }
 
+  // Serve the SPA at /app and /app/* (rewrite to index.html or stripped path)
+  if (urlPath === "/app" || urlPath.startsWith("/app/")) {
+    urlPath = urlPath === "/app" ? "/index.html" : urlPath.replace(/^\/app/, "");
+    if (urlPath === "") urlPath = "/index.html";
+  }
+
+  // Serve static files (assets, etc.) — anything that's not index.html
+  if (urlPath !== "/index.html") {
+    const filePath = normalize(join(distDir, urlPath));
+    if (!filePath.startsWith(distDir)) {
+      res.writeHead(403, applySecurityHeaders());
+      res.end("Forbidden");
+      return;
+    }
+
+    try {
+      const info = await stat(filePath);
+      if (info.isDirectory()) throw new Error("is directory");
+      const data = await readFile(filePath);
+      const mime = MIME[extname(filePath)] ?? "application/octet-stream";
+      const headers: Record<string, string> = applySecurityHeaders({ "Content-Type": mime });
+      if (extname(filePath) === ".json") {
+        headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+      } else {
+        headers["Cache-Control"] = "public, max-age=31536000, immutable";
+      }
+      res.writeHead(200, headers);
+      res.end(data);
+      return;
+    } catch {
+      // File not found — fall through to SPA fallback below
+    }
+  }
+
+  // SPA fallback: serve index.html with env injection (for /app, /index.html, and unknown routes)
   try {
-    const info = await stat(filePath);
-    if (info.isDirectory()) throw new Error("is directory");
-    let data = await readFile(filePath);
-    const mime = MIME[extname(filePath)] ?? "application/octet-stream";
-    const headers: Record<string, string> = applySecurityHeaders({ "Content-Type": mime });
-    // Cache static assets aggressively (cache-busting via ?v= query params);
-    // keep index.html and .json config files fresh so updates are picked up.
-    if (urlPath === "/index.html" || urlPath === "/" || extname(filePath) === ".json") {
-      headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-    } else {
-      headers["Cache-Control"] = "public, max-age=31536000, immutable";
-    }
-    // Inject runtime env vars and absolute OG image URLs into index.html
-    if (urlPath === "/index.html" || urlPath === "/") {
-      const html = data.toString("utf-8");
-      const injected = await injectMeta(html, req);
-      data = Buffer.from(injected, "utf-8");
-    }
-    res.writeHead(200, headers);
+    const indexPath = join(distDir, "index.html");
+    let data = await readFile(indexPath);
+    const html = data.toString("utf-8");
+    const injected = await injectMeta(html, req);
+    data = Buffer.from(injected, "utf-8");
+    res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate" }));
     res.end(data);
   } catch {
-    try {
-      const indexPath = join(distDir, "index.html");
-      let data = await readFile(indexPath);
-      const html = data.toString("utf-8");
-      const injected = await injectMeta(html, req);
-      data = Buffer.from(injected, "utf-8");
-      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8" }));
-      res.end(data);
-    } catch {
-      res.writeHead(404, applySecurityHeaders());
-      res.end("Not found");
-    }
+    res.writeHead(404, applySecurityHeaders());
+    res.end("Not found");
   }
 }
 
