@@ -1086,7 +1086,9 @@ export class Hud {
       localStorage.setItem(PLAYER_KEY, JSON.stringify(player));
       this.net.send({ type: "setup", player });
       modal.hidden = true;
-      if (!localStorage.getItem("agent-heights-intro-seen")) {
+      if (!localStorage.getItem("agent-heights-onboard-seen")) {
+        setTimeout(() => this.showOnboardingPrompt(), 600);
+      } else if (!localStorage.getItem("agent-heights-intro-seen")) {
         setTimeout(() => this.showIntroGuide(), 800);
       }
     };
@@ -1096,6 +1098,164 @@ export class Hud {
         if ((e as KeyboardEvent).key === "Enter") go();
       }),
     );
+  }
+
+  // ----------------------------------------------------- onboarding prompt
+
+  private showOnboardingPrompt(): void {
+    localStorage.setItem("agent-heights-onboard-seen", "1");
+
+    const modal = document.getElementById("onboard-modal")!;
+    modal.hidden = false;
+    modal.innerHTML = `
+      <div class="modal onboard" style="max-width: 520px;">
+        <h1 style="font-size: 1.4rem;">WHAT DO YOU DO?</h1>
+        <p class="sub" style="margin-bottom: 1rem;">Tell us about your work and the tools you use. We'll find the right agents for your stack.</p>
+        <textarea id="ob-prompt-text" rows="4" placeholder="e.g. I'm a backend developer. We use GitHub, Sentry, Grafana, deploy on Vercel, and track issues in Linear." style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid #333; background: #111; color: #e0e0e0; font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
+        <div id="ob-prompt-status" style="min-height: 1.5rem; text-align: center; color: #888; font-size: 0.8rem; margin-top: 0.5rem;"></div>
+        <div id="ob-prompt-results" style="margin-top: 0.5rem;"></div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+          <button class="btn" id="ob-prompt-skip" style="flex: 1;">SKIP</button>
+          <button class="btn primary" id="ob-prompt-go" style="flex: 1;">FIND AGENTS ▶</button>
+        </div>
+      </div>
+    `;
+
+    const textarea = modal.querySelector("#ob-prompt-text") as HTMLTextAreaElement;
+    const statusEl = modal.querySelector("#ob-prompt-status") as HTMLDivElement;
+    const resultsEl = modal.querySelector("#ob-prompt-results") as HTMLDivElement;
+    const skipBtn = modal.querySelector("#ob-prompt-skip") as HTMLButtonElement;
+    const goBtn = modal.querySelector("#ob-prompt-go") as HTMLButtonElement;
+    textarea.focus();
+
+    let resolved = false;
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      modal.hidden = true;
+      if (!localStorage.getItem("agent-heights-intro-seen")) {
+        setTimeout(() => this.showIntroGuide(), 400);
+      }
+    };
+
+    skipBtn.addEventListener("click", finish);
+
+    const submit = () => {
+      const text = textarea.value.trim();
+      if (!text) { textarea.focus(); return; }
+
+      goBtn.disabled = true;
+      goBtn.textContent = "FINDING…";
+      statusEl.textContent = "Asking AI to match your stack…";
+      resultsEl.innerHTML = "";
+
+      this.net.send({ type: "recommend_agents", text });
+    };
+
+    goBtn.addEventListener("click", submit);
+    textarea.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter" && !(e as KeyboardEvent).shiftKey) {
+        e.preventDefault();
+        submit();
+      }
+    });
+
+    // Listen for recommendation results
+    const onRecs = (recommendations: { agentId: string; name: string; summary: string; reason: string; image_url: string | null }[]) => {
+      if (resolved) return;
+
+      goBtn.disabled = false;
+      goBtn.textContent = "FIND AGENTS ▶";
+      statusEl.textContent = "";
+
+      if (recommendations.length === 0) {
+        statusEl.textContent = "No matching agents found. You can browse the marketplace later.";
+        resultsEl.innerHTML = "";
+        // Add a finish button
+        const doneBtn = document.createElement("button");
+        doneBtn.className = "btn primary";
+        doneBtn.style.cssText = "width: 100%; margin-top: 0.5rem;";
+        doneBtn.textContent = "ENTER OFFICE ▶";
+        doneBtn.addEventListener("click", finish);
+        resultsEl.appendChild(doneBtn);
+        return;
+      }
+
+      statusEl.textContent = `Found ${recommendations.length} agent${recommendations.length > 1 ? "s" : ""} for your stack:`;
+      resultsEl.innerHTML = "";
+
+      for (const rec of recommendations) {
+        const card = document.createElement("div");
+        card.style.cssText = `
+          display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.6rem;
+          margin-bottom: 0.4rem; border: 1px solid #1a1a1a; border-radius: 0.5rem;
+          background: #0d0d0d; transition: border-color 0.15s;
+        `;
+        card.addEventListener("mouseenter", () => { card.style.borderColor = "#333"; });
+        card.addEventListener("mouseleave", () => { card.style.borderColor = "#1a1a1a"; });
+
+        const avatar = rec.image_url
+          ? `<img src="${rec.image_url}" style="width:36px;height:36px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'" />`
+          : `<div style="width:36px;height:36px;border-radius:0.375rem;background:#1a2a1a;display:flex;align-items:center;justify-content:center;font-weight:700;color:#53b86b;flex-shrink:0;">${rec.name.charAt(0).toUpperCase()}</div>`;
+
+        card.innerHTML = `
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:600; font-size:0.85rem; margin-bottom:0.15rem;">${this.escape(rec.name)}</div>
+            <div style="font-size:0.72rem; color:#888; margin-bottom:0.2rem;">${this.escape(rec.summary.slice(0, 80))}</div>
+            <div style="font-size:0.7rem; color:#53b86b; line-height:1.3;">${this.escape(rec.reason)}</div>
+          </div>
+          ${avatar}
+        `;
+
+        const hireBtn = document.createElement("button");
+        hireBtn.textContent = "HIRE";
+        hireBtn.style.cssText = `
+          flex-shrink: 0; padding: 0.35rem 0.75rem; border: none; border-radius: 0.375rem;
+          background: #e0e0e0; color: #0d0d0d; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+          align-self: center;
+        `;
+        hireBtn.addEventListener("click", async () => {
+          hireBtn.disabled = true;
+          hireBtn.textContent = "Hiring…";
+          try {
+            const res = await fetch(`/api/marketplace/agent?id=${encodeURIComponent(rec.agentId)}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const agent = await res.json() as MarketplaceAgent;
+            this.hireFromMarketplace(agent);
+            hireBtn.textContent = "Hired! 🚁";
+            hireBtn.style.background = "#53b86b";
+            hireBtn.style.color = "#fff";
+          } catch {
+            hireBtn.textContent = "Failed";
+            hireBtn.style.background = "#e05d5d";
+            hireBtn.style.color = "#fff";
+            setTimeout(() => { hireBtn.disabled = false; hireBtn.textContent = "HIRE"; hireBtn.style.background = "#e0e0e0"; hireBtn.style.color = "#0d0d0d"; }, 2000);
+          }
+        });
+        card.appendChild(hireBtn);
+        resultsEl.appendChild(card);
+      }
+
+      // Add an "Enter Office" button after the results
+      const enterBtn = document.createElement("button");
+      enterBtn.className = "btn primary";
+      enterBtn.style.cssText = "width: 100%; margin-top: 0.5rem;";
+      enterBtn.textContent = "ENTER OFFICE ▶";
+      enterBtn.addEventListener("click", finish);
+      resultsEl.appendChild(enterBtn);
+    };
+
+    this.store.agentRecommendationListeners.add(onRecs);
+
+    // Clean up listener when modal is dismissed
+    const origFinish = finish;
+    const cleanup = () => {
+      this.store.agentRecommendationListeners.delete(onRecs);
+      origFinish();
+    };
+    skipBtn.removeEventListener("click", finish);
+    skipBtn.addEventListener("click", cleanup);
   }
 
   // --------------------------------------------------------------- intro guide
@@ -5423,6 +5583,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
   private lastToastText = "";
   private lastToastTime = 0;
+
+  private escape(s: string): string {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
 
   private toast(text: string): void {
     const now = Date.now();

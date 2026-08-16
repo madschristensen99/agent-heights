@@ -28,6 +28,7 @@ import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
 import { handleAssetUpgradeRequest, runAssetGenerationJob } from "./asset-upgrade.js";
 import { getUsageSummary } from "./usage.js";
+import { getProviderConfig } from "./providers/api-config.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
 import { scheduleDeletion, cancelDeletion, getDeletionStatus, processExpiredDeletions, GRACE_PERIOD_DAYS } from "./account.js";
 
@@ -3271,6 +3272,142 @@ wss.on("connection", async (ws, req) => {
           const ok = await manager.unregisterForgeServer(msg.serverId);
           if (!ok) {
             sess.broadcast({ type: "toast", text: "MCP server not found or already removed." });
+          }
+          break;
+        }
+        case "recommend_agents": {
+          const userText = String(msg.text).trim().slice(0, 2000);
+          if (!userText) break;
+
+          // Save onboarding text for CRM insights
+          if (isSupabaseConfigured) {
+            Promise.resolve(supabaseAdmin
+              .from("heights_cloud_user_onboarding")
+              .upsert({
+                user_id: sess.user.id,
+                onboarding_text: userText,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: "user_id" }))
+              .then(() => {})
+              .catch((err: unknown) => console.warn("[onboarding] failed to save text:", err));
+          }
+
+          // Fetch all approved marketplace agents (name, summary, tags, category)
+          let agentCatalog: { id: string; name: string; summary: string; tags: string; category: string[] }[] = [];
+          if (isSupabaseConfigured) {
+            try {
+              const { data, error } = await supabaseAdmin
+                .from("heights_cloud_agents")
+                .select("id, name, summary, tags, category")
+                .eq("status", "approved")
+                .eq("search_type", "agent")
+                .order("created_at", { ascending: false })
+                .limit(500);
+              if (!error && data) {
+                agentCatalog = data.map((r) => ({
+                  id: String(r.id),
+                  name: String(r.name ?? ""),
+                  summary: String(r.summary ?? "").slice(0, 120),
+                  tags: String(r.tags ?? ""),
+                  category: Array.isArray(r.category) ? r.category.map(String) : [],
+                }));
+              }
+            } catch (err) {
+              console.warn("[onboarding] failed to fetch marketplace agents:", err);
+            }
+          }
+
+          if (agentCatalog.length === 0) {
+            ws.send(JSON.stringify({ type: "agent_recommendations", recommendations: [] } satisfies ServerMsg));
+            break;
+          }
+
+          // Build the LLM prompt
+          const providerConfig = getProviderConfig();
+          if (!providerConfig.apiKey) {
+            ws.send(JSON.stringify({ type: "agent_recommendations", recommendations: [] } satisfies ServerMsg));
+            break;
+          }
+
+          const systemPrompt = `You are an onboarding concierge for Agent Heights, a platform where users hire AI agents into a virtual office. Given a user's description of their work and tools, and a list of available marketplace agents, recommend the 3-5 most relevant agents. Return ONLY a JSON array, no markdown, no explanation. Each element: {"agentId": "<id>", "reason": "<one sentence why this agent fits>"}. Only recommend agents from the list. If none match, return [].`;
+
+          const userPrompt = `User description: "${userText}"\n\nAvailable agents:\n${JSON.stringify(agentCatalog.slice(0, 200))}`;
+
+          try {
+            const llmRes = await fetch(`${providerConfig.baseUrl}/chat/completions`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...providerConfig.headers,
+              },
+              body: JSON.stringify({
+                model: "deepseek-v4-flash",
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: userPrompt },
+                ],
+                max_tokens: 1024,
+                temperature: 0.3,
+              }),
+              signal: AbortSignal.timeout(15_000),
+            });
+
+            if (!llmRes.ok) {
+              console.warn("[onboarding] LLM API error:", llmRes.status);
+              ws.send(JSON.stringify({ type: "agent_recommendations", recommendations: [] } satisfies ServerMsg));
+              break;
+            }
+
+            const llmData = await llmRes.json() as any;
+            const content = String(llmData.choices?.[0]?.message?.content ?? "").trim();
+
+            // Parse the JSON array from the response
+            let parsed: { agentId: string; reason: string }[] = [];
+            try {
+              // Strip markdown code fences if present
+              const jsonStr = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+              parsed = JSON.parse(jsonStr);
+            } catch {
+              console.warn("[onboarding] failed to parse LLM response:", content.slice(0, 200));
+              ws.send(JSON.stringify({ type: "agent_recommendations", recommendations: [] } satisfies ServerMsg));
+              break;
+            }
+
+            // Build recommendation objects with full agent details
+            const agentMap = new Map(agentCatalog.map((a) => [a.id, a]));
+            const recommendations = parsed
+              .filter((r) => agentMap.has(r.agentId))
+              .slice(0, 5)
+              .map((r) => {
+                const agent = agentMap.get(r.agentId)!;
+                return {
+                  agentId: r.agentId,
+                  name: agent.name,
+                  summary: agent.summary,
+                  reason: r.reason,
+                  image_url: null as string | null,
+                };
+              });
+
+            // Fetch image_url for recommended agents
+            if (isSupabaseConfigured && recommendations.length > 0) {
+              const ids = recommendations.map((r) => r.agentId);
+              const { data: imgData } = await supabaseAdmin
+                .from("heights_cloud_agents")
+                .select("id, image_url")
+                .in("id", ids);
+              if (imgData) {
+                const imgMap = new Map(imgData.map((r) => [String(r.id), r.image_url ? String(r.image_url) : null]));
+                for (const rec of recommendations) {
+                  rec.image_url = imgMap.get(rec.agentId) ?? null;
+                }
+              }
+            }
+
+            ws.send(JSON.stringify({ type: "agent_recommendations", recommendations } satisfies ServerMsg));
+          } catch (err) {
+            console.warn("[onboarding] LLM call failed:", err);
+            ws.send(JSON.stringify({ type: "agent_recommendations", recommendations: [] } satisfies ServerMsg));
           }
           break;
         }

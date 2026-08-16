@@ -225,6 +225,9 @@ export class Store {
   private forgeUpdateListeners = new Set<() => void>();
   private forgeBuildLogListeners = new Set<(serverId: string, line: string, stream: "stdout" | "stderr") => void>();
 
+  /** Fired when the server returns agent recommendations from onboarding. */
+  agentRecommendationListeners = new Set<(recommendations: { agentId: string; name: string; summary: string; reason: string; image_url: string | null }[]) => void>();
+
   /** Platform connection states from Hermes Agent gateway */
   platformStates: PlatformConnectionState[] = [];
 
@@ -991,38 +994,82 @@ export class Store {
         const isPopup = msg.redirectMode === "popup";
 
         // Popup mode: provider rejects production redirect URIs, so we use localhost.
-        // Open auth in a popup, poll its URL until it contains code=, then auto-submit.
+        // We can't read the popup's URL after it redirects to localhost (cross-origin),
+        // so we auto-open the popup AND show a compact paste modal that auto-reads
+        // the clipboard when the user returns.
         if (isPopup) {
           const _w = 600, _h = 700;
           const _l = Math.round((window.screenLeft ?? window.screenX) + (window.outerWidth - _w) / 2);
           const _t = Math.round((window.screenTop ?? window.screenY) + (window.outerHeight - _h) / 2);
           const popup = window.open(msg.authUrl, "mcp-oauth-popup", `width=${_w},height=${_h},left=${_l},top=${_t},scrollbars=yes`);
-          this.toast(`Opening ${svcName} login... Complete authorization in the popup.`);
+
+          // Show compact paste modal
+          const modal = document.createElement("div");
+          modal.id = "mcp-oauth-modal";
+          modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;";
+          modal.innerHTML = `
+            <div style="background:#111;border:1px solid #333;border-radius:0.75rem;max-width:480px;width:90vw;padding:1.5rem;color:#e0e0e0;font-family:system-ui,sans-serif;">
+              <h3 style="margin:0 0 0.5rem;font-size:1rem;">Connect to ${svcName}</h3>
+              <div style="font-size:0.8rem;color:#888;margin:0 0 1rem;">
+                Complete authorization in the popup. After redirect, copy the URL from the popup's address bar and paste it here.
+              </div>
+              <input id="mcp-oauth-input" type="text" placeholder="Paste the redirect URL here..."
+                style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.8rem;margin-bottom:0.5rem;box-sizing:border-box;" />
+              <div style="display:flex;gap:0.5rem;">
+                <button id="mcp-oauth-submit" style="flex:1;padding:0.5rem;border:none;border-radius:0.5rem;background:#e0e0e0;color:#0d0d0d;font-size:0.85rem;font-weight:600;cursor:pointer;">Submit Code</button>
+                <button id="mcp-oauth-cancel" style="padding:0.5rem 1rem;border:1px solid #222;border-radius:0.5rem;background:#1a1a1a;color:#888;font-size:0.85rem;cursor:pointer;">Cancel</button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(modal);
+          const input = modal.querySelector("#mcp-oauth-input") as HTMLInputElement;
+          const submitBtn = modal.querySelector("#mcp-oauth-submit") as HTMLButtonElement;
+          const cancelBtn = modal.querySelector("#mcp-oauth-cancel") as HTMLButtonElement;
+          const close = () => modal.remove();
+
+          cancelBtn.addEventListener("click", close);
+          modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+
+          // Auto-read clipboard when popup closes or input is focused
+          const tryClipboard = async () => {
+            try {
+              const text = await navigator.clipboard.readText();
+              if (text && text.includes("code=")) {
+                input.value = text.trim();
+                // Auto-submit if clipboard has the code
+                this.sendFn?.({ type: "submit_mcp_oauth_code", serverUrl: msg.serverUrl, callbackUrl: text.trim() });
+                submitBtn.textContent = "Exchanging...";
+                submitBtn.disabled = true;
+              }
+            } catch { /* clipboard blocked */ }
+          };
 
           if (popup) {
             const pollInterval = setInterval(() => {
-              try {
-                // While on auth.hostinger.com, reading location throws (cross-origin).
-                // When it redirects to localhost:1/callback, the connection fails but
-                // the URL is readable in most browsers.
-                const href = popup.location.href;
-                if (href && href.includes("code=")) {
-                  clearInterval(pollInterval);
-                  popup.close();
-                  this.sendFn?.({ type: "submit_mcp_oauth_code", serverUrl: msg.serverUrl, callbackUrl: href });
-                  this.toast(`Authorization received from ${svcName}, exchanging token...`);
-                }
-              } catch {
-                // Cross-origin — popup is still on the auth provider's site, keep polling
-              }
-              // If popup was closed manually, stop polling
               if (popup.closed) {
                 clearInterval(pollInterval);
+                void tryClipboard();
               }
             }, 500);
-            // Safety timeout: stop polling after 5 minutes
             setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
           }
+
+          input.addEventListener("focus", async () => {
+            if (!input.value) {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text && text.includes("code=")) { input.value = text.trim(); }
+              } catch { /* clipboard blocked */ }
+            }
+          });
+
+          submitBtn.addEventListener("click", () => {
+            const url = input.value.trim();
+            if (!url) { input.focus(); return; }
+            this.sendFn?.({ type: "submit_mcp_oauth_code", serverUrl: msg.serverUrl, callbackUrl: url });
+            submitBtn.textContent = "Exchanging...";
+            submitBtn.disabled = true;
+          });
           break;
         }
 
@@ -1471,6 +1518,10 @@ export class Store {
       }
       case "achievements_saved": {
         // Server confirmed persistence — nothing to do
+        return;
+      }
+      case "agent_recommendations": {
+        for (const fn of this.agentRecommendationListeners) fn(msg.recommendations);
         return;
       }
     }
