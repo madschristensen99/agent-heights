@@ -903,7 +903,7 @@ export class OfficeScene extends Phaser.Scene {
                 .sprite(mx, my, MONITOR_SIDE_TEX, "0")
                 .setDepth(10 + (obj.y ?? 0) - 10);
               this.officeManagerMonitor = spr;
-              spr.setInteractive({ useHandCursor: true });
+              spr.setInteractive({ hitArea: new Phaser.Geom.Rectangle(-TILE_PX * 0.3, -TILE_PX * 0.3, TILE_PX * 1.6, TILE_PX * 1.6), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
               spr.on("pointerdown", () => this.openAgentViewModal(OFFICE_MANAGER_ID));
             } else if (obj.name === "hermes-seat") {
               this.hermesSeat = { x: tx, y: ty };
@@ -916,7 +916,7 @@ export class OfficeScene extends Phaser.Scene {
                 .setDepth(10 + (obj.y ?? 0) - 10)
                 .setFlipX(true);
               this.hermesMonitor = spr;
-              spr.setInteractive({ useHandCursor: true });
+              spr.setInteractive({ hitArea: new Phaser.Geom.Rectangle(-TILE_PX * 0.3, -TILE_PX * 0.3, TILE_PX * 1.6, TILE_PX * 1.6), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
               spr.on("pointerdown", () => this.openAgentViewModal(HERMES_ID));
             } else if (obj.name === "wizard-seat") {
               this.wizardSeat = { x: tx, y: ty };

@@ -482,8 +482,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     } else if (hs === "balding") {
       ci(hx(32), hy(18), 16, pal.skin);
       el(hx(19), hy(21), 5, 7 + hb, pal.hair);
-      el(hx(32), hy(15), 6, 2, pal.hair);
-      s.set(hx(28), hy(16), pal.skin);
+      el(hx(25), hy(15), 5, 2, pal.hair);
+      s.set(hx(32), hy(16), pal.skin);
       el(hx(26), hy(10), 3, 2, hairLi); el(hx(21), hy(19), 4, 9, hairDk);
     } else if (hs === "spiky") {
       el(hx(33), hy(9), 18, 9, pal.hair);
