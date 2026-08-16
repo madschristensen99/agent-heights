@@ -356,6 +356,7 @@ export interface FiredAgent {
   isPremium?: boolean;
   circleServices?: CircleServiceConfig[];
   skills?: TaskCategory[];
+  acl?: AgentACL;
 }
 
 /** An agent on vacation — temporarily away with all data preserved. */
@@ -838,7 +839,7 @@ export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
   | { type: "set_settings"; settings: GameSettings }
-  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean; crossmintWallet?: boolean; isPremium?: boolean; circleServices?: CircleServiceConfig[]; skills?: TaskCategory[] }
+  | { type: "hire"; name: string; provider: Provider; model: string; systemPrompt?: string; role?: AgentRole; sprite?: number; appearance?: CharAppearance; mcpServers?: MCPServerConfig[]; personality?: PersonalityTraits; cdpSolana?: boolean; crossmintWallet?: boolean; isPremium?: boolean; circleServices?: CircleServiceConfig[]; skills?: TaskCategory[]; acl?: AgentACL }
   | { type: "assign"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_new"; agentId: string; task: string; handoffTo?: string }
   | { type: "assign_all"; task: string }

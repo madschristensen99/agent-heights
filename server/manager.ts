@@ -1387,7 +1387,7 @@ export class AgentManager {
     return this.chunkOverrides[`${cx},${cy}`];
   }
 
-  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[], skills?: TaskCategory[]): Promise<void> {
+  async hire(name: string, provider: Provider, model: string, systemPrompt = "", role: AgentRole = "worker", sprite?: number, appearance?: CharAppearance | null, mcpServers?: MCPServerConfig[], personality?: PersonalityTraits, cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[], skills?: TaskCategory[], acl?: AgentACL): Promise<void> {
     const cleanName = name.trim().slice(0, 24) || "Agent";
     console.log(`[manager] hire called: name=${cleanName} provider=${provider} model=${model}`);
 
@@ -1447,6 +1447,7 @@ export class AgentManager {
       personality: traits,
       mood: "content",
       skills: skills?.length ? skills : undefined,
+      acl: acl ?? { allowedUserIds: [] },
     };
 
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
@@ -2287,6 +2288,7 @@ export class AgentManager {
       isPremium: fa.isPremium ?? false,
       circleServices: fa.circleServices,
       skills: fa.skills,
+      acl: fa.acl ?? { allowedUserIds: [] },
     };
 
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;

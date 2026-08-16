@@ -3066,47 +3066,82 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       securitySection.innerHTML = "";
     }
 
-    // ACL (Access Control List) section — manage who can chat with this agent
+    // ACL (Access Control List) section — collapsible, manage who can chat with this agent
     const aclSection = document.getElementById("d-acl-section")!;
     if (this.store.accessLevel === "manage" && !isNpc) {
       aclSection.hidden = false;
       const acl = agent.acl;
       const hasAcl = acl && ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
-      const roomPlayers = [...this.store.roomPlayers.values()];
       const allowedIds = acl?.allowedUserIds ?? [];
+      const allowedCount = allowedIds.length;
+
+      // Build summary label
+      let summaryLabel: string;
+      if (!hasAcl) {
+        summaryLabel = "Everyone with talk access";
+      } else if (allowedCount === 0) {
+        summaryLabel = "Only you (owner)";
+      } else {
+        summaryLabel = `${allowedCount} person${allowedCount !== 1 ? "s" : ""} allowed`;
+      }
+
+      // Collect people: room players + org members (deduped by userId)
+      const roomPlayers = [...this.store.roomPlayers.values()].filter((p) => p.userId !== this.store.userId);
+      const orgMembers = this.store.orgMembers?.members.filter((m) => m.userId !== this.store.userId) ?? [];
+      const peopleMap = new Map<string, { userId: string; name: string }>();
+      for (const p of roomPlayers) peopleMap.set(p.userId, { userId: p.userId, name: p.name });
+      for (const m of orgMembers) {
+        if (!peopleMap.has(m.userId)) peopleMap.set(m.userId, { userId: m.userId, name: m.name });
+      }
+      const people = [...peopleMap.values()];
 
       aclSection.innerHTML = `
-        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid var(--panel-edge-soft); border-radius:0.5rem; background:var(--panel-soft);">
-          <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.4rem;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <span style="font-size:0.7rem; font-weight:600; color:var(--accent);">ACCESS CONTROL</span>
+        <div style="margin:0.4rem 0;">
+          <div id="acl-toggle" style="display:flex; align-items:center; gap:0.35rem; padding:0.35rem 0.5rem; border:1px solid var(--panel-edge-soft); border-radius:0.375rem; background:var(--panel-soft); cursor:pointer; user-select:none;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="${hasAcl ? "var(--accent)" : "var(--dim)"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span style="font-size:0.65rem; color:var(--text); flex:1; text-align:left;">${esc(summaryLabel)}</span>
+            <span id="acl-chevron" style="font-size:0.6rem; color:var(--dim);">▸</span>
           </div>
-          <div style="font-size:0.63rem; color:var(--dim); margin-bottom:0.4rem; line-height:1.35;">
-            Restrict who can chat with this agent. Visitors with "talk" access will see the agent but won't be able to interact unless they're on the allowed list.
+          <div id="acl-expanded" style="display:none; margin-top:0.3rem; padding:0.5rem; border:1px solid var(--panel-edge-soft); border-radius:0.375rem; background:var(--panel-soft);">
+            <div style="font-size:0.6rem; color:var(--dim); margin-bottom:0.35rem; line-height:1.35;">
+              Restrict who can chat with this agent. Visitors with "talk" access will see the agent but won't be able to interact unless they're on the allowed list.
+            </div>
+            <div style="display:flex; flex-direction:column; gap:0.25rem; margin-bottom:0.35rem;">
+              <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.65rem; color:var(--text); cursor:pointer; text-align:left;">
+                <input type="radio" name="acl-mode" value="open" ${!hasAcl ? "checked" : ""} style="accent-color:var(--accent); flex-shrink:0;" />
+                Everyone with talk access can chat
+              </label>
+              <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.65rem; color:var(--text); cursor:pointer; text-align:left;">
+                <input type="radio" name="acl-mode" value="restricted" ${hasAcl ? "checked" : ""} style="accent-color:var(--accent); flex-shrink:0;" />
+                Only specific people can chat
+              </label>
+            </div>
+            <div id="acl-people" style="${hasAcl ? "" : "display:none;"}">
+              <div style="font-size:0.58rem; color:var(--dim); margin-bottom:0.15rem;">Allowed people:</div>
+              ${people.length > 0
+                ? people.map((p) => `<label style="display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:var(--text); cursor:pointer; padding:0.1rem 0; text-align:left;">
+                    <input type="checkbox" class="acl-user-cb" data-uid="${p.userId}" ${allowedIds.includes(p.userId) ? "checked" : ""} style="accent-color:var(--accent); flex-shrink:0;" />
+                    ${esc(p.name)}
+                  </label>`).join("")
+                : `<div style="font-size:0.6rem; color:var(--dim);">No other people available. Invite people to your room or org first.</div>`
+              }
+            </div>
+            <button id="d-acl-save" style="margin-top:0.4rem; padding:0.25rem 0.5rem; border:1px solid var(--accent); border-radius:0.25rem; background:var(--panel); color:var(--accent); font-size:0.6rem; cursor:pointer;">Save</button>
           </div>
-          <div style="display:flex; flex-direction:column; gap:0.3rem;">
-            <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.68rem; color:var(--text); cursor:pointer;">
-              <input type="radio" name="acl-mode" value="open" ${!hasAcl ? "checked" : ""} style="accent-color:var(--accent);" />
-              Everyone with talk access can chat
-            </label>
-            <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.68rem; color:var(--text); cursor:pointer;">
-              <input type="radio" name="acl-mode" value="restricted" ${hasAcl ? "checked" : ""} style="accent-color:var(--accent);" />
-              Only specific people can chat
-            </label>
-          </div>
-          <div id="acl-people" style="margin-top:0.4rem; ${hasAcl ? "" : "display:none;"}">
-            <div style="font-size:0.6rem; color:var(--dim); margin-bottom:0.2rem;">Allowed people:</div>
-            ${roomPlayers.length > 0
-              ? roomPlayers.map((p) => `<label style="display:flex; align-items:center; gap:0.3rem; font-size:0.65rem; color:var(--text); cursor:pointer; padding:0.15rem 0;">
-                  <input type="checkbox" class="acl-user-cb" data-uid="${p.userId}" ${allowedIds.includes(p.userId) ? "checked" : ""} style="accent-color:var(--accent);" />
-                  ${esc(p.name)}
-                </label>`).join("")
-              : `<div style="font-size:0.62rem; color:var(--dim);">No other players in this room. Invite people first, then restrict access.</div>`
-            }
-          </div>
-          <button id="d-acl-save" style="margin-top:0.5rem; padding:0.3rem 0.6rem; border:1px solid var(--accent); border-radius:0.3rem; background:var(--panel); color:var(--accent); font-size:0.65rem; cursor:pointer;">Save Access Settings</button>
         </div>
       `;
+
+      // Wire up expand/collapse toggle
+      const toggleEl = aclSection.querySelector("#acl-toggle") as HTMLElement | null;
+      const expandedEl = aclSection.querySelector("#acl-expanded") as HTMLElement | null;
+      const chevron = aclSection.querySelector("#acl-chevron") as HTMLElement | null;
+      if (toggleEl && expandedEl) {
+        toggleEl.addEventListener("click", () => {
+          const isExpanded = expandedEl.style.display !== "none";
+          expandedEl.style.display = isExpanded ? "none" : "block";
+          if (chevron) chevron.textContent = isExpanded ? "▸" : "▾";
+        });
+      }
 
       // Wire up radio toggle
       const radios = aclSection.querySelectorAll('input[name="acl-mode"]');
@@ -3136,7 +3171,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             this.toast(`Access restricted to ${userIds.length} person${userIds.length !== 1 ? "s" : ""}.`);
           }
           saveBtn.textContent = "Saved";
-          setTimeout(() => { saveBtn.textContent = "Save Access Settings"; }, 2000);
+          setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
+          // Collapse after save
+          if (expandedEl) expandedEl.style.display = "none";
+          if (chevron) chevron.textContent = "▸";
         });
       }
     } else {
