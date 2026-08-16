@@ -218,6 +218,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   ): boolean => {
     const provider = s.componentProvider?.[component];
     if (!provider || !provider[style]) return false;
+    if (component === "hair" && style === "balding") return false;
     if (component === "beard" && style === "stubble" && dirName !== "down") return false;
     const frames = provider[style];
     const dirIndex = dirName === "down" ? 0 : dirName === "right" ? 1 : 2;
