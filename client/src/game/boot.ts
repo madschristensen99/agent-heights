@@ -33,7 +33,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    const v = "?v=8x";
+    const v = "?v=9x";
     this.load.tilemapTiledJSON("map-classic", `assets/maps/office.json${v}`);
     this.load.tilemapTiledJSON("map-agentHeights", `assets/maps/agentHeights.json${v}`);
     this.load.image("tiles-classic", `assets/tilesets/office.png${v}`);
