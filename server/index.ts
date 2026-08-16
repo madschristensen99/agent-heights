@@ -658,6 +658,20 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // Legal pages — serve from distDir (Vite copies from client/public/)
+  const legalPath = req.url?.split("?")[0] ?? "";
+  if (legalPath === "/privacy" || legalPath === "/terms") {
+    const htmlFile = legalPath.slice(1) + ".html"; // "/privacy" → "privacy.html"
+    readFile(join(distDir, htmlFile)).then((data) => {
+      res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8" }));
+      res.end(data);
+    }).catch(() => {
+      res.writeHead(404, applySecurityHeaders());
+      res.end("Not found");
+    });
+    return;
+  }
+
   // Dashboard routes — serve from dist-dashboard/
   const urlPath = req.url?.split("?")[0] ?? "/";
   if (urlPath === "/dashboard" || urlPath.startsWith("/dashboard/")) {
