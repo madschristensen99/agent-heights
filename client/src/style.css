@@ -488,7 +488,8 @@ body {
 .detail #d-mcp-section,
 .detail #d-premium-section,
 .detail #d-cdp-section,
-.detail #d-crossmint-section {
+.detail #d-crossmint-section,
+.detail #d-acl-section {
   max-height: 180px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;

@@ -3134,17 +3134,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const people = [...peopleMap.values()];
 
       aclSection.innerHTML = `
-        <div style="margin:0.4rem 0;">
-          <div id="acl-toggle" style="display:flex; align-items:center; gap:0.35rem; padding:0.35rem 0.5rem; border:1px solid var(--panel-edge-soft); border-radius:0.375rem; background:var(--panel-soft); cursor:pointer; user-select:none;">
+        <div style="margin:0.3rem 0;">
+          <div id="acl-toggle" style="display:flex; align-items:center; gap:0.35rem; padding:0.3rem 0.5rem; border:1px solid var(--panel-edge-soft); border-radius:0.375rem; background:var(--panel-soft); cursor:pointer; user-select:none;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="${hasAcl ? "var(--accent)" : "var(--dim)"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <span style="font-size:0.65rem; color:var(--text); flex:1; text-align:left;">${esc(summaryLabel)}</span>
+            <span style="font-size:0.65rem; font-weight:700; color:var(--text); text-align:left;">Chat Access</span>
+            <span style="font-size:0.6rem; color:var(--dim); flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(summaryLabel)}</span>
             <span id="acl-chevron" style="font-size:0.6rem; color:var(--dim);">▸</span>
           </div>
-          <div id="acl-expanded" style="display:none; margin-top:0.3rem; padding:0.5rem; border:1px solid var(--panel-edge-soft); border-radius:0.375rem; background:var(--panel-soft);">
-            <div style="font-size:0.6rem; color:var(--dim); margin-bottom:0.35rem; line-height:1.35;">
-              Restrict who can chat with this agent. Visitors with "talk" access will see the agent but won't be able to interact unless they're on the allowed list.
+          <div id="acl-expanded" style="display:none; margin-top:0.2rem; padding:0.35rem; border:1px solid var(--panel-edge-soft); border-radius:0.375rem; background:var(--panel-soft);">
+            <div style="font-size:0.58rem; color:var(--dim); margin-bottom:0.25rem; line-height:1.3;">
+              Visitors with "talk" access will see the agent but can't interact unless they're on the allowed list.
             </div>
-            <div style="display:flex; flex-direction:column; gap:0.25rem; margin-bottom:0.35rem;">
+            <div style="font-size:0.62rem; font-weight:700; color:var(--text); margin-bottom:0.2rem;">Who can chat?</div>
+            <div style="display:flex; flex-direction:column; gap:0.2rem; margin-bottom:0.25rem;">
               <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.65rem; color:var(--text); cursor:pointer; text-align:left;">
                 <input type="radio" name="acl-mode" value="open" ${!hasAcl ? "checked" : ""} style="accent-color:var(--accent); flex-shrink:0;" />
                 Everyone with talk access can chat
@@ -3155,18 +3157,18 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               </label>
             </div>
             <div id="acl-people" style="${hasAcl ? "" : "display:none;"}">
-              <div style="font-size:0.58rem; color:var(--dim); margin-bottom:0.25rem;">Allowed people:</div>
+              <div style="font-size:0.58rem; color:var(--dim); margin-bottom:0.2rem;">Allowed people:</div>
               ${people.length > 0
-                ? `<div style="max-height:8rem; overflow-y:auto; border:1px solid var(--panel-edge-soft); border-radius:0.25rem; padding:0.25rem;">
-                  ${people.map((p) => `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.62rem; color:var(--text); cursor:pointer; padding:0.2rem 0.25rem; border-radius:0.2rem; text-align:left; margin-bottom:0.1rem; background:var(--panel);">
+                ? `<div style="max-height:6rem; overflow-y:auto; border:1px solid var(--panel-edge-soft); border-radius:0.25rem; padding:0.2rem;">
+                  ${people.map((p) => `<label style="display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:var(--text); cursor:pointer; padding:0.15rem 0.2rem; border-radius:0.2rem; text-align:left; margin-bottom:0.05rem; background:var(--panel);">
                     <input type="checkbox" class="acl-user-cb" data-uid="${p.userId}" ${allowedIds.includes(p.userId) ? "checked" : ""} style="accent-color:var(--accent); flex-shrink:0; width:0.7rem; height:0.7rem;" />
                     <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.name)}</span>
                   </label>`).join("")}
                 </div>`
-                : `<div style="font-size:0.6rem; color:var(--dim); padding:0.3rem; border:1px solid var(--panel-edge-soft); border-radius:0.25rem;">No other people available. Invite people to your room or org first.</div>`
+                : `<div style="font-size:0.6rem; color:var(--dim); padding:0.25rem; border:1px solid var(--panel-edge-soft); border-radius:0.25rem;">No other people available. Invite people to your room or org first.</div>`
               }
             </div>
-            <button id="d-acl-save" style="margin-top:0.4rem; padding:0.25rem 0.5rem; border:1px solid var(--accent); border-radius:0.25rem; background:var(--panel); color:var(--accent); font-size:0.6rem; cursor:pointer;">Save</button>
+            <button id="d-acl-save" style="margin-top:0.25rem; padding:0.2rem 0.5rem; border:1px solid var(--accent); border-radius:0.25rem; background:var(--panel); color:var(--accent); font-size:0.6rem; cursor:pointer; width:100%;">Save</button>
           </div>
         </div>
       `;
