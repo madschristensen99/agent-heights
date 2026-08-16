@@ -164,6 +164,7 @@ export class OfficeScene extends Phaser.Scene {
   private phoneBoothLight!: Phaser.GameObjects.Graphics;
   private webcam: WebcamManager | null = null;
   private presenterVideoEls = new Map<string, { video: HTMLVideoElement; wrap: HTMLDivElement }>();
+  private cachedCanvasRect: DOMRect | null = null;
   private presenters: Presenter[] = [];
   private focusedPresenterKey: string | null = null;
   private mutedPresenterKeys = new Set<string>();
@@ -392,6 +393,15 @@ export class OfficeScene extends Phaser.Scene {
     this.events.on("prerender", () => {
       this.updateProjectorVideo();
       this.updateProjectorVideoOverlays();
+    });
+
+    // Invalidate cached canvas rect on resize/scroll so worldRectToScreen stays accurate
+    const invalidateCanvasRect = () => { this.cachedCanvasRect = null; };
+    window.addEventListener("resize", invalidateCanvasRect);
+    window.addEventListener("scroll", invalidateCanvasRect, true);
+    this.events.once("shutdown", () => {
+      window.removeEventListener("resize", invalidateCanvasRect);
+      window.removeEventListener("scroll", invalidateCanvasRect, true);
     });
 
     // ── Screen share + webcam: create managers and wire store listeners ──
@@ -5581,11 +5591,12 @@ export class OfficeScene extends Phaser.Scene {
     g.fillCircle(px - 0.5, py - 0.5, 1);
   }
 
-  /** Convert a world-space rect to screen-space pixels using the main camera. */
+  /** Convert a world-space rect to screen-space pixels using the main camera.
+   *  Uses cached canvas rect to avoid forced layout reflow every frame. */
   private worldRectToScreen(wx: number, wy: number, ww: number, wh: number): { x: number; y: number; w: number; h: number } {
     const cam = this.cameras.main;
-    const canvas = this.game.canvas.getBoundingClientRect();
-    // Use camera worldView for accurate position (accounts for follow lerp and rounding)
+    if (!this.cachedCanvasRect) this.cachedCanvasRect = this.game.canvas.getBoundingClientRect();
+    const canvas = this.cachedCanvasRect;
     const view = cam.worldView;
     const sx = canvas.left + (wx - view.x) * cam.zoom;
     const sy = canvas.top + (wy - view.y) * cam.zoom;
@@ -5595,13 +5606,17 @@ export class OfficeScene extends Phaser.Scene {
   /** Update the YouTube IFrame overlay to match the projector screen position. */
   private updateProjectorVideo(): void {
     const channel = this.store.projectorChannel;
+
+    // Fast exit: nothing to do if projector is off/agent and no presenters
+    const hasPresenters = this.presenterVideoEls.size > 0;
+    if (!hasPresenters && !channel) return;
+
     const px = this.projectorTile.x * TILE_PX + 32;
     const py = this.projectorTile.y * TILE_PX - 100;
     const sw = 480;
     const sh = 288;
 
     // If any presenter video is active, hide YouTube iframe
-    const hasPresenters = this.presenterVideoEls.size > 0;
     if (hasPresenters) {
       if (this.projectorIframe) this.projectorIframe.style.display = "none";
       return;
@@ -9229,11 +9244,21 @@ export class OfficeScene extends Phaser.Scene {
 
     if (visiblePresenters.length === 0) return;
 
+    // Helper: set wrap position only if changed (avoids layout thrash from redundant DOM writes)
+    const setWrapRect = (wrap: HTMLDivElement, x: number, y: number, w: number, h: number) => {
+      const s = wrap.style;
+      const lx = `${x}px`, ly = `${y}px`, lw = `${w}px`, lh = `${h}px`;
+      if (s.left !== lx) s.left = lx;
+      if (s.top !== ly) s.top = ly;
+      if (s.width !== lw) s.width = lw;
+      if (s.height !== lh) s.height = lh;
+    };
+
     // Apply mute state: focused presenter is unmuted, all others muted
     for (const [key, entry] of this.presenterVideoEls) {
       const isFocused = this.focusedPresenterKey === key;
       const isMuted = this.mutedPresenterKeys.has(key);
-      entry.video.muted = isFocused ? false : !isMuted; // focused always unmuted; others respect mute set
+      entry.video.muted = isFocused ? false : !isMuted;
       if (isFocused) {
         entry.video.style.outline = "2px solid #4af";
       } else {
@@ -9252,10 +9277,7 @@ export class OfficeScene extends Phaser.Scene {
         const entry = this.presenterVideoEls.get(key)!;
         const mainH = others.length > 0 ? sh - 50 : sh;
         const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, mainH);
-        entry.wrap.style.left = `${rect.x}px`;
-        entry.wrap.style.top = `${rect.y}px`;
-        entry.wrap.style.width = `${rect.w}px`;
-        entry.wrap.style.height = `${rect.h}px`;
+        setWrapRect(entry.wrap, rect.x, rect.y, rect.w, rect.h);
       }
 
       // Small thumbnails for others
@@ -9264,10 +9286,7 @@ export class OfficeScene extends Phaser.Scene {
         const key = this.presenterKey(p.userId, p.type);
         const entry = this.presenterVideoEls.get(key)!;
         const rect = this.worldRectToScreen(px - sw / 2 + i * thumbW, py - sh / 2 + sh - 50, thumbW, 50);
-        entry.wrap.style.left = `${rect.x}px`;
-        entry.wrap.style.top = `${rect.y}px`;
-        entry.wrap.style.width = `${rect.w}px`;
-        entry.wrap.style.height = `${rect.h}px`;
+        setWrapRect(entry.wrap, rect.x, rect.y, rect.w, rect.h);
       });
       return;
     }
@@ -9294,10 +9313,7 @@ export class OfficeScene extends Phaser.Scene {
         cellW,
         cellH,
       );
-      entry.wrap.style.left = `${rect.x}px`;
-      entry.wrap.style.top = `${rect.y}px`;
-      entry.wrap.style.width = `${rect.w}px`;
-      entry.wrap.style.height = `${rect.h}px`;
+      setWrapRect(entry.wrap, rect.x, rect.y, rect.w, rect.h);
     });
   }
 

@@ -2962,7 +2962,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               <div class="wallet-label" style="font-size:0.7rem; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:var(--accent);font-size:0.6rem;">OAuth</span>' : `<span style="font-size:0.6rem;">${esc(kLabel)}</span>${kHelpHtml}`}</div>
               <div style="display:flex; gap:0.25rem; align-items:center;">
                 ${isOAuth
-                  ? `<button id="d-mcp-connect-${i}" class="btn" style="flex:1; padding:0.35rem 0.5rem; font-size:0.7rem;">🔗 Reconnect via OAuth</button>`
+                  ? `<button id="d-mcp-connect-${i}" class="btn" style="flex:1; padding:0.35rem 0.5rem; font-size:0.7rem;">🔗 Reconnect via OAuth</button>
+                     <button id="d-mcp-disconnect-${i}" class="btn" style="padding:0.35rem 0.5rem; font-size:0.7rem; color:var(--red);">Disconnect</button>`
                   : `<input id="d-mcp-key-${i}" type="password" placeholder="${esc(kPlaceholder)}" autocomplete="off"
                       style="flex:1; padding:0.35rem 0.5rem; font-size:0.75rem;" />
                     <button id="d-mcp-save-${i}" class="btn" style="padding:0.35rem 0.5rem; font-size:0.7rem;">Save</button>`
@@ -3006,10 +3007,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             setTimeout(() => { connectBtn.textContent = "🔗 Reconnect via OAuth"; connectBtn.disabled = false; }, 5000);
           });
         }
+        const disconnectBtn = mcpSection.querySelector(`#d-mcp-disconnect-${i}`) as HTMLButtonElement | null;
+        if (disconnectBtn && s.url) {
+          disconnectBtn.addEventListener("click", () => {
+            this.net.send({ type: "set_mcp_key", serverUrl: s.url!, apiKey: "" });
+            disconnectBtn.textContent = "✓ Disconnected";
+            setTimeout(() => { disconnectBtn.textContent = "Disconnect"; }, 2000);
+            const statusEl = mcpSection.querySelector(`#d-mcp-status-${i}`) as HTMLSpanElement | null;
+            if (statusEl) { statusEl.textContent = "✗"; statusEl.style.color = "var(--red)"; }
+          });
+        }
       });
       // Listen for key status response
       this.detailMcpListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
-        let anyMissing = false;
         for (const r of results) {
           const idx = serverUrls.indexOf(r.serverUrl);
           if (idx >= 0) {
@@ -3018,10 +3028,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               statusEl.textContent = r.hasKey ? "✓" : "✗";
               statusEl.style.color = r.hasKey ? "var(--green)" : "var(--red)";
             }
-            if (!r.hasKey) anyMissing = true;
           }
         }
-        mcpSection.hidden = !anyMissing;
+        // Always show MCP section so users can disconnect/reconnect
+        mcpSection.hidden = false;
       };
       this.store.mcpKeysStatusListeners.push(this.detailMcpListener);
     } else {
