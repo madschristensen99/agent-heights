@@ -53,7 +53,7 @@ Rules:
 Examples:
 - "Alice just picked up your request. She's diving into the codebase now."
 - "Alice finished up. She found and fixed the bug in the auth flow."
-- "Bob ran into a rate limit on the API. I've notified Agent Resources to look into it."
+- "Bob ran into a rate limit on the API. I've notified the Office Manager to look into it."
 - "Quick update: Alice's still heads-down on your request, about 10 minutes in. Making good progress."`;
 
 /**

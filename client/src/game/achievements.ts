@@ -20,7 +20,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "green_thumb", name: "Office Botanist", desc: "Water the office plants.", tier: "First Steps", icon: "🪴" },
   { id: "power_nap", name: "5 More Minutes", desc: "Take a power nap on the sofa.", tier: "First Steps", icon: "🛋️" },
   { id: "mystery_snack", name: "Existential Crunch", desc: "Get the mystery snack from the vending machine.", tier: "First Steps", icon: "🍫" },
-  { id: "agent-resources_visit", name: "Say Hi to Agent Resources", desc: "Visit Agent Resources in her office.", tier: "First Steps", icon: "👋" },
+  { id: "office-manager_visit", name: "Say Hi to the Office Manager", desc: "Visit the Office Manager in her office.", tier: "First Steps", icon: "👋" },
 
   // ── Agent Mastery ──
   { id: "ten_tasks", name: "Productivity Milestone", desc: "Complete 10 total tasks.", tier: "Agent Mastery", icon: "📊" },

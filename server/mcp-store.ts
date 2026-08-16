@@ -38,6 +38,9 @@ function rowToServer(row: any): MCPCatalogServer {
     keyPlaceholder: cfg.keyPlaceholder,
     keyHelpUrl: cfg.keyHelpUrl,
     urlPlaceholder: cfg.urlPlaceholder,
+    riskLevel: cfg.riskLevel,
+    securityNote: cfg.securityNote,
+    dataAccess: cfg.dataAccess,
   };
 }
 

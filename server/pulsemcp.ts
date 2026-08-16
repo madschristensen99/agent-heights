@@ -45,7 +45,7 @@ const PULSEMCP_SEARCH_TIMEOUT_MS = 8_000;
 
 /**
  * Search PulseMCP for MCP servers matching the query.
- * Returns a formatted string suitable for injecting into Agent Resources's context.
+ * Returns a formatted string suitable for injecting into the Office Manager's context.
  * Returns null if the search fails, times out, or finds no results.
  */
 /**
@@ -229,7 +229,7 @@ function toMCPConfigSync(s: PulseMCPServer): MCPServerConfig {
 
 /**
  * Search PulseMCP for MCP servers matching the query.
- * Returns a formatted string suitable for injecting into Agent Resources's context.
+ * Returns a formatted string suitable for injecting into the Office Manager's context.
  * Returns null if the search fails, times out, or finds no results.
  */
 export async function searchPulseMCP(query: string, limit = 10): Promise<string | null> {
@@ -305,7 +305,7 @@ export async function searchPulseMCPStructured(query: string, limit = 20): Promi
 }
 
 /**
- * Determine if a user's message to Agent Resources seems like it's asking about
+ * Determine if a user's message to the Office Manager seems like it's asking about
  * finding tools, agents, or capabilities that would warrant a PulseMCP search.
  * Only triggers on messages that look like they're seeking a specific tool/service,
  * not generic questions about the office or current agents.

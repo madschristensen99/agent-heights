@@ -17,7 +17,7 @@ const OUTPUT_DIR = "/tmp/agent-heights-screenshots";
 
 function spritePathForAgent(info: AgentInfo): string {
   // Map special agents to their sprites
-  if (info.id === "agent-resources") return join(IMG_DIR, "char-agent-resources.png");
+  if (info.id === "office-manager") return join(IMG_DIR, "char-office-manager.png");
   if (info.id === "hermes") return join(IMG_DIR, "char-hermes.png");
   // Use sprite index for regular agents (char-0 through char-7)
   const idx = Math.max(0, Math.min(7, info.sprite ?? 0));

@@ -28,7 +28,7 @@ export function GanttChart() {
   const span = Math.max(maxTime - minTime, 60 * 60 * 1000);
 
   const agentList = [...agents.values()].filter(
-    (a) => a.id !== "agent-resources" && a.id !== "hermes" && a.id !== "wizard",
+    (a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard",
   );
 
   const goalCards = cards.filter((c) => c.type === "goal");

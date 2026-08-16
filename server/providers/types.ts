@@ -60,15 +60,15 @@ export interface RunContext {
   loadMessages?: (agentId: string) => Promise<unknown[]>;
   /** Clear persisted conversation messages for an agent. */
   clearMessages?: (agentId: string) => Promise<void>;
-  /** Hire an agent (Agent Resources only). Triggers helicopter delivery + creates agent. */
+  /** Hire an agent (Office Manager only). Triggers helicopter delivery + creates agent. */
   hireAgent?: (name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[]) => Promise<string>;
   /** Delegate a task to another agent (Hermes/devops only). Assigns the task immediately. */
   delegateTask?: (agentName: string, task: string) => string;
-  /** Request Agent Resources to hire a new agent (Hermes/devops only). Sends a message to Agent Resources' inbox. */
+  /** Request the Office Manager to hire a new agent (Hermes/devops only). Sends a message to the Office Manager's inbox. */
   requestHire?: (skillArea: string, reason: string) => string;
   /** Called when an agent posts a message to a colleague's inbox. Lets the manager assign a review task to an idle recipient. Returns a delivery status string. */
   onPostMessage?: (recipientFolder: string, fromFolder: string, message: string) => string;
-  /** Called when an MCP tool encounters a rate-limit or API funding error. Lets the manager notify Agent Resources, Hermes, and the user. */
+  /** Called when an MCP tool encounters a rate-limit or API funding error. Lets the manager notify the Office Manager, Hermes, and the user. */
   onApiError?: (type: "rate_limit" | "funding", details: { serverLabel: string; toolName: string; message: string }) => void;
   /** Let an agent create a schedule for itself. Returns a result message (success or error). */
   createSelfSchedule?: (name: string, task: string, cronExpression: string) => string;

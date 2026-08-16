@@ -1066,7 +1066,7 @@ export async function makeTools(cwd: string, opts?: {
   }
   const baseWithSchedules = [...baseWithWorld, ...scheduleTools];
 
-  // ── Agent hiring tool (only for Agent Resources) ───────────
+  // ── Agent hiring tool (only for Office Manager) ───────────
   const hireTools: AgentTool<any, any>[] = [];
   if (opts?.hireAgent) {
     const hireAgentTool: AgentTool<any, any> = {
@@ -1172,8 +1172,8 @@ export async function makeTools(cwd: string, opts?: {
     mailClerkTools.push({
       name: "request_hire",
       description:
-        "Request Agent Resources to hire a new agent with specific skills. Use this when no existing agent has the right expertise for a task. " +
-        "Agent Resources will review the request and hire someone if appropriate.",
+        "Request the Office Manager to hire a new agent with specific skills. Use this when no existing agent has the right expertise for a task. " +
+        "The Office Manager will review the request and hire someone if appropriate.",
       inputSchema: {
         type: "object",
         properties: {
@@ -1269,10 +1269,10 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     const abortRef = { signal: ctx.abort.signal };
     if (!agent) {
       const submitState = { called: false, verified: false, callCount: 0 };
-      // Agent Resources chat with hireAgent capability gets special tools
-      const agentResourcesHireTools: AgentTool<any, any>[] = [];
+      // Office Manager chat with hireAgent capability gets special tools
+      const officeManagerHireTools: AgentTool<any, any>[] = [];
       if (isChat && ctx.hireAgent) {
-        agentResourcesHireTools.push({
+        officeManagerHireTools.push({
           name: "hire_agent",
           description: "Hire a new AI agent into the office. The agent will arrive via helicopter. Use this when the boss asks you to hire someone, bring someone in, or add an agent to the office. You can specify MCP servers for community MCP agents.",
           inputSchema: {
@@ -1310,7 +1310,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
             }
           },
         });
-        agentResourcesHireTools.push({
+        officeManagerHireTools.push({
           name: "search_community_mcps",
           description: "Search the PulseMCP community database of 22,000+ MCP servers. Returns names, descriptions, and install configs. Use this when the boss asks about tools, integrations, or capabilities not in the curated catalog.",
           inputSchema: {
@@ -1348,7 +1348,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         wizardChatTools.push(...wt);
       }
       const tools = isChat
-        ? (wizardChatTools.length > 0 ? wizardChatTools : agentResourcesHireTools)
+        ? (wizardChatTools.length > 0 ? wizardChatTools : officeManagerHireTools)
         : await makeTools(ctx.cwd, {
         railway: ctx.railway,
         sharedCwd: ctx.sharedCwd,
@@ -1403,7 +1403,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         onBroadcastHtml: ctx.onBroadcastHtml,
         requestGate: ctx.requestGate,
       });
-      const maxIter = isChat ? (wizardChatTools.length > 0 ? 10 : agentResourcesHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
+      const maxIter = isChat ? (wizardChatTools.length > 0 ? 10 : officeManagerHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
         providerId: "deepseek",

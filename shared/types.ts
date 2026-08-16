@@ -96,6 +96,9 @@ export const SHIRT_COLORS = [
 export const PANTS_COLORS = [
   "#2f3e5c", "#454545", "#5c4a2f", "#3a5a40",
   "#3e4a5c", "#23283a", "#1b1f2e", "#4a3a2a",
+  "#4a6fa5", "#b8a88a", "#6b6b3a", "#5c2a2a",
+  "#d8d4c8", "#1a2a4a", "#3a3a3a", "#8a4a2a",
+  "#2a6a6a", "#4a3a5c",
 ];
 
 export const ACCESSORIES = ["none", "glasses", "headband", "earrings", "cap", "beanie", "headphones"];
@@ -315,6 +318,12 @@ export interface MCPServerConfig {
   envVars?: { name: string; description: string; isRequired: boolean }[];
   /** For remote servers where the URL is per-instance (e.g. n8n). When set, the UI shows a URL input field. */
   urlPlaceholder?: string;
+  /** Security risk level — low (read-only/no auth), medium (API key, limited scope), high (financial/trading/write access). */
+  riskLevel?: "low" | "medium" | "high";
+  /** Security best-practice advice shown before hiring (e.g., "Scope your PAT to specific repos"). */
+  securityNote?: string;
+  /** Short summary of what data/tools the agent can access through this server. */
+  dataAccess?: string;
 }
 
 // ----------------------------------------------------------- Labyrinth ---
@@ -605,6 +614,10 @@ export interface TaskCard {
   dependsOnCardIds?: string[];
   /** Card IDs that block this card (derived from office state graph). */
   blockedByCardIds?: string[];
+  /** Agent ID that holds the execution lock (prevents double-claim races). */
+  lockedBy?: string | null;
+  /** Timestamp of the last status change (for stale review detection). */
+  statusChangedAt?: number;
 }
 
 export interface AgentSchedule {
@@ -877,6 +890,7 @@ export type ClientMsg =
   | { type: "join_room"; roomId: string }
   | { type: "leave_room"; roomId: string }
   | { type: "switch_room"; roomId: string }
+  | { type: "restore_room"; roomId: string; roomType?: RoomType }
   | { type: "invite_to_room"; roomId: string; userId: string; role: "member" | "guest"; accessLevel?: RoomAccessLevel }
   | { type: "set_agent_acl"; agentId: string; acl: AgentACL }
   | { type: "respond_invite"; roomId: string; accept: boolean }
@@ -991,8 +1005,8 @@ export type ServerMsg =
   | { type: "api_key_status"; hasKey: boolean }
   | { type: "mcp_key_status"; serverUrl: string; hasKey: boolean }
   | { type: "mcp_keys_status"; results: { serverUrl: string; hasKey: boolean }[] }
-  | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
-  | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
+  | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" | "popup" }
+  | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" | "popup" }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "cdp_wallet_status"; agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }
   | { type: "cdp_policy_status"; agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; allowedTokenMints: string[] | null; blockedTokenMints: string[] | null; network: string; error?: string }
@@ -1031,7 +1045,7 @@ export type ServerMsg =
   | { type: "org_members"; orgId: string; members: OrgMember[] }
   | { type: "org_created"; org: Organization }
   | { type: "org_error"; message: string }
-  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; usageCap: number; currentPeriodEnd: number | null; freeTrialExpiresAt: number | null; nextTrialAt: number | null }
+  | { type: "payment_status"; entrancePaid: boolean; subscriptionActive: boolean; subscriptionStatus: string; subscriptionTier: SubscriptionTier | null; agentLimit: number; usageCap: number; currentPeriodEnd: number | null }
   | { type: "payment_required"; reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number }
   | { type: "emote"; agentId: string; emote: string }
   | { type: "agent_chat"; fromId: string; toId: string; fromName: string; toName: string; text: string }
@@ -1168,8 +1182,8 @@ export function parseTier(s: string | null | undefined): SubscriptionTier | null
 
 export const SERVER_PORT = (typeof process !== "undefined" && Number(process.env?.PORT)) || 3001;
 
-/** Fixed agent id for Agent Resources, the office manager NPC. */
-export const AGENT_RESOURCES_ID = "agent-resources";
+/** Fixed agent id for the Office Manager, the office manager NPC. */
+export const OFFICE_MANAGER_ID = "office-manager";
 
 /** Fixed agent id for Hermes, the devops core engineer NPC in the mail room. */
 export const HERMES_ID = "hermes";

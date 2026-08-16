@@ -82,7 +82,7 @@ Map personality types to ElevenLabs pre-made voice IDs:
 | Loop Unroller | Robotic, literal, methodical |
 | Cache Invalidator | Weary, wise, slow |
 | The Manager | Upbeat, clear, mid-range |
-| Agent Resources (Office Manager) | Warm, professional, welcoming female voice |
+| Office Manager | Warm, professional, welcoming female voice |
 
 Voice IDs are stored in a config map. Users can optionally override per-agent
 in settings.
@@ -119,25 +119,25 @@ Client reassembles chunks per agent, plays through the audio system.
 
 ## 2. Greetings
 
-### 2.1 Agent Resources Greeting (Already Visual — Add Audio)
+### 2.1 Office Manager Greeting (Already Visual — Add Audio)
 
-AgentResourcesNPC already has a greeting state machine
+OfficeManagerNPC already has a greeting state machine
 (`client/src/game/agent.ts:497-551`): when the player enters her office zone,
 she stands up, walks to a greet tile, faces the player, and idles for 3.5
 seconds. Currently no text or audio is produced.
 
 Enhancement:
 
-1. When AgentResourcesNPC enters "greeting" state, client sends `{ type: "greet",
-   agentId: AGENT_RESOURCES_ID }` to server
+1. When OfficeManagerNPC enters "greeting" state, client sends `{ type: "greet",
+   agentId: OFFICE_MANAGER_ID }` to server
 2. Server runs a lightweight greeting prompt (no tools, ~1 sentence): *"Your
    boss just walked into your office. Greet them warmly in one short sentence."*
 3. ElevenLabs TTS on the greeting line
-4. Audio plays, short text bubble appears above Agent Resources
+4. Audio plays, short text bubble appears above Office Manager
 
 ### 2.2 Agent Proximity Greetings
 
-When the player walks near an idle agent (similar to Agent Resources's zone detection but
+When the player walks near an idle agent (similar to Office Manager's zone detection but
 simpler — distance check):
 
 1. Client detects player within ~2 tiles of an idle agent they haven't greeted
@@ -243,7 +243,7 @@ Changes to `client/src/game/scene.ts`:
 | Coffee machine interaction | `coffeePour()` | Scene coffee tile |
 | Water cooler interaction | `waterBubbler()` | Scene cooler tile |
 | Door / entering world | `doorOpen()` | Scene transition |
-| Agent Resources greeting | TTS + `chairSqueak()` | AgentResourcesNPC greeting state |
+| Office Manager greeting | TTS + `chairSqueak()` | OfficeManagerNPC greeting state |
 | Agent greeting (proximity) | TTS | Proximity detection |
 
 ---
@@ -330,7 +330,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
 
 - Add `"greet"` ClientMsg
 - Implement `manager.greet()` — lightweight prompt, no tools
-- Agent Resources greeting: trigger on her existing "greeting" state
+- Office Manager greeting: trigger on her existing "greeting" state
 - Agent proximity greetings: distance check in scene update loop
 - Cooldown system to prevent spam
 - Speech bubble text above NPC for the spoken line

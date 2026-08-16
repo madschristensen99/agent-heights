@@ -70,7 +70,7 @@ client/src/
   game/                      ← REWRITTEN — game logic on top of engine
     scene.ts                 Office scene (rewritten from Phaser to engine API)
     boot.ts                  Boot/loading scene (rewritten)
-    agent.ts                 AgentNPC, AgentResourcesNPC, HermesNPC (rewritten)
+    agent.ts                 AgentNPC, OfficeManagerNPC, HermesNPC (rewritten)
     world.ts                 WorldLayer — chunk rendering, creatures, combat (rewritten)
     worldgen.ts              UNCHANGED — pure math, no Phaser
     worldgen.worker.ts       UNCHANGED — pure math, no Phaser
@@ -744,7 +744,7 @@ shows a *working* office, not just an empty room.
 - `particle-system.ts` — GPU instanced particles
 
 **Port:**
-- `agent.ts` → AgentNPC/AgentResourcesNPC/HermesNPC using engine sprites + tweens
+- `agent.ts` → AgentNPC/OfficeManagerNPC/HermesNPC using engine sprites + tweens
 - `chargen.ts` → output character sheets to atlas
 - `lighting.ts` → use engine LightSystem (delete Phaser additive sprites)
 - `effects.ts` → use engine ParticleSystem (delete Phaser emitters)

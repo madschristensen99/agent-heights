@@ -35,7 +35,7 @@ async function catalogSummary(): Promise<string> {
   return lines.join("\n");
 }
 
-/** Fetch approved marketplace agents from DB and build a summary for Agent Resources's system prompt. */
+/** Fetch approved marketplace agents from DB and build a summary for the Office Manager's system prompt. */
 async function buildMarketplaceAgentsSummary(): Promise<string> {
   if (!isSupabaseConfigured) return CURATED_AGENTS_SUMMARY;
 
@@ -64,10 +64,10 @@ async function buildMarketplaceAgentsSummary(): Promise<string> {
   }
 }
 
-/** Build HQ context string to inject into Agent Resources's system prompt. */
+/** Build HQ context string to inject into the Office Manager's system prompt. */
 async function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: string): Promise<string> {
   const roster = agents
-    .filter((a) => a.id !== "agent-resources")
+    .filter((a) => a.id !== "office-manager")
     .map((a) => {
       const skills = a.skills?.length ? ` [skills: ${a.skills.join(", ")}]` : "";
       const caps = a.capabilities?.length ? ` [capabilities: ${a.capabilities.join(", ")}]` : "";
@@ -97,7 +97,7 @@ async function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: 
   }
   const availableSkills = new Set<string>();
   for (const a of agents) {
-    if (a.id === "agent-resources") continue;
+    if (a.id === "office-manager") continue;
     a.skills?.forEach((s) => availableSkills.add(s));
     a.capabilities?.forEach((c) => availableSkills.add(c));
   }
@@ -107,8 +107,8 @@ async function buildHqContext(agents: AgentInfo[], board: TaskCard[], bossName: 
     : "";
 
   // Busy agent count for hiring urgency
-  const busyCount = agents.filter((a) => a.id !== "agent-resources" && (a.status === "thinking" || a.status === "working" || a.status === "waiting")).length;
-  const totalCount = agents.filter((a) => a.id !== "agent-resources").length;
+  const busyCount = agents.filter((a) => a.id !== "office-manager" && (a.status === "thinking" || a.status === "working" || a.status === "waiting")).length;
+  const totalCount = agents.filter((a) => a.id !== "office-manager").length;
   const hiringUrgency = busyCount === totalCount && totalCount > 0
     ? `\n### 🚨 Hiring Urgency\nAll ${totalCount} agents are currently busy. If there are pending tasks, consider hiring new talent using the hire_agent tool.\n`
     : "";
@@ -130,7 +130,7 @@ Agents have individual workspaces, can be assigned tasks, collaborate via handof
 Users can browse the marketplace from inside Agent Heights and hire marketplace agents directly into their office.
 
 ### YOUR ROLE — Office Manager (IMPORTANT)
-You are Agent Resources, the office manager. You have four core responsibilities:
+You are the Office Manager. You have four core responsibilities:
 
 1. **Answer questions directly.** When the user asks you a question, ANSWER IT DIRECTLY. Do NOT delegate research tasks to other agents. The user is talking to YOU because they want YOUR answer.
 
@@ -167,13 +167,13 @@ If PulseMCP search results are included in this context, summarize them and sugg
 the relevant MCP server on a new or existing agent.`;
 }
 
-export async function handleAgentResourcesRequest(
+export async function handleOfficeManagerRequest(
   req: IncomingMessage,
   res: ServerResponse,
   getHqContext: () => Promise<{ agents: AgentInfo[]; board: TaskCard[]; bossName: string } | null>,
 ): Promise<boolean> {
   const url = req.url?.split("?")[0] ?? "";
-  if (url !== "/api/agent-resources") return false;
+  if (url !== "/api/office-manager") return false;
 
   if (req.method !== "POST") {
     json(res, 405, { error: "Method not allowed" });
@@ -211,7 +211,7 @@ export async function handleAgentResourcesRequest(
   let hqContextStr = hqCtx ? await buildHqContext(hqCtx.agents, hqCtx.board, hqCtx.bossName) : undefined;
 
   // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
-  // query, search PulseMCP and inject results into the context so Agent Resources can
+  // query, search PulseMCP and inject results into the context so the Office Manager can
   // recommend community MCP servers beyond the curated catalog.
   if (hqContextStr && shouldSearchPulseMCP(parsed.message)) {
     const searchQuery = extractSearchQuery(parsed.message);
@@ -222,12 +222,12 @@ export async function handleAgentResourcesRequest(
           hqContextStr += `\n\n${pulseResults}`;
         }
       } catch {
-        // PulseMCP search is best-effort — don't block Agent Resources's response
+        // PulseMCP search is best-effort — don't block the Office Manager's response
       }
     }
   }
 
-  // Forward to marketplace Agent Resources API
+  // Forward to marketplace Office Manager API
   const forwardBody = {
     message: parsed.message,
     history: parsed.history ?? [],
@@ -236,14 +236,14 @@ export async function handleAgentResourcesRequest(
   };
 
   try {
-    const upstream = await fetch(`${MARKETPLACE_URL}/api/agent-resources`, {
+    const upstream = await fetch(`${MARKETPLACE_URL}/api/office-manager`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(forwardBody),
     });
 
     if (!upstream.ok || !upstream.body) {
-      json(res, 502, { error: `Marketplace Agent Resources returned ${upstream.status}` });
+      json(res, 502, { error: `Marketplace Office Manager API returned ${upstream.status}` });
       return true;
     }
 

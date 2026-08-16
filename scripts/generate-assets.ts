@@ -1133,7 +1133,7 @@ const drawers: Record<number, TileDrawer> = {
     // left edge highlight (facing entrance)
     s.rect(ox, oy, 3, 64, tp.hi);
     s.rect(ox, oy, 1, 64, mix(tp.hi, "#fff", 0.3));
-    // front panel — right portion (facing Agent Resources on the right)
+    // front panel — right portion (facing the Office Manager on the right)
     vGrad(s, ox + 44, oy, 18, 64, sp.li, sp.sh);
     s.rect(ox + 44, oy, 2, 64, sp.dk);
     s.rect(ox + 60, oy, 2, 64, sp.sh);
@@ -1566,7 +1566,7 @@ const BOSS_PALETTE: CharPalette = {
   skin: "#f2c39b", hair: "#2b1d0e", shirt: "#2e3547", shirtShade: "#23283a", pants: "#1b1f2e", tie: "#9e2b2b", hairStyle: "swept", accessory: "none", headFeature: "none", beard: "none",
 };
 
-const AGENT_RESOURCES_PALETTE: CharPalette = {
+const OFFICE_MANAGER_PALETTE: CharPalette = {
   skin: "#f2c39b", hair: "#1a1a2a", shirt: "#c44a4a", shirtShade: "#a83a3a", pants: "#c44a4a", eyeColor: "#3a9a4e", hairStyle: "ponytail", accessory: "headband", headFeature: "none", beard: "none",
 };
 
@@ -1705,8 +1705,8 @@ interface MapTheme {
   tileset: string;
   /** Desk top-left tiles; index order == deskIndex assigned by the server. */
   desks: Array<[number, number]>;
-  /** Agent Resources's desk top-left tile (placed separately from regular desks). */
-  agentResourcesDesk?: [number, number];
+  /** Office Manager's desk top-left tile (placed separately from regular desks). */
+  officeManagerDesk?: [number, number];
   /** Hermes agent desk top-left tile (mirrored side desk, chair on left). */
   hermesDesk?: [number, number];
   /** Floors, walls and decor — desks, chairs and points are common. */
@@ -1719,7 +1719,7 @@ const CLASSIC: MapTheme = {
     [3, 4], [8, 4], [13, 4], [18, 4],
     [3, 10], [8, 10], [13, 10], [18, 10],
   ],
-  agentResourcesDesk: [25, 9],
+  officeManagerDesk: [25, 9],
   hermesDesk: [2, 16],
   paint(G, W, F) {
     // --- floors with distinct zones ---
@@ -1804,7 +1804,7 @@ const CLASSIC: MapTheme = {
       for (let x = 1; x <= 10; x++) G(x, y, (x + y) % 2 === 0 ? TILE.TILE_A : TILE.TILE_B);
     }
 
-    // --- Agent Resources's office (right side, between break room and meeting corner) ---
+    // --- Office Manager's office (right side, between break room and meeting corner) ---
     // Floor — red carpet
     for (let y = 8; y <= 11; y++) {
       for (let x = 22; x <= 27; x++) G(x, y, (x + y) % 2 === 0 ? TILE.RED_CARPET_A : TILE.RED_CARPET_B);
@@ -1846,7 +1846,7 @@ const CLASSIC: MapTheme = {
     F(26, 16, TILE.PLANT);
     // Lobby clutter
     F(19, 17, TILE.TRASH);
-    // Agent Resources's office decor
+    // Office Manager's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
     // Server room (inside mail room, bottom-left corner)
@@ -1869,7 +1869,7 @@ const AGENT_HEIGHTS: MapTheme = {
     [3, 4], [8, 4], [13, 4], [18, 4],
     [3, 10], [8, 10], [13, 10], [18, 10],
   ],
-  agentResourcesDesk: [25, 9],
+  officeManagerDesk: [25, 9],
   hermesDesk: [2, 16],
   paint(G, W, F) {
     // --- floors: all carpet ---
@@ -1973,7 +1973,7 @@ const AGENT_HEIGHTS: MapTheme = {
     G(14, 12, (14 + 12) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
     G(15, 12, (15 + 12) % 2 === 0 ? TILE.CARPET_A : TILE.CARPET_B);
 
-    // --- Agent Resources's office (right side, between break room and meeting corner) ---
+    // --- Office Manager's office (right side, between break room and meeting corner) ---
     // North wall
     for (let x = 22; x <= 27; x++) W(x, 7, TILE.WALL_TOP);
     // South wall
@@ -2007,7 +2007,7 @@ const AGENT_HEIGHTS: MapTheme = {
     F(26, 16, TILE.PLANT);
     // Lobby clutter
     F(19, 17, TILE.TRASH);
-    // Agent Resources's office decor
+    // Office Manager's office decor
     F(27, 11, TILE.PLANT);
     F(22, 11, TILE.FILING);
     // Server room (inside mail room, bottom-left corner)
@@ -2041,9 +2041,9 @@ function buildMap(theme: MapTheme): object {
     F(dx, dy + 1, TILE.CHAIR);
   }
 
-  // Agent Resources's desk — vertical (facing left toward entrance), chair on the right
-  if (theme.agentResourcesDesk) {
-    const [ydx, ydy] = theme.agentResourcesDesk;
+  // Office Manager's desk — vertical (facing left toward entrance), chair on the right
+  if (theme.officeManagerDesk) {
+    const [ydx, ydy] = theme.officeManagerDesk;
     F(ydx, ydy, TILE.DESK_SIDE_TOP);
     F(ydx, ydy + 1, TILE.DESK_SIDE_BOTTOM);
     F(ydx + 1, ydy, TILE.CHAIR_LEFT);
@@ -2075,11 +2075,11 @@ function buildMap(theme: MapTheme): object {
     objects.push(point(`seat-${i}`, dx, dy + 1));
     objects.push(point(`monitor-${i}`, dx, dy));
   });
-  if (theme.agentResourcesDesk) {
-    const [ydx, ydy] = theme.agentResourcesDesk;
-    objects.push(point("agent-resources-seat", ydx + 1, ydy));
-    objects.push(point("agent-resources-desk", ydx, ydy));
-    objects.push(point("agent-resources-monitor", ydx, ydy));
+  if (theme.officeManagerDesk) {
+    const [ydx, ydy] = theme.officeManagerDesk;
+    objects.push(point("office-manager-seat", ydx + 1, ydy));
+    objects.push(point("office-manager-desk", ydx, ydy));
+    objects.push(point("office-manager-monitor", ydx, ydy));
   }
   if (theme.hermesDesk) {
     const [hdx, hdy] = theme.hermesDesk;
@@ -2738,7 +2738,7 @@ async function main() {
     if (i === 0) sheet.preview(join(PREVIEWS, "char-0.png"), 6);
   });
   buildCharSheet(BOSS_PALETTE).save(join(ASSETS, "characters", "boss.png"));
-  buildCharSheet(AGENT_RESOURCES_PALETTE).save(join(ASSETS, "characters", "char-agent-resources.png"));
+  buildCharSheet(OFFICE_MANAGER_PALETTE).save(join(ASSETS, "characters", "char-office-manager.png"));
   buildCharSheet(HERMES_PALETTE).save(join(ASSETS, "characters", "char-hermes.png"));
 
   const worldTileset = buildWorldTileset();

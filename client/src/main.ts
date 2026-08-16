@@ -5,7 +5,7 @@ import { Net } from "./net";
 import { Store } from "./store";
 import { Hud } from "./ui/hud";
 import { initAuth, onAuthChange, getToken, isAuthEnabled, createAuthOverlay, refreshSession, getUserId, signOut } from "./auth";
-import { createPaymentOverlay, updatePaymentState, refreshPaymentStatus, onPaymentChange } from "./payment";
+import { createPaymentOverlay, updatePaymentState, refreshPaymentStatus } from "./payment";
 
 const isSpectator = new URLSearchParams(window.location.search).get("spectator") === "1";
 
@@ -22,8 +22,6 @@ net.onMessage = (msg) => {
       agentLimit: msg.agentLimit,
       usageCap: msg.usageCap,
       currentPeriodEnd: msg.currentPeriodEnd,
-      freeTrialExpiresAt: msg.freeTrialExpiresAt,
-      nextTrialAt: msg.nextTrialAt,
     });
   } else if (msg.type === "payment_required") {
     store.toast(msg.message);
@@ -43,35 +41,7 @@ net.onSessionExpired = async () => {
 };
 
 const authOverlay = createAuthOverlay();
-// If true, the user manually closed the overlay — don't auto-re-show it.
-let paymentOverlayDismissed = false;
-const paymentOverlay = createPaymentOverlay(() => { paymentOverlayDismissed = true; });
-
-// If true, suppress auto-showing the payment overlay because we just returned
-// from a successful Stripe checkout and the webhook may not have processed yet.
-let suppressPaymentOverlay = false;
-
-// Auto-show/hide payment overlay based on subscription + free trial status
-onPaymentChange((state) => {
-  if (state && state.subscriptionActive) {
-    suppressPaymentOverlay = false;
-    paymentOverlayDismissed = false;
-    paymentOverlay.hide();
-    return;
-  }
-  if (state && !state.subscriptionActive) {
-    const trialActive = state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
-    if (!trialActive && !suppressPaymentOverlay) {
-      // Trial expired (or never started) — hard gate, always show
-      paymentOverlay.show();
-    } else if (trialActive && !paymentOverlayDismissed) {
-      // Trial active and user hasn't dismissed — show overlay so they see plans
-      paymentOverlay.show();
-    } else {
-      paymentOverlay.hide();
-    }
-  }
-});
+const paymentOverlay = createPaymentOverlay();
 
 if (isSpectator) {
   // Spectator mode: skip auth, HUD, and payment — just render the world
@@ -105,19 +75,13 @@ if (!isSpectator) {
   }
 
   // If we returned from a successful Stripe checkout, poll payment status
-  // while suppressing the payment overlay (webhook may not have processed yet)
   if (_paymentResult && _paymentResult.endsWith("success")) {
-    suppressPaymentOverlay = true;
     let attempts = 0;
     const poll = async () => {
       attempts++;
       await refreshPaymentStatus();
-      // If payment is now confirmed, onPaymentChange will clear the suppress flag
       if (attempts < 10) {
         setTimeout(() => void poll(), 2000);
-      } else {
-        // Polling exhausted — stop suppressing so overlay can show if still unpaid
-        suppressPaymentOverlay = false;
       }
     };
     setTimeout(() => void poll(), 1500);

@@ -9,7 +9,7 @@ import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supab
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleMcpCatalogRequest } from "./mcp-store.js";
 import { searchPulseMCPStructured } from "./pulsemcp.js";
-import { handleAgentResourcesRequest } from "./agent-resources.js";
+import { handleOfficeManagerRequest } from "./office-manager.js";
 import { handlePublishRequest } from "./publish.js";
 import { stopRailwayMCP, checkRailwayStatus, queryRailway, deployWorldToRailway, listWorldDeployments, stopWorldDeployment } from "./providers/railway-mcp.js";
 import { listWorldTemplates, generateWorld } from "./world-templates.js";
@@ -25,7 +25,7 @@ import { ScreenshotManager } from "./providers/screenshot.js";
 import { browserLastFrame, closeAgentBrowser, destroyAllBrowsers, cleanupIdleBrowsers } from "./providers/browser.js";
 import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
-import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured, startFreeTrial, nextTrialResetAt } from "./stripe.js";
+import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
 import { handleAssetUpgradeRequest, runAssetGenerationJob } from "./asset-upgrade.js";
 import { getUsageSummary } from "./usage.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
@@ -275,9 +275,9 @@ const screenshots = new ScreenshotManager();
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
 const server = createServer((req, res) => {
-  // Agent Resources chat proxy — needs HQ context from the session
-  if (req.url?.split("?")[0] === "/api/agent-resources") {
-    void handleAgentResourcesRequest(req, res, async () => {
+  // Office Manager chat proxy — needs HQ context from the session
+  if (req.url?.split("?")[0] === "/api/office-manager") {
+    void handleOfficeManagerRequest(req, res, async () => {
       if (isSupabaseConfigured) {
         const authHeader = req.headers["authorization"];
         const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -791,11 +791,11 @@ wss.on("connection", async (ws, req) => {
         return;
       }
 
-      // Only spectator_chat is accepted — forward to Agent Resources
+      // Only spectator_chat is accepted — forward to the Office Manager
       if (msg.type === "spectator_chat") {
         const text = `[${msg.fromName}]: ${msg.text}`.slice(0, 500);
         console.log(`[spectator] chat from ${msg.fromName}: ${msg.text}`);
-        sess.manager.chat("agent-resources", text);
+        sess.manager.chat("office-manager", text);
         return;
       }
 
@@ -925,17 +925,10 @@ wss.on("connection", async (ws, req) => {
     }
   }
 
-  // Send payment status so the client can gate UI (subscription + free trial)
-  let freeTrialTimer: ReturnType<typeof setTimeout> | null = null;
+  // Send payment status so the client can gate UI (subscription + free tier)
   if (isSupabaseConfigured && isStripeConfigured) {
     try {
       const payStatus = await getUserPaymentStatus(user.id, user.email);
-
-      // Start a free trial for authed users without a subscription
-      let freeTrialExpiresAt = payStatus.freeTrialExpiresAt;
-      if (!payStatus.subscriptionActive && !freeTrialExpiresAt) {
-        freeTrialExpiresAt = startFreeTrial(user.id);
-      }
 
       // Update the manager with subscription info
       sess.manager.subscriptionTier = payStatus.subscriptionTier;
@@ -950,58 +943,7 @@ wss.on("connection", async (ws, req) => {
         agentLimit: payStatus.agentLimit,
         usageCap: payStatus.usageCap,
         currentPeriodEnd: payStatus.currentPeriodEnd,
-        freeTrialExpiresAt,
-        nextTrialAt: payStatus.nextTrialAt,
       } satisfies ServerMsg));
-
-      // Set timer to notify when free trial expires
-      if (freeTrialExpiresAt) {
-        const msUntilExpiry = freeTrialExpiresAt - Date.now();
-        if (msUntilExpiry > 0) {
-          freeTrialTimer = setTimeout(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              // Send updated payment_status with expired trial so the client
-              // shows the payment overlay as a hard gate (no close button)
-              ws.send(JSON.stringify({
-                type: "payment_status",
-                entrancePaid: true,
-                subscriptionActive: false,
-                subscriptionStatus: "none",
-                subscriptionTier: null,
-                agentLimit: 0,
-                usageCap: 0,
-                currentPeriodEnd: null,
-                freeTrialExpiresAt: Date.now(),
-                nextTrialAt: nextTrialResetAt(),
-              } satisfies ServerMsg));
-              ws.send(JSON.stringify({
-                type: "payment_required",
-                reason: "subscription",
-                message: "Your 2-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
-              } satisfies ServerMsg));
-            }
-          }, msUntilExpiry);
-        } else {
-          // Already expired
-          ws.send(JSON.stringify({
-            type: "payment_status",
-            entrancePaid: true,
-            subscriptionActive: false,
-            subscriptionStatus: "none",
-            subscriptionTier: null,
-            agentLimit: 0,
-            usageCap: 0,
-            currentPeriodEnd: null,
-            freeTrialExpiresAt: Date.now(),
-            nextTrialAt: nextTrialResetAt(),
-          } satisfies ServerMsg));
-          ws.send(JSON.stringify({
-            type: "payment_required",
-            reason: "subscription",
-            message: "Your 2-minute free trial has ended. Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.",
-          } satisfies ServerMsg));
-        }
-      }
     } catch (err) {
       console.error("[server] failed to get payment status:", err);
     }
@@ -1089,18 +1031,6 @@ wss.on("connection", async (ws, req) => {
       // Unified permission system: check access level for the current room
       const accessLevel = tenants.getRoomAccessLevel(sess.user.id);
 
-      // Pre-check: if this is a chat message to a busy agent, reject before
-      // consuming a rate-limit token (prevents "too many requests" spam).
-      if (msg.type === "chat" && accessLevel !== "no_access") {
-        const roomMgr = tenants.getRoomManager(sess.roomId!);
-        const mgr0 = roomMgr ?? manager;
-        const agent0 = mgr0.getAgentInfo(msg.agentId);
-        if (agent0 && (agent0.status === "thinking" || agent0.status === "working")) {
-          sess.broadcast({ type: "toast", text: `${agent0.name} is heads-down right now.` });
-          return;
-        }
-      }
-
       // Fast path: high-frequency messages use sync in-memory rate limiting
       const allowed = FAST_PATH_TYPES.has(msg.type)
         ? rateLimit(sess.user.id, msg.type)
@@ -1116,6 +1046,19 @@ wss.on("connection", async (ws, req) => {
           if (ws.readyState === WebSocket.OPEN) ws.send(data);
         }
         return;
+      }
+
+      // Post-rate-limit check: if this is a chat message to a busy agent, reject.
+      // Sent directly via ws.send() so it doesn't get forwarded to room peers.
+      if (msg.type === "chat" && accessLevel !== "no_access") {
+        const roomMgr = tenants.getRoomManager(sess.roomId!);
+        const mgr0 = roomMgr ?? manager;
+        const agent0 = mgr0.getAgentInfo(msg.agentId);
+        if (agent0 && (agent0.status === "thinking" || agent0.status === "working")) {
+          const data = JSON.stringify({ type: "toast", text: `${agent0.name} is heads-down right now.` });
+          if (ws.readyState === WebSocket.OPEN) ws.send(data);
+          return;
+        }
       }
 
       // Account-level actions — bypass room permission checks
@@ -1147,12 +1090,14 @@ wss.on("connection", async (ws, req) => {
       const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_broadcast_html", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
 
       if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
-        sess.broadcast({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can look around but not manage agents. Ask an admin for talk access." : "Only room managers can do that." });
+        const data = JSON.stringify({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can look around but not manage agents. Ask an admin for talk access." : "Only room managers can do that." });
+        if (ws.readyState === WebSocket.OPEN) ws.send(data);
         return;
       }
 
       if (TALK_OR_ABOVE.has(msg.type) && accessLevel !== "talk" && accessLevel !== "manage") {
-        sess.broadcast({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can see agents but not interact. Ask an admin for talk access." : "No agents here — visit an office to chat." });
+        const data = JSON.stringify({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can see agents but not interact. Ask an admin for talk access." : "No agents here — visit an office to chat." });
+        if (ws.readyState === WebSocket.OPEN) ws.send(data);
         return;
       }
 
@@ -1246,12 +1191,22 @@ wss.on("connection", async (ws, req) => {
           }
           break;
         }
-        case "assign":
+        case "assign": {
+          if (!activeManager.subscriptionTier) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to assign tasks to your agents." });
+            break;
+          }
           activeManager.assign(msg.agentId, msg.task, msg.handoffTo);
           break;
-        case "assign_new":
+        }
+        case "assign_new": {
+          if (!activeManager.subscriptionTier) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to assign tasks to your agents." });
+            break;
+          }
           activeManager.assignNew(msg.agentId, msg.task, msg.handoffTo);
           break;
+        }
         case "chat": {
           // Subscription gate: block inference for users without an active subscription
           if (!activeManager.subscriptionTier) {
@@ -1281,7 +1236,8 @@ wss.on("connection", async (ws, req) => {
                 }
               }
               if (!allowed) {
-                sess.broadcast({ type: "toast", text: "You don't have permission to chat with this agent." });
+                const data = JSON.stringify({ type: "toast", text: "You don't have permission to chat with this agent." });
+                if (ws.readyState === WebSocket.OPEN) ws.send(data);
                 break;
               }
             }
@@ -2161,6 +2117,101 @@ wss.on("connection", async (ws, req) => {
                 type: "player_joined",
                 roomId: msg.roomId,
                 player: me,
+              });
+            }
+          }
+          break;
+        }
+        case "restore_room": {
+          // Only restore if the room exists and we're not already in it
+          const targetRoom = tenants.getRoom(msg.roomId);
+          if (!targetRoom || sess.roomId === msg.roomId) break;
+          // Check join permission
+          if (!tenants.canJoinRoom(msg.roomId, sess.user.id)) break;
+          // Notify old room that the player left
+          const oldRoomId = sess.roomId;
+          if (oldRoomId) {
+            for (const p of tenants.getRoomPlayers(oldRoomId)) {
+              if (p.userId === sess.user.id) continue;
+              const otherSess = tenants.get(p.userId);
+              if (otherSess) {
+                otherSess.broadcast({ type: "player_left", roomId: oldRoomId, userId: sess.user.id });
+              }
+            }
+          }
+          const room = tenants.switchRoom(sess.user.id, msg.roomId);
+          if (!room) break;
+          // Send new room state to the restoring player
+          const restoreAccessLevel = tenants.computeAccessLevel(room, sess.user.id);
+          sess.broadcast({
+            type: "room_state",
+            roomId: msg.roomId,
+            name: room.name,
+            players: tenants.getRoomPlayers(msg.roomId),
+            privateOfficeId: sess.privateOfficeId ?? undefined,
+            projectorChannel: room.projectorChannel,
+            accessLevel: restoreAccessLevel,
+            roomType: room.roomType,
+          });
+          sendRoomsList();
+          // Send agent snapshot from the room's manager
+          const restoreRoomMgr = tenants.getRoomManager(msg.roomId);
+          if (restoreRoomMgr) {
+            const snap = restoreRoomMgr.snapshot();
+            sess.broadcast({
+              type: "snapshot",
+              agents: snap.agents,
+              logs: snap.logs,
+              player: sess.player,
+              settings: restoreRoomMgr.settings,
+              board: snap.board,
+              schedules: restoreRoomMgr.snapshotSchedules(),
+              world: restoreRoomMgr.worldState(),
+            });
+          } else {
+            sess.broadcast({
+              type: "snapshot",
+              agents: [],
+              logs: {},
+              player: sess.player,
+              settings: sess.manager.settings,
+              board: [],
+              schedules: [],
+              world: null,
+            });
+          }
+          // Send mailbox + platform states for the restored room's manager
+          if (restoreRoomMgr) {
+            for (const mb of restoreRoomMgr.getMailboxSnapshots()) {
+              sess.broadcast({ type: "mailbox_update", ...mb });
+            }
+            sess.broadcast({ type: "platform_connection", states: restoreRoomMgr.getPlatformConnectionStates() });
+          }
+          void sendOutfits(ws, sess);
+          // Re-broadcast active screen share / webcam state to the restoring player
+          const restorePlayers = tenants.getRoomPlayers(msg.roomId);
+          for (const p of restorePlayers) {
+            if (p.userId === sess.user.id) continue;
+            const peerSess = tenants.get(p.userId);
+            if (!peerSess) continue;
+            if (peerSess.screenShareActive) {
+              sess.broadcast({ type: "screen_share_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
+            }
+            if (peerSess.webcamActive) {
+              sess.broadcast({ type: "webcam_state", presenterId: p.userId, presenterName: peerSess.player?.name ?? "Boss" });
+              sess.broadcast({ type: "webcam_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
+            }
+          }
+          // Notify players in the restored room
+          const restoreMe = restorePlayers.find((p) => p.userId === sess.user.id);
+          for (const p of restorePlayers) {
+            if (p.userId === sess.user.id) continue;
+            const otherSess = tenants.get(p.userId);
+            if (otherSess && restoreMe) {
+              otherSess.broadcast({
+                type: "player_joined",
+                roomId: msg.roomId,
+                player: restoreMe,
               });
             }
           }
@@ -3253,7 +3304,6 @@ wss.on("connection", async (ws, req) => {
     sess.clients.delete(ws);
     if (refreshTimer) clearTimeout(refreshTimer);
     if (expiryTimer) clearTimeout(expiryTimer);
-    if (freeTrialTimer) clearTimeout(freeTrialTimer);
     // Clean up agent log subscriptions
     if (sess.agentLogSubscriptions) {
       for (const unsub of sess.agentLogSubscriptions.values()) unsub();

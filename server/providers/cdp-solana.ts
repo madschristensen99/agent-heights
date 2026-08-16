@@ -78,34 +78,133 @@ export async function getAgentWalletAddress(agentId: string): Promise<string | n
   }
 }
 
-/** Get token balances for an agent's wallet. */
+/** Convert raw token units to human-readable string with proper decimals. */
+function rawToHuman(rawAmount: bigint, decimals: number): string {
+  if (decimals <= 0) return rawAmount.toString();
+  const negative = rawAmount < 0n;
+  const absVal = negative ? -rawAmount : rawAmount;
+  const divisor = 10n ** BigInt(decimals);
+  const wholePart = absVal / divisor;
+  const fracPart = absVal % divisor;
+  const fracStr = fracPart.toString().padStart(decimals, "0").replace(/0+$/, "");
+  let str = fracStr ? `${wholePart}.${fracStr}` : wholePart.toString();
+  if (negative) str = `-${str}`;
+  return str;
+}
+
+/** Fetch token metadata (symbol, name, decimals) from Jupiter's token API for a given mint. */
+const metadataCache = new Map<string, { symbol: string; name: string; decimals: number }>();
+
+async function resolveTokenMetadata(mint: string): Promise<{ symbol: string; name: string; decimals: number }> {
+  if (metadataCache.has(mint)) return metadataCache.get(mint)!;
+  const fallback = { symbol: mint.slice(0, 8), name: mint, decimals: 6 };
+  try {
+    const url = new URL("https://lite-api.jup.ag/ultra/v1/search");
+    url.searchParams.set("query", mint);
+    const res = await fetch(url.toString(), { headers: { "Content-Type": "application/json" } });
+    if (!res.ok) return fallback;
+    const data = await res.json() as any;
+    const tokens = Array.isArray(data) ? data : (data.tokens ?? data.result ?? []);
+    const found = (tokens as any[]).find((t) => (t.mint ?? t.address ?? t.id) === mint);
+    if (!found) return fallback;
+    const meta = {
+      symbol: found.symbol ?? found.tokenSymbol ?? mint.slice(0, 8),
+      name: found.name ?? found.tokenName ?? mint,
+      decimals: Number(found.decimals ?? found.tokenDecimals ?? 6),
+    };
+    metadataCache.set(mint, meta);
+    return meta;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Fetch ALL token balances directly from Solana RPC via getTokenAccountsByOwner.
+ * This bypasses CDP's indexing (which misses newer/Pump.fun tokens) and reads
+ * every SPL token account directly from the chain. */
+async function getAgentBalancesRpc(address: string): Promise<{ mint: string; symbol: string; amount: string; decimals: number }[]> {
+  const conn = new Connection(getRpcUrl(), "confirmed");
+  const owner = new PublicKey(address);
+
+  // Fetch native SOL balance
+  const lamports = await conn.getBalance(owner);
+  const solBalance = rawToHuman(BigInt(lamports), 9);
+
+  // Fetch all SPL token accounts (parsed)
+  const tokenAccounts = await conn.getParsedTokenAccountsByOwner(
+    owner,
+    { programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }
+  );
+
+  // Also check Token-2022 program
+  let token2022Accounts: typeof tokenAccounts = { value: [] } as any;
+  try {
+    token2022Accounts = await conn.getParsedTokenAccountsByOwner(
+      owner,
+      { programId: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb") }
+    );
+  } catch { /* Token-2022 may not be available on all networks */ }
+
+  const allAccounts = [...tokenAccounts.value, ...token2022Accounts.value];
+
+  // Build balance list, filtering out zero balances
+  const splBalances: { mint: string; symbol: string; amount: string; decimals: number }[] = [];
+  for (const acc of allAccounts) {
+    const parsed = (acc.account.data as any).parsed;
+    if (!parsed || parsed.type !== "account") continue;
+    const info = parsed.info;
+    if (!info) continue;
+    const rawAmount = BigInt(info.tokenAmount?.amount ?? 0);
+    if (rawAmount === 0n) continue;
+    const decimals = Number(info.tokenAmount?.decimals ?? 0);
+    const mint = info.mint as string;
+    splBalances.push({ mint, symbol: "", amount: rawToHuman(rawAmount, decimals), decimals });
+  }
+
+  // Resolve metadata for SPL tokens in parallel (batch of 5 to avoid rate limits)
+  const resolved: typeof splBalances = [];
+  for (let i = 0; i < splBalances.length; i += 5) {
+    const batch = splBalances.slice(i, i + 5);
+    const metas = await Promise.all(batch.map((b) => resolveTokenMetadata(b.mint)));
+    for (let j = 0; j < batch.length; j++) {
+      resolved.push({ ...batch[j], symbol: metas[j].symbol });
+    }
+  }
+
+  // SOL first, then SPL tokens
+  return [{ mint: "So11111111111111111111111111111111111111112", symbol: "SOL", amount: solBalance, decimals: 9 }, ...resolved];
+}
+
+/** Get token balances for an agent's wallet.
+ * Uses direct Solana RPC as primary source (complete — includes all SPL tokens
+ * including Pump.fun meme coins), enriched with CDP data for USD values on known tokens. */
 export async function getAgentBalances(agentId: string): Promise<{ address: string; balances: { symbol: string; amount: string; usdValue?: string }[] } | null> {
   if (!isCdpConfigured()) return null;
   try {
-    const cdp = getCdpClient();
     const account = await getAgentAccount(agentId);
-    const result = await cdp.solana.listTokenBalances({ address: account.address });
-    const rawBalances = (result as any).balances ?? [];
-    const balances = (rawBalances as any[]).map((b) => {
-      const rawAmount = BigInt(b.amount?.amount ?? 0);
-      const decimals = Number(b.amount?.decimals ?? 0);
-      const symbol = b.token?.symbol ?? b.token?.name ?? "unknown";
-      // Convert raw units to human-readable string with proper decimals
-      let amountStr: string;
-      if (decimals <= 0) {
-        amountStr = rawAmount.toString();
-      } else {
-        const negative = rawAmount < 0n;
-        const absVal = negative ? -rawAmount : rawAmount;
-        const divisor = 10n ** BigInt(decimals);
-        const wholePart = absVal / divisor;
-        const fracPart = absVal % divisor;
-        const fracStr = fracPart.toString().padStart(decimals, "0").replace(/0+$/, "");
-        amountStr = fracStr ? `${wholePart}.${fracStr}` : wholePart.toString();
-        if (negative) amountStr = `-${amountStr}`;
+
+    // Primary: direct RPC (gets ALL tokens including meme coins CDP misses)
+    const rpcBalances = await getAgentBalancesRpc(account.address);
+
+    // Secondary: CDP for USD value enrichment on known tokens
+    let cdpUsdMap = new Map<string, string>();
+    try {
+      const cdp = getCdpClient();
+      const cdpResult = await cdp.solana.listTokenBalances({ address: account.address });
+      const cdpRaw = (cdpResult as any).balances ?? [];
+      for (const b of cdpRaw as any[]) {
+        const mint = b.token?.mintAddress;
+        const usd = b.usdValue?.value ?? b.usdValue;
+        if (mint && usd) cdpUsdMap.set(mint, String(usd));
       }
-      return { symbol, amount: amountStr, usdValue: undefined };
-    });
+    } catch { /* CDP enrichment is best-effort */ }
+
+    const balances = rpcBalances.map((b) => ({
+      symbol: b.symbol,
+      amount: b.amount,
+      usdValue: cdpUsdMap.get(b.mint),
+    }));
+
     return { address: account.address, balances };
   } catch (err) {
     console.error(`[cdp-solana] Failed to get balances for agent ${agentId}:`, err);
@@ -412,30 +511,17 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
     inputSchema: { type: "object", properties: {} },
     async execute() {
       try {
-        const cdp = getCdpClient();
-        const account = await getAgentAccount(agentId);
-        const result = await cdp.solana.listTokenBalances({ address: account.address });
-        const rawBalances = (result as any).balances ?? [];
-        if (!rawBalances || rawBalances.length === 0) {
+        const data = await getAgentBalances(agentId);
+        if (!data || data.balances.length === 0) {
+          const account = await getAgentAccount(agentId);
           return `Wallet ${account.address} has no token balances. The wallet may need to be funded.`;
         }
-        const formatted = (rawBalances as any[]).map((b) => {
-          const rawAmount = BigInt(b.amount?.amount ?? 0);
-          const decimals = Number(b.amount?.decimals ?? 0);
-          const symbol = b.token?.symbol ?? b.token?.name ?? "unknown";
-          let amountStr: string;
-          if (decimals <= 0) {
-            amountStr = rawAmount.toString();
-          } else {
-            const divisor = 10n ** BigInt(decimals);
-            const wholePart = rawAmount / divisor;
-            const fracPart = rawAmount % divisor;
-            const fracStr = fracPart.toString().padStart(decimals, "0").replace(/0+$/, "");
-            amountStr = fracStr ? `${wholePart}.${fracStr}` : wholePart.toString();
-          }
-          return `${symbol}: ${amountStr}`;
+        const formatted = data.balances.map((b) => {
+          let line = `${b.symbol}: ${b.amount}`;
+          if (b.usdValue) line += ` (~$${b.usdValue})`;
+          return line;
         });
-        return `Balances for ${account.address}:\n${formatted.join("\n")}`;
+        return `Balances for ${data.address}:\n${formatted.join("\n")}`;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return `Error getting balances: ${msg}`;

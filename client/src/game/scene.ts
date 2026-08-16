@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
-import { AgentNPC, AgentResourcesNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
-import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE } from "../../../shared/types";
+import { AgentNPC, OfficeManagerNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
+import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -96,16 +96,16 @@ export class OfficeScene extends Phaser.Scene {
   private store!: Store;
   private grid!: Grid;
   private npcs = new Map<string, AgentNPC>();
-  private agentResources: AgentResourcesNPC | null = null;
+  private officeManager: OfficeManagerNPC | null = null;
   private hermes: HermesNPC | null = null;
   private wizard: WizardNPC | null = null;
-  private agentResourcesSeat: Tile | null = null;
-  private agentResourcesOfficeZone: Phaser.GameObjects.Zone | null = null;
+  private officeManagerSeat: Tile | null = null;
+  private officeManagerOfficeZone: Phaser.GameObjects.Zone | null = null;
   private seats: Tile[] = [];
   private extraSpots: Tile[] = [];
   private monitors: Phaser.GameObjects.Sprite[] = [];
   private chairs: Phaser.GameObjects.Sprite[] = [];
-  private agentResourcesMonitor: Phaser.GameObjects.Sprite | null = null;
+  private officeManagerMonitor: Phaser.GameObjects.Sprite | null = null;
   private hermesSeat: Tile | null = null;
   private hermesMonitor: Phaser.GameObjects.Sprite | null = null;
   private wizardSeat: Tile | null = null;
@@ -342,6 +342,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerVx = 0;
   private playerVy = 0;
   private playerPathOutdoor = false;
+  private pendingOutdoorTargetPx: { x: number; y: number } | null = null;
 
   // ── Camera controls (pinch-zoom, pan, recenter) ──
   private cameraMode: "follow" | "free" = "follow";
@@ -567,18 +568,18 @@ export class OfficeScene extends Phaser.Scene {
     // a theme change restarts the scene — drop everything the last run built
     this.npcs.clear();
     this.initialSyncDone = false;
-    this.agentResources = null;
+    this.officeManager = null;
     // Clear any theme-registered furniture from the previous run
     clearThemeFurniture();
     this.hermes = null;
     this.wizard = null;
-    this.agentResourcesSeat = null;
+    this.officeManagerSeat = null;
     this.wizardSeat = null;
     this.seats = [];
     this.extraSpots = [];
     this.monitors = [];
     this.chairs = [];
-    this.agentResourcesMonitor = null;
+    this.officeManagerMonitor = null;
     this.hermesMonitor = null;
     this.coffeeUntil = 0;
     this.fridgeUntil = 0;
@@ -809,16 +810,16 @@ export class OfficeScene extends Phaser.Scene {
               this.spawnTile = { x: tx, y: ty };
             } else if (obj.name === "coffee") {
               this.coffeeTile = { x: tx, y: ty };
-            } else if (obj.name === "agent-resources-seat") {
-              this.agentResourcesSeat = { x: tx, y: ty };
-            } else if (obj.name === "agent-resources-monitor") {
-              // Side-view monitor on Agent Resources's desk — thin profile, screen faces right toward her
+            } else if (obj.name === "office-manager-seat") {
+              this.officeManagerSeat = { x: tx, y: ty };
+            } else if (obj.name === "office-manager-monitor") {
+              // Side-view monitor on the Office Manager's desk — thin profile, screen faces right toward her
               const mx = (obj.x ?? 0) + TILE_PX * 0.35;
               const my = (obj.y ?? 0) - TILE_PX * 0.15;
               const spr = this.add
                 .sprite(mx, my, MONITOR_SIDE_TEX, "0")
                 .setDepth(10 + (obj.y ?? 0) - 10);
-              this.agentResourcesMonitor = spr;
+              this.officeManagerMonitor = spr;
             } else if (obj.name === "hermes-seat") {
               this.hermesSeat = { x: tx, y: ty };
             } else if (obj.name === "hermes-monitor") {
@@ -930,28 +931,28 @@ export class OfficeScene extends Phaser.Scene {
             }
           }
 
-          // Agent Resources — the office manager NPC
-          if (this.agentResourcesSeat) {
-            // Create Agent Resources's left-facing chair sprite
-            const ycx = this.agentResourcesSeat.x * TILE_PX + TILE_PX / 2;
-            const ycy = this.agentResourcesSeat.y * TILE_PX + TILE_PX / 2;
+          // Office Manager — the office manager NPC
+          if (this.officeManagerSeat) {
+            // Create the Office Manager's left-facing chair sprite
+            const ycx = this.officeManagerSeat.x * TILE_PX + TILE_PX / 2;
+            const ycy = this.officeManagerSeat.y * TILE_PX + TILE_PX / 2;
             this.add
               .sprite(ycx, ycy, resolveChairTex(this, CHAIR_TEX_LEFT))
-              .setDepth(5 + this.agentResourcesSeat.y * TILE_PX + 1);
+              .setDepth(5 + this.officeManagerSeat.y * TILE_PX + 1);
 
-            this.agentResources = new AgentResourcesNPC(this, this.grid, this.agentResourcesSeat, (clicked) =>
+            this.officeManager = new OfficeManagerNPC(this, this.grid, this.officeManagerSeat, (clicked) =>
               this.walkToAgent(clicked),
             );
 
-            // clickable zone over Agent Resources's office — clicking anywhere inside opens her chat
+            // clickable zone over the Office Manager's office — clicking anywhere inside opens her chat
             const zo = { x0: 22, y0: 8, x1: 27, y1: 11 };
             const zx = (zo.x0 + zo.x1 + 1) / 2 * TILE_PX;
             const zy = (zo.y0 + zo.y1 + 1) / 2 * TILE_PX;
             const zw = (zo.x1 - zo.x0 + 1) * TILE_PX;
             const zh = (zo.y1 - zo.y0 + 1) * TILE_PX;
-            this.agentResourcesOfficeZone = this.add.zone(zx, zy, zw, zh);
-            this.agentResourcesOfficeZone.setInteractive({ useHandCursor: true });
-            this.agentResourcesOfficeZone.on("pointerdown", () => this.walkToAgent(AGENT_RESOURCES_ID));
+            this.officeManagerOfficeZone = this.add.zone(zx, zy, zw, zh);
+            this.officeManagerOfficeZone.setInteractive({ useHandCursor: true });
+            this.officeManagerOfficeZone.on("pointerdown", () => this.walkToAgent(OFFICE_MANAGER_ID));
           }
 
           // Hermes — right-facing chair at the mail room desk
@@ -986,7 +987,7 @@ export class OfficeScene extends Phaser.Scene {
             for (let x = 2; x < map.width - 2; x++) {
               if (!walkable[y][x] || (x + y) % 3 !== 0) continue;
               if (this.seats.some((s) => s && s.x === x && s.y === y)) continue;
-              if (this.agentResourcesSeat && this.agentResourcesSeat.x === x && this.agentResourcesSeat.y === y) continue;
+              if (this.officeManagerSeat && this.officeManagerSeat.x === x && this.officeManagerSeat.y === y) continue;
               if (this.hermesSeat && this.hermesSeat.x === x && this.hermesSeat.y === y) continue;
               if (this.wizardSeat && this.wizardSeat.x === x && this.wizardSeat.y === y) continue;
               this.extraSpots.push({ x, y });
@@ -1377,7 +1378,7 @@ export class OfficeScene extends Phaser.Scene {
             });
             this.store.onNpcState((npcId, x, y, dir, state) => {
               if (!this.ready || this.store.roomId === "hq2") return;
-              if (npcId === AGENT_RESOURCES_ID) this.agentResources?.remoteUpdate(x, y, dir, state);
+              if (npcId === OFFICE_MANAGER_ID) this.officeManager?.remoteUpdate(x, y, dir, state);
               else if (npcId === HERMES_ID) this.hermes?.remoteUpdate(x, y, dir, state);
               else if (npcId === WIZARD_ID) this.wizard?.remoteUpdate(x, y, dir, state);
             });
@@ -2266,8 +2267,31 @@ export class OfficeScene extends Phaser.Scene {
       this.playerTargetPx = { x: worldPoint.x, y: worldPoint.y };
       this.showPathMarkerPx(worldPoint.x, worldPoint.y);
     } else {
-      this.walkToTile(targetTile);
-      this.showPathMarker(targetTile);
+      // Player is inside — check if the tap is outside the office
+      const tapOutside = this.world.isOutside(worldPoint.x, worldPoint.y);
+      if (tapOutside) {
+        // Two-phase: path to the door first, then straight-line to outdoor target
+        const doorTile = this.doorTile;
+        const start = tileOf(this.player.x, this.player.y);
+        const path = findPath(this.grid, start, doorTile);
+        if (path.length > 0) {
+          this.playerPath = path;
+          this.playerPathOutdoor = false;
+          this.pendingOutdoorTargetPx = { x: worldPoint.x, y: worldPoint.y };
+          this.playerTargetPx = null;
+          this.showPathMarkerPx(worldPoint.x, worldPoint.y);
+          return;
+        }
+        // Path to door failed — fall back to straight-line (sub-step collision handles the door gap)
+        this.playerPath = [];
+        this.playerPathOutdoor = false;
+        this.pendingOutdoorTargetPx = null;
+        this.playerTargetPx = { x: worldPoint.x, y: worldPoint.y };
+        this.showPathMarkerPx(worldPoint.x, worldPoint.y);
+      } else {
+        this.walkToTile(targetTile);
+        this.showPathMarker(targetTile);
+      }
     }
   }
 
@@ -2294,9 +2318,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Mobile: walk to the agent first, then select on arrival
     let npcX = 0, npcY = 0;
-    if (id === AGENT_RESOURCES_ID && this.agentResources) {
-      npcX = this.agentResources.container.x;
-      npcY = this.agentResources.container.y;
+    if (id === OFFICE_MANAGER_ID && this.officeManager) {
+      npcX = this.officeManager.container.x;
+      npcY = this.officeManager.container.y;
     } else if (id === HERMES_ID && this.hermes) {
       npcX = this.hermes.container.x;
       npcY = this.hermes.container.y;
@@ -2334,7 +2358,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Select an agent and open chat. */
   private selectAgent(id: string): void {
     this.store.select(id);
-    if (id === AGENT_RESOURCES_ID) achievements.unlock("agent-resources_visit");
+    if (id === OFFICE_MANAGER_ID) achievements.unlock("office-manager_visit");
     setTimeout(() => {
       (document.getElementById("d-chat") as HTMLInputElement | null)?.focus();
     }, 0);
@@ -2740,6 +2764,46 @@ export class OfficeScene extends Phaser.Scene {
     );
   }
 
+  /** Security warnings for platforms that handle sensitive data or have broad access. */
+  private static readonly PLATFORM_SECURITY_WARNINGS: Record<string, { level: "low" | "medium" | "high"; note: string }> = {
+    Slack: {
+      level: "medium",
+      note: "The bot token grants access to channel messages where the bot is invited. Only invite the bot to channels where agents should read. Use the minimum required scopes.",
+    },
+    Discord: {
+      level: "medium",
+      note: "The bot can read all server messages it has access to. Restrict bot roles to specific channels. Enable only the Message Content Intent if needed.",
+    },
+    WhatsApp: {
+      level: "medium",
+      note: "Twilio credentials can send messages on your behalf. Keep your Auth Token private and rotate it if compromised.",
+    },
+    Gmail: {
+      level: "high",
+      note: "Google OAuth grants access to your email. Hermes can read and send emails. Consider using a dedicated Google account for agent communications.",
+    },
+    "Google Chat": {
+      level: "medium",
+      note: "The service account can read and post messages in Google Chat spaces. Restrict the service account to specific spaces.",
+    },
+    "Microsoft Teams": {
+      level: "medium",
+      note: "Azure AD app credentials grant access to Teams channels. Limit the app to specific teams and channels via admin consent policies.",
+    },
+    "GitHub Issues": {
+      level: "medium",
+      note: "The GitHub token grants access to your repositories. Use a fine-grained PAT scoped to specific repos with minimum permissions.",
+    },
+    "X (Twitter)": {
+      level: "high",
+      note: "X API credentials can post tweets and read your account data. Use a dedicated account or restrict API permissions to read-only if possible.",
+    },
+    Telegram: {
+      level: "low",
+      note: "The bot token only allows the bot to receive messages sent to it directly. No access to your private conversations.",
+    },
+  };
+
   /** Platform-specific setup steps for the connect modal. */
   private static readonly PLATFORM_SETUP_STEPS: Record<string, { title: string; body: string; cmd?: string }[]> = {
     Slack: [
@@ -3100,6 +3164,30 @@ export class OfficeScene extends Phaser.Scene {
       display: flex; flex-direction: column; gap: 0;
     `;
     card.appendChild(content);
+
+    // Security warning banner (if platform has one)
+    const secWarn = OfficeScene.PLATFORM_SECURITY_WARNINGS[platform];
+    if (secWarn) {
+      const warnBanner = document.createElement("div");
+      const isHigh = secWarn.level === "high";
+      const isMed = secWarn.level === "medium";
+      warnBanner.style.cssText = `
+        display: flex; gap: 8px; padding: 10px 14px; border-radius: 8px;
+        margin-bottom: 16px; font-size: 12px; line-height: 1.5;
+        background: ${isHigh ? "#fdf0ec" : isMed ? "#fef9ec" : "#eef5ee"};
+        border: 1px solid ${isHigh ? "#e8a895" : isMed ? "#e8d895" : "#c8d8c8"};
+        color: ${isHigh ? "#a04020" : isMed ? "#8a7020" : "#4a6a4a"};
+      `;
+      const iconColor = isHigh ? "#c44a30" : isMed ? "#c8a030" : "#5a8a5a";
+      warnBanner.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div>
+          <div style="font-weight:bold;margin-bottom:2px;">Security Note</div>
+          <div>${secWarn.note}</div>
+        </div>
+      `;
+      content.appendChild(warnBanner);
+    }
 
     // Step badge
     const stepBadge = document.createElement("div");
@@ -3773,7 +3861,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Water cooler: show a random agent's current status. */
   private waterCoolerGossip(): void {
-    const agents = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID);
+    const agents = [...this.store.agents.values()].filter((a) => a.id !== OFFICE_MANAGER_ID);
     if (agents.length === 0) {
       this.store.toast("The water cooler bubbles quietly. Nobody to gossip about yet.");
       return;
@@ -4619,7 +4707,7 @@ export class OfficeScene extends Phaser.Scene {
     this.padFrontPx = { x: _pf.x, y: _pf.y };
   }
 
-  /** Draw a big red emergency button on the wall in Agent Resources's office. */
+  /** Draw a big red emergency button on the wall in the Office Manager's office. */
   private drawRedButton(): void {
     const g = this.add.graphics().setDepth(3);
     const bx = this.redButtonTile.x * TILE_PX + 32;
@@ -4943,7 +5031,7 @@ export class OfficeScene extends Phaser.Scene {
     // sidebar and is interactable right away. The helicopter animation
     // is purely cosmetic — syncAgents() will replace the cosmetic sprite
     // with the real NPC when the server confirms.
-    // Skip if the server already created the agent (Agent Resources hire).
+    // Skip if the server already created the agent (Office Manager hire).
     if (delivery && !delivery.alreadyHired) {
       const net = this.game.registry.get("net") as import("../net").Net;
       net.send({
@@ -6723,7 +6811,7 @@ export class OfficeScene extends Phaser.Scene {
       this.anims.create({ key: `${key}-hop`, frames: this.anims.generateFrameNumbers(key, { frames: [3, 1, 0] }), frameRate: 5, repeat: 0 });
     }
 
-    const sheets = ["char-agent-resources", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
+    const sheets = ["char-office-manager", "char-hermes", ...Array.from({ length: 8 }, (_, i) => `char-${i}`)];
     const dirs: Dir[] = ["down", "left", "right", "up"];
     for (const key of sheets) {
       if (this.anims.exists(`${key}-work`)) continue;
@@ -6788,7 +6876,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private syncAgents(): void {
     for (const [id, info] of this.store.agents) {
-      if (id === AGENT_RESOURCES_ID) {
+      if (id === OFFICE_MANAGER_ID) {
         if (info.appearance) {
           const key = agentTextureKey(info);
           if (!this.textures.exists(key)) {
@@ -6796,7 +6884,7 @@ export class OfficeScene extends Phaser.Scene {
             this.ensureCharAnimations(key);
           }
         }
-        this.agentResources?.sync(info);
+        this.officeManager?.sync(info);
         continue;
       }
       if (id === HERMES_ID) {
@@ -6893,15 +6981,15 @@ export class OfficeScene extends Phaser.Scene {
       }
     });
 
-    // Agent Resources's monitor — always on since she's always at her desk
-    if (this.agentResourcesMonitor) {
-      const agentResourcesInfo = this.store.agents.get(AGENT_RESOURCES_ID);
-      if (agentResourcesInfo && agentResourcesInfo.status !== "idle") {
-        this.agentResourcesMonitor.setFrame("1");
-        this.agentResourcesMonitor.setTint(getThemeStatusColors(this.worldTheme)[agentResourcesInfo.status]);
+    // Office Manager's monitor — always on since she's always at her desk
+    if (this.officeManagerMonitor) {
+      const officeManagerInfo = this.store.agents.get(OFFICE_MANAGER_ID);
+      if (officeManagerInfo && officeManagerInfo.status !== "idle") {
+        this.officeManagerMonitor.setFrame("1");
+        this.officeManagerMonitor.setTint(getThemeStatusColors(this.worldTheme)[officeManagerInfo.status]);
       } else {
-        this.agentResourcesMonitor.setFrame("0");
-        this.agentResourcesMonitor.clearTint();
+        this.officeManagerMonitor.setFrame("0");
+        this.officeManagerMonitor.clearTint();
       }
     }
 
@@ -6942,17 +7030,17 @@ export class OfficeScene extends Phaser.Scene {
       const myRoleTyping = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
       const isVisitorTyping = (myRoleTyping === "member" || myRoleTyping === "guest") && this.store.roomId !== "hq2";
       if (!isVisitorTyping) {
-        this.agentResources?.update(time, dt, false, this.player.x, this.player.y);
+        this.officeManager?.update(time, dt, false, this.player.x, this.player.y);
         this.hermes?.update(time, dt);
         this.wizard?.update(time, dt);
       }
       const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
-      const selAgentResources = this.store.selectedId === AGENT_RESOURCES_ID ? this.agentResources : null;
+      const selOfficeManager = this.store.selectedId === OFFICE_MANAGER_ID ? this.officeManager : null;
       const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
       const selWizard = this.store.selectedId === WIZARD_ID ? this.wizard : null;
-      this.selectRing.setVisible(!!(sel || selAgentResources || selHermes || selWizard));
+      this.selectRing.setVisible(!!(sel || selOfficeManager || selHermes || selWizard));
       if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
-      else if (selAgentResources) this.selectRing.setPosition(selAgentResources.container.x, selAgentResources.container.y + 1);
+      else if (selOfficeManager) this.selectRing.setPosition(selOfficeManager.container.x, selOfficeManager.container.y + 1);
       else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
       else if (selWizard) this.selectRing.setPosition(selWizard.container.x, selWizard.container.y + 1);
       return;
@@ -6986,6 +7074,7 @@ export class OfficeScene extends Phaser.Scene {
       // Joystick input cancels any active tap-to-walk path
       this.playerPath = [];
       this.playerTargetPx = null;
+      this.pendingOutdoorTargetPx = null;
       this.pendingInteract = false;
       this.pendingAgentId = null;
       this.clearPathMarker();
@@ -7020,16 +7109,22 @@ export class OfficeScene extends Phaser.Scene {
         // Advance past all tiles we were close to
         this.playerPath.splice(0, advanceCount);
         if (this.playerPath.length === 0) {
-          // Path complete
-          this.clearPathMarker();
-          if (this.pendingAgentId) {
-            const aid = this.pendingAgentId;
-            this.pendingAgentId = null;
-            this.selectAgent(aid);
-          } else if (this.pendingInteract) {
-            this.pendingInteract = false;
-            // Simulate E press via touchInput so the full ePressed block runs next frame
-            touchInput.action = "interact";
+          // Path complete — check if we have a pending outdoor target to continue toward
+          if (this.pendingOutdoorTargetPx) {
+            this.playerTargetPx = this.pendingOutdoorTargetPx;
+            this.pendingOutdoorTargetPx = null;
+            // Don't clear path marker — straight-line phase will handle it
+          } else {
+            this.clearPathMarker();
+            if (this.pendingAgentId) {
+              const aid = this.pendingAgentId;
+              this.pendingAgentId = null;
+              this.selectAgent(aid);
+            } else if (this.pendingInteract) {
+              this.pendingInteract = false;
+              // Simulate E press via touchInput so the full ePressed block runs next frame
+              touchInput.action = "interact";
+            }
           }
         }
       } else if (dist > 0) {
@@ -7062,6 +7157,7 @@ export class OfficeScene extends Phaser.Scene {
     if (left || right || up || down) {
       this.playerPath = [];
       this.playerTargetPx = null;
+      this.pendingOutdoorTargetPx = null;
       this.pendingInteract = false;
       this.pendingAgentId = null;
       this.clearPathMarker();
@@ -7241,15 +7337,15 @@ export class OfficeScene extends Phaser.Scene {
             );
             if (d < 144 && (!best || d < best.d)) best = { id, d };
           }
-          // also check Agent Resources
-          if (this.agentResources) {
+          // also check the Office Manager
+          if (this.officeManager) {
             const d = Phaser.Math.Distance.Between(
               this.player.x,
               this.player.y,
-              this.agentResources.container.x,
-              this.agentResources.container.y,
+              this.officeManager.container.x,
+              this.officeManager.container.y,
             );
-            if (d < 144 && (!best || d < best.d)) best = { id: AGENT_RESOURCES_ID, d };
+            if (d < 144 && (!best || d < best.d)) best = { id: OFFICE_MANAGER_ID, d };
           }
           // also check Hermes
           if (this.hermes) {
@@ -7263,7 +7359,7 @@ export class OfficeScene extends Phaser.Scene {
           }
           this.store.select(best ? best.id : null);
           if (best) {
-            if (best.id === AGENT_RESOURCES_ID) achievements.unlock("agent-resources_visit");
+            if (best.id === OFFICE_MANAGER_ID) achievements.unlock("office-manager_visit");
             // defer focus so this keypress doesn't type "e" into the chat box
             setTimeout(() => {
               (document.getElementById("d-chat") as HTMLInputElement | null)?.focus();
@@ -7282,23 +7378,23 @@ export class OfficeScene extends Phaser.Scene {
 
     // --- agents ---
     for (const npc of this.npcs.values()) npc.update(time, dt, this.store.settings.game.idleWander, this.player.x, this.player.y);
-    // Run Agent Resources/Hermes state machine unless we're a visitor in someone else's private office
+    // Run Office Manager/Hermes state machine unless we're a visitor in someone else's private office
     const myRole = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
     const isVisitor = (myRole === "member" || myRole === "guest") && this.store.roomId !== "hq2";
     if (!isVisitor) {
-      this.agentResources?.update(time, dt, false, this.player.x, this.player.y);
+      this.officeManager?.update(time, dt, false, this.player.x, this.player.y);
       this.hermes?.update(time, dt);
       this.wizard?.update(time, dt);
     }
 
     // selection ring
     const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
-    const selAgentResources = this.store.selectedId === AGENT_RESOURCES_ID ? this.agentResources : null;
+    const selOfficeManager = this.store.selectedId === OFFICE_MANAGER_ID ? this.officeManager : null;
     const selHermes = this.store.selectedId === HERMES_ID ? this.hermes : null;
     const selWizard = this.store.selectedId === WIZARD_ID ? this.wizard : null;
-    this.selectRing.setVisible(!!(sel || selAgentResources || selHermes || selWizard));
+    this.selectRing.setVisible(!!(sel || selOfficeManager || selHermes || selWizard));
     if (sel) this.selectRing.setPosition(sel.container.x, sel.container.y + 1);
-    else if (selAgentResources) this.selectRing.setPosition(selAgentResources.container.x, selAgentResources.container.y + 1);
+    else if (selOfficeManager) this.selectRing.setPosition(selOfficeManager.container.x, selOfficeManager.container.y + 1);
     else if (selHermes) this.selectRing.setPosition(selHermes.container.x, selHermes.container.y + 1);
     else if (selWizard) this.selectRing.setPosition(selWizard.container.x, selWizard.container.y + 1);
 
@@ -7463,7 +7559,7 @@ export class OfficeScene extends Phaser.Scene {
     const isOwnerForNpc = myRoleForNpc === "owner" && this.store.roomId !== "hq2";
     if (isOwnerForNpc && now - this.lastNpcSyncSent > 200) {
       this.lastNpcSyncSent = now;
-      this.sendNpcStateIfChanged(this.agentResources, AGENT_RESOURCES_ID);
+      this.sendNpcStateIfChanged(this.officeManager, OFFICE_MANAGER_ID);
       this.sendNpcStateIfChanged(this.hermes, HERMES_ID);
       this.sendNpcStateIfChanged(this.wizard, WIZARD_ID);
     }
@@ -8467,7 +8563,7 @@ export class OfficeScene extends Phaser.Scene {
     content.innerHTML = this.renderAgentDashboard(agent);
 
     // Wire up system prompt editing
-    const isBuiltIn = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID;
+    const isBuiltIn = agent.id === OFFICE_MANAGER_ID || agent.id === HERMES_ID;
     const editBtn = document.getElementById("av-stats-prompt-edit");
     const saveBtn = document.getElementById("av-stats-prompt-save");
     const cancelBtn = document.getElementById("av-stats-prompt-cancel");
@@ -8568,8 +8664,8 @@ export class OfficeScene extends Phaser.Scene {
     let spriteImg: string;
     if (agent.appearance) {
       spriteImg = generateCharPreviewDataURL(agent.appearance, 3);
-    } else if (agent.id === AGENT_RESOURCES_ID) {
-      spriteImg = "assets/characters/char-agent-resources.png";
+    } else if (agent.id === OFFICE_MANAGER_ID) {
+      spriteImg = "assets/characters/char-office-manager.png";
     } else if (agent.id === HERMES_ID) {
       spriteImg = "assets/characters/char-hermes.png";
     } else {

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { AgentInfo } from "../../../shared/types";
-import { AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID } from "../../../shared/types";
+import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID } from "../../../shared/types";
 import type { WorldTheme } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
 import { CHAR_LAYERS } from "./chargen";
@@ -230,6 +230,7 @@ export class AgentNPC {
   private bubble: Phaser.GameObjects.Sprite;
   private emoteSprite: Phaser.GameObjects.Sprite;
   private emoteUntil = 0;
+  private lockIcon: Phaser.GameObjects.Container | null = null;
   private shadow: Phaser.GameObjects.Ellipse;
   private baseKey: string;
   private useLayers: boolean;
@@ -302,11 +303,23 @@ export class AgentNPC {
       .setVisible(false)
       .setScale(1.5);
 
+    // Lock icon for ACL-restricted agents — drawn as vector graphics, shown above the name tag
+    const lockGfx = scene.add.graphics();
+    lockGfx.lineStyle(1.5, 0xc9852c, 1);
+    lockGfx.fillStyle(0xc9852c, 0.15);
+    lockGfx.fillRoundedRect(-4, -2, 8, 7, 1);
+    lockGfx.strokeRoundedRect(-4, -2, 8, 7, 1);
+    lockGfx.beginPath();
+    lockGfx.arc(0, -2, 2.5, Math.PI, 0, false);
+    lockGfx.strokePath();
+    this.lockIcon = scene.add.container(28, -96, [lockGfx]).setVisible(false);
+
     containerChildren.push(
       this.nameTag.nameBg,
       this.nameTag.label,
       this.bubble,
       this.emoteSprite,
+      this.lockIcon,
     );
 
     this.container = scene.add.container(feet.x, feet.y, containerChildren);
@@ -331,6 +344,18 @@ export class AgentNPC {
     this.info = info;
     this.nameTag.setStatus(info.status);
     this.nameTag.setName(info.name);
+
+    // Update lock icon visibility based on ACL
+    if (this.lockIcon) {
+      const acl = info.acl;
+      const hasAcl = acl && ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
+      if (hasAcl) {
+        this.lockIcon.setVisible(true);
+      } else {
+        this.lockIcon.setVisible(false);
+      }
+    }
+
     if (this.busy && !wasBusy) {
       // a new task trumps the coffee run
       this.pendingBreak = false;
@@ -706,14 +731,14 @@ export class AgentNPC {
   }
 }
 
-// --- Agent Resources's office geometry (must match generate-assets.ts) ---
-const AGENT_RESOURCES_OFFICE = { x0: 22, y0: 8, x1: 27, y1: 11 };
-const AGENT_RESOURCES_GREET_TILE: Tile = { x: 23, y: 10 };
+// --- Office Manager's office geometry (must match generate-assets.ts) ---
+const OFFICE_MANAGER_OFFICE = { x0: 22, y0: 8, x1: 27, y1: 11 };
+const OFFICE_MANAGER_GREET_TILE: Tile = { x: 23, y: 10 };
 
-type AgentResourcesState = "sitting" | "greeting" | "returning";
+type OfficeManagerState = "sitting" | "greeting" | "returning";
 
-/** Agent Resources — the office manager. Sits at her desk; stands up to greet visitors. */
-export class AgentResourcesNPC {
+/** Office Manager — sits at her desk; stands up to greet visitors. */
+export class OfficeManagerNPC {
   container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite;
   private nameTag: NameTag;
@@ -723,10 +748,10 @@ export class AgentResourcesNPC {
   private seat: Tile;
   private path: Tile[] = [];
   private dir: Dir = "down";
-  private state: AgentResourcesState = "sitting";
+  private state: OfficeManagerState = "sitting";
   private greetUntil = 0;
   private wasPlayerInside = false;
-  private texKey = "char-agent-resources";
+  private texKey = "char-office-manager";
 
   constructor(
     scene: Phaser.Scene,
@@ -739,7 +764,7 @@ export class AgentResourcesNPC {
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 48, 18, 0x000000, 0.15);
     this.sprite = scene.add.sprite(0, 0, this.texKey, 6).setOrigin(0.5, 1).setScale(1);
-    this.nameTag = createNameTag(scene, "Agent Resources", "idle");
+    this.nameTag = createNameTag(scene, "Office Manager", "idle");
 
     this.container = scene.add.container(feet.x, feet.y, [
       this.shadow,
@@ -753,7 +778,7 @@ export class AgentResourcesNPC {
     this.play(`${this.texKey}-idle-left`);
 
     this.sprite.setInteractive({ useHandCursor: true });
-    this.sprite.on("pointerdown", () => onClick(AGENT_RESOURCES_ID));
+    this.sprite.on("pointerdown", () => onClick(OFFICE_MANAGER_ID));
   }
 
   /** Update status dot + label from server state. */
@@ -784,7 +809,7 @@ export class AgentResourcesNPC {
   remoteUpdate(x: number, y: number, dir: Dir, state: string): void {
     this.container.setPosition(x, y);
     this.dir = dir;
-    this.state = state as AgentResourcesState;
+    this.state = state as OfficeManagerState;
     // Clear path — visitors don't run the pathfinding state machine
     this.path = [];
     this.play(`${this.texKey}-idle-${this.dir}`);
@@ -805,13 +830,13 @@ export class AgentResourcesNPC {
     const c = this.texKey;
     const pt = tileOf(playerX, playerY);
     const playerInside =
-      pt.x >= AGENT_RESOURCES_OFFICE.x0 && pt.x <= AGENT_RESOURCES_OFFICE.x1 &&
-      pt.y >= AGENT_RESOURCES_OFFICE.y0 && pt.y <= AGENT_RESOURCES_OFFICE.y1;
+      pt.x >= OFFICE_MANAGER_OFFICE.x0 && pt.x <= OFFICE_MANAGER_OFFICE.x1 &&
+      pt.y >= OFFICE_MANAGER_OFFICE.y0 && pt.y <= OFFICE_MANAGER_OFFICE.y1;
 
     // detect player entering the office
     if (playerInside && !this.wasPlayerInside && this.state === "sitting") {
       this.state = "greeting";
-      const path = findPath(this.grid, this.tile(), AGENT_RESOURCES_GREET_TILE);
+      const path = findPath(this.grid, this.tile(), OFFICE_MANAGER_GREET_TILE);
       this.path = path;
       this.greetUntil = 0;
     }

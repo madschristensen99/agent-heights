@@ -8,8 +8,6 @@ export interface PaymentState {
   agentLimit: number;
   usageCap: number;
   currentPeriodEnd: number | null;
-  freeTrialExpiresAt: number | null;
-  nextTrialAt: number | null;
 }
 
 type PaymentListener = (state: PaymentState | null) => void;
@@ -80,13 +78,11 @@ export async function refreshPaymentStatus(): Promise<void> {
       agentLimit: (result.agentLimit as number) ?? 0,
       usageCap: (result.usageCap as number) ?? 0,
       currentPeriodEnd: (result.currentPeriodEnd as number | null) ?? null,
-      freeTrialExpiresAt: (result.freeTrialExpiresAt as number | null) ?? null,
-      nextTrialAt: (result.nextTrialAt as number | null) ?? null,
     });
   }
 }
 
-export function createPaymentOverlay(onClose?: () => void): { show: () => void; hide: () => void } {
+export function createPaymentOverlay(): { show: () => void; hide: () => void } {
   const overlay = document.createElement("div");
   overlay.id = "payment-overlay";
   overlay.style.cssText = `
@@ -106,20 +102,6 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       <h1 style="font-size:2.2rem;font-weight:800;margin:0 0 0.5rem;letter-spacing:0.08em;color:#58c866;text-shadow:3px 3px 0 #080a10;">AGENT HEIGHTS</h1>
       <p style="color:#a0a5b4;font-size:0.7rem;font-weight:500;margin:0 0 0.5rem;letter-spacing:0.15em;text-transform:uppercase;">Agent Subscription Plans</p>
       <div id="payment-sprites" style="display:flex;gap:12px;justify-content:center;margin-bottom:1.2rem;position:relative;z-index:1;"></div>
-
-      <div id="payment-trial-section" style="display:none;flex-direction:column;gap:0.5rem;background:rgba(88,200,102,0.1);border:1px solid #3da64a;border-radius:12px;padding:1.2rem;margin-bottom:1rem;">
-        <h2 style="font-size:1rem;color:#58c866;margin:0;">Free Trial Active</h2>
-        <p style="color:#a0a5b4;font-size:0.85rem;margin:0;line-height:1.4;">You're looking around for free! Time remaining:</p>
-        <p id="trial-countdown" style="font-size:1.6rem;font-weight:800;color:#58c866;margin:0;letter-spacing:0.05em;">2:00</p>
-        <p style="color:#7a8090;font-size:0.75rem;margin:0.3rem 0 0;line-height:1.3;">Subscribe to the Starter plan for $0.99/mo to run tasks and chat with your agents.</p>
-      </div>
-
-      <div id="payment-trial-expired-section" style="display:none;flex-direction:column;gap:0.5rem;background:rgba(224,93,93,0.08);border:1px solid #4a3a3a;border-radius:12px;padding:1.2rem;margin-bottom:1rem;">
-        <h2 style="font-size:1rem;color:#e05d5d;margin:0;">Free Trial Ended</h2>
-        <p style="color:#a0a5b4;font-size:0.85rem;margin:0;line-height:1.4;">Your 2-minute free trial for today has ended. You can come back for another free trial in:</p>
-        <p id="trial-reset-countdown" style="font-size:1.6rem;font-weight:800;color:#e05d5d;margin:0;letter-spacing:0.05em;">--:--:--</p>
-        <p style="color:#7a8090;font-size:0.75rem;margin:0.3rem 0 0;line-height:1.3;">Or subscribe now to the Starter plan for $0.99/mo to keep running tasks and chatting with your agents.</p>
-      </div>
 
       <div id="payment-subscription-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
         <button id="start-99-btn" style="padding:1rem 1.5rem;border-radius:10px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:1.15rem;font-weight:800;cursor:pointer;transition:filter 0.15s,transform 0.1s;letter-spacing:0.02em;">
@@ -178,10 +160,6 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
 
   const subscriptionSection = overlay.querySelector("#payment-subscription-section") as HTMLDivElement;
   const activeSection = overlay.querySelector("#payment-active-section") as HTMLDivElement;
-  const trialSection = overlay.querySelector("#payment-trial-section") as HTMLDivElement;
-  const trialCountdown = overlay.querySelector("#trial-countdown") as HTMLParagraphElement;
-  const trialExpiredSection = overlay.querySelector("#payment-trial-expired-section") as HTMLDivElement;
-  const trialResetCountdown = overlay.querySelector("#trial-reset-countdown") as HTMLParagraphElement;
   const loadingEl = overlay.querySelector("#payment-loading") as HTMLDivElement;
   const periodInfo = overlay.querySelector("#payment-period-info") as HTMLParagraphElement;
   const activeTitle = overlay.querySelector("#payment-active-title") as HTMLHeadingElement;
@@ -193,45 +171,7 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   const manageBtn = overlay.querySelector("#manage-subscription-btn") as HTMLButtonElement;
   const closeBtn = overlay.querySelector("#payment-close-btn") as HTMLButtonElement;
 
-  let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let selectedBillingPeriod: BillingPeriod = "annual";
-
-  function updateCountdown() {
-    if (!currentState) {
-      trialSection.style.display = "none";
-      trialExpiredSection.style.display = "none";
-      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
-      return;
-    }
-
-    // Active trial countdown
-    if (currentState.freeTrialExpiresAt && currentState.freeTrialExpiresAt > Date.now()) {
-      trialSection.style.display = "flex";
-      const remaining = currentState.freeTrialExpiresAt - Date.now();
-      const secs = Math.ceil(remaining / 1000);
-      const m = Math.floor(secs / 60);
-      const s = secs % 60;
-      trialCountdown.textContent = `${m}:${s.toString().padStart(2, "0")}`;
-    } else {
-      trialSection.style.display = "none";
-    }
-
-    // Expired trial — show countdown to next reset
-    const trialExpired = !currentState.subscriptionActive &&
-      (!currentState.freeTrialExpiresAt || currentState.freeTrialExpiresAt <= Date.now()) &&
-      currentState.nextTrialAt;
-    if (trialExpired && currentState.nextTrialAt! > Date.now()) {
-      trialExpiredSection.style.display = "flex";
-      const remaining = currentState.nextTrialAt! - Date.now();
-      const totalSecs = Math.ceil(remaining / 1000);
-      const h = Math.floor(totalSecs / 3600);
-      const m = Math.floor((totalSecs % 3600) / 60);
-      const s = totalSecs % 60;
-      trialResetCountdown.textContent = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-    } else {
-      trialExpiredSection.style.display = "none";
-    }
-  }
 
   function buildTierCard(tier: typeof SUBSCRIPTION_TIER_LIST[number], isUpgrade: boolean): string {
     const agentLabel = tier.agentLimit === Infinity ? "Unlimited agents" : `${tier.agentLimit} agent${tier.agentLimit === 1 ? "" : "s"}`;
@@ -253,26 +193,9 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
       loadingEl.style.display = "block";
       subscriptionSection.style.display = "none";
       activeSection.style.display = "none";
-      trialSection.style.display = "none";
-      trialExpiredSection.style.display = "none";
-      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
       return;
     }
     loadingEl.style.display = "none";
-
-    // Show trial banner if trial is active, or expired-trial countdown if trial is used up
-    const trialActive = currentState.freeTrialExpiresAt && currentState.freeTrialExpiresAt > Date.now();
-    const trialExpired = !currentState.subscriptionActive &&
-      (!currentState.freeTrialExpiresAt || currentState.freeTrialExpiresAt <= Date.now()) &&
-      currentState.nextTrialAt;
-    if (trialActive || trialExpired) {
-      if (!countdownInterval) countdownInterval = setInterval(updateCountdown, 1000);
-      updateCountdown();
-    } else {
-      trialSection.style.display = "none";
-      trialExpiredSection.style.display = "none";
-      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
-    }
 
     if (!currentState.subscriptionActive) {
       subscriptionSection.style.display = "flex";
@@ -308,15 +231,6 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
 
   onPaymentChange(renderState);
 
-  // Show/hide close button based on trial status — hard gate when trial expired
-  onPaymentChange((state) => {
-    const trialActive = state && state.freeTrialExpiresAt && state.freeTrialExpiresAt > Date.now();
-    const subActive = state && state.subscriptionActive;
-    // Only show close button during active trial (soft gate)
-    // When trial expired and no subscription, hide it (hard gate)
-    closeBtn.style.display = (trialActive || subActive) ? "block" : "none";
-  });
-
   const start99Btn = overlay.querySelector("#start-99-btn") as HTMLButtonElement;
   start99Btn.addEventListener("click", () => void startSubscriptionCheckout("starter", "monthly"));
   start99Btn.addEventListener("mouseenter", () => { start99Btn.style.filter = "brightness(1.1)"; });
@@ -325,7 +239,7 @@ export function createPaymentOverlay(onClose?: () => void): { show: () => void; 
   start99Btn.addEventListener("mouseup", () => { start99Btn.style.transform = "none"; });
 
   manageBtn.addEventListener("click", () => void openCustomerPortal());
-  closeBtn.addEventListener("click", () => { overlay.style.display = "none"; onClose?.(); });
+  closeBtn.addEventListener("click", () => { overlay.style.display = "none"; });
 
   function setBillingPeriod(period: BillingPeriod) {
     selectedBillingPeriod = period;

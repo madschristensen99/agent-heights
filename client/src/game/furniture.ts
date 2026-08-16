@@ -487,7 +487,7 @@ function drawOfficeChairUp(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillRect(cx + s * 0.17, s * 0.37, s * 0.02, s * 0.05);
 }
 
-/** Office chair facing left — side view (Agent Resources's chair) — premium executive */
+/** Office chair facing left — side view (Office Manager's chair) — premium executive */
 function drawOfficeChairLeft(ctx: CanvasRenderingContext2D, s: number): void {
   const cx = s * 0.5;
 
@@ -1513,7 +1513,7 @@ function drawToaster(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fill();
 }
 
-/** Side-view desk — top tile (desk surface on left, front panel on right facing Agent Resources) */
+/** Side-view desk — top tile (desk surface on left, front panel on right facing the Office Manager) */
 function drawDeskSideTop(ctx: CanvasRenderingContext2D, s: number): void {
   const surfaceW = s * 0.7;
   const panelX = surfaceW;
@@ -1543,7 +1543,7 @@ function drawDeskSideTop(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillStyle = hexRGBA(0x88bbff, 0.04);
   ctx.fillRect(0, s * 0.3, surfaceW, s * 0.4);
 
-  // front panel — right portion (facing Agent Resources who sits on the right)
+  // front panel — right portion (facing the Office Manager who sits on the right)
   const panelGrad = linearGrad(ctx, panelX, 0, s, 0, [
     [0, shade(0x3a3a42, 5)],
     [0.5, shade(0x2e2e36, 0)],
@@ -1825,7 +1825,7 @@ function drawOfficeChairRight(ctx: CanvasRenderingContext2D, s: number): void {
   ctx.fillRect(cx + s * 0.14, s * 0.37, s * 0.03, s * 0.08);
 }
 
-/** Side-view monitor — thin profile seen from the side, screen faces right toward Agent Resources */
+/** Side-view monitor — thin profile seen from the side, screen faces right toward the Office Manager */
 function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: boolean = false): void {
   const cx = s * 0.5;
 
@@ -1873,7 +1873,7 @@ function drawDeskMonitorSide(ctx: CanvasRenderingContext2D, s: number, lit: bool
   ctx.lineWidth = 0.8;
   ctx.stroke();
 
-  // screen edge glow — on the RIGHT side (facing Agent Resources)
+  // screen edge glow — on the RIGHT side (facing the Office Manager)
   if (lit) {
     // bright blue-white glow strip
     ctx.fillStyle = hexRGBA(0xaaccff, 0.7);

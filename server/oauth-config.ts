@@ -19,6 +19,9 @@ export interface KnownOAuthConfig {
   scopes: string[];
   /** Token endpoint auth method: "client_secret_basic" (default) or "none" (PKCE-only). */
   tokenEndpointAuthMethod?: "client_secret_basic" | "none";
+  /** When true, always use http://localhost:1/callback as redirect URI (manual paste-back mode).
+   *  Use for providers that reject production redirect URIs in DCR. */
+  forceLocalRedirect?: boolean;
 }
 
 export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
@@ -65,5 +68,17 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
     tokenEndpoint: "https://zoom.us/oauth/token",
     scopes: [],
     tokenEndpointAuthMethod: "client_secret_basic",
+  },
+
+  // Hostinger MCP — DCR rejects production redirect URIs (invalid_redirect_uri).
+  // Pre-registered with http://localhost:1/callback — uses manual paste-back mode.
+  // Auth server: https://auth.hostinger.com (discovered via /.well-known/oauth-protected-resource)
+  "https://mcp.hostinger.com": {
+    clientId: "01a00ba7-daa8-7276-a5c4-09a4089db03c",
+    authorizationEndpoint: "https://auth.hostinger.com/api/external/v1/oauth-server/authorize",
+    tokenEndpoint: "https://auth.hostinger.com/api/external/v1/oauth-server/token",
+    scopes: [],
+    tokenEndpointAuthMethod: "none",
+    forceLocalRedirect: true,
   },
 };

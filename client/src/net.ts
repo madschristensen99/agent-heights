@@ -59,6 +59,16 @@ export class Net {
       // Send auth message as the very first thing after open
       if (this.token && !this._spectator) {
         ws.send(JSON.stringify({ type: "auth", token: this.token }));
+        // After auth, send restore_room so the server can put us back where we were
+        try {
+          const saved = localStorage.getItem("agent-heights-last-room");
+          if (saved) {
+            const { roomId, roomType } = JSON.parse(saved);
+            if (roomId) {
+              this.queue.push({ type: "restore_room", roomId, roomType });
+            }
+          }
+        } catch {}
       }
       this.onStatus(true);
       for (const msg of this.queue.splice(0)) {

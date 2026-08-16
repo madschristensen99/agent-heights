@@ -1,7 +1,7 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, TaskPhase, CharAppearance, MCPServerConfig, PersonalityTraits, AgentInfo } from "../../../shared/types";
-import { AGENT_MODELS, OFFICE_THEMES, AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, SCHEDULE_PRESETS,
+import { AGENT_MODELS, OFFICE_THEMES, OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
   randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
@@ -13,6 +13,7 @@ import { touchInput, isTouchDevice } from "../touch";
 import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
+import { SECURITY_NOTES } from "../../../shared/mcp-catalog";
 import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
 import { startSubscriptionCheckout, openCustomerPortal } from "../payment";
 let monacoModule: typeof import("monaco-editor") | null = null;
@@ -277,6 +278,8 @@ export class Hud {
         <div class="meta" id="d-meta"></div>
         <div class="task" id="d-task" hidden></div>
         <div id="d-mcp-section" hidden></div>
+        <div id="d-security-section" hidden></div>
+        <div id="d-acl-section" hidden></div>
         <div id="d-premium-section" hidden></div>
         <div id="d-cdp-section" hidden></div>
         <div id="d-crossmint-section" hidden></div>
@@ -1101,26 +1104,49 @@ export class Hud {
     const seen = localStorage.getItem("agent-heights-intro-seen");
     localStorage.setItem("agent-heights-intro-seen", "1");
 
+    const svgIcon = (paths: string, color: string) =>
+      `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+
     const steps = [
       {
-        icon: "🏢",
+        icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "#58c866"),
         title: "Welcome to Agent Heights",
         body: "You're the boss of a virtual office full of <strong>real AI agents</strong>. Each employee at a desk is a live coding agent that reads, writes, and runs code in its own workspace. Your job: hire them, give them tasks, and watch them work.",
       },
       {
-        icon: "➕",
+        icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "#58c866"),
+        title: "Meet Hermes",
+        body: "The agent at the front desk is <strong>Hermes</strong> — your office concierge. Hermes can relay messages to other agents, manage your calendar, and connect to external platforms like Slack, Discord, and Telegram. Click Hermes to start a conversation anytime.",
+      },
+      {
+        icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', "#4f9dde"),
+        title: "Platform Mailboxes",
+        body: "The mailboxes along the wall connect Hermes to external messaging platforms. Walk up to a mailbox and click to set up integrations with <strong>Slack</strong>, <strong>Discord</strong>, <strong>Telegram</strong>, <strong>Gmail</strong>, and more. Each platform shows a security note about what data the integration accesses.",
+      },
+      {
+        icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>', "#c9852c"),
+        title: "Security & Access Control",
+        body: "When you hire agents with API access (MCP servers), their detail panel shows a <strong>SECURITY & ACCESS</strong> section with risk levels and data access notes. Use <strong>ACCESS CONTROL</strong> to restrict who can chat with specific agents — useful when inviting collaborators to your room.",
+      },
+      {
+        icon: svgIcon('<path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>', "#8b7355"),
         title: "Hire Your First Agent",
-        body: "Click <strong>+ HIRE AGENT</strong> (bottom-left) to create a custom agent from scratch — pick a name, role, and personality. Or browse the <strong>🛒 MARKET</strong> (top bar) for pre-built agents with specialized skills like trading, data analysis, or DevOps.",
+        body: "Click <strong>+ HIRE AGENT</strong> (bottom-left) to create a custom agent from scratch — pick a name, role, and personality. Or browse the <strong>MARKET</strong> (top bar) for pre-built agents with specialized skills like trading, data analysis, or DevOps.",
       },
       {
-        icon: "📋",
+        icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', "#53b86b"),
         title: "Assign Tasks & Watch Them Work",
-        body: "Click any agent in the office to open their detail panel. Type a task, hit <strong>ASSIGN ▶</strong>, and watch them walk to their desk and start working. Speech bubbles and the <strong>Office Feed</strong> (left panel) stream their real tool calls and output in real time.",
+        body: "Click any agent in the office to open their detail panel. Type a task, hit <strong>ASSIGN</strong>, and watch them walk to their desk and start working. Speech bubbles and the <strong>Office Feed</strong> (left panel) stream their real tool calls and output in real time.",
       },
       {
-        icon: "🛒",
+        icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 1v6"/><path d="M12 17v6"/><path d="M4.22 4.22l4.24 4.24"/><path d="M15.54 15.54l4.24 4.24"/><path d="M1 12h6"/><path d="M17 12h6"/><path d="M4.22 19.78l4.24-4.24"/><path d="M15.54 8.46l4.24-4.24"/>', "#9b6dff"),
+        title: "MCP Servers & Agent Tools",
+        body: "MCP (Model Context Protocol) servers give your agents tools — file access, API integrations, databases, and more. Browse the <strong>Community MCPs</strong> tab in the marketplace to add capabilities. Each MCP server shows its risk level and data access scope so you know what you're granting.",
+      },
+      {
+        icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', "#e8a838"),
         title: "The Marketplace",
-        body: "The <strong>🛒 MARKET</strong> button opens the agent marketplace. Browse the <strong>Agents</strong> tab for curated, ready-to-hire AI agents. The <strong>Community MCPs</strong> tab lets you search 22,000+ MCP servers — hire one and your agent gets those tools instantly. Click any agent card to see details, then hit <strong>Hire into HQ</strong>.",
+        body: "The <strong>MARKET</strong> button opens the agent marketplace. Browse the <strong>Agents</strong> tab for curated, ready-to-hire AI agents. The <strong>Community MCPs</strong> tab lets you search 22,000+ MCP servers — hire one and your agent gets those tools instantly. Click any agent card to see details, then hit <strong>Hire into HQ</strong>.",
       },
     ];
 
@@ -1212,6 +1238,39 @@ export class Hud {
   }
 
   // --------------------------------------------------------------- rooms
+
+  /** Build a security summary for the invite panel showing agents with MCP tools and ACL restrictions. */
+  private renderInviteSecuritySummary(): string {
+    const agents = [...this.store.agents.values()];
+    if (agents.length === 0) return "";
+
+    const agentsWithMcp = agents.filter((a) => a.mcpServers && a.mcpServers.length > 0);
+    const restrictedAgents = agents.filter((a) => {
+      const acl = a.acl;
+      return acl && ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
+    });
+    const unrestrictedCount = agents.length - restrictedAgents.length;
+
+    if (agentsWithMcp.length === 0 && restrictedAgents.length === 0) return "";
+
+    const mcpNames = agentsWithMcp.map((a) => a.name).slice(0, 5);
+    const mcpSummary = mcpNames.length > 0
+      ? `${mcpNames.join(", ")}${agentsWithMcp.length > 5 ? ` +${agentsWithMcp.length - 5} more` : ""}`
+      : "";
+
+    return `<div style="margin-top:0.6rem; padding:0.5rem; border:1px solid #333; border-radius:6px; background:#1a1a1a;">
+      <div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.3rem;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c9852c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span style="font-size:0.65rem; font-weight:600; color:#c9852c;">ROOM SECURITY SUMMARY</span>
+      </div>
+      ${agentsWithMcp.length > 0 ? `<div style="font-size:0.62rem; color:#999; margin-bottom:0.2rem;">${agentsWithMcp.length} agent${agentsWithMcp.length !== 1 ? "s" : ""} with API access: ${esc(mcpSummary)}</div>` : ""}
+      ${restrictedAgents.length > 0
+        ? `<div style="font-size:0.62rem; color:#999;">${restrictedAgents.length} agent${restrictedAgents.length !== 1 ? "s" : ""} access-restricted (ACL). Visitor can chat with ${unrestrictedCount} agent${unrestrictedCount !== 1 ? "s" : ""}.</div>`
+        : agentsWithMcp.length > 0
+          ? `<div style="font-size:0.62rem; color:#888;">No agents are ACL-restricted. Consider restricting sensitive agents before inviting.</div>`
+          : ""}
+    </div>`;
+  }
 
   private openRoomsPanel(): void {
     const overlay = document.createElement("div");
@@ -1324,10 +1383,28 @@ export class Hud {
         <div style="border-top:1px solid #333;padding-top:1rem;">
           <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">INVITE PLAYER TO CURRENT ROOM</div>
           <div style="display:flex;gap:0.5rem;">
-            <input id="room-invite-input" placeholder="User ID…" style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
+            <input id="room-invite-input" placeholder="User ID..." style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
             <button class="btn" id="room-invite-btn" style="font-size:0.8rem;">INVITE</button>
           </div>
-          <div style="font-size:0.7rem;color:#666;margin-top:0.3rem;">Tip: Find user IDs of players in the room from the player list above.</div>
+          <div style="margin-top:0.6rem;">
+            <div style="font-size:0.7rem;color:#888;margin-bottom:0.3rem;">ACCESS LEVEL</div>
+            <div style="display:flex;gap:0.4rem;">
+              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:#ccc;cursor:pointer;padding:0.3rem 0.5rem;border:1px solid #333;border-radius:6px;cursor:pointer;">
+                <input type="radio" name="invite-access" value="tour" style="accent-color:#4f9dde;" />
+                Tour
+              </label>
+              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:#ccc;cursor:pointer;padding:0.3rem 0.5rem;border:1px solid #333;border-radius:6px;cursor:pointer;">
+                <input type="radio" name="invite-access" value="talk" checked style="accent-color:#53b86b;" />
+                Talk
+              </label>
+              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:#ccc;cursor:pointer;padding:0.3rem 0.5rem;border:1px solid #333;border-radius:6px;cursor:pointer;">
+                <input type="radio" name="invite-access" value="manage" style="accent-color:#e8a838;" />
+                Manage
+              </label>
+            </div>
+            <div id="invite-access-desc" style="font-size:0.65rem;color:#666;margin-top:0.3rem;">Can enter, see agents, and chat (subject to per-agent ACLs).</div>
+          </div>
+          ${this.renderInviteSecuritySummary()}
         </div>
       </div>
     `;
@@ -1388,10 +1465,27 @@ export class Hud {
       const input = document.getElementById("room-invite-input") as HTMLInputElement;
       const userId = input.value.trim();
       if (!userId || !this.store.roomId) return;
-      this.net.send({ type: "invite_to_room", roomId: this.store.roomId, userId, role: "member" });
-      this.toast(`Invite sent to ${userId}`);
+      const accessRadio = overlay.querySelector('input[name="invite-access"]:checked') as HTMLInputElement | null;
+      const accessLevel = (accessRadio?.value as "tour" | "talk" | "manage") ?? "talk";
+      this.net.send({ type: "invite_to_room", roomId: this.store.roomId, userId, role: "member", accessLevel });
+      this.toast(`Invite sent to ${userId} (${accessLevel} access)`);
       close();
     });
+
+    // Update access level description
+    const accessDescs: Record<string, string> = {
+      tour: "Can look around and see agents but cannot chat or manage. Good for showing off your office.",
+      talk: "Can enter, see agents, and chat (subject to per-agent ACLs).",
+      manage: "Full control — hire, fire, assign tasks, and configure agents. Only for trusted collaborators.",
+    };
+    const descEl = document.getElementById("invite-access-desc");
+    if (descEl) {
+      for (const radio of overlay.querySelectorAll<HTMLInputElement>('input[name="invite-access"]')) {
+        radio.addEventListener("change", () => {
+          descEl.textContent = accessDescs[radio.value] ?? "";
+        });
+      }
+    }
 
     // Refresh orgs
     document.getElementById("org-refresh-btn")!.addEventListener("click", () => {
@@ -1639,7 +1733,7 @@ export class Hud {
           <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "#53b86b" : "#e05d5d"};">
             ${this.store.subscriptionActive
               ? `✓ ${this.store.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === this.store.subscriptionTier)?.name : "Active"} — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"} available.`
-              : "⚠ No active subscription — plans start at $0.99/month."}
+              : `Free plan — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"}, no task execution. Upgrade to run tasks.`}
           </div>
           ${this.store.subscriptionActive
             ? `<button class="btn" id="s-manage-sub">MANAGE SUBSCRIPTION</button>`
@@ -2084,14 +2178,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       return;
     }
     const hireable = [...this.store.agents.values()].filter(
-      (a) => a.id !== AGENT_RESOURCES_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
+      (a) => a.id !== OFFICE_MANAGER_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
     );
     if (hireable.length < 2) {
       this.toast("You need at least 2 hireable agents to fuse.");
       return;
     }
     const agentA = this.store.agents.get(agentAId);
-    if (!agentA || agentA.id === AGENT_RESOURCES_ID || agentA.id === HERMES_ID || agentA.id === WIZARD_ID) return;
+    if (!agentA || agentA.id === OFFICE_MANAGER_ID || agentA.id === HERMES_ID || agentA.id === WIZARD_ID) return;
 
     const modal = document.getElementById("fuse-modal")!;
     modal.hidden = false;
@@ -2340,7 +2434,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
   private canHireAgent(): boolean {
     if (this.store.agentLimit > 0) {
-      const hireable = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID).length;
+      const hireable = [...this.store.agents.values()].filter((a) => a.id !== OFFICE_MANAGER_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID).length;
       if (hireable >= this.store.agentLimit) {
         this.toast(`You've reached your agent limit (${this.store.agentLimit}). Upgrade your plan to hire more agents.`);
         return false;
@@ -2511,7 +2605,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     roster.classList.toggle("collapsed", this.rosterCollapsed);
     const rows = [...this.store.agents.values()]
       .sort((a, b) => {
-        const perm = (id: string) => id === AGENT_RESOURCES_ID ? 0 : id === HERMES_ID ? 1 : id === WIZARD_ID ? 2 : 3;
+        const perm = (id: string) => id === OFFICE_MANAGER_ID ? 0 : id === HERMES_ID ? 1 : id === WIZARD_ID ? 2 : 3;
         const pa = perm(a.id), pb = perm(b.id);
         return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
       })
@@ -2522,8 +2616,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           if (a.appearance) {
             avatarUrl = generateCharPreviewDataURL(a.appearance, 2);
             avatarSize = 'background-size:20px 30px;';
-          } else if (a.id === AGENT_RESOURCES_ID) {
-            avatarUrl = 'assets/characters/char-agent-resources.png';
+          } else if (a.id === OFFICE_MANAGER_ID) {
+            avatarUrl = 'assets/characters/char-office-manager.png';
             avatarSize = 'background-size:160px 120px;';
           } else if (a.id === HERMES_ID) {
             avatarUrl = 'assets/characters/char-hermes.png';
@@ -2636,12 +2730,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     }
     document.getElementById("d-meta")!.innerHTML = `
       <span class="dot ${agent.status}"></span> ${agent.status.toUpperCase()}
-      ${agent.role === "manager" ? "· 👔 MANAGER " : ""}
-      · ${agent.id === AGENT_RESOURCES_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : agent.id === WIZARD_ID ? "world builder" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done
-      ${agent.skills && agent.skills.length ? `<div class="agent-skills">${agent.skills.map((s) => `<span class="skill-badge">${esc(s)}</span>`).join("")}</div>` : ""}`;
+      ${agent.role === "manager" ? "· MANAGER " : ""}
+      · ${agent.id === OFFICE_MANAGER_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : agent.id === WIZARD_ID ? "world builder" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done
+      ${agent.skills && agent.skills.length ? `<div class="agent-skills">${agent.skills.map((s) => `<span class="skill-badge">${esc(s)}</span>`).join("")}</div>` : ""}
+      ${agent.acl && this.store.accessLevel !== "manage" && ((agent.acl.allowedUserIds && agent.acl.allowedUserIds.length > 0) || (agent.acl.allowedRoles && agent.acl.allowedRoles.length > 0))
+        ? `<div style="margin-top:0.3rem; display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:#c9852c;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c9852c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Access restricted — chat disabled</div>`
+        : ""}`;
 
-    // Agent Resources and Hermes can't be fired, vacationed, or fused
-    const isNpc = agent.id === AGENT_RESOURCES_ID || agent.id === HERMES_ID || agent.id === WIZARD_ID;
+    // Office Manager and Hermes can't be fired, vacationed, or fused
+    const isNpc = agent.id === OFFICE_MANAGER_ID || agent.id === HERMES_ID || agent.id === WIZARD_ID;
     const fireBtn = document.getElementById("d-fire") as HTMLButtonElement | null;
     if (fireBtn) fireBtn.hidden = isNpc;
     const vacBtn = document.getElementById("d-vacation") as HTMLButtonElement | null;
@@ -2756,6 +2853,135 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     } else {
       mcpSection.hidden = true;
       mcpSection.innerHTML = "";
+    }
+
+    // Security & access info section — shows MCP server risk levels and data access
+    const securitySection = document.getElementById("d-security-section")!;
+    if (mcpServers && mcpServers.length > 0) {
+      const securityEntries: { name: string; riskLevel: string; securityNote: string; dataAccess: string }[] = [];
+      for (const s of mcpServers) {
+        const serverName = s.name ?? s.url ?? "MCP Server";
+        if (s.riskLevel && s.securityNote && s.dataAccess) {
+          securityEntries.push({ name: serverName, riskLevel: s.riskLevel, securityNote: s.securityNote, dataAccess: s.dataAccess });
+        } else {
+          const fallback = SECURITY_NOTES[serverName];
+          if (fallback) {
+            securityEntries.push({ name: serverName, ...fallback });
+          }
+        }
+      }
+      if (securityEntries.length > 0) {
+        securitySection.hidden = false;
+        const hasHighRisk = securityEntries.some((e) => e.riskLevel === "high");
+        const hasMediumRisk = securityEntries.some((e) => e.riskLevel === "medium");
+        const borderColor = hasHighRisk ? "#5a2020" : hasMediumRisk ? "#3a3520" : "var(--panel-edge-soft)";
+        const bgColor = hasHighRisk ? "rgba(90,32,32,0.08)" : hasMediumRisk ? "rgba(58,53,32,0.08)" : "var(--panel-soft)";
+        const headerColor = hasHighRisk ? "var(--red)" : hasMediumRisk ? "#c9852c" : "var(--dim)";
+        securitySection.innerHTML = `
+          <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid ${borderColor}; border-radius:0.5rem; background:${bgColor};">
+            <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.4rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${headerColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span style="font-size:0.7rem; font-weight:600; color:${headerColor};">SECURITY & ACCESS</span>
+            </div>
+            ${securityEntries.map((e) => {
+              const rc = e.riskLevel === "high" ? "var(--red)" : e.riskLevel === "medium" ? "#c9852c" : "var(--dim)";
+              const rl = e.riskLevel === "high" ? "HIGH RISK" : e.riskLevel === "medium" ? "MEDIUM RISK" : "LOW RISK";
+              return `<div style="margin-bottom:0.4rem; padding-bottom:0.4rem; border-bottom:1px solid var(--panel-edge-soft);">
+                <div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.15rem;">
+                  <span style="font-size:0.7rem; font-weight:600; color:var(--text);">${esc(e.name)}</span>
+                  <span style="font-size:0.55rem; font-weight:700; padding:0.08rem 0.3rem; border-radius:0.2rem; background:${rc}22; color:${rc};">${rl}</span>
+                </div>
+                <div style="font-size:0.65rem; color:var(--dim); margin-bottom:0.15rem;">${esc(e.dataAccess)}</div>
+                <div style="font-size:0.63rem; color:var(--dim); line-height:1.35;">${esc(e.securityNote)}</div>
+              </div>`;
+            }).join("")}
+          </div>
+        `;
+      } else {
+        securitySection.hidden = true;
+        securitySection.innerHTML = "";
+      }
+    } else {
+      securitySection.hidden = true;
+      securitySection.innerHTML = "";
+    }
+
+    // ACL (Access Control List) section — manage who can chat with this agent
+    const aclSection = document.getElementById("d-acl-section")!;
+    if (this.store.accessLevel === "manage" && !isNpc) {
+      aclSection.hidden = false;
+      const acl = agent.acl;
+      const hasAcl = acl && ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
+      const roomPlayers = [...this.store.roomPlayers.values()];
+      const allowedIds = acl?.allowedUserIds ?? [];
+
+      aclSection.innerHTML = `
+        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid var(--panel-edge-soft); border-radius:0.5rem; background:var(--panel-soft);">
+          <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.4rem;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span style="font-size:0.7rem; font-weight:600; color:var(--accent);">ACCESS CONTROL</span>
+          </div>
+          <div style="font-size:0.63rem; color:var(--dim); margin-bottom:0.4rem; line-height:1.35;">
+            Restrict who can chat with this agent. Visitors with "talk" access will see the agent but won't be able to interact unless they're on the allowed list.
+          </div>
+          <div style="display:flex; flex-direction:column; gap:0.3rem;">
+            <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.68rem; color:var(--text); cursor:pointer;">
+              <input type="radio" name="acl-mode" value="open" ${!hasAcl ? "checked" : ""} style="accent-color:var(--accent);" />
+              Everyone with talk access can chat
+            </label>
+            <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.68rem; color:var(--text); cursor:pointer;">
+              <input type="radio" name="acl-mode" value="restricted" ${hasAcl ? "checked" : ""} style="accent-color:var(--accent);" />
+              Only specific people can chat
+            </label>
+          </div>
+          <div id="acl-people" style="margin-top:0.4rem; ${hasAcl ? "" : "display:none;"}">
+            <div style="font-size:0.6rem; color:var(--dim); margin-bottom:0.2rem;">Allowed people:</div>
+            ${roomPlayers.length > 0
+              ? roomPlayers.map((p) => `<label style="display:flex; align-items:center; gap:0.3rem; font-size:0.65rem; color:var(--text); cursor:pointer; padding:0.15rem 0;">
+                  <input type="checkbox" class="acl-user-cb" data-uid="${p.userId}" ${allowedIds.includes(p.userId) ? "checked" : ""} style="accent-color:var(--accent);" />
+                  ${esc(p.name)}
+                </label>`).join("")
+              : `<div style="font-size:0.62rem; color:var(--dim);">No other players in this room. Invite people first, then restrict access.</div>`
+            }
+          </div>
+          <button id="d-acl-save" style="margin-top:0.5rem; padding:0.3rem 0.6rem; border:1px solid var(--accent); border-radius:0.3rem; background:var(--panel); color:var(--accent); font-size:0.65rem; cursor:pointer;">Save Access Settings</button>
+        </div>
+      `;
+
+      // Wire up radio toggle
+      const radios = aclSection.querySelectorAll('input[name="acl-mode"]');
+      const peopleDiv = aclSection.querySelector("#acl-people") as HTMLElement | null;
+      radios.forEach((r) => {
+        r.addEventListener("change", () => {
+          const radio = r as HTMLInputElement;
+          if (peopleDiv) {
+            peopleDiv.style.display = radio.value === "restricted" ? "block" : "none";
+          }
+        });
+      });
+
+      // Wire up save button
+      const saveBtn = aclSection.querySelector("#d-acl-save") as HTMLButtonElement | null;
+      if (saveBtn) {
+        saveBtn.addEventListener("click", () => {
+          const selected = aclSection.querySelector('input[name="acl-mode"]:checked') as HTMLInputElement | null;
+          if (!selected) return;
+          if (selected.value === "open") {
+            this.net.send({ type: "set_agent_acl", agentId: agent.id, acl: {} });
+            this.toast("Access opened — everyone with talk access can chat.");
+          } else {
+            const checked = aclSection.querySelectorAll(".acl-user-cb:checked") as NodeListOf<HTMLInputElement>;
+            const userIds = [...checked].map((cb) => cb.dataset.uid).filter((u): u is string => !!u);
+            this.net.send({ type: "set_agent_acl", agentId: agent.id, acl: { allowedUserIds: userIds } });
+            this.toast(`Access restricted to ${userIds.length} person${userIds.length !== 1 ? "s" : ""}.`);
+          }
+          saveBtn.textContent = "Saved";
+          setTimeout(() => { saveBtn.textContent = "Save Access Settings"; }, 2000);
+        });
+      }
+    } else {
+      aclSection.hidden = true;
+      aclSection.innerHTML = "";
     }
 
     // Premium services section — show paid API services and per-call costs
@@ -3331,11 +3557,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const sayBtn = document.getElementById("d-say") as HTMLButtonElement | null;
     const isBusy = agent.status === "thinking" || agent.status === "working";
     const canTalk = this.store.accessLevel === "talk" || this.store.accessLevel === "manage";
+    // Check ACL restrictions for non-manage users
+    const acl = agent.acl;
+    const aclRestricted = acl && this.store.accessLevel !== "manage" &&
+      ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
     if (chatInput) {
-      chatInput.disabled = isBusy || !canTalk;
-      chatInput.placeholder = !canTalk ? "Tour mode — no chat access" : isBusy ? `${agent.name} is busy…` : "Say something… (chat, not a task)";
+      chatInput.disabled = isBusy || !canTalk || !!aclRestricted;
+      chatInput.placeholder = !canTalk ? "Tour mode — no chat access" : aclRestricted ? "Access restricted — ask manager for permission" : isBusy ? `${agent.name} is busy…` : "Say something… (chat, not a task)";
     }
-    if (sayBtn) sayBtn.disabled = isBusy || !canTalk;
+    if (sayBtn) sayBtn.disabled = isBusy || !canTalk || !!aclRestricted;
 
     if (!this._scheduleEditingId && !this._scheduleCreateOpen) {
       const sig = [...this.store.schedules.values()]
@@ -3849,7 +4079,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     const cards = [...this.store.board.values()].sort((a, b) => a.createdAt - b.createdAt);
     const agents = [...this.store.agents.values()].filter(
-      (a) => a.id !== AGENT_RESOURCES_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
+      (a) => a.id !== OFFICE_MANAGER_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
     );
     const deps = this.store.cardDependencies;
 
@@ -4184,7 +4414,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       return;
     }
 
-    const agents = [...this.store.agents.values()].filter((a) => a.id !== AGENT_RESOURCES_ID && a.id !== WIZARD_ID);
+    const agents = [...this.store.agents.values()].filter((a) => a.id !== OFFICE_MANAGER_ID && a.id !== WIZARD_ID);
     const fired = [...this.store.firedAgents.values()];
 
     const allAgents = [
@@ -5191,7 +5421,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     });
   }
 
+  private lastToastText = "";
+  private lastToastTime = 0;
+
   private toast(text: string): void {
+    const now = Date.now();
+    if (text === this.lastToastText && now - this.lastToastTime < 2000) return;
+    this.lastToastText = text;
+    this.lastToastTime = now;
     const box = document.getElementById("toasts")!;
     const el = document.createElement("div");
     el.className = "toast";

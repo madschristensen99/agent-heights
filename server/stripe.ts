@@ -23,42 +23,9 @@ function calcTaxCents(baseCents: number): number {
   return Math.round(baseCents * SALES_TAX_PERCENT / 100);
 }
 
-// ── Free trial: 2 minutes per day for authed users without a subscription ──
-// Users can look around and hire agents but cannot run inference (tasks/chat)
-const FREE_TRIAL_DURATION_MS = 2 * 60 * 1000;
-const freeTrialMap = new Map<string, { date: string; expiresAt: number }>();
-
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function nextTrialResetAt(): number {
-  const now = new Date();
-  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
-  return next.getTime();
-}
-
-export function getFreeTrialStatus(userId: string): { active: boolean; expiresAt: number | null } {
-  const today = todayKey();
-  const entry = freeTrialMap.get(userId);
-  if (!entry || entry.date !== today) return { active: false, expiresAt: null };
-  const now = Date.now();
-  if (now >= entry.expiresAt) return { active: false, expiresAt: null };
-  return { active: true, expiresAt: entry.expiresAt };
-}
-
-export function startFreeTrial(userId: string): number | null {
-  const today = todayKey();
-  const now = Date.now();
-  const entry = freeTrialMap.get(userId);
-  if (entry && entry.date === today) {
-    return now < entry.expiresAt ? entry.expiresAt : null;
-  }
-  const expiresAt = now + FREE_TRIAL_DURATION_MS;
-  freeTrialMap.set(userId, { date: today, expiresAt });
-  console.log(`[free-trial] started for user ${userId}, expires at ${new Date(expiresAt).toISOString()}`);
-  return expiresAt;
-}
+// Free tier: authed users without a subscription can walk around and hire up to 2 agents
+// but cannot run inference (tasks/chat)
+const FREE_TIER_AGENT_LIMIT = 2;
 
 export interface PaymentStatus {
   entrancePaid: boolean; // always true now — entrance fee removed
@@ -68,18 +35,16 @@ export interface PaymentStatus {
   agentLimit: number;
   usageCap: number; // monthly usage cap in cents (80% of tier price)
   currentPeriodEnd: number | null;
-  freeTrialExpiresAt: number | null;
-  nextTrialAt: number | null;
 }
 
 export async function getUserPaymentStatus(userId: string, email?: string | null): Promise<PaymentStatus> {
   // Admin emails get business tier automatically (no Stripe payment required)
   if (email && COMMAND_CENTER_ADMINS.includes(email.toLowerCase())) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "business", agentLimit: SUBSCRIPTION_TIERS.business.agentLimit, usageCap: SUBSCRIPTION_TIERS.business.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null, nextTrialAt: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "business", agentLimit: SUBSCRIPTION_TIERS.business.agentLimit, usageCap: SUBSCRIPTION_TIERS.business.usageCap, currentPeriodEnd: null };
   }
 
   if (!isSupabaseConfigured || !isStripeConfigured) {
-    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "pro", agentLimit: SUBSCRIPTION_TIERS.pro.agentLimit, usageCap: SUBSCRIPTION_TIERS.pro.usageCap, currentPeriodEnd: null, freeTrialExpiresAt: null, nextTrialAt: null };
+    return { entrancePaid: true, subscriptionStatus: "active", subscriptionActive: true, subscriptionTier: "pro", agentLimit: SUBSCRIPTION_TIERS.pro.agentLimit, usageCap: SUBSCRIPTION_TIERS.pro.usageCap, currentPeriodEnd: null };
   }
   try {
     // Try full query with subscription_tier (may fail if migration not applied)
@@ -102,9 +67,7 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
     }
 
     if (error || !data) {
-      const trial = getFreeTrialStatus(userId);
-      const nextTrialAt = !trial.active ? nextTrialResetAt() : null;
-      return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt, nextTrialAt };
+      return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: FREE_TIER_AGENT_LIMIT, usageCap: 0, currentPeriodEnd: null };
     }
 
     const entrancePaid = true; // Entrance fee removed — always true
@@ -115,16 +78,12 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
       (data.subscription_status === "trialing") ||
       (data.subscription_status === "past_due" && data.current_period_end && data.current_period_end > now);
 
-    const trialStatus = !subscriptionActive ? getFreeTrialStatus(userId) : null;
-    const freeTrialExpiresAt = trialStatus?.expiresAt ?? null;
-    const nextTrialAt = trialStatus && !trialStatus.active ? nextTrialResetAt() : null;
-
     const tier = parseTier(data.subscription_tier as string | null);
     // If subscription is active but tier is NULL (legacy subscription from before
     // tiered pricing was introduced), default to 'starter' so the user isn't
     // locked out with agentLimit=0 and usageCap=0.
     const effectiveTier = tier ?? (subscriptionActive ? "starter" : null);
-    const agentLimit = effectiveTier ? SUBSCRIPTION_TIERS[effectiveTier].agentLimit : 0;
+    const agentLimit = effectiveTier ? SUBSCRIPTION_TIERS[effectiveTier].agentLimit : FREE_TIER_AGENT_LIMIT;
     const usageCap = effectiveTier ? SUBSCRIPTION_TIERS[effectiveTier].usageCap : 0;
 
     return {
@@ -135,13 +94,9 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
       agentLimit,
       usageCap,
       currentPeriodEnd: data.current_period_end ?? null,
-      freeTrialExpiresAt,
-      nextTrialAt,
     };
   } catch {
-    const trial = getFreeTrialStatus(userId);
-    const nextTrialAt = !trial.active ? nextTrialResetAt() : null;
-    return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: 0, usageCap: 0, currentPeriodEnd: null, freeTrialExpiresAt: trial.expiresAt, nextTrialAt };
+    return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: FREE_TIER_AGENT_LIMIT, usageCap: 0, currentPeriodEnd: null };
   }
 }
 

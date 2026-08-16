@@ -137,8 +137,6 @@ export class Store {
   agentLimit = 0;
   usageCap = 0;
   currentPeriodEnd: number | null = null;
-  freeTrialExpiresAt: number | null = null;
-  nextTrialAt: number | null = null;
   paymentRequired: { reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number } | null = null;
   scheduledDeletionAt: number | null = null;
   /** Asset upgrade state for the current portal world. */
@@ -262,7 +260,6 @@ export class Store {
     this.agentLimit = 0;
     this.usageCap = 0;
     this.currentPeriodEnd = null;
-    this.freeTrialExpiresAt = null;
     this.paymentRequired = null;
     this.railwayData = null;
     this.railwayError = null;
@@ -737,6 +734,14 @@ export class Store {
           if (s.agentId === msg.agentId) this.schedules.delete(s.id);
         }
         break;
+      case "agent_acl_updated": {
+        const a = this.agents.get(msg.agentId);
+        if (a) {
+          a.acl = msg.acl;
+          this.agentsDirty = true;
+        }
+        break;
+      }
       case "chat_cleared":
         this.logs.set(msg.agentId, []);
         this.feed = this.feed.filter((f) => f.agentId !== msg.agentId);
@@ -983,6 +988,43 @@ export class Store {
         console.log(`[mcp-oauth] received ${msg.type}, redirectMode=${msg.redirectMode ?? "manual"}`, msg);
         const svcName = msg.serverUrl ? new URL(msg.serverUrl).hostname.replace(/^mcp\./, '').replace(/^www\./, '').replace(/\.[^.]+$/, '').replace(/^./, c => c.toUpperCase()) : 'MCP Server';
         const isAuto = msg.redirectMode === "auto";
+        const isPopup = msg.redirectMode === "popup";
+
+        // Popup mode: provider rejects production redirect URIs, so we use localhost.
+        // Open auth in a popup, poll its URL until it contains code=, then auto-submit.
+        if (isPopup) {
+          const _w = 600, _h = 700;
+          const _l = Math.round((window.screenLeft ?? window.screenX) + (window.outerWidth - _w) / 2);
+          const _t = Math.round((window.screenTop ?? window.screenY) + (window.outerHeight - _h) / 2);
+          const popup = window.open(msg.authUrl, "mcp-oauth-popup", `width=${_w},height=${_h},left=${_l},top=${_t},scrollbars=yes`);
+          this.toast(`Opening ${svcName} login... Complete authorization in the popup.`);
+
+          if (popup) {
+            const pollInterval = setInterval(() => {
+              try {
+                // While on auth.hostinger.com, reading location throws (cross-origin).
+                // When it redirects to localhost:1/callback, the connection fails but
+                // the URL is readable in most browsers.
+                const href = popup.location.href;
+                if (href && href.includes("code=")) {
+                  clearInterval(pollInterval);
+                  popup.close();
+                  this.sendFn?.({ type: "submit_mcp_oauth_code", serverUrl: msg.serverUrl, callbackUrl: href });
+                  this.toast(`Authorization received from ${svcName}, exchanging token...`);
+                }
+              } catch {
+                // Cross-origin — popup is still on the auth provider's site, keep polling
+              }
+              // If popup was closed manually, stop polling
+              if (popup.closed) {
+                clearInterval(pollInterval);
+              }
+            }, 500);
+            // Safety timeout: stop polling after 5 minutes
+            setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+          }
+          break;
+        }
 
         // Auto mode: server has a public callback URL, OAuth redirect will be handled automatically
         if (isAuto) {
@@ -1113,8 +1155,6 @@ export class Store {
         this.agentLimit = msg.agentLimit;
         this.usageCap = msg.usageCap;
         this.currentPeriodEnd = msg.currentPeriodEnd;
-        this.freeTrialExpiresAt = msg.freeTrialExpiresAt;
-        this.nextTrialAt = msg.nextTrialAt;
         break;
       case "payment_required":
         this.paymentRequired = { reason: msg.reason, message: msg.message, tier: msg.tier, agentLimit: msg.agentLimit, monthlySpend: msg.monthlySpend, usageCap: msg.usageCap };
@@ -1160,6 +1200,7 @@ export class Store {
         for (const p of msg.players) {
           this.roomPlayers.set(p.userId, p);
         }
+        try { localStorage.setItem("agent-heights-last-room", JSON.stringify({ roomId: msg.roomId, roomType: this.roomType })); } catch {}
         break;
       case "player_joined":
         this.roomPlayers.set(msg.player.userId, msg.player);

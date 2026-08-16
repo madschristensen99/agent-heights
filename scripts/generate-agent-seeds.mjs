@@ -155,7 +155,7 @@ function genAppearance(id) {
     hairStyle: (h >> 2) % 7,
     hair: (h >> 5) % 8,
     shirt: (h >> 8) % 13,
-    pants: (h >> 11) % 3,
+    pants: (h >> 11) % 18,
     accessory: (h >> 14) % 6,
     accent: (h >> 17) % 13,
     beard: (h >> 20) % 3,

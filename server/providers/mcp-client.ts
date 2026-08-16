@@ -975,7 +975,7 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
               if (typeof result === "string" && isFundingError(result)) {
                 console.warn(`[mcp:${label}] funding issue detected on tool ${def.name}`);
                 onApiError?.("funding", { serverLabel: label, toolName: def.name, message: result.slice(0, 500) });
-                return `[FUNDING ISSUE] ${result}\n\n⚠️ This API has a billing or funding problem. The office manager (Agent Resources) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
+                return `[FUNDING ISSUE] ${result}\n\n⚠️ This API has a billing or funding problem. The Office Manager and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
               }
 
               const truncatedResult = typeof result === "string" && result.length > MAX_MCP_RESULT_CHARS
@@ -1003,7 +1003,7 @@ export async function loadMCPTools(servers: MCPServerConfig[], abortRef?: { sign
               if (isFundingError(msg)) {
                 console.warn(`[mcp:${label}] funding issue detected on tool ${def.name} (error)`);
                 onApiError?.("funding", { serverLabel: label, toolName: def.name, message: msg.slice(0, 500) });
-                return `[FUNDING ISSUE] MCP tool ${def.name} failed: ${msg}\n\n⚠️ This API has a billing or funding problem. The office manager (Agent Resources) and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
+                return `[FUNDING ISSUE] MCP tool ${def.name} failed: ${msg}\n\n⚠️ This API has a billing or funding problem. The Office Manager and devops engineer (Hermes) have been notified, and the user has been alerted via their configured mailboxes. Do NOT retry this API call until the funding issue is resolved.`;
               }
 
               return `[ERROR] MCP tool ${def.name} failed: ${msg}`;

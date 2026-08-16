@@ -1,6 +1,7 @@
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import type { MCPServerConfig } from "../../../shared/types";
 import { getToken } from "../auth.js";
+import { SECURITY_NOTES, type RiskLevel } from "../../../shared/mcp-catalog";
 
 export interface MarketplaceResult {
   agents?: MarketplaceAgent[];
@@ -384,7 +385,7 @@ export class MarketplaceBrowser {
       : "None";
 
     // Parse agent config to detect MCP servers that need auth + premium services
-    let mcpServers: { url?: string; name?: string; authType?: "oauth" | "apikey"; keyLabel?: string; keyPlaceholder?: string; keyHelpUrl?: string; urlPlaceholder?: string; envVars?: { name: string; description: string; isRequired: boolean }[] }[] = [];
+    let mcpServers: MCPServerConfig[] = [];
     let circleServices: { name: string; pricePerCall: number; description: string; tools: { name: string; description: string }[] }[] = [];
     try {
       const config = agent.agent ? JSON.parse(agent.agent) : {};
@@ -410,6 +411,47 @@ export class MarketplaceBrowser {
     // Only show auth UI for servers that actually require it (oauth or apikey).
     // Servers without authType (open/no-auth) are ready to use immediately.
     const authRequiredServers = mcpServers.filter((s) => s.authType === "oauth" || s.authType === "apikey");
+
+    // Collect security info for all MCP servers on this agent
+    const securityEntries: { name: string; riskLevel: RiskLevel; securityNote: string; dataAccess: string }[] = [];
+    for (const s of mcpServers) {
+      const serverName = s.name ?? s.url ?? "MCP Server";
+      if (s.riskLevel && s.securityNote && s.dataAccess) {
+        securityEntries.push({ name: serverName, riskLevel: s.riskLevel, securityNote: s.securityNote, dataAccess: s.dataAccess });
+      } else {
+        const fallback = SECURITY_NOTES[serverName];
+        if (fallback) {
+          securityEntries.push({ name: serverName, ...fallback });
+        }
+      }
+    }
+    const hasHighRisk = securityEntries.some((e) => e.riskLevel === "high");
+    const hasMediumRisk = securityEntries.some((e) => e.riskLevel === "medium");
+
+    const securityHtml = securityEntries.length > 0
+      ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid ${hasHighRisk ? "#5a2020" : hasMediumRisk ? "#3a3520" : "#333"}; border-radius:0.5rem; background:${hasHighRisk ? "#1a1010" : hasMediumRisk ? "#1a1810" : "#1a1a1a"};">
+          <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.5rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${hasHighRisk ? "#e05d5d" : hasMediumRisk ? "#c9852c" : "#666"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span style="font-size:0.75rem; font-weight:600; color:${hasHighRisk ? "#e05d5d" : hasMediumRisk ? "#c9852c" : "#888"};">SECURITY & ACCESS NOTICE</span>
+          </div>
+          ${securityEntries.map((e) => {
+            const riskColor = e.riskLevel === "high" ? "#e05d5d" : e.riskLevel === "medium" ? "#c9852c" : "#666";
+            const riskLabel = e.riskLevel === "high" ? "HIGH RISK" : e.riskLevel === "medium" ? "MEDIUM RISK" : "LOW RISK";
+            return `<div style="margin-bottom:0.5rem; padding-bottom:0.5rem; border-bottom:1px solid #222;">
+              <div style="display:flex; align-items:center; gap:0.35rem; margin-bottom:0.2rem;">
+                <span style="font-size:0.75rem; font-weight:600; color:#ccc;">${this.escape(e.name)}</span>
+                <span style="font-size:0.6rem; font-weight:700; padding:0.1rem 0.35rem; border-radius:0.2rem; background:${riskColor}22; color:${riskColor};">${riskLabel}</span>
+              </div>
+              <div style="font-size:0.7rem; color:#999; margin-bottom:0.2rem;">${this.escape(e.dataAccess)}</div>
+              <div style="font-size:0.68rem; color:#888; line-height:1.4;">${this.escape(e.securityNote)}</div>
+            </div>`;
+          }).join("")}
+          ${hasHighRisk ? `<div style="display:flex; align-items:center; gap:0.35rem; margin-top:0.5rem;">
+            <input id="mq-security-ack" type="checkbox" style="accent-color:#e05d5d;" />
+            <label for="mq-security-ack" style="font-size:0.7rem; color:#aaa; cursor:pointer;">I understand the security implications and have scoped my credentials appropriately.</label>
+          </div>` : ""}
+        </div>`
+      : "";
 
     const mcpKeyHtml = authRequiredServers.length > 0
       ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #333; border-radius:0.5rem; background:#1a1a1a;">
@@ -489,6 +531,7 @@ export class MarketplaceBrowser {
           <div style="font-size:0.75rem; font-weight:600; color:#666; margin-bottom:0.25rem;">REQUIREMENTS</div>
           <div style="font-size:0.8rem; color:#aaa; white-space:pre-wrap;">${this.escape(requirements)}</div>
         </div>
+        ${securityHtml}
         ${mcpKeyHtml}
         ${agent.is_premium && circleServices.length > 0 ? `<div style="margin-bottom:1rem; padding:0.75rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:#1a1525;">
           <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.4rem;">⚡ PREMIUM AGENT — Paid API Services</div>
@@ -555,9 +598,12 @@ export class MarketplaceBrowser {
       const warning = modal.querySelector("#mq-mcp-warning") as HTMLDivElement | null;
       if (!hireBtn) return;
       const allHaveKeys = serverKeys.every((k) => mcpKeyState[k]);
-      hireBtn.disabled = !allHaveKeys;
-      hireBtn.style.opacity = allHaveKeys ? "1" : "0.4";
-      hireBtn.style.cursor = allHaveKeys ? "pointer" : "not-allowed";
+      const securityAck = modal.querySelector("#mq-security-ack") as HTMLInputElement | null;
+      const securityAcked = !securityAck || securityAck.checked;
+      const canHire = allHaveKeys && securityAcked;
+      hireBtn.disabled = !canHire;
+      hireBtn.style.opacity = canHire ? "1" : "0.4";
+      hireBtn.style.cursor = canHire ? "pointer" : "not-allowed";
       if (warning) {
         warning.style.display = allHaveKeys ? "none" : "block";
         if (!allHaveKeys) {
@@ -566,6 +612,12 @@ export class MarketplaceBrowser {
         }
       }
     };
+
+    // Wire up security acknowledgment checkbox
+    const securityAck = modal.querySelector("#mq-security-ack") as HTMLInputElement | null;
+    if (securityAck) {
+      securityAck.addEventListener("change", updateHireButton);
+    }
 
     // Ask server which MCP servers already have keys
     if (serverKeys.length > 0) {

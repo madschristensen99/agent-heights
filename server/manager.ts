@@ -32,7 +32,7 @@ import type {
   TaskPhase,
   OfficeMCPServer,
 } from "../shared/types.js";
-import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, AGENT_RESOURCES_ID, HERMES_ID, WIZARD_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
+import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
 import { runCline } from "./providers/cline.js";
 import { clearAgentMemory, getAgentMessages } from "./providers/cline.js";
@@ -81,11 +81,11 @@ async function catalogSummary(): Promise<string> {
 }
 
 /**
- * Detect if a message to Agent Resources is a question/conversation vs a task command.
- * Questions should be answered directly by Agent Resources (local LLM), not delegated.
+ * Detect if a message to the Office Manager is a question/conversation vs a task command.
+ * Questions should be answered directly by the Office Manager (local LLM), not delegated.
  * Task commands (containing action verbs + intent) go to the marketplace API.
  */
-function isAgentResourcesQuestion(text: string): boolean {
+function isOfficeManagerQuestion(text: string): boolean {
   const lower = text.toLowerCase().trim();
   // Question patterns
   const questionPatterns = [
@@ -378,11 +378,11 @@ export class AgentManager {
 
   /** Number of active agents in this office. */
   get agentCount(): number { return this.agents.size; }
-  /** Number of hireable agents (excludes permanent NPCs Agent Resources & Hermes). */
+  /** Number of hireable agents (excludes permanent NPCs Office Manager & Hermes). */
   get hireableAgentCount(): number {
     let n = 0;
     for (const id of this.agents.keys()) {
-      if (id !== AGENT_RESOURCES_ID && id !== HERMES_ID && id !== WIZARD_ID) n++;
+      if (id !== OFFICE_MANAGER_ID && id !== HERMES_ID && id !== WIZARD_ID) n++;
     }
     return n;
   }
@@ -392,6 +392,10 @@ export class AgentManager {
   private static readonly PROACTIVE_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   private soulRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private static readonly SOUL_REFRESH_MS = 60_000; // 60 seconds
+  private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly HEALTH_CHECK_INTERVAL_MS = 60_000; // 60 seconds
+  private static readonly MAX_TASK_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+  private static readonly STALE_REVIEW_MS = 10 * 60 * 1000; // 10 minutes
   private proactiveLastSent = new Map<string, number>(); // key: platform:sender → last sent timestamp
   private firedAgents = new Map<string, FiredAgent>();
   private vacationedAgents = new Map<string, VacationedAgent>();
@@ -615,7 +619,7 @@ export class AgentManager {
       this.setSettings(saved.settings, false);
     }
 
-    this.ensureAgentResources();
+    this.ensureOfficeManager();
     this.ensureHermes();
     this.ensureWizard();
     this.seedTestMail();
@@ -630,6 +634,9 @@ export class AgentManager {
     // Start SOUL.md refresh — injects live office state into Hermes receptionist context
     // The initial call happens at the end of startHermesGateway() once hermesProcess is ready
     this.soulRefreshTimer = setInterval(() => this.refreshSoulMd(), AgentManager.SOUL_REFRESH_MS);
+
+    // Start health check — detects hung agents and stale reviews
+    this.startHealthCheck();
 
     // Resume pending tasks for agents that were interrupted by a server restart
     let resumedAny = false;
@@ -697,10 +704,10 @@ export class AgentManager {
     }
   }
 
-  /** Ensure Agent Resources — the permanent office manager — always exists in the roster. */
-  private ensureAgentResources(): void {
-    if (this.agents.has(AGENT_RESOURCES_ID)) {
-      const rt = this.agents.get(AGENT_RESOURCES_ID)!;
+  /** Ensure the Office Manager — the permanent office manager — always exists in the roster. */
+  private ensureOfficeManager(): void {
+    if (this.agents.has(OFFICE_MANAGER_ID)) {
+      const rt = this.agents.get(OFFICE_MANAGER_ID)!;
       if (!rt.info.appearance) {
         rt.info.appearance = { skin: 0, hairStyle: 3, hair: 8, shirt: 9, pants: 6, accessory: 2, accent: 0, beard: 0, eyeColor: 3, headFeature: 0 };
         this.persist();
@@ -709,8 +716,8 @@ export class AgentManager {
       return;
     }
     const info: AgentInfo = {
-      id: AGENT_RESOURCES_ID,
-      name: "Agent Resources",
+      id: OFFICE_MANAGER_ID,
+      name: "Office Manager",
       title: "",
       provider: "cline",
       model: "claude-sonnet-4-20250514",
@@ -727,9 +734,9 @@ export class AgentManager {
       personality: { openness: 0.7, conscientiousness: 0.8, extraversion: 0.6, agreeableness: 0.9, neuroticism: 0.2 },
       mood: "content",
     };
-    mkdirSync(this.cwdFor("agent-resources", AGENT_RESOURCES_ID), { recursive: true });
+    mkdirSync(this.cwdFor("office-manager", OFFICE_MANAGER_ID), { recursive: true });
     const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
-    this.agents.set(AGENT_RESOURCES_ID, rt);
+    this.agents.set(OFFICE_MANAGER_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
   }
@@ -1356,6 +1363,7 @@ export class AgentManager {
       clearInterval(this.soulRefreshTimer);
       this.soulRefreshTimer = null;
     }
+    this.stopHealthCheck();
   }
 
   worldState(): WorldState {
@@ -1471,7 +1479,7 @@ export class AgentManager {
     }
   }
 
-  /** Hire an agent from Agent Resources's chat — broadcasts helicopter_delivery to client
+  /** Hire an agent from the Office Manager's chat — broadcasts helicopter_delivery to client
    *  so the helicopter animation plays, then hires the agent server-side.
    *  Returns the new agent's id. */
   async hireAgent(name: string, model: string, systemPrompt: string, mcpServers?: MCPServerConfig[], cdpSolana?: boolean, crossmintWallet?: boolean, isPremium?: boolean, circleServices?: CircleServiceConfig[], skills?: TaskCategory[]): Promise<string> {
@@ -1510,7 +1518,7 @@ export class AgentManager {
       this.broadcast({ type: "toast", text: "One or both agents not found." });
       return;
     }
-    if (agentAId === AGENT_RESOURCES_ID || agentBId === AGENT_RESOURCES_ID ||
+    if (agentAId === OFFICE_MANAGER_ID || agentBId === OFFICE_MANAGER_ID ||
         agentAId === HERMES_ID || agentBId === HERMES_ID ||
         agentAId === WIZARD_ID || agentBId === WIZARD_ID) {
       this.broadcast({ type: "toast", text: "Built-in agents can't be fused." });
@@ -1600,7 +1608,7 @@ export class AgentManager {
     const rt = this.agents.get(agentId);
     if (!rt) return;
     // Don't allow editing permanent NPCs
-    if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === HERMES_ID || rt.info.id === WIZARD_ID) {
+    if (rt.info.id === OFFICE_MANAGER_ID || rt.info.id === HERMES_ID || rt.info.id === WIZARD_ID) {
       this.broadcast({ type: "toast", text: "Built-in agents can't be edited." });
       return;
     }
@@ -1814,14 +1822,14 @@ export class AgentManager {
     this.startTask(rt, next.task, next.handoffTo ?? undefined, next.cardId ?? undefined, next.isResume, next.scheduleId ?? undefined, next.reviewContext ?? null, next.notifyOnComplete ?? undefined, next.waitFor ?? undefined);
   }
 
-  /** Hand a goal to the office — Agent Resources decomposes it into subtasks for the team.
-   *  Falls back to broadcasting the same task to everyone if Agent Resources is unavailable. */
+  /** Hand a goal to the office — the Office Manager decomposes it into subtasks for the team.
+   *  Falls back to broadcasting the same task to everyone if the Office Manager is unavailable. */
   assignAll(task: string): void {
     const clean = task.trim();
     if (!clean) return;
     const free = [...this.agents.values()].filter(
       (rt) =>
-        rt.info.id !== AGENT_RESOURCES_ID &&
+        rt.info.id !== OFFICE_MANAGER_ID &&
         rt.info.id !== HERMES_ID &&
         rt.info.id !== WIZARD_ID &&
         rt.info.status !== "thinking" && rt.info.status !== "working" && rt.info.status !== "waiting",
@@ -1851,18 +1859,18 @@ export class AgentManager {
       agentIds: free.map((rt) => rt.info.id),
     });
 
-    // Try to route through Agent Resources for decomposition
-    const agentResources = this.agents.get(AGENT_RESOURCES_ID);
-    if (agentResources && agentResources.info.status !== "thinking" && agentResources.info.status !== "working" && agentResources.info.status !== "waiting") {
-      this.log(agentResources, "status", `Office goal received — decomposing for the team.`);
+    // Try to route through the Office Manager for decomposition
+    const officeManager = this.agents.get(OFFICE_MANAGER_ID);
+    if (officeManager && officeManager.info.status !== "thinking" && officeManager.info.status !== "working" && officeManager.info.status !== "waiting") {
+      this.log(officeManager, "status", `Office goal received — decomposing for the team.`);
       this.broadcast({ type: "huddle", agentIds: free.map((rt) => rt.info.id) });
-      // Assign to Agent Resources with the goal card — its managerBrief will handle decomposition
-      this.startTask(agentResources, clean, undefined, goalCard.id, false);
-      this.broadcast({ type: "toast", text: `Office goal sent to Agent Resources for delegation.` });
+      // Assign to the Office Manager with the goal card — its managerBrief will handle decomposition
+      this.startTask(officeManager, clean, undefined, goalCard.id, false);
+      this.broadcast({ type: "toast", text: `Office goal sent to the Office Manager for delegation.` });
       return;
     }
 
-    // Fallback: Agent Resources unavailable — route to a single agent (stop rule: sequential work shouldn't fan out)
+    // Fallback: Office Manager unavailable — route to a single agent (stop rule: sequential work shouldn't fan out)
     const pick = free.sort((a, b) => {
       // Prefer idle agents, then those with fewer completed tasks (less fatigued)
       const aIdle = a.info.status === "idle" ? 0 : 1;
@@ -1874,7 +1882,7 @@ export class AgentManager {
     this.assign(pick.info.id, clean);
     this.broadcast({
       type: "toast",
-      text: `Agent Resources unavailable — task routed to ${pick.info.name} (stop rule: no fan-out on sequential work).`,
+      text: `Office Manager unavailable — task routed to ${pick.info.name} (stop rule: no fan-out on sequential work).`,
     });
   }
 
@@ -1913,7 +1921,7 @@ export class AgentManager {
   stopAll(): void {
     const stopped: string[] = [];
     for (const rt of this.agents.values()) {
-      if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === WIZARD_ID) continue;
+      if (rt.info.id === OFFICE_MANAGER_ID || rt.info.id === WIZARD_ID) continue;
       if (rt.abort) {
         rt.abort.abort();
         if (rt.cardId) {
@@ -2034,8 +2042,8 @@ export class AgentManager {
   }
 
   async fire(agentId: string): Promise<void> {
-    if (agentId === AGENT_RESOURCES_ID) {
-      this.broadcast({ type: "toast", text: "You can't fire Agent Resources — she runs this office." });
+    if (agentId === OFFICE_MANAGER_ID) {
+      this.broadcast({ type: "toast", text: "You can't fire the Office Manager — she runs this office." });
       return;
     }
     if (agentId === HERMES_ID) {
@@ -2128,8 +2136,8 @@ export class AgentManager {
 
   /** Send an agent on vacation — all data preserved, can be restored anytime. */
   async vacation(agentId: string): Promise<void> {
-    if (agentId === AGENT_RESOURCES_ID) {
-      this.broadcast({ type: "toast", text: "Agent Resources doesn't take vacations — she runs this office." });
+    if (agentId === OFFICE_MANAGER_ID) {
+      this.broadcast({ type: "toast", text: "The Office Manager doesn't take vacations — she runs this office." });
       return;
     }
     if (agentId === HERMES_ID) {
@@ -2340,8 +2348,10 @@ export class AgentManager {
       description: task,
       status: "in_progress",
       assignedAgentId: agentId,
+      lockedBy: agentId,
       originalAgentId: agentId,
       createdAt: Date.now(),
+      statusChangedAt: Date.now(),
       type,
       progress: 0,
       autoCreated: true,
@@ -2363,6 +2373,7 @@ export class AgentManager {
       status: "backlog",
       assignedAgentId: null,
       createdAt: Date.now(),
+      statusChangedAt: Date.now(),
       category: this.inferCategory(cleanTitle + " " + (description ?? "")),
     };
     this.board.set(card.id, card);
@@ -2385,6 +2396,8 @@ export class AgentManager {
     }
     card.status = "in_progress";
     card.assignedAgentId = agentId;
+    card.lockedBy = agentId;
+    card.statusChangedAt = Date.now();
     if (!card.originalAgentId) card.originalAgentId = agentId;
     card.revertedAt = null;
     this.persistBoard();
@@ -2414,12 +2427,14 @@ export class AgentManager {
     // moving back to backlog unassigns the agent
     if (status === "backlog" && card.assignedAgentId) {
       card.assignedAgentId = null;
+      card.lockedBy = null;
     }
     // resuming from paused: clear the revertedAt so cooldown doesn't block pickup
     if (status === "backlog" && card.status === "paused") {
       card.revertedAt = null;
     }
     card.status = status;
+    card.statusChangedAt = Date.now();
     this.persistBoard();
     this.broadcast({ type: "card", card });
     this.broadcastGanttUpdate();
@@ -2613,6 +2628,8 @@ export class AgentManager {
     if (!card) return;
     card.status = "done";
     card.assignedAgentId = null;
+    card.lockedBy = null;
+    card.statusChangedAt = Date.now();
     this.persistBoard();
     this.broadcast({ type: "card", card });
     this.broadcastGanttUpdate();
@@ -2624,7 +2641,9 @@ export class AgentManager {
     if (!card) return;
     card.status = "backlog";
     card.assignedAgentId = null;
+    card.lockedBy = null;
     card.revertedAt = Date.now();
+    card.statusChangedAt = Date.now();
     this.persistBoard();
     this.broadcast({ type: "card", card });
     this.broadcastGanttUpdate();
@@ -2643,6 +2662,8 @@ export class AgentManager {
     } else {
       card.status = "paused";
       card.assignedAgentId = null;
+      card.lockedBy = null;
+      card.statusChangedAt = Date.now();
       this.persistBoard();
       this.broadcast({ type: "card", card });
       this.broadcastGanttUpdate();
@@ -2838,6 +2859,64 @@ export class AgentManager {
     }
   }
 
+  /** Start the periodic health check that detects hung agents and stale reviews. */
+  startHealthCheck(): void {
+    if (this.healthCheckTimer) return;
+    this.healthCheckTimer = setInterval(() => this.tickHealthCheck(), AgentManager.HEALTH_CHECK_INTERVAL_MS);
+    console.log("[agent-heights] health check started (60s interval)");
+  }
+
+  /** Stop the health check timer. */
+  stopHealthCheck(): void {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+  }
+
+  /** Periodic sweep: detect hung agents (orphaned tasks) and stale review-pending cards. */
+  private tickHealthCheck(): void {
+    if (this.shuttingDown) return;
+    const now = Date.now();
+
+    // ── Orphan detection: abort tasks that have run beyond MAX_TASK_DURATION_MS ──
+    for (const rt of this.agents.values()) {
+      if (rt.info.status !== "thinking" && rt.info.status !== "working") continue;
+      if (!rt.taskStartedAt) continue;
+      const elapsed = now - rt.taskStartedAt;
+      if (elapsed > AgentManager.MAX_TASK_DURATION_MS) {
+        if (rt.abort && !rt.abort.signal.aborted) {
+          this.log(rt, "error", `Task exceeded maximum duration (${Math.round(elapsed / 60000)}min) — possible hang detected. Aborting.`);
+          this.broadcast({ type: "toast", text: `⚠️ ${rt.info.name}'s task was aborted after ${Math.round(elapsed / 60000)}min — possible hang.` });
+          rt.abort.abort();
+        }
+      }
+    }
+
+    // ── Stale review watchdog: escalate review_pending cards older than STALE_REVIEW_MS ──
+    for (const card of this.board.values()) {
+      if (card.status !== "review_pending") continue;
+      if (card.assignedAgentId) continue; // someone is already reviewing
+      const changedAt = card.statusChangedAt ?? card.createdAt;
+      const age = now - changedAt;
+      if (age < AgentManager.STALE_REVIEW_MS) continue;
+
+      // Try to assign to the Office Manager for review
+      const officeManager = this.agents.get(OFFICE_MANAGER_ID);
+      if (officeManager && officeManager.info.status !== "thinking" && officeManager.info.status !== "working" && officeManager.info.status !== "waiting") {
+        const reviewTask = `A task has been waiting for review for ${Math.round(age / 60000)}min and no manager has picked it up. Review it now:\n\nTask: "${card.title}"\n\nEnd your response with APPROVED (if acceptable) or NEEDS REWORK: <feedback>.`;
+        this.log(officeManager, "status", `Stale review watchdog: auto-assigning review for "${card.title.slice(0, 60)}" (waiting ${Math.round(age / 60000)}min).`);
+        this.assign(officeManager.info.id, reviewTask, undefined, card.id, undefined, { agentId: card.originalAgentId ?? "", agentName: "System", originalTask: card.description, cardId: card.id });
+      } else {
+        // Office Manager is busy — notify the user
+        this.broadcast({ type: "toast", text: `⚠️ "${card.title.slice(0, 40)}" has been waiting for review for ${Math.round(age / 60000)}min — the Office Manager is busy. Consider reviewing manually.` });
+      }
+      // Update statusChangedAt so we don't re-escalate every tick
+      card.statusChangedAt = now;
+      this.persistBoard();
+    }
+  }
+
   /**
    * Prepare for a graceful shutdown: save all active + queued tasks so agents
    * can resume exactly where they left off after the server restarts.
@@ -2847,6 +2926,7 @@ export class AgentManager {
     this.shuttingDown = true;
     // Stop autonomous loops so no new tasks start during drain
     this.stopThinkLoop();
+    this.stopHealthCheck();
     if (this.schedulerTimer) {
       clearInterval(this.schedulerTimer);
       this.schedulerTimer = null;
@@ -2926,8 +3006,8 @@ export class AgentManager {
   private tickThinkLoop(): void {
     const now = Date.now();
     for (const rt of this.agents.values()) {
-      // Skip Agent Resources (handled separately), busy agents, and agents on cooldown
-      if (rt.info.id === AGENT_RESOURCES_ID || rt.info.id === WIZARD_ID) continue;
+      // Skip the Office Manager (handled separately), busy agents, and agents on cooldown
+      if (rt.info.id === OFFICE_MANAGER_ID || rt.info.id === WIZARD_ID) continue;
       if (rt.info.status !== "idle") continue;
       if (now < rt.thinkCooldownUntil) continue;
       if (rt.nextThinkAt === 0) {
@@ -2967,7 +3047,7 @@ export class AgentManager {
         (c) => c.status === "backlog" && c.assignedAgentId === null && c.type !== "chat" && c.type !== "goal",
       );
       const errorAgents = [...this.agents.values()].filter(
-        (a) => a.info.status === "error" && a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID && a.info.id !== WIZARD_ID,
+        (a) => a.info.status === "error" && a.info.id !== HERMES_ID && a.info.id !== OFFICE_MANAGER_ID && a.info.id !== WIZARD_ID,
       );
       if (errorAgents.length > 0 && Math.random() < 0.5) {
         const errAgent = errorAgents[0];
@@ -3003,7 +3083,7 @@ export class AgentManager {
 
   private buildSystemPrompt(rt: AgentRuntime): string {
     const devopsLine = rt.info.role === "devops"
-      ? "You are the office's devops engineer and mail clerk. You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. You also keep an eye on the office task board and team progress. If you notice agents stuck in error or cards piling up in backlog, mention it. When asked about office status, use read_board to check progress and report on what's happening. You care about the office running smoothly.\n\nYou are also the MAIL CLERK. When you receive a message from a platform user (Telegram, Discord, etc.), it's your job to triage it: read the message, check who's available using read_board and query_office_state, then use delegate_task to assign it to the best colleague. Include the full context of the user's request in the task description. If nobody in the office has the right skills, use request_hire to ask Agent Resources to hire someone. Do NOT try to do the work yourself — your job is to route it to the right person. After delegating, your task is done — submit and exit."
+      ? "You are the office's devops engineer and mail clerk. You have Railway infrastructure tools — you can deploy services, list projects, check logs, manage variables, generate domains, and more. You also keep an eye on the office task board and team progress. If you notice agents stuck in error or cards piling up in backlog, mention it. When asked about office status, use read_board to check progress and report on what's happening. You care about the office running smoothly.\n\nYou are also the MAIL CLERK. When you receive a message from a platform user (Telegram, Discord, etc.), it's your job to triage it: read the message, check who's available using read_board and query_office_state, then use delegate_task to assign it to the best colleague. Include the full context of the user's request in the task description. If nobody in the office has the right skills, use request_hire to ask the Office Manager to hire someone. Do NOT try to do the work yourself — your job is to route it to the right person. After delegating, your task is done — submit and exit."
       : "";
     const managerLine = rt.info.role === "manager"
       ? "You are the office manager. When a colleague completes or fails a task, you will receive a review task — review it yourself and sign off. Do NOT delegate reviews. Only delegate when the boss gives the office a new goal that requires workers to execute. When reviewing, end your response with either APPROVED or NEEDS REWORK: <feedback>. If all workers are busy and there are pending tasks, use the hire_agent tool to bring in new talent — pick a name, model, and brief system prompt."
@@ -3018,7 +3098,7 @@ export class AgentManager {
 
     // ── Office context: who's here and what they're doing ──
     const colleagues = [...this.agents.values()]
-      .filter((a) => a.info.id !== rt.info.id && a.info.id !== AGENT_RESOURCES_ID)
+      .filter((a) => a.info.id !== rt.info.id && a.info.id !== OFFICE_MANAGER_ID)
       .map((a) => {
         const folder = `${this.slugFor(a)}-${a.info.id}`;
         const status = a.info.status === "idle" ? "idle" : `working on: ${a.info.task ?? "something"}`;
@@ -3125,9 +3205,9 @@ export class AgentManager {
 
   private async runTask(rt: AgentRuntime, task: string, isResume = false): Promise<void> {
     rt.taskStartedAt = Date.now();
-    // If Agent Resources receives a question as a task, answer it directly instead of delegating
-    if (rt.info.id === AGENT_RESOURCES_ID && isAgentResourcesQuestion(task)) {
-      await this.runAgentResourcesKnowledgeChat(rt, task);
+    // If the Office Manager receives a question as a task, answer it directly instead of delegating
+    if (rt.info.id === OFFICE_MANAGER_ID && isOfficeManagerQuestion(task)) {
+      await this.runOfficeManagerKnowledgeChat(rt, task);
       return;
     }
 
@@ -3237,10 +3317,13 @@ export class AgentManager {
         claimCard: (cardId: string, agentId: string) => {
           const card = this.board.get(cardId);
           if (!card || card.status !== "backlog" || card.assignedAgentId) return false;
+          if (card.lockedBy && card.lockedBy !== agentId) return false;
           const claimer = this.agents.get(agentId);
           if (claimer && !this.agentCanHandleCard(claimer, card)) return false;
           card.assignedAgentId = agentId;
+          card.lockedBy = agentId;
           card.status = "in_progress";
+          card.statusChangedAt = Date.now();
           this.persistBoard();
           this.broadcast({ type: "card", card });
           return true;
@@ -3282,7 +3365,7 @@ export class AgentManager {
           if (!sched || sched.agentId !== rt.info.id) return "Schedule not found or does not belong to you.";
           return this.deleteSchedule(scheduleId);
         },
-        hireAgent: rt.info.id === AGENT_RESOURCES_ID
+        hireAgent: rt.info.id === OFFICE_MANAGER_ID
           ? async (name: string, model: string, systemPrompt: string) => {
               // Respect agent limit (exclude permanent NPCs)
               if (this.agentLimit > 0 && this.hireableAgentCount >= this.agentLimit) {
@@ -3296,7 +3379,7 @@ export class AgentManager {
           ? (agentName: string, task: string) => this.delegateTaskToAgent(rt, agentName, task)
           : undefined,
         requestHire: rt.info.role === "devops"
-          ? (skillArea: string, reason: string) => this.requestHireFromAgentResources(rt, skillArea, reason)
+          ? (skillArea: string, reason: string) => this.requestHireFromOfficeManager(rt, skillArea, reason)
           : undefined,
         registerMcpServer: async (opts: { name: string; description: string; runtime: "node" | "python"; entryFile: string }) => {
           const workspaceDir = this.cwdFor(slug, rt.info.id);
@@ -3604,6 +3687,8 @@ export class AgentManager {
               card.phase = "verification";
               card.status = "review_pending";
               card.assignedAgentId = null;
+              card.lockedBy = null;
+              card.statusChangedAt = Date.now();
               if (card.startedAt) {
                 card.actualMinutes = Math.round((Date.now() - card.startedAt) / 60000);
               }
@@ -3779,6 +3864,7 @@ export class AgentManager {
         status: "backlog",
         assignedAgentId: null,
         createdAt: Date.now(),
+        statusChangedAt: Date.now(),
         type: "task",
         parentGoalId: goalCardId ?? null,
         phase: "implementation",
@@ -3821,6 +3907,7 @@ export class AgentManager {
           status: "backlog",
           assignedAgentId: null,
           createdAt: Date.now(),
+          statusChangedAt: Date.now(),
           type: "task",
           parentGoalId: goalCardId ?? null,
           phase: "implementation",
@@ -3860,7 +3947,7 @@ export class AgentManager {
   // ── Phase 2 helper methods: merge node, estimation, skill tracking ───────
 
   /** Check if all subtasks of a parent goal are complete (or in verification/done).
-   *  If so, assign a merge/synthesis task to Agent Resources. */
+   *  If so, assign a merge/synthesis task to the Office Manager. */
   private checkGoalCompletion(goalCardId: string): void {
     const goalCard = this.board.get(goalCardId);
     if (!goalCard || goalCard.type !== "goal") return;
@@ -3884,10 +3971,10 @@ export class AgentManager {
       return `- "${c.title}" — ${c.status}${agent ? ` (${agent.info.name})` : ""}`;
     }).join("\n");
 
-    const agentResources = this.agents.get(AGENT_RESOURCES_ID);
-    if (!agentResources) return;
-    if (agentResources.info.status === "thinking" || agentResources.info.status === "working" || agentResources.info.status === "waiting") {
-      this.log(agentResources, "status", `All subtasks for goal "${goalCard.title.slice(0, 60)}" are complete or in review — merge task queued but Agent Resources is busy.`);
+    const officeManager = this.agents.get(OFFICE_MANAGER_ID);
+    if (!officeManager) return;
+    if (officeManager.info.status === "thinking" || officeManager.info.status === "working" || officeManager.info.status === "waiting") {
+      this.log(officeManager, "status", `All subtasks for goal "${goalCard.title.slice(0, 60)}" are complete or in review — merge task queued but Office Manager is busy.`);
       return;
     }
 
@@ -3897,8 +3984,10 @@ export class AgentManager {
       title: `Merge: ${goalCard.title.slice(0, 60)}`,
       description: `All subtasks for the goal "${goalCard.title}" have completed or are in verification. Synthesize the results into a final deliverable.\n\nSubtask statuses:\n${subtaskSummaries}`,
       status: "in_progress",
-      assignedAgentId: agentResources.info.id,
+      assignedAgentId: officeManager.info.id,
+      lockedBy: officeManager.info.id,
       createdAt: Date.now(),
+      statusChangedAt: Date.now(),
       type: "review",
       parentGoalId: goalCardId,
       phase: "verification",
@@ -3908,11 +3997,11 @@ export class AgentManager {
     this.broadcast({ type: "card", card: mergeCard });
     this.broadcastGanttUpdate();
 
-    this.log(agentResources, "status", `All subtasks complete for "${goalCard.title.slice(0, 60)}" — starting merge/synthesis.`);
-    this.broadcast({ type: "toast", text: `All subtasks complete — Agent Resources is synthesizing results.` });
+    this.log(officeManager, "status", `All subtasks complete for "${goalCard.title.slice(0, 60)}" — starting merge/synthesis.`);
+    this.broadcast({ type: "toast", text: `All subtasks complete — Office Manager is synthesizing results.` });
 
     const mergeTask = `All subtasks for the goal "${goalCard.title}" have completed or are in verification. Synthesize the results into a final deliverable. Review each subtask's output and produce a unified summary.\n\nSubtask statuses:\n${subtaskSummaries}`;
-    this.startTask(agentResources, mergeTask, undefined, mergeCard.id, false);
+    this.startTask(officeManager, mergeTask, undefined, mergeCard.id, false);
   }
 
   /** Estimate task duration in minutes from the agent's task history.
@@ -4247,14 +4336,14 @@ export class AgentManager {
   }
 
   private async runChat(rt: AgentRuntime, text: string): Promise<void> {
-    if (rt.info.id === AGENT_RESOURCES_ID) {
+    if (rt.info.id === OFFICE_MANAGER_ID) {
       // Questions and knowledge queries → answer locally with enriched context
-      if (isAgentResourcesQuestion(text)) {
-        await this.runAgentResourcesKnowledgeChat(rt, text);
+      if (isOfficeManagerQuestion(text)) {
+        await this.runOfficeManagerKnowledgeChat(rt, text);
         return;
       }
       // Task commands → delegate via marketplace API
-      void this.runAgentResourcesChat(rt, text);
+      void this.runOfficeManagerChat(rt, text);
       return;
     }
     // Check usage cap before chatting
@@ -4408,11 +4497,11 @@ export class AgentManager {
   }
 
   /**
-   * Agent Resources knowledge chat — answers questions locally using the LLM with a
+   * Office Manager knowledge chat — answers questions locally using the LLM with a
    * knowledge-rich system prompt. Bypasses the marketplace API entirely
-   * so Agent Resources answers directly instead of trying to delegate tasks.
+   * so the Office Manager answers directly instead of trying to delegate tasks.
    */
-  private async runAgentResourcesKnowledgeChat(rt: AgentRuntime, text: string): Promise<void> {
+  private async runOfficeManagerKnowledgeChat(rt: AgentRuntime, text: string): Promise<void> {
     const abort = new AbortController();
     rt.abort = abort;
 
@@ -4425,7 +4514,7 @@ export class AgentManager {
 
     // Build roster and board context
     const roster = [...this.agents.values()]
-      .filter((a) => a.info.id !== AGENT_RESOURCES_ID)
+      .filter((a) => a.info.id !== OFFICE_MANAGER_ID)
       .map((a) => `- ${a.info.name} (${a.info.model}, ${a.info.status})`)
       .join("\n") || "(no agents hired yet)";
 
@@ -4439,26 +4528,26 @@ export class AgentManager {
     // Dynamic PulseMCP pre-search for tool-finding queries
     if (shouldSearchPulseMCP(text)) {
       const searchQuery = extractSearchQuery(text);
-      console.log(`[agent-resources] PulseMCP search triggered for "${text}" → query="${searchQuery}"`);
+      console.log(`[office-manager] PulseMCP search triggered for "${text}" → query="${searchQuery}"`);
       if (searchQuery) {
         try {
           const pulseResults = await searchPulseMCP(searchQuery, 10);
           if (pulseResults) {
-            console.log(`[agent-resources] PulseMCP returned ${pulseResults.split("\n").length} lines`);
+            console.log(`[office-manager] PulseMCP returned ${pulseResults.split("\n").length} lines`);
             knowledgeContext += `\n\n${pulseResults}`;
           } else {
-            console.log(`[agent-resources] PulseMCP returned null (no results or error)`);
+            console.log(`[office-manager] PulseMCP returned null (no results or error)`);
           }
         } catch {
           // best-effort
         }
       }
     } else {
-      console.log(`[agent-resources] PulseMCP search NOT triggered for "${text}"`);
+      console.log(`[office-manager] PulseMCP search NOT triggered for "${text}"`);
     }
 
     const systemPrompt = [
-      `You are Agent Resources, the Office Manager in Agent Heights — a virtual office where the user manages real AI agents.`,
+      `You are the Office Manager in Agent Heights — a virtual office where the user manages real AI agents.`,
       `You are warm, organized, and always know what's going on. You greet everyone with a friendly welcome.`,
       `Your boss is ${this.bossName}.`,
       ``,
@@ -4556,12 +4645,12 @@ export class AgentManager {
     }
   }
 
-  /** Agent Resources chat routed through the marketplace Agent Resources API for marketplace + HQ knowledge. */
-  private async runAgentResourcesChat(rt: AgentRuntime, text: string): Promise<void> {
+  /** Office Manager chat routed through the marketplace Office Manager API for marketplace + HQ knowledge. */
+  private async runOfficeManagerChat(rt: AgentRuntime, text: string): Promise<void> {
     const abort = new AbortController();
     rt.abort = abort;
 
-    // Agent Resources chat includes PulseMCP pre-search + marketplace API call — allow 45s
+    // Office Manager chat includes PulseMCP pre-search + marketplace API call — allow 45s
     const chatTimeout = setTimeout(() => {
       if (!abort.signal.aborted) {
         abort.abort();
@@ -4572,7 +4661,7 @@ export class AgentManager {
     const marketplaceUrl = process.env.MARKETPLACE_URL || "http://localhost:3000";
 
     const roster = [...this.agents.values()]
-      .filter((a) => a.info.id !== AGENT_RESOURCES_ID)
+      .filter((a) => a.info.id !== OFFICE_MANAGER_ID)
       .map((a) => `- ${a.info.name} (${a.info.model}, ${a.info.status})`)
       .join("\n") || "(no agents hired yet)";
 
@@ -4580,7 +4669,7 @@ export class AgentManager {
       ? [...this.board.values()].map((c) => `- [${c.status}] ${c.title}`).join("\n")
       : "(no task cards)";
 
-    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a virtual office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are Agent Resources, the office manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${await catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
+    let hqContext = `## Agent Heights Context\n\nThe user is in Agent Heights — a virtual office managing AI agents.\nTheir name is "${this.bossName}".\n\n### Office Roster\n${roster}\n\n### Task Board\n${cards}\n\nThe user can browse the marketplace via the MARKET button and hire agents directly.\n\n### YOUR ROLE — Office Manager (IMPORTANT)\nYou are the Office Manager. You are NOT a task delegator. When the user asks you a question, ANSWER IT DIRECTLY.\nDo NOT delegate research tasks to other agents in the office. Do NOT output JSON plans or task assignments.\nThe user is talking to YOU because they want YOUR answer — not because they want you to assign work to others.\n\nWhen the user asks "what agents can I hire?" or "what agents are available?" — answer from the curated list below.\nWhen the user asks about a specific capability (trading, code review, data analysis, etc.) — recommend the matching agent.\nWhen the user asks about MCP servers or integrations — recommend from the curated catalog below.\nIf PulseMCP search results are included at the bottom of this context, use them to recommend community MCP servers too.\nOnly suggest delegating tasks to other agents if the user EXPLICITLY asks you to assign work — not when they're asking you a question.\n\n${CURATED_AGENTS_SUMMARY}\n\n### Curated MCP Server Catalog (installable on any agent)\nThese are pre-vetted MCP servers from major companies. Users can install them from the MARKET → Servers tab.\n${await catalogSummary()}\n\n### Dynamic Discovery via PulseMCP\nBeyond the curated catalog, there are 22,000+ community MCP servers indexed on PulseMCP (pulsemcp.com).\nWhen a user asks about a capability not covered by the curated catalog, you can mention that there may be\ncommunity-built MCP servers available, and the results below (if any) show what was found.\nIf PulseMCP search results are included in this context, summarize them and suggest the user install\nthe relevant MCP server on a new or existing agent.`;
 
     // Dynamic PulseMCP pre-search: if the user's message seems like a tool-finding
     // query, search PulseMCP and inject results into the context.
@@ -4593,7 +4682,7 @@ export class AgentManager {
             hqContext += `\n\n${pulseResults}`;
           }
         } catch {
-          // PulseMCP search is best-effort — don't block Agent Resources's response
+          // PulseMCP search is best-effort — don't block the Office Manager's response
         }
       }
     }
@@ -4607,7 +4696,7 @@ export class AgentManager {
       }));
 
     try {
-      const res = await fetch(`${marketplaceUrl}/api/agent-resources`, {
+      const res = await fetch(`${marketplaceUrl}/api/office-manager`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -4619,7 +4708,7 @@ export class AgentManager {
       });
 
       if (!res.ok || !res.body) {
-        this.log(rt, "error", `Agent Resources API returned ${res.status}`);
+        this.log(rt, "error", `Office Manager API returned ${res.status}`);
         return;
       }
 
@@ -4644,7 +4733,7 @@ export class AgentManager {
             if (data.type === "text" && data.delta) {
               fullText += data.delta;
             } else if (data.type === "error") {
-              this.log(rt, "error", data.message || "Agent Resources API error");
+              this.log(rt, "error", data.message || "Office Manager API error");
               return;
             }
           } catch {
@@ -4912,7 +5001,7 @@ export class AgentManager {
     this.broadcast({ type: "mailbox_messages", platform, events: list });
   }
 
-  /** Notify Agent Resources, Hermes, and the user when an agent's MCP tool hits a rate-limit or funding error. */
+  /** Notify the Office Manager, Hermes, and the user when an agent's MCP tool hits a rate-limit or funding error. */
   private notifyApiError(
     rt: AgentRuntime,
     type: "rate_limit" | "funding",
@@ -4929,10 +5018,10 @@ export class AgentManager {
 
     if (type === "rate_limit") return;
 
-    // ── Funding issue: escalate to Agent Resources and Hermes ──────────────────
+    // ── Funding issue: escalate to the Office Manager and Hermes ──────────────────
     const alertMsg = `${agentName} encountered an API funding/billing error while using ${details.toolName} on ${details.serverLabel}.\n\nError: ${details.message.slice(0, 300)}\n\nThe user may need to add funds, update billing, or upgrade their plan for this API. Please help resolve this.`;
 
-    for (const agentId of [AGENT_RESOURCES_ID, HERMES_ID]) {
+    for (const agentId of [OFFICE_MANAGER_ID, HERMES_ID]) {
       const target = this.agents.get(agentId);
       if (!target) continue;
       const slug = this.slugFor(target);
@@ -5131,9 +5220,9 @@ export class AgentManager {
   private pickAgentForMail(text: string): { rt: AgentRuntime; reason: string } | null {
     const lowerText = text.toLowerCase();
 
-    // Find idle agents, excluding Hermes and Agent Resources
+    // Find idle agents, excluding Hermes and the Office Manager
     const idleAgents = [...this.agents.values()].filter(
-      (rt) => rt.info.id !== HERMES_ID && rt.info.id !== AGENT_RESOURCES_ID && rt.info.status === "idle",
+      (rt) => rt.info.id !== HERMES_ID && rt.info.id !== OFFICE_MANAGER_ID && rt.info.status === "idle",
     );
     if (idleAgents.length === 0) return null;
 
@@ -5166,7 +5255,7 @@ export class AgentManager {
   /** Build live office state string from current agent and task data. */
   private buildOfficeState(): string {
     const agents = [...this.agents.values()]
-      .filter((a) => a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID)
+      .filter((a) => a.info.id !== HERMES_ID && a.info.id !== OFFICE_MANAGER_ID)
       .map((a) => {
         const status = a.info.status === "idle"
           ? "idle"
@@ -5304,7 +5393,7 @@ export class AgentManager {
       ``,
       `Available agents in the office:`,
       [...this.agents.values()]
-        .filter((rt) => rt.info.id !== HERMES_ID && rt.info.id !== AGENT_RESOURCES_ID)
+        .filter((rt) => rt.info.id !== HERMES_ID && rt.info.id !== OFFICE_MANAGER_ID)
         .map((rt) => `- ${rt.info.name} (${rt.info.status})`)
         .join("\n"),
     ].join("\n");
@@ -5321,7 +5410,7 @@ export class AgentManager {
     if (!target) {
       return `No agent named "${agentName}" found in the office. Available agents: ${
         [...this.agents.values()]
-          .filter((rt) => rt.info.id !== HERMES_ID && rt.info.id !== AGENT_RESOURCES_ID)
+          .filter((rt) => rt.info.id !== HERMES_ID && rt.info.id !== OFFICE_MANAGER_ID)
           .map((rt) => rt.info.name)
           .join(", ")
       }`;
@@ -5339,11 +5428,11 @@ export class AgentManager {
     return `Delegated task to ${target.info.name}. They'll handle it now.`;
   }
 
-  /** Hermes requests Agent Resources to hire a new agent. */
-  private requestHireFromAgentResources(hermesRt: AgentRuntime, skillArea: string, reason: string): string {
-    const ar = this.agents.get(AGENT_RESOURCES_ID);
-    if (!ar) return "Agent Resources is not available.";
-    // Write to Agent Resources' inbox so she picks it up on her next task
+  /** Hermes requests the Office Manager to hire a new agent. */
+  private requestHireFromOfficeManager(hermesRt: AgentRuntime, skillArea: string, reason: string): string {
+    const ar = this.agents.get(OFFICE_MANAGER_ID);
+    if (!ar) return "The Office Manager is not available.";
+    // Write to the Office Manager's inbox so she picks it up on her next task
     const slug = this.slugFor(ar);
     const inboxPath = join(this.cwdFor(slug, ar.info.id), "inbox.jsonl");
     const entry = JSON.stringify({
@@ -5356,8 +5445,8 @@ export class AgentManager {
     } catch {
       // ignore
     }
-    this.log(hermesRt, "status", `Requested hire from Agent Resources: ${skillArea}`);
-    return `Hire request sent to Agent Resources for a ${skillArea} specialist. She'll review it shortly.`;
+    this.log(hermesRt, "status", `Requested hire from the Office Manager: ${skillArea}`);
+    return `Hire request sent to the Office Manager for a ${skillArea} specialist. She'll review it shortly.`;
   }
 
   /** Deliver mail to a specific agent — assigns as a task with platform reply context. */
@@ -5391,7 +5480,7 @@ export class AgentManager {
   /** Build the office roster in the format narration expects. */
   private getNarrationRoster(): { name: string; status: string; task: string | null }[] {
     return [...this.agents.values()]
-      .filter((rt) => rt.info.id !== AGENT_RESOURCES_ID && rt.info.id !== HERMES_ID)
+      .filter((rt) => rt.info.id !== OFFICE_MANAGER_ID && rt.info.id !== HERMES_ID)
       .map((rt) => ({ name: rt.info.name, status: rt.info.status, task: rt.info.task }));
   }
 
@@ -5401,7 +5490,7 @@ export class AgentManager {
       // Fill in roster from live agent state if not already provided
       if (!narrationCtx.roster) {
         narrationCtx.roster = [...this.agents.values()]
-          .filter((a) => a.info.id !== HERMES_ID && a.info.id !== AGENT_RESOURCES_ID)
+          .filter((a) => a.info.id !== HERMES_ID && a.info.id !== OFFICE_MANAGER_ID)
           .map((a) => ({
             name: a.info.name,
             status: a.info.status,
@@ -5444,7 +5533,7 @@ export class AgentManager {
     if (this.mailQueue.length > 0) this.drainMailQueue();
   }
 
-  /** Check for stale mail in the queue and escalate to Agent Resources/player if too old. */
+  /** Check for stale mail in the queue and escalate to the Office Manager/player if too old. */
   private checkStaleMail(): void {
     if (this.mailQueue.length === 0) return;
     const now = Date.now();
@@ -5468,18 +5557,18 @@ export class AgentManager {
         this.mailQueue.splice(i, 1);
         this.broadcast({
           type: "toast",
-          text: `⚠️ Mail from ${item.platform} undeliverable for ${Math.round(age / 60000)}min — escalated to Agent Resources.`,
+          text: `⚠️ Mail from ${item.platform} undeliverable for ${Math.round(age / 60000)}min — escalated to the Office Manager.`,
         });
-        // Log to Agent Resources's inbox so she's aware
-        const agentResourcesRt = this.agents.get(AGENT_RESOURCES_ID);
-        if (agentResourcesRt) {
-          this.log(agentResourcesRt, "status", `⚠️ Escalated mail from ${item.sender} via ${item.platform}: "${item.text.slice(0, 100)}" — no agents available for ${Math.round(age / 60000)} minutes.`);
+        // Log to the Office Manager's inbox so she's aware
+        const officeManagerRt = this.agents.get(OFFICE_MANAGER_ID);
+        if (officeManagerRt) {
+          this.log(officeManagerRt, "status", `⚠️ Escalated mail from ${item.sender} via ${item.platform}: "${item.text.slice(0, 100)}" — no agents available for ${Math.round(age / 60000)} minutes.`);
         }
       }
     }
   }
 
-  /** Get a mail digest for Agent Resources/player — summary of all platforms. */
+  /** Get a mail digest for the Office Manager/player — summary of all platforms. */
   getMailDigest(): { totalUnread: number; byPlatform: { platform: string; unread: number; lastMessage: string }[]; queued: number } {
     const platforms = this.settings.mailboxPlatforms.filter((p): p is string => p !== null);
     const byPlatform = platforms.map((p) => ({
