@@ -219,7 +219,7 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const provider = s.componentProvider?.[component];
     if (!provider || !provider[style]) return false;
     if (component === "hair" && style === "balding" && dirName === "down") return false;
-    if (component === "beard" && style === "stubble" && dirName !== "down") return false;
+    if (component === "beard" && style === "stubble") return false;
     const frames = provider[style];
     const dirIndex = dirName === "down" ? 0 : dirName === "right" ? 1 : 2;
     const frameIndex = dirIndex * 8 + poseNum;
