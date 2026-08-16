@@ -2945,7 +2945,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     }
     const mcpServers = agent.mcpServers;
     if (mcpServers && mcpServers.length > 0) {
-      mcpSection.hidden = true;
+      mcpSection.hidden = false;
       const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
       mcpSection.innerHTML = `
         <div class="wallet-card">
@@ -3046,8 +3046,6 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             }
           }
         }
-        // Always show MCP section so users can disconnect/reconnect
-        mcpSection.hidden = false;
       };
       this.store.mcpKeysStatusListeners.push(this.detailMcpListener);
     } else {
