@@ -12,6 +12,7 @@ import type { ProviderRunner, TaskEvent } from "./types.js";
 import { truncate } from "./types.js";
 import { wrapRailwayTools } from "./railway-mcp.js";
 import { loadMCPTools, type OnApiErrorFn } from "./mcp-client.js";
+import { isGoogleWorkspaceMcp, loadGoogleWorkspaceTools } from "./google-workspace.js";
 import { loadCdpSolanaTools } from "./cdp-solana.js";
 import { loadCrossmintWalletTools } from "./crossmint-wallets.js";
 import { loadPremiumTools, type CircleServiceConfig, type PremiumProxyContext } from "./premium-proxy.js";
@@ -1225,10 +1226,27 @@ export async function makeTools(cwd: string, opts?: {
 
   // Load tools from any MCP servers declared in the agent config (e.g. Robinhood Trading MCP)
   if (opts?.mcpServers && opts.mcpServers.length > 0) {
-    try {
-      const mcpTools = await loadMCPTools(opts.mcpServers, opts.abortRef, opts.onApiError);
-      if (mcpTools.length > 0) allTools.push(...mcpTools);
-    } catch (e) { console.error("[cline] MCP tools failed:", e); }
+    // Split Google Workspace MCP servers from regular ones.
+    // Google Workspace MCP servers are in Developer Preview and return permission errors
+    // even with valid tokens. We bypass them by calling the Google REST APIs directly.
+    const googleServers = opts.mcpServers.filter(s => isGoogleWorkspaceMcp(s.url));
+    const otherServers = opts.mcpServers.filter(s => !isGoogleWorkspaceMcp(s.url));
+
+    // Load direct REST tools for Google Workspace services
+    if (googleServers.length > 0) {
+      try {
+        const gwTools = await loadGoogleWorkspaceTools(googleServers, opts.onApiError);
+        if (gwTools.length > 0) allTools.push(...gwTools);
+      } catch (e) { console.error("[cline] Google Workspace direct tools failed:", e); }
+    }
+
+    // Load regular MCP tools for non-Google servers
+    if (otherServers.length > 0) {
+      try {
+        const mcpTools = await loadMCPTools(otherServers, opts.abortRef, opts.onApiError);
+        if (mcpTools.length > 0) allTools.push(...mcpTools);
+      } catch (e) { console.error("[cline] MCP tools failed:", e); }
+    }
   }
 
   // Load CDP Solana wallet tools (auto-provisioned, no user credentials needed)
