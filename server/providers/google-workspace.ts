@@ -408,7 +408,25 @@ function gmailTools(token: string): AgentTool<any, any>[] {
 
 function docsTools(token: string): AgentTool<any, any>[] {
   const base = "https://docs.googleapis.com/v1/documents";
+  const driveBase = "https://www.googleapis.com/drive/v3";
   return [
+    tool("search_docs", "Search for Google Docs by name. Returns a list of documents with their IDs, titles, and last modified times. Use this to find document IDs before calling read_doc or update_doc.", {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query (document name or content keywords). Leave empty to list all documents." },
+        pageSize: { type: "integer", description: "Maximum number of results. Default 10." },
+      },
+    }, async (i) => {
+      const params = new URLSearchParams({
+        fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
+        q: "mimeType='application/vnd.google-apps.document' and trashed=false",
+        orderBy: "modifiedTime desc",
+      });
+      if (i.pageSize) params.set("pageSize", String(i.pageSize)); else params.set("pageSize", "10");
+      if (i.query) params.set("q", `mimeType='application/vnd.google-apps.document' and trashed=false and name contains '${i.query.replace(/'/g, "\\'")}'`);
+      return gapi(token, "GET", `${driveBase}/files?${params}`);
+    }),
+
     tool("read_doc", "Retrieves a JSON representation of the Google Doc.", {
       type: "object",
       properties: { documentId: { type: "string", description: "Required. The document ID." } },
@@ -430,7 +448,25 @@ function docsTools(token: string): AgentTool<any, any>[] {
 
 function slidesTools(token: string): AgentTool<any, any>[] {
   const base = "https://slides.googleapis.com/v1/presentations";
+  const driveBase = "https://www.googleapis.com/drive/v3";
   return [
+    tool("search_presentations", "Search for Google Slides presentations by name. Returns a list with their IDs, titles, and last modified times. Use this to find presentation IDs before calling read_presentation or update_presentation.", {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query (presentation name). Leave empty to list all presentations." },
+        pageSize: { type: "integer", description: "Maximum number of results. Default 10." },
+      },
+    }, async (i) => {
+      const params = new URLSearchParams({
+        fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
+        q: "mimeType='application/vnd.google-apps.presentation' and trashed=false",
+        orderBy: "modifiedTime desc",
+      });
+      if (i.pageSize) params.set("pageSize", String(i.pageSize)); else params.set("pageSize", "10");
+      if (i.query) params.set("q", `mimeType='application/vnd.google-apps.presentation' and trashed=false and name contains '${i.query.replace(/'/g, "\\'")}'`);
+      return gapi(token, "GET", `${driveBase}/files?${params}`);
+    }),
+
     tool("read_presentation", "Read a JSON representation of a Google Slides presentation.", {
       type: "object",
       properties: { presentationId: { type: "string", description: "Required. The presentation ID." } },
