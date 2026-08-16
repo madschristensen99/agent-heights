@@ -1006,8 +1006,8 @@ export type ServerMsg =
   | { type: "api_key_status"; hasKey: boolean }
   | { type: "mcp_key_status"; serverUrl: string; hasKey: boolean }
   | { type: "mcp_keys_status"; results: { serverUrl: string; hasKey: boolean }[] }
-  | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" | "popup" }
-  | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" | "popup" }
+  | { type: "mcp_oauth_required"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
+  | { type: "mcp_oauth_code_needed"; serverUrl: string; authUrl: string; redirectMode?: "auto" | "manual" }
   | { type: "mcp_oauth_complete"; serverUrl: string; success: boolean; error?: string }
   | { type: "cdp_wallet_status"; agentId: string; address: string | null; balances: { symbol: string; amount: string; usdValue?: string }[] | null; error?: string }
   | { type: "cdp_policy_status"; agentId: string; policyId: string | null; maxSolPerTransfer: number | null; allowedRecipients: string[] | null; blockedRecipients: string[] | null; allowedTokenMints: string[] | null; blockedTokenMints: string[] | null; network: string; error?: string }

@@ -298,7 +298,7 @@ export async function startOAuthFlow(
   serverUrl: string,
   userId: string,
   baseUrl: string,
-): Promise<{ authUrl: string; redirectMode: "auto" | "manual" | "popup" }> {
+): Promise<{ authUrl: string; redirectMode: "auto" | "manual" }> {
   cleanupExpired();
 
   // 1. Check known configs first (no network calls needed)
@@ -321,7 +321,7 @@ export async function startOAuthFlow(
     authorizationEndpoint = known.authorizationEndpoint;
     scopes = known.scopes;
     tokenEndpointAuthMethod = known.tokenEndpointAuthMethod;
-    console.log(`[mcp-oauth] Using known OAuth config for ${serverUrl}${known.forceLocalRedirect ? " (forceLocalRedirect)" : ""}`);
+    console.log(`[mcp-oauth] Using known OAuth config for ${serverUrl}`);
   } else if (cached && Date.now() - cached.cachedAt < REGISTRATION_CACHE_MS) {
     clientId = cached.clientId;
     clientSecret = cached.clientSecret;
@@ -472,8 +472,7 @@ export async function startOAuthFlow(
 
   // 5. Build authorization URL
   const state = randomUUID();
-  const forceLocal = known?.forceLocalRedirect ?? false;
-  const redirectUri = (baseUrl && !forceLocal) ? `${baseUrl}/oauth/callback` : `http://localhost:1/callback`;
+  const redirectUri = baseUrl ? `${baseUrl}/oauth/callback` : `http://localhost:1/callback`;
 
   const authUrl = new URL(authorizationEndpoint);
   authUrl.searchParams.set("response_type", "code");
@@ -500,7 +499,7 @@ export async function startOAuthFlow(
     tokenEndpointAuthMethod,
   });
 
-  return { authUrl: authUrl.toString(), redirectMode: (baseUrl && !forceLocal) ? "auto" : forceLocal ? "popup" : "manual" };
+  return { authUrl: authUrl.toString(), redirectMode: baseUrl ? "auto" : "manual" };
 }
 
 /**

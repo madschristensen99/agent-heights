@@ -111,7 +111,7 @@ export const SECURITY_NOTES: Record<string, { riskLevel: RiskLevel; securityNote
   },
   "Hostinger": {
     riskLevel: "high",
-    securityNote: "OAuth grants full access to hosting infrastructure — websites, VPS, DNS, billing, and ecommerce. Restrict this agent with ACLs in shared rooms. Always review deploy and DNS changes before approving.",
+    securityNote: "API token grants full access to hosting infrastructure — websites, VPS, DNS, billing, and ecommerce. Restrict this agent with ACLs in shared rooms. Always review deploy and DNS changes before approving.",
     dataAccess: "Deploy and manage websites, VPS instances, domains, DNS records, email marketing, subscriptions, ecommerce stores, and WordPress sites on Hostinger.",
   },
   "Capitol Trades": {
@@ -155,7 +155,7 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Massive Web Scraper: Data agent — captcha solving, JS rendering, geo-targeting (195+ countries), Google search with structured results via Massive MCP. For sites that block standard browsers. Requires Massive API token.
 - Google Maps Scraper: Data agent — search Google Maps for businesses, retrieve reviews and photos, structure results for prospecting and market analysis via gmapsextractor.com MCP. Requires Google Maps Scraper API key.
 - Crossmint Wallet Agent: Solana wallet agent — auto-provisioned smart wallet with sponsored gas. Check balances, transfer tokens, review tx history via Crossmint. No setup needed — wallet created on hire.
-- Hostinger Agent: Infrastructure agent — deploy and manage websites, VPS, domains, DNS, email marketing, billing, ecommerce, and WordPress via Hostinger MCP (OAuth). Full hosting control from conversation.
+- Hostinger Agent: Infrastructure agent — deploy and manage websites, VPS, domains, DNS, email marketing, billing, ecommerce, and WordPress via Hostinger MCP. Requires Hostinger API token (generate at hPanel → Account → API).
 - Capitol Trades Analyst: Research agent — track US politician stock trades, buy momentum, and party-specific trading patterns via capitoltrades.com MCP. No auth needed. Pairs with wallet agents for "follow the politicians" strategies.`;
 
 
