@@ -138,9 +138,13 @@ function estimateTokens(messages: any[]): number {
   return Math.ceil(chars / 4);
 }
 
-/** Strip tool_result blocks whose tool_call_id has no matching tool_use, and strip
+/** Strip tool_result blocks whose tool_use_id has no matching tool_use, and strip
  *  trailing tool_use blocks that have no matching tool_result. Prevents
- *  "tool_call_id is not found" and incomplete-tool-use API errors. */
+ *  "Messages with role 'tool' must be a response to a preceding message with 'tool_calls'"
+ *  and incomplete-tool-use API errors.
+ *
+ *  Messages are in Anthropic format where tool_result blocks use `tool_use_id` (not
+ *  `tool_call_id` which is OpenAI format). We check both field names for safety. */
 function sanitizeMessages(messages: any[]): any[] {
   // Collect all tool_use IDs present in the conversation
   const toolUseIds = new Set<string>();
@@ -152,39 +156,43 @@ function sanitizeMessages(messages: any[]): any[] {
     }
   }
 
-  // Strip orphaned tool_result blocks (no matching tool_use)
+  // Helper: get the tool ID from a tool_result block (Anthropic uses tool_use_id, OpenAI uses tool_call_id)
+  const getToolResultId = (p: any): string | undefined => p.tool_use_id ?? p.tool_call_id;
+
+  // Strip orphaned tool_result blocks (no matching tool_use) from user messages
   let sanitized = messages.map((msg: any) => {
     if (msg.role !== "user" || !Array.isArray(msg.content)) return msg;
-    const hasOrphan = msg.content.some((p: any) => p.type === "tool_result" && p.tool_call_id && !toolUseIds.has(p.tool_call_id));
+    const hasOrphan = msg.content.some((p: any) => p.type === "tool_result" && getToolResultId(p) && !toolUseIds.has(getToolResultId(p)!));
     if (!hasOrphan) return msg;
-    const filtered = msg.content.filter((p: any) => !(p.type === "tool_result" && p.tool_call_id && !toolUseIds.has(p.tool_call_id)));
+    const filtered = msg.content.filter((p: any) => !(p.type === "tool_result" && getToolResultId(p) && !toolUseIds.has(getToolResultId(p)!)));
     if (filtered.length === 0) return null;
     return { ...msg, content: filtered };
   }).filter((m: any) => m !== null);
 
-  // Strip trailing tool_use blocks with no matching tool_result
+  // Collect all tool_result IDs that have a matching tool_use
   const toolResultIds = new Set<string>();
   for (const msg of sanitized) {
     if (Array.isArray(msg.content)) {
       for (const part of msg.content) {
-        if (part.type === "tool_result" && part.tool_call_id) toolResultIds.add(part.tool_call_id);
-      }
-    }
-  }
-  if (sanitized.length > 0) {
-    const last = sanitized[sanitized.length - 1];
-    if (last.role === "assistant" && Array.isArray(last.content)) {
-      const hasUnmatched = last.content.some((p: any) => p.type === "tool_use" && p.id && !toolResultIds.has(p.id));
-      if (hasUnmatched) {
-        const filtered = last.content.filter((p: any) => !(p.type === "tool_use" && p.id && !toolResultIds.has(p.id)));
-        if (filtered.length === 0) {
-          sanitized = sanitized.slice(0, -1);
-        } else {
-          sanitized[sanitized.length - 1] = { ...last, content: filtered };
+        if (part.type === "tool_result") {
+          const id = getToolResultId(part);
+          if (id) toolResultIds.add(id);
         }
       }
     }
   }
+
+  // Strip unmatched tool_use blocks from ALL assistant messages (not just the last one).
+  // compactMessages may remove the matching tool_result from a middle assistant message's pair.
+  sanitized = sanitized.map((msg: any) => {
+    if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg;
+    const hasUnmatched = msg.content.some((p: any) => p.type === "tool_use" && p.id && !toolResultIds.has(p.id));
+    if (!hasUnmatched) return msg;
+    const filtered = msg.content.filter((p: any) => !(p.type === "tool_use" && p.id && !toolResultIds.has(p.id)));
+    if (filtered.length === 0) return null;
+    return { ...msg, content: filtered };
+  }).filter((m: any) => m !== null);
+
   return sanitized;
 }
 

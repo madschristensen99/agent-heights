@@ -47,6 +47,7 @@ function getNetwork(): string {
 }
 
 function getRpcUrl(): string {
+  if (process.env.SOLANA_RPC_URL) return process.env.SOLANA_RPC_URL;
   const net = getNetwork();
   if (net === "solana") return "https://api.mainnet-beta.solana.com";
   return "https://api.devnet.solana.com";
@@ -177,35 +178,51 @@ async function getAgentBalancesRpc(address: string): Promise<{ mint: string; sym
 
 /** Get token balances for an agent's wallet.
  * Uses direct Solana RPC as primary source (complete — includes all SPL tokens
- * including Pump.fun meme coins), enriched with CDP data for USD values on known tokens. */
+ * including Pump.fun meme coins), enriched with CDP data for USD values on known tokens.
+ * Falls back to CDP's listTokenBalances if RPC fails (e.g. public endpoint rate-limited). */
 export async function getAgentBalances(agentId: string): Promise<{ address: string; balances: { symbol: string; amount: string; usdValue?: string }[] } | null> {
   if (!isCdpConfigured()) return null;
   try {
     const account = await getAgentAccount(agentId);
 
-    // Primary: direct RPC (gets ALL tokens including meme coins CDP misses)
-    const rpcBalances = await getAgentBalancesRpc(account.address);
-
-    // Secondary: CDP for USD value enrichment on known tokens
-    let cdpUsdMap = new Map<string, string>();
+    // Fetch CDP balances (used for USD enrichment + as fallback if RPC fails)
+    let cdpBalances: any[] = [];
     try {
       const cdp = getCdpClient();
       const cdpResult = await cdp.solana.listTokenBalances({ address: account.address });
-      const cdpRaw = (cdpResult as any).balances ?? [];
-      for (const b of cdpRaw as any[]) {
-        const mint = b.token?.mintAddress;
-        const usd = b.usdValue?.value ?? b.usdValue;
-        if (mint && usd) cdpUsdMap.set(mint, String(usd));
+      cdpBalances = (cdpResult as any).balances ?? [];
+    } catch { /* CDP may fail too — best-effort */ }
+
+    // Build CDP USD value map + fallback balance list
+    const cdpUsdMap = new Map<string, string>();
+    const cdpFallback: { symbol: string; amount: string; usdValue?: string }[] = [];
+    for (const b of cdpBalances as any[]) {
+      const mint = b.token?.mintAddress;
+      const usd = b.usdValue?.value ?? b.usdValue;
+      if (mint && usd) cdpUsdMap.set(mint, String(usd));
+      const rawAmount = BigInt(b.amount?.amount ?? 0);
+      const decimals = Number(b.amount?.decimals ?? 0);
+      const symbol = b.token?.symbol ?? b.token?.name ?? "unknown";
+      cdpFallback.push({ symbol, amount: rawToHuman(rawAmount, decimals), usdValue: usd ? String(usd) : undefined });
+    }
+
+    // Primary: direct RPC (gets ALL tokens including meme coins CDP misses)
+    try {
+      const rpcBalances = await getAgentBalancesRpc(account.address);
+      const balances = rpcBalances.map((b) => ({
+        symbol: b.symbol,
+        amount: b.amount,
+        usdValue: cdpUsdMap.get(b.mint),
+      }));
+      return { address: account.address, balances };
+    } catch (rpcErr) {
+      console.warn(`[cdp-solana] RPC balance fetch failed, falling back to CDP:`, rpcErr instanceof Error ? rpcErr.message : String(rpcErr));
+      // Fallback: use CDP balances (may miss meme coins but at least shows SOL/USDC)
+      if (cdpFallback.length > 0) {
+        return { address: account.address, balances: cdpFallback };
       }
-    } catch { /* CDP enrichment is best-effort */ }
-
-    const balances = rpcBalances.map((b) => ({
-      symbol: b.symbol,
-      amount: b.amount,
-      usdValue: cdpUsdMap.get(b.mint),
-    }));
-
-    return { address: account.address, balances };
+      throw rpcErr;
+    }
   } catch (err) {
     console.error(`[cdp-solana] Failed to get balances for agent ${agentId}:`, err);
     return null;

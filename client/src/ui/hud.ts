@@ -3051,26 +3051,46 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const borderColor = hasHighRisk ? "#5a2020" : hasMediumRisk ? "#3a3520" : "var(--panel-edge-soft)";
         const bgColor = hasHighRisk ? "rgba(90,32,32,0.08)" : hasMediumRisk ? "rgba(58,53,32,0.08)" : "var(--panel-soft)";
         const headerColor = hasHighRisk ? "var(--red)" : hasMediumRisk ? "#c9852c" : "var(--dim)";
+        const highCount = securityEntries.filter((e) => e.riskLevel === "high").length;
+        const medCount = securityEntries.filter((e) => e.riskLevel === "medium").length;
+        let secSummary: string;
+        if (highCount > 0) secSummary = `${highCount} high risk`;
+        else if (medCount > 0) secSummary = `${medCount} medium risk`;
+        else secSummary = `${securityEntries.length} low risk`;
         securitySection.innerHTML = `
-          <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid ${borderColor}; border-radius:0.5rem; background:${bgColor};">
-            <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.4rem;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${headerColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <span style="font-size:0.7rem; font-weight:600; color:${headerColor};">SECURITY & ACCESS</span>
+          <div style="margin:0.4rem 0;">
+            <div id="sec-toggle" style="display:flex; align-items:center; gap:0.35rem; padding:0.35rem 0.5rem; border:1px solid ${borderColor}; border-radius:0.375rem; background:${bgColor}; cursor:pointer; user-select:none;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="${headerColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span style="font-size:0.65rem; color:var(--text); flex:1; text-align:left;">Security &amp; Access — ${esc(secSummary)}</span>
+              <span id="sec-chevron" style="font-size:0.6rem; color:var(--dim);">▸</span>
             </div>
-            ${securityEntries.map((e) => {
-              const rc = e.riskLevel === "high" ? "var(--red)" : e.riskLevel === "medium" ? "#c9852c" : "var(--dim)";
-              const rl = e.riskLevel === "high" ? "HIGH RISK" : e.riskLevel === "medium" ? "MEDIUM RISK" : "LOW RISK";
-              return `<div style="margin-bottom:0.4rem; padding-bottom:0.4rem; border-bottom:1px solid var(--panel-edge-soft);">
-                <div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.15rem;">
-                  <span style="font-size:0.7rem; font-weight:600; color:var(--text);">${esc(e.name)}</span>
-                  <span style="font-size:0.55rem; font-weight:700; padding:0.08rem 0.3rem; border-radius:0.2rem; background:${rc}22; color:${rc};">${rl}</span>
-                </div>
-                <div style="font-size:0.65rem; color:var(--dim); margin-bottom:0.15rem;">${esc(e.dataAccess)}</div>
-                <div style="font-size:0.63rem; color:var(--dim); line-height:1.35;">${esc(e.securityNote)}</div>
-              </div>`;
-            }).join("")}
+            <div id="sec-expanded" style="display:none; margin-top:0.3rem; padding:0.5rem; border:1px solid ${borderColor}; border-radius:0.375rem; background:${bgColor};">
+              ${securityEntries.map((e) => {
+                const rc = e.riskLevel === "high" ? "var(--red)" : e.riskLevel === "medium" ? "#c9852c" : "var(--dim)";
+                const rl = e.riskLevel === "high" ? "HIGH RISK" : e.riskLevel === "medium" ? "MEDIUM RISK" : "LOW RISK";
+                return `<div style="margin-bottom:0.4rem; padding-bottom:0.4rem; border-bottom:1px solid var(--panel-edge-soft);">
+                  <div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.15rem;">
+                    <span style="font-size:0.7rem; font-weight:600; color:var(--text);">${esc(e.name)}</span>
+                    <span style="font-size:0.55rem; font-weight:700; padding:0.08rem 0.3rem; border-radius:0.2rem; background:${rc}22; color:${rc};">${rl}</span>
+                  </div>
+                  <div style="font-size:0.65rem; color:var(--dim); margin-bottom:0.15rem;">${esc(e.dataAccess)}</div>
+                  <div style="font-size:0.63rem; color:var(--dim); line-height:1.35;">${esc(e.securityNote)}</div>
+                </div>`;
+              }).join("")}
+            </div>
           </div>
         `;
+        // Wire up expand/collapse
+        const secToggle = securitySection.querySelector("#sec-toggle") as HTMLElement | null;
+        const secExpanded = securitySection.querySelector("#sec-expanded") as HTMLElement | null;
+        const secChevron = securitySection.querySelector("#sec-chevron") as HTMLElement | null;
+        if (secToggle && secExpanded) {
+          secToggle.addEventListener("click", () => {
+            const isExpanded = secExpanded.style.display !== "none";
+            secExpanded.style.display = isExpanded ? "none" : "block";
+            if (secChevron) secChevron.textContent = isExpanded ? "▸" : "▾";
+          });
+        }
       } else {
         securitySection.hidden = true;
         securitySection.innerHTML = "";
@@ -3106,7 +3126,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const peopleMap = new Map<string, { userId: string; name: string }>();
       for (const p of roomPlayers) peopleMap.set(p.userId, { userId: p.userId, name: p.name });
       for (const m of orgMembers) {
-        if (!peopleMap.has(m.userId)) peopleMap.set(m.userId, { userId: m.userId, name: m.userEmail ?? m.userId });
+        if (!peopleMap.has(m.userId)) {
+          const name = m.userEmail ? m.userEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : m.userId.slice(0, 8);
+          peopleMap.set(m.userId, { userId: m.userId, name });
+        }
       }
       const people = [...peopleMap.values()];
 
@@ -3132,13 +3155,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               </label>
             </div>
             <div id="acl-people" style="${hasAcl ? "" : "display:none;"}">
-              <div style="font-size:0.58rem; color:var(--dim); margin-bottom:0.15rem;">Allowed people:</div>
+              <div style="font-size:0.58rem; color:var(--dim); margin-bottom:0.25rem;">Allowed people:</div>
               ${people.length > 0
-                ? people.map((p) => `<label style="display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:var(--text); cursor:pointer; padding:0.1rem 0; text-align:left;">
-                    <input type="checkbox" class="acl-user-cb" data-uid="${p.userId}" ${allowedIds.includes(p.userId) ? "checked" : ""} style="accent-color:var(--accent); flex-shrink:0;" />
-                    ${esc(p.name)}
-                  </label>`).join("")
-                : `<div style="font-size:0.6rem; color:var(--dim);">No other people available. Invite people to your room or org first.</div>`
+                ? `<div style="max-height:8rem; overflow-y:auto; border:1px solid var(--panel-edge-soft); border-radius:0.25rem; padding:0.25rem;">
+                  ${people.map((p) => `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.62rem; color:var(--text); cursor:pointer; padding:0.2rem 0.25rem; border-radius:0.2rem; text-align:left; margin-bottom:0.1rem; background:var(--panel);">
+                    <input type="checkbox" class="acl-user-cb" data-uid="${p.userId}" ${allowedIds.includes(p.userId) ? "checked" : ""} style="accent-color:var(--accent); flex-shrink:0; width:0.7rem; height:0.7rem;" />
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.name)}</span>
+                  </label>`).join("")}
+                </div>`
+                : `<div style="font-size:0.6rem; color:var(--dim); padding:0.3rem; border:1px solid var(--panel-edge-soft); border-radius:0.25rem;">No other people available. Invite people to your room or org first.</div>`
               }
             </div>
             <button id="d-acl-save" style="margin-top:0.4rem; padding:0.25rem 0.5rem; border:1px solid var(--accent); border-radius:0.25rem; background:var(--panel); color:var(--accent); font-size:0.6rem; cursor:pointer;">Save</button>
