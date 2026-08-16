@@ -138,57 +138,74 @@ function estimateTokens(messages: any[]): number {
   return Math.ceil(chars / 4);
 }
 
-/** Strip tool_result blocks whose tool_use_id has no matching tool_use, and strip
- *  trailing tool_use blocks that have no matching tool_result. Prevents
- *  "Messages with role 'tool' must be a response to a preceding message with 'tool_calls'"
- *  and incomplete-tool-use API errors.
+/** Strip orphaned tool-result blocks (no matching tool-call) from user messages and
+ *  unmatched tool-call blocks (no matching tool-result) from assistant messages.
+ *  Prevents "Messages with role 'tool' must be a response to a preceding message with
+ *  'tool_calls'" and incomplete-tool-use API errors.
  *
- *  Messages are in Anthropic format where tool_result blocks use `tool_use_id` (not
- *  `tool_call_id` which is OpenAI format). We check both field names for safety. */
+ *  Handles TWO message formats:
+ *  1. @cline Agent internal format: tool-call (toolCallId) / tool-result (toolCallId)
+ *  2. Anthropic format: tool_use (id) / tool_result (tool_use_id or tool_call_id) */
 function sanitizeMessages(messages: any[]): any[] {
-  // Collect all tool_use IDs present in the conversation
-  const toolUseIds = new Set<string>();
+  // Collect all tool-call IDs from assistant messages (both formats)
+  const toolCallIds = new Set<string>();
   for (const msg of messages) {
     if (Array.isArray(msg.content)) {
       for (const part of msg.content) {
-        if (part.type === "tool_use" && part.id) toolUseIds.add(part.id);
+        if (part.type === "tool-call" && part.toolCallId) toolCallIds.add(part.toolCallId);
+        if (part.type === "tool_use" && part.id) toolCallIds.add(part.id);
       }
     }
   }
 
-  // Helper: get the tool ID from a tool_result block (Anthropic uses tool_use_id, OpenAI uses tool_call_id)
-  const getToolResultId = (p: any): string | undefined => p.tool_use_id ?? p.tool_call_id;
+  // Helper: get the tool ID from a tool-result block in any format
+  const getResultId = (p: any): string | undefined =>
+    p.toolCallId ?? p.tool_use_id ?? p.tool_call_id;
 
-  // Strip orphaned tool_result blocks (no matching tool_use) from user messages
+  // Check if a part is a tool-result in any format
+  const isToolResult = (p: any): boolean =>
+    p.type === "tool-result" || p.type === "tool_result";
+
+  // Check if a part is a tool-call in any format
+  const isToolCall = (p: any): boolean =>
+    p.type === "tool-call" || p.type === "tool_use";
+
+  // Get the tool-call ID from a part in any format
+  const getCallId = (p: any): string | undefined =>
+    p.toolCallId ?? p.id;
+
+  // Strip orphaned tool-result blocks (no matching tool-call) from ANY message.
+  // The @cline SDK creates tool-result messages with role: "tool", while Anthropic
+  // format puts tool_result blocks in role: "user" messages. Check both.
   let sanitized = messages.map((msg: any) => {
-    if (msg.role !== "user" || !Array.isArray(msg.content)) return msg;
-    const hasOrphan = msg.content.some((p: any) => p.type === "tool_result" && getToolResultId(p) && !toolUseIds.has(getToolResultId(p)!));
+    if (!Array.isArray(msg.content)) return msg;
+    const hasOrphan = msg.content.some((p: any) => isToolResult(p) && getResultId(p) && !toolCallIds.has(getResultId(p)!));
     if (!hasOrphan) return msg;
-    const filtered = msg.content.filter((p: any) => !(p.type === "tool_result" && getToolResultId(p) && !toolUseIds.has(getToolResultId(p)!)));
+    const filtered = msg.content.filter((p: any) => !(isToolResult(p) && getResultId(p) && !toolCallIds.has(getResultId(p)!)));
     if (filtered.length === 0) return null;
     return { ...msg, content: filtered };
   }).filter((m: any) => m !== null);
 
-  // Collect all tool_result IDs that have a matching tool_use
+  // Collect all tool-result IDs that have a matching tool-call
   const toolResultIds = new Set<string>();
   for (const msg of sanitized) {
     if (Array.isArray(msg.content)) {
       for (const part of msg.content) {
-        if (part.type === "tool_result") {
-          const id = getToolResultId(part);
+        if (isToolResult(part)) {
+          const id = getResultId(part);
           if (id) toolResultIds.add(id);
         }
       }
     }
   }
 
-  // Strip unmatched tool_use blocks from ALL assistant messages (not just the last one).
-  // compactMessages may remove the matching tool_result from a middle assistant message's pair.
+  // Strip unmatched tool-call blocks from ALL assistant messages.
+  // compactMessages may remove the matching tool-result from a middle assistant message's pair.
   sanitized = sanitized.map((msg: any) => {
     if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg;
-    const hasUnmatched = msg.content.some((p: any) => p.type === "tool_use" && p.id && !toolResultIds.has(p.id));
+    const hasUnmatched = msg.content.some((p: any) => isToolCall(p) && getCallId(p) && !toolResultIds.has(getCallId(p)!));
     if (!hasUnmatched) return msg;
-    const filtered = msg.content.filter((p: any) => !(p.type === "tool_use" && p.id && !toolResultIds.has(p.id)));
+    const filtered = msg.content.filter((p: any) => !(isToolCall(p) && getCallId(p) && !toolResultIds.has(getCallId(p)!)));
     if (filtered.length === 0) return null;
     return { ...msg, content: filtered };
   }).filter((m: any) => m !== null);
@@ -212,10 +229,11 @@ function compactMessages(messages: any[]): any[] {
       for (const part of content) {
         if (part.type === "text" && part.text) {
           summaryParts.push(`[${role}] ${part.text.slice(0, 200)}`);
-        } else if (part.type === "tool_use") {
-          summaryParts.push(`[${role}] called ${part.name}(${JSON.stringify(part.input ?? {}).slice(0, 100)})`);
-        } else if (part.type === "tool_result") {
-          const resultText = typeof part.content === "string" ? part.content.slice(0, 100) : "[tool result]";
+        } else if (part.type === "tool-call" || part.type === "tool_use") {
+          summaryParts.push(`[${role}] called ${part.toolName ?? part.name}(${JSON.stringify(part.input ?? {}).slice(0, 100)})`);
+        } else if (part.type === "tool-result" || part.type === "tool_result") {
+          const out = part.output ?? part.content;
+          const resultText = typeof out === "string" ? out.slice(0, 100) : "[tool result]";
           summaryParts.push(`[${role}] tool result: ${resultText}`);
         }
       }
@@ -1501,8 +1519,8 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
               lastText = part.text.trim();
               enqueue({ kind: "text", text: lastText });
             }
-            if ((part as any).type === "tool_use") {
-              console.log(`[cline:${agentId}] tool_use: ${(part as any).name} input=${JSON.stringify((part as any).input).slice(0, 200)}`);
+            if ((part as any).type === "tool-call" || (part as any).type === "tool_use") {
+              console.log(`[cline:${agentId}] tool-call: ${(part as any).toolName ?? (part as any).name} input=${JSON.stringify((part as any).input).slice(0, 200)}`);
             }
           }
           break;
@@ -1521,17 +1539,17 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
           }, 15_000);
           break;
         }
-        case "tool-completed": {
+        case "tool-finished": {
           if (toolHeartbeatTimer) { clearInterval(toolHeartbeatTimer); toolHeartbeatTimer = null; }
-          console.log(`[cline:${agentId}] tool-completed: ${ev.toolCall?.toolName} result=${JSON.stringify(ev.result ?? "").slice(0, 200)}`);
+          console.log(`[cline:${agentId}] tool-finished: ${ev.toolCall?.toolName} result=${JSON.stringify(ev.message?.content?.[0]?.output ?? "").slice(0, 200)}`);
           break;
         }
         case "run-failed":
           console.log(`[cline:${agentId}] run-failed:`, ev.error?.message);
           enqueue({ kind: "error", text: truncate(ev.error?.message ?? "Run failed", 300) });
           break;
-        case "run-completed": {
-          console.log(`[cline:${agentId}] run-completed: status=${ev.result?.status} output=${ev.result?.outputText?.slice(0, 200)}`);
+        case "run-finished": {
+          console.log(`[cline:${agentId}] run-finished: status=${ev.result?.status} output=${ev.result?.outputText?.slice(0, 200)}`);
           break;
         }
       }
