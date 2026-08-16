@@ -2949,8 +2949,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
       mcpSection.innerHTML = `
         <div class="wallet-card">
-          <div class="wallet-title mcp">MCP SERVER AUTH</div>
-          ${mcpServers.map((s, i) => {
+          <div id="d-mcp-toggle" class="wallet-title mcp" style="cursor:pointer; user-select:none; display:flex; justify-content:space-between; align-items:center;">
+            <span>MCP SERVER AUTH</span>
+            <span id="d-mcp-arrow" style="font-size:0.7rem; color:var(--dim);">▼</span>
+          </div>
+          <div id="d-mcp-body" style="margin-top:0.4rem;">
+            ${mcpServers.map((s, i) => {
             const isOAuth = s.authType === "oauth";
             const kLabel = s.keyLabel ?? "API Key";
             const kPlaceholder = s.keyPlaceholder ?? "Paste new API key...";
@@ -2972,8 +2976,20 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               </div>
             </div>`;
           }).join("")}
+          </div>
         </div>
       `;
+      // Wire up collapsible toggle
+      const mcpToggle = mcpSection.querySelector("#d-mcp-toggle") as HTMLElement | null;
+      const mcpBody = mcpSection.querySelector("#d-mcp-body") as HTMLElement | null;
+      const mcpArrow = mcpSection.querySelector("#d-mcp-arrow") as HTMLElement | null;
+      if (mcpToggle && mcpBody) {
+        mcpToggle.addEventListener("click", () => {
+          const isHidden = mcpBody.style.display === "none";
+          mcpBody.style.display = isHidden ? "" : "none";
+          if (mcpArrow) mcpArrow.textContent = isHidden ? "▼" : "▶";
+        });
+      }
       // Check existing key status
       if (serverUrls.length > 0) {
         this.net.send({ type: "check_mcp_keys", serverUrls });

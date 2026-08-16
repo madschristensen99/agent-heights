@@ -482,13 +482,18 @@ export async function startOAuthFlow(
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("code_challenge", challenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
-  authUrl.searchParams.set("resource", serverUrl);
 
   // Google OAuth: request offline access (refresh token) and force consent
   // to ensure the correct scopes are granted and refresh tokens are returned.
+  // Note: Do NOT send the "resource" param for Google — it restricts the token
+  // audience to the MCP server URL, but the MCP server internally calls the
+  // underlying Google API (e.g. sheets.googleapis.com) which rejects the token.
   if (authorizationEndpoint.includes("accounts.google.com")) {
     authUrl.searchParams.set("access_type", "offline");
     authUrl.searchParams.set("prompt", "consent");
+  } else {
+    // Non-Google servers: include resource param per RFC 8707
+    authUrl.searchParams.set("resource", serverUrl);
   }
 
   if (scopes.length > 0) {
