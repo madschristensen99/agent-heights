@@ -89,7 +89,7 @@ export async function signUpWithEmail(email: string, password: string): Promise<
   const { error } = await client.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: window.location.origin },
+    options: { emailRedirectTo: `${window.location.origin}/dashboard` },
   });
   return { error: error?.message ?? null };
 }
@@ -98,7 +98,7 @@ export async function signInWithGitHub(): Promise<{ error: string | null }> {
   if (!client) return { error: "Auth not configured" };
   const { error } = await client.auth.signInWithOAuth({
     provider: "github",
-    options: { redirectTo: window.location.origin },
+    options: { redirectTo: `${window.location.origin}/dashboard` },
   });
   return { error: error?.message ?? null };
 }
@@ -107,7 +107,7 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
   if (!client) return { error: "Auth not configured" };
   const { error } = await client.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: window.location.origin },
+    options: { redirectTo: `${window.location.origin}/dashboard` },
   });
   return { error: error?.message ?? null };
 }
@@ -120,7 +120,7 @@ export async function signOut(): Promise<void> {
 export async function resetPasswordForEmail(email: string): Promise<{ error: string | null }> {
   if (!client) return { error: "Auth not configured" };
   const { error } = await client.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin,
+    redirectTo: `${window.location.origin}/dashboard`,
   });
   return { error: error?.message ?? null };
 }
