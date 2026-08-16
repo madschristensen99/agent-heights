@@ -490,7 +490,19 @@ export class TenantManager {
           }
         }
       };
-      mgr = new AgentManager(orgDir, broadcast, session, save, saved, null, `org:${orgId}`);
+      const isOrgUserConnected = (): boolean => {
+        for (const room of this.rooms.values()) {
+          if (room.orgId !== orgId) continue;
+          if (room.players.size > 0) {
+            for (const [pid] of room.players) {
+              const peerSess = this.sessions.get(pid);
+              if (peerSess && peerSess.clients.size > 0) return true;
+            }
+          }
+        }
+        return false;
+      };
+      mgr = new AgentManager(orgDir, broadcast, session, save, saved, null, `org:${orgId}`, isOrgUserConnected);
       mgr.setMcpKeys({});
       mgr.startThinkLoop();
       this.orgManagers.set(orgId, mgr);
@@ -717,7 +729,7 @@ export class TenantManager {
       };
     }
 
-    sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey, user.id);
+    sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey, user.id, () => sess.clients.size > 0);
     sess.manager.setMcpKeys(mcpKeys);
     if (player) sess.manager.bossName = player.name;
     sess.manager.startThinkLoop();

@@ -455,7 +455,10 @@ class HttpMCPClient {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => res.statusText);
-        console.error(`[mcp:${this.label}] rpc ${method} failed: ${res.status} ${errBody.slice(0, 200)}`);
+        console.error(`[mcp:${this.label}] rpc ${method} failed: ${res.status} ${errBody.slice(0, 500)}`);
+        if (res.status === 401 || res.status === 403) {
+          console.error(`[mcp:${this.label}] Auth error — token may be invalid or missing required scopes`);
+        }
         throw new Error(`MCP HTTP ${res.status}: ${errBody}`);
       }
 

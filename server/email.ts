@@ -290,3 +290,37 @@ export async function sendReplyCorrectionEmail(email: string): Promise<void> {
     `),
   );
 }
+
+export async function sendGateNotificationEmail(
+  email: string,
+  agentName: string,
+  question: string,
+  options: string[],
+): Promise<void> {
+  const optionItems = options
+    .map((o, i) => `<li style="margin:0 0 8px;padding:10px 14px;background:${BRAND_BG};border:1px solid ${BRAND_BORDER};border-radius:6px;font-size:0.9rem;color:${BRAND_TEXT};"><strong style="color:${BRAND_ACCENT};">${i + 1}.</strong> ${o}</li>`)
+    .join("");
+  await send(
+    email,
+    `${agentName} needs your decision`,
+    shell(`
+      <h2 style="margin:0 0 12px;font-size:1.25rem;color:${BRAND_TEXT};">❓ ${agentName} needs your decision</h2>
+      <p style="margin:0 0 20px;font-size:0.95rem;line-height:1.6;color:${BRAND_MUTED};">
+        One of your agents is waiting for your input to proceed:
+      </p>
+      <div style="background:${BRAND_BG};border:1px solid ${BRAND_BORDER};border-radius:8px;padding:16px 18px;margin:0 0 20px;font-size:0.95rem;line-height:1.6;color:${BRAND_TEXT};">
+        ${question}
+      </div>
+      <p style="margin:0 0 10px;font-size:0.85rem;color:${BRAND_MUTED};text-transform:uppercase;letter-spacing:0.08em;">Your options:</p>
+      <ul style="list-style:none;margin:0 0 24px;padding:0;">
+        ${optionItems}
+      </ul>
+      <div style="text-align:center;margin:24px 0;">
+        ${button("Open Your Office", APP_URL)}
+      </div>
+      <p style="margin:0;font-size:0.8rem;color:${BRAND_MUTED};text-align:center;">
+        If you don't respond within 30 minutes, the agent will proceed with its best judgment.
+      </p>
+    `),
+  );
+}

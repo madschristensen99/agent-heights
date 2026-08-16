@@ -571,8 +571,13 @@ export async function handleOAuthCallback(
       redirect_uri: flow.redirectUri,
       client_id: flow.clientId,
       code_verifier: flow.codeVerifier,
-      resource: flow.serverUrl,
     };
+
+    // Only include resource param for non-Google servers (Google doesn't support
+    // it in the token exchange and it may cause audience/scope issues)
+    if (!flow.tokenEndpoint.includes("oauth2.googleapis.com") && !flow.tokenEndpoint.includes("accounts.google.com")) {
+      tokenParams.resource = flow.serverUrl;
+    }
 
     const tokenHeaders: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
 
@@ -598,7 +603,11 @@ export async function handleOAuthCallback(
       return { success: false, error: `Token exchange failed: ${tokenRes.status} — ${errDetail}`, serverUrl: flow.serverUrl, userId: flow.userId };
     }
 
-    const tokenData = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in?: number };
+    const tokenData = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in?: number; scope?: string };
+
+    console.log(`[mcp-oauth] Token exchange success for ${flow.serverUrl}`);
+    console.log(`[mcp-oauth]   expires_in=${tokenData.expires_in ?? "unknown"}s, has_refresh=${!!tokenData.refresh_token}`);
+    console.log(`[mcp-oauth]   granted scopes: ${tokenData.scope ?? "(none returned)"}`);
 
     // Store access token + refresh token + expiry as JSON blob
     const tokenBlob = JSON.stringify({
@@ -614,8 +623,6 @@ export async function handleOAuthCallback(
     if (error) {
       return { success: false, error: `Failed to store token: ${error}`, serverUrl: flow.serverUrl, userId: flow.userId };
     }
-
-    console.log(`[mcp-oauth] Token exchange success for ${flow.serverUrl}, expires_in=${tokenData.expires_in ?? "unknown"}s`);
   return { success: true, serverUrl: flow.serverUrl, userId: flow.userId };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

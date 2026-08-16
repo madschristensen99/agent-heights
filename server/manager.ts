@@ -52,6 +52,8 @@ import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCr
 import type { CircleServiceConfig } from "./providers/premium-proxy.js";
 import { OfficeState } from "./office-state.js";
 import { registerServer, listServers, getServerConfigs, unregisterServer, loadServers, restartServer } from "./mcp-forge.js";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
+import { sendGateNotificationEmail, isEmailConfigured } from "./email.js";
 
 /** Build a compact categorized summary of the curated MCP catalog from DB. */
 async function catalogSummary(): Promise<string> {
@@ -357,7 +359,7 @@ interface AgentRuntime {
   /** Number of times the current task has been sent back for rework by a manager. */
   reworkCount: number;
   /** Pending decision gate: blocks the task until the boss resolves it. */
-  pendingGate: { id: string; resolve: (answer: string) => void; timer: ReturnType<typeof setTimeout> } | null;
+  pendingGate: { id: string; resolve: (answer: string) => void; timer: ReturnType<typeof setTimeout>; options?: string[] } | null;
 }
 
 /** Keyword expansion for TaskCategory values used in skill-based mail routing. */
@@ -496,7 +498,7 @@ export class AgentManager {
       // Remote server: existing OAuth/token flow
       const stored = parseStoredToken(raw);
       let token = stored.access_token;
-      console.log(`[mcp-inject] Found token for ${s.url}, expires_at=${stored.expires_at ?? "none"}, has_refresh=${!!stored.refresh_token}`);
+      console.log(`[mcp-inject] Found token for ${s.url}, expires_at=${stored.expires_at ?? "none"}, has_refresh=${!!stored.refresh_token}, token_prefix=${token?.slice(0, 20)}...`);
       // Check if token is expired (or will expire in the next 60s)
       if (stored.expires_at && stored.expires_at < Date.now() + 60_000) {
         console.log(`[mcp] Token for ${s.url} expired, attempting refresh...`);
@@ -514,6 +516,8 @@ export class AgentManager {
     return result;
   }
 
+  private isUserConnectedFn: () => boolean;
+
   constructor(
     rootDir: string,
     private broadcast: (msg: ServerMsg) => void,
@@ -522,7 +526,9 @@ export class AgentManager {
     saved: SaveState | null,
     apiKey: string | null = null,
     private userId: string = "",
+    isUserConnected: (() => boolean) | null = null,
   ) {
+    this.isUserConnectedFn = isUserConnected ?? (() => true);
     this.workspaceRoot = join(rootDir, "workspace");
     mkdirSync(this.workspaceRoot, { recursive: true });
     mkdirSync(join(this.workspaceRoot, "shared"), { recursive: true });
@@ -2707,6 +2713,22 @@ export class AgentManager {
     return false;
   }
 
+  /** Send a gate notification email when the user is offline and no platform context is available. */
+  private sendGateEmail(rt: AgentRuntime, question: string, options: string[], gateId: string): void {
+    if (!isEmailConfigured || !isSupabaseConfigured || !this.userId || this.userId === "dev") return;
+    void (async () => {
+      try {
+        const { data: userData } = await supabaseAdmin.auth.admin.getUserById(this.userId);
+        const email = userData.user?.email;
+        if (!email) return;
+        await sendGateNotificationEmail(email, rt.info.name, question, options);
+        this.log(rt, "status", `Gate question sent to ${email} via email`);
+      } catch (err) {
+        console.warn(`[manager] sendGateEmail failed:`, err);
+      }
+    })();
+  }
+
   /** Get an agent's task info: current task, queue, and history. */
   getTaskInfo(agentId: string): { currentTask: string | null; queue: { task: string; handoffTo: string | null }[]; history: { task: string; success: boolean; ts: number; durationMs: number }[] } | null {
     const rt = this.agents.get(agentId);
@@ -3439,17 +3461,43 @@ export class AgentManager {
         requestGate: (question: string, options: string[]): Promise<string> => {
           return new Promise((resolve) => {
             const gateId = randomUUID();
+            const userConnected = this.isUserConnectedFn();
             this.broadcast({ type: "agent_gate", gateId, agentId: rt.info.id, agentName: rt.info.name, question, options });
             this.log(rt, "status", `Asked the boss: "${question}" (options: ${options.join(", ")})`);
-            // Auto-resolve after 5 minutes with the first option (best judgment fallback)
+
+            // If user is not in the office, forward the gate through outbound channels
+            if (!userConnected) {
+              const platformCtx = rt.platformContext;
+              if (platformCtx && this.hermesClient) {
+                // Task came from a messaging platform — send gate question there
+                const optionList = options.map((o, i) => `${i + 1}. ${o}`).join("\n");
+                const gateMsg = `❓ ${rt.info.name} needs your decision:\n\n${question}\n\nReply with a number:\n${optionList}`;
+                this.hermesClient.sendMessage(platformCtx.platform, platformCtx.sender, gateMsg).then((ok) => {
+                  if (ok) {
+                    this.log(rt, "status", `Gate question sent to ${platformCtx.sender} via ${platformCtx.platform}`);
+                  } else {
+                    this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will try email`);
+                    this.sendGateEmail(rt, question, options, gateId);
+                  }
+                }).catch(() => {
+                  this.sendGateEmail(rt, question, options, gateId);
+                });
+              } else {
+                // No platform context — send email notification
+                this.sendGateEmail(rt, question, options, gateId);
+              }
+            }
+
+            // Auto-resolve: 5 min if user is connected (in-game popup), 30 min for outbound
+            const timeoutMs = userConnected ? 5 * 60 * 1000 : 30 * 60 * 1000;
             const timer = setTimeout(() => {
               if (rt.pendingGate?.id === gateId) {
                 rt.pendingGate = null;
-                this.log(rt, "status", "Boss didn't respond in 5 minutes — proceeding with best judgment.");
+                this.log(rt, "status", `Boss didn't respond in ${Math.round(timeoutMs / 60000)} minutes — proceeding with best judgment.`);
                 resolve(options[0]);
               }
-            }, 5 * 60 * 1000);
-            rt.pendingGate = { id: gateId, resolve, timer };
+            }, timeoutMs);
+            rt.pendingGate = { id: gateId, resolve, timer, options };
           });
         },
       });
@@ -5349,7 +5397,44 @@ export class AgentManager {
    *  If no agents are idle, the message is queued for retry. */
   routePlatformEvent(platform: string, sender: string, text: string): void {
     console.log(`[manager] routePlatformEvent: platform=${platform}, sender=${sender}, text="${text.slice(0, 80)}"`);
-    // 0. Auto-screenshot: if the user asks for a photo/screenshot/pic, send one immediately
+
+    // 0a. Gate reply: if the assigned agent has a pending gate from this platform, resolve it
+    const gateAgentId = this.platformAssignedAgent.get(platform);
+    if (gateAgentId) {
+      const gateAgent = this.agents.get(gateAgentId);
+      if (gateAgent?.pendingGate && gateAgent.platformContext?.platform === platform && gateAgent.platformContext?.sender === sender) {
+        const gate = gateAgent.pendingGate;
+        // Try to parse as a number first
+        const numMatch = text.trim().match(/^(\d+)$/);
+        let resolution: string | null = null;
+        if (numMatch) {
+          const idx = parseInt(numMatch[1], 10) - 1;
+          if (gate.options && idx >= 0 && idx < gate.options.length) {
+            resolution = gate.options[idx];
+          }
+        }
+        // Fallback: try exact text match against options
+        if (!resolution && gate.options) {
+          const match = gate.options.find(o => o.toLowerCase() === text.trim().toLowerCase());
+          if (match) resolution = match;
+        }
+        if (resolution) {
+          clearTimeout(gate.timer);
+          gateAgent.pendingGate = null;
+          this.log(gateAgent, "status", `Boss answered via ${platform}: "${resolution}"`);
+          gate.resolve(resolution);
+          return;
+        }
+        // If we can't parse a valid option, send a hint back
+        if (this.hermesClient && gate.options) {
+          const optionList = gate.options.map((o, i) => `${i + 1}. ${o}`).join("\n");
+          this.hermesClient.sendMessage(platform, sender, `Please reply with a number:\n${optionList}`).catch(() => {});
+        }
+        return;
+      }
+    }
+
+    // 0b. Auto-screenshot: if the user asks for a photo/screenshot/pic, send one immediately
     const lowerText = text.toLowerCase();
     const screenshotKeywords = ["screenshot", "photo", "pic of", "picture of", "what does it look like", "show me the office"];
     if (screenshotKeywords.some((kw) => lowerText.includes(kw))) {

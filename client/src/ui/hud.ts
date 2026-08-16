@@ -2736,24 +2736,24 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (!banner) {
       banner = document.createElement("div");
       banner.id = "gate-banner";
-      banner.style.cssText = "position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:600;padding:16px 20px;border-radius:12px;background:rgba(15,15,30,0.96);border:2px solid #f0a040;color:#fff;font-size:14px;max-width:520px;box-shadow:0 8px 32px rgba(240,160,64,0.3);backdrop-filter:blur(6px);";
+      banner.style.cssText = "position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:600;padding:16px 20px;border-radius:12px;background:var(--panel);border:1.5px solid var(--accent);color:var(--text);font-size:14px;max-width:520px;box-shadow:var(--shadow-lg);backdrop-filter:blur(6px);font-family:var(--font-body);";
       document.body.appendChild(banner);
     }
     banner.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:18px;">❓</span>
-        <strong style="color:#f0a040;">${esc(gate.agentName)} needs your decision</strong>
+        <strong style="color:var(--accent-dark);">${esc(gate.agentName)} needs your decision</strong>
       </div>
-      <div style="margin-bottom:14px;color:#ddd;line-height:1.4;">${esc(gate.question)}</div>
+      <div style="margin-bottom:14px;color:var(--text);line-height:1.4;">${esc(gate.question)}</div>
       <div id="gate-options" style="display:flex;flex-direction:column;gap:8px;"></div>
     `;
     const optsContainer = banner.querySelector("#gate-options")!;
     for (const opt of gate.options) {
       const btn = document.createElement("button");
       btn.textContent = opt;
-      btn.style.cssText = "padding:8px 14px;border-radius:8px;border:1px solid rgba(240,160,64,0.4);background:rgba(240,160,64,0.12);color:#f0d090;cursor:pointer;font-size:13px;text-align:left;transition:background 0.15s;";
-      btn.addEventListener("mouseenter", () => { btn.style.background = "rgba(240,160,64,0.25)"; });
-      btn.addEventListener("mouseleave", () => { btn.style.background = "rgba(240,160,64,0.12)"; });
+      btn.style.cssText = "padding:8px 14px;border-radius:8px;border:1px solid var(--panel-edge-soft);background:var(--panel-soft);color:var(--text);cursor:pointer;font-size:13px;text-align:left;transition:background 0.15s,border-color 0.15s;";
+      btn.addEventListener("mouseenter", () => { btn.style.background = "var(--accent-light)"; btn.style.borderColor = "var(--accent)"; });
+      btn.addEventListener("mouseleave", () => { btn.style.background = "var(--panel-soft)"; btn.style.borderColor = "var(--panel-edge-soft)"; });
       btn.addEventListener("click", () => {
         this.store.resolveGate(opt);
       });

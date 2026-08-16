@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <!-- Dark flat background -->
+  <rect width="32" height="32" fill="#5a8fb8"/>
+  <!-- Antenna with yellow signal light -->
+  <rect x="15" y="3" width="2" height="3" fill="#3a4a62"/>
+  <rect x="14" y="1" width="4" height="2" fill="#e8a838"/>
+  <!-- Roof overhang -->
+  <rect x="5" y="6" width="22" height="2" fill="#3a4a62"/>
+  <rect x="5" y="6" width="22" height="1" fill="#4a5a72"/>
+  <!-- Building body -->
+  <rect x="6" y="8" width="20" height="18" fill="#2a3a52"/>
+  <!-- Left edge highlight -->
+  <rect x="6" y="8" width="1" height="18" fill="#3a4a62"/>
+  <!-- Right edge shadow -->
+  <rect x="25" y="8" width="1" height="18" fill="#1a2a42"/>
+  <!-- Windows row 1 -->
+  <rect x="9" y="10" width="3" height="2" fill="#f0ece0"/>
+  <rect x="14.5" y="10" width="3" height="2" fill="#f0ece0"/>
+  <rect x="20" y="10" width="3" height="2" fill="#f0ece0"/>
+  <!-- Windows row 2 -->
+  <rect x="9" y="14" width="3" height="2" fill="#f0ece0"/>
+  <rect x="14.5" y="14" width="3" height="2" fill="#f0ece0"/>
+  <rect x="20" y="14" width="3" height="2" fill="#f0ece0"/>
+  <!-- Windows row 3 (side only) -->
+  <rect x="9" y="18" width="3" height="2" fill="#f0ece0"/>
+  <rect x="20" y="18" width="3" height="2" fill="#f0ece0"/>
+  <!-- Windows row 4 (side only) -->
+  <rect x="9" y="22" width="3" height="2" fill="#f0ece0"/>
+  <rect x="20" y="22" width="3" height="2" fill="#f0ece0"/>
+  <!-- Door (4x8, centered, touches building base) -->
+  <rect x="14" y="18" width="4" height="8" fill="#1a1e2e"/>
+  <!-- Green yard spanning full width from building base to bottom -->
+  <rect x="0" y="26" width="32" height="6" fill="#3a8848"/>
+  <rect x="0" y="26" width="32" height="1" fill="#58c866"/>
+  <rect x="0" y="31" width="32" height="1" fill="#2a6838"/>
+</svg>
