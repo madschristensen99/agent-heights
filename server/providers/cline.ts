@@ -1447,7 +1447,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         try {
           const dbMessages = await ctx.loadMessages(agentId);
           if (dbMessages.length > 0) {
-            stored = dbMessages as any[];
+            stored = sanitizeMessages(dbMessages as any[]);
             messageStore.set(agentId, stored);
             console.log(`[cline:${agentId}] restored ${stored.length} messages from DB`);
           }
@@ -1609,7 +1609,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
     }
 
     if (result.messages.length > 0) {
-      const msgs = [...result.messages] as any;
+      const rawMsgs = [...result.messages] as any;
+      const msgs = sanitizeMessages(rawMsgs);
+      if (msgs.length !== rawMsgs.length) {
+        console.log(`[cline:${agentId}] sanitized ${rawMsgs.length} → ${msgs.length} messages after run — clearing cached agent to prevent orphaned tool messages on next continue()`);
+        agents.delete(agentId);
+      }
       messageStore.set(agentId, msgs);
       // Persist to DB for context restoration across server restarts
       if (ctx.saveMessages) {

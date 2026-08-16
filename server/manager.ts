@@ -3542,11 +3542,11 @@ export class AgentManager {
 
       // a stale or corrupted conversation shouldn't brick the agent forever
       const isStaleSessionError = /session|resume|conversation|thread|tool_call_id|invalid.*request/i.test(firstErrorText);
-      const isToolCallIdError = /tool_call_id.*not.*found/i.test(firstErrorText);
+      const isToolCallIdError = /tool_call_id.*not.*found|Messages with role.*tool.*must be a response|tool.*must be a response to a preceding message with.*tool_calls/i.test(firstErrorText);
       const isTokenLimitError = /token.*limit|exceeded.*limit/i.test(firstErrorText);
-      // tool_call_id errors can occur mid-conversation (after valid events) when
-      // compaction or restore leaves orphaned tool_result blocks.  Allow retry
-      // for these even when gotEvents is true — the corrupted state is cleared.
+      // tool_call_id / orphaned tool message errors can occur mid-conversation (after valid events)
+      // when compaction or restore leaves orphaned tool_result blocks.  Allow retry for these even
+      // when gotEvents is true — the corrupted state is cleared.
       const canRetryStale = (isStaleSessionError && !gotEvents) || isToolCallIdError;
       if (sawError && hadSession && (canRetryStale || isTokenLimitError)) {
         rt.info.sessionId = null;
