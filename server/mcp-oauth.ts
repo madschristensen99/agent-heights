@@ -581,8 +581,11 @@ export async function handleOAuthCallback(
     });
 
     if (!tokenRes.ok) {
-      console.error("[mcp-oauth] Token exchange failed:", tokenRes.status);
-      return { success: false, error: `Token exchange failed: ${tokenRes.status}`, serverUrl: flow.serverUrl, userId: flow.userId };
+      const errBody = await tokenRes.text().catch(() => "");
+      console.error("[mcp-oauth] Token exchange failed:", tokenRes.status, errBody);
+      let errDetail = errBody;
+      try { const j = JSON.parse(errBody); errDetail = j.error_description || j.error || errBody; } catch { /* not JSON */ }
+      return { success: false, error: `Token exchange failed: ${tokenRes.status} — ${errDetail}`, serverUrl: flow.serverUrl, userId: flow.userId };
     }
 
     const tokenData = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in?: number };
