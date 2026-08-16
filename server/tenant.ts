@@ -1,8 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel } from "../shared/types.js";
-import { COMMAND_CENTER_SLUG, COMMAND_CENTER_ADMINS } from "../shared/types.js";
+import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel, Presenter } from "../shared/types.js";
+import { COMMAND_CENTER_SLUG, COMMAND_CENTER_ADMINS, MAX_PRESENTERS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
 import { SaveFile, type SaveState, type Persistence } from "./persistence.js";
@@ -71,6 +71,8 @@ interface Room {
   projectorChannel: string;
   /** Persisted invite list for private rooms: userId → access level. */
   invitedUsers: Map<string, RoomAccessLevel>;
+  /** Active presenters (screen share + webcam) keyed by `${userId}:${type}`. */
+  presenters: Map<string, Presenter>;
 }
 
 /** In-memory organization member (augmented with email for display). */
@@ -139,6 +141,7 @@ export class TenantManager {
       orgId: ccOrgId,
       projectorChannel: "off",
       invitedUsers: new Map(),
+      presenters: new Map(),
     });
   }
 
@@ -152,6 +155,42 @@ export class TenantManager {
 
   getRoom(roomId: string): Room | undefined {
     return this.rooms.get(roomId);
+  }
+
+  /** Get all active presenters in a room. */
+  getRoomPresenters(roomId: string): Presenter[] {
+    const room = this.rooms.get(roomId);
+    if (!room) return [];
+    return Array.from(room.presenters.values());
+  }
+
+  /** Add a presenter to a room. Returns false if the cap is hit. */
+  addPresenter(roomId: string, presenter: Presenter): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    const key = `${presenter.userId}:${presenter.type}`;
+    if (room.presenters.has(key)) return true; // already presenting this type
+    if (room.presenters.size >= MAX_PRESENTERS) return false;
+    room.presenters.set(key, presenter);
+    return true;
+  }
+
+  /** Remove a specific presenter (by userId + type) from a room. */
+  removePresenter(roomId: string, userId: string, type: "screen" | "webcam"): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    room.presenters.delete(`${userId}:${type}`);
+  }
+
+  /** Remove all presentations by a user from a room (for disconnect cleanup). */
+  removeAllPresenters(roomId: string, userId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    for (const key of room.presenters.keys()) {
+      if (key.startsWith(`${userId}:`)) {
+        room.presenters.delete(key);
+      }
+    }
   }
 
   /** Get all rooms owned by or visible to a user. */
@@ -187,6 +226,7 @@ export class TenantManager {
       orgId,
       projectorChannel: "off",
       invitedUsers: new Map(),
+      presenters: new Map(),
     };
     this.rooms.set(roomId, room);
     return roomId;
@@ -229,7 +269,24 @@ export class TenantManager {
 
     // Update session
     const sess = this.sessions.get(userId);
-    if (sess) sess.roomId = null;
+    if (sess) {
+      sess.roomId = null;
+      // Clean up any active presentations
+      if (sess.screenShareActive || sess.webcamActive) {
+        sess.screenShareActive = false;
+        sess.webcamActive = false;
+      }
+    }
+    // Remove all presentations by this user from the room
+    this.removeAllPresenters(roomId, userId);
+    // Notify remaining players about presenter changes
+    const remainingPresenters = this.getRoomPresenters(roomId);
+    for (const [pid] of room.players) {
+      const peerSess = this.sessions.get(pid);
+      if (peerSess) {
+        peerSess.broadcast({ type: "presenters_update", roomId, presenters: remainingPresenters });
+      }
+    }
 
     // Delete empty rooms (except HQ2, org rooms, and private offices — keep for rejoin)
     if (room.players.size === 0 && roomId !== HQ2_ROOM_ID && !room.isPrivate && room.roomType !== "organization") {

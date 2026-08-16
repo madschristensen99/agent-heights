@@ -178,7 +178,8 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
     });
   }
 
-  // Auto-fit model into view
+  // Auto-fit model into view, accounting for vertical offset and animation
+  // transforms so the model never gets clipped by the camera frustum.
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -187,12 +188,22 @@ const RENDER_FN = async (objUrl: string, mtlUrl: string | null, textureUrl: stri
   // sqrt(sx² + sz²) — larger than any single axis. Without this, elongated
   // models like wolves get cropped at diagonal angles.
   const xzDiag = Math.sqrt(size.x * size.x + size.z * size.z);
-  const maxDim = Math.max(size.y, xzDiag, 0.001);
-  const scale = (1.3 / maxDim) * scaleMul;
+  // Camera frustum half-height is 0.7 (OrthographicCamera top = 0.7).
+  // The model's highest point across all animation frames must stay below 0.7:
+  //   top = (size.y / 2) * scale * scaleY * scaleMul + Y_OFF + animYOff
+  // Attack frame is the worst case: scaleY=1.08, animYOff=0.02
+  const CAM_HALF = 0.7;
+  const Y_OFF = 0.08;
+  const MAX_ANIM_SCALE_Y = 1.08;
+  const MAX_ANIM_Y_OFF = 0.02;
+  const vertFit = ((CAM_HALF - Y_OFF - MAX_ANIM_Y_OFF) * 2) /
+    (Math.max(size.y, 0.001) * MAX_ANIM_SCALE_Y * scaleMul);
+  const horizFit = (CAM_HALF * 2) / (Math.max(xzDiag, 0.001) * scaleMul);
+  const scale = Math.min(vertFit, horizFit);
   model.scale.setScalar(scale);
   model.position.x = -center.x * scale;
   model.position.z = -center.z * scale;
-  const baseY = -center.y * scale + 0.15;
+  const baseY = -center.y * scale + Y_OFF;
   model.position.y = baseY;
 
   // Direction rotations (model faces -Z = South = toward camera at rotation 0)

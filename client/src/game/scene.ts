@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, OfficeManagerNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
-import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE } from "../../../shared/types";
+import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE, type Presenter, MAX_PRESENTERS } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -20,10 +20,13 @@ import { getToken } from "../auth";
 import { VoiceManager } from "../voice";
 import { ScreenShareManager } from "../screen-share";
 import { WebcamManager } from "../webcam";
+import { PresenterPanel } from "../ui/presenter-panel";
 import * as loadingOverlay from "./loading-overlay";
 
 const PLAYER_SPEED = 300;
-const ACCEL_LERP = 0.18;
+/** Per-second acceleration rate for exponential smoothing.
+ *  Higher = snappier start/stop. 12 ≈ old 0.18-per-frame at 60fps. */
+const ACCEL_RATE = 12;
 
 function hintLabel(text: string): string {
   return isTouchDevice() ? text.replace(/^E:\s*/, "TAP ") : text;
@@ -160,10 +163,11 @@ export class OfficeScene extends Phaser.Scene {
   private phoneBoothGfx!: Phaser.GameObjects.Graphics;
   private phoneBoothLight!: Phaser.GameObjects.Graphics;
   private webcam: WebcamManager | null = null;
-  private webcamVideoEl: HTMLVideoElement | null = null;
-  private webcamVideoWrap: HTMLDivElement | null = null;
-  private screenShareVideoEl: HTMLVideoElement | null = null;
-  private screenShareVideoWrap: HTMLDivElement | null = null;
+  private presenterVideoEls = new Map<string, { video: HTMLVideoElement; wrap: HTMLDivElement }>();
+  private presenters: Presenter[] = [];
+  private focusedPresenterKey: string | null = null;
+  private mutedPresenterKeys = new Set<string>();
+  private presenterPanel: PresenterPanel | null = null;
   private webcamPresenterId: string | null = null;
   private webcamPresenterName: string | null = null;
   private inPhoneBooth = false;
@@ -281,7 +285,7 @@ export class OfficeScene extends Phaser.Scene {
   private lastPlayerNameBgKey = "";
   private playerDir: Dir = "down";
   private playerTexKey = "boss-default";
-  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "SPACE", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "M" | "SPACE", Phaser.Input.Keyboard.Key>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
@@ -393,55 +397,134 @@ export class OfficeScene extends Phaser.Scene {
     // ── Screen share + webcam: create managers and wire store listeners ──
     if (this._myUserId && this.net) {
       this.screenShare = new ScreenShareManager(this._myUserId, (msg) => this.net!.send(msg));
-      this.screenShare.onRemoteStream = (stream, _userId) => {
-        this.attachScreenShareVideo(stream);
+      this.screenShare.onRemoteStream = (stream, userId) => {
+        this.attachPresenterStream(userId, "screen", stream);
       };
       this.screenShare.onStreamEnded = () => {
-        this.detachScreenShareVideo();
+        if (this._myUserId) this.detachPresenterStream(this._myUserId, "screen");
       };
-      this.store.onScreenSharePeer((userId, name) => this.screenShare?.onSharerPeer(userId, name));
       this.store.onScreenShareOffer((fromUserId, sdp) => { void this.screenShare?.onOffer(fromUserId, sdp); });
       this.store.onScreenShareAnswer((fromUserId, sdp) => { void this.screenShare?.onAnswer(fromUserId, sdp); });
       this.store.onScreenShareIce((fromUserId, candidate) => { void this.screenShare?.onIce(fromUserId, candidate); });
-      this.store.onScreenSharePeerLeft((userId) => this.screenShare?.onPeerLeft(userId));
 
       this.webcam = new WebcamManager(this._myUserId, (msg) => this.net!.send(msg));
-      this.webcam.onRemoteStream = (stream, _userId) => {
-        this.attachWebcamVideo(stream);
+      this.webcam.onRemoteStream = (stream, userId) => {
+        this.attachPresenterStream(userId, "webcam", stream);
       };
       this.webcam.onStreamEnded = () => {
-        this.detachWebcamVideo();
+        if (this._myUserId) this.detachPresenterStream(this._myUserId, "webcam");
       };
       this.webcam.onStateChange = (broadcasting) => {
         this.updatePhoneBoothVisual(broadcasting);
       };
-      this.store.onWebcamState((presenterId, presenterName) => {
-        this.webcamPresenterId = presenterId;
-        this.webcamPresenterName = presenterName;
-        if (!presenterId) {
-          this.detachWebcamVideo();
-        }
-      });
-      this.store.onWebcamPeer((userId, name) => this.webcam?.onBroadcasterPeer(userId, name));
       this.store.onWebcamOffer((fromUserId, sdp) => { void this.webcam?.onOffer(fromUserId, sdp); });
       this.store.onWebcamAnswer((fromUserId, sdp) => { void this.webcam?.onAnswer(fromUserId, sdp); });
       this.store.onWebcamIce((fromUserId, candidate) => { void this.webcam?.onIce(fromUserId, candidate); });
-      this.store.onWebcamPeerLeft((userId) => {
-        this.webcam?.onPeerLeft(userId);
-        if (this.webcamPresenterId === userId) {
-          this.webcamPresenterId = null;
-          this.webcamPresenterName = null;
-          this.detachWebcamVideo();
+
+      // Unified presenter updates — replaces individual screen_share_peer / webcam_state / etc.
+      this.store.onPresentersUpdate((presenters) => {
+        this.onPresentersUpdate(presenters);
+        if (this.presenterPanel) {
+          this.presenterPanel.setPresenters(presenters);
+          this.presenterPanel.setSharing(!!this.screenShare?.sharing);
+          this.presenterPanel.setBroadcasting(!!this.webcam?.broadcasting);
         }
       });
+      this.store.onPresenterKicked((presenterType) => {
+        if (presenterType === "screen") {
+          this.screenShare?.stopSharing();
+          if (this._myUserId) this.detachPresenterStream(this._myUserId, "screen");
+        } else {
+          this.webcam?.stopBroadcasting();
+          this.inPhoneBooth = false;
+          if (this.player) this.player.setVisible(true);
+          if (this._myUserId) this.detachPresenterStream(this._myUserId, "webcam");
+        }
+      });
+
+      // Presenter management panel
+      this.presenterPanel = new PresenterPanel({
+        onFocus: (uid, type) => {
+          this.focusedPresenterKey = this.focusedPresenterKey === `${uid}:${type}` ? null : `${uid}:${type}`;
+          this.updateProjectorVideoOverlays();
+          this.presenterPanel?.setFocus(this.focusedPresenterKey);
+        },
+        onMute: (uid, type) => {
+          const key = `${uid}:${type}`;
+          if (this.mutedPresenterKeys.has(key)) this.mutedPresenterKeys.delete(key);
+          else this.mutedPresenterKeys.add(key);
+          this.updateProjectorVideoOverlays();
+          this.presenterPanel?.setMuted(this.mutedPresenterKeys);
+        },
+        onKick: (uid, type) => {
+          this.net?.send({ type: "presenter_kick", userId: uid, presenterType: type });
+        },
+        onStartScreenShare: () => {
+          if (this.presenters.length >= MAX_PRESENTERS) {
+            this.store.toast(`Presenter grid is full (${MAX_PRESENTERS}/${MAX_PRESENTERS}).`);
+            return;
+          }
+          this.screenShare?.startSharing().then(() => {
+            const localStream = this.screenShare?.localStream;
+            if (localStream && this._myUserId) {
+              this.attachPresenterStream(this._myUserId, "screen", localStream);
+            }
+            this.store.toast("Sharing your screen to the projector!");
+            this.presenterPanel?.setSharing(true);
+          }).catch(() => {
+            this.store.toast("Screen share permission denied.");
+          });
+        },
+        onStopScreenShare: () => {
+          this.screenShare?.stopSharing();
+          if (this._myUserId) this.detachPresenterStream(this._myUserId, "screen");
+          this.store.toast("Screen share stopped.");
+          this.presenterPanel?.setSharing(false);
+        },
+        onStartWebcam: () => {
+          if (this.webcamPresenterId && this.webcamPresenterId !== this._myUserId) {
+            this.store.toast(`${this.webcamPresenterName ?? "Someone"} is already broadcasting.`);
+            return;
+          }
+          if (this.presenters.length >= MAX_PRESENTERS) {
+            this.store.toast(`Presenter grid is full (${MAX_PRESENTERS}/${MAX_PRESENTERS}).`);
+            return;
+          }
+          this.webcam?.startBroadcasting().then(() => {
+            this.inPhoneBooth = true;
+            if (this.player) this.player.setVisible(false);
+            const localStream = this.webcam?.localStream;
+            if (localStream && this._myUserId) {
+              this.attachPresenterStream(this._myUserId, "webcam", localStream);
+            }
+            this.store.toast("ON AIR — webcam broadcasting to projector!");
+            this.presenterPanel?.setBroadcasting(true);
+          }).catch(() => {
+            this.store.toast("Camera access denied. Check browser permissions.");
+          });
+        },
+        onStopWebcam: () => {
+          this.webcam?.stopBroadcasting();
+          this.inPhoneBooth = false;
+          if (this.player) this.player.setVisible(true);
+          if (this._myUserId) this.detachPresenterStream(this._myUserId, "webcam");
+          this.store.toast("Webcam broadcast stopped.");
+          this.presenterPanel?.setBroadcasting(false);
+        },
+        onClose: () => {
+          this.presenterPanel?.hide();
+        },
+      });
+      this.presenterPanel.setMyUserId(this._myUserId);
 
       this.events.once("shutdown", () => {
         this.screenShare?.stopSharing();
         this.screenShare = null;
         this.webcam?.destroy();
         this.webcam = null;
-        this.detachWebcamVideo();
-        this.detachScreenShareVideo();
+        this.detachAllPresenterStreams();
+        this.presenterPanel?.destroy();
+        this.presenterPanel = null;
       });
     }
 
@@ -820,6 +903,8 @@ export class OfficeScene extends Phaser.Scene {
                 .sprite(mx, my, MONITOR_SIDE_TEX, "0")
                 .setDepth(10 + (obj.y ?? 0) - 10);
               this.officeManagerMonitor = spr;
+              spr.setInteractive({ useHandCursor: true });
+              spr.on("pointerdown", () => this.openAgentViewModal(OFFICE_MANAGER_ID));
             } else if (obj.name === "hermes-seat") {
               this.hermesSeat = { x: tx, y: ty };
             } else if (obj.name === "hermes-monitor") {
@@ -831,6 +916,8 @@ export class OfficeScene extends Phaser.Scene {
                 .setDepth(10 + (obj.y ?? 0) - 10)
                 .setFlipX(true);
               this.hermesMonitor = spr;
+              spr.setInteractive({ useHandCursor: true });
+              spr.on("pointerdown", () => this.openAgentViewModal(HERMES_ID));
             } else if (obj.name === "wizard-seat") {
               this.wizardSeat = { x: tx, y: ty };
             } else if (obj.name.startsWith("seat-")) {
@@ -856,7 +943,10 @@ export class OfficeScene extends Phaser.Scene {
               } else {
                 spr.setInteractive({ useHandCursor: true });
               }
-              spr.on("pointerdown", () => this.openAgentViewModal(idx));
+              spr.on("pointerdown", () => {
+                const agent = [...this.store.agents.values()].find(a => a.deskIndex === idx);
+                if (agent) this.openAgentViewModal(agent.id);
+              });
               this.monitors[idx] = spr;
             }
           }
@@ -1285,7 +1375,7 @@ export class OfficeScene extends Phaser.Scene {
           });
 
           this.cursors = this.input.keyboard!.createCursorKeys();
-          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,SPACE") as OfficeScene["keys"];
+          this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,M,SPACE") as OfficeScene["keys"];
           this.input.keyboard!.on("keydown-ESC", () => {
             this.store.select(null);
             this.store.toggleBoard(false);
@@ -1625,10 +1715,10 @@ export class OfficeScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const view = cam.worldView;
     if (this.lastSkyView &&
-        this.lastSkyView.x === view.x &&
-        this.lastSkyView.y === view.y &&
-        this.lastSkyView.w === view.width &&
-        this.lastSkyView.h === view.height) {
+        Math.abs(this.lastSkyView.x - view.x) < 2 &&
+        Math.abs(this.lastSkyView.y - view.y) < 2 &&
+        Math.abs(this.lastSkyView.w - view.width) < 2 &&
+        Math.abs(this.lastSkyView.h - view.height) < 2) {
       return;
     }
     this.lastSkyView = { x: view.x, y: view.y, w: view.width, h: view.height };
@@ -3597,13 +3687,18 @@ export class OfficeScene extends Phaser.Scene {
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, ssPx.x, ssPx.y) < 120) {
       if (this.screenShare?.sharing) {
         this.screenShare.stopSharing();
-        this.detachScreenShareVideo();
+        if (this._myUserId) this.detachPresenterStream(this._myUserId, "screen");
         this.store.toast("Screen share stopped.");
       } else {
+        // Check presenter cap before starting
+        if (this.presenters.length >= MAX_PRESENTERS) {
+          this.store.toast(`Presenter grid is full (${MAX_PRESENTERS}/${MAX_PRESENTERS}). Use the manage panel to kick someone.`);
+          return true;
+        }
         this.screenShare?.startSharing().then(() => {
           const localStream = this.screenShare?.localStream;
-          if (localStream) {
-            this.attachScreenShareVideo(localStream);
+          if (localStream && this._myUserId) {
+            this.attachPresenterStream(this._myUserId, "screen", localStream);
           }
           this.store.toast("Sharing your screen to the projector!");
         }).catch(() => {
@@ -3621,11 +3716,7 @@ export class OfficeScene extends Phaser.Scene {
         this.webcam.stopBroadcasting();
         this.inPhoneBooth = false;
         if (this.player) this.player.setVisible(true);
-        if (this.webcamPresenterId === this._myUserId) {
-          this.webcamPresenterId = null;
-          this.webcamPresenterName = null;
-        }
-        this.detachWebcamVideo();
+        if (this._myUserId) this.detachPresenterStream(this._myUserId, "webcam");
         this.store.toast("Webcam broadcast stopped.");
       } else {
         if (this.webcamPresenterId && this.webcamPresenterId !== this._myUserId) {
@@ -3635,12 +3726,9 @@ export class OfficeScene extends Phaser.Scene {
         this.webcam?.startBroadcasting().then(() => {
           this.inPhoneBooth = true;
           if (this.player) this.player.setVisible(false);
-          // Show broadcaster's own camera on the projector
           const localStream = this.webcam?.localStream;
-          if (localStream) {
-            this.webcamPresenterId = this._myUserId;
-            this.webcamPresenterName = this.store.player?.name ?? "You";
-            this.attachWebcamVideo(localStream);
+          if (localStream && this._myUserId) {
+            this.attachPresenterStream(this._myUserId, "webcam", localStream);
           }
           this.store.toast("ON AIR — webcam broadcasting to projector!");
         }).catch(() => {
@@ -4130,7 +4218,10 @@ export class OfficeScene extends Phaser.Scene {
     // Screen share station
     {
       const px = { x: this.screenShareTile.x * TILE_PX + 32, y: this.screenShareTile.y * TILE_PX + 32 };
-      const label = this.screenShare?.sharing ? "E: STOP SHARE" : "E: SHARE SCREEN";
+      let label = this.screenShare?.sharing ? "E: STOP SHARE" : "E: SHARE SCREEN";
+      if (this.presenters.length > 0 && !this.screenShare?.sharing) {
+        label = `E: SHARE (${this.presenters.length}/${MAX_PRESENTERS})`;
+      }
       add(this.screenShareHint, px.x, px.y, 120, label, px.x, px.y + 48);
     }
 
@@ -5509,10 +5600,9 @@ export class OfficeScene extends Phaser.Scene {
     const sw = 480;
     const sh = 288;
 
-    // If webcam or screen share video is active, hide YouTube iframe
-    const hasWebcam = !!this.webcamVideoWrap && this.webcamVideoWrap.style.display !== "none";
-    const hasScreenShare = !!this.screenShareVideoWrap && this.screenShareVideoWrap.style.display !== "none";
-    if (hasWebcam || hasScreenShare) {
+    // If any presenter video is active, hide YouTube iframe
+    const hasPresenters = this.presenterVideoEls.size > 0;
+    if (hasPresenters) {
       if (this.projectorIframe) this.projectorIframe.style.display = "none";
       return;
     }
@@ -5623,16 +5713,7 @@ export class OfficeScene extends Phaser.Scene {
       this.projectorIframe = null;
       this.projectorVideoId = null;
     }
-    if (this.webcamVideoWrap) {
-      this.webcamVideoWrap.remove();
-      this.webcamVideoWrap = null;
-      this.webcamVideoEl = null;
-    }
-    if (this.screenShareVideoWrap) {
-      this.screenShareVideoWrap.remove();
-      this.screenShareVideoWrap = null;
-      this.screenShareVideoEl = null;
-    }
+    this.detachAllPresenterStreams();
   }
 
   /** Draw a kanban-style task board on the front wall of the office. */
@@ -7170,9 +7251,10 @@ export class OfficeScene extends Phaser.Scene {
       vy /= len;
     }
 
-    // Smooth acceleration/deceleration toward target velocity
-    this.playerVx += (vx - this.playerVx) * ACCEL_LERP;
-    this.playerVy += (vy - this.playerVy) * ACCEL_LERP;
+    // Smooth acceleration/deceleration toward target velocity (framerate-independent)
+    const accelT = 1 - Math.exp(-ACCEL_RATE * dt / 1000);
+    this.playerVx += (vx - this.playerVx) * accelT;
+    this.playerVy += (vy - this.playerVy) * accelT;
     // Deadzone snap to prevent micro-drift
     if (Math.abs(this.playerVx) < 0.02) this.playerVx = 0;
     if (Math.abs(this.playerVy) < 0.02) this.playerVy = 0;
@@ -7448,6 +7530,19 @@ export class OfficeScene extends Phaser.Scene {
       this.world.swapWeapon();
     }
 
+    // M: toggle presenter management panel
+    const mPressed = Phaser.Input.Keyboard.JustDown(this.keys.M);
+    if (mPressed && this.presenterPanel) {
+      this.presenterPanel.toggle();
+      if (this.presenterPanel.isOpen()) {
+        this.presenterPanel.setPresenters(this.presenters);
+        this.presenterPanel.setSharing(!!this.screenShare?.sharing);
+        this.presenterPanel.setBroadcasting(!!this.webcam?.broadcasting);
+        this.presenterPanel.setFocus(this.focusedPresenterKey);
+        this.presenterPanel.setMuted(this.mutedPresenterKeys);
+      }
+    }
+
     // check for death teleport from world layer
     const teleportTo = this.registry.get("teleportTo") as { x: number; y: number } | undefined;
     if (teleportTo) {
@@ -7707,7 +7802,7 @@ export class OfficeScene extends Phaser.Scene {
         const predictedX = p.x + entry.storeVx * frameDt;
         const predictedY = p.y + entry.storeVy * frameDt;
 
-        const lerp = 0.25;
+        const lerp = 1 - Math.exp(-15 * frameDt);
         target.x += (predictedX - target.x) * lerp;
         target.y += (predictedY - target.y) * lerp;
         target.setDepth(10 + target.y);
@@ -7792,8 +7887,8 @@ export class OfficeScene extends Phaser.Scene {
   // ── Agent screen viewing + projector broadcast ──────────────────────
 
   /** Open a modal showing a live screenshot feed from an agent's browser. */
-  private openAgentViewModal(deskIndex: number): void {
-    const agent = [...this.store.agents.values()].find(a => a.deskIndex === deskIndex);
+  private openAgentViewModal(agentId: string): void {
+    const agent = this.store.agents.get(agentId);
     if (!agent) return;
     this.agentViewAgentId = agent.id;
     this.agentViewTab = "screen";
@@ -9021,104 +9116,189 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Attach a remote webcam stream to a hidden video element for projector display. */
-  private attachWebcamVideo(stream: MediaStream): void {
-    if (!this.webcamVideoEl) {
-      this.webcamVideoWrap = document.createElement("div");
-      this.webcamVideoWrap.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;overflow:hidden;";
-      this.webcamVideoEl = document.createElement("video");
-      this.webcamVideoEl.autoplay = true;
-      this.webcamVideoEl.playsInline = true;
-      this.webcamVideoEl.muted = true;
-      this.webcamVideoEl.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;border:none;";
-      this.webcamVideoWrap.appendChild(this.webcamVideoEl);
-      document.body.appendChild(this.webcamVideoWrap);
+  // ── Presenter video management ─────────────────────────────────────
+
+  private presenterKey(userId: string, type: "screen" | "webcam"): string {
+    return `${userId}:${type}`;
+  }
+
+  /** Attach a remote presenter stream to a video element for projector display. */
+  private attachPresenterStream(userId: string, type: "screen" | "webcam", stream: MediaStream): void {
+    const key = this.presenterKey(userId, type);
+    let entry = this.presenterVideoEls.get(key);
+    if (!entry) {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;overflow:hidden;";
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true; // muted by default; unmuted only for focused presenter
+      video.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;display:block;border:none;";
+      video.style.objectFit = type === "screen" ? "contain" : "cover";
+      wrap.appendChild(video);
+      document.body.appendChild(wrap);
+      entry = { video, wrap };
+      this.presenterVideoEls.set(key, entry);
     }
-    this.webcamVideoEl.srcObject = stream;
-    this.webcamVideoWrap!.style.display = "block";
+    entry.video.srcObject = stream;
+    entry.wrap.style.display = "block";
     this.updateProjectorVideoOverlays();
   }
 
-  /** Detach the webcam video element from the projector. */
-  private detachWebcamVideo(): void {
-    if (this.webcamVideoEl) {
-      this.webcamVideoEl.srcObject = null;
+  /** Detach a specific presenter's video element. */
+  private detachPresenterStream(userId: string, type: "screen" | "webcam"): void {
+    const key = this.presenterKey(userId, type);
+    const entry = this.presenterVideoEls.get(key);
+    if (entry) {
+      entry.video.srcObject = null;
+      entry.wrap.style.display = "none";
+      entry.wrap.remove();
+      this.presenterVideoEls.delete(key);
     }
-    if (this.webcamVideoWrap) {
-      this.webcamVideoWrap.style.display = "none";
+    if (this.focusedPresenterKey === key) {
+      this.focusedPresenterKey = null;
     }
-  }
-
-  /** Attach a remote screen share stream to a hidden video element for projector display. */
-  private attachScreenShareVideo(stream: MediaStream): void {
-    if (!this.screenShareVideoEl) {
-      this.screenShareVideoWrap = document.createElement("div");
-      this.screenShareVideoWrap.style.cssText = "position:fixed;border:none;pointer-events:none;z-index:51;border-radius:3px;display:none;overflow:hidden;";
-      this.screenShareVideoEl = document.createElement("video");
-      this.screenShareVideoEl.autoplay = true;
-      this.screenShareVideoEl.playsInline = true;
-      this.screenShareVideoEl.muted = true;
-      this.screenShareVideoEl.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;display:block;border:none;";
-      this.screenShareVideoWrap.appendChild(this.screenShareVideoEl);
-      document.body.appendChild(this.screenShareVideoWrap);
-    }
-    this.screenShareVideoEl.srcObject = stream;
-    this.screenShareVideoWrap!.style.display = "block";
+    this.mutedPresenterKeys.delete(key);
     this.updateProjectorVideoOverlays();
   }
 
-  /** Detach the screen share video element from the projector. */
-  private detachScreenShareVideo(): void {
-    if (this.screenShareVideoEl) {
-      this.screenShareVideoEl.srcObject = null;
+  /** Detach all presenter video elements. */
+  private detachAllPresenterStreams(): void {
+    for (const [, entry] of this.presenterVideoEls) {
+      entry.video.srcObject = null;
+      entry.wrap.remove();
     }
-    if (this.screenShareVideoWrap) {
-      this.screenShareVideoWrap.style.display = "none";
-    }
+    this.presenterVideoEls.clear();
+    this.focusedPresenterKey = null;
+    this.mutedPresenterKeys.clear();
   }
 
-  /** Update positions of webcam and screen share video overlays on the projector.
-   *  When both are active, the projector splits into two halves:
-   *  left = screen share, right = webcam. */
+  /** Handle a presenters_update from the server: sync WebRTC peers + video elements. */
+  private onPresentersUpdate(presenters: Presenter[]): void {
+    const oldPresenters = this.presenters;
+    this.presenters = presenters;
+
+    // Track webcam presenter for phone booth hint
+    const webcamP = presenters.find(p => p.type === "webcam");
+    this.webcamPresenterId = webcamP?.userId ?? null;
+    this.webcamPresenterName = webcamP?.name ?? null;
+
+    // Determine which presenters are new vs gone
+    const newKeys = new Set(presenters.map(p => this.presenterKey(p.userId, p.type)));
+    const oldKeys = new Set(oldPresenters.map(p => this.presenterKey(p.userId, p.type)));
+
+    // Initiate WebRTC for new presenters (unless it's me)
+    for (const p of presenters) {
+      const key = this.presenterKey(p.userId, p.type);
+      if (oldKeys.has(key)) continue;
+      if (p.userId === this._myUserId) continue;
+      if (p.type === "screen") {
+        this.screenShare?.onSharerPeer(p.userId, p.name);
+      } else {
+        this.webcam?.onBroadcasterPeer(p.userId, p.name);
+      }
+    }
+
+    // Clean up WebRTC + video for departed presenters
+    for (const old of oldPresenters) {
+      const key = this.presenterKey(old.userId, old.type);
+      if (newKeys.has(key)) continue;
+      if (old.type === "screen") {
+        this.screenShare?.onPeerLeft(old.userId);
+      } else {
+        this.webcam?.onPeerLeft(old.userId);
+      }
+      this.detachPresenterStream(old.userId, old.type);
+    }
+
+    this.updateProjectorVideoOverlays();
+  }
+
+  /** Update positions of presenter video overlays on the projector.
+   *  Supports 1-4 presenters in a grid, plus focus mode. */
   private updateProjectorVideoOverlays(): void {
     const px = this.projectorTile.x * TILE_PX + 32;
     const py = this.projectorTile.y * TILE_PX - 100;
     const sw = 480;
     const sh = 288;
 
-    const hasWebcam = !!this.webcamVideoWrap && this.webcamVideoWrap.style.display !== "none";
-    const hasScreenShare = !!this.screenShareVideoWrap && this.screenShareVideoWrap.style.display !== "none";
+    const visiblePresenters = this.presenters.filter(p => {
+      const key = this.presenterKey(p.userId, p.type);
+      return this.presenterVideoEls.has(key) && this.presenterVideoEls.get(key)!.wrap.style.display !== "none";
+    });
 
-    if (hasWebcam && hasScreenShare) {
-      // Split-screen: left half = screen share, right half = webcam
-      const halfW = sw / 2;
-      const ssRect = this.worldRectToScreen(px - sw / 2, py - sh / 2, halfW, sh);
-      const wcRect = this.worldRectToScreen(px, py - sh / 2, halfW, sh);
+    if (visiblePresenters.length === 0) return;
 
-      this.screenShareVideoWrap!.style.left = `${ssRect.x}px`;
-      this.screenShareVideoWrap!.style.top = `${ssRect.y}px`;
-      this.screenShareVideoWrap!.style.width = `${ssRect.w}px`;
-      this.screenShareVideoWrap!.style.height = `${ssRect.h}px`;
-
-      this.webcamVideoWrap!.style.left = `${wcRect.x}px`;
-      this.webcamVideoWrap!.style.top = `${wcRect.y}px`;
-      this.webcamVideoWrap!.style.width = `${wcRect.w}px`;
-      this.webcamVideoWrap!.style.height = `${wcRect.h}px`;
-    } else if (hasWebcam) {
-      // Webcam only — full projector
-      const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
-      this.webcamVideoWrap!.style.left = `${rect.x}px`;
-      this.webcamVideoWrap!.style.top = `${rect.y}px`;
-      this.webcamVideoWrap!.style.width = `${rect.w}px`;
-      this.webcamVideoWrap!.style.height = `${rect.h}px`;
-    } else if (hasScreenShare) {
-      // Screen share only — full projector
-      const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, sh);
-      this.screenShareVideoWrap!.style.left = `${rect.x}px`;
-      this.screenShareVideoWrap!.style.top = `${rect.y}px`;
-      this.screenShareVideoWrap!.style.width = `${rect.w}px`;
-      this.screenShareVideoWrap!.style.height = `${rect.h}px`;
+    // Apply mute state: focused presenter is unmuted, all others muted
+    for (const [key, entry] of this.presenterVideoEls) {
+      const isFocused = this.focusedPresenterKey === key;
+      const isMuted = this.mutedPresenterKeys.has(key);
+      entry.video.muted = isFocused ? false : !isMuted; // focused always unmuted; others respect mute set
+      if (isFocused) {
+        entry.video.style.outline = "2px solid #4af";
+      } else {
+        entry.video.style.outline = "none";
+      }
     }
+
+    const focusKey = this.focusedPresenterKey;
+    if (focusKey) {
+      // Focus mode: one large video, others in a strip at the bottom
+      const focused = visiblePresenters.find(p => this.presenterKey(p.userId, p.type) === focusKey);
+      const others = visiblePresenters.filter(p => this.presenterKey(p.userId, p.type) !== focusKey);
+
+      if (focused) {
+        const key = this.presenterKey(focused.userId, focused.type);
+        const entry = this.presenterVideoEls.get(key)!;
+        const mainH = others.length > 0 ? sh - 50 : sh;
+        const rect = this.worldRectToScreen(px - sw / 2, py - sh / 2, sw, mainH);
+        entry.wrap.style.left = `${rect.x}px`;
+        entry.wrap.style.top = `${rect.y}px`;
+        entry.wrap.style.width = `${rect.w}px`;
+        entry.wrap.style.height = `${rect.h}px`;
+      }
+
+      // Small thumbnails for others
+      const thumbW = sw / Math.max(others.length, 1);
+      others.forEach((p, i) => {
+        const key = this.presenterKey(p.userId, p.type);
+        const entry = this.presenterVideoEls.get(key)!;
+        const rect = this.worldRectToScreen(px - sw / 2 + i * thumbW, py - sh / 2 + sh - 50, thumbW, 50);
+        entry.wrap.style.left = `${rect.x}px`;
+        entry.wrap.style.top = `${rect.y}px`;
+        entry.wrap.style.width = `${rect.w}px`;
+        entry.wrap.style.height = `${rect.h}px`;
+      });
+      return;
+    }
+
+    // Grid layout based on count
+    const n = visiblePresenters.length;
+    let cols: number, rows: number;
+    if (n <= 1) { cols = 1; rows = 1; }
+    else if (n <= 2) { cols = 2; rows = 1; }
+    else if (n <= 4) { cols = 2; rows = 2; }
+    else { cols = 2; rows = Math.ceil(n / 2); }
+
+    const cellW = sw / cols;
+    const cellH = sh / rows;
+
+    visiblePresenters.forEach((p, i) => {
+      const key = this.presenterKey(p.userId, p.type);
+      const entry = this.presenterVideoEls.get(key)!;
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const rect = this.worldRectToScreen(
+        px - sw / 2 + col * cellW,
+        py - sh / 2 + row * cellH,
+        cellW,
+        cellH,
+      );
+      entry.wrap.style.left = `${rect.x}px`;
+      entry.wrap.style.top = `${rect.y}px`;
+      entry.wrap.style.width = `${rect.w}px`;
+      entry.wrap.style.height = `${rect.h}px`;
+    });
   }
 
   // ── Matrix rain monitor animation ────────────────────────────────────

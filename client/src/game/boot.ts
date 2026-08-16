@@ -92,7 +92,7 @@ export class BootScene extends Phaser.Scene {
 
     // 3D creature spritesheets (8 directions × 4 animation frames, 128px cells)
     // Always loaded — removed for procedural-tier worlds in create().
-    const creature3dVer = "?v=3d4";
+    const creature3dVer = "?v=3d5";
     const creature3dKeys = [
       "creature-slime", "creature-wolf", "creature-skeleton", "creature-imp",
       "creature-wraith", "creature-fire-elemental",

@@ -458,8 +458,8 @@ export class AgentNPC {
 
   update(time: number, dt: number, wanderEnabled = true, playerX = 0, playerY = 0): void {
     // after a long frame (tab switch, GC, DOM jank) don't take one giant step;
-    // 100ms keeps speed truthful down to 10fps while still preventing teleports
-    dt = Math.min(dt, 100);
+    // 50ms matches the scene's cap to keep player and NPCs in sync
+    dt = Math.min(dt, 50);
     const c = agentTextureKey(this.info);
 
     // hide expired emote bubble
@@ -848,7 +848,7 @@ export class OfficeManagerNPC {
       const dx = next.x - this.container.x;
       const dy = next.y - this.container.y;
       const dist = Math.hypot(dx, dy);
-      const step = (WALK_SPEED * Math.min(_dt, 100)) / 1000;
+      const step = (WALK_SPEED * Math.min(_dt, 50)) / 1000;
       if (dist <= step) {
         this.container.setPosition(next.x, next.y);
         this.path.shift();
@@ -1031,7 +1031,7 @@ export class HermesNPC {
 
   update(time: number, dt: number): void {
     const c = this.texKey;
-    dt = Math.min(dt, 100);
+    dt = Math.min(dt, 50);
 
     if (this.emoteUntil > 0 && time >= this.emoteUntil) {
       this.emoteUntil = 0;

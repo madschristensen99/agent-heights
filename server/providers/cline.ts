@@ -1257,7 +1257,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
   // Fresh start: wipe the existing Agent instance + message store so a new
   // conversation begins. The manager injects a memory summary via systemPrompt.
-  if (ctx.freshStart && !isChat) {
+  if (ctx.freshStart) {
     agents.delete(agentId);
     messageStore.delete(agentId);
   }

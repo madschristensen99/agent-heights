@@ -14,7 +14,7 @@ import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import { SECURITY_NOTES } from "../../../shared/mcp-catalog";
-import { getToken, getUserEmail, signOut, isAuthEnabled, onAuthChange } from "../auth";
+import { getToken, getUserEmail, getUserId, signOut, isAuthEnabled, onAuthChange } from "../auth";
 import { startSubscriptionCheckout, openCustomerPortal } from "../payment";
 let monacoModule: typeof import("monaco-editor") | null = null;
 
@@ -365,7 +365,7 @@ export class Hud {
         <div class="vmodel-diagram" id="vmodel-diagram"></div>
       </div>
       <div class="toasts" id="toasts"></div>
-      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · G gantt · N v-model · V voice · click an agent · ESC close · scroll to zoom</div>
+      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · G gantt · N v-model · V voice · M manage projector · click an agent · ESC close · scroll to zoom</div>
       <div class="hint touch">Tap an agent to talk · Tap objects to interact · Pinch to zoom · 2-finger drag to pan</div>
       <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
       <div class="mobile-panel-toggles">
@@ -1407,7 +1407,7 @@ export class Hud {
     const agentsWithMcp = agents.filter((a) => a.mcpServers && a.mcpServers.length > 0);
     const restrictedAgents = agents.filter((a) => {
       const acl = a.acl;
-      return acl && ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
+      return acl && (acl.allowedUserIds !== undefined || acl.allowedRoles !== undefined);
     });
     const unrestrictedCount = agents.length - restrictedAgents.length;
 
@@ -2214,6 +2214,17 @@ export class Hud {
               ${traitSliders}
               <button class="btn" id="h-rand-personality" style="font-size:0.75rem;padding:0.3rem 0.6rem;margin-top:0.3rem;">🎲 RANDOMIZE</button>
             </div>
+            <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:#888;">ACCESS</div>
+            <div style="padding:0.3rem 0;">
+              <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:#ccc;cursor:pointer;margin-bottom:0.25rem;">
+                <input type="radio" name="h-access" value="owner" checked style="accent-color:#4f9dde;" />
+                Only you can chat
+              </label>
+              <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:#ccc;cursor:pointer;">
+                <input type="radio" name="h-access" value="open" style="accent-color:#4f9dde;" />
+                Everyone with talk access can chat
+              </label>
+            </div>
           </div>
         </div>
         <div class="row">
@@ -2314,6 +2325,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         { name: "memory", command: "npx", args: ["-y", "@anthropic-ai/mcp-server-memory"] },
       ];
       const skills = [...document.querySelectorAll<HTMLInputElement>(".h-skill:checked")].map((el) => el.value as any);
+      const accessChoice = (document.querySelector('input[name="h-access"]:checked') as HTMLInputElement | null)?.value ?? "owner";
+      const acl = accessChoice === "open" ? {} : { allowedUserIds: [] as string[] };
       this.net.send({
         type: "hire",
         name,
@@ -2325,6 +2338,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         personality: traits,
         mcpServers: builtinMcp,
         skills: skills.length ? skills : undefined,
+        acl,
       });
       modal.hidden = true;
     });
@@ -2893,7 +2907,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       ${agent.role === "manager" ? "· MANAGER " : ""}
       · ${agent.id === OFFICE_MANAGER_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : agent.id === WIZARD_ID ? "world builder" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done
       ${agent.skills && agent.skills.length ? `<div class="agent-skills">${agent.skills.map((s) => `<span class="skill-badge">${esc(s)}</span>`).join("")}</div>` : ""}
-      ${agent.acl && this.store.accessLevel !== "manage" && ((agent.acl.allowedUserIds && agent.acl.allowedUserIds.length > 0) || (agent.acl.allowedRoles && agent.acl.allowedRoles.length > 0))
+      ${agent.acl && this.store.accessLevel !== "manage" && (agent.acl.allowedUserIds !== undefined || agent.acl.allowedRoles !== undefined)
         ? `<div style="margin-top:0.3rem; display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:#c9852c;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c9852c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Access restricted — chat disabled</div>`
         : ""}`;
 
@@ -3071,7 +3085,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (this.store.accessLevel === "manage" && !isNpc) {
       aclSection.hidden = false;
       const acl = agent.acl;
-      const hasAcl = acl && ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
+      const hasAcl = acl && (acl.allowedUserIds !== undefined || acl.allowedRoles !== undefined);
       const allowedIds = acl?.allowedUserIds ?? [];
       const allowedCount = allowedIds.length;
 
@@ -3086,12 +3100,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       }
 
       // Collect people: room players + org members (deduped by userId)
-      const roomPlayers = [...this.store.roomPlayers.values()].filter((p) => p.userId !== this.store.userId);
-      const orgMembers = this.store.orgMembers?.members.filter((m) => m.userId !== this.store.userId) ?? [];
+      const currentUserId = getUserId();
+      const roomPlayers = [...this.store.roomPlayers.values()].filter((p) => p.userId !== currentUserId);
+      const orgMembers = this.store.orgMembers?.members.filter((m) => m.userId !== currentUserId) ?? [];
       const peopleMap = new Map<string, { userId: string; name: string }>();
       for (const p of roomPlayers) peopleMap.set(p.userId, { userId: p.userId, name: p.name });
       for (const m of orgMembers) {
-        if (!peopleMap.has(m.userId)) peopleMap.set(m.userId, { userId: m.userId, name: m.name });
+        if (!peopleMap.has(m.userId)) peopleMap.set(m.userId, { userId: m.userId, name: m.userEmail ?? m.userId });
       }
       const people = [...peopleMap.values()];
 
@@ -3758,7 +3773,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     // Check ACL restrictions for non-manage users
     const acl = agent.acl;
     const aclRestricted = acl && this.store.accessLevel !== "manage" &&
-      ((acl.allowedUserIds && acl.allowedUserIds.length > 0) || (acl.allowedRoles && acl.allowedRoles.length > 0));
+      (acl.allowedUserIds !== undefined || acl.allowedRoles !== undefined);
     if (chatInput) {
       chatInput.disabled = isBusy || !canTalk || !!aclRestricted;
       chatInput.placeholder = !canTalk ? "Tour mode — no chat access" : aclRestricted ? "Access restricted — ask manager for permission" : isBusy ? `${agent.name} is busy…` : "Say something… (chat, not a task)";

@@ -379,6 +379,7 @@ export interface VacationedAgent {
   deskIndex: number;
   vacationedAt: number;
   skills?: TaskCategory[];
+  acl?: AgentACL;
 }
 
 /** Persisted world state — seed + fired agents + vacationed agents + visited chunk data. */
@@ -935,6 +936,7 @@ export type ClientMsg =
   | { type: "webcam_offer"; targetUserId: string; sdp: string }
   | { type: "webcam_answer"; targetUserId: string; sdp: string }
   | { type: "webcam_ice"; targetUserId: string; candidate: string }
+  | { type: "presenter_kick"; userId: string; presenterType: "screen" | "webcam" }
   | { type: "agent_view_start"; agentId: string }
   | { type: "agent_view_stop"; agentId: string }
   | { type: "agent_broadcast_start"; agentId: string }
@@ -1057,17 +1059,14 @@ export type ServerMsg =
   | { type: "voice_ice"; fromUserId: string; candidate: string }
   | { type: "voice_peer_left"; userId: string }
   | { type: "projector_state"; channel: string }
-  | { type: "screen_share_peer"; userId: string; name: string }
+  | { type: "presenters_update"; roomId: string; presenters: Presenter[] }
+  | { type: "presenter_kicked"; presenterType: "screen" | "webcam" }
   | { type: "screen_share_offer"; fromUserId: string; sdp: string }
   | { type: "screen_share_answer"; fromUserId: string; sdp: string }
   | { type: "screen_share_ice"; fromUserId: string; candidate: string }
-  | { type: "screen_share_peer_left"; userId: string }
-  | { type: "webcam_state"; presenterId: string | null; presenterName: string | null }
-  | { type: "webcam_peer"; userId: string; name: string }
   | { type: "webcam_offer"; fromUserId: string; sdp: string }
   | { type: "webcam_answer"; fromUserId: string; sdp: string }
   | { type: "webcam_ice"; fromUserId: string; candidate: string }
-  | { type: "webcam_peer_left"; userId: string }
   | { type: "agent_frame"; agentId: string; frame: string }
   | { type: "agent_broadcast_state"; agentId: string | null }
   | { type: "agent_broadcast_html_state"; agentId: string | null; url: string | null }
@@ -1112,6 +1111,16 @@ export type ServerMsg =
   | { type: "achievements_saved" }
   | { type: "agent_gate"; gateId: string; agentId: string; agentName: string; question: string; options: string[] }
   | { type: "agent_recommendations"; recommendations: { agentId: string; name: string; summary: string; reason: string; image_url: string | null }[] };
+
+/** A presenter broadcasting to the room projector (screen share or webcam). */
+export interface Presenter {
+  userId: string;
+  name: string;
+  type: "screen" | "webcam";
+  startedAt: number;
+}
+
+export const MAX_PRESENTERS = 4;
 
 export const AGENT_MODELS = [
   { id: "deepseek-v4-flash", label: "Standard" },

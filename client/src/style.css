@@ -632,6 +632,7 @@ input.invalid {
   margin: 0 0 8px;
   flex-wrap: nowrap;
   flex-shrink: 0;
+  align-items: center;
 }
 
 .chat-row input {

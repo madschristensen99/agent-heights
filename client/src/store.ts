@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus, Presenter } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 
@@ -193,17 +193,14 @@ export class Store {
   private voiceAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
   private voiceIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
   private voicePeerLeftListeners = new Set<(userId: string) => void>();
-  private screenSharePeerListeners = new Set<(userId: string, name: string) => void>();
+  private presentersUpdateListeners = new Set<(presenters: Presenter[]) => void>();
+  private presenterKickedListeners = new Set<(presenterType: "screen" | "webcam") => void>();
   private screenShareOfferListeners = new Set<(fromUserId: string, sdp: string) => void>();
   private screenShareAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
   private screenShareIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
-  private screenSharePeerLeftListeners = new Set<(userId: string) => void>();
-  private webcamStateListeners = new Set<(presenterId: string | null, presenterName: string | null) => void>();
-  private webcamPeerListeners = new Set<(userId: string, name: string) => void>();
   private webcamOfferListeners = new Set<(fromUserId: string, sdp: string) => void>();
   private webcamAnswerListeners = new Set<(fromUserId: string, sdp: string) => void>();
   private webcamIceListeners = new Set<(fromUserId: string, candidate: string) => void>();
-  private webcamPeerLeftListeners = new Set<(userId: string) => void>();
   private agentFrameListeners = new Set<(agentId: string, frame: string) => void>();
   private agentBroadcastStateListeners = new Set<(agentId: string | null) => void>();
   private agentBroadcastHtmlListeners = new Set<(agentId: string | null, url: string | null) => void>();
@@ -364,8 +361,12 @@ export class Store {
     this.voicePeerLeftListeners.clear();
   }
 
-  onScreenSharePeer(fn: (userId: string, name: string) => void): void {
-    this.screenSharePeerListeners.add(fn);
+  onPresentersUpdate(fn: (presenters: Presenter[]) => void): void {
+    this.presentersUpdateListeners.add(fn);
+  }
+
+  onPresenterKicked(fn: (presenterType: "screen" | "webcam") => void): void {
+    this.presenterKickedListeners.add(fn);
   }
 
   onScreenShareOffer(fn: (fromUserId: string, sdp: string) => void): void {
@@ -380,18 +381,6 @@ export class Store {
     this.screenShareIceListeners.add(fn);
   }
 
-  onScreenSharePeerLeft(fn: (userId: string) => void): void {
-    this.screenSharePeerLeftListeners.add(fn);
-  }
-
-  onWebcamState(fn: (presenterId: string | null, presenterName: string | null) => void): void {
-    this.webcamStateListeners.add(fn);
-  }
-
-  onWebcamPeer(fn: (userId: string, name: string) => void): void {
-    this.webcamPeerListeners.add(fn);
-  }
-
   onWebcamOffer(fn: (fromUserId: string, sdp: string) => void): void {
     this.webcamOfferListeners.add(fn);
   }
@@ -402,10 +391,6 @@ export class Store {
 
   onWebcamIce(fn: (fromUserId: string, candidate: string) => void): void {
     this.webcamIceListeners.add(fn);
-  }
-
-  onWebcamPeerLeft(fn: (userId: string) => void): void {
-    this.webcamPeerLeftListeners.add(fn);
   }
 
   onAgentFrame(fn: (agentId: string, frame: string) => void): void {
@@ -1295,8 +1280,12 @@ export class Store {
         for (const fn of this.voicePeerLeftListeners) fn(msg.userId);
         return;
       }
-      case "screen_share_peer": {
-        for (const fn of this.screenSharePeerListeners) fn(msg.userId, msg.name);
+      case "presenters_update": {
+        for (const fn of this.presentersUpdateListeners) fn(msg.presenters);
+        return;
+      }
+      case "presenter_kicked": {
+        for (const fn of this.presenterKickedListeners) fn(msg.presenterType);
         return;
       }
       case "screen_share_offer": {
@@ -1311,18 +1300,6 @@ export class Store {
         for (const fn of this.screenShareIceListeners) fn(msg.fromUserId, msg.candidate);
         return;
       }
-      case "screen_share_peer_left": {
-        for (const fn of this.screenSharePeerLeftListeners) fn(msg.userId);
-        return;
-      }
-      case "webcam_state": {
-        for (const fn of this.webcamStateListeners) fn(msg.presenterId, msg.presenterName);
-        return;
-      }
-      case "webcam_peer": {
-        for (const fn of this.webcamPeerListeners) fn(msg.userId, msg.name);
-        return;
-      }
       case "webcam_offer": {
         for (const fn of this.webcamOfferListeners) fn(msg.fromUserId, msg.sdp);
         return;
@@ -1333,10 +1310,6 @@ export class Store {
       }
       case "webcam_ice": {
         for (const fn of this.webcamIceListeners) fn(msg.fromUserId, msg.candidate);
-        return;
-      }
-      case "webcam_peer_left": {
-        for (const fn of this.webcamPeerLeftListeners) fn(msg.userId);
         return;
       }
       case "agent_frame": {

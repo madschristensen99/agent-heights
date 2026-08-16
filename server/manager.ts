@@ -2191,6 +2191,7 @@ export class AgentManager {
       deskIndex: rt.info.deskIndex,
       vacationedAt: Date.now(),
       skills: rt.info.skills,
+      acl: rt.info.acl,
     };
     this.vacationedAgents.set(vac.id, vac);
 
@@ -2239,6 +2240,7 @@ export class AgentManager {
       personality: va.personality,
       mood: va.mood ?? "content",
       skills: va.skills,
+      acl: va.acl ?? { allowedUserIds: [] },
     };
 
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
@@ -3210,6 +3212,25 @@ export class AgentManager {
     // If the Office Manager receives a question as a task, answer it directly instead of delegating
     if (rt.info.id === OFFICE_MANAGER_ID && isOfficeManagerQuestion(task)) {
       await this.runOfficeManagerKnowledgeChat(rt, task);
+      // runOfficeManagerKnowledgeChat sets status to "idle" in its finally block,
+      // but the try/finally cleanup below is skipped by this early return.
+      // Perform the essential cleanup that would normally happen there.
+      rt.freshStart = false;
+      rt.memorySummary = null;
+      rt.handoffTo = null;
+      rt.notifyOnComplete = null;
+      rt.waitFor = null;
+      const duration = Date.now() - rt.taskStartedAt;
+      rt.taskHistory.unshift({ task, success: true, ts: Date.now(), durationMs: duration });
+      if (rt.taskHistory.length > 20) rt.taskHistory.pop();
+      if (rt.cardId) {
+        this.completeCard(rt.cardId);
+        rt.cardId = null;
+      }
+      rt.info.task = null;
+      if (rt.taskQueue.length > 0) {
+        this.drainQueue(rt);
+      }
       return;
     }
 
@@ -4439,8 +4460,8 @@ export class AgentManager {
         systemPrompt: this.buildSystemPrompt(rt),
         abort,
         settings: this.settings,
-        agentId: rt.info.id,
-        sessionId: null, // Chat uses a separate agent instance — don't resume task session
+        agentId: rt.info.id, // Chat uses a separate agent instance — don't resume task session
+        sessionId: null,
         onSession: () => {}, // Don't persist chat session ID over task session ID
         railway: false,
         apiKey: this.apiKey,
@@ -4754,7 +4775,7 @@ export class AgentManager {
     } finally {
       clearTimeout(chatTimeout);
       rt.abort = null;
-      if (!abort.signal.aborted && this.agents.has(rt.info.id)) {
+      if (this.agents.has(rt.info.id)) {
         this.setStatus(rt, "idle");
       }
     }

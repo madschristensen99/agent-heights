@@ -1361,6 +1361,10 @@ export class WorldLayer {
   private pendingChunks = new Map<string, Chunk>();
   private workerRequested = new Set<string>();
   private doorPreloaded = false;
+  private lastChunkCX = Number.NaN;
+  private lastChunkCY = Number.NaN;
+  private lastChunkVX = 0;
+  private lastChunkVY = 0;
 
   // --- Chunk rendering ---
   private renderingQueue: RenderJob[] = [];
@@ -1866,46 +1870,71 @@ export class WorldLayer {
     const pcx = Math.floor(tx / CHUNK_SIZE);
     const pcy = Math.floor(ty / CHUNK_SIZE);
 
-    // Normalise velocity for directional bias (zero velocity = pure distance sort)
+    // Skip the expensive O(n²) scan + sort if the player hasn't crossed a chunk
+    // boundary and velocity direction hasn't changed.  We still run processRenderJobs
+    // and unload checks below every frame.
     const vlen = Math.hypot(vx, vy);
     const nvx = vlen > 0 ? vx / vlen : 0;
     const nvy = vlen > 0 ? vy / vlen : 0;
+    const sameChunk = pcx === this.lastChunkCX && pcy === this.lastChunkCY;
+    const sameDir = nvx === this.lastChunkVX && nvy === this.lastChunkVY;
 
-    // Collect needed chunks; sort key combines distance with directional bias
-    // so chunks the player is walking toward load before equally-distant ones
-    // behind/orthogonal.  The bias term (nvx*dx + nvy*dy) ranges -LOAD_RADIUS..+LOAD_RADIUS;
-    // we scale it to compete with distance (0..LOAD_RADIUS²).
-    const BIAS_WEIGHT = LOAD_RADIUS;
-    const needed: { cx: number; cy: number; priority: number }[] = [];
-    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
-      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
-        const ncy = pcy + dy;
-        if (ncy < 0) continue;
-        const ncx = pcx + dx;
-        const key = `${ncx},${ncy}`;
-        if (this.chunks.has(key)) continue;
-        const dist = dx * dx + dy * dy;
-        const dirAlign = nvx * dx + nvy * dy;
-        const priority = dist - dirAlign * BIAS_WEIGHT;
-        needed.push({ cx: ncx, cy: ncy, priority });
+    let needed: { cx: number; cy: number; priority: number }[] = [];
+
+    if (!sameChunk || !sameDir) {
+      this.lastChunkCX = pcx;
+      this.lastChunkCY = pcy;
+      this.lastChunkVX = nvx;
+      this.lastChunkVY = nvy;
+
+      // Collect needed chunks; sort key combines distance with directional bias
+      // so chunks the player is walking toward load before equally-distant ones
+      // behind/orthogonal.  The bias term (nvx*dx + nvy*dy) ranges -LOAD_RADIUS..+LOAD_RADIUS;
+      // we scale it to compete with distance (0..LOAD_RADIUS²).
+      const BIAS_WEIGHT = LOAD_RADIUS;
+      for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+        for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+          const ncy = pcy + dy;
+          if (ncy < 0) continue;
+          const ncx = pcx + dx;
+          const key = `${ncx},${ncy}`;
+          if (this.chunks.has(key)) continue;
+          const dist = dx * dx + dy * dy;
+          const dirAlign = nvx * dx + nvy * dy;
+          const priority = dist - dirAlign * BIAS_WEIGHT;
+          needed.push({ cx: ncx, cy: ncy, priority });
+        }
       }
-    }
-    needed.sort((a, b) => a.priority - b.priority);
+      needed.sort((a, b) => a.priority - b.priority);
 
-    // Request all needed chunks from the worker first (non-blocking)
-    for (const n of needed) this.requestChunk(n.cx, n.cy);
+      // Request all needed chunks from the worker first (non-blocking)
+      for (const n of needed) this.requestChunk(n.cx, n.cy);
 
-    // Pre-request chunks one ring beyond LOAD_RADIUS so the worker has a head start.
-    // These are NOT loaded — just sent to the worker so tile data is ready by the time
-    // the player moves close enough to need them.
-    const preRadius = LOAD_RADIUS + 1;
-    for (let dy = -preRadius; dy <= preRadius; dy++) {
-      for (let dx = -preRadius; dx <= preRadius; dx++) {
-        if (Math.abs(dx) <= LOAD_RADIUS && Math.abs(dy) <= LOAD_RADIUS) continue; // already requested above
-        const ncy = pcy + dy;
-        if (ncy < 0) continue;
-        const ncx = pcx + dx;
-        this.requestChunk(ncx, ncy);
+      // Pre-request chunks one ring beyond LOAD_RADIUS so the worker has a head start.
+      // These are NOT loaded — just sent to the worker so tile data is ready by the time
+      // the player moves close enough to need them.
+      const preRadius = LOAD_RADIUS + 1;
+      for (let dy = -preRadius; dy <= preRadius; dy++) {
+        for (let dx = -preRadius; dx <= preRadius; dx++) {
+          if (Math.abs(dx) <= LOAD_RADIUS && Math.abs(dy) <= LOAD_RADIUS) continue; // already requested above
+          const ncy = pcy + dy;
+          if (ncy < 0) continue;
+          const ncx = pcx + dx;
+          this.requestChunk(ncx, ncy);
+        }
+      }
+    } else {
+      // Same chunk + direction — just re-scan for any newly needed chunks
+      // without the full sort (worker requests are idempotent)
+      for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+        for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+          const ncy = pcy + dy;
+          if (ncy < 0) continue;
+          const ncx = pcx + dx;
+          const key = `${ncx},${ncy}`;
+          if (this.chunks.has(key)) continue;
+          needed.push({ cx: ncx, cy: ncy, priority: 0 });
+        }
       }
     }
 

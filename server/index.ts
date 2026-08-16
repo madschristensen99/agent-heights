@@ -3,8 +3,8 @@ import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize, resolve, relative } from "node:path";
 import { readFile, stat, readdir, writeFile, unlink, mkdir, lstat } from "node:fs/promises";
-import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance } from "../shared/types.js";
-import { SERVER_PORT, isValidAppearance } from "../shared/types.js";
+import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance, Presenter } from "../shared/types.js";
+import { SERVER_PORT, isValidAppearance, MAX_PRESENTERS } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleMcpCatalogRequest } from "./mcp-store.js";
@@ -730,6 +730,19 @@ function waitForAuthMessage(ws: WebSocket, timeoutMs: number): Promise<string | 
   });
 }
 
+/** Broadcast current presenters to all players in a room. */
+function broadcastPresenters(roomId: string): void {
+  const room = tenants.getRoom(roomId);
+  if (!room) return;
+  const presenters = tenants.getRoomPresenters(roomId);
+  for (const [pid] of room.players) {
+    const peerSess = tenants.get(pid);
+    if (peerSess) {
+      peerSess.broadcast({ type: "presenters_update", roomId, presenters });
+    }
+  }
+}
+
 wss.on("connection", async (ws, req) => {
   // Validate WebSocket origin to prevent cross-site WebSocket hijacking
   const origin = req.headers["origin"] as string | undefined;
@@ -1220,26 +1233,29 @@ wss.on("connection", async (ws, req) => {
             const acl = agentInfo.acl;
             // Manage level bypasses all ACL checks
             if (accessLevel !== "manage") {
-              let allowed = true;
-              if (acl.allowedUserIds && acl.allowedUserIds.length > 0) {
-                allowed = acl.allowedUserIds.includes(sess.user.id);
-              }
-              if (allowed && acl.allowedRoles && acl.allowedRoles.length > 0 && sess.roomId) {
-                const room = tenants.getRoom(sess.roomId);
-                if (room?.orgId) {
-                  const org = tenants.getOrg(room.orgId);
-                  const member = org?.members.get(sess.user.id);
-                  if (member) {
-                    allowed = acl.allowedRoles.includes(member.role);
-                  } else {
-                    allowed = false; // non-member can't chat with role-restricted agent
+              const hasUserIds = acl.allowedUserIds !== undefined;
+              const hasRoles = acl.allowedRoles !== undefined;
+              // If neither is specified, acl is "open" — no restriction
+              if (hasUserIds || hasRoles) {
+                let allowed = false;
+                if (hasUserIds && acl.allowedUserIds!.includes(sess.user.id)) {
+                  allowed = true;
+                }
+                if (!allowed && hasRoles && sess.roomId) {
+                  const room = tenants.getRoom(sess.roomId);
+                  if (room?.orgId) {
+                    const org = tenants.getOrg(room.orgId);
+                    const member = org?.members.get(sess.user.id);
+                    if (member && acl.allowedRoles!.includes(member.role)) {
+                      allowed = true;
+                    }
                   }
                 }
-              }
-              if (!allowed) {
-                const data = JSON.stringify({ type: "toast", text: "You don't have permission to chat with this agent." });
-                if (ws.readyState === WebSocket.OPEN) ws.send(data);
-                break;
+                if (!allowed) {
+                  const data = JSON.stringify({ type: "toast", text: "You don't have permission to chat with this agent." });
+                  if (ws.readyState === WebSocket.OPEN) ws.send(data);
+                  break;
+                }
               }
             }
           }
@@ -2095,19 +2111,8 @@ wss.on("connection", async (ws, req) => {
           }
           // Send outfits for the joined room's wardrobe
           void sendOutfits(ws, sess);
-          // Re-broadcast active screen share / webcam state to the joining player
-          for (const p of players) {
-            if (p.userId === sess.user.id) continue;
-            const peerSess = tenants.get(p.userId);
-            if (!peerSess) continue;
-            if (peerSess.screenShareActive) {
-              sess.broadcast({ type: "screen_share_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
-            }
-            if (peerSess.webcamActive) {
-              sess.broadcast({ type: "webcam_state", presenterId: p.userId, presenterName: peerSess.player?.name ?? "Boss" });
-              sess.broadcast({ type: "webcam_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
-            }
-          }
+          // Send current presenters to the joining player
+          sess.broadcast({ type: "presenters_update", roomId: msg.roomId, presenters: tenants.getRoomPresenters(msg.roomId) });
           // Notify all other players in the room
           const me = players.find((p) => p.userId === sess.user.id);
           for (const p of players) {
@@ -2189,21 +2194,10 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "platform_connection", states: restoreRoomMgr.getPlatformConnectionStates() });
           }
           void sendOutfits(ws, sess);
-          // Re-broadcast active screen share / webcam state to the restoring player
-          const restorePlayers = tenants.getRoomPlayers(msg.roomId);
-          for (const p of restorePlayers) {
-            if (p.userId === sess.user.id) continue;
-            const peerSess = tenants.get(p.userId);
-            if (!peerSess) continue;
-            if (peerSess.screenShareActive) {
-              sess.broadcast({ type: "screen_share_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
-            }
-            if (peerSess.webcamActive) {
-              sess.broadcast({ type: "webcam_state", presenterId: p.userId, presenterName: peerSess.player?.name ?? "Boss" });
-              sess.broadcast({ type: "webcam_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
-            }
-          }
+          // Send current presenters to the restoring player
+          sess.broadcast({ type: "presenters_update", roomId: msg.roomId, presenters: tenants.getRoomPresenters(msg.roomId) });
           // Notify players in the restored room
+          const restorePlayers = tenants.getRoomPlayers(msg.roomId);
           const restoreMe = restorePlayers.find((p) => p.userId === sess.user.id);
           for (const p of restorePlayers) {
             if (p.userId === sess.user.id) continue;
@@ -2285,21 +2279,10 @@ wss.on("connection", async (ws, req) => {
           }
           // Send outfits for the new room's wardrobe
           void sendOutfits(ws, sess);
-          // Re-broadcast active screen share / webcam state to the switching player
-          const switchedPlayers = tenants.getRoomPlayers(msg.roomId);
-          for (const p of switchedPlayers) {
-            if (p.userId === sess.user.id) continue;
-            const peerSess = tenants.get(p.userId);
-            if (!peerSess) continue;
-            if (peerSess.screenShareActive) {
-              sess.broadcast({ type: "screen_share_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
-            }
-            if (peerSess.webcamActive) {
-              sess.broadcast({ type: "webcam_state", presenterId: p.userId, presenterName: peerSess.player?.name ?? "Boss" });
-              sess.broadcast({ type: "webcam_peer", userId: p.userId, name: peerSess.player?.name ?? "Boss" });
-            }
-          }
+          // Send current presenters to the switching player
+          sess.broadcast({ type: "presenters_update", roomId: msg.roomId, presenters: tenants.getRoomPresenters(msg.roomId) });
           // Notify players in the new room
+          const switchedPlayers = tenants.getRoomPlayers(msg.roomId);
           const switchedMe = switchedPlayers.find((p) => p.userId === sess.user.id);
           for (const p of switchedPlayers) {
             if (p.userId === sess.user.id) continue;
@@ -2607,34 +2590,24 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "screen_share_start": {
-          sess.screenShareActive = true;
           if (!sess.roomId) break;
-          const room = tenants.getRoom(sess.roomId);
-          if (!room) break;
           const myName = sess.player?.name ?? "Boss";
-          console.log(`[screen-share] ${sess.user.id} (${myName}) started sharing in room ${sess.roomId} (players: ${[...room.players.keys()].join(",")})`);
-          for (const [pid] of room.players) {
-            if (pid === sess.user.id) continue;
-            const peerSess = tenants.get(pid);
-            if (peerSess) {
-              peerSess.broadcast({ type: "screen_share_peer", userId: sess.user.id, name: myName });
-            }
+          const presenter: Presenter = { userId: sess.user.id, name: myName, type: "screen", startedAt: Date.now() };
+          if (!tenants.addPresenter(sess.roomId, presenter)) {
+            sess.broadcast({ type: "toast", text: `Presenter grid is full (${MAX_PRESENTERS}/${MAX_PRESENTERS}). Try again when someone stops.` });
+            break;
           }
+          sess.screenShareActive = true;
+          console.log(`[screen-share] ${sess.user.id} (${myName}) started sharing in room ${sess.roomId}`);
+          broadcastPresenters(sess.roomId);
           break;
         }
         case "screen_share_stop": {
           if (!sess.screenShareActive) break;
           sess.screenShareActive = false;
           if (!sess.roomId) break;
-          const room = tenants.getRoom(sess.roomId);
-          if (!room) break;
-          for (const [pid] of room.players) {
-            if (pid === sess.user.id) continue;
-            const peerSess = tenants.get(pid);
-            if (peerSess) {
-              peerSess.broadcast({ type: "screen_share_peer_left", userId: sess.user.id });
-            }
-          }
+          tenants.removePresenter(sess.roomId, sess.user.id, "screen");
+          broadcastPresenters(sess.roomId);
           break;
         }
         case "screen_share_offer":
@@ -2664,35 +2637,48 @@ wss.on("connection", async (ws, req) => {
         }
         case "webcam_start": {
           if (sess.webcamActive) break;
-          sess.webcamActive = true;
           if (!sess.roomId) break;
-          const room = tenants.getRoom(sess.roomId);
-          if (!room) break;
           const myName = sess.player?.name ?? "Boss";
-          for (const [pid] of room.players) {
-            if (pid === sess.user.id) continue;
-            const peerSess = tenants.get(pid);
-            if (peerSess) {
-              peerSess.broadcast({ type: "webcam_state", presenterId: sess.user.id, presenterName: myName });
-              peerSess.broadcast({ type: "webcam_peer", userId: sess.user.id, name: myName });
-            }
+          const presenter: Presenter = { userId: sess.user.id, name: myName, type: "webcam", startedAt: Date.now() };
+          if (!tenants.addPresenter(sess.roomId, presenter)) {
+            sess.broadcast({ type: "toast", text: `Presenter grid is full (${MAX_PRESENTERS}/${MAX_PRESENTERS}). Try again when someone stops.` });
+            break;
           }
+          sess.webcamActive = true;
+          broadcastPresenters(sess.roomId);
           break;
         }
         case "webcam_stop": {
           if (!sess.webcamActive) break;
           sess.webcamActive = false;
           if (!sess.roomId) break;
+          tenants.removePresenter(sess.roomId, sess.user.id, "webcam");
+          broadcastPresenters(sess.roomId);
+          break;
+        }
+        case "presenter_kick": {
+          if (!sess.roomId) break;
           const room = tenants.getRoom(sess.roomId);
           if (!room) break;
-          for (const [pid] of room.players) {
-            if (pid === sess.user.id) continue;
-            const peerSess = tenants.get(pid);
-            if (peerSess) {
-              peerSess.broadcast({ type: "webcam_state", presenterId: null, presenterName: null });
-              peerSess.broadcast({ type: "webcam_peer_left", userId: sess.user.id });
-            }
+          // Only room owner or manage access can kick
+          const accessLevel = tenants.getRoomAccessLevel(sess.user.id);
+          if (room.ownerId !== sess.user.id && accessLevel !== "manage") {
+            sess.broadcast({ type: "toast", text: "Only the room owner or managers can kick presenters." });
+            break;
           }
+          // Notify the kicked user
+          const targetSess = tenants.get(msg.userId);
+          if (targetSess) {
+            targetSess.broadcast({ type: "presenter_kicked", presenterType: msg.presenterType });
+          }
+          // Remove from room presenters and broadcast update
+          tenants.removePresenter(sess.roomId, msg.userId, msg.presenterType);
+          if (msg.presenterType === "screen") {
+            targetSess?.broadcast({ type: "toast", text: "Your screen share was stopped by the room owner." });
+          } else {
+            targetSess?.broadcast({ type: "toast", text: "Your webcam broadcast was stopped by the room owner." });
+          }
+          broadcastPresenters(sess.roomId);
           break;
         }
         case "webcam_offer":
@@ -3463,37 +3449,14 @@ wss.on("connection", async (ws, req) => {
         }
       }
     }
-    // Clean up screen share state when the last client disconnects
-    if (sess.clients.size === 0 && sess.screenShareActive) {
+    // Clean up presenter state when the last client disconnects
+    if (sess.clients.size === 0 && (sess.screenShareActive || sess.webcamActive)) {
+      const wasPresenting = sess.screenShareActive || sess.webcamActive;
       sess.screenShareActive = false;
-      if (sess.roomId) {
-        const room = tenants.getRoom(sess.roomId);
-        if (room) {
-          for (const [pid] of room.players) {
-            if (pid === sess.user.id) continue;
-            const peerSess = tenants.get(pid);
-            if (peerSess) {
-              peerSess.broadcast({ type: "screen_share_peer_left", userId: sess.user.id });
-            }
-          }
-        }
-      }
-    }
-    // Clean up webcam state when the last client disconnects
-    if (sess.clients.size === 0 && sess.webcamActive) {
       sess.webcamActive = false;
-      if (sess.roomId) {
-        const room = tenants.getRoom(sess.roomId);
-        if (room) {
-          for (const [pid] of room.players) {
-            if (pid === sess.user.id) continue;
-            const peerSess = tenants.get(pid);
-            if (peerSess) {
-              peerSess.broadcast({ type: "webcam_state", presenterId: null, presenterName: null });
-              peerSess.broadcast({ type: "webcam_peer_left", userId: sess.user.id });
-            }
-          }
-        }
+      if (sess.roomId && wasPresenting) {
+        tenants.removeAllPresenters(sess.roomId, sess.user.id);
+        broadcastPresenters(sess.roomId);
       }
     }
     tenants.handleClientDisconnect(sess.user.id);
