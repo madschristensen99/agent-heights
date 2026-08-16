@@ -119,6 +119,46 @@ export const SECURITY_NOTES: Record<string, { riskLevel: RiskLevel; securityNote
     securityNote: "Read-only public data from capitoltrades.com (US politician stock trade filings). No credentials required. No write or financial access.",
     dataAccess: "Reads publicly available congressional trade filings — politician names, tickers, transaction types, sizes, and dates.",
   },
+  "Gmail": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read access to your Gmail inbox and the ability to create drafts. Drafts are not sent automatically — you review them in Gmail before sending. Use a dedicated Google Account if sharing agents in shared rooms.",
+    dataAccess: "Search and read your Gmail threads, create email drafts, and manage labels.",
+  },
+  "Google Drive": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read access to your Google Drive files and the ability to create/copy files. The drive.file scope limits access to files created or opened by the app. Restrict with ACLs in shared rooms.",
+    dataAccess: "Search, read, download, create, and copy files in your Google Drive.",
+  },
+  "Google Docs": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read and write access to your Google Docs. The agent can modify document content. Always review proposed changes before approving. The drive.file scope limits file access.",
+    dataAccess: "Read and update the content and structure of your Google Docs.",
+  },
+  "Google Sheets": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read and write access to your Google Sheets. The agent can modify cell values, formulas, and spreadsheet structure. Always review proposed changes before approving.",
+    dataAccess: "Read and update cell values, formulas, and structure in your Google Sheets.",
+  },
+  "Google Slides": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read and write access to your Google Slides presentations. The agent can modify slide content. Always review proposed changes before approving.",
+    dataAccess: "Read and update the content and layout of your Google Slides presentations.",
+  },
+  "Google Calendar": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read access to your calendar events and the ability to create, update, and delete events. Always confirm before the agent modifies your calendar. The scopes are limited to calendar list and events (not settings).",
+    dataAccess: "List, search, create, update, and delete events on your Google Calendar.",
+  },
+  "Google Chat": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read access to Google Chat spaces and messages, and the ability to send messages. The bot only sees spaces it has been added to. Be cautious about sending messages to shared spaces.",
+    dataAccess: "List and read Google Chat spaces, memberships, and messages. Create messages in spaces.",
+  },
+  "Google People": {
+    riskLevel: "medium",
+    securityNote: "OAuth grants read-only access to your Google Contacts, profile, and directory. No write access. Contact information is sensitive — restrict with ACLs in shared rooms.",
+    dataAccess: "Read your Google profile, contacts, and organization directory.",
+  },
 };
 
 /** Look up security metadata for a server by name, falling back to the SECURITY_NOTES map. */
@@ -156,7 +196,15 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Google Maps Scraper: Data agent — search Google Maps for businesses, retrieve reviews and photos, structure results for prospecting and market analysis via gmapsextractor.com MCP. Requires Google Maps Scraper API key.
 - Crossmint Wallet Agent: Solana wallet agent — auto-provisioned smart wallet with sponsored gas. Check balances, transfer tokens, review tx history via Crossmint. No setup needed — wallet created on hire.
 - Hostinger Agent: Infrastructure agent — deploy and manage websites, VPS, domains, DNS, email marketing, billing, ecommerce, and WordPress via Hostinger MCP. Requires Hostinger API token (generate at hPanel → Account → API).
-- Capitol Trades Analyst: Research agent — track US politician stock trades, buy momentum, and party-specific trading patterns via capitoltrades.com MCP. No auth needed. Pairs with wallet agents for "follow the politicians" strategies.`;
+- Capitol Trades Analyst: Research agent — track US politician stock trades, buy momentum, and party-specific trading patterns via capitoltrades.com MCP. No auth needed. Pairs with wallet agents for "follow the politicians" strategies.
+- Gmail Agent: Email agent — search, read, and draft emails via Google Workspace Gmail MCP (OAuth). Creates drafts for review, manages labels.
+- Google Drive Agent: File agent — search, read, download, create, and copy files via Google Drive MCP (OAuth).
+- Google Docs Agent: Document agent — read and update Google Docs via Google Docs MCP (OAuth).
+- Google Sheets Agent: Spreadsheet agent — read and update cell values, formulas, and structure via Google Sheets MCP (OAuth).
+- Google Slides Agent: Presentation agent — read and update slide decks via Google Slides MCP (OAuth).
+- Google Calendar Agent: Scheduling agent — list, search, create, update, and delete events via Google Calendar MCP (OAuth). Suggests meeting times based on free/busy.
+- Google Chat Agent: Messaging agent — read and send messages in Google Chat spaces via Google Chat MCP (OAuth).
+- Google Contacts Agent: Contacts agent — look up contacts, profile info, and directory via Google People API MCP (OAuth).`;
 
 
 /** Convert a catalog entry to an MCPServerConfig for agent assignment. */
