@@ -47,7 +47,25 @@ function tool(name: string, description: string, inputSchema: Record<string, unk
 
 function sheetsTools(token: string): AgentTool<any, any>[] {
   const base = "https://sheets.googleapis.com/v4/spreadsheets";
+  const driveBase = "https://www.googleapis.com/drive/v3";
   return [
+    tool("search_spreadsheets", "Search for Google Sheets by name. Returns a list of spreadsheets with their IDs, titles, and last modified times. Use this to find spreadsheet IDs before calling get_values, get_spreadsheet, or update tools.", {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query (spreadsheet name). Leave empty to list all spreadsheets." },
+        pageSize: { type: "integer", description: "Maximum number of results. Default 10." },
+      },
+    }, async (i) => {
+      const params = new URLSearchParams({
+        fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
+        q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+        orderBy: "modifiedTime desc",
+      });
+      if (i.pageSize) params.set("pageSize", String(i.pageSize)); else params.set("pageSize", "10");
+      if (i.query) params.set("q", `mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and name contains '${i.query.replace(/'/g, "\\'")}'`);
+      return gapi(token, "GET", `${driveBase}/files?${params}`);
+    }),
+
     tool("get_values", "Returns a range of values from a spreadsheet.", {
       type: "object",
       properties: {
