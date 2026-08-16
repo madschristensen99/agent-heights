@@ -67,6 +67,7 @@ export async function refreshMcpToken(
       grant_type: "refresh_token",
       refresh_token: stored.refresh_token,
       client_id: stored.client_id,
+      resource: serverUrl,
     };
 
     const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
@@ -482,6 +483,14 @@ export async function startOAuthFlow(
   authUrl.searchParams.set("code_challenge", challenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
   authUrl.searchParams.set("resource", serverUrl);
+
+  // Google OAuth: request offline access (refresh token) and force consent
+  // to ensure the correct scopes are granted and refresh tokens are returned.
+  if (authorizationEndpoint.includes("accounts.google.com")) {
+    authUrl.searchParams.set("access_type", "offline");
+    authUrl.searchParams.set("prompt", "consent");
+  }
+
   if (scopes.length > 0) {
     authUrl.searchParams.set("scope", scopes.join(" "));
   }

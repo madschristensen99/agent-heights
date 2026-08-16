@@ -82,6 +82,7 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.compose",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
   "https://drivemcp.googleapis.com/mcp/v1": {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
@@ -92,6 +93,7 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/drive.readonly",
       "https://www.googleapis.com/auth/drive.file",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
   "https://docsmcp.googleapis.com/mcp/v1": {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
@@ -104,6 +106,7 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/documents.readonly",
       "https://www.googleapis.com/auth/documents",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
   "https://sheetsmcp.googleapis.com/mcp/v1": {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
@@ -116,6 +119,7 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/spreadsheets.readonly",
       "https://www.googleapis.com/auth/spreadsheets",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
   "https://slidesmcp.googleapis.com/mcp/v1": {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
@@ -128,6 +132,7 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/presentations.readonly",
       "https://www.googleapis.com/auth/presentations",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
   "https://calendarmcp.googleapis.com/mcp/v1": {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
@@ -139,6 +144,7 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/calendar.events.freebusy",
       "https://www.googleapis.com/auth/calendar.events.readonly",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
   "https://chatmcp.googleapis.com/mcp/v1": {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
@@ -152,6 +158,7 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/chat.messages.create",
       "https://www.googleapis.com/auth/chat.users.readstate.readonly",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
   "https://people.googleapis.com/mcp/v1": {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
@@ -163,5 +170,6 @@ export const KNOWN_OAUTH_CONFIGS: Record<string, KnownOAuthConfig> = {
       "https://www.googleapis.com/auth/userinfo.profile",
       "https://www.googleapis.com/auth/contacts.readonly",
     ],
+    tokenEndpointAuthMethod: "client_secret_basic",
   },
 };
