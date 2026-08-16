@@ -218,7 +218,6 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
   ): boolean => {
     const provider = s.componentProvider?.[component];
     if (!provider || !provider[style]) return false;
-    if (component === "hair" && style === "balding") return false;
     if (component === "beard" && style === "stubble" && dirName !== "down") return false;
     const frames = provider[style];
     const dirIndex = dirName === "down" ? 0 : dirName === "right" ? 1 : 2;
@@ -484,9 +483,9 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     } else if (hs === "balding") {
       ci(hx(32), hy(18), 16, pal.skin);
       el(hx(19), hy(21), 5, 7 + hb, pal.hair);
-      el(hx(22), hy(14), 3, 2, pal.hair);
-      s.set(hx(30), hy(15), pal.skin); s.set(hx(32), hy(16), pal.skin);
-      el(hx(23), hy(10), 3, 2, hairLi); el(hx(21), hy(19), 4, 9, hairDk);
+      el(hx(32), hy(15), 6, 2, pal.hair);
+      s.set(hx(28), hy(16), pal.skin);
+      el(hx(26), hy(10), 3, 2, hairLi); el(hx(21), hy(19), 4, 9, hairDk);
     } else if (hs === "spiky") {
       el(hx(33), hy(9), 18, 9, pal.hair);
       for (let i = -2; i <= 2; i++) { const sx = hx(30 + i * 5); s.set(sx, hy(4 + Math.abs(i) * 2), pal.hair); s.set(sx + 1, hy(5 + Math.abs(i) * 2), pal.hair); }
