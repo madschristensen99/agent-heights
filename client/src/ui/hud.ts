@@ -320,6 +320,7 @@ export class Hud {
       <div class="modal-backdrop" id="wardrobe-modal" hidden></div>
       <div class="modal-backdrop" id="forge-modal" hidden></div>
       <div class="modal-backdrop" id="fuse-modal" hidden></div>
+      <div class="modal-backdrop" id="subscribe-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
@@ -491,6 +492,9 @@ export class Hud {
     store.subscribe(() => this.scheduleRender());
     store.onForgeUpdate(() => this.scheduleRender());
     store.onToast((text) => this.toast(text));
+    store.onPaymentRequired((reason, message) => {
+      if (reason === "subscription") this.showSubscribeModal(message);
+    });
     store.outfitUpdateListeners.push(() => {
       if (this.store.wardrobeOpen) this.refreshOutfitList();
     });
@@ -831,6 +835,7 @@ export class Hud {
       const wardrobe = document.getElementById("wardrobe-modal")!;
       const forge = document.getElementById("forge-modal")!;
       const fuse = document.getElementById("fuse-modal")!;
+      const subscribe = document.getElementById("subscribe-modal")!;
       if (e.key === "Escape") {
         hire.hidden = true;
         settings.hidden = true;
@@ -843,6 +848,7 @@ export class Hud {
         wardrobe.hidden = true;
         forge.hidden = true;
         fuse.hidden = true;
+        subscribe.hidden = true;
         this.store.toggleForgePanel(false);
         this.store.toggleAchievements(false);
         this.store.toggleHallOfFame(false);
@@ -855,7 +861,7 @@ export class Hud {
       if (active?.isContentEditable) return;
       const tag = active?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden || !railway.hidden || !github.hidden || !codeEditor.hidden || !worlds.hidden || !forge.hidden || !fuse.hidden) return;
+      if (!hire.hidden || !settings.hidden || !onboard.hidden || !ach.hidden || !hof.hidden || !wardrobe.hidden || !railway.hidden || !github.hidden || !codeEditor.hidden || !worlds.hidden || !forge.hidden || !fuse.hidden || !subscribe.hidden) return;
       switch (e.key.toLowerCase()) {
         case "h":
           e.preventDefault();
@@ -2285,6 +2291,42 @@ export class Hud {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     this.toast("Export downloaded.");
+  }
+
+  // -------------------------------------------------------- subscribe modal
+
+  private showSubscribeModal(message: string): void {
+    const modal = document.getElementById("subscribe-modal")!;
+    if (!modal.hidden) return;
+    modal.hidden = false;
+
+    modal.innerHTML = `
+      <div class="modal" style="width:420px;max-width:92vw;">
+        <h2>SUBSCRIPTION REQUIRED</h2>
+        <p style="font-size:0.85rem;color:var(--dim);text-align:center;margin:0 0 0.4rem 0;">${esc(message)}</p>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;">
+          ${SUBSCRIPTION_TIER_LIST.map(t => {
+            const agentLabel = `${t.agentLimit} agent${t.agentLimit === 1 ? "" : "s"}`;
+            return `<button class="btn primary sub-tier-btn" data-tier="${t.id}" style="text-align:left;padding:0.7rem 0.9rem;font-size:0.9rem;">
+              <span style="font-weight:800;">${t.name}</span> — ${t.label} <span style="color:var(--dim);font-size:0.78rem;">(${agentLabel})</span>
+            </button>`;
+          }).join("")}
+        </div>
+        <div class="row footer">
+          <button class="btn" id="sub-cancel">MAYBE LATER</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("sub-cancel")!.addEventListener("click", () => {
+      modal.hidden = true;
+    });
+    modal.querySelectorAll<HTMLButtonElement>(".sub-tier-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tier = btn.dataset.tier as SubscriptionTier;
+        if (tier) void startSubscriptionCheckout(tier);
+      });
+    });
   }
 
   // ------------------------------------------------------------- hire modal
