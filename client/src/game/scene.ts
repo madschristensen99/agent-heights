@@ -4048,133 +4048,39 @@ export class OfficeScene extends Phaser.Scene {
     this.world.audio.uiClick();
   }
 
-  /** Update proximity hints — show only the closest interactable. */
-  private hintCandidates: { hint: HintTag; dist: number; label: string; hx: number; hy: number }[] = [];
+  /** Update proximity hints — show the interactable that E will actually trigger (priority order). */
   private updateAllHints(time: number): void {
-    const candidates = this.hintCandidates;
-    candidates.length = 0;
-    const add = (
-      hint: HintTag,
-      cx: number, cy: number, radius: number,
+    // Hide all hints first
+    for (const h of this.allHints) h.setVisible(false);
+
+    // Helper: show hint if player is within radius. Returns true if shown.
+    const show = (
+      hint: HintTag, cx: number, cy: number, radius: number,
       label: string, hx: number, hy: number,
-    ): void => {
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, cx, cy);
-      if (dist < radius) candidates.push({ hint, dist, label, hx, hy });
+    ): boolean => {
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, cx, cy) < radius) {
+        hint.setPosition(hx, hy).setText(hintLabel(label)).setVisible(true);
+        return true;
+      }
+      return false;
     };
 
-    // Board
-    if (!this.store.boardOpen) {
-      const px = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
-      add(this.boardHint, px.x, px.y, 160, "E: TASK BOARD", px.x, px.y + 64);
+    // Check in E-press priority order — first match wins.
+    // This must mirror the ePressed chain in update().
+
+    // 1. Trophy case
+    if (!this.store.achievementsOpen) {
+      const px = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 68 };
+      if (show(this.trophyHint, px.x, px.y, 120, "E: TROPHY CASE", px.x, px.y + 64)) return;
     }
 
-    // Gantt chart
-    if (!this.store.ganttOpen) {
-      const px = { x: this.ganttTile.x * TILE_PX + 32, y: this.ganttTile.y * TILE_PX + 52 };
-      add(this.ganttHint, px.x, px.y, 160, "E: GANTT CHART", px.x, px.y + 64);
+    // 2. Hall of fame
+    if (!this.store.hallOfFameOpen) {
+      const px = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
+      if (show(this.hallOfFameHint, px.x, px.y, 120, "E: HALL OF FAME", px.x + 48, px.y)) return;
     }
 
-    // Coffee
-    {
-      const px = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
-      add(this.coffeeHint, px.x, px.y, 144, time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE", px.x, px.y + 64);
-    }
-
-    // Fridge
-    {
-      const px = { x: this.fridgeTile.x * TILE_PX + 32, y: this.fridgeTile.y * TILE_PX + 32 };
-      add(this.fridgeHint, px.x, px.y, 144, time < this.fridgeUntil ? "E: RESTOCKING..." : "E: SNACK", px.x, px.y + 64);
-    }
-
-    // Water Cooler
-    {
-      const px = { x: this.coolerTile.x * TILE_PX + 32, y: this.coolerTile.y * TILE_PX + 32 };
-      add(this.coolerHint, px.x, px.y, 144, time < this.coolerUntil ? "E: ..." : "E: GOSSIP", px.x, px.y + 64);
-    }
-
-    // Clock
-    {
-      const px = { x: this.clockTile.x * TILE_PX + 32, y: this.clockTile.y * TILE_PX + 32 };
-      add(this.clockHint, px.x, px.y, 160, "E: CHECK TIME", px.x, px.y + 48);
-    }
-
-    // Vending
-    if (this.vendingTile) {
-      const px = { x: this.vendingTile.x * TILE_PX + 32, y: this.vendingTile.y * TILE_PX + 32 };
-      add(this.vendingHint, px.x, px.y, 144, time < this.vendingUntil ? "E: RESTOCKING..." : "E: BUY SNACK", px.x, px.y + 64);
-    }
-
-    // Sofa
-    if (this.sofaTile) {
-      const px = { x: this.sofaTile.x * TILE_PX + 32, y: this.sofaTile.y * TILE_PX + 32 };
-      add(this.sofaHint, px.x, px.y, 144, time < this.sofaUntil ? "E: ALREADY RESTED" : "E: POWER NAP", px.x, px.y + 64);
-    }
-
-    // Filing — check nearest
-    {
-      const near = this.nearestTile(this.filingTiles, 144);
-      if (near) {
-        const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
-        add(this.filingHint, px.x, px.y, 144, time < this.filingUntil ? "E: BROWSING..." : "E: BROWSE FILES", px.x, px.y + 64);
-      }
-    }
-
-    // Wardrobe
-    {
-      const px = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
-      add(this.wardrobeHint, px.x, px.y, 144, "E: WARDROBE", px.x, px.y + 64);
-    }
-
-    // Nemesis Terminal
-    {
-      const px = { x: this.nemesisTerminalTile.x * TILE_PX + 32, y: this.nemesisTerminalTile.y * TILE_PX + 32 };
-      add(this.nemesisTerminalHint, px.x, px.y, 144, "E: NEMESIS CODEX", px.x, px.y + 64);
-    }
-
-    // Forge Station
-    {
-      const px = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
-      add(this.warTableHint, px.x, px.y, 144, "E: MCP FORGE", px.x, px.y + 64);
-    }
-
-    // Tool Rack
-    {
-      const px = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
-      add(this.scrapBinHint, px.x, px.y, 144, "E: TOOL RACK", px.x, px.y + 64);
-    }
-
-    // Status Monitor
-    {
-      const px = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
-      add(this.radioHint, px.x, px.y, 144, "E: STATUS", px.x, px.y + 64);
-    }
-
-    // Code Terminal
-    {
-      const px = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
-      add(this.workbenchHint, px.x, px.y, 144, "E: TERMINAL", px.x, px.y + 64);
-    }
-
-    // Blueprint Desk
-    {
-      const px = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
-      add(this.researchHint, px.x, px.y, 144, "E: BLUEPRINT", px.x, px.y + 64);
-    }
-
-    // Plants — check nearest
-    {
-      const near = this.nearestTile(this.plantTiles, 144);
-      if (near) {
-        const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
-        const label = time < this.plantUntil ? "E: BOOSTED!" : time < this.plantCooldownUntil ? "E: STILL MOIST" : "E: WATER PLANTS";
-        add(this.plantHint, px.x, px.y, 144, label, px.x, px.y + 64);
-      }
-    }
-
-    // Mailbox
-    add(this.mailboxHint, this.mailboxPx.x, this.mailboxPx.y, 120, this.mailboxHasMail ? "E: CHECK MAIL" : "E: EMPTY", this.mailboxPx.x, this.mailboxPx.y + 64);
-
-    // Platform mailboxes (mail room)
+    // 3. Platform mailboxes (mail room)
     {
       let nearestPm: PlatformMailbox | null = null;
       let nearestPmDist = Infinity;
@@ -4203,17 +4109,22 @@ export class OfficeScene extends Phaser.Scene {
           : nearestPm.flagUp
             ? `E: CHECK ${nearestPm.platform.toUpperCase()}`
             : "E: EMPTY";
-        add(this.platformMailboxHint, pmPx.x, pmPx.y, 100, label, pmPx.x, pmPx.y + 64);
+        if (show(this.platformMailboxHint, pmPx.x, pmPx.y, 100, label, pmPx.x, pmPx.y + 64)) return;
       }
     }
 
-    // Red Button
-    {
-      const px = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
-      add(this.redButtonHint, px.x, px.y, 160, time < this.redButtonUntil ? "E: COOLING" : "E: STOP!", px.x, px.y + 64);
+    // 4. Server rack
+    if (!this.store.railwayPanelOpen) {
+      const near = this.nearestTile(this.serverRackTiles, 150);
+      if (near) {
+        const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
+        if (show(this.serverRackHint, px.x, px.y, 150, "E: CHECK SERVERS", px.x, near.y * TILE_PX - 8)) return;
+      }
     }
 
-    // Projector control panel + screen (share channel label computation)
+    // --- tryOfficeInteract priority chain ---
+
+    // 5. Projector control panel
     {
       const ch = this.store.projectorChannel;
       const channels = OfficeScene.PROJECTOR_CHANNELS;
@@ -4221,21 +4132,39 @@ export class OfficeScene extends Phaser.Scene {
       const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1;
       const nextLabel = nextIdx === -1 ? "OFF" : channels[nextIdx].label;
       const chLabel = ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`;
-
       const ctrlPx = { x: this.projectorControlTile.x * TILE_PX + 32, y: this.projectorControlTile.y * TILE_PX + 32 };
-      add(this.projectorControlHint, ctrlPx.x, ctrlPx.y, 80, chLabel, ctrlPx.x, ctrlPx.y + 48);
-
-      const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
-      add(this.projectorHint, projPx.x, projPx.y, 200, chLabel, projPx.x, projPx.y + 64);
+      if (show(this.projectorControlHint, ctrlPx.x, ctrlPx.y, 80, chLabel, ctrlPx.x, ctrlPx.y + 48)) return;
     }
 
-    // Projector speaker (mute/unmute)
+    // 6. Projector speaker (mute/unmute)
     {
       const px = { x: this.projectorSpeakerTile.x * TILE_PX + 32, y: this.projectorSpeakerTile.y * TILE_PX + 32 };
-      add(this.projectorSpeakerHint, px.x, px.y, 80, this.projectorMuted ? "E: UNMUTE" : "E: MUTE", px.x, px.y + 48);
+      if (show(this.projectorSpeakerHint, px.x, px.y, 80, this.projectorMuted ? "E: UNMUTE" : "E: MUTE", px.x, px.y + 48)) return;
     }
 
-    // Phone booth
+    // 7. Projector screen
+    {
+      const ch = this.store.projectorChannel;
+      const channels = OfficeScene.PROJECTOR_CHANNELS;
+      const curIdx = channels.findIndex(c => c.id === ch);
+      const nextIdx = curIdx + 1 >= channels.length ? -1 : curIdx + 1;
+      const nextLabel = nextIdx === -1 ? "OFF" : channels[nextIdx].label;
+      const chLabel = ch === "off" ? `E: ${channels[0].label}` : `E: ${nextLabel}`;
+      const projPx = { x: this.projectorTile.x * TILE_PX + 32, y: this.projectorTile.y * TILE_PX - 100 };
+      if (show(this.projectorHint, projPx.x, projPx.y, 200, chLabel, projPx.x, projPx.y + 64)) return;
+    }
+
+    // 8. Screen share station
+    {
+      const px = { x: this.screenShareTile.x * TILE_PX + 32, y: this.screenShareTile.y * TILE_PX + 32 };
+      let label = this.screenShare?.sharing ? "E: STOP SHARE" : "E: SHARE SCREEN";
+      if (this.presenters.length > 0 && !this.screenShare?.sharing) {
+        label = `E: SHARE (${this.presenters.length}/${MAX_PRESENTERS})`;
+      }
+      if (show(this.screenShareHint, px.x, px.y, 120, label, px.x, px.y + 48)) return;
+    }
+
+    // 9. Phone booth
     {
       const px = { x: this.phoneBoothTile.x * TILE_PX + 32, y: this.phoneBoothTile.y * TILE_PX + 32 };
       let label: string;
@@ -4246,48 +4175,129 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         label = "E: START WEBCAM";
       }
-      add(this.phoneBoothHint, px.x, px.y, 120, label, px.x, px.y + 56);
+      if (show(this.phoneBoothHint, px.x, px.y, 120, label, px.x, px.y + 56)) return;
     }
 
-    // Screen share station
+    // 10. Fridge
     {
-      const px = { x: this.screenShareTile.x * TILE_PX + 32, y: this.screenShareTile.y * TILE_PX + 32 };
-      let label = this.screenShare?.sharing ? "E: STOP SHARE" : "E: SHARE SCREEN";
-      if (this.presenters.length > 0 && !this.screenShare?.sharing) {
-        label = `E: SHARE (${this.presenters.length}/${MAX_PRESENTERS})`;
-      }
-      add(this.screenShareHint, px.x, px.y, 120, label, px.x, px.y + 48);
+      const px = { x: this.fridgeTile.x * TILE_PX + 32, y: this.fridgeTile.y * TILE_PX + 32 };
+      if (show(this.fridgeHint, px.x, px.y, 144, time < this.fridgeUntil ? "E: RESTOCKING..." : "E: SNACK", px.x, px.y + 64)) return;
     }
 
-    // Trophy case
-    if (!this.store.achievementsOpen) {
-      const px = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 68 };
-      add(this.trophyHint, px.x, px.y, 120, "E: TROPHY CASE", px.x, px.y + 64);
+    // 11. Water Cooler
+    {
+      const px = { x: this.coolerTile.x * TILE_PX + 32, y: this.coolerTile.y * TILE_PX + 32 };
+      if (show(this.coolerHint, px.x, px.y, 144, time < this.coolerUntil ? "E: ..." : "E: GOSSIP", px.x, px.y + 64)) return;
     }
 
-    // Hall of fame bulletin board
-    if (!this.store.hallOfFameOpen) {
-      const px = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
-      add(this.hallOfFameHint, px.x, px.y, 120, "E: HALL OF FAME", px.x + 48, px.y);
+    // 12. Clock
+    {
+      const px = { x: this.clockTile.x * TILE_PX + 32, y: this.clockTile.y * TILE_PX + 32 };
+      if (show(this.clockHint, px.x, px.y, 160, "E: CHECK TIME", px.x, px.y + 48)) return;
     }
 
-    // Server rack
-    if (!this.store.railwayPanelOpen) {
-      const near = this.nearestTile(this.serverRackTiles, 150);
+    // 13. Vending
+    if (this.vendingTile) {
+      const px = { x: this.vendingTile.x * TILE_PX + 32, y: this.vendingTile.y * TILE_PX + 32 };
+      if (show(this.vendingHint, px.x, px.y, 144, time < this.vendingUntil ? "E: RESTOCKING..." : "E: BUY SNACK", px.x, px.y + 64)) return;
+    }
+
+    // 14. Sofa
+    if (this.sofaTile) {
+      const px = { x: this.sofaTile.x * TILE_PX + 32, y: this.sofaTile.y * TILE_PX + 32 };
+      if (show(this.sofaHint, px.x, px.y, 144, time < this.sofaUntil ? "E: ALREADY RESTED" : "E: POWER NAP", px.x, px.y + 64)) return;
+    }
+
+    // 15. Filing cabinets
+    {
+      const near = this.nearestTile(this.filingTiles, 144);
       if (near) {
         const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
-        add(this.serverRackHint, px.x, px.y, 150, "E: CHECK SERVERS", px.x, near.y * TILE_PX - 8);
+        if (show(this.filingHint, px.x, px.y, 144, time < this.filingUntil ? "E: BROWSING..." : "E: BROWSE FILES", px.x, px.y + 64)) return;
       }
     }
 
-    // Hide all, then show only the closest
-    for (const h of this.allHints) h.setVisible(false);
-    let best: { hint: HintTag; dist: number; label: string; hx: number; hy: number } | null = null;
-    for (const c of candidates) {
-      if (!best || c.dist < best.dist) best = c;
+    // 16. Wardrobe
+    {
+      const px = { x: this.wardrobeTile.x * TILE_PX + 32, y: this.wardrobeTile.y * TILE_PX + 32 };
+      if (show(this.wardrobeHint, px.x, px.y, 144, "E: WARDROBE", px.x, px.y + 64)) return;
     }
-    if (best) {
-      best.hint.setPosition(best.hx, best.hy).setText(hintLabel(best.label)).setVisible(true);
+
+    // 17. Nemesis Terminal
+    {
+      const px = { x: this.nemesisTerminalTile.x * TILE_PX + 32, y: this.nemesisTerminalTile.y * TILE_PX + 32 };
+      if (show(this.nemesisTerminalHint, px.x, px.y, 144, "E: NEMESIS CODEX", px.x, px.y + 64)) return;
+    }
+
+    // 18. Forge Station (MCP Forge)
+    {
+      const px = { x: this.warTableTile.x * TILE_PX + 32, y: this.warTableTile.y * TILE_PX + 32 };
+      if (show(this.warTableHint, px.x, px.y, 144, "E: MCP FORGE", px.x, px.y + 64)) return;
+    }
+
+    // 19. Tool Rack
+    {
+      const px = { x: this.scrapBinTile.x * TILE_PX + 32, y: this.scrapBinTile.y * TILE_PX + 32 };
+      if (show(this.scrapBinHint, px.x, px.y, 144, "E: TOOL RACK", px.x, px.y + 64)) return;
+    }
+
+    // 20. Status Monitor
+    {
+      const px = { x: this.radioTile.x * TILE_PX + 32, y: this.radioTile.y * TILE_PX + 32 };
+      if (show(this.radioHint, px.x, px.y, 144, "E: STATUS", px.x, px.y + 64)) return;
+    }
+
+    // 21. Code Terminal
+    {
+      const px = { x: this.workbenchTile.x * TILE_PX + 32, y: this.workbenchTile.y * TILE_PX + 32 };
+      if (show(this.workbenchHint, px.x, px.y, 144, "E: TERMINAL", px.x, px.y + 64)) return;
+    }
+
+    // 22. Blueprint Desk
+    {
+      const px = { x: this.researchTile.x * TILE_PX + 32, y: this.researchTile.y * TILE_PX + 32 };
+      if (show(this.researchHint, px.x, px.y, 144, "E: BLUEPRINT", px.x, px.y + 64)) return;
+    }
+
+    // 23. Plants
+    {
+      const near = this.nearestTile(this.plantTiles, 144);
+      if (near) {
+        const px = { x: near.x * TILE_PX + 32, y: near.y * TILE_PX + 32 };
+        const label = time < this.plantUntil ? "E: BOOSTED!" : time < this.plantCooldownUntil ? "E: STILL MOIST" : "E: WATER PLANTS";
+        if (show(this.plantHint, px.x, px.y, 144, label, px.x, px.y + 64)) return;
+      }
+    }
+
+    // 24. Mailbox
+    {
+      if (show(this.mailboxHint, this.mailboxPx.x, this.mailboxPx.y, 120, this.mailboxHasMail ? "E: CHECK MAIL" : "E: EMPTY", this.mailboxPx.x, this.mailboxPx.y + 64)) return;
+    }
+
+    // 25. Red Button
+    {
+      const px = { x: this.redButtonTile.x * TILE_PX + 32, y: this.redButtonTile.y * TILE_PX + 32 };
+      if (show(this.redButtonHint, px.x, px.y, 160, time < this.redButtonUntil ? "E: COOLING" : "E: STOP!", px.x, px.y + 64)) return;
+    }
+
+    // --- end tryOfficeInteract ---
+
+    // 26. Coffee
+    {
+      const px = { x: this.coffeeTile.x * TILE_PX + 32, y: this.coffeeTile.y * TILE_PX + 32 };
+      if (show(this.coffeeHint, px.x, px.y, 144, time < this.coffeeUntil ? "E: REFILL" : "E: GRAB COFFEE", px.x, px.y + 64)) return;
+    }
+
+    // 27. Board
+    if (!this.store.boardOpen) {
+      const px = { x: this.boardTile.x * TILE_PX + 32, y: this.boardTile.y * TILE_PX + 52 };
+      if (show(this.boardHint, px.x, px.y, 160, "E: TASK BOARD", px.x, px.y + 64)) return;
+    }
+
+    // 28. Gantt chart
+    if (!this.store.ganttOpen) {
+      const px = { x: this.ganttTile.x * TILE_PX + 32, y: this.ganttTile.y * TILE_PX + 52 };
+      if (show(this.ganttHint, px.x, px.y, 160, "E: GANTT CHART", px.x, px.y + 64)) return;
     }
   }
 
@@ -7619,9 +7629,9 @@ export class OfficeScene extends Phaser.Scene {
       this.store.toast("You were knocked out and dragged back to the office!");
     }
 
-    // office proximity hints — unified: show only the closest interactable
+    // office proximity hints — show the interactable that E will actually trigger
     if (!outside) {
-      if (time - this.lastHintUpdate > 100) {
+      if (time - this.lastHintUpdate > 50) {
         this.lastHintUpdate = time;
         this.updateAllHints(time);
       }
