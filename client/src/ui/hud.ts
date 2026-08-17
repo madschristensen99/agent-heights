@@ -1524,6 +1524,10 @@ export class Hud {
         const el = document.getElementById(step.targetId);
         if (el) positionCard(el);
         else { card.style.left = "50%"; card.style.top = "50%"; card.style.transform = "translate(-50%, -50%)"; }
+      } else if (step.cameraTarget) {
+        card.style.transform = "translateX(-50%)";
+        card.style.left = "50%";
+        card.style.top = `calc(100vh - ${card.offsetHeight + 24}px)`;
       } else {
         card.style.left = "50%";
         card.style.top = "50%";

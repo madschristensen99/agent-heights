@@ -240,8 +240,8 @@ export function drawChar(s: DrawSurface, ox: number, oy: number, pal: CharPalett
     const excludeFace = !minY && component === "hair";
     // Face center differs by direction: "down" face is centered, "right" face
     // is shifted to the right side of the sprite.
-    const faceCX = dirName === "right" ? 38 : 32;
-    const faceCY = 25;
+    const faceCX = (dirName === "right" ? 38 : 32) + headSway;
+    const faceCY = 25 + headBob + 3;
     const faceRX2 = dirName === "right" ? 81 : 100; // rx^2 (9^2 vs 10^2)
     const faceRY2 = 64; // ry^2 (8^2)
 
