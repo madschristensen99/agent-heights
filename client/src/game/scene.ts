@@ -241,6 +241,7 @@ export class OfficeScene extends Phaser.Scene {
   private heliElevatorGfx: Phaser.GameObjects.Graphics | null = null;
   private heliDelivery: HelicopterDelivery | null = null;
   private heliSound: { stop: () => void } | null = null;
+  private heliSafetyTimer: Phaser.Time.TimerEvent | null = null;
   private pendingHeliAgents: string[] = [];
   private pendingHeliDeliveries: HelicopterDelivery[] = [];
   private initialSyncDone = false;
@@ -389,6 +390,17 @@ export class OfficeScene extends Phaser.Scene {
     }
     // Clean up projector iframe on scene shutdown/restart
     this.events.once("shutdown", () => this.destroyProjectorVideo());
+
+    // Stop helicopter sound on scene shutdown — tweens/delayedCalls are killed
+    // during shutdown so endHelicopter() may never fire, leaving audio looping.
+    this.events.once("shutdown", () => {
+      this.heliSafetyTimer?.remove();
+      this.heliSafetyTimer = null;
+      this.heliSound?.stop();
+      this.heliSound = null;
+      this.heliActive = false;
+      this.pendingHeliDeliveries = [];
+    });
 
     // Projector video overlay: position during prerender for accurate camera placement
     this.events.on("prerender", () => {
@@ -692,6 +704,8 @@ export class OfficeScene extends Phaser.Scene {
     this.heliAgent = null;
     this.heliElevatorGfx?.destroy();
     this.heliElevatorGfx = null;
+    this.heliSafetyTimer?.remove();
+    this.heliSafetyTimer = null;
     this.heliSound?.stop();
     this.heliSound = null;
     this.pendingHeliDeliveries = [];
@@ -5139,6 +5153,16 @@ export class OfficeScene extends Phaser.Scene {
     this.heliSound = this.world?.audio.helicopter() ?? null;
     console.log(`[heli-debug] triggerHelicopter: agentName=${agentName}, world=${!!this.world}, audio=${!!this.world?.audio}, heliSound=${!!this.heliSound}, ready=${this.ready}, heliActive=${this.heliActive}`);
 
+    // Safety timeout: if the tween chain breaks (scene sleep, missing container,
+    // etc.) endHelicopter() may never fire. This guarantees the sound stops.
+    this.heliSafetyTimer?.remove();
+    this.heliSafetyTimer = this.time.delayedCall(15000, () => {
+      if (this.heliSound) {
+        console.warn("[heli-debug] safety timeout reached — forcing endHelicopter");
+        this.endHelicopter();
+      }
+    });
+
     // Send the hire WS message immediately so the agent appears in the
     // sidebar and is interactable right away. The helicopter animation
     // is purely cosmetic — syncAgents() will replace the cosmetic sprite
@@ -5314,6 +5338,12 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Helicopter lifts off and flies away. */
   private heliTakeoff(): void {
+    // Schedule endHelicopter regardless of heliContainer state so the sound
+    // always stops even if the container was destroyed prematurely.
+    this.time.delayedCall(2000, () => {
+      this.endHelicopter();
+    });
+
     if (!this.heliContainer) return;
     const padCx = this.padCenter.x;
     const padCy = this.padCenter.y;
@@ -5339,11 +5369,6 @@ export class OfficeScene extends Phaser.Scene {
           },
         });
       },
-    });
-
-    // agent fades out quickly — the real NPC replaces it via syncAgents()
-    this.time.delayedCall(2000, () => {
-      this.endHelicopter();
     });
   }
 
@@ -5391,6 +5416,8 @@ export class OfficeScene extends Phaser.Scene {
     this.heliElevatorGfx = null;
     this.heliActive = false;
     this.heliDelivery = null;
+    this.heliSafetyTimer?.remove();
+    this.heliSafetyTimer = null;
     this.heliSound?.stop();
     this.heliSound = null;
     // Fallback: if the elevator never completed but we're tearing down,
