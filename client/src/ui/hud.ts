@@ -1113,7 +1113,7 @@ export class Hud {
         <p class="sub" style="margin-bottom: 1rem;">Tell us about your work and the tools you use. We'll find the right agents for your stack.</p>
         <textarea id="ob-prompt-text" rows="4" placeholder="e.g. I'm a backend developer. We use GitHub, Sentry, Grafana, deploy on Vercel, and track issues in Linear." style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--panel-edge); background: var(--panel-soft); color: var(--text); font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
         <div id="ob-prompt-status" style="min-height: 1.5rem; text-align: center; color: #888; font-size: 0.8rem; margin-top: 0.5rem;"></div>
-        <div id="ob-prompt-results" style="margin-top: 0.5rem;"></div>
+        <div id="ob-prompt-results" style="margin-top: 0.5rem; max-height: 260px; overflow-y: auto;"></div>
         <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
           <button class="btn" id="ob-prompt-skip" style="flex: 1;">SKIP</button>
           <button class="btn primary" id="ob-prompt-go" style="flex: 1;">FIND AGENTS ▶</button>
@@ -1239,13 +1239,30 @@ export class Hud {
         resultsEl.appendChild(card);
       }
 
-      // Add an "Enter Office" button after the results
+      // Add Search Again + Enter Office buttons after the results
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:0.5rem;margin-top:0.5rem;";
+
+      const againBtn = document.createElement("button");
+      againBtn.className = "btn";
+      againBtn.style.cssText = "flex:1;";
+      againBtn.textContent = "↻ SEARCH AGAIN";
+      againBtn.addEventListener("click", () => {
+        resultsEl.innerHTML = "";
+        statusEl.textContent = "";
+        textarea.value = "";
+        textarea.focus();
+      });
+
       const enterBtn = document.createElement("button");
       enterBtn.className = "btn primary";
-      enterBtn.style.cssText = "width: 100%; margin-top: 0.5rem;";
+      enterBtn.style.cssText = "flex:1;";
       enterBtn.textContent = "ENTER OFFICE ▶";
       enterBtn.addEventListener("click", finish);
-      resultsEl.appendChild(enterBtn);
+
+      btnRow.appendChild(againBtn);
+      btnRow.appendChild(enterBtn);
+      resultsEl.appendChild(btnRow);
     };
 
     this.store.agentRecommendationListeners.add(onRecs);
