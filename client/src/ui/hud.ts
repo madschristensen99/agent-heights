@@ -1335,6 +1335,7 @@ export class Hud {
     let overlay: HTMLElement | null = null;
     let card: HTMLElement | null = null;
     let highlightedEl: HTMLElement | null = null;
+    let savedPosition: string | null = null;
     let cameraRestored = false;
 
     const restoreCamera = () => {
@@ -1371,6 +1372,10 @@ export class Hud {
     const clearHighlight = () => {
       if (highlightedEl) {
         highlightedEl.classList.remove("tour-highlight");
+        if (savedPosition !== null) {
+          highlightedEl.style.position = savedPosition;
+          savedPosition = null;
+        }
         highlightedEl = null;
       }
     };
@@ -1446,6 +1451,13 @@ export class Hud {
       if (step.targetId) {
         const el = document.getElementById(step.targetId);
         if (el) {
+          const computed = getComputedStyle(el).position;
+          if (computed === "static") {
+            savedPosition = el.style.position;
+            el.style.position = "relative";
+          } else {
+            savedPosition = null;
+          }
           el.classList.add("tour-highlight");
           highlightedEl = el;
         }

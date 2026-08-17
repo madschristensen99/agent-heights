@@ -3987,7 +3987,6 @@ kbd {
 }
 
 .tour-highlight {
-  position: relative;
   z-index: 11501;
   box-shadow: 0 0 0 9999px rgba(42, 56, 72, 0.45);
   border-radius: var(--radius-sm);
