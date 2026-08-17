@@ -3085,7 +3085,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     taskEl.hidden = !agent.task;
     taskEl.textContent = agent.task ? `▸ ${agent.task}` : "";
 
-    // MCP key management for agents with MCP servers
+    // MCP tools & auth management for agents with MCP servers
     const mcpSection = document.getElementById("d-mcp-section")!;
     // Remove previous detail MCP listener to prevent leaks
     if (this.detailMcpListener) {
@@ -3096,40 +3096,62 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const mcpServers = agent.mcpServers;
     if (mcpServers && mcpServers.length > 0) {
       mcpSection.hidden = false;
-      const serverUrls = mcpServers.map((s) => s.url).filter((u): u is string => !!u);
-      mcpSection.innerHTML = `
-        <div class="wallet-card">
-          <div id="d-mcp-toggle" class="wallet-title mcp" style="cursor:pointer; user-select:none; display:flex; justify-content:space-between; align-items:center;">
-            <span>MCP SERVER AUTH</span>
-            <span id="d-mcp-arrow" style="font-size:0.7rem; color:var(--dim);">▼</span>
-          </div>
-          <div id="d-mcp-body" style="margin-top:0.4rem;">
-            ${mcpServers.map((s, i) => {
-            const isOAuth = s.authType === "oauth";
-            const kLabel = s.keyLabel ?? "API Key";
-            const kPlaceholder = s.keyPlaceholder ?? "Paste new API key...";
-            const kHelpHtml = s.keyHelpUrl
-              ? `<a href="${s.keyHelpUrl}" target="_blank" class="wallet-link" style="margin-left:0.4rem;">Get key →</a>`
-              : "";
-            return `
-            <div style="margin-bottom:0.4rem;">
-              <div class="wallet-label" style="font-size:0.7rem; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:var(--accent);font-size:0.6rem;">OAuth</span>' : `<span style="font-size:0.6rem;">${esc(kLabel)}</span>${kHelpHtml}`}</div>
-              <div style="display:flex; gap:0.25rem; align-items:center;">
-                ${isOAuth
-                  ? `<button id="d-mcp-connect-${i}" class="btn" style="flex:1; padding:0.35rem 0.5rem; font-size:0.7rem;">🔗 Reconnect via OAuth</button>
-                     <button id="d-mcp-disconnect-${i}" class="btn" style="padding:0.35rem 0.5rem; font-size:0.7rem; color:var(--red);">Disconnect</button>`
-                  : `<input id="d-mcp-key-${i}" type="password" placeholder="${esc(kPlaceholder)}" autocomplete="off"
-                      style="flex:1; padding:0.35rem 0.5rem; font-size:0.75rem;" />
-                    <button id="d-mcp-save-${i}" class="btn" style="padding:0.35rem 0.5rem; font-size:0.7rem;">Save</button>`
-                }
-                <span id="d-mcp-status-${i}" style="font-size:0.65rem; color:var(--dim); min-width:1.5rem;"></span>
-              </div>
-            </div>`;
-          }).join("")}
-          </div>
-        </div>
-      `;
-      // Wire up collapsible toggle
+      // Split servers into auth-required (oauth/apikey) and no-auth (stdio/local tools)
+      const authServers = mcpServers.filter((s) => s.authType === "oauth" || s.authType === "apikey");
+      const noAuthServers = mcpServers.filter((s) => s.authType !== "oauth" && s.authType !== "apikey");
+      const serverUrls = authServers.map((s) => s.url).filter((u): u is string => !!u);
+
+      // Build read-only tools list for no-auth servers (e.g. playwright, sequential-thinking, memory)
+      const toolsListHtml = noAuthServers.length > 0
+        ? `<div style="margin-bottom:0.5rem;">
+            <div class="wallet-label" style="font-size:0.65rem; color:var(--dim); margin-bottom:0.25rem;">BUILT-IN TOOLS</div>
+            ${noAuthServers.map((s) => {
+              const sName = s.name ?? s.url ?? s.command ?? "MCP Server";
+              return `<div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.2rem;">
+                <span style="font-size:0.65rem; color:var(--green);">✓</span>
+                <span style="font-size:0.7rem; color:var(--text);">${esc(sName)}</span>
+              </div>`;
+            }).join("")}
+          </div>`
+        : "";
+
+      // Build auth section only for servers that require authentication
+      const authSectionHtml = authServers.length > 0
+        ? `<div class="wallet-card">
+            <div id="d-mcp-toggle" class="wallet-title mcp" style="cursor:pointer; user-select:none; display:flex; justify-content:space-between; align-items:center;">
+              <span>MCP SERVER AUTH</span>
+              <span id="d-mcp-arrow" style="font-size:0.7rem; color:var(--dim);">▼</span>
+            </div>
+            <div id="d-mcp-body" style="margin-top:0.4rem;">
+              ${authServers.map((s, i) => {
+              const isOAuth = s.authType === "oauth";
+              const kLabel = s.keyLabel ?? "API Key";
+              const kPlaceholder = s.keyPlaceholder ?? "Paste new API key...";
+              const kHelpHtml = s.keyHelpUrl
+                ? `<a href="${s.keyHelpUrl}" target="_blank" class="wallet-link" style="margin-left:0.4rem;">Get key →</a>`
+                : "";
+              return `
+              <div style="margin-bottom:0.4rem;">
+                <div class="wallet-label" style="font-size:0.7rem; margin-bottom:0.2rem;">${esc(s.name ?? s.url ?? "MCP Server")} ${isOAuth ? '<span style="color:var(--accent);font-size:0.6rem;">OAuth</span>' : `<span style="font-size:0.6rem;">${esc(kLabel)}</span>${kHelpHtml}`}</div>
+                <div style="display:flex; gap:0.25rem; align-items:center;">
+                  ${isOAuth
+                    ? `<button id="d-mcp-connect-${i}" class="btn" style="flex:1; padding:0.35rem 0.5rem; font-size:0.7rem;">🔗 Reconnect via OAuth</button>
+                       <button id="d-mcp-disconnect-${i}" class="btn" style="padding:0.35rem 0.5rem; font-size:0.7rem; color:var(--red);">Disconnect</button>`
+                    : `<input id="d-mcp-key-${i}" type="password" placeholder="${esc(kPlaceholder)}" autocomplete="off"
+                        style="flex:1; padding:0.35rem 0.5rem; font-size:0.75rem;" />
+                      <button id="d-mcp-save-${i}" class="btn" style="padding:0.35rem 0.5rem; font-size:0.7rem;">Save</button>`
+                  }
+                  <span id="d-mcp-status-${i}" style="font-size:0.65rem; color:var(--dim); min-width:1.5rem;"></span>
+                </div>
+              </div>`;
+            }).join("")}
+            </div>
+          </div>`
+        : "";
+
+      mcpSection.innerHTML = toolsListHtml + authSectionHtml;
+
+      // Wire up collapsible toggle (only exists if auth servers present)
       const mcpToggle = mcpSection.querySelector("#d-mcp-toggle") as HTMLElement | null;
       const mcpBody = mcpSection.querySelector("#d-mcp-body") as HTMLElement | null;
       const mcpArrow = mcpSection.querySelector("#d-mcp-arrow") as HTMLElement | null;
@@ -3140,12 +3162,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           if (mcpArrow) mcpArrow.textContent = isHidden ? "▼" : "▶";
         });
       }
-      // Check existing key status
+      // Check existing key status (only for auth servers with URLs)
       if (serverUrls.length > 0) {
         this.net.send({ type: "check_mcp_keys", serverUrls });
       }
-      // Wire up save buttons (API key auth)
-      mcpServers.forEach((s, i) => {
+      // Wire up save buttons (API key auth) — only for auth servers
+      authServers.forEach((s, i) => {
         const saveBtn = mcpSection.querySelector(`#d-mcp-save-${i}`) as HTMLButtonElement | null;
         if (saveBtn && s.url) {
           saveBtn.addEventListener("click", () => {
@@ -3162,8 +3184,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           });
         }
       });
-      // Wire up OAuth connect buttons
-      mcpServers.forEach((s, i) => {
+      // Wire up OAuth connect/disconnect buttons — only for auth servers
+      authServers.forEach((s, i) => {
         const connectBtn = mcpSection.querySelector(`#d-mcp-connect-${i}`) as HTMLButtonElement | null;
         if (connectBtn && s.url) {
           connectBtn.addEventListener("click", () => {
@@ -3184,20 +3206,22 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           });
         }
       });
-      // Listen for key status response
-      this.detailMcpListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
-        for (const r of results) {
-          const idx = serverUrls.indexOf(r.serverUrl);
-          if (idx >= 0) {
-            const statusEl = mcpSection.querySelector(`#d-mcp-status-${idx}`) as HTMLSpanElement | null;
-            if (statusEl) {
-              statusEl.textContent = r.hasKey ? "✓" : "✗";
-              statusEl.style.color = r.hasKey ? "var(--green)" : "var(--red)";
+      // Listen for key status response (only for auth servers)
+      if (authServers.length > 0) {
+        this.detailMcpListener = (results: { serverUrl: string; hasKey: boolean }[]) => {
+          for (const r of results) {
+            const idx = serverUrls.indexOf(r.serverUrl);
+            if (idx >= 0) {
+              const statusEl = mcpSection.querySelector(`#d-mcp-status-${idx}`) as HTMLSpanElement | null;
+              if (statusEl) {
+                statusEl.textContent = r.hasKey ? "✓" : "✗";
+                statusEl.style.color = r.hasKey ? "var(--green)" : "var(--red)";
+              }
             }
           }
-        }
-      };
-      this.store.mcpKeysStatusListeners.push(this.detailMcpListener);
+        };
+        this.store.mcpKeysStatusListeners.push(this.detailMcpListener);
+      }
     } else {
       mcpSection.hidden = true;
       mcpSection.innerHTML = "";
