@@ -1306,7 +1306,7 @@ export class Hud {
       title: string;
       body: string;
       targetId?: string;
-      cameraTarget?: "hermes" | "mailboxes";
+      cameraTarget?: "hermes" | "mailboxes" | "officeManager";
     };
 
     const steps: TourStep[] = [
@@ -1326,6 +1326,12 @@ export class Hud {
         title: "The Marketplace",
         body: "The <strong>MARKET</strong> button opens the agent marketplace. Browse ready-to-hire AI agents, or search 22,000+ <strong>MCP servers</strong> to give your agents new tools — file access, API integrations, databases, and more.",
         targetId: "marketplace-btn",
+      },
+      {
+        icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', "#e87de8"),
+        title: "Your Office Manager",
+        body: "The <strong>Office Manager</strong> runs the day-to-day — she can hire agents, reorganize desks, and manage your office layout. Click her desk to interact.",
+        cameraTarget: "officeManager",
       },
       {
         icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "#58c866"),
@@ -1364,7 +1370,7 @@ export class Hud {
       }
     };
 
-    const panCameraTo = (target: "hermes" | "mailboxes") => {
+    const panCameraTo = (target: "hermes" | "mailboxes" | "officeManager") => {
       const scene = this.store.sceneRef as any;
       if (!scene?.cameras?.main) return;
       cameraRestored = false;
@@ -1373,6 +1379,9 @@ export class Hud {
       if (target === "hermes" && scene.hermes?.container) {
         px = scene.hermes.container.x;
         py = scene.hermes.container.y;
+      } else if (target === "officeManager" && scene.officeManager?.container) {
+        px = scene.officeManager.container.x;
+        py = scene.officeManager.container.y;
       } else if (target === "mailboxes" && scene.platformMailboxes?.[0]?.tile) {
         const t = scene.platformMailboxes[0].tile;
         const tilePx = scene.TILE_PX ?? 32;
