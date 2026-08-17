@@ -30,14 +30,14 @@ try { const old = localStorage.getItem(OLD_PLAYER_KEY); if (old && !localStorage
 /** In-game styled confirmation modal — replaces browser confirm() to preserve immersion. */
 function inlineConfirm(title: string, message: string, confirmLabel: string, onConfirm: () => void): void {
   const modal = document.createElement("div");
-  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
   modal.innerHTML = `
-    <div style="background:#1a1a1a;border:1px solid #333;border-radius:0.75rem;padding:1.5rem;max-width:360px;width:90vw;text-align:center;font-family:'M Plus Rounded 1c',sans-serif;">
-      <h3 style="margin:0 0 0.5rem;font-size:1.05rem;color:#e0e0e0;">${title}</h3>
-      <p style="color:#888;font-size:0.82rem;margin:0 0 1.25rem;line-height:1.4;">${message}</p>
+    <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;max-width:360px;width:90vw;text-align:center;font-family:var(--font-body);box-shadow:var(--shadow-lg);">
+      <h3 style="margin:0 0 0.5rem;font-size:1.05rem;color:var(--text);">${title}</h3>
+      <p style="color:var(--dim);font-size:0.82rem;margin:0 0 1.25rem;line-height:1.4;">${message}</p>
       <div style="display:flex;gap:0.75rem;justify-content:center;">
-        <button id="ic-cancel" style="padding:0.5rem 1.25rem;border:1px solid #333;border-radius:0.5rem;background:#1a1a1a;color:#999;font-size:0.85rem;cursor:pointer;">Cancel</button>
-        <button id="ic-confirm" style="padding:0.5rem 1.25rem;border:none;border-radius:0.5rem;background:#c44a4a;color:#fff;font-size:0.85rem;font-weight:600;cursor:pointer;">${confirmLabel}</button>
+        <button id="ic-cancel" style="padding:0.5rem 1.25rem;border:1px solid var(--panel-edge);border-radius:var(--radius-sm);background:var(--panel-soft);color:var(--dim);font-size:0.85rem;cursor:pointer;font-family:var(--font-body);">Cancel</button>
+        <button id="ic-confirm" style="padding:0.5rem 1.25rem;border:none;border-radius:var(--radius-sm);background:var(--red);color:#fff;font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body);">${confirmLabel}</button>
       </div>
     </div>
   `;
@@ -382,17 +382,17 @@ export class Hud {
           <button class="mobile-action-btn" id="ma-teleport" title="Teleport">Q</button>
         </div>
       </div>
-      <div id="server-restart-overlay" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; flex-direction:column; gap:1rem;">
-        <div style="font-size:1.5rem; font-weight:bold; color:#e0e0e0; font-family:monospace; display:flex; align-items:center; gap:0.6rem;">
-          <svg width="28" height="28" viewBox="0 0 48 48" style="animation: restart-spin 1.2s linear infinite;" fill="none" stroke="#4f9dde" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <div id="server-restart-overlay" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(42,56,72,0.4); align-items:center; justify-content:center; flex-direction:column; gap:1rem; backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
+        <div style="font-size:1.5rem; font-weight:bold; color:var(--text); font-family:var(--font-body); display:flex; align-items:center; gap:0.6rem;">
+          <svg width="28" height="28" viewBox="0 0 48 48" style="animation: restart-spin 1.2s linear infinite;" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M38.8 18.6a16 16 0 1 0 1.2 6.4"/>
             <path d="M40 6v12h-12"/>
           </svg>
           Office Update In Progress
         </div>
-        <div style="font-size:0.9rem; color:#9aa0b0; font-family:monospace;">Your agents will resume their tasks shortly…</div>
-        <div style="width:120px; height:4px; background:#222; border-radius:2px; overflow:hidden;">
-          <div style="width:40%; height:100%; background:#4f9dde; border-radius:2px; animation: restart-pulse 1.2s ease-in-out infinite;"></div>
+        <div style="font-size:0.9rem; color:var(--dim); font-family:var(--font-body);">Your agents will resume their tasks shortly…</div>
+        <div style="width:120px; height:4px; background:var(--panel-edge-soft); border-radius:2px; overflow:hidden;">
+          <div style="width:40%; height:100%; background:var(--accent); border-radius:2px; animation: restart-pulse 1.2s ease-in-out infinite;"></div>
         </div>
       </div>
     `;
@@ -425,14 +425,14 @@ export class Hud {
       const signoutBtn = document.getElementById("signout-btn")!;
       signoutBtn.addEventListener("click", () => {
         const modal = document.createElement("div");
-        modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+        modal.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
         modal.innerHTML = `
-          <div style="background:#1a1a1a;border:1px solid #333;border-radius:0.75rem;padding:1.5rem;max-width:340px;width:90vw;text-align:center;">
-            <h3 style="margin:0 0 0.5rem;font-size:1.1rem;">Sign out of your office?</h3>
-            <p style="color:#888;font-size:0.85rem;margin:0 0 1.25rem;">Your agents will keep working, but you'll need to sign back in to manage them.</p>
+          <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;max-width:340px;width:90vw;text-align:center;box-shadow:var(--shadow-lg);font-family:var(--font-body);">
+            <h3 style="margin:0 0 0.5rem;font-size:1.1rem;color:var(--text);">Sign out of your office?</h3>
+            <p style="color:var(--dim);font-size:0.85rem;margin:0 0 1.25rem;">Your agents will keep working, but you'll need to sign back in to manage them.</p>
             <div style="display:flex;gap:0.75rem;justify-content:center;">
-              <button id="signout-cancel" class="btn" style="padding:0.6rem 1.2rem;border-radius:0.5rem;border:1px solid #333;background:#222;color:#e0e0e0;cursor:pointer;">Cancel</button>
-              <button id="signout-confirm" class="btn danger" style="padding:0.6rem 1.2rem;border-radius:0.5rem;border:none;background:#e05d5d;color:#fff;font-weight:600;cursor:pointer;">Sign out</button>
+              <button id="signout-cancel" class="btn" style="padding:0.6rem 1.2rem;border-radius:var(--radius-sm);border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--dim);cursor:pointer;">Cancel</button>
+              <button id="signout-confirm" class="btn danger" style="padding:0.6rem 1.2rem;border-radius:var(--radius-sm);border:none;background:var(--red);color:#fff;font-weight:600;cursor:pointer;">Sign out</button>
             </div>
           </div>
         `;
@@ -783,15 +783,15 @@ export class Hud {
       : `<li>Open ${browserName} settings → Privacy → Microphone</li><li>Allow microphone access for this site</li><li>Refresh this page and click the 🎤 button again</li>`;
 
     const modal = document.createElement("div");
-    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
     modal.innerHTML = `
-      <div style="background:#1a1a1a;border:1px solid #444;border-radius:0.75rem;padding:1.5rem;max-width:420px;width:90vw;color:#eee;">
-        <h3 style="margin:0 0 0.5rem;font-size:1.1rem;color:#f44336;">${title}</h3>
-        <p style="margin:0 0 1rem;font-size:0.85rem;color:#aaa;line-height:1.4;">${reason}</p>
-        <ol style="margin:0 0 1rem;padding-left:1.2rem;font-size:0.85rem;color:#ccc;line-height:1.6;">${steps}</ol>
-        ${settingsUrl ? `<div style="margin-bottom:1rem;"><input id="mic-url-input" readonly value="${settingsUrl}" style="width:100%;padding:0.4rem 0.6rem;background:#111;border:1px solid #333;border-radius:0.3rem;color:#8FC4E8;font-size:0.8rem;font-family:monospace;" /><button id="mic-copy-btn" style="margin-top:0.4rem;padding:0.3rem 0.8rem;border:1px solid #3A8CD4;background:transparent;color:#3A8CD4;border-radius:0.3rem;cursor:pointer;font-size:0.75rem;">Copy URL</button></div>` : ""}
+      <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:90vw;color:var(--text);box-shadow:var(--shadow-lg);font-family:var(--font-body);">
+        <h3 style="margin:0 0 0.5rem;font-size:1.1rem;color:var(--red);">${title}</h3>
+        <p style="margin:0 0 1rem;font-size:0.85rem;color:var(--dim);line-height:1.4;">${reason}</p>
+        <ol style="margin:0 0 1rem;padding-left:1.2rem;font-size:0.85rem;color:var(--text);line-height:1.6;">${steps}</ol>
+        ${settingsUrl ? `<div style="margin-bottom:1rem;"><input id="mic-url-input" readonly value="${settingsUrl}" style="width:100%;padding:0.4rem 0.6rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:var(--radius-sm);color:var(--accent);font-size:0.8rem;font-family:var(--font-mono);" /><button id="mic-copy-btn" style="margin-top:0.4rem;padding:0.3rem 0.8rem;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:var(--radius-sm);cursor:pointer;font-size:0.75rem;font-family:var(--font-body);">Copy URL</button></div>` : ""}
         <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-          <button id="mic-close-btn" style="padding:0.5rem 1rem;border:1px solid #555;background:#333;color:#eee;border-radius:0.4rem;cursor:pointer;font-size:0.8rem;">Close</button>
+          <button id="mic-close-btn" style="padding:0.5rem 1rem;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--dim);border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;font-family:var(--font-body);">Close</button>
         </div>
       </div>
     `;
@@ -1189,21 +1189,21 @@ export class Hud {
         const card = document.createElement("div");
         card.style.cssText = `
           display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.6rem;
-          margin-bottom: 0.4rem; border: 1px solid #1a1a1a; border-radius: 0.5rem;
-          background: #0d0d0d; transition: border-color 0.15s;
+          margin-bottom: 0.4rem; border: 1px solid var(--panel-edge); border-radius: var(--radius-sm);
+          background: var(--panel-soft); transition: border-color 0.15s;
         `;
-        card.addEventListener("mouseenter", () => { card.style.borderColor = "#333"; });
-        card.addEventListener("mouseleave", () => { card.style.borderColor = "#1a1a1a"; });
+        card.addEventListener("mouseenter", () => { card.style.borderColor = "var(--accent)"; });
+        card.addEventListener("mouseleave", () => { card.style.borderColor = "var(--panel-edge)"; });
 
         const avatar = rec.image_url
           ? `<img src="${rec.image_url}" style="width:36px;height:36px;border-radius:0.375rem;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'" />`
-          : `<div style="width:36px;height:36px;border-radius:0.375rem;background:#1a2a1a;display:flex;align-items:center;justify-content:center;font-weight:700;color:#53b86b;flex-shrink:0;">${rec.name.charAt(0).toUpperCase()}</div>`;
+          : `<div style="width:36px;height:36px;border-radius:0.375rem;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent);flex-shrink:0;">${rec.name.charAt(0).toUpperCase()}</div>`;
 
         card.innerHTML = `
           <div style="flex:1; min-width:0;">
-            <div style="font-weight:600; font-size:0.85rem; margin-bottom:0.15rem;">${this.escape(rec.name)}</div>
-            <div style="font-size:0.72rem; color:#888; margin-bottom:0.2rem;">${this.escape(rec.summary.slice(0, 80))}</div>
-            <div style="font-size:0.7rem; color:#53b86b; line-height:1.3;">${this.escape(rec.reason)}</div>
+            <div style="font-weight:600; font-size:0.85rem; margin-bottom:0.15rem; color:var(--text);">${this.escape(rec.name)}</div>
+            <div style="font-size:0.72rem; color:var(--dim); margin-bottom:0.2rem;">${this.escape(rec.summary.slice(0, 80))}</div>
+            <div style="font-size:0.7rem; color:var(--green); line-height:1.3;">${this.escape(rec.reason)}</div>
           </div>
           ${avatar}
         `;
@@ -1211,9 +1211,9 @@ export class Hud {
         const hireBtn = document.createElement("button");
         hireBtn.textContent = "HIRE";
         hireBtn.style.cssText = `
-          flex-shrink: 0; padding: 0.35rem 0.75rem; border: none; border-radius: 0.375rem;
-          background: #e0e0e0; color: #0d0d0d; font-size: 0.75rem; font-weight: 600; cursor: pointer;
-          align-self: center;
+          flex-shrink: 0; padding: 0.35rem 0.75rem; border: 1px solid var(--panel-edge); border-radius: var(--radius-sm);
+          background: var(--panel); color: var(--text); font-size: 0.75rem; font-weight: 600; cursor: pointer;
+          align-self: center; font-family: var(--font-body);
         `;
         hireBtn.addEventListener("click", async () => {
           hireBtn.disabled = true;
@@ -1224,13 +1224,15 @@ export class Hud {
             const agent = await res.json() as MarketplaceAgent;
             this.hireFromMarketplace(agent);
             hireBtn.textContent = "Hired! 🚁";
-            hireBtn.style.background = "#53b86b";
+            hireBtn.style.background = "var(--green)";
             hireBtn.style.color = "#fff";
+            hireBtn.style.borderColor = "var(--green)";
           } catch {
             hireBtn.textContent = "Failed";
-            hireBtn.style.background = "#e05d5d";
+            hireBtn.style.background = "var(--red)";
             hireBtn.style.color = "#fff";
-            setTimeout(() => { hireBtn.disabled = false; hireBtn.textContent = "HIRE"; hireBtn.style.background = "#e0e0e0"; hireBtn.style.color = "#0d0d0d"; }, 2000);
+            hireBtn.style.borderColor = "var(--red)";
+            setTimeout(() => { hireBtn.disabled = false; hireBtn.textContent = "HIRE"; hireBtn.style.background = "var(--panel)"; hireBtn.style.color = "var(--text)"; hireBtn.style.borderColor = "var(--panel-edge)"; }, 2000);
           }
         });
         card.appendChild(hireBtn);
@@ -1505,33 +1507,33 @@ export class Hud {
       ? `${mcpNames.join(", ")}${agentsWithMcp.length > 5 ? ` +${agentsWithMcp.length - 5} more` : ""}`
       : "";
 
-    return `<div style="margin-top:0.6rem; padding:0.5rem; border:1px solid #333; border-radius:6px; background:#1a1a1a;">
+    return `<div style="margin-top:0.6rem; padding:0.5rem; border:1px solid var(--panel-edge); border-radius:var(--radius-sm); background:var(--panel-soft);">
       <div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.3rem;">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c9852c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         <span style="font-size:0.65rem; font-weight:600; color:#c9852c;">ROOM SECURITY SUMMARY</span>
       </div>
-      ${agentsWithMcp.length > 0 ? `<div style="font-size:0.62rem; color:#999; margin-bottom:0.2rem;">${agentsWithMcp.length} agent${agentsWithMcp.length !== 1 ? "s" : ""} with API access: ${esc(mcpSummary)}</div>` : ""}
+      ${agentsWithMcp.length > 0 ? `<div style="font-size:0.62rem; color:var(--dim); margin-bottom:0.2rem;">${agentsWithMcp.length} agent${agentsWithMcp.length !== 1 ? "s" : ""} with API access: ${esc(mcpSummary)}</div>` : ""}
       ${restrictedAgents.length > 0
-        ? `<div style="font-size:0.62rem; color:#999;">${restrictedAgents.length} agent${restrictedAgents.length !== 1 ? "s" : ""} access-restricted (ACL). Visitor can chat with ${unrestrictedCount} agent${unrestrictedCount !== 1 ? "s" : ""}.</div>`
+        ? `<div style="font-size:0.62rem; color:var(--dim);">${restrictedAgents.length} agent${restrictedAgents.length !== 1 ? "s" : ""} access-restricted (ACL). Visitor can chat with ${unrestrictedCount} agent${unrestrictedCount !== 1 ? "s" : ""}.</div>`
         : agentsWithMcp.length > 0
-          ? `<div style="font-size:0.62rem; color:#888;">No agents are ACL-restricted. Consider restricting sensitive agents before inviting.</div>`
+          ? `<div style="font-size:0.62rem; color:var(--dim);">No agents are ACL-restricted. Consider restricting sensitive agents before inviting.</div>`
           : ""}
     </div>`;
   }
 
   private openRoomsPanel(): void {
     const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
     overlay.id = "rooms-overlay";
 
     const players = Array.from(this.store.roomPlayers.values());
     const playerListHtml = players.length === 0
-      ? '<p style="color:#888;font-size:0.85rem;">No players in room.</p>'
+      ? '<p style="color:var(--dim);font-size:0.85rem;">No players in room.</p>'
       : players.map(p => `
         <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
-          <span style="width:8px;height:8px;border-radius:50%;background:${p.role === 'owner' ? '#4f9dde' : p.role === 'guest' ? '#e8a838' : '#666'};"></span>
-          <span style="font-size:0.85rem;">${p.name}</span>
-          <span style="font-size:0.7rem;color:#888;">${p.role}</span>
+          <span style="width:8px;height:8px;border-radius:50%;background:${p.role === 'owner' ? 'var(--accent)' : p.role === 'guest' ? 'var(--amber)' : 'var(--panel-edge)'};"></span>
+          <span style="font-size:0.85rem;color:var(--text);">${p.name}</span>
+          <span style="font-size:0.7rem;color:var(--dim);">${p.role}</span>
         </div>
       `).join("");
 
@@ -1543,22 +1545,22 @@ export class Hud {
     const otherRooms = this.store.roomsList.filter(r => r.roomId !== "hq2" && r.roomId !== this.store.privateOfficeId && r.roomType !== "organization");
 
     overlay.innerHTML = `
-      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:480px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;max-height:85vh;overflow-y:auto;">
+      <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;width:480px;max-width:90vw;color:var(--text);font-family:var(--font-body);max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-          <h2 style="margin:0;font-size:1.1rem;">🚪 Rooms</h2>
-          <button class="x" id="rooms-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+          <h2 style="margin:0;font-size:1.1rem;color:var(--text);">🚪 Rooms</h2>
+          <button class="x" id="rooms-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
         </div>
 
         <div style="margin-bottom:1rem;">
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.3rem;">CURRENT ROOM</div>
-          <div style="font-size:0.9rem;font-weight:bold;margin-bottom:0.3rem;">${this.store.roomName || "—"}</div>
-          ${!isHq2 ? `<div style="font-size:0.7rem;color:#666;margin-bottom:0.5rem;word-break:break-all;">Room ID: <span id="room-id-display" style="color:#4f9dde;cursor:pointer;text-decoration:underline;">${this.store.roomId ?? "—"}</span></div>` : ""}
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.3rem;">PLAYERS (${players.length})</div>
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">CURRENT ROOM</div>
+          <div style="font-size:0.9rem;font-weight:bold;color:var(--text);margin-bottom:0.3rem;">${this.store.roomName || "—"}</div>
+          ${!isHq2 ? `<div style="font-size:0.7rem;color:var(--dim);margin-bottom:0.5rem;word-break:break-all;">Room ID: <span id="room-id-display" style="color:var(--accent);cursor:pointer;text-decoration:underline;">${this.store.roomId ?? "—"}</span></div>` : ""}
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">PLAYERS (${players.length})</div>
           <div>${playerListHtml}</div>
         </div>
 
-        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">SWITCH ROOM</div>
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;">SWITCH ROOM</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 COMMAND CENTER</button>
             <button class="btn ${isInOffice ? 'primary' : ''}" id="room-office-btn" style="font-size:0.8rem;${isInOffice ? 'opacity:0.6;pointer-events:none;' : ''}">🏠 MY OFFICE</button>
@@ -1566,8 +1568,8 @@ export class Hud {
         </div>
 
         ${orgRooms.length > 0 ? `
-        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">🏢 ORGANIZATION ROOMS</div>
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;">🏢 ORGANIZATION ROOMS</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             ${orgRooms.map(r => {
               const isCurrent = this.store.roomId === r.roomId;
@@ -1578,8 +1580,8 @@ export class Hud {
         ` : ""}
 
         ${otherRooms.length > 0 ? `
-        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">YOUR ROOMS</div>
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;">YOUR ROOMS</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             ${otherRooms.map(r => {
               const isCurrent = this.store.roomId === r.roomId;
@@ -1589,30 +1591,30 @@ export class Hud {
         </div>
         ` : ""}
 
-        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">CREATE NEW ROOM</div>
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;">CREATE NEW ROOM</div>
           <div style="display:flex;gap:0.5rem;">
-            <input id="room-name-input" placeholder="Room name…" style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
+            <input id="room-name-input" placeholder="Room name…" style="flex:1;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:var(--radius-sm);color:var(--text);font-size:0.85rem;font-family:var(--font-body);" />
             <button class="btn primary" id="room-create-btn" style="font-size:0.8rem;">CREATE</button>
           </div>
         </div>
 
-        <div style="border-top:1px solid #333;padding-top:1rem;margin-bottom:1rem;">
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-            <div style="font-size:0.75rem;color:#888;">ORGANIZATIONS</div>
+            <div style="font-size:0.75rem;color:var(--dim);">ORGANIZATIONS</div>
             <button class="btn" id="org-refresh-btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;">↻</button>
           </div>
           <div id="orgs-container" style="display:flex;flex-direction:column;gap:0.4rem;">
-            ${this.store.orgsList.length === 0 ? '<p style="color:#888;font-size:0.8rem;">No organizations yet.</p>' : this.store.orgsList.map(o => `
-              <div style="background:#222;border-radius:6px;padding:0.5rem 0.7rem;">
+            ${this.store.orgsList.length === 0 ? '<p style="color:var(--dim);font-size:0.8rem;">No organizations yet.</p>' : this.store.orgsList.map(o => `
+              <div style="background:var(--panel-soft);border:1px solid var(--panel-edge-soft);border-radius:var(--radius-sm);padding:0.5rem 0.7rem;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                   <div>
-                    <span style="font-size:0.85rem;font-weight:bold;">${o.name}</span>
-                    ${o.githubOrg ? `<span style="font-size:0.7rem;color:#666;margin-left:0.4rem;">github:${o.githubOrg}</span>` : ""}
+                    <span style="font-size:0.85rem;font-weight:bold;color:var(--text);">${o.name}</span>
+                    ${o.githubOrg ? `<span style="font-size:0.7rem;color:var(--dim);margin-left:0.4rem;">github:${o.githubOrg}</span>` : ""}
                   </div>
                   <div style="display:flex;gap:0.3rem;align-items:center;">
-                    <span style="font-size:0.7rem;color:#888;">${o.memberCount} member${o.memberCount !== 1 ? 's' : ''}</span>
-                    ${o.isMember ? `<span style="font-size:0.65rem;color:#4f9dde;">${o.role}</span>` : ''}
+                    <span style="font-size:0.7rem;color:var(--dim);">${o.memberCount} member${o.memberCount !== 1 ? 's' : ''}</span>
+                    ${o.isMember ? `<span style="font-size:0.65rem;color:var(--accent);">${o.role}</span>` : ''}
                   </div>
                 </div>
                 <div style="display:flex;gap:0.3rem;margin-top:0.4rem;">
@@ -1627,29 +1629,29 @@ export class Hud {
           </div>
         </div>
 
-        <div style="border-top:1px solid #333;padding-top:1rem;">
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">INVITE PLAYER TO CURRENT ROOM</div>
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;">INVITE PLAYER TO CURRENT ROOM</div>
           <div style="display:flex;gap:0.5rem;">
-            <input id="room-invite-input" placeholder="User ID..." style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
+            <input id="room-invite-input" placeholder="User ID..." style="flex:1;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:var(--radius-sm);color:var(--text);font-size:0.85rem;font-family:var(--font-body);" />
             <button class="btn" id="room-invite-btn" style="font-size:0.8rem;">INVITE</button>
           </div>
           <div style="margin-top:0.6rem;">
-            <div style="font-size:0.7rem;color:#888;margin-bottom:0.3rem;">ACCESS LEVEL</div>
+            <div style="font-size:0.7rem;color:var(--dim);margin-bottom:0.3rem;">ACCESS LEVEL</div>
             <div style="display:flex;gap:0.4rem;">
-              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:#ccc;cursor:pointer;padding:0.3rem 0.5rem;border:1px solid #333;border-radius:6px;cursor:pointer;">
-                <input type="radio" name="invite-access" value="tour" style="accent-color:#4f9dde;" />
+              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:var(--text);cursor:pointer;padding:0.3rem 0.5rem;border:1px solid var(--panel-edge);border-radius:var(--radius-sm);">
+                <input type="radio" name="invite-access" value="tour" style="accent-color:var(--accent);" />
                 Tour
               </label>
-              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:#ccc;cursor:pointer;padding:0.3rem 0.5rem;border:1px solid #333;border-radius:6px;cursor:pointer;">
-                <input type="radio" name="invite-access" value="talk" checked style="accent-color:#53b86b;" />
+              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:var(--text);cursor:pointer;padding:0.3rem 0.5rem;border:1px solid var(--panel-edge);border-radius:var(--radius-sm);">
+                <input type="radio" name="invite-access" value="talk" checked style="accent-color:var(--green);" />
                 Talk
               </label>
-              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:#ccc;cursor:pointer;padding:0.3rem 0.5rem;border:1px solid #333;border-radius:6px;cursor:pointer;">
-                <input type="radio" name="invite-access" value="manage" style="accent-color:#e8a838;" />
+              <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:var(--text);cursor:pointer;padding:0.3rem 0.5rem;border:1px solid var(--panel-edge);border-radius:var(--radius-sm);">
+                <input type="radio" name="invite-access" value="manage" style="accent-color:var(--amber);" />
                 Manage
               </label>
             </div>
-            <div id="invite-access-desc" style="font-size:0.65rem;color:#666;margin-top:0.3rem;">Can enter, see agents, and chat (subject to per-agent ACLs).</div>
+            <div id="invite-access-desc" style="font-size:0.65rem;color:var(--dim);margin-top:0.3rem;">Can enter, see agents, and chat (subject to per-agent ACLs).</div>
           </div>
           ${this.renderInviteSecuritySummary()}
         </div>
