@@ -195,6 +195,10 @@ const ICON = {
     <path d="M3 5h10"/><path d="M3 8h10"/><path d="M3 11h6"/><path d="M2 2.5h12v11H2z" opacity="0.3"/></svg>`,
   brain: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M8 3a2.5 2.5 0 0 0-2.5 2.5v5A2.5 2.5 0 0 0 8 13a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 8 3z"/><path d="M5.5 5.5a2 2 0 0 0-2 2"/><path d="M5.5 10.5a2 2 0 0 0-2-2"/><path d="M10.5 5.5a2 2 0 0 1 2 2"/><path d="M10.5 10.5a2 2 0 0 1 2-2"/><path d="M8 3v10"/></svg>`,
+  micOn: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>`,
+  micOff: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v5a3 3 0 0 0 5.12 2.12"/><path d="M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><path d="M12 18v4"/><path d="M8 22h8"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`,
+  speakerOn: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
+  speakerOff: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
 };
 
 export class Hud {
@@ -249,8 +253,8 @@ export class Hud {
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
         <button class="btn mini" id="worlds-btn">🌀 WORLDS</button>
-        <button class="btn mini" id="voice-btn" title="Toggle microphone">🎤</button>
-        <button class="btn mini" id="speaker-btn" title="Toggle speaker (mute/unmute incoming audio)">🔊</button>
+        <button class="btn mini" id="voice-btn" title="Toggle microphone">${ICON.micOff}</button>
+        <button class="btn mini" id="speaker-btn" title="Toggle speaker (mute/unmute incoming audio)">${ICON.speakerOn}</button>
         <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
         <button class="btn mini" id="help-btn" title="How to play">? HELP</button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
@@ -379,7 +383,7 @@ export class Hud {
       <div class="touch-controls">
         <div class="mobile-actions">
           <button class="mobile-action-btn primary" id="ma-interact" title="Interact / Talk">E</button>
-          <button class="mobile-action-btn" id="ma-voice" title="Voice chat">🎤</button>
+          <button class="mobile-action-btn" id="ma-voice" title="Voice chat">${ICON.micOff}</button>
           <button class="mobile-action-btn" id="ma-teleport" title="Teleport">Q</button>
         </div>
       </div>
@@ -719,20 +723,20 @@ export class Hud {
       // Re-enter listen-only mode so we still hear others
       voice.startListenOnly().catch(() => {});
       if (this.voiceBtn) {
-        this.voiceBtn.textContent = "🎤";
+        this.voiceBtn.innerHTML = ICON.micOff;
         this.voiceBtn.style.color = "";
       }
       const maVoice = document.getElementById("ma-voice");
-      if (maVoice) { maVoice.textContent = "🎤"; maVoice.classList.remove("primary"); }
+      if (maVoice) { maVoice.innerHTML = ICON.micOff; maVoice.classList.remove("primary"); }
     } else {
       // Mic off → enable mic (upgrades from listen-only to full voice)
       voice.start().then(() => {
         if (this.voiceBtn) {
-          this.voiceBtn.textContent = "🎙";
+          this.voiceBtn.innerHTML = ICON.micOn;
           this.voiceBtn.style.color = "#4caf50";
         }
         const maVoice = document.getElementById("ma-voice");
-        if (maVoice) { maVoice.textContent = "🎙"; maVoice.classList.add("primary"); }
+        if (maVoice) { maVoice.innerHTML = ICON.micOn; maVoice.classList.add("primary"); }
       }).catch((err: any) => {
         this.showMicPermissionHelp(err);
       });
@@ -753,7 +757,7 @@ export class Hud {
     const newMuted = !voice.outputMuted;
     voice.setOutputMuted(newMuted);
     if (this.speakerBtn) {
-      this.speakerBtn.textContent = newMuted ? "🔇" : "🔊";
+      this.speakerBtn.innerHTML = newMuted ? ICON.speakerOff : ICON.speakerOn;
       this.speakerBtn.style.color = newMuted ? "#f44336" : "";
     }
   }
