@@ -4473,7 +4473,8 @@ export class AgentManager {
     }, 15_000);
 
     // Hard cap for the full chat response — Wizard gets more time for GitHub tool calls
-    const chatTimeoutMs = rt.info.id === WIZARD_ID ? 120_000 : 30_000;
+    const hasMcpTools = !!(rt.info.mcpServers && rt.info.mcpServers.length > 0);
+    const chatTimeoutMs = rt.info.id === WIZARD_ID ? 120_000 : hasMcpTools ? 90_000 : 30_000;
     const chatTimeout = setTimeout(() => {
       if (!abort.signal.aborted) {
         abort.abort();
@@ -4491,6 +4492,15 @@ export class AgentManager {
           `You are the Wizard — a world-builder with GitHub tools to read and modify files on the ${wizardBranch} branch.`,
           `You CAN use your GitHub tools during chat to inspect or modify the world.`,
           `Reply in character: wise, creative, and conversational. Use your tools when the boss asks for world changes.)`,
+          `\n${this.bossName} says: "${text}"`,
+        ].join(" ")
+      : hasMcpTools
+      ? [
+          `(Your boss ${this.bossName} walks up to your desk for a quick chat.`,
+          `You have tools connected to external services — USE THEM to answer the boss's questions.`,
+          `For example, if asked about your schedule, call list_events. If asked to find something, use search tools.`,
+          `Do NOT just talk about what you could do — actually call the tools and report the real results.`,
+          `Be conversational but factual. Keep it brief after you get the tool results.)`,
           `\n${this.bossName} says: "${text}"`,
         ].join(" ")
       : [
@@ -4514,6 +4524,7 @@ export class AgentManager {
         railway: false,
         apiKey: this.apiKey,
         isChat: true,
+        mcpServers: rt.info.mcpServers,
         wizardGithubPat: isWizard ? wizardPat : undefined,
         wizardBranch: isWizard ? wizardBranch : undefined,
         eventFeedPath: join(this.workspaceRoot, "events.jsonl"),

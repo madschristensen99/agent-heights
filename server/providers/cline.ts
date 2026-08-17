@@ -1391,8 +1391,25 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         const wt = await loadWizardTools({ pat: ctx.wizardGithubPat, branch: ctx.wizardBranch });
         wizardChatTools.push(...wt);
       }
+      // Chat: load MCP tools (e.g. Google Calendar, Gmail) so agents can answer questions
+      // using their connected services, not just role-play as office characters.
+      const chatMcpTools: AgentTool<any, any>[] = [];
+      if (isChat && ctx.mcpServers && ctx.mcpServers.length > 0) {
+        try {
+          const googleServers = ctx.mcpServers.filter(s => isGoogleWorkspaceMcp(s.url));
+          const otherServers = ctx.mcpServers.filter(s => !isGoogleWorkspaceMcp(s.url));
+          if (googleServers.length > 0) {
+            const gwTools = await loadGoogleWorkspaceTools(googleServers, ctx.onApiError);
+            chatMcpTools.push(...gwTools);
+          }
+          if (otherServers.length > 0) {
+            const mcpTools = await loadMCPTools(otherServers, abortRef, ctx.onApiError);
+            chatMcpTools.push(...mcpTools);
+          }
+        } catch (e) { console.error(`[cline:${agentId}] chat MCP tools failed:`, e); }
+      }
       const tools = isChat
-        ? (wizardChatTools.length > 0 ? wizardChatTools : officeManagerHireTools)
+        ? [...wizardChatTools, ...officeManagerHireTools, ...chatMcpTools]
         : await makeTools(ctx.cwd, {
         railway: ctx.railway,
         sharedCwd: ctx.sharedCwd,
@@ -1447,7 +1464,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         onBroadcastHtml: ctx.onBroadcastHtml,
         requestGate: ctx.requestGate,
       });
-      const maxIter = isChat ? (wizardChatTools.length > 0 ? 10 : officeManagerHireTools.length > 0 ? 5 : 1) : ctx.settings.cline.maxIterations;
+      const maxIter = isChat
+        ? (wizardChatTools.length > 0 ? 10
+           : chatMcpTools.length > 0 ? 10
+           : officeManagerHireTools.length > 0 ? 5
+           : 1)
+        : ctx.settings.cline.maxIterations;
       console.log(`[cline:${agentId}] tools: [${tools.map(t => t.name).join(", ")}] model=${ctx.model} isChat=${isChat} maxIter=${maxIter}`);
       agent = new Agent({
         providerId: "deepseek",
