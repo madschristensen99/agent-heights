@@ -1147,7 +1147,7 @@ export class Hud {
 
       goBtn.disabled = true;
       goBtn.textContent = "FINDING…";
-      statusEl.textContent = "Asking AI to match your stack…";
+      statusEl.textContent = "Finding agents for your stack…";
       resultsEl.innerHTML = "";
 
       this.net.send({ type: "recommend_agents", text });
