@@ -1108,13 +1108,13 @@ export class Hud {
     const modal = document.getElementById("onboard-modal")!;
     modal.hidden = false;
     modal.innerHTML = `
-      <div class="modal onboard" style="max-width: 520px;">
+      <div class="modal onboard" style="max-width: 520px; max-height: 85vh; overflow-y: auto;">
         <h1 style="font-size: 1.4rem;">WHAT DO YOU DO?</h1>
         <p class="sub" style="margin-bottom: 1rem;">Tell us about your work and the tools you use. We'll find the right agents for your stack.</p>
         <textarea id="ob-prompt-text" rows="4" placeholder="e.g. I'm a backend developer. We use GitHub, Sentry, Grafana, deploy on Vercel, and track issues in Linear." style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--panel-edge); background: var(--panel-soft); color: var(--text); font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
-        <div id="ob-prompt-status" style="min-height: 1.5rem; text-align: center; color: #888; font-size: 0.8rem; margin-top: 0.5rem;"></div>
-        <div id="ob-prompt-results" style="margin-top: 0.5rem; max-height: 260px; overflow-y: auto;"></div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+        <div id="ob-prompt-status" style="min-height: 1.5rem; text-align: center; color: var(--dim); font-size: 0.8rem; margin-top: 0.5rem;"></div>
+        <div id="ob-prompt-results" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
+        <div id="ob-prompt-actions" style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
           <button class="btn" id="ob-prompt-skip" style="flex: 1;">SKIP</button>
           <button class="btn primary" id="ob-prompt-go" style="flex: 1;">FIND AGENTS ▶</button>
         </div>
@@ -1239,9 +1239,9 @@ export class Hud {
         resultsEl.appendChild(card);
       }
 
-      // Add Search Again + Enter Office buttons after the results
-      const btnRow = document.createElement("div");
-      btnRow.style.cssText = "display:flex;gap:0.5rem;margin-top:0.5rem;";
+      // Add Search Again + Enter Office buttons in the action row
+      const actionsEl = modal.querySelector("#ob-prompt-actions") as HTMLDivElement;
+      actionsEl.innerHTML = "";
 
       const againBtn = document.createElement("button");
       againBtn.className = "btn";
@@ -1252,6 +1252,19 @@ export class Hud {
         statusEl.textContent = "";
         textarea.value = "";
         textarea.focus();
+        actionsEl.innerHTML = "";
+        const skipBtn2 = document.createElement("button");
+        skipBtn2.className = "btn";
+        skipBtn2.style.cssText = "flex:1;";
+        skipBtn2.textContent = "SKIP";
+        skipBtn2.addEventListener("click", finish);
+        const goBtn2 = document.createElement("button");
+        goBtn2.className = "btn primary";
+        goBtn2.style.cssText = "flex:1;";
+        goBtn2.textContent = "FIND AGENTS ▶";
+        goBtn2.addEventListener("click", submit);
+        actionsEl.appendChild(skipBtn2);
+        actionsEl.appendChild(goBtn2);
       });
 
       const enterBtn = document.createElement("button");
@@ -1260,9 +1273,8 @@ export class Hud {
       enterBtn.textContent = "ENTER OFFICE ▶";
       enterBtn.addEventListener("click", finish);
 
-      btnRow.appendChild(againBtn);
-      btnRow.appendChild(enterBtn);
-      resultsEl.appendChild(btnRow);
+      actionsEl.appendChild(againBtn);
+      actionsEl.appendChild(enterBtn);
     };
 
     this.store.agentRecommendationListeners.add(onRecs);
