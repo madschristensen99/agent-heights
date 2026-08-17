@@ -1279,7 +1279,11 @@ export class Hud {
 
   // --------------------------------------------------------------- intro guide
 
+  private tourActive = false;
+
   private showIntroGuide(): void {
+    if (this.tourActive) return;
+    this.tourActive = true;
     localStorage.setItem("agent-heights-intro-seen", "1");
 
     const svgIcon = (paths: string, color: string) =>
@@ -1412,6 +1416,7 @@ export class Hud {
       restoreCamera();
       if (overlay) { overlay.remove(); overlay = null; }
       if (card) { card.remove(); card = null; }
+      this.tourActive = false;
     };
 
     const render = () => {
