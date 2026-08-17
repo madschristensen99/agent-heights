@@ -1386,21 +1386,23 @@ export class Hud {
       const cardW = 320;
       const cardH = card.offsetHeight || 160;
       const gap = 16;
+      const margin = 10;
 
       let left = rect.left + rect.width / 2 - cardW / 2;
       let top = rect.bottom + gap;
 
-      if (top + cardH > window.innerHeight - 10) {
+      if (top + cardH > window.innerHeight - margin) {
         top = rect.top - cardH - gap;
       }
-      if (top < 10) {
+      if (top < margin) {
         top = rect.bottom + gap;
       }
-      if (left + cardW > window.innerWidth - 10) {
-        left = window.innerWidth - cardW - 10;
+      if (left + cardW > window.innerWidth - margin) {
+        left = window.innerWidth - cardW - margin;
       }
-      if (left < 10) left = 10;
+      if (left < margin) left = margin;
 
+      card.style.transform = "none";
       card.style.left = `${left}px`;
       card.style.top = `${top}px`;
     };
