@@ -97,35 +97,43 @@ function sanitizeSearch(s: string): string {
 }
 
 /** Agents we want to surface first — high-value, popular, or flagship.
- *  Matched case-insensitively against the agent name. */
+ *  Matched case-insensitively against the agent name (with or without " Agent" suffix). */
 const FEATURED_AGENTS = [
+  // Google Workspace
+  "Google Docs",
+  "Google Calendar",
+  // Finance & trading
   "Yahoo Finance",
-  "GitHub Agent",
   "Robinhood Trading",
-  "Coinbase Solana Agent",
+  "Coinbase Solana",
   "Crossmint Wallet",
   "AgentWallet Trader",
-  "Runpod GPU Agent",
+  // Developer tools
+  "GitHub",
+  "Supabase",
+  "Vercel",
+  "GitLab",
+  "Sentry",
+  "PostHog",
+  "Runpod GPU",
+  // Productivity & business
+  "Notion",
+  "Linear",
+  "Atlassian (Jira & Confluence)",
+  "Airtable",
+  "Calendly",
+  "Cal.com",
+  "HubSpot",
+  "Stripe",
+  "Twilio",
+  "PayPal",
+  // Data & scraping
+  "Tavily",
+  "FireCrawl",
   "Massive Web Scraper",
-  "Google Maps Scraper Agent",
-  "Notion Agent",
-  "Linear Agent",
-  "Stripe Agent",
-  "HubSpot Agent",
-  "Atlassian (Jira & Confluence) Agent",
-  "Tavily Agent",
-  "FireCrawl Agent",
-  "Supabase Agent",
-  "Vercel Agent",
-  "GitLab Agent",
-  "Airtable Agent",
-  "Hugging Face Agent",
-  "Sentry Agent",
-  "PostHog Agent",
-  "Twilio Agent",
-  "PayPal Agent",
-  "Calendly Agent",
-  "Canva Agent",
+  "Google Maps Scraper",
+  // AI
+  "Hugging Face",
 ];
 
 /** Premium agents to surface first in the premium tab. */
@@ -143,10 +151,15 @@ const FEATURED_PREMIUM_AGENTS = [
   "StableSocial - Reddit",
 ];
 
+/** Normalize a name for comparison — strips trailing " Agent" suffix case-insensitively. */
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/\s+agent$/i, "").trim();
+}
+
 function agentPriority(name: string, featured: string[] = FEATURED_AGENTS): number {
-  const lower = name.toLowerCase();
+  const lower = normalizeName(name);
   for (let i = 0; i < featured.length; i++) {
-    if (lower === featured[i].toLowerCase()) return i;
+    if (lower === normalizeName(featured[i])) return i;
   }
   return featured.length;
 }

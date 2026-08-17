@@ -11,7 +11,7 @@ export function MarketplaceView() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const params = new URLSearchParams({ type: "agent", limit: "50" });
+    const params = new URLSearchParams({ type: "agent", limit: "50", premium: "false" });
     if (search) params.set("search", search);
     fetch(`/api/marketplace?${params}`)
       .then((r) => r.json())
