@@ -1111,7 +1111,7 @@ export class Hud {
       <div class="modal onboard" style="max-width: 520px;">
         <h1 style="font-size: 1.4rem;">WHAT DO YOU DO?</h1>
         <p class="sub" style="margin-bottom: 1rem;">Tell us about your work and the tools you use. We'll find the right agents for your stack.</p>
-        <textarea id="ob-prompt-text" rows="4" placeholder="e.g. I'm a backend developer. We use GitHub, Sentry, Grafana, deploy on Vercel, and track issues in Linear." style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid #333; background: #111; color: #e0e0e0; font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
+        <textarea id="ob-prompt-text" rows="4" placeholder="e.g. I'm a backend developer. We use GitHub, Sentry, Grafana, deploy on Vercel, and track issues in Linear." style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--panel-edge); background: var(--panel-soft); color: var(--text); font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
         <div id="ob-prompt-status" style="min-height: 1.5rem; text-align: center; color: #888; font-size: 0.8rem; margin-top: 0.5rem;"></div>
         <div id="ob-prompt-results" style="margin-top: 0.5rem;"></div>
         <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
@@ -1261,140 +1261,227 @@ export class Hud {
   // --------------------------------------------------------------- intro guide
 
   private showIntroGuide(): void {
-    const seen = localStorage.getItem("agent-heights-intro-seen");
     localStorage.setItem("agent-heights-intro-seen", "1");
 
     const svgIcon = (paths: string, color: string) =>
-      `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+      `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 
-    const steps = [
+    type TourStep = {
+      icon: string;
+      title: string;
+      body: string;
+      targetId?: string;
+      cameraTarget?: "hermes" | "mailboxes";
+    };
+
+    const steps: TourStep[] = [
       {
         icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "#58c866"),
         title: "Welcome to Agent Heights",
-        body: "You're the boss of a virtual office full of <strong>real AI agents</strong>. Each employee at a desk is a live coding agent that reads, writes, and runs code in its own workspace. Your job: hire them, give them tasks, and watch them work.",
+        body: "You're the boss of a virtual office full of <strong>real AI agents</strong>. Each employee at a desk is a live AI that reads, writes, and runs code. Your job: hire them, give them tasks, and watch them work. Let's take a quick tour.",
+      },
+      {
+        icon: svgIcon('<path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>', "#8b7355"),
+        title: "Hire Your First Agent",
+        body: "Click <strong>+ HIRE AGENT</strong> to create a custom agent from scratch — pick a name, role, and personality. Or browse the <strong>MARKET</strong> for pre-built agents with specialized skills.",
+        targetId: "hire-btn",
+      },
+      {
+        icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', "#e8a838"),
+        title: "The Marketplace",
+        body: "The <strong>MARKET</strong> button opens the agent marketplace. Browse ready-to-hire AI agents, or search 22,000+ <strong>MCP servers</strong> to give your agents new tools — file access, API integrations, databases, and more.",
+        targetId: "marketplace-btn",
       },
       {
         icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "#58c866"),
         title: "Meet Hermes",
         body: "The agent at the front desk is <strong>Hermes</strong> — your office concierge. Hermes can relay messages to other agents, manage your calendar, and connect to external platforms like Slack, Discord, and Telegram. Click Hermes to start a conversation anytime.",
-      },
-      {
-        icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', "#4f9dde"),
-        title: "Platform Mailboxes",
-        body: "The mailboxes along the wall connect Hermes to external messaging platforms. Walk up to a mailbox and click to set up integrations with <strong>Slack</strong>, <strong>Discord</strong>, <strong>Telegram</strong>, <strong>Gmail</strong>, and more. Each platform shows a security note about what data the integration accesses.",
-      },
-      {
-        icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>', "#c9852c"),
-        title: "Security & Access Control",
-        body: "When you hire agents with API access (MCP servers), their detail panel shows a <strong>SECURITY & ACCESS</strong> section with risk levels and data access notes. Use <strong>ACCESS CONTROL</strong> to restrict who can chat with specific agents — useful when inviting collaborators to your room.",
-      },
-      {
-        icon: svgIcon('<path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>', "#8b7355"),
-        title: "Hire Your First Agent",
-        body: "Click <strong>+ HIRE AGENT</strong> (bottom-left) to create a custom agent from scratch — pick a name, role, and personality. Or browse the <strong>MARKET</strong> (top bar) for pre-built agents with specialized skills like trading, data analysis, or DevOps.",
+        cameraTarget: "hermes",
       },
       {
         icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', "#53b86b"),
-        title: "Assign Tasks & Watch Them Work",
-        body: "Click any agent in the office to open their detail panel. Type a task, hit <strong>ASSIGN</strong>, and watch them walk to their desk and start working. Speech bubbles and the <strong>Office Feed</strong> (left panel) stream their real tool calls and output in real time.",
+        title: "Office Feed",
+        body: "The <strong>Office Feed</strong> streams real-time activity from all your agents — tool calls, output, and status changes. Type a task here to assign it to everyone at once.",
+        targetId: "feed",
       },
       {
-        icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 1v6"/><path d="M12 17v6"/><path d="M4.22 4.22l4.24 4.24"/><path d="M15.54 15.54l4.24 4.24"/><path d="M1 12h6"/><path d="M17 12h6"/><path d="M4.22 19.78l4.24-4.24"/><path d="M15.54 8.46l4.24-4.24"/>', "#9b6dff"),
-        title: "MCP Servers & Agent Tools",
-        body: "MCP (Model Context Protocol) servers give your agents tools — file access, API integrations, databases, and more. Browse the <strong>Community MCPs</strong> tab in the marketplace to add capabilities. Each MCP server shows its risk level and data access scope so you know what you're granting.",
-      },
-      {
-        icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', "#e8a838"),
-        title: "The Marketplace",
-        body: "The <strong>MARKET</strong> button opens the agent marketplace. Browse the <strong>Agents</strong> tab for curated, ready-to-hire AI agents. The <strong>Community MCPs</strong> tab lets you search 22,000+ MCP servers — hire one and your agent gets those tools instantly. Click any agent card to see details, then hit <strong>Hire into HQ</strong>.",
+        icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>', "#4f9dde"),
+        title: "Help & Shortcuts",
+        body: "Click <strong>? HELP</strong> anytime to replay this tour. Use <strong>WASD</strong> or arrows to walk, <strong>E</strong> to interact, <strong>scroll</strong> to zoom. That's it — you're ready to build your team!",
+        targetId: "help-btn",
       },
     ];
 
     let current = 0;
-    const overlay = document.createElement("div");
-    overlay.className = "intro-overlay";
-    overlay.innerHTML = `<div class="intro-modal"></div>`;
-    document.body.appendChild(overlay);
+    let overlay: HTMLElement | null = null;
+    let card: HTMLElement | null = null;
+    let highlightedEl: HTMLElement | null = null;
+    let cameraRestored = false;
+
+    const restoreCamera = () => {
+      if (cameraRestored) return;
+      cameraRestored = true;
+      const scene = this.store.sceneRef as any;
+      if (scene?.cameras?.main && scene?.player) {
+        scene.cameras.main.startFollow(scene.player, false, 0.1, 0.1);
+        scene.cameras.main.setZoom(scene.defaultZoom?.() ?? 1);
+      }
+    };
+
+    const panCameraTo = (target: "hermes" | "mailboxes") => {
+      const scene = this.store.sceneRef as any;
+      if (!scene?.cameras?.main) return;
+      cameraRestored = false;
+      const cam = scene.cameras.main;
+      let px = 0, py = 0;
+      if (target === "hermes" && scene.hermes?.container) {
+        px = scene.hermes.container.x;
+        py = scene.hermes.container.y;
+      } else if (target === "mailboxes" && scene.platformMailboxes?.[0]?.tile) {
+        const t = scene.platformMailboxes[0].tile;
+        const tilePx = scene.TILE_PX ?? 32;
+        px = t.x * tilePx + tilePx / 2;
+        py = t.y * tilePx + tilePx / 2;
+      } else {
+        return;
+      }
+      cam.stopFollow();
+      cam.pan(px, py, 800, "Cubic.easeInOut");
+    };
+
+    const clearHighlight = () => {
+      if (highlightedEl) {
+        highlightedEl.classList.remove("tour-highlight");
+        highlightedEl = null;
+      }
+    };
+
+    const positionCard = (targetEl: HTMLElement) => {
+      if (!card) return;
+      const rect = targetEl.getBoundingClientRect();
+      const cardW = 320;
+      const cardH = card.offsetHeight || 160;
+      const gap = 16;
+
+      let left = rect.left + rect.width / 2 - cardW / 2;
+      let top = rect.bottom + gap;
+
+      if (top + cardH > window.innerHeight - 10) {
+        top = rect.top - cardH - gap;
+      }
+      if (top < 10) {
+        top = rect.bottom + gap;
+      }
+      if (left + cardW > window.innerWidth - 10) {
+        left = window.innerWidth - cardW - 10;
+      }
+      if (left < 10) left = 10;
+
+      card.style.left = `${left}px`;
+      card.style.top = `${top}px`;
+    };
+
+    const cleanup = () => {
+      clearHighlight();
+      restoreCamera();
+      if (overlay) { overlay.remove(); overlay = null; }
+      if (card) { card.remove(); card = null; }
+    };
 
     const render = () => {
       const step = steps[current];
-      const modal = overlay.querySelector(".intro-modal") as HTMLDivElement;
-      modal.innerHTML = `
-        <div class="intro-icon">${step.icon}</div>
-        <h2 class="intro-title">${step.title}</h2>
-        <p class="intro-body">${step.body}</p>
-        <div class="intro-dots">
-          ${steps.map((_, i) => `<span class="intro-dot${i === current ? " active" : ""}"></span>`).join("")}
+
+      if (current === 0) {
+        if (card) { card.remove(); card = null; }
+        if (!overlay) {
+          overlay = document.createElement("div");
+          overlay.className = "intro-overlay";
+          document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = `<div class="intro-modal"></div>`;
+        const modal = overlay.querySelector(".intro-modal") as HTMLDivElement;
+        modal.innerHTML = `
+          <div class="intro-icon">${step.icon}</div>
+          <h2 class="intro-title">${step.title}</h2>
+          <p class="intro-body">${step.body}</p>
+          <div class="intro-dots">
+            ${steps.map((_, i) => `<span class="intro-dot${i === current ? " active" : ""}"></span>`).join("")}
+          </div>
+          <div class="intro-actions">
+            <span></span>
+            <button class="btn primary" id="intro-next">NEXT ▶</button>
+          </div>
+          <button class="intro-skip" id="intro-skip">Skip tour</button>
+        `;
+        const next = modal.querySelector("#intro-next");
+        if (next) next.addEventListener("click", () => { current++; render(); });
+        const skip = modal.querySelector("#intro-skip");
+        if (skip) skip.addEventListener("click", cleanup);
+        return;
+      }
+
+      if (overlay) { overlay.remove(); overlay = null; }
+
+      clearHighlight();
+
+      if (step.targetId) {
+        const el = document.getElementById(step.targetId);
+        if (el) {
+          el.classList.add("tour-highlight");
+          highlightedEl = el;
+        }
+      }
+
+      if (step.cameraTarget) {
+        panCameraTo(step.cameraTarget);
+      } else {
+        restoreCamera();
+      }
+
+      if (!card) {
+        card = document.createElement("div");
+        card.className = "tour-card";
+        document.body.appendChild(card);
+      }
+
+      card.innerHTML = `
+        <div class="tour-card-title">${step.icon} ${step.title}</div>
+        <p class="tour-card-body">${step.body}</p>
+        <div class="tour-card-actions">
+          <div class="tour-dots">
+            ${steps.map((_, i) => `<span class="tour-dot${i === current ? " active" : ""}"></span>`).join("")}
+          </div>
+          <div class="tour-btns">
+            ${current > 0 ? '<button class="btn" id="tour-back">◀</button>' : ""}
+            ${current < steps.length - 1
+              ? '<button class="btn primary" id="tour-next">NEXT ▶</button>'
+              : '<button class="btn primary" id="tour-done">LET\'S GO ▶</button>'}
+          </div>
         </div>
-        <div class="intro-actions">
-          ${current > 0 ? '<button class="btn" id="intro-back">◀ BACK</button>' : '<span></span>'}
-          ${current < steps.length - 1
-            ? '<button class="btn primary" id="intro-next">NEXT ▶</button>'
-            : '<button class="btn primary" id="intro-done">LET\'S GO ▶</button>'}
-        </div>
-        <button class="intro-skip" id="intro-skip">Skip tour</button>
+        <button class="tour-skip" id="tour-skip">Skip tour</button>
       `;
 
-      const next = modal.querySelector("#intro-next");
+      if (step.targetId) {
+        const el = document.getElementById(step.targetId);
+        if (el) positionCard(el);
+        else { card.style.left = "50%"; card.style.top = "50%"; card.style.transform = "translate(-50%, -50%)"; }
+      } else {
+        card.style.left = "50%";
+        card.style.top = "50%";
+        card.style.transform = "translate(-50%, -50%)";
+      }
+
+      const next = card.querySelector("#tour-next");
       if (next) next.addEventListener("click", () => { current++; render(); });
-      const back = modal.querySelector("#intro-back");
+      const back = card.querySelector("#tour-back");
       if (back) back.addEventListener("click", () => { current--; render(); });
-      const done = modal.querySelector("#intro-done");
-      if (done) done.addEventListener("click", () => {
-        overlay.remove();
-        if (!seen) this.showFirstTimeTooltips();
-      });
-      const skip = modal.querySelector("#intro-skip");
-      if (skip) skip.addEventListener("click", () => overlay.remove());
+      const done = card.querySelector("#tour-done");
+      if (done) done.addEventListener("click", cleanup);
+      const skip = card.querySelector("#tour-skip");
+      if (skip) skip.addEventListener("click", cleanup);
     };
 
     render();
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
-  }
-
-  private showFirstTimeTooltips(): void {
-    const targets = [
-      { id: "hire-btn", text: "Hire a custom AI agent", side: "top" },
-      { id: "marketplace-btn", text: "Browse pre-built agents & MCP servers", side: "bottom" },
-      { id: "feed", text: "Live activity from all your agents", side: "left" },
-    ];
-
-    const tips: HTMLDivElement[] = [];
-    for (const t of targets) {
-      const el = document.getElementById(t.id);
-      if (!el) continue;
-      const tip = document.createElement("div");
-      tip.className = `intro-tooltip intro-tooltip-${t.side}`;
-      tip.textContent = t.text;
-      const rect = el.getBoundingClientRect();
-      if (t.side === "top") {
-        tip.style.left = `${rect.left + rect.width / 2}px`;
-        tip.style.top = `${rect.bottom + 10}px`;
-        tip.style.transform = "translateX(-50%)";
-      } else if (t.side === "bottom") {
-        tip.style.left = `${rect.left + rect.width / 2}px`;
-        tip.style.bottom = `${window.innerHeight - rect.top + 10}px`;
-        tip.style.transform = "translateX(-50%)";
-      } else {
-        tip.style.left = `${rect.right + 10}px`;
-        tip.style.top = `${rect.top + rect.height / 2}px`;
-        tip.style.transform = "translateY(-50%)";
-      }
-      document.body.appendChild(tip);
-      tips.push(tip);
-      el.classList.add("intro-pulse");
-    }
-
-    const dismiss = () => {
-      tips.forEach((t) => t.remove());
-      targets.forEach((t) => document.getElementById(t.id)?.classList.remove("intro-pulse"));
-      document.removeEventListener("click", dismiss, true);
-      document.removeEventListener("keydown", dismiss, true);
-    };
-    setTimeout(() => {
-      document.addEventListener("click", dismiss, true);
-      document.addEventListener("keydown", dismiss, true);
-    }, 100);
   }
 
   // --------------------------------------------------------------- rooms

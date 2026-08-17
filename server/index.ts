@@ -3347,7 +3347,7 @@ wss.on("connection", async (ws, req) => {
             break;
           }
 
-          const systemPrompt = `You are an onboarding concierge for Agent Heights, a platform where users hire AI agents into a virtual office. Given a user's description of their work and tools, and a list of available marketplace agents, recommend the 3-5 most relevant agents. Return ONLY a JSON array, no markdown, no explanation. Each element: {"agentId": "<id>", "reason": "<one sentence why this agent fits>"}. Only recommend agents from the list. If none match, return [].`;
+          const systemPrompt = `You are an onboarding concierge for Agent Heights, a platform where users hire AI agents into a virtual office. Given a user's description of their work and tools, and a list of available marketplace agents, recommend the 3-5 most relevant agents. Be generous — even for vague descriptions like "student" or "I like computers", find agents that could plausibly help (e.g. note-taking, scheduling, research, writing, organization tools). Only return an empty array if there is truly zero relevance. Return ONLY a JSON array, no markdown, no explanation. Each element: {"agentId": "<id>", "reason": "<one sentence why this agent fits>"}. Only recommend agents from the list.`;
 
           const userPrompt = `User description: "${userText}"\n\nAvailable agents:\n${JSON.stringify(agentCatalog.slice(0, 200))}`;
 

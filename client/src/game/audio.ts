@@ -271,7 +271,7 @@ export class AudioSystem {
     thumpOsc.frequency.value = 14;
     const thumpGain = ctx.createGain();
     thumpGain.gain.value = 0;
-    thumpGain.gain.linearRampToValueAtTime(0.12, now + 4);
+    thumpGain.gain.linearRampToValueAtTime(0.12, now + 1);
     thumpOsc.connect(thumpGain);
     thumpGain.connect(this.sfxGain);
 
@@ -282,12 +282,12 @@ export class AudioSystem {
 
     // Fade in the blade gain
     bladeGain.gain.setValueAtTime(0, now);
-    bladeGain.gain.linearRampToValueAtTime(0.25, now + 4);
+    bladeGain.gain.linearRampToValueAtTime(0.25, now + 1);
 
     return {
       stop: () => {
         const stopTime = ctx.currentTime;
-        const fadeDuration = 4;
+        const fadeDuration = 0.5;
         bladeGain.gain.cancelScheduledValues(stopTime);
         bladeGain.gain.setValueAtTime(bladeGain.gain.value, stopTime);
         bladeGain.gain.linearRampToValueAtTime(0, stopTime + fadeDuration);

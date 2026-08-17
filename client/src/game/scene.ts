@@ -242,6 +242,7 @@ export class OfficeScene extends Phaser.Scene {
   private heliDelivery: HelicopterDelivery | null = null;
   private heliSound: { stop: () => void } | null = null;
   private pendingHeliAgents: string[] = [];
+  private pendingHeliDeliveries: HelicopterDelivery[] = [];
   private initialSyncDone = false;
 
   private world!: WorldLayer;
@@ -691,6 +692,9 @@ export class OfficeScene extends Phaser.Scene {
     this.heliAgent = null;
     this.heliElevatorGfx?.destroy();
     this.heliElevatorGfx = null;
+    this.heliSound?.stop();
+    this.heliSound = null;
+    this.pendingHeliDeliveries = [];
     this.clouds = [];
 
     // Variables that cross phase boundaries
@@ -1454,7 +1458,12 @@ export class OfficeScene extends Phaser.Scene {
             });
             this.store.onHelicopter((delivery) => {
               console.log(`[heli-debug] onHelicopter callback: ready=${this.ready}, heliActive=${this.heliActive}, name=${delivery?.name}`);
-              if (this.ready && !this.heliActive) this.triggerHelicopter(delivery);
+              if (!this.ready) return;
+              if (this.heliActive) {
+                this.pendingHeliDeliveries.push(delivery);
+              } else {
+                this.triggerHelicopter(delivery);
+              }
             });
             this.store.onPaymentRequired((reason, _message) => {
               if (this.heliActive && reason === "agent_limit") {
@@ -1471,6 +1480,7 @@ export class OfficeScene extends Phaser.Scene {
                 this.heliSound?.stop();
                 this.heliSound = null;
                 this.pendingHeliAgents = [];
+                this.pendingHeliDeliveries = [];
               }
             });
             this.store.onAssembly((agentIds) => {
@@ -5125,6 +5135,7 @@ export class OfficeScene extends Phaser.Scene {
     this.heliDelivery = delivery ?? null;
     const agentName = delivery?.name ?? "Agent";
     this.store.toast(`Helicopter summoned! ${agentName} incoming...`);
+    this.heliSound?.stop();
     this.heliSound = this.world?.audio.helicopter() ?? null;
     console.log(`[heli-debug] triggerHelicopter: agentName=${agentName}, world=${!!this.world}, audio=${!!this.world?.audio}, heliSound=${!!this.heliSound}, ready=${this.ready}, heliActive=${this.heliActive}`);
 
@@ -5389,6 +5400,9 @@ export class OfficeScene extends Phaser.Scene {
       const exitY = 3 * TILE_PX + 52;
       this.syncPendingHeliAgents(exitX, exitY);
     }
+    // Trigger the next queued delivery if any
+    const next = this.pendingHeliDeliveries.shift();
+    if (next) this.triggerHelicopter(next);
   }
 
   /** Draw the projector screen frame on the top-left wall. */
