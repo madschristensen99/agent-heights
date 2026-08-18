@@ -31,6 +31,7 @@ import { getUsageSummary } from "./usage.js";
 import { getProviderConfig } from "./providers/api-config.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
 import { scheduleDeletion, cancelDeletion, getDeletionStatus, processExpiredDeletions, GRACE_PERIOD_DAYS } from "./account.js";
+import { HermesProcessManager } from "./hermes-process.js";
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
@@ -3551,6 +3552,15 @@ server.listen(SERVER_PORT, () => {
 
 async function shutdown(): Promise<void> {
   console.log("[agent-heights] graceful shutdown initiated — notifying clients & saving agent tasks");
+
+  // 0. Kill Hermes gateway IMMEDIATELY with SIGKILL — before any async work.
+  // Railway sends SIGTERM to the process group, and Hermes catches it to send
+  // "Gateway shutting down" notifications to Telegram users. By killing it
+  // instantly first, we prevent the notification.
+  try {
+    const hermesProc = HermesProcessManager.getInstance();
+    hermesProc.stop();
+  } catch { /* best effort */ }
 
   // 1. Broadcast "server_restarting" to all connected clients so they show
   //    a friendly overlay instead of a scary disconnect.

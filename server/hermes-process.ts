@@ -779,7 +779,7 @@ export class HermesProcessManager {
     }, HEALTH_CHECK_INTERVAL_MS);
   }
 
-  /** Stop the Hermes gateway child process. */
+  /** Stop the Hermes gateway child process. Safe to call multiple times. */
   stop(): void {
     this.started = false;
     this.ready = false;
@@ -793,8 +793,8 @@ export class HermesProcessManager {
     }
     this.stopConfigWatchdog();
     if (this.gatewayChild) {
-      console.log("[hermes-process] Stopping hermes gateway child process...");
-      this.gatewayChild.kill("SIGTERM");
+      console.log("[hermes-process] Stopping hermes gateway child process (SIGKILL)...");
+      this.gatewayChild.kill("SIGKILL");
       this.gatewayChild = null;
     }
     if (this.child) {
