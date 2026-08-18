@@ -592,25 +592,18 @@ export class HermesClient {
       if (platformAlreadyConnected) {
         console.log(`[hermes-client] ${platform} already connected — skipping gateway restart (avoids shutdown notification)`);
       } else {
-        // Start (or restart) the gateway so it picks up the new credentials
-        // Use start first (works if gateway was stopped), then fall back to restart
+        // Try to start the gateway (works if it was stopped). If it's already
+        // running, start will fail — but we do NOT fall back to restart,
+        // because restart sends "Gateway shutting down" notifications.
         let gatewayRes = await fetch(`${this.baseUrl}/api/gateway/start`, {
           method: "POST",
           headers: this.authHeaders(),
           signal: AbortSignal.timeout(15000),
         });
         if (!gatewayRes.ok) {
-          // Gateway may already be running — try restart instead
-          gatewayRes = await fetch(`${this.baseUrl}/api/gateway/restart`, {
-            method: "POST",
-            headers: this.authHeaders(),
-            signal: AbortSignal.timeout(15000),
-          });
-        }
-        if (!gatewayRes.ok) {
-          console.warn(`[hermes-client] Platform configured but gateway start/restart returned HTTP ${gatewayRes.status}`);
+          console.log(`[hermes-client] Gateway start returned HTTP ${gatewayRes.status} — likely already running, not restarting (avoids notification)`);
         } else {
-          console.log(`[hermes-client] Gateway start/restart OK after platform config`);
+          console.log(`[hermes-client] Gateway start OK after platform config`);
         }
       }
 

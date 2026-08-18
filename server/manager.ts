@@ -957,19 +957,10 @@ export class AgentManager {
       },
     );
 
-    // Auto-start the messaging gateway if not already running
-    // (hermesProcess.start() already starts it, but this is a belt-and-suspenders
-    // call in case the process crashed. Skip if already running to avoid restart.)
-    {
-      const anyConnected = this.platformStates.some((s) => s.connected);
-      if (!anyConnected) {
-        this.hermesClient.startGateway().catch((err) => {
-          console.warn(`[hermes] Auto-start gateway failed: ${err}`);
-        });
-      } else {
-        console.log(`[hermes] Gateway already running with connected platforms — skipping auto-start`);
-      }
-    }
+    // hermesProcess.start() already spawns the gateway — no need to call
+    // startGateway() here. Doing so races with the fresh gateway (which hasn't
+    // connected to Telegram yet), causing an unnecessary restart and
+    // "Gateway shutting down" notification.
 
     // ── Configure LLM model BEFORE autoReconfigurePlatforms ──
     // autoReconfigurePlatforms calls configurePlatform() which makes Hermes

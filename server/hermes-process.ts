@@ -96,11 +96,12 @@ export class HermesProcessManager {
       try {
         execSync(`pkill -f "hermes serve" 2>/dev/null || true`, { stdio: "ignore", timeout: 5000 });
       } catch { /* best effort */ }
-      // Kill orphaned hermes gateway processes — these survive hermes serve being killed
-      // and keep serving stale config (e.g. kimi-coding) to Telegram users
+      // Kill orphaned hermes gateway processes with SIGKILL (-9) — SIGTERM gives
+      // Hermes a chance to send "Gateway shutting down" notifications to Telegram
+      // users before dying. SIGKILL kills it instantly.
       try {
-        execSync(`pkill -f "hermes gateway" 2>/dev/null || true`, { stdio: "ignore", timeout: 5000 });
-        console.log("[hermes-process] Killed orphaned hermes gateway processes");
+        execSync(`pkill -9 -f "hermes gateway" 2>/dev/null || true`, { stdio: "ignore", timeout: 5000 });
+        console.log("[hermes-process] Killed orphaned hermes gateway processes (SIGKILL)");
       } catch {
         console.warn("[hermes-process] Could not kill hermes gateway processes — continuing");
       }
