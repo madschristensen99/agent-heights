@@ -375,6 +375,17 @@ const TASK_CATEGORY_KEYWORDS: Record<string, string[]> = {
 };
 
 export class AgentManager {
+  /** Static registry of all active AgentManagers keyed by userId.
+   *  Used by the Hermes event dispatcher to route inbound platform events
+   *  to the correct user's manager (instead of always routing to the first
+   *  user who initialized the gateway). */
+  private static managersByUserId = new Map<string, AgentManager>();
+
+  /** Get the AgentManager for a given userId, or null if not registered. */
+  static getManagerByUserId(userId: string): AgentManager | null {
+    return AgentManager.managersByUserId.get(userId) ?? null;
+  }
+
   private agents = new Map<string, AgentRuntime>();
   private board = new Map<string, TaskCard>();
 
@@ -677,6 +688,13 @@ export class AgentManager {
       this.save.clearPendingTasks();
     }
 
+    // Register this manager in the static registry so the Hermes event
+    // dispatcher can route inbound platform events to the correct user.
+    if (this.userId) {
+      AgentManager.managersByUserId.set(this.userId, this);
+      console.log(`[manager] Registered manager for user ${this.userId} in static registry`);
+    }
+
     // Load persisted forge servers (self-built MCP servers)
     void this.loadForgeServers();
   }
@@ -931,28 +949,32 @@ export class AgentManager {
     this.hermesClient.setMailboxPlatforms(this.settings.mailboxPlatforms);
     this.hermesClient.start(
       (states) => {
-        this.platformStates = states;
-        this.broadcast({ type: "platform_connection", states });
+        // Broadcast platform connection states to ALL connected users.
+        // Platform states are global (the gateway is shared), so every
+        // manager needs to see the current state.
+        for (const mgr of AgentManager.managersByUserId.values()) {
+          mgr.platformStates = states;
+          mgr.broadcast({ type: "platform_connection", states });
+        }
       },
       (event) => {
-        // Real inbound message from a platform via Hermes
-        this.emitPlatformEvent(event.platform, event.direction, event.sender, event.text);
-        // Persist home channel for Telegram so /sethome survives redeploys
-        if (event.direction === "inbound" && event.platform.toLowerCase() === "telegram" && event.chatId) {
-          const existing = this.save.getPlatformCredentials();
-          if (existing.TELEGRAM_HOME_CHANNEL !== event.chatId) {
-            const merged = { ...existing, TELEGRAM_HOME_CHANNEL: event.chatId };
-            this.save.setPlatformCredentials(merged);
-            void this.save.flushNow();
-            console.log(`[manager] Saved TELEGRAM_HOME_CHANNEL=${event.chatId} to platform credentials`);
-            // Also write to Hermes .env immediately so it takes effect without restart
-            try {
-              syncHermesEnvFile(merged);
-            } catch { /* best effort */ }
-          }
-        }
-        if (event.direction === "inbound") {
-          this.routePlatformEvent(event.platform, event.sender, event.text);
+        // Route the event to the correct user's manager based on ownerUserId.
+        // This prevents all inbound messages from going to the first user
+        // who initialized the gateway.
+        const targetUserId = event.ownerUserId;
+        const targetMgr = targetUserId
+          ? AgentManager.getManagerByUserId(targetUserId)
+          : null;
+
+        if (targetMgr) {
+          // Route to the owner's manager
+          targetMgr.handlePlatformEvent(event);
+        } else {
+          // Fallback: no owner registered — route to this manager (the one
+          // that initialized the gateway). This preserves backward compat
+          // for platforms configured before ownership tracking was added.
+          console.warn(`[hermes] No owner registered for platform ${event.platform} — falling back to gateway initializer (user ${this.userId})`);
+          this.handlePlatformEvent(event);
         }
       },
     );
@@ -1155,6 +1177,8 @@ export class AgentManager {
 
         if (credsAlreadyInEnv) {
           console.log(`[hermes] autoReconfigurePlatforms: ${platform} credentials already in .env — skipping configurePlatform (avoids gateway restart)`);
+          // Still register ownership so inbound events route to this user
+          this.hermesClient?.registerPlatformOwner(platform, this.userId);
           // Still try to capture home channel if not yet saved
           if (lower === "telegram" && !savedCreds.TELEGRAM_HOME_CHANNEL) {
             setTimeout(() => this.proactivelyCaptureHomeChannel("telegram"), 5000);
@@ -1172,10 +1196,13 @@ export class AgentManager {
         );
         if (alreadyConnected) {
           console.log(`[hermes] autoReconfigurePlatforms: ${platform} already connected — skipping (avoids gateway restart notification)`);
+          // Still register ownership so inbound events route to this user
+          this.hermesClient?.registerPlatformOwner(platform, this.userId);
           continue;
         }
 
         console.log(`[hermes] autoReconfigurePlatforms: re-enabling ${platform} from save.json`);
+        this.hermesClient?.registerPlatformOwner(platform, this.userId);
         this.hermesClient?.configurePlatform(platform, creds).then((result) => {
           if (result.success) {
             console.log(`[hermes] autoReconfigurePlatforms: ${platform} re-enabled successfully`);
@@ -1306,6 +1333,9 @@ export class AgentManager {
     }
 
     const result = await this.hermesClient.configurePlatform(platform, credentials);
+
+    // Register this user as the platform owner so inbound events route to them
+    this.hermesClient.registerPlatformOwner(platform, this.userId);
 
     // Re-write .env AFTER the API call — Hermes API may have overwritten .env,
     // wiping our token. syncHermesEnvFile merges everything atomically.
@@ -2989,6 +3019,10 @@ export class AgentManager {
    */
   async prepareForShutdown(): Promise<void> {
     this.shuttingDown = true;
+    // Unregister from the static manager registry
+    if (this.userId) {
+      AgentManager.managersByUserId.delete(this.userId);
+    }
     // Stop autonomous loops so no new tasks start during drain
     this.stopThinkLoop();
     this.stopHealthCheck();
@@ -5443,6 +5477,31 @@ export class AgentManager {
       this.hermesProcess.updateSystemPromptWithOfficeState(this.buildOfficeState());
     } catch {
       // Non-critical
+    }
+  }
+
+  /** Handle an inbound platform event routed by the Hermes dispatcher.
+   *  This is called by the singleton event dispatcher when an event's
+   *  ownerUserId matches this manager's userId. */
+  handlePlatformEvent(event: PlatformEvent): void {
+    // Real inbound message from a platform via Hermes
+    this.emitPlatformEvent(event.platform, event.direction, event.sender, event.text);
+    // Persist home channel for Telegram so /sethome survives redeploys
+    if (event.direction === "inbound" && event.platform.toLowerCase() === "telegram" && event.chatId) {
+      const existing = this.save.getPlatformCredentials();
+      if (existing.TELEGRAM_HOME_CHANNEL !== event.chatId) {
+        const merged = { ...existing, TELEGRAM_HOME_CHANNEL: event.chatId };
+        this.save.setPlatformCredentials(merged);
+        void this.save.flushNow();
+        console.log(`[manager] Saved TELEGRAM_HOME_CHANNEL=${event.chatId} to platform credentials`);
+        // Also write to Hermes .env immediately so it takes effect without restart
+        try {
+          syncHermesEnvFile(merged);
+        } catch { /* best effort */ }
+      }
+    }
+    if (event.direction === "inbound") {
+      this.routePlatformEvent(event.platform, event.sender, event.text);
     }
   }
 

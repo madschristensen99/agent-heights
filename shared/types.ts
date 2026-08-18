@@ -1490,6 +1490,10 @@ export interface PlatformEvent {
   timestamp: number;
   /** Chat/channel ID from the platform (used for persisting home channel) */
   chatId?: string;
+  /** The userId of the user who owns this platform's credentials.
+   *  Set by HermesClient based on platform ownership tracking.
+   *  Used to route inbound events to the correct AgentManager. */
+  ownerUserId?: string;
 }
 
 /** Connection state for a messaging platform (mirrors Hermes Agent gateway status). */

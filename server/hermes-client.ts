@@ -84,6 +84,10 @@ export class HermesClient {
   private onPlatformEvent: ((event: PlatformEvent) => void) | null = null;
   mailboxPlatforms: (string | null)[] = [null, null, null, null, null, null];
 
+  /** Maps platform name (lowercase) → userId who configured it.
+   *  Used to route inbound events to the correct AgentManager. */
+  private platformOwners = new Map<string, string>();
+
   private static _instance: HermesClient | null = null;
 
   /** Get the singleton instance. Only one polling client should exist per process. */
@@ -106,6 +110,19 @@ export class HermesClient {
       headers["X-Hermes-Session-Token"] = this.sessionToken;
     }
     return headers;
+  }
+
+  /** Register which user owns a platform's credentials.
+   *  Called when a user configures or auto-reconfigures a platform.
+   *  This ensures inbound messages are routed to the correct AgentManager. */
+  registerPlatformOwner(platform: string, userId: string): void {
+    this.platformOwners.set(platform.toLowerCase(), userId);
+    console.log(`[hermes-client] Platform ownership: ${platform} → user ${userId}`);
+  }
+
+  /** Get the userId who owns a platform, or null if unregistered. */
+  getPlatformOwner(platform: string): string | null {
+    return this.platformOwners.get(platform.toLowerCase()) ?? null;
   }
 
   /** Update which platforms to poll for connection status. */
@@ -352,13 +369,16 @@ export class HermesClient {
               if (text.startsWith("⚠️") || text.includes("API Funding Alert") || text.startsWith("System ·")) {
                 continue;
               }
+              const normalizedPlatform = this.normalizePlatform(platform);
+              const ownerUserId = this.getPlatformOwner(normalizedPlatform) ?? undefined;
               events.push({
-                platform: this.normalizePlatform(platform),
+                platform: normalizedPlatform,
                 direction: "inbound",
                 sender: replyTarget,
                 text,
                 timestamp: msg.timestamp ?? Date.now(),
                 chatId: chatId ?? undefined,
+                ownerUserId,
               });
             }
           }
