@@ -9,7 +9,7 @@
  *  If it crashes, Agent Heights restarts it."
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
@@ -78,17 +78,35 @@ export class HermesProcessManager {
     this.ensureHermesConfig();
 
     // If Hermes is already running externally (persistent volume across redeploys),
-    // it may have stale config in memory (e.g. wrong provider from a previous deploy).
-    // We write the correct config.yaml above, then manager.ts uses the REST API
-    // (configureModel + restartGateway) to fix the in-memory config and restart
-    // the gateway properly through Hermes's own API.
+    // it has stale config in memory (e.g. kimi-coding from a previous deploy).
+    // configureModel via REST only updates part of the internal state — the hermes serve
+    // process may still rewrite config.yaml with the stale provider during platform
+    // configuration or gateway restarts. The only reliable fix is to kill the old
+    // hermes serve and spawn a fresh one that reads the correct config.yaml from disk.
     const alreadyRunning = await this.isReachable();
     if (alreadyRunning) {
-      console.log("[hermes-process] Hermes already running externally — config.yaml overwritten, REST API will handle model config + gateway restart");
-      this.externalMode = true;
-      this.ready = true;
-      this.startHealthCheck();
-      return;
+      console.log("[hermes-process] Hermes already running externally — killing stale process to force fresh config.yaml read");
+      try {
+        execSync(`fuser -k ${this.port}/tcp 2>/dev/null || true`, { stdio: "ignore", timeout: 5000 });
+        console.log(`[hermes-process] Killed process on port ${this.port}`);
+      } catch {
+        try {
+          execSync(`pkill -f "hermes serve" 2>/dev/null || true`, { stdio: "ignore", timeout: 5000 });
+          console.log("[hermes-process] Killed hermes serve via pkill");
+        } catch {
+          console.warn("[hermes-process] Could not kill stale hermes serve — continuing with fresh spawn attempt");
+        }
+      }
+      // Wait for the port to be released
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Verify it's actually dead
+      const stillAlive = await this.isReachable();
+      if (stillAlive) {
+        console.warn("[hermes-process] Old hermes serve still alive after kill — spawning anyway (may conflict)");
+      } else {
+        console.log("[hermes-process] Old hermes serve killed — port is free");
+      }
+      // Fall through to spawn a fresh hermes serve + gateway
     }
 
     console.log(`[hermes-process] Starting hermes serve on port ${this.port}...`);
