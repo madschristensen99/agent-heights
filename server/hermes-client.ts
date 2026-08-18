@@ -482,6 +482,30 @@ export class HermesClient {
     }
   }
 
+  /** Restart the Hermes gateway via REST API.
+   *  This properly kills the old gateway process and starts a new one that
+   *  reads the updated config.yaml. Use this instead of startGateway() when
+   *  the gateway is already running but has stale config. */
+  async restartGateway(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/gateway/restart`, {
+        method: "POST",
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.warn(`[hermes-client] restartGateway failed: HTTP ${res.status} — ${body.slice(0, 300)}`);
+      } else {
+        console.log(`[hermes-client] restartGateway OK`);
+      }
+      return res.ok;
+    } catch (err) {
+      console.warn(`[hermes-client] restartGateway error: ${err}`);
+      return false;
+    }
+  }
+
   /** Set the LLM model provider via Hermes REST API.
    *  This is the authoritative way to configure which model the gateway agent uses.
    *  POST /api/model/set with {scope, provider, model} */

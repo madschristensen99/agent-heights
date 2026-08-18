@@ -999,20 +999,36 @@ export class AgentManager {
         console.warn(`[hermes] LLM API direct test: CONNECTION ERROR: ${err}`);
       });
 
-      this.hermesClient!.configureModel(modelProvider, modelName).then((ok) => {
-        if (ok) {
-          // Restart gateway so new model config takes effect for all sessions
-          // (Hermes docs: "Restart the gateway if you want to force all sessions to pick up the change")
-          // Always restart — stale config (e.g. kimi-coding) must be purged on every startup
-          this.hermesClient?.startGateway().catch((err) => {
-            console.warn(`[hermes] Gateway restart after model config failed: ${err}`);
-          });
-        } else {
-          console.warn(`[hermes] configureModel returned false — gateway may have stale model config`);
-        }
-      }).catch((err) => {
-        console.warn(`[hermes] Model config failed: ${err}`);
-      });
+      // Check if Hermes has stale model config (e.g. kimi-coding from a previous deploy).
+      // Only call configureModel + restartGateway if the provider is actually wrong,
+      // to avoid "Gateway shutting down" notifications on every healthy redeploy.
+      const currentModel = await this.hermesClient!.getModelInfo().catch(() => null);
+      const currentProvider = (currentModel as any)?.provider ?? (currentModel as any)?.model?.provider;
+      const providerIsStale = currentProvider && currentProvider !== modelProvider;
+
+      if (providerIsStale) {
+        console.log(`[hermes] Stale model provider detected: ${currentProvider} (expected ${modelProvider}) — configuring + restarting gateway`);
+      } else if (!currentProvider) {
+        console.log(`[hermes] Could not determine current model provider — configuring + restarting gateway as precaution`);
+      } else {
+        console.log(`[hermes] Model provider already correct: ${currentProvider} — skipping configureModel + gateway restart`);
+      }
+
+      if (providerIsStale || !currentProvider) {
+        this.hermesClient!.configureModel(modelProvider, modelName).then((ok) => {
+          if (ok) {
+            // Restart gateway via REST API so new model config takes effect for all sessions.
+            // This properly kills the old gateway process through Hermes's own API.
+            this.hermesClient?.restartGateway().catch((err) => {
+              console.warn(`[hermes] Gateway restart after model config failed: ${err}`);
+            });
+          } else {
+            console.warn(`[hermes] configureModel returned false — gateway may have stale model config`);
+          }
+        }).catch((err) => {
+          console.warn(`[hermes] Model config failed: ${err}`);
+        });
+      }
     } else {
       console.warn("[hermes] DEEPSEEK_KEY (or KIMI_KEY) is NOT SET — Hermes agent will not be able to call LLM");
     }

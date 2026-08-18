@@ -79,15 +79,15 @@ export class HermesProcessManager {
 
     // If Hermes is already running externally (persistent volume across redeploys),
     // it may have stale config in memory (e.g. wrong provider from a previous deploy).
-    // Restart it so it picks up the freshly-written config.yaml.
+    // We write the correct config.yaml above, then manager.ts uses the REST API
+    // (configureModel + restartGateway) to fix the in-memory config and restart
+    // the gateway properly through Hermes's own API.
     const alreadyRunning = await this.isReachable();
     if (alreadyRunning) {
-      console.log("[hermes-process] Hermes already running externally — restarting to pick up fresh config.yaml");
+      console.log("[hermes-process] Hermes already running externally — config.yaml overwritten, REST API will handle model config + gateway restart");
       this.externalMode = true;
       this.ready = true;
       this.startHealthCheck();
-      // Restart the gateway so it re-reads config.yaml with the correct provider/model
-      this.restartGateway();
       return;
     }
 
