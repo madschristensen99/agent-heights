@@ -1546,8 +1546,12 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
 
     const unsub = agentInstance.subscribe((event) => {
       if (ctx.abort.signal.aborted) return;
-      console.log(`[cline:${agentId}] event:`, event.type, JSON.stringify(event).slice(0, 300));
       const ev: any = event;
+      // Skip logging for high-frequency streaming events to avoid console spam
+      const noisyEvents = new Set(["assistant-reasoning-delta", "assistant-text-delta", "usage-updated"]);
+      if (!noisyEvents.has(ev.type)) {
+        console.log(`[cline:${agentId}] event:`, ev.type, JSON.stringify(event).slice(0, 300));
+      }
       switch (ev.type) {
         case "assistant-text-delta":
           // Accumulate text deltas — we yield the full message when it completes

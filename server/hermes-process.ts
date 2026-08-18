@@ -113,30 +113,29 @@ export class HermesProcessManager {
         console.log("[hermes-process] All stale hermes processes killed — ports are free");
       }
 
-      // Delete state.db — it contains stale model config (kimi-coding) from a previous
-      // deploy. New sessions created from state.db inherit the old provider. By deleting
-      // it, fresh sessions will read the correct provider from config.yaml (deepseek).
-      // pairing/ directory is preserved so Telegram doesn't need re-pairing.
+      // Nuke the entire ~/.hermes directory except pairing/ and .env.
+      // This clears ALL persistent state that could hold stale kimi-coding config —
+      // state.db, gateway_state.json, model profiles, session caches, etc.
+      // pairing/ is preserved so Telegram doesn't need re-pairing.
+      // .env is preserved so API keys and platform credentials survive.
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       try {
-        const stateDbPath = join(hermesHome, "state.db");
-        if (existsSync(stateDbPath)) {
-          rmSync(stateDbPath);
-          console.log("[hermes-process] Deleted state.db (stale model config cleared)");
+        const allFiles = readdirSync(hermesHome);
+        const preserved = new Set(["pairing", ".env"]);
+        for (const entry of allFiles) {
+          if (preserved.has(entry)) continue;
+          const target = join(hermesHome, entry);
+          try {
+            rmSync(target, { recursive: true, force: true });
+          } catch { /* best effort */ }
         }
+        const remaining = readdirSync(hermesHome);
+        console.log(`[hermes-process] Nuked ~/.hermes (kept pairing/ + .env) — remaining: ${remaining.join(", ")}`);
       } catch (err) {
-        console.warn(`[hermes-process] Could not delete state.db: ${err}`);
+        console.warn(`[hermes-process] Could not nuke ~/.hermes: ${err}`);
       }
-      // Delete gateway_state.json — stale gateway state from old process
-      try {
-        const gatewayStatePath = join(hermesHome, "gateway_state.json");
-        if (existsSync(gatewayStatePath)) {
-          rmSync(gatewayStatePath);
-          console.log("[hermes-process] Deleted gateway_state.json");
-        }
-      } catch (err) {
-        console.warn(`[hermes-process] Could not delete gateway_state.json: ${err}`);
-      }
+      // Re-write config.yaml since we just deleted it along with everything else
+      this.ensureHermesConfig();
       // Fall through to spawn a fresh hermes serve + gateway
     }
 
