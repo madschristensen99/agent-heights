@@ -971,16 +971,23 @@ export class AgentManager {
       }
     }
 
-    // Auto-reconfigure platforms from persisted .env credentials (survives redeploy)
-    await this.autoReconfigurePlatforms();
-
-    // Configure the LLM model via REST API (belt-and-suspenders with config.yaml)
+    // ── Configure LLM model BEFORE autoReconfigurePlatforms ──
+    // autoReconfigurePlatforms calls configurePlatform() which makes Hermes
+    // rewrite config.yaml using its internal model state. If Hermes has stale
+    // state (e.g. kimi-coding), it will overwrite our correct config.yaml.
+    // By calling configureModel first, we fix Hermes's internal state so any
+    // config.yaml rewrite uses the correct provider.
     const apiKey = process.env.DEEPSEEK_KEY ?? process.env.KIMI_KEY ?? process.env.KIMI_API_KEY;
     const modelProvider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
     const modelName = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
     const apiBaseUrl = apiKey === process.env.DEEPSEEK_KEY
       ? "https://api.deepseek.com"
       : "https://api.moonshot.ai/v1";
+
+    // Log current model info BEFORE we do anything
+    const beforeModel = await this.hermesClient!.getModelInfo().catch(() => null);
+    console.log(`[hermes] Model info BEFORE configureModel: ${JSON.stringify(beforeModel)}`);
+
     if (apiKey) {
       // Test direct API connectivity to verify key + network from inside the container
       fetch(`${apiBaseUrl}/models`, {
@@ -999,45 +1006,57 @@ export class AgentManager {
         console.warn(`[hermes] LLM API direct test: CONNECTION ERROR: ${err}`);
       });
 
-      // Check if Hermes has stale model config (e.g. kimi-coding from a previous deploy).
-      // Only call configureModel + restartGateway if the provider is actually wrong,
-      // to avoid "Gateway shutting down" notifications on every healthy redeploy.
-      const currentModel = await this.hermesClient!.getModelInfo().catch(() => null);
-      const currentProvider = (currentModel as any)?.provider ?? (currentModel as any)?.model?.provider;
-      const providerIsStale = currentProvider && currentProvider !== modelProvider;
-
-      if (providerIsStale) {
-        console.log(`[hermes] Stale model provider detected: ${currentProvider} (expected ${modelProvider}) — configuring + restarting gateway`);
-      } else if (!currentProvider) {
-        console.log(`[hermes] Could not determine current model provider — configuring + restarting gateway as precaution`);
-      } else {
-        console.log(`[hermes] Model provider already correct: ${currentProvider} — skipping configureModel + gateway restart`);
-      }
-
-      if (providerIsStale || !currentProvider) {
-        this.hermesClient!.configureModel(modelProvider, modelName).then((ok) => {
-          if (ok) {
-            // Restart gateway via REST API so new model config takes effect for all sessions.
-            // This properly kills the old gateway process through Hermes's own API.
-            this.hermesClient?.restartGateway().catch((err) => {
-              console.warn(`[hermes] Gateway restart after model config failed: ${err}`);
-            });
-          } else {
-            console.warn(`[hermes] configureModel returned false — gateway may have stale model config`);
-          }
-        }).catch((err) => {
-          console.warn(`[hermes] Model config failed: ${err}`);
-        });
-      }
+      // ALWAYS call configureModel — don't rely on getModelInfo to detect staleness.
+      // The response format may be unreliable or not reflect the actual gateway state.
+      console.log(`[hermes] Calling configureModel(${modelProvider}, ${modelName})…`);
+      const configOk = await this.hermesClient!.configureModel(modelProvider, modelName).catch((err) => {
+        console.warn(`[hermes] configureModel failed: ${err}`);
+        return false;
+      });
+      console.log(`[hermes] configureModel result: ${configOk}`);
     } else {
       console.warn("[hermes] DEEPSEEK_KEY (or KIMI_KEY) is NOT SET — Hermes agent will not be able to call LLM");
     }
 
-    // Log current model info for diagnostics
-    this.hermesClient.getModelInfo().then((info) => {
-      if (info) console.log(`[hermes] Model info: ${JSON.stringify(info)}`);
-      else console.warn("[hermes] Could not retrieve model info from Hermes");
-    }).catch(() => {});
+    // Log config.yaml contents BEFORE autoReconfigurePlatforms
+    this.logConfigYaml("BEFORE autoReconfigurePlatforms");
+
+    // Auto-reconfigure platforms from persisted .env credentials (survives redeploy)
+    // This may cause Hermes to rewrite config.yaml — but since we called configureModel
+    // above, Hermes's internal state should now be correct (deepseek).
+    await this.autoReconfigurePlatforms();
+
+    // Log config.yaml contents AFTER autoReconfigurePlatforms
+    this.logConfigYaml("AFTER autoReconfigurePlatforms");
+
+    // Re-write config.yaml to ensure correct provider/model, undoing any changes
+    // Hermes may have made during autoReconfigurePlatforms.
+    this.hermesProcess?.rewriteConfig();
+    this.logConfigYaml("AFTER rewriteConfig");
+
+    // Now restart the gateway so it picks up the correct config.yaml + model config.
+    // This is the only restart — done after all writes are complete.
+    if (apiKey) {
+      console.log(`[hermes] Restarting gateway to pick up correct model config…`);
+      const restartOk = await this.hermesClient!.restartGateway().catch((err) => {
+        console.warn(`[hermes] Gateway restart failed: ${err}`);
+        return false;
+      });
+      console.log(`[hermes] Gateway restart result: ${restartOk}`);
+
+      // Verify the model config after restart
+      setTimeout(async () => {
+        if (!this.hermesClient) return;
+        const afterModel = await this.hermesClient.getModelInfo().catch(() => null);
+        console.log(`[hermes] Model info AFTER restart: ${JSON.stringify(afterModel)}`);
+        const afterProvider = (afterModel as any)?.provider ?? (afterModel as any)?.model?.provider;
+        if (afterProvider && afterProvider !== modelProvider) {
+          console.error(`[hermes] ⚠️ Provider is STILL ${afterProvider} after restart (expected ${modelProvider})!`);
+        } else if (afterProvider === modelProvider) {
+          console.log(`[hermes] ✓ Provider confirmed correct: ${afterProvider}`);
+        }
+      }, 5000);
+    }
 
     // After autoReconfigure + gateway start, re-broadcast platform states with
     // increasing delays so clients see the updated connection status once the
@@ -1053,6 +1072,23 @@ export class AgentManager {
 
     // Now that hermesProcess is ready, inject live office state into the system prompt
     this.refreshSoulMd();
+  }
+
+  /** Log the first 5 lines of config.yaml for diagnostic purposes. */
+  private logConfigYaml(label: string): void {
+    try {
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      const configPath = join(hermesHome, "config.yaml");
+      if (existsSync(configPath)) {
+        const content = readFileSync(configPath, "utf-8");
+        const lines = content.split("\n").slice(0, 5);
+        console.log(`[hermes] config.yaml ${label}:\n${lines.join("\n")}`);
+      } else {
+        console.log(`[hermes] config.yaml ${label}: FILE DOES NOT EXIST`);
+      }
+    } catch (err) {
+      console.warn(`[hermes] config.yaml ${label}: READ ERROR: ${err}`);
+    }
   }
 
   /** Get current platform connection states. */

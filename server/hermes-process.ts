@@ -215,6 +215,13 @@ export class HermesProcessManager {
     console.log(`[hermes-process] Wrote config.yaml with ${provider}/${model} + Agent Heights system prompt` + (preservedPlatforms.trim() ? " + preserved platforms" : ""));
   }
 
+  /** Re-write config.yaml with the correct provider/model.
+   *  Called externally (from manager.ts) after autoReconfigurePlatforms,
+   *  which may cause Hermes to rewrite config.yaml with stale internal state. */
+  rewriteConfig(): void {
+    this.ensureHermesConfig();
+  }
+
   /** Check if the Hermes gateway is reachable. */
   private async isReachable(): Promise<boolean> {
     try {
