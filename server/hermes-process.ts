@@ -77,12 +77,17 @@ export class HermesProcessManager {
     // Ensure Hermes has a config.yaml with a model provider configured
     this.ensureHermesConfig();
 
-    // If Hermes is already running externally, don't spawn a child process
+    // If Hermes is already running externally (persistent volume across redeploys),
+    // it may have stale config in memory (e.g. wrong provider from a previous deploy).
+    // Restart it so it picks up the freshly-written config.yaml.
     const alreadyRunning = await this.isReachable();
     if (alreadyRunning) {
-      console.log("[hermes-process] Hermes gateway already running externally — not spawning child process");
+      console.log("[hermes-process] Hermes already running externally — restarting to pick up fresh config.yaml");
+      this.externalMode = true;
       this.ready = true;
       this.startHealthCheck();
+      // Restart the gateway so it re-reads config.yaml with the correct provider/model
+      this.restartGateway();
       return;
     }
 
@@ -110,10 +115,8 @@ export class HermesProcessManager {
       const model = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
       console.log(`[hermes-process] ensureHermesConfig: hermesHome=${hermesHome}, apiKey=${apiKey ? "set (" + apiKey.slice(0, 8) + "...)" : "NOT SET"}, provider=${provider}, model=${model}`);
 
-      // Always write config.yaml to ensure clean config (old config may be corrupt on persistent volume)
-      if (apiKey) {
-        this.writeConfig(configPath, provider, model);
-      }
+      // Always write config.yaml to ensure clean config (old config may be corrupt or stale on persistent volume)
+      this.writeConfig(configPath, provider, model);
 
       // List /app/ag/ and hermes home contents for diagnostics
       const volumeRoot = "/app/ag";
@@ -126,11 +129,9 @@ export class HermesProcessManager {
         console.log(`[hermes-process] Files in ${hermesHome}: ${files.join(", ")}`);
       } catch { /* ignore */ }
 
-      // Write/merge .env with KIMI_API_KEY + restored platform credentials
+      // Write/merge .env with API keys + restored platform credentials
       // Uses the unified syncHermesEnvFile function (atomic write, single source of truth)
-      if (apiKey) {
-        syncHermesEnvFile(this.platformEnvVars);
-      }
+      syncHermesEnvFile(this.platformEnvVars);
     } catch (err) {
       console.warn(`[hermes-process] Failed to write Hermes config: ${err}`);
     }

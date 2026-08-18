@@ -23,7 +23,7 @@ const DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash";
 
 const KIMI_BASE_URL = "https://api.moonshot.ai/v1";
 const KIMI_API_KEY = process.env.KIMI_KEY ?? "";
-const KIMI_DEFAULT_MODEL = "kimi-k2.5";
+const KIMI_DEFAULT_MODEL = "kimi-k2.6";
 
 /** Aliases that map to the DeepSeek default model. */
 const MODEL_TO_DEEPSEEK: Record<string, string> = {
@@ -38,6 +38,7 @@ const MODEL_TO_DEEPSEEK: Record<string, string> = {
   "openrouter/tencent/hy3:free": DEEPSEEK_DEFAULT_MODEL,
   // Legacy Kimi defaults → DeepSeek
   "kimi-k2.5": DEEPSEEK_DEFAULT_MODEL,
+  "kimi-k2.6": DEEPSEEK_DEFAULT_MODEL,
 };
 
 /**

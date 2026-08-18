@@ -1000,13 +1000,15 @@ export class AgentManager {
       });
 
       this.hermesClient!.configureModel(modelProvider, modelName).then((ok) => {
-        if (ok && !AgentManager.modelConfigDone) {
-          AgentManager.modelConfigDone = true;
+        if (ok) {
           // Restart gateway so new model config takes effect for all sessions
           // (Hermes docs: "Restart the gateway if you want to force all sessions to pick up the change")
+          // Always restart — stale config (e.g. kimi-coding) must be purged on every startup
           this.hermesClient?.startGateway().catch((err) => {
             console.warn(`[hermes] Gateway restart after model config failed: ${err}`);
           });
+        } else {
+          console.warn(`[hermes] configureModel returned false — gateway may have stale model config`);
         }
       }).catch((err) => {
         console.warn(`[hermes] Model config failed: ${err}`);
@@ -1043,7 +1045,6 @@ export class AgentManager {
   }
 
   private static autoReconfigureDone = false;
-  private static modelConfigDone = false;
   private static hermesGatewayInitialized = false;
 
   /** Auto-reconfigure platforms from persisted credentials in save.json after redeploy.
