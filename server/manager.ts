@@ -5419,6 +5419,8 @@ export class AgentManager {
   private writeOfficeStateNow(): void {
     try {
       if (this.hermesProcess) {
+        const creds = this.save.getPlatformCredentials();
+        if (Object.keys(creds).length === 0) return;
         this.hermesProcess.writeOfficeState(this.buildOfficeState());
       }
     } catch {
@@ -5427,14 +5429,18 @@ export class AgentManager {
   }
 
   /** Build live office state and inject it into the Hermes gateway system prompt.
-   *  Called every 60s. The Hermes gateway LLM has no file access, so we must
-   *  embed office context directly in config.yaml's system_prompt and restart
-   *  the gateway. Rate-limited to max once per 2 minutes inside hermes-process. */
+   *  Called every 60s. Only the AgentManager that owns platform credentials
+   *  (e.g. Telegram bot) writes office state — otherwise multiple user sessions
+   *  would compete to write their own office state to the shared SOUL.md. */
   private refreshSoulMd(): void {
     try {
-      if (this.hermesProcess) {
-        this.hermesProcess.updateSystemPromptWithOfficeState(this.buildOfficeState());
-      }
+      if (!this.hermesProcess) return;
+      // Only the AgentManager with platform credentials should write office state.
+      // This prevents other users' agents from overwriting the office state shown
+      // to Telegram users.
+      const creds = this.save.getPlatformCredentials();
+      if (Object.keys(creds).length === 0) return;
+      this.hermesProcess.updateSystemPromptWithOfficeState(this.buildOfficeState());
     } catch {
       // Non-critical
     }
