@@ -33,6 +33,8 @@ export class HermesProcessManager {
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   private started = false;
+  /** Whether the Hermes process has been started (and not yet stopped). */
+  get isStarted(): boolean { return this.started; }
   private onReady: (() => void) | null = null;
   private ready = false;
   private sessionToken: string;
@@ -416,7 +418,10 @@ export class HermesProcessManager {
    *  Used before gateway start so the system prompt is correct from the beginning.
    *  SOUL.md is the primary mechanism — Hermes reads it as slot #1 in the system prompt. */
   writeOfficeState(officeState: string): void {
-    this.currentOfficeState = officeState;
+    // NOTE: Do NOT set this.currentOfficeState here. Only updateSystemPromptWithOfficeState()
+    // should track state, so it can detect the change (prevState !== officeState) and
+    // trigger a session reset. If we set it here, the first refreshSoulMd() call sees
+    // prevState === officeState and skips the session reset — leaving stale sessions.
     try {
       const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
       const configPath = join(hermesHome, "config.yaml");
@@ -479,10 +484,12 @@ export class HermesProcessManager {
   /** Delete all messaging platform sessions via DELETE /api/sessions/{id}.
    *  This forces the gateway to create new sessions with the updated config.yaml
    *  system_prompt on the next message from each user.
+   *  Public so manager.ts can call it after writing office state if the gateway
+   *  is already running.
    *  Pairing state is stored in pairing/ directory, separate from sessions (state.db),
    *  so deleting sessions does NOT break Telegram pairing.
    *  The gateway is NOT restarted — the Telegram connection stays alive. */
-  private async resetPlatformSessions(): Promise<void> {
+  async resetPlatformSessions(): Promise<void> {
     try {
       const res = await fetch(`${this.baseUrl}/api/sessions?limit=100`, {
         headers: {

@@ -5428,13 +5428,23 @@ export class AgentManager {
   }
 
   /** Write office state to config.yaml without restarting the gateway.
-   *  Called before gateway start so the system prompt is correct from the beginning. */
+   *  Called before gateway start so the system prompt is correct from the beginning.
+   *  If the gateway is already running, also resets platform sessions so new
+   *  sessions pick up the updated system prompt. */
   private writeOfficeStateNow(): void {
     try {
       if (this.hermesProcess) {
         const creds = this.save.getPlatformCredentials();
         if (Object.keys(creds).length === 0) return;
         this.hermesProcess.writeOfficeState(this.buildOfficeState());
+        // If the gateway is already running, reset sessions so new ones
+        // pick up the correct SOUL.md. This handles the case where another
+        // AgentManager started the gateway with stale state, and we're now
+        // writing the correct state after boot restore.
+        if (this.hermesProcess.isStarted) {
+          void this.hermesProcess.resetPlatformSessions();
+          console.log("[manager] writeOfficeStateNow: gateway already running — reset platform sessions");
+        }
       }
     } catch {
       // Non-critical
