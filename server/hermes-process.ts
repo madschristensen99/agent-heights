@@ -41,6 +41,7 @@ export class HermesProcessManager {
 
   private platformEnvVars: Record<string, string> = {};
   private currentOfficeState: string | null = null;
+  private configWatchdog: ReturnType<typeof setInterval> | null = null;
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl ?? HERMES_BASE_URL;
@@ -149,6 +150,10 @@ export class HermesProcessManager {
     // This is separate from `hermes serve` which only provides the dashboard API.
     // Without this, gateway_mode stays "none" and no platforms connect.
     this.spawnGateway();
+
+    // Start config watchdog — monitors config.yaml and rewrites it with the
+    // correct provider if Hermes overwrites it with a stale provider (e.g. kimi-coding).
+    this.startConfigWatchdog();
   }
 
   /** Ensure Hermes has config.yaml and .env with the LLM API key. */
@@ -268,6 +273,55 @@ export class HermesProcessManager {
    *  which may cause Hermes to rewrite config.yaml with stale internal state. */
   rewriteConfig(): void {
     this.ensureHermesConfig();
+  }
+
+  /** Start a watchdog that monitors config.yaml every 5s. If the provider
+   *  is not the expected one (e.g. Hermes rewrote it to kimi-coding),
+   *  immediately rewrites config.yaml and calls configureModel via REST. */
+  private startConfigWatchdog(): void {
+    if (this.configWatchdog) return;
+    const expectedProvider = process.env.HERMES_MODEL_PROVIDER ?? "deepseek";
+    const expectedModel = process.env.HERMES_MODEL_NAME ?? "deepseek-v4-flash";
+    const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+    const configPath = join(hermesHome, "config.yaml");
+
+    this.configWatchdog = setInterval(() => {
+      try {
+        if (!existsSync(configPath)) return;
+        const content = readFileSync(configPath, "utf-8");
+        const providerMatch = content.match(/^model:\s*\n\s*provider:\s*(\S+)/m);
+        if (!providerMatch) return;
+        const currentProvider = providerMatch[1];
+        if (currentProvider !== expectedProvider) {
+          console.warn(`[hermes-process] CONFIG WATCHDOG: config.yaml provider is ${currentProvider}, expected ${expectedProvider} — rewriting!`);
+          this.ensureHermesConfig();
+          // Also fix Hermes internal state via REST API
+          fetch(`${this.baseUrl}/api/model/set`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Hermes-Session-Token": this.sessionToken },
+            body: JSON.stringify({ scope: "main", provider: expectedProvider, model: expectedModel }),
+            signal: AbortSignal.timeout(5000),
+          }).then((res) => {
+            if (res.ok) {
+              console.log(`[hermes-process] CONFIG WATCHDOG: configureModel(${expectedProvider}) OK — internal state fixed`);
+            } else {
+              console.warn(`[hermes-process] CONFIG WATCHDOG: configureModel failed: HTTP ${res.status}`);
+            }
+          }).catch((err) => {
+            console.warn(`[hermes-process] CONFIG WATCHDOG: configureModel error: ${err}`);
+          });
+        }
+      } catch { /* best effort */ }
+    }, 5000);
+    console.log(`[hermes-process] Config watchdog started — monitoring for stale provider every 5s (expected: ${expectedProvider})`);
+  }
+
+  /** Stop the config watchdog. */
+  stopConfigWatchdog(): void {
+    if (this.configWatchdog) {
+      clearInterval(this.configWatchdog);
+      this.configWatchdog = null;
+    }
   }
 
   /** Check if the Hermes gateway is reachable. */
@@ -735,6 +789,7 @@ export class HermesProcessManager {
       clearInterval(this.healthTimer);
       this.healthTimer = null;
     }
+    this.stopConfigWatchdog();
     if (this.gatewayChild) {
       console.log("[hermes-process] Stopping hermes gateway child process...");
       this.gatewayChild.kill("SIGTERM");
