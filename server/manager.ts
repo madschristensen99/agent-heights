@@ -1034,24 +1034,19 @@ export class AgentManager {
     this.hermesProcess?.rewriteConfig();
     this.logConfigYaml("AFTER rewriteConfig");
 
-    // Now restart the gateway so it picks up the correct config.yaml + model config.
-    // This is the only restart — done after all writes are complete.
+    // No explicit gateway restart needed — we spawn a fresh hermes serve + gateway
+    // from hermes-process.ts with the correct config.yaml. Restarting here would
+    // send "Gateway shutting down" notifications to Telegram users for no reason.
+    // The config watchdog handles any subsequent config corruption by Hermes.
     if (apiKey) {
-      console.log(`[hermes] Restarting gateway to pick up correct model config…`);
-      const restartOk = await this.hermesClient!.restartGateway().catch((err) => {
-        console.warn(`[hermes] Gateway restart failed: ${err}`);
-        return false;
-      });
-      console.log(`[hermes] Gateway restart result: ${restartOk}`);
-
-      // Verify the model config after restart
+      // Verify the model config after gateway is up
       setTimeout(async () => {
         if (!this.hermesClient) return;
         const afterModel = await this.hermesClient.getModelInfo().catch(() => null);
-        console.log(`[hermes] Model info AFTER restart: ${JSON.stringify(afterModel)}`);
+        console.log(`[hermes] Model info after gateway start: ${JSON.stringify(afterModel)}`);
         const afterProvider = (afterModel as any)?.provider ?? (afterModel as any)?.model?.provider;
         if (afterProvider && afterProvider !== modelProvider) {
-          console.error(`[hermes] ⚠️ Provider is STILL ${afterProvider} after restart (expected ${modelProvider})!`);
+          console.error(`[hermes] ⚠️ Provider is ${afterProvider} (expected ${modelProvider}) — watchdog will fix within 5s`);
         } else if (afterProvider === modelProvider) {
           console.log(`[hermes] ✓ Provider confirmed correct: ${afterProvider}`);
         }
