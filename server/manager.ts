@@ -52,8 +52,6 @@ import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCr
 import type { CircleServiceConfig } from "./providers/premium-proxy.js";
 import { OfficeState } from "./office-state.js";
 import { registerServer, listServers, getServerConfigs, unregisterServer, loadServers, restartServer } from "./mcp-forge.js";
-import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
-import { sendGateNotificationEmail, isEmailConfigured } from "./email.js";
 
 /** Build a compact categorized summary of the curated MCP catalog from DB. */
 async function catalogSummary(): Promise<string> {
@@ -2782,22 +2780,6 @@ export class AgentManager {
     return false;
   }
 
-  /** Send a gate notification email when the user is offline and no platform context is available. */
-  private sendGateEmail(rt: AgentRuntime, question: string, options: string[], gateId: string): void {
-    if (!isEmailConfigured || !isSupabaseConfigured || !this.userId || this.userId === "dev") return;
-    void (async () => {
-      try {
-        const { data: userData } = await supabaseAdmin.auth.admin.getUserById(this.userId);
-        const email = userData.user?.email;
-        if (!email) return;
-        await sendGateNotificationEmail(email, rt.info.name, question, options);
-        this.log(rt, "status", `Gate question sent to ${email} via email`);
-      } catch (err) {
-        console.warn(`[manager] sendGateEmail failed:`, err);
-      }
-    })();
-  }
-
   /** Get an agent's task info: current task, queue, and history. */
   getTaskInfo(agentId: string): { currentTask: string | null; queue: { task: string; handoffTo: string | null }[]; history: { task: string; success: boolean; ts: number; durationMs: number }[] } | null {
     const rt = this.agents.get(agentId);
@@ -3549,16 +3531,13 @@ export class AgentManager {
                   if (ok) {
                     this.log(rt, "status", `Gate question sent to ${platformCtx.sender} via ${platformCtx.platform}`);
                   } else {
-                    this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will try email`);
-                    this.sendGateEmail(rt, question, options, gateId);
+                    this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will auto-resolve on timeout`);
                   }
                 }).catch(() => {
-                  this.sendGateEmail(rt, question, options, gateId);
+                  this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will auto-resolve on timeout`);
                 });
-              } else {
-                // No platform context — send email notification
-                this.sendGateEmail(rt, question, options, gateId);
               }
+              // No platform context: let the auto-resolve timeout handle it
             }
 
             // Auto-resolve: 5 min if user is connected (in-game popup), 30 min for outbound
