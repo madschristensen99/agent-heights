@@ -11,7 +11,7 @@
 
 import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { PLATFORM_ENV_VAR_MAP } from "./hermes-client.js";
@@ -111,6 +111,31 @@ export class HermesProcessManager {
         console.warn("[hermes-process] Old hermes serve still alive after kill — spawning anyway (may conflict)");
       } else {
         console.log("[hermes-process] All stale hermes processes killed — ports are free");
+      }
+
+      // Delete state.db — it contains stale model config (kimi-coding) from a previous
+      // deploy. New sessions created from state.db inherit the old provider. By deleting
+      // it, fresh sessions will read the correct provider from config.yaml (deepseek).
+      // pairing/ directory is preserved so Telegram doesn't need re-pairing.
+      const hermesHome = process.env.HERMES_HOME ?? join(homedir(), ".hermes");
+      try {
+        const stateDbPath = join(hermesHome, "state.db");
+        if (existsSync(stateDbPath)) {
+          rmSync(stateDbPath);
+          console.log("[hermes-process] Deleted state.db (stale model config cleared)");
+        }
+      } catch (err) {
+        console.warn(`[hermes-process] Could not delete state.db: ${err}`);
+      }
+      // Delete gateway_state.json — stale gateway state from old process
+      try {
+        const gatewayStatePath = join(hermesHome, "gateway_state.json");
+        if (existsSync(gatewayStatePath)) {
+          rmSync(gatewayStatePath);
+          console.log("[hermes-process] Deleted gateway_state.json");
+        }
+      } catch (err) {
+        console.warn(`[hermes-process] Could not delete gateway_state.json: ${err}`);
       }
       // Fall through to spawn a fresh hermes serve + gateway
     }
