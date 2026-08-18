@@ -914,13 +914,16 @@ export class AgentManager {
 
     // Pass saved platform credentials (tokens + home channels) so they're written
     // to .env BEFORE the gateway starts — prevents "No home channel" message
-    try {
-      const savedCreds = this.save.getPlatformCredentials();
-      if (Object.keys(savedCreds).length > 0) {
-        this.hermesProcess.setPlatformEnvVars(savedCreds);
-        console.log(`[hermes] Passing saved credentials to HermesProcessManager: ${Object.keys(savedCreds).join(", ")}`);
-      }
-    } catch { /* best effort */ }
+    // Skip for org managers — they don't own platform credentials
+    if (!this.userId.startsWith("org:")) {
+      try {
+        const savedCreds = this.save.getPlatformCredentials();
+        if (Object.keys(savedCreds).length > 0) {
+          this.hermesProcess.setPlatformEnvVars(savedCreds);
+          console.log(`[hermes] Passing saved credentials to HermesProcessManager: ${Object.keys(savedCreds).join(", ")}`);
+        }
+      } catch { /* best effort */ }
+    }
 
     // Write office state to config.yaml BEFORE the gateway starts,
     // so the system prompt is correct from the very first message
@@ -5434,6 +5437,8 @@ export class AgentManager {
   private writeOfficeStateNow(): void {
     try {
       if (this.hermesProcess) {
+        // Org managers must never write to SOUL.md
+        if (this.userId.startsWith("org:")) return;
         const creds = this.save.getPlatformCredentials();
         if (Object.keys(creds).length === 0) return;
         this.hermesProcess.writeOfficeState(this.buildOfficeState());
@@ -5453,14 +5458,15 @@ export class AgentManager {
 
   /** Build live office state and inject it into the Hermes gateway system prompt.
    *  Called every 60s. Only the AgentManager that owns platform credentials
-   *  (e.g. Telegram bot) writes office state — otherwise multiple user sessions
-   *  would compete to write their own office state to the shared SOUL.md. */
+   *  (e.g. Telegram bot) AND is a personal (non-org) manager writes office state.
+   *  Org managers have different agents and would overwrite the personal office
+   *  state shown to Telegram users. */
   private refreshSoulMd(): void {
     try {
       if (!this.hermesProcess) return;
+      // Org managers must never write to SOUL.md — they have different agents
+      if (this.userId.startsWith("org:")) return;
       // Only the AgentManager with platform credentials should write office state.
-      // This prevents other users' agents from overwriting the office state shown
-      // to Telegram users.
       const creds = this.save.getPlatformCredentials();
       if (Object.keys(creds).length === 0) return;
       this.hermesProcess.updateSystemPromptWithOfficeState(this.buildOfficeState());
