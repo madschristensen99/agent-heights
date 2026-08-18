@@ -918,7 +918,8 @@ export class AgentManager {
     if (!this.userId.startsWith("org:")) {
       try {
         const savedCreds = this.save.getPlatformCredentials();
-        if (Object.keys(savedCreds).length > 0) {
+        // Only pass creds if this user has an actual bot token, not just home channel
+        if (this.hasPlatformBotToken()) {
           this.hermesProcess.setPlatformEnvVars(savedCreds);
           console.log(`[hermes] Passing saved credentials to HermesProcessManager: ${Object.keys(savedCreds).join(", ")}`);
         }
@@ -5439,8 +5440,10 @@ export class AgentManager {
       if (this.hermesProcess) {
         // Org managers must never write to SOUL.md
         if (this.userId.startsWith("org:")) return;
-        const creds = this.save.getPlatformCredentials();
-        if (Object.keys(creds).length === 0) return;
+        // Only the AgentManager that owns an actual bot token should write
+        // office state. Having just TELEGRAM_HOME_CHANNEL (a chat ID) doesn't
+        // count — multiple users can have that saved.
+        if (!this.hasPlatformBotToken()) return;
         this.hermesProcess.writeOfficeState(this.buildOfficeState());
         // If the gateway is already running, reset sessions so new ones
         // pick up the correct SOUL.md. This handles the case where another
@@ -5457,22 +5460,39 @@ export class AgentManager {
   }
 
   /** Build live office state and inject it into the Hermes gateway system prompt.
-   *  Called every 60s. Only the AgentManager that owns platform credentials
-   *  (e.g. Telegram bot) AND is a personal (non-org) manager writes office state.
-   *  Org managers have different agents and would overwrite the personal office
-   *  state shown to Telegram users. */
+   *  Called every 60s. Only the AgentManager that owns an actual bot token
+   *  (not just TELEGRAM_HOME_CHANNEL) AND is a personal (non-org) manager
+   *  writes office state. Org managers have different agents and would
+   *  overwrite the personal office state shown to Telegram users. */
   private refreshSoulMd(): void {
     try {
       if (!this.hermesProcess) return;
       // Org managers must never write to SOUL.md — they have different agents
       if (this.userId.startsWith("org:")) return;
-      // Only the AgentManager with platform credentials should write office state.
-      const creds = this.save.getPlatformCredentials();
-      if (Object.keys(creds).length === 0) return;
+      // Only the AgentManager with an actual bot token should write office state.
+      if (!this.hasPlatformBotToken()) return;
       this.hermesProcess.updateSystemPromptWithOfficeState(this.buildOfficeState());
     } catch {
       // Non-critical
     }
+  }
+
+  /** Check if this AgentManager's platform credentials contain an actual bot
+   *  token (not just TELEGRAM_HOME_CHANNEL metadata). Only the user who
+   *  configured the bot has the token saved. This prevents users who only
+   *  have the home channel (from proactivelyCaptureHomeChannel) from
+   *  overwriting SOUL.md with their own agents. */
+  private hasPlatformBotToken(): boolean {
+    const creds = this.save.getPlatformCredentials();
+    const BOT_TOKEN_KEYS = [
+      "TELEGRAM_BOT_TOKEN",
+      "DISCORD_BOT_TOKEN",
+      "SLACK_BOT_TOKEN",
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_PHONE_NUMBER",
+    ];
+    return BOT_TOKEN_KEYS.some((k) => creds[k]);
   }
 
   /** Handle an inbound platform event routed by the Hermes dispatcher.
