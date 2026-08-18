@@ -392,7 +392,7 @@ export class HermesProcessManager {
     this.gatewayRestarting = true; // Prevent exit handler from also scheduling a restart
     if (this.gatewayChild) {
       console.log("[hermes-process] Restarting gateway child process...");
-      this.gatewayChild.kill("SIGTERM");
+      this.gatewayChild.kill("SIGKILL");
       this.gatewayChild = null;
     }
     // Delay 1s before respawning to let the old process fully exit
@@ -402,7 +402,7 @@ export class HermesProcessManager {
   }
 
   private lastPromptUpdate = 0;
-  private static readonly PROMPT_UPDATE_COOLDOWN_MS = 300_000; // 5 minutes
+  private static readonly PROMPT_UPDATE_COOLDOWN_MS = 60_000; // 60 seconds (matches SOUL_REFRESH_MS)
 
   /** Write office state into SOUL.md and config.yaml WITHOUT restarting the gateway.
    *  Used before gateway start so the system prompt is correct from the beginning.
