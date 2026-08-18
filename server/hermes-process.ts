@@ -148,6 +148,14 @@ export class HermesProcessManager {
     // Start config watchdog — monitors config.yaml and rewrites it with the
     // correct provider if Hermes overwrites it with a stale provider (e.g. kimi-coding).
     this.startConfigWatchdog();
+
+    // Force a one-time session reset to clear stale sessions from before
+    // the office state fix. Without this, group chat sessions that were
+    // created with the wrong system prompt (from another user's AgentManager)
+    // will keep serving the wrong office state until the state changes.
+    setTimeout(() => {
+      void this.resetPlatformSessions();
+    }, 5000);
   }
 
   /** Ensure Hermes has config.yaml and .env with the LLM API key. */
