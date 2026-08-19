@@ -125,6 +125,13 @@ export function LoginScreen() {
             </p>
           )}
 
+          <p className="text-center text-xs text-muted leading-relaxed">
+            👁 By continuing, you acknowledge our{" "}
+            <a href="/privacy" target="_blank" rel="noopener" className="text-muted underline hover:text-accent transition-colors">Privacy Policy</a>
+            {" "}and{" "}
+            <a href="/terms" target="_blank" rel="noopener" className="text-muted underline hover:text-accent transition-colors">Terms of Service</a>.
+          </p>
+
           {status && <p className={`text-center text-sm ${statusColor}`}>{status}</p>}
         </div>
       </div>

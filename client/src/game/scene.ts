@@ -1,6 +1,5 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
-import type { Net } from "../net";
 import { AgentNPC, OfficeManagerNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
 import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE, type Presenter, MAX_PRESENTERS, DECORATION_CATALOG } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
@@ -2531,9 +2530,9 @@ export class OfficeScene extends Phaser.Scene {
     });
 
     // Physics overlap
-    this.portalZone = this.add.circle(px, py - 20, 28, 0x000000, 0);
+    this.portalZone = this.add.circle(px, py - 20, 48, 0x000000, 0);
     this.physics.add.existing(this.portalZone, true);
-    (this.portalZone.body as Phaser.Physics.Arcade.Body).setCircle(28, 0, 0);
+    (this.portalZone.body as Phaser.Physics.Arcade.Body).setCircle(48, 0, 0);
 
     this.portalCollider = this.physics.add.overlap(this.player, this.portalZone, () => {
       this.exitWorld();
@@ -8808,18 +8807,9 @@ export class OfficeScene extends Phaser.Scene {
       if (this.tryPlatformMailboxInteract()) {
         // handled
       } else
-      // server rack — query Railway + GitHub data, or open code editor if inside a world
+      // server rack — opens the worlds panel (sandboxed themes, no Railway/GitHub)
       if (this.nearestTile(this.serverRackTiles, 150)) {
-        if (this.store.currentWorld) {
-          // Inside a world theme — show world info
-          this.store.toast(`Inside world: ${this.store.currentWorld.themeName}`);
-        } else {
-          const net = this.game.registry.get("net") as Net;
-          net.send({ type: "railway_query" });
-          net.send({ type: "github_query" });
-          net.send({ type: "railway_list_deployments" });
-          this.store.toast("Querying Railway + GitHub...");
-        }
+        this.store.toggleWorldsPanel();
       } else
       // try new office interactables first
       if (this.tryOfficeInteract(time)) {

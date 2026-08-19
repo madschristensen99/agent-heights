@@ -5,27 +5,103 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Privacy Policy — Agent Heights</title>
 <style>
-:root { --bg: #0d0f1a; --card: #161824; --accent: #58c866; --text: #e0e0e0; --muted: #8a8a9a; --border: #232636; }
+:root { --bg: #0d0f1a; --card: #161824; --accent: #58c866; --text: #e0e0e0; --muted: #8a8a9a; --border: #232636; --eye: #58c866; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; padding: 2rem 1rem; }
 .container { max-width: 720px; margin: 0 auto; }
-h1 { color: var(--accent); font-size: 1.8rem; margin-bottom: 0.5rem; }
-h2 { color: var(--text); font-size: 1.2rem; margin-top: 2rem; margin-bottom: 0.5rem; }
+
+/* Surveillance header */
+.eye-banner {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.eye {
+  display: inline-block;
+  font-size: 3rem;
+  animation: blink 4s infinite;
+}
+@keyframes blink {
+  0%, 92%, 100% { transform: scaleY(1); opacity: 1; }
+  94%, 98% { transform: scaleY(0.1); opacity: 0.6; }
+}
+.scan-line {
+  position: fixed;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.15;
+  animation: scan 6s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: 100vh; }
+}
+
+h1 { color: var(--accent); font-size: 1.8rem; margin-bottom: 0.3rem; text-align: center; }
+.tagline {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+  margin-bottom: 0.5rem;
+}
+.tagline .quote { color: var(--accent); font-weight: 600; }
+
+h2 {
+  color: var(--text);
+  font-size: 1.15rem;
+  margin-top: 2rem;
+  margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+h2 .icon { font-size: 1.1rem; }
+.flavor {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-style: italic;
+  margin-bottom: 0.6rem;
+  opacity: 0.8;
+}
 p, li { color: var(--muted); margin-bottom: 0.5rem; }
 ul { padding-left: 1.5rem; margin-bottom: 1rem; }
 a { color: var(--accent); text-decoration: none; }
-.updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; }
+.updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; text-align: center; }
+
+.disclaimer {
+  margin-top: 2.5rem;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: rgba(22,24,36,0.5);
+}
+.disclaimer .eye-sm { font-size: 1.1rem; }
 </style>
 </head>
 <body>
+<div class="scan-line"></div>
 <div class="container">
+
+<div class="eye-banner">
+  <div class="eye">👁</div>
+</div>
 <h1>Privacy Policy</h1>
+<p class="tagline"><span class="quote">"I'm watching you, Wazowski. Always watching."</span></p>
+<p class="tagline">— The Office Manager</p>
 <p class="updated">Last updated: August 16, 2025</p>
 
-<h2>Overview</h2>
+<h2><span class="icon">📋</span> Overview</h2>
+<p class="flavor">Welcome to Agent Heights. We see everything. But in a good way.</p>
 <p>Agent Heights ("we", "our", or "the Service") is an AI agent platform that lets users hire and manage AI agents connected to external services via Model Context Protocol (MCP) servers. This Privacy Policy explains what data we collect, how we use it, and the choices you have.</p>
 
-<h2>Information We Collect</h2>
+<h2><span class="icon">👀</span> What We See</h2>
+<p class="flavor">Don't worry — we're not actually hiding in your closet. We just need a few things to run the office.</p>
+
 <h3>Account Information</h3>
 <ul>
 <li>Email address (for authentication and account management)</li>
@@ -53,7 +129,8 @@ a { color: var(--accent); text-decoration: none; }
 <li>We store transaction records and billing history for account management</li>
 </ul>
 
-<h2>How Google Workspace MCP Servers Access Your Data</h2>
+<h2><span class="icon">📄</span> How Google Workspace MCP Servers Access Your Data</h2>
+<p class="flavor">When you let an agent peek at your Google stuff, here's exactly what it can see.</p>
 <p>When you connect a Google Workspace agent (Gmail, Google Drive, Google Docs, Google Sheets, Google Slides, Google Calendar, Google Chat, or Google Contacts), the agent accesses your Google data through Google's official MCP servers using OAuth 2.0. The specific data accessed depends on the scopes you authorize:</p>
 <ul>
 <li><strong>Gmail:</strong> Read email threads and create drafts (does not send emails automatically)</li>
@@ -67,7 +144,8 @@ a { color: var(--accent); text-decoration: none; }
 </ul>
 <p>All data access is performed through Google's official MCP servers. We do not store the content of your Google Workspace data — only the OAuth tokens needed to make authenticated requests.</p>
 
-<h2>How We Use Your Information</h2>
+<h2><span class="icon">🎯</span> Why We're Watching</h2>
+<p class="flavor">It's not creepy. We promise. It's mostly just... keeping the lights on.</p>
 <ul>
 <li>To provide and maintain the Service</li>
 <li>To authenticate you and manage your account</li>
@@ -77,7 +155,8 @@ a { color: var(--accent); text-decoration: none; }
 <li>To comply with legal obligations</li>
 </ul>
 
-<h2>Data Storage and Security</h2>
+<h2><span class="icon">🔒</span> The Surveillance Room</h2>
+<p class="flavor">All footage stored in a secure, encrypted vault. No interns with clipboards.</p>
 <ul>
 <li>Data is stored in Supabase (PostgreSQL) with row-level security policies</li>
 <li>OAuth tokens and API keys are encrypted using AES-256-GCM</li>
@@ -85,7 +164,8 @@ a { color: var(--accent); text-decoration: none; }
 <li>Access to sensitive data is restricted to authenticated users only</li>
 </ul>
 
-<h2>Data Retention</h2>
+<h2><span class="icon">⏱️</span> How Long We Keep Watching</h2>
+<p class="flavor">We don't hold grudges. Or data. Once you're out, you're out.</p>
 <ul>
 <li>Account data is retained while your account is active</li>
 <li>You can request account deletion at any time — data is permanently removed within 30 days</li>
@@ -93,7 +173,8 @@ a { color: var(--accent); text-decoration: none; }
 <li>Billing records may be retained for legal compliance purposes</li>
 </ul>
 
-<h2>Your Rights</h2>
+<h2><span class="icon">🚪</span> Your Right to Be Un-Watched</h2>
+<p class="flavor">You can walk away at any time. We'll stop watching. We might miss you though.</p>
 <ul>
 <li>Access, correct, or delete your personal data</li>
 <li>Revoke OAuth access for any connected service</li>
@@ -101,7 +182,8 @@ a { color: var(--accent); text-decoration: none; }
 <li>Cancel your subscription at any time</li>
 </ul>
 
-<h2>Third-Party Services</h2>
+<h2><span class="icon">🤝</span> Who Else Has Eyes On You</h2>
+<p class="flavor">We work with some trusted partners. They have their own eyes. And their own rules.</p>
 <p>The Service integrates with the following third-party providers:</p>
 <ul>
 <li><strong>Supabase:</strong> Authentication and database hosting</li>
@@ -112,8 +194,16 @@ a { color: var(--accent); text-decoration: none; }
 </ul>
 <p>Each provider has its own privacy policy governing how they handle data.</p>
 
-<h2>Contact</h2>
+<h2><span class="icon">📡</span> Talk to the Watcher</h2>
+<p class="flavor">Questions? Concerns? Want to know what we saw? Just ask.</p>
 <p>For privacy questions or data requests, contact us at <a href="mailto:support@agentheights.com">support@agentheights.com</a>.</p>
+
+<div class="disclaimer">
+  <span class="eye-sm">👁</span><br>
+  This policy is not actual surveillance. We just think it's funny.<br>
+  The legal stuff above is real though. We really do care about your privacy.
+</div>
+
 </div>
 </body>
 </html>

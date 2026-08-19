@@ -2560,6 +2560,11 @@ export class Hud {
             <div style="font-size:0.78rem;color:#888;margin-bottom:0.75rem;">All agents are stopped. Your data will be permanently erased after this date. Sign in anytime before then to cancel.</div>
             <button class="btn" id="s-cancel-deletion">CANCEL DELETION</button>
           </div>
+          <div style="margin-bottom:1rem;">
+            <a href="/privacy" target="_blank" style="font-size:0.85rem;color:#7a8090;text-decoration:none;">👁 Privacy Policy</a>
+            <span style="margin:0 0.5rem;color:#444;">·</span>
+            <a href="/terms" target="_blank" style="font-size:0.85rem;color:#7a8090;text-decoration:none;">Terms of Service</a>
+          </div>
           <div id="s-delete-account-section" style="margin-top:1rem;border-top:1px solid #333;padding-top:1rem;">
             <div class="sec" style="color:#c44a4a;">DANGER ZONE</div>
             <p style="font-size:0.78rem;color:#888;margin-bottom:0.5rem;">Permanently delete your account and all associated data. A 30-day grace period applies — you can cancel by signing back in.</p>
@@ -7638,8 +7643,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       if (btn) {
         btn.addEventListener("click", () => {
           const scene = this.store.sceneRef as any;
-          if (scene?.openPortal) {
-            scene.openPortal(world.themeId, world.name);
+          if (scene?.enterWorldPortal) {
+            scene.enterWorldPortal(world.themeId, world.name);
           }
         });
       }

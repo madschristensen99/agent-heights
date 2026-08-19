@@ -240,6 +240,9 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
       <p id="auth-forgot" style="margin-top:0.3rem;font-size:0.8rem;color:#555;cursor:pointer;">
         <span style="color:#7a8090;">Forgot password?</span>
       </p>
+      <p style="margin-top:0.8rem;font-size:0.72rem;color:#555;line-height:1.4;">
+        👁 By continuing, you acknowledge our <a href="/privacy" target="_blank" style="color:#7a8090;text-decoration:underline;">Privacy Policy</a> and <a href="/terms" target="_blank" style="color:#7a8090;text-decoration:underline;">Terms of Service</a>.
+      </p>
       <div id="auth-status" style="margin-top:0.5rem;font-size:0.85rem;min-height:1.2em;"></div>
     </div>
   `;
