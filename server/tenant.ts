@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel, Presenter, Challenge } from "../shared/types.js";
+import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel, Presenter, Challenge, OnlinePlayer } from "../shared/types.js";
 import { COMMAND_CENTER_SLUG, COMMAND_CENTER_ADMINS, MAX_PRESENTERS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
@@ -20,7 +20,8 @@ import type { WebSocket } from "ws";
 import { startSession as startConcierge, evaluateNudge, CONCIERGE_EVAL_INTERVAL } from "./concierge.js";
 import { recordTaskCompletion } from "./agent-growth.js";
 import { addXp, getProgress } from "./office-progression.js";
-import { sendWelcomeEmail, isEmailConfigured } from "./email.js";
+import { sendWelcomeEmail, isEmailConfigured, sendRawEmail } from "./email.js";
+import { paragraph, ctaSection, shell, APP_URL, BRAND_ACCENT } from "./email-blocks.js";
 
 export interface UserSession {
   user: AuthUser;
@@ -122,6 +123,8 @@ export class TenantManager {
   private positionFlushTimers = new Map<string, ReturnType<typeof setInterval>>();
   /** Interval between position buffer flushes (ms). */
   private static readonly POSITION_FLUSH_MS = 50;
+  /** Callback fired when a user goes offline (after grace period). */
+  onUserOffline?: (userId: string) => void;
 
   constructor(private rootDir: string) {
     // Pre-seed the Command Center organization
@@ -263,6 +266,9 @@ export class TenantManager {
     const sess = this.sessions.get(user.id);
     if (sess) sess.roomId = roomId;
 
+    // Broadcast occupancy update to all users who can see this room
+    this.broadcastRoomOccupancy(roomId);
+
     return roomPlayer;
   }
 
@@ -299,6 +305,9 @@ export class TenantManager {
     if (room.players.size === 0 && roomId !== HQ2_ROOM_ID && !room.isPrivate && room.roomType !== "organization") {
       this.rooms.delete(roomId);
     }
+
+    // Broadcast occupancy update to all users who can see this room
+    this.broadcastRoomOccupancy(roomId);
 
     return player;
   }
@@ -815,13 +824,15 @@ export class TenantManager {
       if (ccOrg) {
         const org = this.orgs.get(ccOrg);
         if (org && !org.members.has(user.id)) {
-          org.members.set(user.id, {
+          const newMember: OrgMemberEntry = {
             orgId: ccOrg,
             userId: user.id,
             userEmail: user.email,
             role: "admin",
             joinedAt: Date.now(),
-          });
+          };
+          org.members.set(user.id, newMember);
+          void this.persistOrgMember(ccOrg, newMember);
           console.log(`[agent-heights] auto-added ${user.email} as admin to Command Center org`);
         }
       }
@@ -834,13 +845,17 @@ export class TenantManager {
         const pending = org.members.get(pendingKey);
         if (pending) {
           org.members.delete(pendingKey);
-          org.members.set(user.id, {
+          const newMember: OrgMemberEntry = {
             orgId: org.id,
             userId: user.id,
             userEmail: user.email,
             role: pending.role,
             joinedAt: Date.now(),
-          });
+          };
+          org.members.set(user.id, newMember);
+          // Remove the pending row from DB and insert the real one
+          void this.removeOrgMemberFromDB(org.id, pendingKey);
+          void this.persistOrgMember(org.id, newMember);
           console.log(`[agent-heights] converted pending invite for ${user.email} in org ${org.name}`);
         }
       }
@@ -947,6 +962,8 @@ export class TenantManager {
       }
       s.disconnectTimer = null;
       // Session + AgentManager stay alive — agents keep working
+      // Notify friends that this user is now offline
+      if (this.onUserOffline) this.onUserOffline(userId);
     }, 30_000);
   }
 
@@ -1020,6 +1037,10 @@ export class TenantManager {
     }
     this.orgs.set(orgId, org);
     this.orgsBySlug.set(slug, orgId);
+    void this.persistOrg(org);
+    if (founderUserId) {
+      void this.persistOrgMember(orgId, org.members.get(founderUserId)!);
+    }
     return org;
   }
 
@@ -1111,6 +1132,7 @@ export class TenantManager {
         role,
         joinedAt: Date.now(),
       });
+      void this.persistOrgMember(orgId, org.members.get(pendingKey)!);
       return { ok: true, message: `Invitation sent to ${userEmail}. They will be added when they log in.` };
     }
 
@@ -1118,13 +1140,15 @@ export class TenantManager {
       return { ok: false, message: `${userEmail} is already a member.` };
     }
 
-    org.members.set(targetUserId, {
+    const newMember: OrgMemberEntry = {
       orgId,
       userId: targetUserId,
       userEmail,
       role,
       joinedAt: Date.now(),
-    });
+    };
+    org.members.set(targetUserId, newMember);
+    void this.persistOrgMember(orgId, newMember);
 
     return { ok: true, message: `Added ${userEmail} as ${role}.` };
   }
@@ -1133,7 +1157,9 @@ export class TenantManager {
   removeOrgMember(orgId: string, userId: string): boolean {
     const org = this.orgs.get(orgId);
     if (!org) return false;
-    return org.members.delete(userId);
+    const deleted = org.members.delete(userId);
+    if (deleted) void this.removeOrgMemberFromDB(orgId, userId);
+    return deleted;
   }
 
   /** Create a room within an organization. Returns the room ID or null. */
@@ -1166,6 +1192,164 @@ export class TenantManager {
     return false;
   }
 
+  // ── Organization persistence ─────────────────────────────────────────
+
+  /** Load organizations and members from the database at boot. */
+  async restoreOrgsAtBoot(): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data: orgsData, error: orgsError } = await supabaseAdmin
+        .from("agent_heights_organizations")
+        .select("*");
+      if (orgsError || !orgsData) {
+        console.log("[agent-heights] org restore: could not query orgs:", orgsError?.message);
+        return;
+      }
+
+      const { data: membersData, error: membersError } = await supabaseAdmin
+        .from("agent_heights_org_members")
+        .select("*");
+      if (membersError || !membersData) {
+        console.log("[agent-heights] org restore: could not query org members:", membersError?.message);
+        return;
+      }
+
+      let restored = 0;
+      for (const row of orgsData) {
+        // Skip the Command Center — it's pre-seeded in the constructor
+        if (row.slug === COMMAND_CENTER_SLUG) continue;
+        const orgId = row.id as string;
+        const org: OrgEntry = {
+          id: orgId,
+          name: row.name as string,
+          slug: row.slug as string,
+          githubOrg: (row.github_org as string) ?? null,
+          createdAt: new Date(row.created_at as string).getTime(),
+          members: new Map(),
+        };
+        // Add members
+        for (const m of membersData) {
+          if (m.org_id !== orgId) continue;
+          const userId = m.user_id as string;
+          if (userId.startsWith("pending:")) {
+            // Pending email invitation
+            org.members.set(userId, {
+              orgId,
+              userId,
+              userEmail: m.user_email as string | null,
+              role: m.role as "admin" | "member",
+              joinedAt: new Date(m.joined_at as string).getTime(),
+            });
+          } else {
+            org.members.set(userId, {
+              orgId,
+              userId,
+              userEmail: m.user_email as string | null,
+              role: m.role as "admin" | "member",
+              joinedAt: new Date(m.joined_at as string).getTime(),
+            });
+          }
+        }
+        this.orgs.set(orgId, org);
+        this.orgsBySlug.set(org.slug, orgId);
+        restored++;
+      }
+
+      // Sync Command Center members from DB too (admins may have been added in a previous session)
+      const ccOrgId = "org-command-center";
+      const ccOrg = this.orgs.get(ccOrgId);
+      if (ccOrg) {
+        for (const m of membersData) {
+          if (m.org_id !== ccOrgId) continue;
+          const userId = m.user_id as string;
+          if (!ccOrg.members.has(userId)) {
+            ccOrg.members.set(userId, {
+              orgId: ccOrgId,
+              userId,
+              userEmail: m.user_email as string | null,
+              role: m.role as "admin" | "member",
+              joinedAt: new Date(m.joined_at as string).getTime(),
+            });
+          }
+        }
+      }
+
+      console.log(`[agent-heights] org restore: ${restored} org(s) loaded from DB (${membersData.length} member rows)`);
+    } catch (err) {
+      console.error("[agent-heights] org restore: failed:", err);
+    }
+  }
+
+  /** Persist an organization to the database. */
+  private async persistOrg(org: OrgEntry): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabaseAdmin
+        .from("agent_heights_organizations")
+        .upsert({
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          github_org: org.githubOrg,
+          created_at: new Date(org.createdAt).toISOString(),
+        }, { onConflict: "id" });
+    } catch (err) {
+      console.error("[tenant] persistOrg failed:", err);
+    }
+  }
+
+  /** Persist an org member to the database. */
+  private async persistOrgMember(orgId: string, member: OrgMemberEntry): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabaseAdmin
+        .from("agent_heights_org_members")
+        .upsert({
+          org_id: orgId,
+          user_id: member.userId,
+          user_email: member.userEmail,
+          role: member.role,
+          joined_at: new Date(member.joinedAt).toISOString(),
+        }, { onConflict: "org_id,user_id" });
+    } catch (err) {
+      console.error("[tenant] persistOrgMember failed:", err);
+    }
+  }
+
+  /** Remove an org member from the database. */
+  private async removeOrgMemberFromDB(orgId: string, userId: string): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabaseAdmin
+        .from("agent_heights_org_members")
+        .delete()
+        .eq("org_id", orgId)
+        .eq("user_id", userId);
+    } catch (err) {
+      console.error("[tenant] removeOrgMemberFromDB failed:", err);
+    }
+  }
+
+  /** Send a friend request email notification. */
+  async sendFriendRequestEmail(toEmail: string, fromName: string): Promise<void> {
+    if (!isEmailConfigured) return;
+    try {
+      await sendRawEmail(
+        toEmail,
+        `${fromName} wants to be friends on Agent Heights`,
+        shell(
+          [
+            paragraph(`<strong style="color:${BRAND_ACCENT};">${fromName}</strong> wants to connect with you on Agent Heights.`, { lead: true }),
+            paragraph("Accept their request to see when they're online and which room they're in. You can also join them with one click.", { muted: true }),
+            ctaSection("View Friend Requests", APP_URL),
+          ].join(""),
+        ),
+      );
+    } catch (err) {
+      console.error("[tenant] friend request email failed:", err);
+    }
+  }
+
   /** Check if a user can perform admin actions in their current room. */
   canManageRoom(userId: string): boolean {
     const sess = this.sessions.get(userId);
@@ -1177,5 +1361,124 @@ export class TenantManager {
       return this.isOrgAdmin(room.orgId, userId);
     }
     return false;
+  }
+
+  // ── Presence & room discovery ─────────────────────────────────────────
+
+  /** Get all currently online users with their current room info. */
+  getOnlineUsers(): OnlinePlayer[] {
+    const result: OnlinePlayer[] = [];
+    for (const [userId, sess] of this.sessions) {
+      if (sess.clients.size === 0) continue;
+      const roomId = sess.roomId;
+      const room = roomId ? this.rooms.get(roomId) : null;
+      const name = sess.player?.name ?? "Boss";
+      result.push({
+        userId,
+        name,
+        roomId: roomId ?? null,
+        roomName: room?.name ?? "",
+        roomType: room?.roomType ?? null,
+        orgId: room?.orgId,
+      });
+    }
+    return result;
+  }
+
+  /** Get the set of currently online user IDs (for friends presence). */
+  getOnlineUserIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const [userId, sess] of this.sessions) {
+      if (sess.clients.size > 0) ids.add(userId);
+    }
+    return ids;
+  }
+
+  /** Get a map of userId → { roomId, name, roomName, roomType, orgId } for online users. */
+  getOnlineUserInfo(): Map<string, { roomId: string | null; name: string; roomName: string; roomType: string; orgId?: string }> {
+    const map = new Map<string, { roomId: string | null; name: string; roomName: string; roomType: string; orgId?: string }>();
+    for (const [userId, sess] of this.sessions) {
+      if (sess.clients.size === 0) continue;
+      const roomId = sess.roomId;
+      const room = roomId ? this.rooms.get(roomId) : null;
+      const name = sess.player?.name ?? "Boss";
+      map.set(userId, {
+        roomId: roomId ?? null,
+        name,
+        roomName: room?.name ?? "",
+        roomType: room?.roomType ?? "",
+        orgId: room?.orgId,
+      });
+    }
+    return map;
+  }
+
+  /** Get room occupancy for all rooms visible to a user (org rooms, public rooms, HQ2). */
+  getRoomOccupancyForUser(userId: string): Array<{ roomId: string; name: string; roomType: RoomType; orgId?: string; playerCount: number; players: { userId: string; name: string }[] }> {
+    const result: Array<{ roomId: string; name: string; roomType: RoomType; orgId?: string; playerCount: number; players: { userId: string; name: string }[] }> = [];
+    for (const room of this.rooms.values()) {
+      if (room.roomType === "private" && room.ownerId !== userId) continue;
+      if (room.roomType === "organization" && room.orgId) {
+        const org = this.orgs.get(room.orgId);
+        if (!org?.members.has(userId) && room.id !== HQ2_ROOM_ID) continue;
+      }
+      const players = Array.from(room.players.values()).map((p) => ({ userId: p.userId, name: p.name }));
+      result.push({
+        roomId: room.id,
+        name: room.name,
+        roomType: room.roomType,
+        orgId: room.orgId,
+        playerCount: players.length,
+        players,
+      });
+    }
+    return result;
+  }
+
+  /** Get the player name for a user (from their session). */
+  getPlayerName(userId: string): string {
+    const sess = this.sessions.get(userId);
+    return sess?.player?.name ?? "Boss";
+  }
+
+  /** Get a session's broadcast function (for notifying friends of online/offline). */
+  getSessionBroadcast(userId: string): ((msg: ServerMsg) => void) | null {
+    const sess = this.sessions.get(userId);
+    return sess ? sess.broadcast : null;
+  }
+
+  /** Get all room IDs for a user (for room occupancy notifications). */
+  getVisibleRoomIds(userId: string): string[] {
+    const ids: string[] = [];
+    for (const room of this.rooms.values()) {
+      if (room.roomType === "private" && room.ownerId !== userId) continue;
+      if (room.roomType === "organization" && room.orgId) {
+        const org = this.orgs.get(room.orgId);
+        if (!org?.members.has(userId) && room.id !== HQ2_ROOM_ID) continue;
+      }
+      ids.push(room.id);
+    }
+    return ids;
+  }
+
+  /** Broadcast room_occupancy to all players who can see a given room. */
+  broadcastRoomOccupancy(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    const players = Array.from(room.players.values()).map((p) => ({ userId: p.userId, name: p.name }));
+    const occupancy = {
+      roomId: room.id,
+      name: room.name,
+      roomType: room.roomType,
+      orgId: room.orgId,
+      playerCount: players.length,
+      players,
+    };
+    for (const [pid, sess] of this.sessions) {
+      if (sess.clients.size === 0) continue;
+      const visibleRoomIds = this.getVisibleRoomIds(pid);
+      if (!visibleRoomIds.includes(roomId)) continue;
+      sess.broadcast({ type: "room_occupancy", rooms: [occupancy] });
+    }
   }
 }

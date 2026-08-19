@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 import { getReactionsForAchievement, NPC_IDS, checkContextTrigger } from "./ui/agent-reactions";
@@ -315,6 +315,15 @@ export class Store {
   /** Members of the currently viewed org. */
   orgMembers: { orgId: string; members: OrgMember[] } | null = null;
 
+  /** Friends list with online status and room info. */
+  friends: FriendEntry[] = [];
+  /** Pending friend requests (incoming and outgoing). */
+  pendingFriendRequests: PendingFriendRequest[] = [];
+  /** All online players (global presence list). */
+  onlinePlayers: OnlinePlayer[] = [];
+  /** Room occupancy map: roomId → { playerCount, players[] }. */
+  roomOccupancy: Map<string, { playerCount: number; players: { userId: string; name: string }[] }> = new Map();
+
   /** True if the current room is an organization room (uses the agentHeights theme). */
   get isOrgRoom(): boolean {
     if (!this.roomId) return false;
@@ -469,6 +478,10 @@ export class Store {
     this.roomsList = [];
     this.orgsList = [];
     this.orgMembers = null;
+    this.friends = [];
+    this.pendingFriendRequests = [];
+    this.onlinePlayers = [];
+    this.roomOccupancy.clear();
     this.hasApiKey = false;
     this.subscriptionActive = true;
     this.subscriptionStatus = "none";
@@ -1479,6 +1492,49 @@ export class Store {
       case "org_error": {
         for (const fn of this.toastListeners) fn(msg.message);
         return;
+      }
+      case "friends_list": {
+        this.friends = msg.friends;
+        this.pendingFriendRequests = msg.pending;
+        break;
+      }
+      case "friend_request_received": {
+        for (const fn of this.toastListeners) fn(`Friend request from ${msg.fromName}!`);
+        this.sendFn?.({ type: "list_friends" });
+        return;
+      }
+      case "friend_accepted": {
+        for (const fn of this.toastListeners) fn(`${msg.byName} accepted your friend request!`);
+        this.sendFn?.({ type: "list_friends" });
+        return;
+      }
+      case "friend_online": {
+        const f = this.friends.find((f) => f.userId === msg.userId);
+        if (f) {
+          f.online = true;
+          f.roomId = msg.roomId;
+          f.roomName = msg.roomName;
+        }
+        break;
+      }
+      case "friend_offline": {
+        const f = this.friends.find((f) => f.userId === msg.userId);
+        if (f) {
+          f.online = false;
+          f.roomId = null;
+          f.roomName = "";
+        }
+        break;
+      }
+      case "online_players": {
+        this.onlinePlayers = msg.players;
+        break;
+      }
+      case "room_occupancy": {
+        for (const r of msg.rooms) {
+          this.roomOccupancy.set(r.roomId, { playerCount: r.playerCount, players: r.players });
+        }
+        break;
       }
       case "emote": {
         for (const fn of this.emoteListeners) fn(msg.agentId, msg.emote);

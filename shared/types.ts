@@ -849,6 +849,34 @@ export interface OrgMember {
 export const COMMAND_CENTER_SLUG = "command-center";
 
 /** Admin emails whitelisted for the Command Center organization. */
+
+// --------------------------------------------------- social graph ---
+
+/** A friend relationship entry for display in the friends list. */
+export interface FriendEntry {
+  userId: string;
+  name: string;
+  online: boolean;
+  roomId: string | null;
+  roomName: string;
+}
+
+/** A pending friend request (incoming or outgoing). */
+export interface PendingFriendRequest {
+  userId: string;
+  name: string;
+  direction: "incoming" | "outgoing";
+}
+
+/** An online player visible in the global presence list. */
+export interface OnlinePlayer {
+  userId: string;
+  name: string;
+  roomId: string | null;
+  roomName: string;
+  roomType: RoomType | null;
+  orgId?: string;
+}
 export const COMMAND_CENTER_ADMINS = [
   "remseechannel@gmail.com",
   "madschristensen99@icloud.com",
@@ -1122,7 +1150,13 @@ export type ClientMsg =
   | { type: "like_office"; officeOwnerId: string }
   | { type: "unlike_office"; officeOwnerId: string }
   | { type: "request_office_progress" }
-  | { type: "request_agent_growth"; agentId: string };
+  | { type: "request_agent_growth"; agentId: string }
+  | { type: "friend_request"; email: string }
+  | { type: "friend_accept"; userId: string }
+  | { type: "friend_decline"; userId: string }
+  | { type: "friend_remove"; userId: string }
+  | { type: "list_friends" }
+  | { type: "list_online_players" };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1279,7 +1313,14 @@ export type ServerMsg =
   | { type: "decorations"; decorations: OfficeDecoration[] }
   | { type: "office_social"; officeOwnerId: string; social: OfficeSocialState }
   | { type: "office_progress"; progress: OfficeLevelInfo }
-  | { type: "agent_growth"; agentId: string; growth: AgentGrowth };
+  | { type: "agent_growth"; agentId: string; growth: AgentGrowth }
+  | { type: "friends_list"; friends: FriendEntry[]; pending: PendingFriendRequest[] }
+  | { type: "friend_request_received"; fromUserId: string; fromName: string }
+  | { type: "friend_accepted"; byUserId: string; byName: string }
+  | { type: "friend_online"; userId: string; name: string; roomId: string | null; roomName: string }
+  | { type: "friend_offline"; userId: string }
+  | { type: "online_players"; players: OnlinePlayer[] }
+  | { type: "room_occupancy"; rooms: { roomId: string; name: string; roomType: RoomType; orgId?: string; playerCount: number; players: { userId: string; name: string }[] }[] };
 
 // ── Away Report ──────────────────────────────────────────────────────────────
 

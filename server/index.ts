@@ -48,6 +48,7 @@ import { getDecorations, placeDecoration, removeDecoration, moveDecoration } fro
 import { getSocialState, leaveStickyNote, likeOffice, unlikeOffice, recordVisit } from "./office-social.js";
 import { getProgress, addXp, getMaxAgents } from "./office-progression.js";
 import { getGrowth, clearGrowth } from "./agent-growth.js";
+import { sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getFriendsList, getAcceptedFriendIds } from "./friends.js";
 import { generateChallenge, scoreChallenge } from "./challenges.js";
 
 // ── User activity persistence (retention system) ─────────────────────────
@@ -333,6 +334,16 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
 
 const tenants = new TenantManager(rootDir);
 const screenshots = new ScreenshotManager();
+
+// Notify friends when a user goes offline (after 30s grace period)
+tenants.onUserOffline = (userId: string) => {
+  void getAcceptedFriendIds(userId).then((friendIds) => {
+    for (const fid of friendIds) {
+      const fb = tenants.getSessionBroadcast(fid);
+      if (fb) fb({ type: "friend_offline", userId });
+    }
+  }).catch(() => {});
+};
 
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
@@ -1044,6 +1055,21 @@ wss.on("connection", async (ws, req) => {
   }
   sess.clients.add(ws);
 
+  // Notify friends that this user is now online
+  if (user.id !== "dev") {
+    void getAcceptedFriendIds(user.id).then((friendIds) => {
+      const name = sess.player?.name ?? "Boss";
+      const roomId = sess.roomId;
+      const room = roomId ? tenants.getRoom(roomId) : null;
+      for (const fid of friendIds) {
+        const fb = tenants.getSessionBroadcast(fid);
+        if (fb) {
+          fb({ type: "friend_online", userId: user.id, name, roomId, roomName: room?.name ?? "" });
+        }
+      }
+    }).catch(() => {});
+  }
+
   // Load persisted activity timestamps for retention system
   if (user.id !== "dev") {
     void loadUserActivity(user.id).then(async (activity) => {
@@ -1202,6 +1228,22 @@ wss.on("connection", async (ws, req) => {
     } satisfies ServerMsg));
   }
   sendRoomsList();
+
+  // Send initial friends list
+  if (sess.user.id !== "dev") {
+    void (async () => {
+      const onlineIds = tenants.getOnlineUserIds();
+      const roomInfo = tenants.getOnlineUserInfo();
+      const { friends, pending } = await getFriendsList(sess.user.id, onlineIds, roomInfo);
+      ws.send(JSON.stringify({ type: "friends_list", friends, pending } satisfies ServerMsg));
+    })().catch(() => {});
+  }
+
+  // Send initial room occupancy
+  const occupancy = tenants.getRoomOccupancyForUser(sess.user.id);
+  if (occupancy.length > 0) {
+    ws.send(JSON.stringify({ type: "room_occupancy", rooms: occupancy } satisfies ServerMsg));
+  }
 
   // ── Token refresh timer ──────────────────────────────────────────────
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -3853,6 +3895,70 @@ wss.on("connection", async (ws, req) => {
           dismissNudge(sess.user.id, msg.nudgeId);
           break;
         }
+        case "friend_request": {
+          const result = await sendFriendRequest(sess.user.id, msg.email);
+          sess.broadcast({ type: "toast", text: result.message });
+          if (result.ok) {
+            const onlineIds = tenants.getOnlineUserIds();
+            const roomInfo = tenants.getOnlineUserInfo();
+            const { friends, pending } = await getFriendsList(sess.user.id, onlineIds, roomInfo);
+            sess.broadcast({ type: "friends_list", friends, pending });
+            // Send email notification to the target user
+            const fromName = tenants.getPlayerName(sess.user.id);
+            void tenants.sendFriendRequestEmail(msg.email, fromName);
+          }
+          break;
+        }
+        case "friend_accept": {
+          const result = await acceptFriendRequest(sess.user.id, msg.userId);
+          sess.broadcast({ type: "toast", text: result.message });
+          if (result.ok) {
+            const onlineIds = tenants.getOnlineUserIds();
+            const roomInfo = tenants.getOnlineUserInfo();
+            const { friends, pending } = await getFriendsList(sess.user.id, onlineIds, roomInfo);
+            sess.broadcast({ type: "friends_list", friends, pending });
+            const friendName = tenants.getPlayerName(sess.user.id);
+            const friendBroadcast = tenants.getSessionBroadcast(msg.userId);
+            if (friendBroadcast) {
+              friendBroadcast({ type: "friend_accepted", byUserId: sess.user.id, byName: friendName });
+              const { friends: fFriends, pending: fPending } = await getFriendsList(msg.userId, onlineIds, roomInfo);
+              friendBroadcast({ type: "friends_list", friends: fFriends, pending: fPending });
+            }
+          }
+          break;
+        }
+        case "friend_decline": {
+          const result = await declineFriendRequest(sess.user.id, msg.userId);
+          sess.broadcast({ type: "toast", text: result.message });
+          if (result.ok) {
+            const onlineIds = tenants.getOnlineUserIds();
+            const roomInfo = tenants.getOnlineUserInfo();
+            const { friends, pending } = await getFriendsList(sess.user.id, onlineIds, roomInfo);
+            sess.broadcast({ type: "friends_list", friends, pending });
+          }
+          break;
+        }
+        case "friend_remove": {
+          const result = await removeFriend(sess.user.id, msg.userId);
+          sess.broadcast({ type: "toast", text: result.message });
+          const onlineIds = tenants.getOnlineUserIds();
+          const roomInfo = tenants.getOnlineUserInfo();
+          const { friends, pending } = await getFriendsList(sess.user.id, onlineIds, roomInfo);
+          sess.broadcast({ type: "friends_list", friends, pending });
+          break;
+        }
+        case "list_friends": {
+          const onlineIds = tenants.getOnlineUserIds();
+          const roomInfo = tenants.getOnlineUserInfo();
+          const { friends, pending } = await getFriendsList(sess.user.id, onlineIds, roomInfo);
+          sess.broadcast({ type: "friends_list", friends, pending });
+          break;
+        }
+        case "list_online_players": {
+          const players = tenants.getOnlineUsers();
+          sess.broadcast({ type: "online_players", players });
+          break;
+        }
       }
     } catch (err) {
       console.error("[server] error handling message:", err);
@@ -3956,9 +4062,28 @@ server.listen(SERVER_PORT, () => {
     void ensureGatewayBalance().catch(err => console.error(`[agent-heights] Gateway auto-deposit failed:`, err));
   }
 
+  // Restore organizations from DB before user sessions so memberships are
+  // available when processOrgMemberships runs.
+  void tenants.restoreOrgsAtBoot();
+
   // Restore user sessions at boot so agents resume immediately after a
   // server restart, without waiting for each user to reconnect.
   void tenants.restoreSessionsAtBoot();
+
+  // Presence heartbeat: every 30s, push updated friends_list to each
+  // connected user so online status and room info stay current without
+  // manual refresh.
+  setInterval(() => {
+    const onlineIds = tenants.getOnlineUserIds();
+    const roomInfo = tenants.getOnlineUserInfo();
+    for (const sess of tenants.values()) {
+      if (sess.clients.size === 0) continue;
+      if (sess.user.id === "dev") continue;
+      void getFriendsList(sess.user.id, onlineIds, roomInfo).then(({ friends, pending }) => {
+        sess.broadcast({ type: "friends_list", friends, pending });
+      });
+    }
+  }, 30_000).unref?.();
 
   // Start agent-originated retention email loop (runs hourly)
   startRetentionLoop((): RetentionManagerEntry[] => {

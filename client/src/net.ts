@@ -6,6 +6,8 @@ const SILENT_MSG_TYPES = new Set([
   "mail_digest", "platform_config_result", "outfits",
   "api_key_status", "mailbox_update", "players_moved",
   "achievements_sync", "achievements_saved",
+  "friends_list", "friend_online", "friend_offline",
+  "online_players", "room_occupancy",
 ]);
 
 export class Net {

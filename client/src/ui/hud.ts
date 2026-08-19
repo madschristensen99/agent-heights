@@ -264,6 +264,7 @@ export class Hud {
         <span id="workspace-name"></span>
         <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
         <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
+        <button class="btn mini" id="social-btn">👥 SOCIAL</button>
         <button class="btn mini" id="worlds-btn">🌀 WORLDS</button>
         <button class="btn mini" id="voice-btn" title="Toggle microphone">${ICON.micOff}</button>
         <button class="btn mini" id="speaker-btn" title="Toggle speaker (mute/unmute incoming audio)">${ICON.speakerOn}</button>
@@ -455,6 +456,11 @@ export class Hud {
     document.getElementById("rooms-btn")!.addEventListener("click", () => {
       this.net.send({ type: "list_orgs" });
       this.openRoomsPanel();
+    });
+    document.getElementById("social-btn")!.addEventListener("click", () => {
+      this.net.send({ type: "list_friends" });
+      this.net.send({ type: "list_online_players" });
+      this.openSocialPanel();
     });
     document.getElementById("worlds-btn")!.addEventListener("click", () => {
       this.store.toggleWorldsPanel();
@@ -1842,6 +1848,200 @@ export class Hud {
     </div>`;
   }
 
+  private openSocialPanel(): void {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+    overlay.id = "social-overlay";
+
+    const onlineFriends = this.store.friends.filter(f => f.online);
+    const offlineFriends = this.store.friends.filter(f => !f.online);
+    const incomingReqs = this.store.pendingFriendRequests.filter(r => r.direction === "incoming");
+    const outgoingReqs = this.store.pendingFriendRequests.filter(r => r.direction === "outgoing");
+
+    const friendHtml = (f: typeof onlineFriends[0]) => `
+      <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${f.online ? 'var(--accent)' : 'var(--panel-edge)'};flex-shrink:0;"></span>
+        <span style="font-size:0.85rem;color:var(--text);flex:1;">${f.name}</span>
+        ${f.online && f.roomName ? `<span style="font-size:0.7rem;color:var(--dim);">in ${f.roomName}</span>` : ''}
+        ${f.online && f.roomId ? `<button class="btn" data-join-room="${f.roomId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;">Join</button>` : ''}
+        <button class="btn" data-remove-friend="${f.userId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;color:var(--dim);">✕</button>
+      </div>`;
+
+    const reqHtml = (r: typeof incomingReqs[0], incoming: boolean) => `
+      <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
+        <span style="font-size:0.85rem;color:var(--text);flex:1;">${r.name}</span>
+        ${incoming ? `
+          <button class="btn primary" data-accept-friend="${r.userId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;">Accept</button>
+          <button class="btn" data-decline-friend="${r.userId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;">Decline</button>
+        ` : `<span style="font-size:0.7rem;color:var(--dim);">Pending</span>`}
+      </div>`;
+
+    const onlinePlayerHtml = this.store.onlinePlayers
+      .filter(p => p.userId !== this.store.userId)
+      .map(p => `
+        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;"></span>
+          <span style="font-size:0.85rem;color:var(--text);flex:1;">${p.name}</span>
+          <span style="font-size:0.7rem;color:var(--dim);">${p.roomName || '—'}</span>
+          ${p.roomId ? `<button class="btn" data-join-room="${p.roomId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;">Join</button>` : ''}
+        </div>
+      `).join("");
+
+    const roomOccupancyHtml = this.store.roomsList
+      .filter(r => r.roomType === "organization" || r.roomId === "hq2")
+      .map(r => {
+        const occ = this.store.roomOccupancy.get(r.roomId);
+        const count = occ?.playerCount ?? 0;
+        const isCurrent = this.store.roomId === r.roomId;
+        return `
+          <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
+            <span style="font-size:0.85rem;color:var(--text);flex:1;">${r.name}</span>
+            <span style="font-size:0.7rem;color:${count > 0 ? 'var(--accent)' : 'var(--dim)'};">${count > 0 ? `🟢 ${count} player${count !== 1 ? 's' : ''}` : '⚫ Empty'}</span>
+            ${!isCurrent ? `<button class="btn" data-join-room="${r.roomId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;">Join</button>` : '<span style="font-size:0.65rem;color:var(--dim);">Here</span>'}
+          </div>`;
+      }).join("");
+
+    overlay.innerHTML = `
+      <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;width:500px;max-width:90vw;color:var(--text);font-family:var(--font-body);max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin:0;font-size:1.1rem;color:var(--text);">👥 Social</h2>
+          <button class="x" id="social-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">ADD FRIEND</div>
+          <div style="display:flex;gap:0.5rem;">
+            <input id="friend-email-input" placeholder="Email address…" style="flex:1;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:var(--radius-sm);color:var(--text);font-size:0.85rem;font-family:var(--font-body);" />
+            <button class="btn primary" id="friend-send-btn" style="font-size:0.8rem;">SEND</button>
+          </div>
+        </div>
+
+        ${incomingReqs.length > 0 ? `
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">FRIEND REQUESTS (${incomingReqs.length})</div>
+          ${incomingReqs.map(r => reqHtml(r, true)).join("")}
+        </div>
+        ` : ""}
+
+        ${outgoingReqs.length > 0 ? `
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">SENT REQUESTS (${outgoingReqs.length})</div>
+          ${outgoingReqs.map(r => reqHtml(r, false)).join("")}
+        </div>
+        ` : ""}
+
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">FRIENDS — ONLINE (${onlineFriends.length})</div>
+          ${onlineFriends.length === 0 ? '<p style="color:var(--dim);font-size:0.8rem;">No friends online.</p>' : onlineFriends.map(f => friendHtml(f)).join("")}
+        </div>
+
+        ${offlineFriends.length > 0 ? `
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">FRIENDS — OFFLINE (${offlineFriends.length})</div>
+          ${offlineFriends.map(f => friendHtml(f)).join("")}
+        </div>
+        ` : ""}
+
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
+            <div style="font-size:0.75rem;color:var(--dim);">ONLINE PLAYERS (${this.store.onlinePlayers.length})</div>
+            <button class="btn" id="online-refresh-btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;">↻</button>
+          </div>
+          ${this.store.onlinePlayers.length <= 1 ? '<p style="color:var(--dim);font-size:0.8rem;">No other players online.</p>' : onlinePlayerHtml}
+        </div>
+
+        ${roomOccupancyHtml ? `
+        <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">ROOMS — WHO'S WHERE</div>
+          ${roomOccupancyHtml}
+        </div>
+        ` : ""}
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    document.getElementById("social-close")!.addEventListener("click", close);
+
+    // Send friend request
+    document.getElementById("friend-send-btn")!.addEventListener("click", () => {
+      const input = document.getElementById("friend-email-input") as HTMLInputElement;
+      const email = input.value.trim();
+      if (!email) return;
+      this.net.send({ type: "friend_request", email });
+      input.value = "";
+      setTimeout(() => {
+        this.net.send({ type: "list_friends" });
+        this.rerenderSocialPanel(overlay);
+      }, 500);
+    });
+
+    // Accept friend
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-accept-friend]")) {
+      btn.addEventListener("click", () => {
+        this.net.send({ type: "friend_accept", userId: btn.dataset.acceptFriend! });
+        setTimeout(() => {
+          this.net.send({ type: "list_friends" });
+          this.rerenderSocialPanel(overlay);
+        }, 500);
+      });
+    }
+
+    // Decline friend
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-decline-friend]")) {
+      btn.addEventListener("click", () => {
+        this.net.send({ type: "friend_decline", userId: btn.dataset.declineFriend! });
+        setTimeout(() => {
+          this.net.send({ type: "list_friends" });
+          this.rerenderSocialPanel(overlay);
+        }, 500);
+      });
+    }
+
+    // Remove friend
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-remove-friend]")) {
+      btn.addEventListener("click", () => {
+        this.net.send({ type: "friend_remove", userId: btn.dataset.removeFriend! });
+        setTimeout(() => {
+          this.net.send({ type: "list_friends" });
+          this.rerenderSocialPanel(overlay);
+        }, 500);
+      });
+    }
+
+    // Join room
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-join-room]")) {
+      btn.addEventListener("click", () => {
+        const roomId = btn.dataset.joinRoom!;
+        this.net.send({ type: "switch_room", roomId });
+        close();
+      });
+    }
+
+    // Refresh online players
+    const refreshBtn = document.getElementById("online-refresh-btn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => {
+        this.net.send({ type: "list_online_players" });
+        setTimeout(() => this.rerenderSocialPanel(overlay), 500);
+      });
+    }
+  }
+
+  private rerenderSocialPanel(overlay: HTMLElement): void {
+    if (!overlay || !overlay.isConnected) return;
+    const oldScroll = overlay.querySelector("div")?.scrollTop ?? 0;
+    this.openSocialPanel();
+    const newOverlay = document.getElementById("social-overlay");
+    if (newOverlay) {
+      const inner = newOverlay.querySelector("div");
+      if (inner) inner.scrollTop = oldScroll;
+      overlay.remove();
+    }
+  }
+
   private openRoomsPanel(): void {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
@@ -1894,7 +2094,10 @@ export class Hud {
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             ${orgRooms.map(r => {
               const isCurrent = this.store.roomId === r.roomId;
-              return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">🏢 ${r.name}</button>`;
+              const occ = this.store.roomOccupancy.get(r.roomId);
+              const count = occ?.playerCount ?? 0;
+              const badge = count > 0 ? ` <span style="font-size:0.65rem;color:var(--accent);">(${count})</span>` : '';
+              return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">🏢 ${r.name}${badge}</button>`;
             }).join("")}
           </div>
         </div>
