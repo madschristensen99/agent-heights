@@ -2386,6 +2386,7 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
     }
   }
   const hasThemeSpritesheet = theme && tex.exists("furniture-theme");
+  const isProceduralTier = theme?.assets?.assetTier === "procedural";
 
   // Generate canvas textures for each furniture type (procedural fallback)
   for (const ft of effectiveTypes) {
@@ -2397,8 +2398,11 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
       if (hasThemeSpritesheet && themeTileIds.has(tileId)) continue;
 
       // If an AI-generated texture exists for this tile ID, skip procedural generation
-      const aiKey = AI_FURNITURE_TEXTURES[tileId];
-      if (aiKey && tex.exists(aiKey)) continue;
+      // (but not for procedural-tier themes — they should use their own drawings)
+      if (!isProceduralTier) {
+        const aiKey = AI_FURNITURE_TEXTURES[tileId];
+        if (aiKey && tex.exists(aiKey)) continue;
+      }
 
       // Fall back to procedural canvas drawing
       const canvasTex = tex.createCanvas(key, TILE_PX, TILE_PX);
@@ -2555,9 +2559,9 @@ export function upgradeFurniture(scene: Phaser.Scene, furnitureLayer: Phaser.Til
         continue;
       }
 
-      // Use theme spritesheet frame if available, then AI texture, then procedural fallback
+      // Use theme spritesheet frame if available, then AI texture (non-procedural only), then procedural fallback
       const themeKey = (hasThemeSpritesheet && themeTileIds.has(tileId)) ? "furniture-theme" : null;
-      const aiKey = AI_FURNITURE_TEXTURES[tileId];
+      const aiKey = isProceduralTier ? null : AI_FURNITURE_TEXTURES[tileId];
       let key: string | null = null;
       let themeFrame: number | undefined;
       if (themeKey && tex.exists(themeKey)) {

@@ -92,6 +92,7 @@ interface RenderJob {
   oy: number;
   chunkLightList: LightSource[];
   container: Phaser.GameObjects.Container;
+  useAiTextures: boolean;
 }
 const MAX_LIGHTS_PER_CHUNK = 8;
 const MAX_HP = 100;
@@ -3462,6 +3463,7 @@ export class WorldLayer {
       currentRow: 0,
       overlayTextures, edgeTileColors, worldTilesTex,
       ox, oy, chunkLightList, container,
+      useAiTextures: this.worldTheme?.assets?.assetTier !== "procedural",
     };
     this.renderingQueue.push(job);
   }
@@ -3558,8 +3560,8 @@ export class WorldLayer {
       const variant = (h & 0x7fffffff) % WORLD_VARIANTS;
       const frame = tileToFrame(tile, variant);
 
-      const aiObjKeyForBase = AI_OBJECT_TEXTURES[tile];
-      const aiTextures = AI_TILE_TEXTURES[tile];
+      const aiObjKeyForBase = job.useAiTextures ? AI_OBJECT_TEXTURES[tile] : undefined;
+      const aiTextures = job.useAiTextures ? AI_TILE_TEXTURES[tile] : undefined;
       if (aiObjKeyForBase && this.scene.textures.exists(aiObjKeyForBase)) {
         const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
         if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
@@ -3591,11 +3593,11 @@ export class WorldLayer {
         drawTexToCanvas(resolveItemTex(this.scene, "tennis-court"), px, py);
       }
 
-      const aiObjKey = AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]];
+      const aiObjKey = job.useAiTextures ? (AI_OBJECT_TEXTURES[tile] ?? AI_ITEM_TEXTURES[overlayTextures[tile]]) : undefined;
       const overlayKey = aiObjKey ?? overlayTextures[tile];
 
       if (tile === TILE.TEE_BOX) {
-        const grassTexs = AI_TILE_TEXTURES[TILE.GRASS];
+        const grassTexs = job.useAiTextures ? AI_TILE_TEXTURES[TILE.GRASS] : undefined;
         if (grassTexs && this.scene.textures.exists(grassTexs[variant % grassTexs.length])) {
           drawTexToCanvas(grassTexs[variant % grassTexs.length], px, py);
         } else {
