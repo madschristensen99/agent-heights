@@ -124,8 +124,10 @@ export async function getOverviewStats(tenants: TenantManager): Promise<Overview
   ]);
 
   const grossMargin = revenue.mrr - usage.totalSpend;
-  const arpu = revenue.mrr > 0 && users.activeSubscribers > 0
-    ? revenue.mrr / users.activeSubscribers
+  // Use the active subscriber count from Stripe (sum of byTier counts) for ARPU
+  const stripeActiveCount = revenue.byTier.reduce((sum, t) => sum + t.count, 0);
+  const arpu = revenue.mrr > 0 && stripeActiveCount > 0
+    ? revenue.mrr / stripeActiveCount
     : 0;
 
   return {
@@ -160,19 +162,44 @@ async function getUserCounts(): Promise<{
     return { totalUsers: 0, activeSubscribers: 0, entrancePaidCount: 0, dau: 0, wau: 0, mau: 0 };
   }
 
-  const { data: payments } = await supabaseAdmin
-    .from("user_payments")
-    .select("subscription_status, entrance_paid, created_at");
+  // Total users and active counts from auth.users (not user_payments, which
+  // only has rows for users who started a payment flow)
+  let totalUsers = 0;
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  let dau = 0;
+  let wau = 0;
+  let mau = 0;
 
-  const totalUsers = payments?.length ?? 0;
-  const activeSubscribers = payments?.filter(p => p.subscription_status === "active" || p.subscription_status === "trialing").length ?? 0;
-  const entrancePaidCount = payments?.filter(p => p.entrance_paid).length ?? 0;
+  try {
+    // listUsers returns paginated results — fetch all pages
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+      if (error || !data.users) break;
+      totalUsers += data.users.length;
+      for (const u of data.users) {
+        // last_sign_in_at is the most reliable activity signal from auth
+        const lastSignIn = u.last_sign_in_at ? new Date(u.last_sign_in_at).getTime() : 0;
+        if (lastSignIn > 0) {
+          if (now - lastSignIn < dayMs) dau++;
+          if (now - lastSignIn < 7 * dayMs) wau++;
+          if (now - lastSignIn < 30 * dayMs) mau++;
+        }
+      }
+      hasMore = page * 1000 < (data.total ?? 0);
+      page++;
+    }
+  } catch (err) {
+    console.error("[admin-stats] listUsers failed:", err);
+  }
 
-  // DAU/WAU/MAU from api_usage_records — distinct users in time windows
-  const now = new Date();
-  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Also count users active via api_usage_records who may not have
+  // last_sign_in_at updated (e.g. long-lived sessions)
+  const dayAgo = new Date(now - dayMs).toISOString();
+  const weekAgo = new Date(now - 7 * dayMs).toISOString();
+  const monthAgo = new Date(now - 30 * dayMs).toISOString();
 
   const [dauRes, wauRes, mauRes] = await Promise.all([
     supabaseAdmin.from("api_usage_records").select("user_id").gte("created_at", dayAgo),
@@ -180,18 +207,30 @@ async function getUserCounts(): Promise<{
     supabaseAdmin.from("api_usage_records").select("user_id").gte("created_at", monthAgo),
   ]);
 
-  const countDistinct = (data: { user_id: string }[] | null): number => {
-    if (!data) return 0;
-    return new Set(data.map(r => r.user_id).filter(Boolean)).size;
-  };
+  const usageDau = new Set((dauRes.data ?? []).map(r => r.user_id).filter(Boolean)).size;
+  const usageWau = new Set((wauRes.data ?? []).map(r => r.user_id).filter(Boolean)).size;
+  const usageMau = new Set((mauRes.data ?? []).map(r => r.user_id).filter(Boolean)).size;
+
+  // Take the max of auth-based and usage-based counts — union of both signals
+  dau = Math.max(dau, usageDau);
+  wau = Math.max(wau, usageWau);
+  mau = Math.max(mau, usageMau);
+
+  // Payment-specific counts still from user_payments
+  const { data: payments } = await supabaseAdmin
+    .from("user_payments")
+    .select("subscription_status, entrance_paid");
+
+  const activeSubscribers = payments?.filter(p => p.subscription_status === "active" || p.subscription_status === "trialing").length ?? 0;
+  const entrancePaidCount = payments?.filter(p => p.entrance_paid).length ?? 0;
 
   return {
     totalUsers,
     activeSubscribers,
     entrancePaidCount,
-    dau: countDistinct(dauRes.data),
-    wau: countDistinct(wauRes.data),
-    mau: countDistinct(mauRes.data),
+    dau,
+    wau,
+    mau,
   };
 }
 
@@ -201,20 +240,30 @@ export async function getUserTimeseries(days: number): Promise<UserTimeseries> {
   const now = new Date();
   const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  // New signups per day
-  const { data: signups } = await supabaseAdmin
-    .from("user_payments")
-    .select("created_at")
-    .gte("created_at", start.toISOString())
-    .order("created_at", { ascending: true });
-
+  // New signups per day — from auth.users (not user_payments which only has
+  // rows for users who started a payment flow)
   const signupMap = new Map<string, number>();
-  for (const row of signups ?? []) {
-    const day = toDayKey(new Date(row.created_at));
-    signupMap.set(day, (signupMap.get(day) ?? 0) + 1);
+  try {
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+      if (error || !data.users) break;
+      for (const u of data.users) {
+        const createdAt = u.created_at ? new Date(u.created_at) : null;
+        if (createdAt && createdAt >= start) {
+          const day = toDayKey(createdAt);
+          signupMap.set(day, (signupMap.get(day) ?? 0) + 1);
+        }
+      }
+      hasMore = page * 1000 < (data.total ?? 0);
+      page++;
+    }
+  } catch (err) {
+    console.error("[admin-stats] listUsers for signups failed:", err);
   }
 
-  // DAU per day — fetch all records in range, group by day + distinct user
+  // DAU per day — union of auth last_sign_in_at and api_usage_records
   const { data: usage } = await supabaseAdmin
     .from("api_usage_records")
     .select("user_id, created_at")
@@ -226,6 +275,28 @@ export async function getUserTimeseries(days: number): Promise<UserTimeseries> {
     const day = toDayKey(new Date(row.created_at));
     if (!dauMap.has(day)) dauMap.set(day, new Set());
     if (row.user_id) dauMap.get(day)!.add(row.user_id);
+  }
+
+  // Also add auth.users last_sign_in_at to DAU map
+  try {
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+      if (error || !data.users) break;
+      for (const u of data.users) {
+        const lastSignIn = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null;
+        if (lastSignIn && lastSignIn >= start) {
+          const day = toDayKey(lastSignIn);
+          if (!dauMap.has(day)) dauMap.set(day, new Set());
+          if (u.id) dauMap.get(day)!.add(u.id);
+        }
+      }
+      hasMore = page * 1000 < (data.total ?? 0);
+      page++;
+    }
+  } catch (err) {
+    console.error("[admin-stats] listUsers for DAU failed:", err);
   }
 
   // Build complete date range
@@ -251,35 +322,6 @@ export async function getRevenueBreakdown(): Promise<RevenueBreakdown> {
     .from("user_payments")
     .select("subscription_status, subscription_tier, entrance_paid");
 
-  const tierCounts = new Map<string, number>();
-  let mrr = 0;
-  let churnedMrr = 0;
-  let pastDueMrr = 0;
-  let pastDueCount = 0;
-  let activeCount = 0;
-
-  for (const p of payments ?? []) {
-    const tier = p.subscription_tier as string | null;
-    const m = tierMrr(tier);
-
-    if (p.subscription_status === "active" || p.subscription_status === "trialing") {
-      mrr += m;
-      activeCount++;
-      tierCounts.set(tier ?? "free", (tierCounts.get(tier ?? "free") ?? 0) + 1);
-    } else if (p.subscription_status === "canceled") {
-      churnedMrr += m;
-    } else if (p.subscription_status === "past_due") {
-      pastDueMrr += m;
-      pastDueCount++;
-    }
-  }
-
-  const byTier = Array.from(tierCounts.entries()).map(([tier, count]) => ({
-    tier,
-    count,
-    mrr: count * tierMrr(tier),
-  }));
-
   const entranceFeesCount = payments?.filter(p => p.entrance_paid).length ?? 0;
   const oneTimeRevenue = entranceFeesCount * 0.99; // $0.99 entrance fee
 
@@ -291,6 +333,130 @@ export async function getRevenueBreakdown(): Promise<RevenueBreakdown> {
       .select("*", { count: "exact", head: true });
     assetUpgradesCount = count ?? 0;
   } catch { /* table may not exist */ }
+
+  // ── MRR from actual Stripe subscription data ────────────────────────
+  // Query Stripe subscriptions API for real amounts instead of guessing
+  // from tier prices in user_payments (which doesn't capture billing period,
+  // discounts, admin free tiers, etc.)
+  let mrr = 0;
+  let churnedMrr = 0;
+  let pastDueMrr = 0;
+  let pastDueCount = 0;
+  let activeCount = 0;
+  const tierCounts = new Map<string, number>();
+  const tierMrrMap = new Map<string, number>();
+
+  if (isStripeConfigured && stripe) {
+    try {
+      // Fetch active + trialing subscriptions from Stripe
+      for (const status of ["active", "trialing"] as const) {
+        const subs = await stripe.subscriptions.list({ status, limit: 100 });
+        for (const sub of subs.data) {
+          // Sum up the recurring amounts from subscription items
+          let subMrr = 0;
+          for (const item of sub.items.data) {
+            const price = item.price;
+            if (price?.unit_amount && price.recurring?.interval) {
+              const interval = price.recurring.interval;
+              const intervalCount = price.recurring.interval_count ?? 1;
+              if (interval === "month") {
+                subMrr += price.unit_amount / 100 / intervalCount;
+              } else if (interval === "year") {
+                subMrr += (price.unit_amount / 100 / intervalCount) / 12;
+              } else if (interval === "week") {
+                subMrr += (price.unit_amount / 100 / intervalCount) * 52 / 12;
+              } else if (interval === "day") {
+                subMrr += (price.unit_amount / 100 / intervalCount) * 365 / 12;
+              }
+            }
+          }
+          mrr += subMrr;
+          activeCount++;
+
+          // Determine tier from metadata
+          const tier = sub.metadata?.tier ?? "unknown";
+          tierCounts.set(tier, (tierCounts.get(tier) ?? 0) + 1);
+          tierMrrMap.set(tier, (tierMrrMap.get(tier) ?? 0) + subMrr);
+        }
+      }
+
+      // Past-due subscriptions
+      const pastDueSubs = await stripe.subscriptions.list({ status: "past_due", limit: 100 });
+      for (const sub of pastDueSubs.data) {
+        let subMrr = 0;
+        for (const item of sub.items.data) {
+          const price = item.price;
+          if (price?.unit_amount && price.recurring?.interval) {
+            if (price.recurring.interval === "month") {
+              subMrr += price.unit_amount / 100 / (price.recurring.interval_count ?? 1);
+            } else if (price.recurring.interval === "year") {
+              subMrr += (price.unit_amount / 100 / (price.recurring.interval_count ?? 1)) / 12;
+            }
+          }
+        }
+        pastDueMrr += subMrr;
+        pastDueCount++;
+      }
+
+      // Canceled subscriptions — estimate churned MRR from last known amount
+      const canceledSubs = await stripe.subscriptions.list({ status: "canceled", limit: 100 });
+      for (const sub of canceledSubs.data) {
+        let subMrr = 0;
+        for (const item of sub.items.data) {
+          const price = item.price;
+          if (price?.unit_amount && price.recurring?.interval) {
+            if (price.recurring.interval === "month") {
+              subMrr += price.unit_amount / 100 / (price.recurring.interval_count ?? 1);
+            } else if (price.recurring.interval === "year") {
+              subMrr += (price.unit_amount / 100 / (price.recurring.interval_count ?? 1)) / 12;
+            }
+          }
+        }
+        churnedMrr += subMrr;
+      }
+    } catch (err) {
+      console.error("[admin-stats] Stripe subscription query failed, falling back to DB:", err);
+      // Fallback: estimate from user_payments
+      for (const p of payments ?? []) {
+        const tier = p.subscription_tier as string | null;
+        const m = tierMrr(tier);
+        if (p.subscription_status === "active" || p.subscription_status === "trialing") {
+          mrr += m;
+          activeCount++;
+          tierCounts.set(tier ?? "free", (tierCounts.get(tier ?? "free") ?? 0) + 1);
+          tierMrrMap.set(tier ?? "free", (tierMrrMap.get(tier ?? "free") ?? 0) + m);
+        } else if (p.subscription_status === "canceled") {
+          churnedMrr += m;
+        } else if (p.subscription_status === "past_due") {
+          pastDueMrr += m;
+          pastDueCount++;
+        }
+      }
+    }
+  } else {
+    // No Stripe — fallback to DB estimates
+    for (const p of payments ?? []) {
+      const tier = p.subscription_tier as string | null;
+      const m = tierMrr(tier);
+      if (p.subscription_status === "active" || p.subscription_status === "trialing") {
+        mrr += m;
+        activeCount++;
+        tierCounts.set(tier ?? "free", (tierCounts.get(tier ?? "free") ?? 0) + 1);
+        tierMrrMap.set(tier ?? "free", (tierMrrMap.get(tier ?? "free") ?? 0) + m);
+      } else if (p.subscription_status === "canceled") {
+        churnedMrr += m;
+      } else if (p.subscription_status === "past_due") {
+        pastDueMrr += m;
+        pastDueCount++;
+      }
+    }
+  }
+
+  const byTier = Array.from(tierCounts.entries()).map(([tier, count]) => ({
+    tier,
+    count,
+    mrr: tierMrrMap.get(tier) ?? 0,
+  }));
 
   const arpu = activeCount > 0 ? mrr / activeCount : 0;
 
@@ -505,7 +671,12 @@ export async function getRealtimeStats(tenants: TenantManager): Promise<Realtime
   const statusMap = new Map<string, number>();
 
   for (const sess of tenants.values()) {
-    onlineUsers++;
+    // Only count sessions with at least one active WebSocket connection.
+    // Sessions persist after disconnect (by design — agents keep working),
+    // so clients.size is the real indicator of who's online.
+    if (sess.clients.size > 0) {
+      onlineUsers++;
+    }
     const snap = sess.manager.snapshot();
     for (const agent of snap.agents) {
       activeAgents++;

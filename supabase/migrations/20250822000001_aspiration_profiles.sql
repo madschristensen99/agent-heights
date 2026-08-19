@@ -5,7 +5,7 @@
 -- suggestion engine, and NPC speech to personalize the experience.
 
 CREATE TABLE IF NOT EXISTS heights_cloud_aspiration_profiles (
-  user_id              text PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id              uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   warrior_score        float NOT NULL DEFAULT 0.0,
   builder_score        float NOT NULL DEFAULT 0.0,
   explorer_score       float NOT NULL DEFAULT 0.0,

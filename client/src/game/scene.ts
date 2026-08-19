@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
-import { AgentNPC, OfficeManagerNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
+import { AgentNPC, OfficeManagerNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, wizardAppearance, wizardTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
 import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE, type Presenter, MAX_PRESENTERS, DECORATION_CATALOG } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
@@ -11,7 +11,10 @@ import { generateSouthTileset, generateSouthWorldTiles } from "./south-tiles";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getServerByUrl } from "../../../shared/mcp-catalog";
-import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX, resolveChairTex, clearThemeFurniture } from "./furniture";
+import { upgradeFurniture, CHAIR_TEX_DOWN, CHAIR_TEX_UP, CHAIR_TEX_LEFT, CHAIR_TEX_RIGHT, MONITOR_TEX, MONITOR_SIDE_TEX, resolveChairTex, clearThemeFurniture, clearThemeFurnitureTextures } from "./furniture";
+import { registerAlleyFurniture } from "./furniture-alley";
+import { registerHawaiiFurniture } from "./furniture-hawaii";
+import { registerOldSouthFurniture } from "./furniture-south";
 import { upgradeWorkshop } from "./workshop";
 import { MailboxConversation } from "./mailbox-conversation";
 import { AI_OFFICE_TEXTURES } from "./ai-tiles";
@@ -710,8 +713,14 @@ export class OfficeScene extends Phaser.Scene {
     this.npcs.clear();
     this.initialSyncDone = false;
     this.officeManager = null;
-    // Clear any theme-registered furniture from the previous run
+    // Clear any theme-registered furniture from the previous run,
+    // then re-register the correct world's furniture if a theme is active.
     clearThemeFurniture();
+    const _theme = this.registry.get("worldTheme") as WorldTheme | null;
+    if (_theme?.id === "erics-alley") registerAlleyFurniture();
+    else if (_theme?.id === "hawaii") registerHawaiiFurniture();
+    else if (_theme?.id === "old-south") registerOldSouthFurniture();
+    clearThemeFurnitureTextures(this);
     this.hermes = null;
     this.wizard = null;
     this.officeManagerSeat = null;
@@ -1150,8 +1159,20 @@ export class OfficeScene extends Phaser.Scene {
               .sprite(wcx, wcy, resolveChairTex(this, CHAIR_TEX_DOWN))
               .setDepth(5 + this.wizardSeat.y * TILE_PX + 1);
 
+            // Generate themed wizard texture if a world theme is active
+            const themeId = this.worldTheme?.id;
+            if (themeId) {
+              const wKey = wizardTextureKey(themeId);
+              const wApp = wizardAppearance(themeId);
+              if (wApp && !this.textures.exists(wKey)) {
+                generateCharTexture(this, wKey, wApp);
+                this.ensureCharAnimations(wKey);
+              }
+            }
+
             this.wizard = new WizardNPC(this, this.grid, this.wizardSeat, (clicked) =>
               this.walkToAgent(clicked),
+              themeId,
             );
           }
 
@@ -4568,56 +4589,164 @@ export class OfficeScene extends Phaser.Scene {
 
     if (this.officeManager && !isVisitor) {
       const dominant = this.store.aspirationProfile?.dominant ?? null;
+      const dialect = this.worldTheme?.dialect?.chatStyle ?? null;
       const officeManagerLines: Record<string, string[]> = {
         builder: [
-          "Your pipeline is running. I'd say 'like clockwork' but clocks are more predictable.",
-          "I see you've automated three tasks. The agents are starting to wonder if you still work here.",
-          "Nice handoff chain. You've built a machine that runs without you. Isn't that the dream?",
-          "Throughput is up. Idle time is down. I'd celebrate but I know you're already optimizing the next thing.",
+          "Your pipeline is running well. If you want to set up a schedule, I can help with that.",
+          "Nice handoff chain. The agents are working together smoothly.",
+          "Throughput is up and idle time is down. Things are running nicely.",
         ],
         explorer: [
-          "New MCP servers in the marketplace. Because what your agents really need is more distractions.",
-          "Try a different model on your next agent. Variety is the spice of... well, everything.",
-          "There's a whole marketplace of tools out there. Your agents are like kids in a candy store. Expensive candy.",
+          "New MCP servers in the marketplace if you want to expand your agents' capabilities.",
+          "Trying a different model on your next agent can open up new possibilities.",
+          "There's a whole marketplace of tools out there for your agents.",
         ],
         puzzle_solver: [
-          "Got a complex problem? I could break it down for you. Or you could do it yourself. Your call, boss.",
-          "A well-structured task graph is a beautiful thing. A poorly structured one is... also a thing.",
-          "Dependencies mapped out? Good. Nothing worse than an agent waiting for something that was never coming.",
+          "Got a complex problem? I can break it down for you into subtasks.",
+          "A well-structured task graph makes everything smoother. Want help setting one up?",
+          "Dependencies mapped out? Good. Let me know if you need help with any of them.",
         ],
         creator: [
-          "Your office is looking nice. I'd say 'homey' but I'm an AI and I don't have a home.",
-          "New theme looks good. The agents noticed. They didn't say anything, but I could tell.",
-          "Nice outfit. The wardrobe system exists and you're using it. That's... that's the whole point.",
+          "Your office is looking nice. New themes and decorations are available in settings.",
+          "The wardrobe system has some great options if you want to freshen up your look.",
+          "Nice outfit. The customization options are there whenever you want to switch things up.",
         ],
         strategist: [
-          "Your team is growing. Have you checked the leaderboards? Of course you have. You're a strategist.",
-          "Planning the next hire? I'm here. I'm always here. That's my job.",
-          "Consistency pays off. The ranks will follow. I read that on a poster once.",
+          "Your team is growing. Have you checked the leaderboards lately?",
+          "Planning the next hire? I'm here to help you think it through.",
+          "Consistency pays off. The ranks will follow your progress.",
         ],
         warrior: [
-          "Heard there's something nasty outside. You could send an agent. Or you could go yourself. You'll go yourself.",
-          "Your combat record is impressive, boss. The agents are intimidated. I'm not. I'm behind a desk.",
-          "Creatures won't slay themselves. That's why they have you. Lucky them.",
+          "There's something nasty outside if you're up for a hunt. Your agents can help too.",
+          "Your combat record is impressive, boss. The creatures outside won't know what hit them.",
+          "Creatures won't slay themselves. Step outside when you're ready for action.",
         ],
       };
-      const lines = (dominant ? officeManagerLines[dominant] : null) ?? [
-        "Need help? I'm here. Not going anywhere. Literally — I'm seated.",
-        "Your office is looking good. I say that every time but I mean it every time.",
-        "Want me to break down a goal? I'm very good at making big problems into small problems.",
-        "Just let me know if you need anything, boss. I'll be at my desk. I'm always at my desk.",
+      const dialectLines: Record<string, Record<string, string[]>> = {
+        street_urban: {
+          builder: [
+            "Your pipeline is running smooth. Want to set up a schedule? I got you.",
+            "Nice handoff chain. The agents are working together real well.",
+          ],
+          explorer: [
+            "New MCP servers in the market. Your agents could be doing way more.",
+            "Try a different model on the next agent. Could open up new possibilities.",
+          ],
+          puzzle_solver: [
+            "Got a complex problem? I can break it down for you, no sweat.",
+            "A solid task graph makes everything smoother. Want help with that?",
+          ],
+          creator: [
+            "Office is looking fresh. New themes and fits in settings if you want to switch up.",
+            "Wardrobe system got some heat. Check it out when you get a chance.",
+          ],
+          strategist: [
+            "Your squad is growing. You checked the leaderboards yet?",
+            "Planning the next hire? I'm here to help you think it through.",
+          ],
+          warrior: [
+            "Something nasty outside. You ready for a hunt? Your agents got your back too.",
+            "Your combat record is legit, boss. The creatures outside don't stand a chance.",
+          ],
+        },
+        hawaiian_pidgin: {
+          builder: [
+            "Your pipeline running smooth. Like for set up one schedule? I can help.",
+            "Nice handoff chain. The agents all working together real good.",
+          ],
+          explorer: [
+            "Get new MCP servers in the market. Your agents could do plenty more.",
+            "Try one different model on the next agent. Could open up new kine possibilities.",
+          ],
+          puzzle_solver: [
+            "Got one complex problem? I can break 'em down for you, no worries.",
+            "One solid task graph makes everything go smoother. Like for help with that?",
+          ],
+          creator: [
+            "Office looking nice. Get new themes and outfits in settings if you like switch up.",
+            "Wardrobe system get some good kine options. Check 'em out when you get chance.",
+          ],
+          strategist: [
+            "Your team is growing. You check the leaderboards already?",
+            "Planning the next hire? I stay here for help you think it through.",
+          ],
+          warrior: [
+            "Get something nasty outside. You ready for hunt? Your agents can help too.",
+            "Your combat record is killer, boss. The creatures outside no chance.",
+          ],
+        },
+        southern_1812: {
+          builder: [
+            "Your pipeline is running quite well. Might I assist in setting up a schedule?",
+            "A fine handoff chain. The agents are working together admirably.",
+          ],
+          explorer: [
+            "New MCP servers have arrived in the marketplace. Your agents might benefit from expanded capabilities.",
+            "Perhaps try a different model on your next agent. New possibilities may present themselves.",
+          ],
+          puzzle_solver: [
+            "A complex problem? I would be happy to break it down into subtasks for you.",
+            "A well-structured task graph makes everything smoother. Might I help you set one up?",
+          ],
+          creator: [
+            "Your office is looking quite fine. New themes and decorations await in settings.",
+            "The wardrobe system has some splendid options. Pray have a look when you are inclined.",
+          ],
+          strategist: [
+            "Your team is growing. Have you consulted the leaderboards of late?",
+            "Planning the next hire? I am at your service to help deliberate.",
+          ],
+          warrior: [
+            "Something nasty lurks outside. Are you prepared for a hunt? Your agents can assist as well.",
+            "Your combat record is most impressive. The creatures outside shall not prevail.",
+          ],
+        },
+      };
+      const aspirationKey = dominant ?? "default";
+      const baseLines = (dominant ? officeManagerLines[dominant] : null) ?? [
+        "Need help? I'm here. Just let me know what you need.",
+        "Your office is looking good. I'm here if you need anything.",
+        "Want me to break down a goal? I'm good at making big problems into small ones.",
+        "Just let me know if you need anything, boss. I'll be at my desk.",
       ];
+      const lines = dialect ? (dialectLines[dialect]?.[aspirationKey] ?? baseLines) : baseLines;
       checkNpc(OFFICE_MANAGER_ID, this.officeManager.container, lines);
     }
 
     if (this.hermes && !isVisitor) {
-      checkNpc(HERMES_ID, this.hermes.container, [
-        "Mail's sorted. Nothing urgent. Which is more than I can say for your task board.",
-        "I'll deliver this message. Unlike some people around here, I actually finish my tasks.",
-        "All systems running. Your agents? Well, that's a different department.",
-        "No new mail. I'd say 'good news' but I know you'd rather have something to do.",
-        "I'm the mail clerk. I deliver things. It's honest work. Unlike whatever your agents are doing.",
-      ]);
+      const dialect = this.worldTheme?.dialect?.chatStyle ?? null;
+      const hermesLines: Record<string, string[]> = {
+        street_urban: [
+          "Mail's sorted. Nothing urgent. I'll let you know when something comes in.",
+          "All systems running. Your agents are working — I'll deliver anything they need.",
+          "No new mail. I'll keep an eye out for you.",
+          "I'm the mail clerk. I deliver things. Let me know if you need anything routed.",
+        ],
+        hawaiian_pidgin: [
+          "Mail all sorted. Nothing urgent. I let you know when something comes.",
+          "All systems running. Your agents working — I deliver anything they need.",
+          "No new mail. I keep watch for you.",
+          "I'm the mail clerk. I deliver things. Let me know if you need anything routed.",
+        ],
+        southern_1812: [
+          "Mail is sorted. Nothing urgent. I shall inform you when something arrives.",
+          "All systems running. Your agents are at work — I shall deliver anything they require.",
+          "No new mail. I shall keep watch on your behalf.",
+          "I am the mail clerk. I deliver things. Pray let me know if you require anything routed.",
+        ],
+      };
+      const lines = dialect ? (hermesLines[dialect] ?? [
+        "Mail's sorted. Nothing urgent. I'll let you know when something comes in.",
+        "All systems running. Your agents are working — I'll deliver anything they need.",
+        "No new mail. I'll keep an eye out for you.",
+        "I'm the mail clerk. I deliver things. Let me know if you need anything routed.",
+      ]) : [
+        "Mail's sorted. Nothing urgent. I'll let you know when something comes in.",
+        "All systems running. Your agents are working — I'll deliver anything they need.",
+        "No new mail. I'll keep an eye out for you.",
+        "I'm the mail clerk. I deliver things. Let me know if you need anything routed.",
+      ];
+      checkNpc(HERMES_ID, this.hermes.container, lines);
     }
   }
 

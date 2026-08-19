@@ -762,6 +762,3 @@ export function registerHawaiiFurniture(): void {
   registerThemeFurniture(36, drawTikiTotemEyes);
   registerThemeFurniture(37, drawVolcanoVent);
 }
-
-// Auto-register on import
-registerHawaiiFurniture();

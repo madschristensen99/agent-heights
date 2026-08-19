@@ -2315,6 +2315,15 @@ export function clearThemeFurniture(): void {
   themeFurnitureDraws.clear();
 }
 
+/** Remove cached furniture canvas textures so they regenerate with new theme draws. */
+export function clearThemeFurnitureTextures(scene: Phaser.Scene): void {
+  const tex = scene.textures;
+  for (let tileId = 17; tileId <= 42; tileId++) {
+    const key = `furniture-${tileId}`;
+    if (tex.exists(key)) tex.remove(key);
+  }
+}
+
 /**
  * Get the effective furniture types for the current context.
  * If a theme is active, theme-registered draws override base draws.

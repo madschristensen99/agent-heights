@@ -70,7 +70,7 @@ function registerFrames(tex: Phaser.Textures.Texture, frameCount: number, frameS
   }
 }
 
-function hexToRgb(hex: number): RGB {
+export function hexToRgb(hex: number): RGB {
   return { r: (hex >> 16) & 0xff, g: (hex >> 8) & 0xff, b: hex & 0xff };
 }
 
@@ -78,17 +78,17 @@ function rgbToHex(r: number, g: number, b: number): number {
   return ((Math.round(r) & 0xff) << 16) | ((Math.round(g) & 0xff) << 8) | (Math.round(b) & 0xff);
 }
 
-function lighten(color: number, amount: number): number {
+export function lighten(color: number, amount: number): number {
   const { r, g, b } = hexToRgb(color);
   return rgbToHex(r + (255 - r) * amount, g + (255 - g) * amount, b + (255 - b) * amount);
 }
 
-function darken(color: number, amount: number): number {
+export function darken(color: number, amount: number): number {
   const { r, g, b } = hexToRgb(color);
   return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 }
 
-function rgba(color: number, alpha: number): string {
+export function rgba(color: number, alpha: number): string {
   const { r, g, b } = hexToRgb(color);
   return `rgba(${r},${g},${b},${alpha})`;
 }
@@ -114,7 +114,7 @@ function radialGradient(
 }
 
 /** Draw a glowing eye. */
-function drawEye(
+export function drawEye(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
@@ -142,7 +142,7 @@ function drawEye(
 }
 
 /** Draw a tapered limb (leg, arm) with shading. */
-function drawLimb(
+export function drawLimb(
   ctx: CanvasRenderingContext2D,
   x1: number,
   y1: number,
@@ -180,7 +180,7 @@ function drawLimb(
 }
 
 /** Draw a textured scale pattern on a region. */
-function drawScales(
+export function drawScales(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
@@ -290,7 +290,7 @@ function drawRune(
 }
 
 /** Draw a soft drop shadow beneath a creature. */
-function drawGroundShadow(ctx: CanvasRenderingContext2D, cx: number, groundY: number, width: number): void {
+export function drawGroundShadow(ctx: CanvasRenderingContext2D, cx: number, groundY: number, width: number): void {
   ctx.save();
   ctx.filter = "blur(3px)";
   const grad = ctx.createRadialGradient(cx, groundY, 0, cx, groundY, width * 1.2);
@@ -309,7 +309,7 @@ function drawGroundShadow(ctx: CanvasRenderingContext2D, cx: number, groundY: nu
 // CREATURE SPRITES — 6 types, 4 frames each (idle, walk1, walk2, attack)
 // ============================================================
 
-interface CreatureDesign {
+export interface CreatureDesign {
   name: string;
   baseColor: number;
   accentColor: number;
@@ -1215,7 +1215,7 @@ const CREATURE_DESIGNS: CreatureDesign[] = [
 // FRIENDLY CREATURE SPRITES — 4 cute types, 4 frames each (idle, walk1, walk2, hop)
 // ============================================================
 
-interface FriendlyDesign {
+export interface FriendlyDesign {
   name: string;
   baseColor: number;
   accentColor: number;
@@ -1831,7 +1831,7 @@ const FRIENDLY_DESIGNS: FriendlyDesign[] = [
 // BEAST SPRITES — 5 unique boss designs, 4 frames each
 // ============================================================
 
-interface BeastDesign {
+export interface BeastDesign {
   name: string;
   baseColor: number;
   accentColor: number;
@@ -4521,101 +4521,110 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
 
   const steps: Array<{ name: string; fn: () => void }> = [];
 
-  // --- Creature spritesheets ---
+  // --- Creature spritesheets (default + all registered themes) ---
   steps.push({
     name: "Creatures",
     fn: () => {
-      for (let i = 0; i < CREATURE_DESIGNS.length; i++) {
-        const design = CREATURE_DESIGNS[i];
-        const key = `creature-${design.name}`;
-        if (tex.exists(key)) continue;
+      for (const set of getAllCreatureDesignSets()) {
+        const prefix = set.themeId ? `creature-${set.themeId}-` : "creature-";
+        for (let i = 0; i < set.designs.length; i++) {
+          const design = set.designs[i];
+          const key = `${prefix}${design.name}`;
+          if (tex.exists(key)) continue;
 
-        // Use AI creature texture if available
-        const aiKey = aiCreatureKey(tex, key);
-        if (aiKey) {
-          buildAiSpritesheet(tex, key, aiKey, CREATURE_FRAMES, TEX_SIZE);
-          continue;
-        }
+          // Use AI creature texture if available
+          const aiKey = aiCreatureKey(tex, key);
+          if (aiKey) {
+            buildAiSpritesheet(tex, key, aiKey, CREATURE_FRAMES, TEX_SIZE);
+            continue;
+          }
 
-        // Fall back to procedural canvas drawing
-        const sheetW = TEX_SIZE * CREATURE_FRAMES;
-        const sheetH = TEX_SIZE;
-        const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
-        const ctx = canvasTex.getContext();
-        for (let f = 0; f < CREATURE_FRAMES; f++) {
-          ctx.save();
-          ctx.translate(f * TEX_SIZE, 0);
-          design.draw(ctx, f, TEX_SIZE, design);
-          ctx.restore();
+          // Fall back to procedural canvas drawing
+          const sheetW = TEX_SIZE * CREATURE_FRAMES;
+          const sheetH = TEX_SIZE;
+          const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+          const ctx = canvasTex.getContext();
+          for (let f = 0; f < CREATURE_FRAMES; f++) {
+            ctx.save();
+            ctx.translate(f * TEX_SIZE, 0);
+            design.draw(ctx, f, TEX_SIZE, design);
+            ctx.restore();
+          }
+          canvasTex.refresh();
+          registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
         }
-        canvasTex.refresh();
-        registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
       }
     },
   });
 
-  // --- Beast spritesheets ---
+  // --- Beast spritesheets (default + all registered themes) ---
   steps.push({
     name: "Beasts",
     fn: () => {
-      for (let i = 0; i < BEAST_DESIGNS.length; i++) {
-        const design = BEAST_DESIGNS[i];
-        const key = `beast-${design.name}`;
-        if (tex.exists(key)) continue;
+      for (const set of getAllBeastDesignSets()) {
+        const prefix = set.themeId ? `beast-${set.themeId}-` : "beast-";
+        for (let i = 0; i < set.designs.length; i++) {
+          const design = set.designs[i];
+          const key = `${prefix}${design.name}`;
+          if (tex.exists(key)) continue;
 
-        // Use AI beast texture if available
-        const aiKey = aiCreatureKey(tex, key);
-        if (aiKey) {
-          buildAiSpritesheet(tex, key, aiKey, BEAST_FRAMES, TEX_SIZE);
-          continue;
-        }
+          // Use AI beast texture if available
+          const aiKey = aiCreatureKey(tex, key);
+          if (aiKey) {
+            buildAiSpritesheet(tex, key, aiKey, BEAST_FRAMES, TEX_SIZE);
+            continue;
+          }
 
-        // Fall back to procedural canvas drawing
-        const sheetW = TEX_SIZE * BEAST_FRAMES;
-        const sheetH = TEX_SIZE;
-        const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
-        const ctx = canvasTex.getContext();
-        for (let f = 0; f < BEAST_FRAMES; f++) {
-          ctx.save();
-          ctx.translate(f * TEX_SIZE, 0);
-          design.draw(ctx, f, TEX_SIZE, design);
-          ctx.restore();
+          // Fall back to procedural canvas drawing
+          const sheetW = TEX_SIZE * BEAST_FRAMES;
+          const sheetH = TEX_SIZE;
+          const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+          const ctx = canvasTex.getContext();
+          for (let f = 0; f < BEAST_FRAMES; f++) {
+            ctx.save();
+            ctx.translate(f * TEX_SIZE, 0);
+            design.draw(ctx, f, TEX_SIZE, design);
+            ctx.restore();
+          }
+          canvasTex.refresh();
+          registerFrames(tex.get(key)!, BEAST_FRAMES, TEX_SIZE);
         }
-        canvasTex.refresh();
-        registerFrames(tex.get(key)!, BEAST_FRAMES, TEX_SIZE);
       }
     },
   });
 
-  // --- Friendly creature spritesheets ---
+  // --- Friendly creature spritesheets (default + all registered themes) ---
   steps.push({
     name: "Friendly creatures",
     fn: () => {
-      for (let i = 0; i < FRIENDLY_DESIGNS.length; i++) {
-        const design = FRIENDLY_DESIGNS[i];
-        const key = `friendly-${design.name}`;
-        if (tex.exists(key)) continue;
+      for (const set of getAllFriendlyDesignSets()) {
+        const prefix = set.themeId ? `friendly-${set.themeId}-` : "friendly-";
+        for (let i = 0; i < set.designs.length; i++) {
+          const design = set.designs[i];
+          const key = `${prefix}${design.name}`;
+          if (tex.exists(key)) continue;
 
-        // Use AI friendly creature texture if available
-        const aiKey = aiCreatureKey(tex, key);
-        if (aiKey) {
-          buildAiSpritesheet(tex, key, aiKey, CREATURE_FRAMES, TEX_SIZE);
-          continue;
-        }
+          // Use AI friendly creature texture if available
+          const aiKey = aiCreatureKey(tex, key);
+          if (aiKey) {
+            buildAiSpritesheet(tex, key, aiKey, CREATURE_FRAMES, TEX_SIZE);
+            continue;
+          }
 
-        // Fall back to procedural canvas drawing
-        const sheetW = TEX_SIZE * CREATURE_FRAMES;
-        const sheetH = TEX_SIZE;
-        const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
-        const ctx = canvasTex.getContext();
-        for (let f = 0; f < CREATURE_FRAMES; f++) {
-          ctx.save();
-          ctx.translate(f * TEX_SIZE, 0);
-          design.draw(ctx, f, TEX_SIZE, design);
-          ctx.restore();
+          // Fall back to procedural canvas drawing
+          const sheetW = TEX_SIZE * CREATURE_FRAMES;
+          const sheetH = TEX_SIZE;
+          const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+          const ctx = canvasTex.getContext();
+          for (let f = 0; f < CREATURE_FRAMES; f++) {
+            ctx.save();
+            ctx.translate(f * TEX_SIZE, 0);
+            design.draw(ctx, f, TEX_SIZE, design);
+            ctx.restore();
+          }
+          canvasTex.refresh();
+          registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
         }
-        canvasTex.refresh();
-        registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
       }
     },
   });
@@ -5010,29 +5019,85 @@ export function generateAllTextures(scene: Phaser.Scene, force = false): void {
   for (const step of steps) step.fn();
 }
 
-/** Get the creature texture key for a hostility level. */
-export function creatureKey(hostility: number): string {
-  const idx = Math.min(Math.floor(hostility), CREATURE_DESIGNS.length - 1);
-  return `creature-${CREATURE_DESIGNS[idx].name}`;
+/** Per-world creature design overrides. Keyed by theme ID. */
+const CREATURE_DESIGNS_BY_THEME: Record<string, CreatureDesign[]> = {};
+
+/** Per-world friendly creature design overrides. Keyed by theme ID. */
+const FRIENDLY_DESIGNS_BY_THEME: Record<string, FriendlyDesign[]> = {};
+
+/** Per-world beast design overrides. Keyed by theme ID. */
+const BEAST_DESIGNS_BY_THEME: Record<string, BeastDesign[]> = {};
+
+/** Register per-world creature designs for a theme. */
+export function registerThemeCreatures(themeId: string, creatures: CreatureDesign[], friendlies: FriendlyDesign[], beasts: BeastDesign[]): void {
+  CREATURE_DESIGNS_BY_THEME[themeId] = creatures;
+  FRIENDLY_DESIGNS_BY_THEME[themeId] = friendlies;
+  BEAST_DESIGNS_BY_THEME[themeId] = beasts;
 }
 
-/** Get the creature design for a hostility level. */
-export function creatureDesign(hostility: number): CreatureDesign {
-  return CREATURE_DESIGNS[Math.min(Math.floor(hostility), CREATURE_DESIGNS.length - 1)];
+/** Get all creature design arrays that need texture generation (default + all registered themes). */
+export function getAllCreatureDesignSets(): Array<{ themeId: string | null; designs: CreatureDesign[] }> {
+  const sets: Array<{ themeId: string | null; designs: CreatureDesign[] }> = [
+    { themeId: null, designs: CREATURE_DESIGNS },
+  ];
+  for (const [themeId, designs] of Object.entries(CREATURE_DESIGNS_BY_THEME)) {
+    sets.push({ themeId, designs });
+  }
+  return sets;
 }
 
-/** Get the beast texture key by beast name. */
-export function beastKey(name: string): string {
-  const design = BEAST_DESIGNS.find((d) => d.name === name);
-  if (design) return `beast-${design.name}`;
-  // fallback: normalize name to design index
+/** Get all friendly design arrays that need texture generation. */
+export function getAllFriendlyDesignSets(): Array<{ themeId: string | null; designs: FriendlyDesign[] }> {
+  const sets: Array<{ themeId: string | null; designs: FriendlyDesign[] }> = [
+    { themeId: null, designs: FRIENDLY_DESIGNS },
+  ];
+  for (const [themeId, designs] of Object.entries(FRIENDLY_DESIGNS_BY_THEME)) {
+    sets.push({ themeId, designs });
+  }
+  return sets;
+}
+
+/** Get all beast design arrays that need texture generation. */
+export function getAllBeastDesignSets(): Array<{ themeId: string | null; designs: BeastDesign[] }> {
+  const sets: Array<{ themeId: string | null; designs: BeastDesign[] }> = [
+    { themeId: null, designs: BEAST_DESIGNS },
+  ];
+  for (const [themeId, designs] of Object.entries(BEAST_DESIGNS_BY_THEME)) {
+    sets.push({ themeId, designs });
+  }
+  return sets;
+}
+
+/** Get the creature texture key for a hostility level, optionally theme-specific. */
+export function creatureKey(hostility: number, themeId?: string): string {
+  const designs = (themeId && CREATURE_DESIGNS_BY_THEME[themeId]) || CREATURE_DESIGNS;
+  const idx = Math.min(Math.floor(hostility), designs.length - 1);
+  const prefix = themeId ? `creature-${themeId}-` : "creature-";
+  return `${prefix}${designs[idx].name}`;
+}
+
+/** Get the creature design for a hostility level, optionally theme-specific. */
+export function creatureDesign(hostility: number, themeId?: string): CreatureDesign {
+  const designs = (themeId && CREATURE_DESIGNS_BY_THEME[themeId]) || CREATURE_DESIGNS;
+  return designs[Math.min(Math.floor(hostility), designs.length - 1)];
+}
+
+/** Get the beast texture key by beast name, optionally theme-specific. */
+export function beastKey(name: string, themeId?: string): string {
+  const designs = (themeId && BEAST_DESIGNS_BY_THEME[themeId]) || BEAST_DESIGNS;
+  const design = designs.find((d) => d.name === name);
+  if (design) {
+    const prefix = themeId ? `beast-${themeId}-` : "beast-";
+    return `${prefix}${design.name}`;
+  }
   const normalized = name.toLowerCase().replace(/\s+/g, "-");
   return `beast-${normalized}`;
 }
 
-/** Get the beast design by name. */
-export function beastDesign(name: string): BeastDesign | undefined {
-  return BEAST_DESIGNS.find((d) => d.name === name);
+/** Get the beast design by name, optionally theme-specific. */
+export function beastDesign(name: string, themeId?: string): BeastDesign | undefined {
+  const designs = (themeId && BEAST_DESIGNS_BY_THEME[themeId]) || BEAST_DESIGNS;
+  return designs.find((d) => d.name === name);
 }
 
 /** Map beast names from BEASTS array to design names. */
@@ -5043,18 +5108,39 @@ export function beastDesignName(beastName: string): string {
     "Ash Wyrm": "ash-wyrm",
     "Void Leviathan": "void-leviathan",
     "Infernal Sovereign": "infernal-sovereign",
+    // Alley beasts
+    "Rat King": "rat-king",
+    "Urban Legend": "urban-legend",
+    // Hawaii beasts
+    "Pele": "pele",
+    "Mo'o-nui": "moo-nui",
+    // Old South beasts
+    "Spectral General": "spectral-general",
+    "Infernal Owner": "infernal-owner",
+    // War bosses
+    "Dragon Warlord": "dragon-warlord",
+    "Concrete Champion": "concrete-champion",
+    "Shark Chief": "shark-chief",
+    "Turtle Champion": "turtle-champion",
+    "Union General": "union-general",
+    "Confederate General": "confederate-general",
   };
-  return map[beastName] ?? "groveheart";
+  return map[beastName] ?? beastName.toLowerCase().replace(/\s+/g, "-");
 }
 
 export const CREATURE_FRAME_COUNT = CREATURE_FRAMES;
 export const BEAST_FRAME_COUNT = BEAST_FRAMES;
 
-/** Get the friendly creature texture key by index. */
-export function friendlyCreatureKey(index: number): string {
-  const idx = ((index % FRIENDLY_DESIGNS.length) + FRIENDLY_DESIGNS.length) % FRIENDLY_DESIGNS.length;
-  return `friendly-${FRIENDLY_DESIGNS[idx].name}`;
+/** Get the friendly creature texture key by index, optionally theme-specific. */
+export function friendlyCreatureKey(index: number, themeId?: string): string {
+  const designs = (themeId && FRIENDLY_DESIGNS_BY_THEME[themeId]) || FRIENDLY_DESIGNS;
+  const idx = ((index % designs.length) + designs.length) % designs.length;
+  const prefix = themeId ? `friendly-${themeId}-` : "friendly-";
+  return `${prefix}${designs[idx].name}`;
 }
 
-/** Number of friendly creature designs. */
-export const FRIENDLY_CREATURE_COUNT = FRIENDLY_DESIGNS.length;
+/** Number of friendly creature designs, optionally for a specific theme. */
+export function friendlyCreatureCount(themeId?: string): number {
+  if (themeId && FRIENDLY_DESIGNS_BY_THEME[themeId]) return FRIENDLY_DESIGNS_BY_THEME[themeId].length;
+  return FRIENDLY_DESIGNS.length;
+}

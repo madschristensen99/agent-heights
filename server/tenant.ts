@@ -774,6 +774,7 @@ export class TenantManager {
         bossName: sess.manager.bossName,
         hasPlatform: sess.manager.getPlatformConnectionStates().some((p) => p.connected),
         subscriptionTier: sess.manager.subscriptionTier,
+        dialectStyle: sess.manager.getDialectStyle(),
       });
       if (nudge) {
         sess.broadcast({
@@ -782,13 +783,6 @@ export class TenantManager {
           text: nudge.text,
           actionLabel: nudge.actionLabel,
           actionType: nudge.actionType,
-        });
-        // Also show speech bubble above the Office Manager NPC in the scene
-        sess.broadcast({
-          type: "npc_speech",
-          npcId: "office-manager",
-          text: nudge.text.slice(0, 120),
-          durationMs: 10_000,
         });
       }
     }, CONCIERGE_EVAL_INTERVAL);

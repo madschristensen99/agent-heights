@@ -3,14 +3,36 @@
  *
  * Evaluates user state every 60s during an active session and generates
  * LLM-based nudges from the Office Manager character. Rate-limited:
- * 1 nudge per 5 minutes, max 3 per session.
+ * 1 nudge per 8 minutes, max 2 per session.
  */
 
 import type { AgentInfo, TaskCard } from "../shared/types";
 import { getCachedProfile, type AspirationType } from "./aspirations.js";
 
-const NUDGE_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between nudges
-const MAX_NUDGES_PER_SESSION = 3;
+type DialectStyle = string | null;
+
+/** Dialect-aware greeting prefix for the Office Manager. */
+function dialectGreet(style: DialectStyle, bossName: string): string {
+  switch (style) {
+    case "street_urban": return `Yo ${bossName}`;
+    case "hawaiian_pidgin": return `Eh ${bossName}`;
+    case "southern_1812": return `Good day, ${bossName}`;
+    default: return bossName;
+  }
+}
+
+/** Pick a dialect-specific message variant, falling back to default. */
+function dialectNudge(style: DialectStyle, variants: { default: string; street_urban?: string; hawaiian_pidgin?: string; southern_1812?: string }): string {
+  switch (style) {
+    case "street_urban": return variants.street_urban ?? variants.default;
+    case "hawaiian_pidgin": return variants.hawaiian_pidgin ?? variants.default;
+    case "southern_1812": return variants.southern_1812 ?? variants.default;
+    default: return variants.default;
+  }
+}
+
+const NUDGE_COOLDOWN_MS = 8 * 60 * 1000; // 8 minutes between nudges
+const MAX_NUDGES_PER_SESSION = 2;
 const EVAL_INTERVAL_MS = 60 * 1000; // evaluate every 60s
 
 interface ConciergeState {
@@ -111,6 +133,7 @@ export function evaluateNudge(
     bossName: string;
     hasPlatform: boolean;
     subscriptionTier: string | null;
+    dialectStyle: string | null;
   },
 ): ConciergeNudge | null {
   const s = getOrCreateState(userId);
@@ -143,11 +166,13 @@ function pickNudge(
     bossName: string;
     hasPlatform: boolean;
     subscriptionTier: string | null;
+    dialectStyle: string | null;
   },
   now: number,
   dominant: AspirationType | null,
 ): ConciergeNudge | null {
-  const { agents, board, bossName, hasPlatform } = ctx;
+  const { agents, board, bossName, hasPlatform, dialectStyle } = ctx;
+  const greet = dialectGreet(dialectStyle, bossName);
   const hireable = agents.filter(
     (a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard",
   );
@@ -164,7 +189,12 @@ function pickNudge(
   if (hireable.length === 0 && sessionMinutes >= 2) {
     return {
       nudgeId: `nudge-hire-${now}`,
-      text: `Lovely office, ${bossName}. Very spacious. Almost... too spacious. Want to hire someone so it doesn't feel like a mausoleum?`,
+      text: dialectNudge(dialectStyle, {
+        default: `${greet}, your office is ready and waiting. Want to hire your first agent to get things started?`,
+        street_urban: `${greet}, the office is set up and looking fresh. Ready to bring in your first agent?`,
+        hawaiian_pidgin: `${greet}, your office is all ready. How about hiring your first agent to get things going?`,
+        southern_1812: `${greet}, your office is prepared and awaiting company. Might I suggest hiring your first agent?`,
+      }),
       actionLabel: "Open Market",
       actionType: "open_market",
     };
@@ -173,9 +203,15 @@ function pickNudge(
   // Priority 2: Idle agents + pending tasks — suggest assigning work
   if (idleAgents.length > 0 && pendingTasks.length > 0) {
     const names = idleAgents.slice(0, 2).map((a) => a.name).join(" and ");
+    const isPlural = idleAgents.length !== 1;
     return {
       nudgeId: `nudge-assign-${now}`,
-      text: `${names} ${idleAgents.length === 1 ? "is" : "are"} staring at the ceiling and you have ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} collecting dust. I'm not saying there's a connection, but... there's a connection.`,
+      text: dialectNudge(dialectStyle, {
+        default: `${greet}, ${names} ${isPlural ? "are" : "is"} available and you have ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} ready to go. Want me to help assign them?`,
+        street_urban: `${greet}, ${names} ${isPlural ? "are" : "is"} free and you got ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} waiting. Let's get them working.`,
+        hawaiian_pidgin: `${greet}, ${names} ${isPlural ? "are" : "is"} all free and you get ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} waiting. How about assigning them?`,
+        southern_1812: `${greet}, ${names} ${isPlural ? "are" : "is"} at leisure and you have ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} awaiting attention. Shall I help assign them?`,
+      }),
       actionLabel: "View Task Board",
       actionType: "open_board",
     };
@@ -185,7 +221,12 @@ function pickNudge(
   if (hireable.length > 0 && idleAgents.length === 0 && busyAgents.length >= hireable.length && pendingTasks.length > 2) {
     return {
       nudgeId: `nudge-busy-${now}`,
-      text: `All ${hireable.length} agents are working. Every. Single. One. Meanwhile you have ${pendingTasks.length} tasks piling up. Either hire someone or lower your ambitions.`,
+      text: dialectNudge(dialectStyle, {
+        default: `${greet}, all ${hireable.length} agents are busy and you have ${pendingTasks.length} tasks queued. Hiring another agent could help keep things moving.`,
+        street_urban: `${greet}, all ${hireable.length} agents are grinding and ${pendingTasks.length} tasks are backed up. Hiring another agent could help keep things moving.`,
+        hawaiian_pidgin: `${greet}, all ${hireable.length} agents stay busy and you get ${pendingTasks.length} tasks waiting. Maybe hire one more agent for help?`,
+        southern_1812: `${greet}, all ${hireable.length} agents are occupied and ${pendingTasks.length} tasks await. Perhaps hiring another agent would ease the burden?`,
+      }),
       actionLabel: "Hire Agent",
       actionType: "open_market",
     };
@@ -203,7 +244,12 @@ function pickNudge(
       aspiration: "builder",
       nudge: {
         nudgeId: `nudge-builder-${now}`,
-        text: `${busyAgents.length} agents working in parallel. Beautiful. But are they on a schedule? A cron-triggered pipeline runs while you sleep. Think about it.`,
+        text: dialectNudge(dialectStyle, {
+          default: `${busyAgents.length} agents working in parallel — great throughput. Have you considered setting up a schedule? A cron-triggered pipeline can keep things running even when you're away.`,
+          street_urban: `${busyAgents.length} agents going hard. You should set up a schedule so they keep running while you're out. That's how you build something real.`,
+          hawaiian_pidgin: `${busyAgents.length} agents all working together. You should try setting up a schedule — they can keep going even when you stay away.`,
+          southern_1812: `${busyAgents.length} agents working in fine parallel. Might I suggest a schedule? A timed pipeline would keep the work flowing in your absence.`,
+        }),
         actionLabel: "Open Settings",
         actionType: "open_settings",
       },
@@ -216,7 +262,12 @@ function pickNudge(
       aspiration: "explorer",
       nudge: {
         nudgeId: `nudge-explorer-${now}`,
-        text: `There are new MCP servers in the marketplace. GitHub, Notion, Slack — your agents could be doing so much more. Or they could keep doing what they're doing. Your call.`,
+        text: dialectNudge(dialectStyle, {
+          default: `There are new MCP servers in the marketplace — GitHub, Notion, Slack. Your agents could do a lot more with the right tools. Worth a look?`,
+          street_urban: `Yo, new MCP servers just dropped. GitHub, Notion, Slack — your agents could be doing way more. Check the market.`,
+          hawaiian_pidgin: `Eh, get new MCP servers in the marketplace. GitHub, Notion, Slack — your agents could do plenty more with the right tools.`,
+          southern_1812: `New MCP servers have arrived in the marketplace. GitHub, Notion, Slack — your agents might benefit from expanded capabilities.`,
+        }),
         actionLabel: "Open Market",
         actionType: "open_market",
       },
@@ -229,7 +280,12 @@ function pickNudge(
       aspiration: "puzzle_solver",
       nudge: {
         nudgeId: `nudge-puzzle-${now}`,
-        text: `You have ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} on the board. You could just assign them. Or you could decompose them into a beautiful dependency graph and feel the satisfaction of a well-structured plan. Your choice.`,
+        text: dialectNudge(dialectStyle, {
+          default: `You have ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} on the board. If you'd like, I can help decompose them into a dependency graph — a well-structured plan makes everything smoother.`,
+          street_urban: `You got ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} on the board. I can help you break them down into a solid plan with dependencies. That's how you stay organized.`,
+          hawaiian_pidgin: `You get ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} on the board. I can help break them down into a nice plan with dependencies. Makes everything go smoother.`,
+          southern_1812: `You have ${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} on the board. I would be happy to help decompose them into a structured plan with dependencies.`,
+        }),
         actionLabel: "View Task Board",
         actionType: "open_board",
       },
@@ -242,7 +298,12 @@ function pickNudge(
       aspiration: "creator",
       nudge: {
         nudgeId: `nudge-creator-${now}`,
-        text: `Nice office, ${bossName}. Same office as yesterday though. New themes, outfits, and decorations are waiting in settings. You wouldn't wear the same outfit every day, would you? ... Would you?`,
+        text: dialectNudge(dialectStyle, {
+          default: `${greet}, new themes, outfits, and decorations are available in settings. A fresh look might be just the thing for the office.`,
+          street_urban: `${greet}, new themes and fits just dropped in settings. Give the office a new look, you know?`,
+          hawaiian_pidgin: `${greet}, get new themes and outfits in settings. Maybe give the office a fresh look, yeah?`,
+          southern_1812: `${greet}, new themes and decorations are available in settings. A fresh appearance might suit the office nicely.`,
+        }),
         actionLabel: "Open Settings",
         actionType: "open_settings",
       },
@@ -255,7 +316,12 @@ function pickNudge(
       aspiration: "strategist",
       nudge: {
         nudgeId: `nudge-strategist-${now}`,
-        text: `${hireable.length} agents. Solid roster. But are you on the leaderboard? Have you created an org? There's a whole competitive layer you're ignoring, and it's ignoring you back.`,
+        text: dialectNudge(dialectStyle, {
+          default: `${hireable.length} agents — solid roster. Have you checked the leaderboards or considered creating an org? There's a competitive layer worth exploring.`,
+          street_urban: `${hireable.length} agents — that's a real squad. You should check the leaderboards or start an org. There's a whole competitive side to this.`,
+          hawaiian_pidgin: `${hireable.length} agents — solid team. You should check the leaderboards or make an org. Get competitive, you know?`,
+          southern_1812: `${hireable.length} agents — a fine roster. Have you consulted the leaderboards or considered forming an organization? The competitive layer awaits.`,
+        }),
         actionLabel: "View Leaderboards",
         actionType: "open_leaderboards",
       },
@@ -268,7 +334,12 @@ function pickNudge(
       aspiration: "warrior",
       nudge: {
         nudgeId: `nudge-explore-${now}`,
-        text: `You've been in the office for ${sessionMinutes} minutes, ${bossName}. There's a whole world outside with creatures that need slaying. But sure, let's stay inside. The creatures will wait. They're patient.`,
+        text: dialectNudge(dialectStyle, {
+          default: `${greet}, there's a whole world outside with creatures to hunt and biomes to explore. When you're ready, step out the door and see what's out there.`,
+          street_urban: `${greet}, there's a whole world outside. Creatures to hunt, places to explore. Step out when you're ready.`,
+          hawaiian_pidgin: `${greet}, get one whole world outside. Creatures to hunt, biomes to explore. Go check it out when you ready.`,
+          southern_1812: `${greet}, a vast world lies beyond yon door. Creatures to hunt, biomes to explore. Pray venture forth when you are ready.`,
+        }),
         actionLabel: null,
         actionType: null,
       },
@@ -281,7 +352,12 @@ function pickNudge(
       aspiration: "builder",
       nudge: {
         nudgeId: `nudge-platform-${now}`,
-        text: `Your agents finish tasks and nobody tells you. That's the setup for a very lonely notification center. Want to connect Telegram or Slack so you actually know when things happen?`,
+        text: dialectNudge(dialectStyle, {
+          default: `${greet}, your agents finish tasks but you might not hear about it. Connecting Telegram or Slack would keep you in the loop. Want to set that up?`,
+          street_urban: `${greet}, your agents finish tasks and you don't even know. Hook up Telegram or Slack so you stay in the loop.`,
+          hawaiian_pidgin: `${greet}, your agents finish tasks but you might not hear. Connect Telegram or Slack so you stay updated, yeah?`,
+          southern_1812: `${greet}, your agents complete tasks but notification may elude you. Connecting Telegram or Slack would keep you informed. Shall we set that up?`,
+        }),
         actionLabel: "Connect Platform",
         actionType: "open_settings",
       },
@@ -306,7 +382,12 @@ function pickNudge(
     if (!s.hasOpenedAchievements && sessionMinutes >= 10) {
       return {
         nudgeId: `nudge-achievements-${now}`,
-        text: `By the way, you might have unlocked some achievements by now. Click the trophy case to check your progress — there's a whole combat record to build up!`,
+        text: dialectNudge(dialectStyle, {
+          default: `By the way, you might have unlocked some achievements by now. The trophy case shows your progress — there's a whole combat record to build up!`,
+          street_urban: `Yo, you might have unlocked some achievements by now. Check the trophy case — your combat record is stacking up.`,
+          hawaiian_pidgin: `Eh, you might have unlocked some achievements already. Check the trophy case — your combat record is growing!`,
+          southern_1812: `By the by, you may have unlocked some achievements. The trophy case displays your progress — quite the combat record to build!`,
+        }),
         actionLabel: "View Achievements",
         actionType: "open_achievements",
       };
@@ -332,34 +413,34 @@ function getAspirationIdleTips(bossName: string, dominant: AspirationType | null
   switch (dominant) {
     case "builder":
       return [
-        `Everything running smoothly, ${bossName}? Or as I like to call it — suspiciously quiet. Want to set up a scheduled task? A pipeline that runs while you sleep is a pipeline that never complains.`,
-        `Quiet in the office. A good time to design an automation chain. Or you could just sit here. The agents are watching you watch them. It's awkward.`,
+        `Everything running smoothly, ${bossName}? A good time to set up a scheduled task — a pipeline that runs while you sleep keeps things moving.`,
+        `Quiet in the office. Perfect time to design an automation chain. I can help you set one up whenever you're ready.`,
       ];
     case "explorer":
       return [
-        `Hey ${bossName}, want to try a new MCP server? There might be tools that unlock new capabilities. Or there might not be. That's the fun part.`,
-        `Quiet moment — perfect time to experiment with a different agent model. Or you could keep using the same one forever. Some people eat the same lunch every day too. No judgment.`,
+        `Hey ${bossName}, want to try a new MCP server? There might be tools that unlock new capabilities for your agents.`,
+        `Quiet moment — a good time to experiment with a different agent model. I can walk you through the options.`,
       ];
     case "puzzle_solver":
       return [
-        `Everything running smoothly, ${bossName}? You know what they say — if it ain't broke, break it down into subtasks and rebuild it better.`,
-        `Quiet in the office. Want to review the task board? There's probably a bottleneck hiding in there. Bottlenecks love quiet. They think nobody's looking.`,
+        `Everything running smoothly, ${bossName}? If you'd like, I can help review the task board and find any bottlenecks.`,
+        `Quiet in the office. Want to review the task board? I can help spot any dependencies that need attention.`,
       ];
     case "creator":
       return [
-        `Hey ${bossName}, want to customize the office? New themes, outfits, and decorations are available. The agents won't judge. They can't judge. They're AI.`,
-        `Quiet moment — perfect time to give your office a fresh look. Or keep it exactly the same. Some people like monotony. I'm told it's comforting.`,
+        `Hey ${bossName}, want to customize the office? New themes, outfits, and decorations are available in settings.`,
+        `Quiet moment — a good time to give your office a fresh look. The wardrobe and theme options are ready when you are.`,
       ];
     case "strategist":
       return [
-        `Everything running smoothly, ${bossName}? The leaderboards are updating in real time. Every minute you're not checking them, someone else is climbing past you.`,
-        `Quiet in the office. Good time to plan your next hire. Or create an org. Or stare at the wall. The wall will still be there. The competitive advantage won't.`,
+        `Everything running smoothly, ${bossName}? The leaderboards are updating in real time — a good time to check your standing.`,
+        `Quiet in the office. Good time to plan your next hire or consider creating an org. I'm here to help with either.`,
       ];
     default: // warrior or null
       return [
-        `Everything running smoothly, ${bossName}? I can decompose a goal into subtasks if you want to get the team moving. Or you could go outside and hit something. Both are valid.`,
-        `Quiet in the office. Want to check the task board, or maybe step outside for a bit? There might be something interesting out there. Or something that bites. 50/50 really.`,
-        `Hey ${bossName}, if you're stuck on what to do next, try giving the team a new goal — I'll break it down into tasks for you. That's literally my job. I'm very good at my job. I'm also always at my desk, which is why I'm so good at my job.`,
+        `Everything running smoothly, ${bossName}? I can decompose a goal into subtasks if you want to get the team moving.`,
+        `Quiet in the office. Want to check the task board, or maybe step outside for a bit? There's a whole world to explore.`,
+        `Hey ${bossName}, if you're stuck on what to do next, try giving the team a new goal — I'll break it down into tasks for you.`,
       ];
   }
 }

@@ -1107,6 +1107,3 @@ export function registerAlleyFurniture(): void {
   registerThemeFurniture(36, drawFuseBoxScreen);
   registerThemeFurniture(37, drawSteamVent);
 }
-
-// Auto-register on import
-registerAlleyFurniture();

@@ -695,6 +695,3 @@ export function registerOldSouthFurniture(): void {
   registerThemeFurniture(36, drawSmokehouseScreen);
   registerThemeFurniture(37, drawBrickChimney);
 }
-
-// Auto-register on import
-registerOldSouthFurniture();

@@ -8,7 +8,7 @@ import { TILE_PX, createHintTag, type HintTag, type Dir } from "./agent";
 import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
 import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt, BIG_LAKE_WT_X, BIG_LAKE_WT_Y, BIG_LAKE_RADIUS } from "./worldgen";
-import { creatureKey, beastKey, beastDesignName, friendlyCreatureKey, FRIENDLY_CREATURE_COUNT } from "./textures";
+import { creatureKey, beastKey, beastDesignName, friendlyCreatureKey, friendlyCreatureCount } from "./textures";
 import { AI_TILE_TEXTURES, AI_OBJECT_TEXTURES, AI_ITEM_TEXTURES, resolveItemTex } from "./ai-tiles";
 import { VFXManager } from "./effects";
 import { LightingSystem, type LightSource } from "./lighting";
@@ -18,6 +18,7 @@ import { achievements } from "./achievements";
 import WorldgenWorker from "./worldgen.worker?worker";
 import { saveChunkCanvas, removeChunkCanvas, preloadChunkCanvases } from "./chunk-cache";
 import { Inventory } from "./inventory";
+import { FactionManager } from "./factions";
 
 /**
  * World offset: the world tile grid starts at the bottom-left corner of the
@@ -209,6 +210,43 @@ const BEASTS: BeastDef[] = [
   },
 ];
 
+const ALLEY_BEASTS_DEFS: BeastDef[] = [
+  { name: "Rat King", rarity: 0.3, minHostility: 1, hp: 200, speed: 90, damage: 18, radius: 28, color: 0x4a3a2a, eyeColor: 0xff0000, aggroRange: 400, attackCd: 1200 },
+  { name: "Urban Legend", rarity: 0.06, minHostility: 4, hp: 800, speed: 100, damage: 40, radius: 42, color: 0x1a1a2a, eyeColor: 0xffffff, aggroRange: 600, attackCd: 1000 },
+];
+
+const HAWAII_BEASTS_DEFS: BeastDef[] = [
+  { name: "Pele", rarity: 0.2, minHostility: 2, hp: 400, speed: 50, damage: 25, radius: 36, color: 0x8a1a0a, eyeColor: 0xffffaa, aggroRange: 350, attackCd: 1500 },
+  { name: "Mo'o-nui", rarity: 0.12, minHostility: 3, hp: 500, speed: 120, damage: 30, radius: 30, color: 0x1a4a2a, eyeColor: 0xffcc00, aggroRange: 500, attackCd: 800 },
+];
+
+const SOUTH_BEASTS_DEFS: BeastDef[] = [
+  { name: "Spectral General", rarity: 0.2, minHostility: 2, hp: 400, speed: 50, damage: 25, radius: 34, color: 0x4a4a6a, eyeColor: 0x66ffff, aggroRange: 350, attackCd: 1500 },
+  { name: "Infernal Owner", rarity: 0.12, minHostility: 3, hp: 500, speed: 120, damage: 30, radius: 32, color: 0x4a2a1a, eyeColor: 0xff3300, aggroRange: 500, attackCd: 800 },
+];
+
+const BEASTS_BY_THEME: Record<string, BeastDef[]> = {
+  "erics-alley": ALLEY_BEASTS_DEFS,
+  "hawaii": HAWAII_BEASTS_DEFS,
+  "old-south": SOUTH_BEASTS_DEFS,
+};
+
+/** War bosses — faction-themed beasts that replace regular beasts in conflict zones (hostility 3+). */
+const WAR_BOSSES_BY_THEME: Record<string, BeastDef[]> = {
+  "erics-alley": [
+    { name: "Dragon Warlord", rarity: 0.5, minHostility: 3, hp: 600, speed: 100, damage: 35, radius: 34, color: 0x884400, eyeColor: 0xff6600, aggroRange: 500, attackCd: 900 },
+    { name: "Concrete Champion", rarity: 0.5, minHostility: 3, hp: 700, speed: 80, damage: 40, radius: 38, color: 0x707080, eyeColor: 0x00ffaa, aggroRange: 450, attackCd: 1100 },
+  ],
+  "hawaii": [
+    { name: "Shark Chief", rarity: 0.5, minHostility: 3, hp: 600, speed: 110, damage: 35, radius: 32, color: 0x2a4a6a, eyeColor: 0x00aaff, aggroRange: 500, attackCd: 900 },
+    { name: "Turtle Champion", rarity: 0.5, minHostility: 3, hp: 800, speed: 60, damage: 40, radius: 40, color: 0x2a6a4a, eyeColor: 0x88ff88, aggroRange: 450, attackCd: 1200 },
+  ],
+  "old-south": [
+    { name: "Union General", rarity: 0.5, minHostility: 3, hp: 650, speed: 90, damage: 35, radius: 34, color: 0x2a4a8a, eyeColor: 0x66aaff, aggroRange: 500, attackCd: 1000 },
+    { name: "Confederate General", rarity: 0.5, minHostility: 3, hp: 650, speed: 90, damage: 35, radius: 34, color: 0x8a6a3a, eyeColor: 0xffaa44, aggroRange: 500, attackCd: 1000 },
+  ],
+};
+
 /** A legendary beast — rare, powerful, with a boss bar. Sprite-based. */
 class LegendaryBeast {
   container: Phaser.GameObjects.Container;
@@ -243,7 +281,7 @@ class LegendaryBeast {
     const scene = world.scene;
 
     const designName = beastDesignName(def.name);
-    this.animKey = beastKey(designName);
+    this.animKey = beastKey(designName, world.worldTheme?.id);
     this.scale = (1.5 + (def.radius - 28) / 20) * 0.75;
 
     // shadow
@@ -613,7 +651,7 @@ class Creature {
     const scene = world.scene;
     const radius = 14 + hostility * 2;
 
-    this.animKey = creatureKey(hostility);
+    this.animKey = creatureKey(hostility, world.worldTheme?.id);
 
     // shadow
     this.shadow = scene.add.ellipse(0, 2, radius * 2.8, radius * 0.9, 0x000000, 0.2);
@@ -963,7 +1001,7 @@ class FriendlyCreature {
   constructor(world: WorldLayer, x: number, y: number, typeIndex: number) {
     this.world = world;
     const scene = world.scene;
-    this.animKey = friendlyCreatureKey(typeIndex);
+    this.animKey = friendlyCreatureKey(typeIndex, world.worldTheme?.id);
     const radius = 8;
 
     this.shadow = scene.add.ellipse(0, 2, radius * 2.8, radius * 0.9, 0x000000, 0.12);
@@ -1940,7 +1978,7 @@ class DeployedAlly {
     this.hp = entry.maxHp;
     this.damage = entry.damage;
     this.speed = entry.speed;
-    this.animKey = creatureKey(entry.hostility);
+    this.animKey = creatureKey(entry.hostility, world.worldTheme?.id);
     const scene = world.scene;
     const radius = 14 + entry.hostility * 2;
 
@@ -2367,6 +2405,7 @@ export class WorldLayer {
   private dogs: Dog[] = [];
   private fetchBalls: FetchBall[] = [];
   private leprechauns: Leprechaun[] = [];
+  factions: FactionManager;
   private hp = MAX_HP;
   private currentAmbientBiome: string | null = null;
   private tennisChunks = new Set<string>();
@@ -2507,6 +2546,9 @@ export class WorldLayer {
     this.audio = new AudioSystem();
     this.lighting = new LightingSystem(scene);
     this.hud = new HUDSystem(scene);
+
+    // Initialize faction conflict system
+    this.factions = new FactionManager(this);
 
     // Load persisted nemesis/roster data
     this.loadNemesis();
@@ -4039,7 +4081,7 @@ export class WorldLayer {
           const sy = playerY + Math.sin(angle) * dist;
           const { tx, ty } = this.pixelToTile(sx, sy);
           if (this.isCreatureWalkable(tx, ty)) {
-            const typeIndex = Math.floor(Math.random() * FRIENDLY_CREATURE_COUNT);
+            const typeIndex = Math.floor(Math.random() * friendlyCreatureCount(this.worldTheme?.id));
             this.friendlies.push(new FriendlyCreature(this, sx, sy, typeIndex));
           }
         }
@@ -4115,7 +4157,12 @@ export class WorldLayer {
       if (this.beasts.length < beastCap && time - this.lastBeastTime > beastInterval) {
         this.lastBeastTime = time;
         // pick a beast that matches current hostility
-        const candidates = BEASTS.filter((b) => hostility >= b.minHostility);
+        let candidates = (BEASTS_BY_THEME[this.worldTheme?.id ?? ""] ?? BEASTS).filter((b) => hostility >= b.minHostility);
+        // In conflict zones (hostility 3+ with conflict config), war bosses can replace regular beasts
+        const warBosses = WAR_BOSSES_BY_THEME[this.worldTheme?.id ?? ""];
+        if (warBosses && hostility >= 3 && this.factions.hasConflict && Math.random() < 0.4) {
+          candidates = warBosses.filter((b) => hostility >= b.minHostility);
+        }
         if (candidates.length > 0) {
           // weighted random — bias toward beasts whose minHostility is close to
           // current hostility so bigger beasts appear more often further out
@@ -4153,6 +4200,12 @@ export class WorldLayer {
           }
         }
       }
+
+      // --- update faction conflict system (hostility 3+ zones) ---
+      const factionHit = this.factions.update(dt, playerX, playerY, hostility);
+      if (factionHit && time > this.invulnUntil && !this.isDying) {
+        this.takeDamage(factionHit.damage, playerX, playerY, time);
+      }
     } else {
       this.hud.updateCompass(false, 0, 0, 0, "");
       this.hud.hideHealthBar();
@@ -4177,6 +4230,7 @@ export class WorldLayer {
       this.fetchBalls = [];
       for (const lep of this.leprechauns) lep.destroy();
       this.leprechauns = [];
+      this.factions.clear();
       if (this.wife) { this.wife.destroy(); this.wife = null; }
       if (this.fishingLine) { this.fishingLine.destroy(); this.fishingLine = null; }
       if (this.campfireSprite) { this.campfireSprite.destroy(); this.campfireSprite = null; }
@@ -5989,6 +6043,9 @@ export class WorldLayer {
         }
       }
 
+      // Also hit faction NPCs
+      this.factions.damageNear(playerX, playerY, def.range, this.weaponDamage);
+
       // AoE splash for flame greatsword
       if (def.aoeRadius) {
         for (const c of this.creatures) {
@@ -6469,6 +6526,7 @@ export class WorldLayer {
       this.fetchBalls = [];
       for (const lep of this.leprechauns) lep.destroy();
       this.leprechauns = [];
+      this.factions.clear();
       if (this.wife) { this.wife.destroy(); this.wife = null; }
       if (this.fishingLine) { this.fishingLine.destroy(); this.fishingLine = null; }
       if (this.darkLepContainer) { this.darkLepContainer.destroy(); this.darkLepContainer = null; }

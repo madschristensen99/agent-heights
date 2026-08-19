@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { CHAR_VARIANTS } from "../../../shared/types";
 import { CHAR_FRAME_W, CHAR_FRAME_H, CHAR_FRAMES_PER_ROW } from "./chargen";
-import { getTextureGenerationSteps } from "./textures";
+import { getTextureGenerationSteps, registerThemeCreatures } from "./textures";
 import type { Dir } from "./agent";
 import { onAuthChange, isAuthEnabled, type AuthState } from "../auth";
 import { Store } from "../store";
@@ -19,9 +19,17 @@ import { SS_FACTOR } from "./world";
 import * as loadingOverlay from "./loading-overlay";
 import { setCharTextureProvider, setCharComponentProvider } from "./chargen";
 import type { CharTextureProvider, CharComponentProvider } from "../../../shared/char-draw";
-import "./furniture-alley"; // auto-registers alley furniture drawing functions
-import "./furniture-hawaii"; // auto-registers hawaii furniture drawing functions
-import "./furniture-south"; // auto-registers old south furniture drawing functions
+import "./furniture-alley"; // alley furniture drawing functions (registered in scene.ts)
+import "./furniture-hawaii"; // hawaii furniture drawing functions (registered in scene.ts)
+import "./furniture-south"; // old south furniture drawing functions (registered in scene.ts)
+import { ALLEY_CREATURES, ALLEY_FRIENDLIES, ALLEY_BEASTS } from "./creatures-alley";
+import { HAWAII_CREATURES, HAWAII_FRIENDLIES, HAWAII_BEASTS } from "./creatures-hawaii";
+import { SOUTH_CREATURES, SOUTH_FRIENDLIES, SOUTH_BEASTS } from "./creatures-south";
+
+// Register per-world creature designs so textures are generated for each theme
+registerThemeCreatures("erics-alley", ALLEY_CREATURES, ALLEY_FRIENDLIES, ALLEY_BEASTS);
+registerThemeCreatures("hawaii", HAWAII_CREATURES, HAWAII_FRIENDLIES, HAWAII_BEASTS);
+registerThemeCreatures("old-south", SOUTH_CREATURES, SOUTH_FRIENDLIES, SOUTH_BEASTS);
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all

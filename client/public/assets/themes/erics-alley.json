@@ -80,6 +80,10 @@
     "chatStyle": "street_urban",
     "emotes": ["smoke", "shrug", "cough"]
   },
+  "conflict": {
+    "factionA": { "name": "Steel Dragons", "color": 8912896, "spriteKey": "faction-dragons" },
+    "factionB": { "name": "Concrete Kings", "color": 7368816, "spriteKey": "faction-kings" }
+  },
   "assets": {
     "tilesetPath": "assets/tilesets/erics-alley.png",
     "assetTier": "procedural"

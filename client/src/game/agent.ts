@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { AgentInfo } from "../../../shared/types";
+import type { AgentInfo, CharAppearance } from "../../../shared/types";
 import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID } from "../../../shared/types";
 import type { WorldTheme } from "../../../shared/types";
 import { findPath, Grid, type Tile } from "./path";
@@ -1109,13 +1109,78 @@ export class HermesNPC {
   }
 }
 
+/** Per-world wizard appearance presets. */
+const WIZARD_APPEARANCES: Record<string, CharAppearance> = {
+  "erics-alley": {
+    skin: 2, hairStyle: 10, hair: 9, shirt: 8, pants: 7,
+    accessory: 4, accent: 0, beard: 1, eyeColor: 5, headFeature: 0,
+  },
+  "hawaii": {
+    skin: 1, hairStyle: 7, hair: 11, shirt: 5, pants: 16,
+    accessory: 2, accent: 5, beard: 3, eyeColor: 3, headFeature: 4,
+  },
+  "old-south": {
+    skin: 0, hairStyle: 5, hair: 11, shirt: 3, pants: 2,
+    accessory: 1, accent: 3, beard: 4, eyeColor: 0, headFeature: 0,
+  },
+};
+
+/** Get the wizard texture key for a given theme (or default). */
+export function wizardTextureKey(themeId?: string): string {
+  return themeId ? `char-wizard-${themeId}` : "char-0";
+}
+
+/** Get the wizard appearance for a given theme (or null for default). */
+export function wizardAppearance(themeId?: string): CharAppearance | null {
+  return themeId ? WIZARD_APPEARANCES[themeId] ?? null : null;
+}
+
+/** Draw a themed prop (spray can, fishing hook, satchel) as a Phaser graphics object. */
+function drawWizardProp(scene: Phaser.Scene, themeId?: string): Phaser.GameObjects.Graphics | null {
+  if (!themeId) return null;
+  const g = scene.add.graphics().setDepth(15);
+  if (themeId === "erics-alley") {
+    // Spray can — small red cylinder with cap
+    g.fillStyle(0xcc3333, 1);
+    g.fillRoundedRect(-3, -28, 6, 12, 1);
+    g.fillStyle(0x999999, 1);
+    g.fillRect(-2, -31, 4, 4);
+    g.fillStyle(0xff6644, 0.6);
+    g.fillCircle(0, -22, 2);
+  } else if (themeId === "hawaii") {
+    // Bone fishing hook — curved line
+    g.lineStyle(2, 0xf0e6d0, 1);
+    g.beginPath();
+    g.moveTo(0, -30);
+    g.lineTo(0, -22);
+    g.arc(3, -22, 5, Math.PI, Math.PI * 1.5, false);
+    g.strokePath();
+    g.fillStyle(0xf0e6d0, 1);
+    g.fillCircle(0, -30, 2);
+  } else if (themeId === "old-south") {
+    // Satchel — small brown rounded rectangle
+    g.fillStyle(0x6b4423, 1);
+    g.fillRoundedRect(-5, -26, 10, 8, 2);
+    g.fillStyle(0x8b6940, 1);
+    g.fillRect(-3, -27, 6, 2);
+    g.fillStyle(0x4a3010, 0.5);
+    g.fillRoundedRect(-4, -25, 8, 5, 1);
+  } else {
+    g.destroy();
+    return null;
+  }
+  return g;
+}
+
 /** Wizard — the world-builder NPC. Sits at a desk and can be chatted with.
- *  Has GitHub tools on the server side to read and modify world files. */
+ *  Has GitHub tools on the server side to read and modify world files.
+ *  Appearance is themed per-world (graffiti wizard, kahuna, snake oil salesman). */
 export class WizardNPC {
   container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite;
   private nameTag: NameTag;
   private shadow: Phaser.GameObjects.Ellipse;
+  private prop: Phaser.GameObjects.Graphics | null;
 
   info!: AgentInfo;
   private dir: Dir = "down";
@@ -1126,19 +1191,32 @@ export class WizardNPC {
     _grid: Grid,
     seat: Tile,
     onClick: (id: string) => void,
+    themeId?: string,
   ) {
 
     const feet = feetOf(seat);
     this.shadow = scene.add.ellipse(0, 2, 50, 18, 0x000000, 0.15);
+
+    // Use themed texture if available
+    const themedKey = wizardTextureKey(themeId);
+    if (themeId && scene.textures.exists(themedKey)) {
+      this.texKey = themedKey;
+    }
+
     this.sprite = scene.add.sprite(0, 0, this.texKey, 6).setOrigin(0.5, 1).setScale(1);
     this.nameTag = createNameTag(scene, "Wizard", "idle");
 
-    this.container = scene.add.container(feet.x, feet.y, [
+    // Themed prop accessory
+    this.prop = drawWizardProp(scene, themeId);
+
+    const children: Phaser.GameObjects.GameObject[] = [
       this.shadow,
       this.sprite,
-      this.nameTag.nameBg,
-      this.nameTag.label,
-    ]);
+    ];
+    if (this.prop) children.push(this.prop);
+    children.push(this.nameTag.nameBg, this.nameTag.label);
+
+    this.container = scene.add.container(feet.x, feet.y, children);
     this.container.setDepth(10 + this.container.y);
     this.dir = "down";
     this.play(`${this.texKey}-idle-${this.dir}`);
