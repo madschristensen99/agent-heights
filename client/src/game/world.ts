@@ -7,7 +7,7 @@ import { isTouchDevice } from "../touch";
 import { TILE_PX, createHintTag, type HintTag, type Dir } from "./agent";
 import { generateCharTexture } from "./chargen";
 import { Grid } from "./path";
-import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt } from "./worldgen";
+import { generateChunk, isWalkable, tileDamage, tileSpeed, type Chunk, hostilityAt, BIG_LAKE_WT_X, BIG_LAKE_WT_Y, BIG_LAKE_RADIUS } from "./worldgen";
 import { creatureKey, beastKey, beastDesignName, friendlyCreatureKey, FRIENDLY_CREATURE_COUNT } from "./textures";
 import { AI_TILE_TEXTURES, AI_OBJECT_TEXTURES, AI_ITEM_TEXTURES, resolveItemTex } from "./ai-tiles";
 import { VFXManager } from "./effects";
@@ -4060,17 +4060,22 @@ export class WorldLayer {
         }
       }
 
-      // --- spawn dog in meadow (hostility 0) — friendly fetch companion ---
-      if (this.dogs.length === 0 && time - this.lastDogSpawnTime > 8000 && Math.round(hostility) === 0) {
+      // --- spawn dog near the big lake — friendly fetch companion ---
+      const lakePxX = BIG_LAKE_WT_X * TILE_PX + TILE_PX / 2 + this.offset.x;
+      const lakePxY = BIG_LAKE_WT_Y * TILE_PX + TILE_PX / 2 + this.offset.y;
+      const lakeRadiusPx = BIG_LAKE_RADIUS * TILE_PX;
+      const distToLake = Math.hypot(playerX - lakePxX, playerY - lakePxY);
+      if (this.dogs.length === 0 && time - this.lastDogSpawnTime > 8000 && distToLake < lakeRadiusPx + 800) {
         this.lastDogSpawnTime = time;
+        // Spawn near the lake shore (just outside the radius)
         const angle = Math.random() * Math.PI * 2;
-        const dist = 200 + Math.random() * 200;
-        const sx = playerX + Math.cos(angle) * dist;
-        const sy = playerY + Math.sin(angle) * dist;
+        const shoreDist = lakeRadiusPx + 50 + Math.random() * 150;
+        const sx = lakePxX + Math.cos(angle) * shoreDist;
+        const sy = lakePxY + Math.sin(angle) * shoreDist;
         const { tx, ty } = this.pixelToTile(sx, sy);
         if (this.isCreatureWalkable(tx, ty)) {
           this.dogs.push(new Dog(this, sx, sy));
-          this.store.toast("🐶 A friendly dog appeared near the water!");
+          this.store.toast("🐶 A friendly dog appeared by the lake!");
         }
       }
 

@@ -205,12 +205,12 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
     }
   }
 
-  // golf course in meadow chunks near the office — reduced from 85% to avoid flattening
+  // near-office flag used by park/fountain/tree placement below
   const nearOffice = (cx >= -1 && cx <= 1 && cy >= 0 && cy <= 1);
-  if (biome === "meadow" && nearOffice && rng() < 0.40) {
+
+  // golf courses — 2 fixed courses at deterministic chunks near the office
+  if (biome === "meadow" && ((cx === -1 && cy === 0) || (cx === -1 && cy === 1))) {
     placeGolfCourseNearOffice(tiles, rng, cx, cy);
-  } else if (biome === "meadow" && rng() < 0.35) {
-    placeGolfCourse(tiles, rng);
   }
 
   // rock formations — walls and ridges that block paths in wasteland/desert
@@ -269,13 +269,13 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
     placeBrickTower(tiles, biome, rng);
   }
 
-  // park features in meadow — benches, hedges, ponds (more frequent near office)
-  if (biome === "meadow" && rng() < (nearOffice ? 0.50 : 0.25)) {
+  // park features in meadow — benches, hedge gardens (reduced rate)
+  if (biome === "meadow" && rng() < (nearOffice ? 0.15 : 0.10)) {
     placeParkFeature(tiles, rng);
   }
 
   // fountains in meadow — decorative water feature right outside the office
-  if (biome === "meadow" && rng() < (nearOffice ? 0.50 : 0.25)) {
+  if (biome === "meadow" && rng() < (nearOffice ? 0.10 : 0.05)) {
     placeFountain(tiles, rng);
   }
 
@@ -290,16 +290,14 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
     placeTennisCourt(tiles, rng);
   }
 
-  // water features — grouped clusters of 6+ tiles, more common near office
+  // water features — small streams in forest/ruins only (meadow has the big lake)
   const hRounded = Math.round(hostility);
-  if ((biome === "meadow" || biome === "forest" || biome === "ruins") && rng() < (hRounded === 0 ? 0.35 : hRounded === 1 ? 0.25 : 0.15)) {
+  if ((biome === "forest" || biome === "ruins") && rng() < (hRounded === 1 ? 0.12 : 0.08)) {
     placeWaterCluster(tiles, rng);
   }
 
-  // lakes — large bodies of water with shore, in meadow/forest (low hostility)
-  if ((biome === "meadow" || biome === "forest") && hRounded <= 1 && rng() < 0.12) {
-    placeLake(tiles, rng);
-  }
+  // big lake — one deterministic multi-chunk lake in the meadow
+  placeBigLake(tiles, cx, cy);
 
   // acid vat clusters — rare, only in ruins/wasteland
   if ((biome === "ruins" || biome === "wasteland") && rng() < 0.08) {
@@ -724,6 +722,50 @@ function placeLake(tiles: number[], rng: () => number): void {
   }
 }
 
+// ============================================================
+// BIG LAKE — one deterministic lake spanning multiple chunks
+// ============================================================
+
+/** Big lake center in world tile coordinates (chunk 1,1 → tile 48,48). */
+export const BIG_LAKE_WT_X = 1 * CHUNK_SIZE + CHUNK_SIZE / 2;
+export const BIG_LAKE_WT_Y = 1 * CHUNK_SIZE + CHUNK_SIZE / 2;
+/** Big lake radius in world tiles. */
+export const BIG_LAKE_RADIUS = 22;
+
+/** Place the big lake — stamps LAKE + LAKE_SHORE tiles based on world-coordinate
+ *  distance to the deterministic lake center. Safe to call on every chunk;
+ *  only affects tiles within the lake's bounding box. */
+function placeBigLake(tiles: number[], cx: number, cy: number): void {
+  const chunkMinWX = cx * CHUNK_SIZE;
+  const chunkMinWY = cy * CHUNK_SIZE;
+
+  // Quick bounding-box reject
+  const lakeMinX = BIG_LAKE_WT_X - BIG_LAKE_RADIUS - 4;
+  const lakeMaxX = BIG_LAKE_WT_X + BIG_LAKE_RADIUS + 4;
+  const lakeMinY = BIG_LAKE_WT_Y - BIG_LAKE_RADIUS - 4;
+  const lakeMaxY = BIG_LAKE_WT_Y + BIG_LAKE_RADIUS + 4;
+  if (chunkMinWX + CHUNK_SIZE - 1 < lakeMinX || chunkMinWX > lakeMaxX) return;
+  if (chunkMinWY + CHUNK_SIZE - 1 < lakeMinY || chunkMinWY > lakeMaxY) return;
+
+  for (let y = 0; y < CHUNK_SIZE; y++) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const wx = chunkMinWX + x;
+      const wy = chunkMinWY + y;
+      const d = Math.hypot(wx - BIG_LAKE_WT_X, wy - BIG_LAKE_WT_Y);
+      // Deterministic organic edge — no rng, consistent across chunk boundaries
+      const edgeNoise = (Math.sin(wx * 0.31) + Math.cos(wy * 0.27)) * 2.0;
+      const lakeEdge = BIG_LAKE_RADIUS + edgeNoise;
+      if (d <= lakeEdge) {
+        tiles[idx(x, y)] = TILE.LAKE;
+      } else if (d <= lakeEdge + 2.5) {
+        if (tiles[idx(x, y)] !== TILE.LAKE && canOverwrite(tiles, idx(x, y))) {
+          tiles[idx(x, y)] = TILE.LAKE_SHORE;
+        }
+      }
+    }
+  }
+}
+
 /** Place an acid vat cluster — small group of acid tiles. */
 function placeAcidCluster(tiles: number[], rng: () => number): void {
   const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
@@ -1065,7 +1107,7 @@ function placeGolfCourse(tiles: number[], rng: () => number): void {
 
 /** Place a park feature — pond, bench, or hedge garden. */
 function placeParkFeature(tiles: number[], rng: () => number): void {
-  const type = Math.floor(rng() * 3);
+  const type = 1 + Math.floor(rng() * 2); // bench or hedge garden (pond removed — big lake handles water)
   const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
   const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
 

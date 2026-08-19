@@ -126,7 +126,7 @@ export function LoginScreen() {
           )}
 
           <p className="text-center text-xs text-muted leading-relaxed">
-            👁 By continuing, you acknowledge our{" "}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"middle",display:"inline-block"}}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> By continuing, you acknowledge our{" "}
             <a href="/privacy" target="_blank" rel="noopener" className="text-muted underline hover:text-accent transition-colors">Privacy Policy</a>
             {" "}and{" "}
             <a href="/terms" target="_blank" rel="noopener" className="text-muted underline hover:text-accent transition-colors">Terms of Service</a>.

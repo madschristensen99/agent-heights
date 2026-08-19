@@ -241,7 +241,7 @@ export function createAuthOverlay(): { show: () => void; hide: () => void } {
         <span style="color:#7a8090;">Forgot password?</span>
       </p>
       <p style="margin-top:0.8rem;font-size:0.72rem;color:#555;line-height:1.4;">
-        👁 By continuing, you acknowledge our <a href="/privacy" target="_blank" style="color:#7a8090;text-decoration:underline;">Privacy Policy</a> and <a href="/terms" target="_blank" style="color:#7a8090;text-decoration:underline;">Terms of Service</a>.
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7a8090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> By continuing, you acknowledge our <a href="/privacy" target="_blank" style="color:#7a8090;text-decoration:underline;">Privacy Policy</a> and <a href="/terms" target="_blank" style="color:#7a8090;text-decoration:underline;">Terms of Service</a>.
       </p>
       <div id="auth-status" style="margin-top:0.5rem;font-size:0.85rem;min-height:1.2em;"></div>
     </div>

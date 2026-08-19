@@ -15,10 +15,10 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, -apple
   text-align: center;
   margin-bottom: 1.5rem;
 }
-.eye {
+.eye-svg {
   display: inline-block;
-  font-size: 3rem;
   animation: blink 4s infinite;
+  transform-origin: center;
 }
 @keyframes blink {
   0%, 92%, 100% { transform: scaleY(1); opacity: 1; }
@@ -57,7 +57,8 @@ h2 {
   align-items: center;
   gap: 0.5rem;
 }
-h2 .icon { font-size: 1.1rem; }
+h2 .icon { display: inline-flex; align-items: center; flex-shrink: 0; }
+h2 .icon svg { width: 18px; height: 18px; }
 .flavor {
   color: var(--accent);
   font-size: 0.82rem;
@@ -80,7 +81,7 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--muted);
   background: rgba(22,24,36,0.5);
 }
-.disclaimer .eye-sm { font-size: 1.1rem; }
+.disclaimer .eye-sm svg { width: 16px; height: 16px; }
 </style>
 </head>
 <body>
@@ -88,18 +89,23 @@ a { color: var(--accent); text-decoration: none; }
 <div class="container">
 
 <div class="eye-banner">
-  <div class="eye">👁</div>
+  <svg class="eye-svg" width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 32s8-18 28-18 28 18 28 18-8 18-28 18S4 32 4 32z" stroke="#58c866" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="32" cy="32" r="10" stroke="#58c866" stroke-width="2.5"/>
+    <circle cx="32" cy="32" r="4" fill="#58c866"/>
+    <circle cx="35" cy="29" r="1.5" fill="#0d0f1a"/>
+  </svg>
 </div>
 <h1>Privacy Policy</h1>
 <p class="tagline"><span class="quote">"I'm watching you, Wazowski. Always watching."</span></p>
 <p class="tagline">— The Office Manager</p>
 <p class="updated">Last updated: August 16, 2025</p>
 
-<h2><span class="icon">📋</span> Overview</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span> Overview</h2>
 <p class="flavor">Welcome to Agent Heights. We see everything. But in a good way.</p>
 <p>Agent Heights ("we", "our", or "the Service") is an AI agent platform that lets users hire and manage AI agents connected to external services via Model Context Protocol (MCP) servers. This Privacy Policy explains what data we collect, how we use it, and the choices you have.</p>
 
-<h2><span class="icon">👀</span> What We See</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span> What We See</h2>
 <p class="flavor">Don't worry — we're not actually hiding in your closet. We just need a few things to run the office.</p>
 
 <h3>Account Information</h3>
@@ -129,7 +135,7 @@ a { color: var(--accent); text-decoration: none; }
 <li>We store transaction records and billing history for account management</li>
 </ul>
 
-<h2><span class="icon">📄</span> How Google Workspace MCP Servers Access Your Data</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg></span> How Google Workspace MCP Servers Access Your Data</h2>
 <p class="flavor">When you let an agent peek at your Google stuff, here's exactly what it can see.</p>
 <p>When you connect a Google Workspace agent (Gmail, Google Drive, Google Docs, Google Sheets, Google Slides, Google Calendar, Google Chat, or Google Contacts), the agent accesses your Google data through Google's official MCP servers using OAuth 2.0. The specific data accessed depends on the scopes you authorize:</p>
 <ul>
@@ -144,7 +150,7 @@ a { color: var(--accent); text-decoration: none; }
 </ul>
 <p>All data access is performed through Google's official MCP servers. We do not store the content of your Google Workspace data — only the OAuth tokens needed to make authenticated requests.</p>
 
-<h2><span class="icon">🎯</span> Why We're Watching</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span> Why We're Watching</h2>
 <p class="flavor">It's not creepy. We promise. It's mostly just... keeping the lights on.</p>
 <ul>
 <li>To provide and maintain the Service</li>
@@ -155,7 +161,7 @@ a { color: var(--accent); text-decoration: none; }
 <li>To comply with legal obligations</li>
 </ul>
 
-<h2><span class="icon">🔒</span> The Surveillance Room</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> The Surveillance Room</h2>
 <p class="flavor">All footage stored in a secure, encrypted vault. No interns with clipboards.</p>
 <ul>
 <li>Data is stored in Supabase (PostgreSQL) with row-level security policies</li>
@@ -164,7 +170,7 @@ a { color: var(--accent); text-decoration: none; }
 <li>Access to sensitive data is restricted to authenticated users only</li>
 </ul>
 
-<h2><span class="icon">⏱️</span> How Long We Keep Watching</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> How Long We Keep Watching</h2>
 <p class="flavor">We don't hold grudges. Or data. Once you're out, you're out.</p>
 <ul>
 <li>Account data is retained while your account is active</li>
@@ -173,7 +179,7 @@ a { color: var(--accent); text-decoration: none; }
 <li>Billing records may be retained for legal compliance purposes</li>
 </ul>
 
-<h2><span class="icon">🚪</span> Your Right to Be Un-Watched</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.562Z"/></svg></span> Your Right to Be Un-Watched</h2>
 <p class="flavor">You can walk away at any time. We'll stop watching. We might miss you though.</p>
 <ul>
 <li>Access, correct, or delete your personal data</li>
@@ -182,7 +188,7 @@ a { color: var(--accent); text-decoration: none; }
 <li>Cancel your subscription at any time</li>
 </ul>
 
-<h2><span class="icon">🤝</span> Who Else Has Eyes On You</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Who Else Has Eyes On You</h2>
 <p class="flavor">We work with some trusted partners. They have their own eyes. And their own rules.</p>
 <p>The Service integrates with the following third-party providers:</p>
 <ul>
@@ -194,12 +200,12 @@ a { color: var(--accent); text-decoration: none; }
 </ul>
 <p>Each provider has its own privacy policy governing how they handle data.</p>
 
-<h2><span class="icon">📡</span> Talk to the Watcher</h2>
+<h2><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg></span> Talk to the Watcher</h2>
 <p class="flavor">Questions? Concerns? Want to know what we saw? Just ask.</p>
 <p>For privacy questions or data requests, contact us at <a href="mailto:support@agentheights.com">support@agentheights.com</a>.</p>
 
 <div class="disclaimer">
-  <span class="eye-sm">👁</span><br>
+  <span class="eye-sm"><svg viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span><br>
   This policy is not actual surveillance. We just think it's funny.<br>
   The legal stuff above is real though. We really do care about your privacy.
 </div>
