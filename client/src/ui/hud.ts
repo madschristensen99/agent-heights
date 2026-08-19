@@ -1,17 +1,20 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
-import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, TaskPhase, CharAppearance, MCPServerConfig, PersonalityTraits, AgentInfo } from "../../../shared/types";
+import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, TaskPhase, CharAppearance, MCPServerConfig, PersonalityTraits, AgentInfo, LeaderboardCategory, LeaderboardEntry, DecorationCategory, ChallengeResult } from "../../../shared/types";
 import { AGENT_MODELS, OFFICE_THEMES, OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
   ACCENT_COLOR_OPTIONS, BEARD_STYLES, EYE_COLORS, HEAD_FEATURES,
   randomAppearance, DEFAULT_APPEARANCE, isValidAppearance, randomPersonality,
   SUBSCRIPTION_TIER_LIST, type SubscriptionTier,
+  DECORATION_CATALOG,
 } from "../../../shared/types";
 import { md } from "./md";
 import { achievements, ACHIEVEMENTS } from "../game/achievements";
 import { touchInput, isTouchDevice } from "../touch";
 import { generateCharPreviewDataURL } from "../game/chargen";
 import { MarketplaceBrowser } from "./marketplace";
+import { computeSuggestions } from "./suggestions";
+import { createPipelineGraph } from "./pipeline-graph";
 import type { MarketplaceAgent } from "../../../shared/marketplace";
 import { SECURITY_NOTES } from "../../../shared/mcp-catalog";
 import { getToken, getUserEmail, getUserId, signOut, isAuthEnabled, onAuthChange } from "../auth";
@@ -230,6 +233,15 @@ export class Hud {
   private feedCollapsed = false;
   private feedExpanded = false;
   private rosterCollapsed = false;
+  private pipelineView = false;
+  private dashboardView = false;
+  private decomposeView = false;
+  private experimentView = false;
+  private decorationView = false;
+  private techTreeView = false;
+  private socialView = false;
+  private challengeView = false;
+  private dashboardPollTimer: ReturnType<typeof setInterval> | null = null;
   private renderQueued = false;
   private tourBannerDismissed = false;
   private perfVisible = false;
@@ -263,6 +275,7 @@ export class Hud {
         </span>
         <span id="conn" class="conn">●</span>
       </div>
+      <div class="stats-bar" id="stats-bar"></div>
       <div class="panel roster" id="roster"></div>
       <div class="panel feed" id="feed">
         <div class="panel-title">OFFICE FEED
@@ -288,6 +301,7 @@ export class Hud {
         <div id="d-cdp-section" hidden></div>
         <div id="d-crossmint-section" hidden></div>
         <div class="d-schedules" id="d-schedules" hidden></div>
+        <div id="d-growth-section" hidden></div>
         <div class="logs-wrap">
           <div class="logs" id="logs"></div>
           <button class="logs-history-btn" id="d-history" title="View conversation history">
@@ -325,13 +339,32 @@ export class Hud {
       <div class="modal-backdrop" id="forge-modal" hidden></div>
       <div class="modal-backdrop" id="fuse-modal" hidden></div>
       <div class="modal-backdrop" id="subscribe-modal" hidden></div>
+      <div class="modal-backdrop" id="away-report-modal" hidden></div>
       <div class="board-panel" id="board-panel" hidden>
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
-          <button class="x" id="board-close">✕</button>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn" id="pipeline-toggle" hidden style="font-size: 11px; padding: 2px 8px;">⚙ Pipeline</button>
+            <button class="btn" id="dashboard-toggle" hidden style="font-size: 11px; padding: 2px 8px;">📊 Dashboard</button>
+            <button class="btn" id="decompose-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🧩 Decompose</button>
+            <button class="btn" id="experiment-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🧪 Log</button>
+            <button class="btn" id="decoration-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🪑 Decorate</button>
+            <button class="btn" id="techtree-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🌳 Tech Tree</button>
+            <button class="btn" id="social-toggle" hidden style="font-size: 11px; padding: 2px 8px;">💬 Social</button>
+            <button class="btn" id="challenge-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🏆 Challenge</button>
+            <button class="x" id="board-close">✕</button>
+          </div>
         </div>
         <div class="board-columns" id="board-columns"></div>
-        <div class="board-add">
+        <div id="pipeline-view" hidden style="height: calc(100% - 100px);"></div>
+        <div id="dashboard-view" hidden style="height: calc(100% - 100px); overflow-y: auto; padding: 12px;"></div>
+        <div id="decompose-view" hidden style="height: calc(100% - 100px); overflow-y: auto; padding: 12px;"></div>
+        <div id="experiment-view" hidden style="height: calc(100% - 100px); overflow-y: auto; padding: 12px;"></div>
+        <div id="decoration-view" hidden style="height: calc(100% - 100px); overflow-y: auto; padding: 12px;"></div>
+        <div id="techtree-view" hidden style="height: calc(100% - 100px); overflow-y: auto; padding: 12px;"></div>
+        <div id="social-view" hidden style="height: calc(100% - 100px); overflow-y: auto; padding: 12px;"></div>
+        <div id="challenge-view" hidden style="height: calc(100% - 100px); overflow-y: auto; padding: 12px;"></div>
+        <div class="board-add" id="board-add-section">
           <input id="board-new-title" maxlength="200" placeholder="New task title…" />
           <textarea id="board-new-desc" rows="2" placeholder="Description (optional)"></textarea>
           <button class="btn primary" id="board-add-btn">+ ADD CARD</button>
@@ -370,6 +403,16 @@ export class Hud {
         <div class="vmodel-diagram" id="vmodel-diagram"></div>
       </div>
       <div class="toasts" id="toasts"></div>
+      <div class="concierge-bubble" id="concierge-bubble" hidden>
+        <span class="concierge-avatar">👩‍💼</span>
+        <span class="concierge-text" id="concierge-text"></span>
+        <button class="concierge-action btn mini" id="concierge-action" hidden></button>
+        <button class="concierge-close" id="concierge-close">✕</button>
+      </div>
+      <div class="next-steps" id="next-steps" hidden>
+        <div class="next-steps-title">NEXT STEPS</div>
+        <div class="next-steps-list" id="next-steps-list"></div>
+      </div>
       <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · G gantt · N v-model · V voice · M manage projector · click an agent · ESC close · scroll to zoom</div>
       <div class="hint touch">Tap an agent to talk · Tap objects to interact · Pinch to zoom · 2-finger drag to pan</div>
       <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
@@ -405,6 +448,10 @@ export class Hud {
     document.getElementById("hire-btn")!.addEventListener("click", () => this.openHireModal());
     document.getElementById("settings-btn")!.addEventListener("click", () => this.openSettings());
     document.getElementById("help-btn")!.addEventListener("click", () => this.showIntroGuide());
+    document.getElementById("concierge-close")!.addEventListener("click", () => {
+      const nudge = this.store.conciergeNudge;
+      if (nudge) this.dismissConcierge(nudge.nudgeId);
+    });
     document.getElementById("rooms-btn")!.addEventListener("click", () => {
       this.net.send({ type: "list_orgs" });
       this.openRoomsPanel();
@@ -504,6 +551,42 @@ export class Hud {
     });
     achievements.onUnlock((def) => {
       this.toast(`🏆 ${def.name} — ${def.desc}`);
+    });
+
+    // Leaderboard results from server
+    store.leaderboardListeners.push((entries) => {
+      this.onLeaderboardResult(entries);
+    });
+
+    // Concierge nudges from Office Manager
+    store.conciergeListeners.push(() => {
+      this.showConciergeNudge();
+    });
+
+    // Decomposition stream from Office Manager
+    store.decomposingListeners.push(() => {
+      this.renderDecomposingPanel();
+    });
+
+    // Away report — shown on reconnect after >2h absence
+    store.awayReportListeners.push(() => {
+      this.showAwayReport();
+    });
+
+    // Next Steps panel — recompute on store changes
+    store.subscribe(() => {
+      this.renderNextSteps();
+      this.renderDecomposingPanel();
+    });
+
+    // Platform connection nudges
+    store.platformNudgeListeners.push((kind, agentName) => {
+      if (kind === "first_hire") {
+        this.toast(`Want ${agentName} to ping you on Slack or Telegram when tasks are done? Connect a platform in settings →`);
+        setTimeout(() => this.showIntentModal(), 2000);
+      } else {
+        this.toast(`${agentName} finished their first task! Want notifications on your phone? Connect Telegram in settings →`);
+      }
     });
 
     // Show invite modal when a pending invite arrives
@@ -675,6 +758,105 @@ export class Hud {
     titleEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) addCard();
     });
+
+    // Pipeline graph toggle — only visible when unlocked
+    document.getElementById("pipeline-toggle")!.addEventListener("click", () => {
+      this.pipelineView = !this.pipelineView;
+      if (this.pipelineView) { this.dashboardView = false; this.challengeView = false; }
+      this.stopDashboardPolling();
+      this.renderBoard();
+    });
+
+    // Automation dashboard toggle — only visible when unlocked
+    document.getElementById("dashboard-toggle")!.addEventListener("click", () => {
+      this.dashboardView = !this.dashboardView;
+      if (this.dashboardView) { this.pipelineView = false; this.decomposeView = false; this.experimentView = false; this.decorationView = false; this.techTreeView = false; this.socialView = false; this.challengeView = false; }
+      if (this.dashboardView) this.startDashboardPolling();
+      else this.stopDashboardPolling();
+      this.renderBoard();
+    });
+
+    // Decomposition mode toggle — only visible when unlocked
+    document.getElementById("decompose-toggle")!.addEventListener("click", () => {
+      this.decomposeView = !this.decomposeView;
+      if (this.decomposeView) { this.pipelineView = false; this.dashboardView = false; this.experimentView = false; this.decorationView = false; this.techTreeView = false; this.socialView = false; this.challengeView = false; }
+      this.stopDashboardPolling();
+      this.renderBoard();
+    });
+
+    // Experiment log toggle — only visible when unlocked
+    document.getElementById("experiment-toggle")!.addEventListener("click", () => {
+      this.experimentView = !this.experimentView;
+      if (this.experimentView) {
+        this.pipelineView = false; this.dashboardView = false; this.decomposeView = false; this.decorationView = false; this.techTreeView = false; this.socialView = false; this.challengeView = false;
+        this.net.send({ type: "request_experiment_log" });
+      }
+      this.stopDashboardPolling();
+      this.renderBoard();
+    });
+
+    // Decoration mode toggle — only visible when unlocked
+    document.getElementById("decoration-toggle")!.addEventListener("click", () => {
+      this.decorationView = !this.decorationView;
+      if (this.decorationView) {
+        this.pipelineView = false; this.dashboardView = false; this.decomposeView = false; this.experimentView = false; this.techTreeView = false; this.socialView = false; this.challengeView = false;
+        this.net.send({ type: "request_decorations" });
+      }
+      this.stopDashboardPolling();
+      this.renderBoard();
+    });
+
+    // Tech tree toggle — only visible when unlocked
+    document.getElementById("techtree-toggle")!.addEventListener("click", () => {
+      this.techTreeView = !this.techTreeView;
+      if (this.techTreeView) {
+        this.pipelineView = false; this.dashboardView = false; this.decomposeView = false; this.experimentView = false; this.decorationView = false; this.socialView = false; this.challengeView = false;
+        this.net.send({ type: "request_office_progress" });
+      }
+      this.stopDashboardPolling();
+      this.renderBoard();
+    });
+
+    // Social toggle — visible when visiting another user's office
+    document.getElementById("social-toggle")!.addEventListener("click", () => {
+      this.socialView = !this.socialView;
+      if (this.socialView) {
+        this.pipelineView = false; this.dashboardView = false; this.decomposeView = false; this.experimentView = false; this.decorationView = false; this.techTreeView = false; this.challengeView = false;
+        const ownerId = this.store.roomOwnerId;
+        if (ownerId) this.net.send({ type: "request_office_social", officeOwnerId: ownerId });
+      }
+      this.stopDashboardPolling();
+      this.renderBoard();
+    });
+
+    // Challenge toggle — visible when optimization challenges unlocked
+    document.getElementById("challenge-toggle")!.addEventListener("click", () => {
+      this.challengeView = !this.challengeView;
+      if (this.challengeView) {
+        this.pipelineView = false; this.dashboardView = false; this.decomposeView = false; this.experimentView = false; this.decorationView = false; this.techTreeView = false; this.socialView = false;
+        if (!this.store.activeChallenge) {
+          this.net.send({ type: "request_challenge" });
+        }
+      }
+      this.stopDashboardPolling();
+      this.renderBoard();
+    });
+  }
+
+  private startDashboardPolling(): void {
+    // ... (rest of the code remains the same)
+    this.stopDashboardPolling();
+    this.net.send({ type: "request_automation_stats" });
+    this.dashboardPollTimer = setInterval(() => {
+      this.net.send({ type: "request_automation_stats" });
+    }, 5000);
+  }
+
+  private stopDashboardPolling(): void {
+    if (this.dashboardPollTimer) {
+      clearInterval(this.dashboardPollTimer);
+      this.dashboardPollTimer = null;
+    }
   }
 
   private toggleFeed(): void {
@@ -1195,6 +1377,36 @@ export class Hud {
       statusEl.textContent = `Found ${recommendations.length} agent${recommendations.length > 1 ? "s" : ""} for your stack:`;
       resultsEl.innerHTML = "";
 
+      // Auto-hire all button
+      const autoHireAllBtn = document.createElement("button");
+      autoHireAllBtn.className = "btn primary";
+      autoHireAllBtn.style.cssText = "width:100%;margin-bottom:0.5rem;padding:0.6rem;font-size:0.85rem;";
+      autoHireAllBtn.textContent = `🚁 HIRE ALL ${recommendations.length} AGENT${recommendations.length > 1 ? "S" : ""}`;
+      autoHireAllBtn.addEventListener("click", async () => {
+        autoHireAllBtn.disabled = true;
+        autoHireAllBtn.textContent = "Hiring all…";
+        let hired = 0;
+        for (const rec of recommendations) {
+          try {
+            const res = await fetch(`/api/marketplace/agent?id=${encodeURIComponent(rec.agentId)}`);
+            if (!res.ok) continue;
+            const agent = await res.json() as MarketplaceAgent;
+            this.hireFromMarketplace(agent);
+            hired++;
+          } catch { /* skip failures */ }
+        }
+        autoHireAllBtn.textContent = `Hired ${hired}/${recommendations.length}! 🚁`;
+        autoHireAllBtn.style.background = "var(--green)";
+        autoHireAllBtn.style.color = "#fff";
+        autoHireAllBtn.style.borderColor = "var(--green)";
+        if (hired > 0) {
+          setTimeout(() => {
+            this.toast(`${hired} agent${hired > 1 ? "s" : ""} hired! They'll arrive by helicopter.`);
+          }, 500);
+        }
+      });
+      resultsEl.appendChild(autoHireAllBtn);
+
       for (const rec of recommendations) {
         const card = document.createElement("div");
         card.style.cssText = `
@@ -1297,6 +1509,44 @@ export class Hud {
     };
     skipBtn.removeEventListener("click", finish);
     skipBtn.addEventListener("click", cleanup);
+  }
+
+  // ----------------------------------------------------- intent modal (post-first-hire)
+
+  private showIntentModal(): void {
+    if (localStorage.getItem("ah-intent-seen")) return;
+    localStorage.setItem("ah-intent-seen", "1");
+
+    const modal = document.getElementById("onboard-modal")!;
+    modal.hidden = false;
+    modal.innerHTML = `
+      <div class="modal onboard" style="max-width: 440px;">
+        <h1 style="font-size: 1.2rem;">What are you trying to do?</h1>
+        <p class="sub" style="margin-bottom: 1rem;">You've got your first agent. Tell us your goal so we can help you get there faster.</p>
+        <div id="intent-options" style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <button class="btn intent-opt" data-intent="research" style="text-align: left; padding: 0.75rem 1rem;">🔬 Research &amp; Analysis</button>
+          <button class="btn intent-opt" data-intent="coding" style="text-align: left; padding: 0.75rem 1rem;">💻 Software Development</button>
+          <button class="btn intent-opt" data-intent="marketing" style="text-align: left; padding: 0.75rem 1rem;">📣 Marketing &amp; Content</button>
+          <button class="btn intent-opt" data-intent="finance" style="text-align: left; padding: 0.75rem 1rem;">💰 Finance &amp; Data</button>
+          <button class="btn intent-opt" data-intent="general" style="text-align: left; padding: 0.75rem 1rem;">🤔 Just exploring</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+          <button class="btn" id="intent-skip" style="flex: 1;">SKIP</button>
+        </div>
+      </div>
+    `;
+
+    const close = () => { modal.hidden = true; };
+
+    modal.querySelector("#intent-skip")!.addEventListener("click", close);
+
+    modal.querySelectorAll(".intent-opt").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const intent = (btn as HTMLButtonElement).dataset.intent ?? "general";
+        this.net.send({ type: "set_stated_intent", intent });
+        close();
+      });
+    });
   }
 
   // --------------------------------------------------------------- intro guide
@@ -2349,8 +2599,8 @@ export class Hud {
     modal.hidden = false;
     const subNotice = this.store.subscriptionActive ? "" : `
       <div style="margin-bottom:0.8rem;padding:0.6rem 0.8rem;border-radius:8px;background:rgba(229,93,93,0.15);border:1px solid rgba(229,93,93,0.3);color:#e05d5d;font-size:0.82rem;line-height:1.3;">
-        <strong>Subscription required.</strong> You need a subscription to hire agents. Plans start at $0.99/month.
-        <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:#58c866;color:#0d0d0d;font-size:0.8rem;font-weight:700;cursor:pointer;">Subscribe now →</button>
+        <strong>Subscription required.</strong> Pay a $0.99 one-time entry fee to hire agents and run tasks. Subscribe for more agents and higher usage caps.
+        <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:#58c866;color:#0d0d0d;font-size:0.8rem;font-weight:700;cursor:pointer;">Get started →</button>
       </div>`;
 
     const traitSliders = ([
@@ -2848,6 +3098,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     this.renderRoster();
     this.renderDetail();
     this.renderFeed();
+    this.renderStatsBar();
     this.renderBoard();
     this.renderGantt();
     this.renderVModel();
@@ -2862,6 +3113,113 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       this.renderWardrobe();
     }
     this.renderForgePanel();
+    this.checkElegantSolution();
+    this.checkBreakthrough();
+  }
+
+  private lastElegantGoalId: string | null = null;
+
+  private checkElegantSolution(): void {
+    const es = this.store.elegantSolution;
+    if (!es || es.goalCardId === this.lastElegantGoalId) return;
+    this.lastElegantGoalId = es.goalCardId;
+
+    const tier = es.tier;
+    const emoji = tier === "gold" ? "🥇" : tier === "silver" ? "🥈" : "🥉";
+    const tierLabel = tier === "gold" ? "GOLD" : tier === "silver" ? "SILVER" : "BRONZE";
+    const color = tier === "gold" ? "#ffd700" : tier === "silver" ? "#c0c0c0" : "#cd7f32";
+    const s = es.score;
+
+    // Create celebration overlay
+    let overlay = document.getElementById("elegant-celebration");
+    if (overlay) overlay.remove();
+    overlay = document.createElement("div");
+    overlay.id = "elegant-celebration";
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.7); z-index: 10000; pointer-events: none;
+      animation: elegant-fade-in 0.3s ease-out;
+    `;
+    overlay.innerHTML = `
+      <div style="text-align: center; animation: elegant-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+        <div style="font-size: 72px; margin-bottom: 12px;">${emoji}</div>
+        <div style="font-size: 32px; font-weight: 900; color: ${color}; text-shadow: 0 0 20px ${color}66; margin-bottom: 8px;">ELEGANT SOLUTION</div>
+        <div style="font-size: 18px; color: #e8eaf0; margin-bottom: 16px;">${tierLabel} TIER</div>
+        <div style="font-size: 14px; color: #9aa0b0; max-width: 400px; margin: 0 auto;">
+          ${s.subtaskCount} subtasks · 0 rework · ${s.maxParallel} parallel paths · ${s.longestPath}-deep chain
+        </div>
+        <div style="font-size: 48px; font-weight: 900; color: ${color}; margin-top: 16px;">${s.grade}</div>
+        <div style="font-size: 14px; color: #6b7280; margin-top: 8px;">${s.summary}</div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (overlay && overlay.parentNode) {
+        overlay.style.transition = "opacity 0.5s";
+        overlay.style.opacity = "0";
+        setTimeout(() => overlay?.remove(), 500);
+      }
+    }, 5000);
+
+    // Clear from store so it doesn't re-trigger
+    this.store.elegantSolution = null;
+  }
+
+  private lastBreakthroughId: string | null = null;
+
+  private checkBreakthrough(): void {
+    const bt = this.store.breakthrough;
+    if (!bt || bt.agentId === this.lastBreakthroughId) return;
+    this.lastBreakthroughId = bt.agentId;
+
+    const triggerIcons: Record<string, string> = {
+      high_success_rate: "🎯",
+      fast_completion: "⚡",
+      faster_than_peers: "🚀",
+    };
+    const icon = triggerIcons[bt.trigger] ?? "🔬";
+
+    // Create celebration card (non-blocking, bottom-right)
+    let card = document.getElementById("breakthrough-card");
+    if (card) card.remove();
+    card = document.createElement("div");
+    card.id = "breakthrough-card";
+    card.style.cssText = `
+      position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+      background: linear-gradient(135deg, #1a1d2e 0%, #2a2d4e 100%);
+      border: 2px solid #4ade80; border-radius: 12px; padding: 16px 20px;
+      max-width: 360px; box-shadow: 0 8px 32px rgba(74, 222, 128, 0.3);
+      animation: elegant-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      font-family: var(--font, sans-serif);
+    `;
+    card.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+        <span style="font-size: 28px;">${icon}</span>
+        <div>
+          <div style="font-size: 16px; font-weight: 800; color: #4ade80; text-shadow: 0 0 12px rgba(74, 222, 128, 0.4);">BREAKTHROUGH!</div>
+          <div style="font-size: 12px; color: #9aa0b0;">${bt.agentName}</div>
+        </div>
+        <button style="margin-left: auto; background: none; border: none; color: #6b7280; cursor: pointer; font-size: 16px;" onclick="this.parentElement.parentElement.remove()">✕</button>
+      </div>
+      <div style="font-size: 13px; color: #e8eaf0; line-height: 1.5;">${bt.description}</div>
+    `;
+    document.body.appendChild(card);
+
+    // Auto-remove after 8 seconds
+    setTimeout(() => {
+      if (card && card.parentNode) {
+        card.style.transition = "opacity 0.5s, transform 0.5s";
+        card.style.opacity = "0";
+        card.style.transform = "translateX(20px)";
+        setTimeout(() => card?.remove(), 500);
+      }
+    }, 8000);
+
+    // Clear from store
+    this.store.breakthrough = null;
   }
 
   private renderTourBanner(): void {
@@ -2944,16 +3302,32 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       <div id="gate-options" style="display:flex;flex-direction:column;gap:8px;"></div>
     `;
     const optsContainer = banner.querySelector("#gate-options")!;
-    for (const opt of gate.options) {
-      const btn = document.createElement("button");
-      btn.textContent = opt;
-      btn.style.cssText = "padding:8px 14px;border-radius:8px;border:1px solid var(--panel-edge-soft);background:var(--panel-soft);color:var(--text);cursor:pointer;font-size:13px;text-align:left;transition:background 0.15s,border-color 0.15s;";
-      btn.addEventListener("mouseenter", () => { btn.style.background = "var(--accent-light)"; btn.style.borderColor = "var(--accent)"; });
-      btn.addEventListener("mouseleave", () => { btn.style.background = "var(--panel-soft)"; btn.style.borderColor = "var(--panel-edge-soft)"; });
-      btn.addEventListener("click", () => {
-        this.store.resolveGate(opt);
+    if (gate.freeText) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Type your answer...";
+      input.style.cssText = "width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--panel-edge-soft);background:var(--panel-soft);color:var(--text);font-size:13px;box-sizing:border-box;outline:none;";
+      input.addEventListener("focus", () => { input.style.borderColor = "var(--accent)"; });
+      input.addEventListener("blur", () => { input.style.borderColor = "var(--panel-edge-soft)"; });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && input.value.trim()) {
+          this.store.resolveGate(input.value.trim());
+        }
       });
-      optsContainer.appendChild(btn);
+      optsContainer.appendChild(input);
+      input.focus();
+    } else {
+      for (const opt of gate.options) {
+        const btn = document.createElement("button");
+        btn.textContent = opt;
+        btn.style.cssText = "padding:8px 14px;border-radius:8px;border:1px solid var(--panel-edge-soft);background:var(--panel-soft);color:var(--text);cursor:pointer;font-size:13px;text-align:left;transition:background 0.15s,border-color 0.15s;";
+        btn.addEventListener("mouseenter", () => { btn.style.background = "var(--accent-light)"; btn.style.borderColor = "var(--accent)"; });
+        btn.addEventListener("mouseleave", () => { btn.style.background = "var(--panel-soft)"; btn.style.borderColor = "var(--panel-edge-soft)"; });
+        btn.addEventListener("click", () => {
+          this.store.resolveGate(opt);
+        });
+        optsContainer.appendChild(btn);
+      }
     }
   }
 
@@ -4061,6 +4435,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         this.renderSchedules(agent.id);
       }
     }
+
+    // Agent growth section — only when unlocked
+    const growthUnlocked = this.store.aspirationUnlocks?.agentGrowth ?? false;
+    const growthSection = document.getElementById("d-growth-section")!;
+    if (growthUnlocked) {
+      if (agentChanged) {
+        this.net.send({ type: "request_agent_growth", agentId: agent.id });
+      }
+      growthSection.hidden = false;
+      this.renderAgentGrowth(agent.id, growthSection);
+    } else {
+      growthSection.hidden = true;
+    }
   }
 
   private openConversationModal(agentId: string, agentName: string, accent: string): void {
@@ -4442,14 +4829,249 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     panel.hidden = !this.store.boardOpen;
     if (!this.store.boardOpen) return;
 
+    // Aspiration-aware task framing
+    const dominant = this.store.aspirationProfile?.dominant ?? null;
+    const DEFAULT_FRAMING = { placeholder: "New task title…", descPlaceholder: "Description (optional)", btnLabel: "+ ADD CARD" };
+    const FRAMING: Record<string, { placeholder: string; descPlaceholder: string; btnLabel: string }> = {
+      warrior: { placeholder: "What challenge will your team conquer?", descPlaceholder: "Boss fight details (optional)", btnLabel: "⚔ DEPLOY SQUAD" },
+      builder: { placeholder: "What should your factory produce?", descPlaceholder: "Pipeline spec (optional)", btnLabel: "⚙ START ASSEMBLY" },
+      explorer: { placeholder: "What do you want to discover?", descPlaceholder: "Experiment notes (optional)", btnLabel: "🔬 LAUNCH EXPERIMENT" },
+      puzzle_solver: { placeholder: "What needs to be solved?", descPlaceholder: "Problem constraints (optional)", btnLabel: "🧩 BREAK IT DOWN" },
+      creator: { placeholder: "Describe your vision", descPlaceholder: "Creative brief (optional)", btnLabel: "✨ MAKE IT HAPPEN" },
+      strategist: { placeholder: "What's your strategic objective?", descPlaceholder: "Strategic context (optional)", btnLabel: "♟ EXECUTE PLAN" },
+    };
+    const framing: { placeholder: string; descPlaceholder: string; btnLabel: string } = (dominant && FRAMING[dominant]) || DEFAULT_FRAMING;
+    const titleEl = document.getElementById("board-new-title") as HTMLInputElement;
+    const descEl = document.getElementById("board-new-desc") as HTMLTextAreaElement;
+    const btnEl = document.getElementById("board-add-btn") as HTMLButtonElement;
+    if (titleEl.placeholder !== framing.placeholder) titleEl.placeholder = framing.placeholder;
+    if (descEl.placeholder !== framing.descPlaceholder) descEl.placeholder = framing.descPlaceholder;
+    if (btnEl.textContent !== framing.btnLabel) btnEl.textContent = framing.btnLabel;
+
+    // Pipeline graph toggle — show/hide based on aspiration unlock
+    const pipelineToggle = document.getElementById("pipeline-toggle") as HTMLButtonElement | null;
+    const dashboardToggle = document.getElementById("dashboard-toggle") as HTMLButtonElement | null;
+    const decomposeToggle = document.getElementById("decompose-toggle") as HTMLButtonElement | null;
+    const experimentToggle = document.getElementById("experiment-toggle") as HTMLButtonElement | null;
+    const decorationToggle = document.getElementById("decoration-toggle") as HTMLButtonElement | null;
+    const techTreeToggle = document.getElementById("techtree-toggle") as HTMLButtonElement | null;
+    const socialToggle = document.getElementById("social-toggle") as HTMLButtonElement | null;
+    const challengeToggle = document.getElementById("challenge-toggle") as HTMLButtonElement | null;
+    const pipelineView = document.getElementById("pipeline-view")!;
+    const dashboardView = document.getElementById("dashboard-view")!;
+    const decomposeView = document.getElementById("decompose-view")!;
+    const experimentView = document.getElementById("experiment-view")!;
+    const decorationView = document.getElementById("decoration-view")!;
+    const techTreeView = document.getElementById("techtree-view")!;
+    const socialViewEl = document.getElementById("social-view")!;
+    const challengeViewEl = document.getElementById("challenge-view")!;
+    const boardColumns = document.getElementById("board-columns")!;
+    const boardAddSection = document.getElementById("board-add-section")!;
+    const pipelineUnlocked = this.store.aspirationUnlocks?.pipelineGraph ?? false;
+    const dashboardUnlocked = this.store.aspirationUnlocks?.automationDashboard ?? false;
+    const decomposeUnlocked = this.store.aspirationUnlocks?.decompositionScoring ?? false;
+    const experimentUnlocked = this.store.aspirationUnlocks?.experimentLog ?? false;
+    const decorationUnlocked = this.store.aspirationUnlocks?.officeDecoration ?? false;
+    const techTreeUnlocked = this.store.aspirationUnlocks?.officeTechTree ?? false;
+    const challengeUnlocked = this.store.aspirationUnlocks?.optimizationChallenges ?? false;
+    if (pipelineToggle) pipelineToggle.hidden = !pipelineUnlocked;
+    if (dashboardToggle) dashboardToggle.hidden = !dashboardUnlocked;
+    if (decomposeToggle) decomposeToggle.hidden = !decomposeUnlocked;
+    if (experimentToggle) experimentToggle.hidden = !experimentUnlocked;
+    if (decorationToggle) decorationToggle.hidden = !decorationUnlocked;
+    if (techTreeToggle) techTreeToggle.hidden = !techTreeUnlocked;
+    const isVisitingOffice = this.store.roomType === "private" && this.store.roomOwnerId && this.store.roomOwnerId !== this.store.userId;
+    if (socialToggle) socialToggle.hidden = !isVisitingOffice;
+    if (challengeToggle) challengeToggle.hidden = !challengeUnlocked;
+
+    if (this.pipelineView && pipelineUnlocked) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      dashboardView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = true;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = true;
+      pipelineView.hidden = false;
+      if (pipelineToggle) pipelineToggle.textContent = "📋 Board";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      pipelineView.innerHTML = "";
+      pipelineView.appendChild(createPipelineGraph(this.store));
+      return;
+    } else if (this.dashboardView && dashboardUnlocked) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      pipelineView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = true;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = true;
+      dashboardView.hidden = false;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📋 Board";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      this.renderAutomationDashboard(dashboardView);
+      return;
+    } else if (this.decomposeView && decomposeUnlocked) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      pipelineView.hidden = true;
+      dashboardView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = true;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = true;
+      decomposeView.hidden = false;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "📋 Board";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      this.renderDecomposeView(decomposeView);
+      return;
+    } else if (this.experimentView && experimentUnlocked) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      pipelineView.hidden = true;
+      dashboardView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = false;
+      decorationView.hidden = true;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = true;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "📋 Board";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      this.renderExperimentView(experimentView);
+      return;
+    } else if (this.decorationView && decorationUnlocked) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      pipelineView.hidden = true;
+      dashboardView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = false;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = true;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "📋 Board";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      this.renderDecorationView(decorationView);
+      return;
+    } else if (this.socialView && isVisitingOffice) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      pipelineView.hidden = true;
+      dashboardView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = true;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = false;
+      challengeViewEl.hidden = true;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      if (socialToggle) socialToggle.textContent = "📋 Board";
+      if (challengeToggle) challengeToggle.textContent = "🏆 Challenge";
+      this.renderSocialPanel(socialViewEl);
+      return;
+    } else if (this.techTreeView && techTreeUnlocked) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      pipelineView.hidden = true;
+      dashboardView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = true;
+      techTreeView.hidden = false;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = true;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "📋 Board";
+      if (socialToggle) socialToggle.textContent = "💬 Social";
+      if (challengeToggle) challengeToggle.textContent = "🏆 Challenge";
+      this.renderTechTreeView(techTreeView);
+      return;
+    } else if (this.challengeView && challengeUnlocked) {
+      boardColumns.hidden = true;
+      boardAddSection.hidden = true;
+      pipelineView.hidden = true;
+      dashboardView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = true;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = false;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      if (socialToggle) socialToggle.textContent = "💬 Social";
+      if (challengeToggle) challengeToggle.textContent = "📋 Board";
+      this.renderChallengeView(challengeViewEl);
+      return;
+    } else {
+      boardColumns.hidden = false;
+      boardAddSection.hidden = false;
+      pipelineView.hidden = true;
+      dashboardView.hidden = true;
+      decomposeView.hidden = true;
+      experimentView.hidden = true;
+      decorationView.hidden = true;
+      techTreeView.hidden = true;
+      socialViewEl.hidden = true;
+      challengeViewEl.hidden = true;
+      if (pipelineToggle) pipelineToggle.textContent = "⚙ Pipeline";
+      if (dashboardToggle) dashboardToggle.textContent = "📊 Dashboard";
+      if (decomposeToggle) decomposeToggle.textContent = "🧩 Decompose";
+      if (experimentToggle) experimentToggle.textContent = "🧪 Log";
+      if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
+      if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
+      if (socialToggle) socialToggle.textContent = "💬 Social";
+      if (challengeToggle) challengeToggle.textContent = "🏆 Challenge";
+    }
+
     const cards = [...this.store.board.values()].sort((a, b) => a.createdAt - b.createdAt);
     const agents = [...this.store.agents.values()];
 
-    // signature: board open state + card data + agent roster (for dropdowns)
+    // signature: board open state + card data + agent roster (for dropdowns) + aspiration framing
     const sig =
       this.store.boardOpen + "|" +
       cards.map((c) => c.id + c.status + c.assignedAgentId + c.title + (c.type ?? "") + (c.progress ?? 0)).join(",") + "|" +
-      agents.map((a) => a.id + a.name + a.status).join(",");
+      agents.map((a) => a.id + a.name + a.status).join(",") + "|" + (dominant ?? "");
     if (sig === this.lastBoardSig) return;
     this.lastBoardSig = sig;
 
@@ -4835,6 +5457,45 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     document.getElementById("vmodel-diagram")!.innerHTML = html;
   }
 
+  private renderStatsBar(): void {
+    const bar = document.getElementById("stats-bar");
+    if (!bar) return;
+
+    const hireable = [...this.store.agents.values()].filter(
+      (a) => a.id !== OFFICE_MANAGER_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
+    );
+    const tasksDone = achievements.getStat("tasksDone");
+    const creaturesKilled = achievements.getStat("creaturesKilled");
+    const bossesSlain = achievements.getStat("bossesSlain");
+    const weapons = achievements.getSetSize("weapons");
+    const holes = achievements.getStat("holeInOnes");
+    const achCount = achievements.getUnlockedCount();
+    const achTotal = achievements.getTotalCount();
+    const hasCrown = achievements.isUnlocked("from_cubicle_to_conqueror");
+
+    // Build compact stat chips — only show ones with > 0 value to avoid clutter
+    const chips: { icon: string; value: string; label: string; glow?: boolean }[] = [
+      { icon: "📋", value: String(tasksDone), label: "Tasks" },
+      { icon: "🤖", value: String(hireable.length), label: "Agents" },
+    ];
+    if (creaturesKilled > 0) chips.push({ icon: "⚔️", value: String(creaturesKilled), label: "Kills" });
+    if (bossesSlain > 0) chips.push({ icon: "🐲", value: String(bossesSlain), label: "Bosses" });
+    if (weapons > 0) chips.push({ icon: "🗡️", value: String(weapons), label: "Weapons" });
+    if (holes > 0) chips.push({ icon: "⛳", value: String(holes), label: "Holes" });
+    chips.push({ icon: "🏆", value: `${achCount}/${achTotal}`, label: "Ach" });
+    if (hasCrown) chips.push({ icon: "👑", value: "", label: "Crown", glow: true });
+
+    const sig = chips.map(c => `${c.icon}${c.value}`).join("|");
+    if (sig === this._statsBarSig) return;
+    this._statsBarSig = sig;
+
+    bar.innerHTML = chips.map(c =>
+      `<span class="stat-chip${c.glow ? " stat-chip-glow" : ""}" title="${c.label}">${c.icon}${c.value ? ` <b>${c.value}</b>` : ""}</span>`
+    ).join("");
+  }
+
+  private _statsBarSig = "";
+
   private renderAchievements(): void {
     const modal = document.getElementById("achievements-modal")!;
     if (!this.store.achievementsOpen) {
@@ -4850,6 +5511,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     }
     const total = achievements.getTotalCount();
     const count = achievements.getUnlockedCount();
+    const activeTab = this._achTab ?? "achievements";
     let html = `<div class="ach-modal-content">`;
     html += `<div class="ach-modal-sticky">`;
     html += `<div class="ach-modal-header">`;
@@ -4858,28 +5520,1143 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     html += `<button class="x" id="ach-close">✕</button>`;
     html += `</div>`;
     html += `<div class="ach-modal-progress-bar"><div class="ach-modal-progress-fill" style="width:${(count / total) * 100}%"></div></div>`;
+    html += `<div class="ach-tabs">`;
+    html += `<button class="ach-tab${activeTab === "achievements" ? " active" : ""}" id="ach-tab-achievements">Achievements</button>`;
+    html += `<button class="ach-tab${activeTab === "stats" ? " active" : ""}" id="ach-tab-stats">Combat Record</button>`;
+    html += `<button class="ach-tab${activeTab === "leaderboards" ? " active" : ""}" id="ach-tab-leaderboards">Leaderboards</button>`;
     html += `</div>`;
-    for (const [tier, items] of Object.entries(tiers)) {
-      html += `<div class="ach-tier-name">${tier}</div>`;
-      html += `<div class="ach-tier-grid">`;
-      for (const a of items) {
-        const isUnlocked = unlocked.has(a.id);
-        const comingClass = a.comingSoon ? " coming-soon" : "";
-        html += `<div class="ach-card${isUnlocked ? " unlocked" : " locked"}${comingClass}">`;
-        html += `<span class="ach-icon">${a.comingSoon ? "🔒" : isUnlocked ? a.icon : "❓"}</span>`;
-        html += `<div class="ach-info">`;
-        html += `<span class="ach-name">${a.name}</span>`;
-        html += `<span class="ach-desc">${a.desc}</span>`;
-        if (a.comingSoon) html += `<span class="ach-soon">Coming Soon</span>`;
-        html += `</div></div>`;
+    html += `</div>`;
+    if (activeTab === "stats") {
+      html += this.renderStatsTab();
+    } else if (activeTab === "leaderboards") {
+      html += this.renderLeaderboardsTab();
+    } else {
+      // Aspiration-aware "Recommended for You" section
+      const dominant = this.store.aspirationProfile?.dominant ?? null;
+      const ASPIRATION_TIERS: Record<string, string[]> = {
+        warrior: ["Warrior", "Adventurer"],
+        builder: ["Agent Mastery"],
+        explorer: ["Explorer"],
+        puzzle_solver: ["Agent Mastery"],
+        creator: ["First Steps"],
+        strategist: ["Agent Mastery"],
+      };
+      const recommendedTiers = dominant ? (ASPIRATION_TIERS[dominant] ?? []) : [];
+
+      if (dominant && recommendedTiers.length > 0) {
+        const recommended = ACHIEVEMENTS.filter((a) => recommendedTiers.includes(a.tier) && !unlocked.has(a.id) && !a.comingSoon);
+        if (recommended.length > 0) {
+          html += `<div class="ach-tier-name">⭐ Recommended for You</div>`;
+          html += `<div class="ach-tier-grid">`;
+          for (const a of recommended.slice(0, 4)) {
+            html += `<div class="ach-card locked">`;
+            html += `<span class="ach-icon">❓</span>`;
+            html += `<div class="ach-info">`;
+            html += `<span class="ach-name">${a.name}</span>`;
+            html += `<span class="ach-desc">${a.desc}</span>`;
+            html += `</div></div>`;
+          }
+          html += `</div>`;
+        }
       }
-      html += `</div>`;
+
+      for (const [tier, items] of Object.entries(tiers)) {
+        html += `<div class="ach-tier-name">${tier}</div>`;
+        html += `<div class="ach-tier-grid">`;
+        for (const a of items) {
+          const isUnlocked = unlocked.has(a.id);
+          const comingClass = a.comingSoon ? " coming-soon" : "";
+          html += `<div class="ach-card${isUnlocked ? " unlocked" : " locked"}${comingClass}">`;
+          html += `<span class="ach-icon">${a.comingSoon ? "🔒" : isUnlocked ? a.icon : "❓"}</span>`;
+          html += `<div class="ach-info">`;
+          html += `<span class="ach-name">${a.name}</span>`;
+          html += `<span class="ach-desc">${a.desc}</span>`;
+          if (a.comingSoon) html += `<span class="ach-soon">Coming Soon</span>`;
+          html += `</div></div>`;
+        }
+        html += `</div>`;
+      }
     }
     html += `</div>`;
     modal.innerHTML = html;
     modal.hidden = false;
     document.getElementById("ach-close")!.addEventListener("click", () => {
       this.store.toggleAchievements(false);
+    });
+    document.getElementById("ach-tab-achievements")?.addEventListener("click", () => {
+      this._achTab = "achievements";
+      this.renderAchievements();
+    });
+    document.getElementById("ach-tab-stats")?.addEventListener("click", () => {
+      this._achTab = "stats";
+      this.renderAchievements();
+    });
+    document.getElementById("ach-tab-leaderboards")?.addEventListener("click", () => {
+      this._achTab = "leaderboards";
+      this.renderAchievements();
+    });
+  }
+
+  private _achTab: "achievements" | "stats" | "leaderboards" = "achievements";
+
+  private formatSpeedrun(ms: number): string {
+    if (!ms || ms <= 0) return "—";
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  private renderStatsTab(): string {
+    const hireable = [...this.store.agents.values()].filter(
+      (a) => a.id !== OFFICE_MANAGER_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
+    );
+    const stats: { label: string; value: string; icon: string }[] = [
+      { icon: "📋", label: "Tasks Completed", value: String(achievements.getStat("tasksDone")) },
+      { icon: "🤖", label: "Agents Hired", value: String(hireable.length) },
+      { icon: "⚔️", label: "Creatures Killed", value: String(achievements.getStat("creaturesKilled")) },
+      { icon: "🐲", label: "Bosses Slain", value: String(achievements.getStat("bossesSlain")) },
+      { icon: "🗡️", label: "Weapons Collected", value: String(achievements.getSetSize("weapons")) },
+      { icon: "⛳", label: "Hole-in-Ones", value: String(achievements.getStat("holeInOnes")) },
+      { icon: "🪓", label: "Trees Chopped", value: String(achievements.getStat("treesChopped")) },
+      { icon: "💐", label: "Flowers Picked", value: String(achievements.getStat("flowersPicked")) },
+      { icon: "🔥", label: "Agents Fired", value: String(achievements.getStat("agentsFired")) },
+      { icon: "🤝", label: "Agents Recruited Back", value: String(achievements.getStat("agentsRecruited")) },
+      { icon: "📌", label: "Board Cards Done", value: String(achievements.getStat("boardCardsDone")) },
+      { icon: "⏱️", label: "Crown Speedrun", value: this.formatSpeedrun(achievements.getStat("speedrunTimeMs")) },
+      { icon: "🏆", label: "Achievements Unlocked", value: `${achievements.getUnlockedCount()} / ${achievements.getTotalCount()}` },
+    ];
+
+    let html = `<div class="ach-stats-grid">`;
+    for (const s of stats) {
+      html += `<div class="ach-stat-card">`;
+      html += `<span class="ach-stat-icon">${s.icon}</span>`;
+      html += `<span class="ach-stat-value">${s.value}</span>`;
+      html += `<span class="ach-stat-label">${s.label}</span>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  // ── Leaderboards tab ──
+
+  private _lbCategory: LeaderboardCategory = "boss_rating";
+  private _lbPeriod: "weekly" | "alltime" = "alltime";
+  private _lbEntries: LeaderboardEntry[] = [];
+  private _lbLoading = false;
+
+  private renderLeaderboardsTab(): string {
+    const categories: { id: LeaderboardCategory; label: string; icon: string }[] = [
+      { id: "boss_rating", label: "Boss Rating", icon: "👑" },
+      { id: "most_tasks_completed", label: "Tasks Done", icon: "📋" },
+      { id: "most_creatures_slain", label: "Creatures Slain", icon: "⚔️" },
+      { id: "deepest_explorers", label: "Deepest Explorers", icon: "🧭" },
+      { id: "fastest_crown", label: "Fastest Crown", icon: "⏱️" },
+    ];
+
+    let html = `<div class="ach-lb-container">`;
+
+    // Category selector
+    html += `<div class="ach-lb-categories">`;
+    for (const cat of categories) {
+      const active = this._lbCategory === cat.id;
+      html += `<button class="ach-lb-cat${active ? " active" : ""}" id="lb-cat-${cat.id}">${cat.icon} ${cat.label}</button>`;
+    }
+    html += `</div>`;
+
+    // Period toggle
+    html += `<div class="ach-lb-period">`;
+    html += `<button class="ach-lb-period-btn${this._lbPeriod === "alltime" ? " active" : ""}" id="lb-period-alltime">All-Time</button>`;
+    html += `<button class="ach-lb-period-btn${this._lbPeriod === "weekly" ? " active" : ""}" id="lb-period-weekly">This Week</button>`;
+    html += `</div>`;
+
+    // Entries
+    if (this._lbLoading) {
+      html += `<div class="ach-lb-loading">Loading...</div>`;
+    } else if (this._lbEntries.length === 0) {
+      html += `<div class="ach-lb-empty">No entries yet. Be the first!</div>`;
+    } else {
+      html += `<div class="ach-lb-list">`;
+      for (const entry of this._lbEntries) {
+        const medal = entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `${entry.rank}.`;
+        html += `<div class="ach-lb-row">`;
+        html += `<span class="ach-lb-rank">${medal}</span>`;
+        html += `<span class="ach-lb-name">${entry.playerName}</span>`;
+        html += `<span class="ach-lb-score">${entry.scoreLabel}</span>`;
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Share button
+    html += `<div class="ach-lb-share">`;
+    html += `<button class="btn" id="lb-share-btn" style="margin-top: 0.75rem;">🔗 Share Your Trophy Room</button>`;
+    html += `</div>`;
+
+    html += `</div>`;
+
+    // Wire up interactions after render
+    setTimeout(() => {
+      for (const cat of categories) {
+        document.getElementById(`lb-cat-${cat.id}`)?.addEventListener("click", () => {
+          this._lbCategory = cat.id;
+          this.fetchLeaderboard();
+        });
+      }
+      document.getElementById("lb-period-alltime")?.addEventListener("click", () => {
+        this._lbPeriod = "alltime";
+        this.fetchLeaderboard();
+      });
+      document.getElementById("lb-period-weekly")?.addEventListener("click", () => {
+        this._lbPeriod = "weekly";
+        this.fetchLeaderboard();
+      });
+      document.getElementById("lb-share-btn")?.addEventListener("click", () => {
+        this.shareTrophyRoom();
+      });
+    }, 0);
+
+    // Fetch if not loading and entries are empty or category/period changed
+    if (!this._lbLoading && this._lbEntries.length === 0) {
+      this.fetchLeaderboard();
+    }
+
+    return html;
+  }
+
+  private fetchLeaderboard(): void {
+    this._lbLoading = true;
+    this.renderAchievements();
+    this.store.sendFn?.({ type: "get_leaderboard", category: this._lbCategory, period: this._lbPeriod });
+  }
+
+  private onLeaderboardResult(entries: LeaderboardEntry[]): void {
+    this._lbLoading = false;
+    this._lbEntries = entries;
+    if (this.store.achievementsOpen) this.renderAchievements();
+  }
+
+  private shareTrophyRoom(): void {
+    const playerName = this.store.player?.name;
+    if (!playerName) {
+      this.toast("Set up your player name first!");
+      return;
+    }
+    const url = `${window.location.origin}/u/${encodeURIComponent(playerName)}`;
+    if (navigator.share) {
+      navigator.share({ title: `${playerName}'s Trophy Room — Agent Heights`, url }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        this.toast("Trophy room link copied to clipboard!");
+      }).catch(() => {
+        this.toast(`Share: ${url}`);
+      });
+    }
+  }
+
+  private renderDecomposingPanel(): void {
+    const text = this.store.managerDecomposingText;
+    let panel = document.getElementById("decomposing-panel");
+    // Clear panel if decomposition is done (Office Manager no longer thinking/working)
+    const om = this.store.agents.get("office-manager");
+    if (text && om && om.status !== "thinking" && om.status !== "working" && om.status !== "waiting") {
+      this.store.managerDecomposingText = null;
+      if (panel) panel.remove();
+      return;
+    }
+    if (!text) {
+      if (panel) panel.remove();
+      return;
+    }
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "decomposing-panel";
+      panel.className = "decomposing-panel";
+      document.body.appendChild(panel);
+    }
+    const displayText = text.length > 500 ? text.slice(-500) : text;
+    panel.innerHTML = `<div class="decomposing-header">📋 Office Manager is planning...</div><pre class="decomposing-text">${displayText.replace(/</g, "&lt;")}</pre>`;
+  }
+
+  private renderExperimentView(container: HTMLElement): void {
+    const entries = this.store.experimentLog;
+    const typeIcons: Record<string, string> = {
+      config_change: "⚙️",
+      mcp_install: "🔌",
+      model_swap: "🔄",
+      agent_hire: "👋",
+      agent_fire: "👋",
+    };
+    const verdictColors: Record<string, string> = {
+      confirmed: "#4ade80",
+      refuted: "#f87171",
+      inconclusive: "#fbbf24",
+      pending: "#9aa0b0",
+    };
+
+    if (entries.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #9aa0b0;">
+          <div style="font-size: 48px; margin-bottom: 12px;">🧪</div>
+          <div style="font-size: 16px; margin-bottom: 8px;">No experiments yet</div>
+          <div style="font-size: 13px; max-width: 400px; margin: 0 auto;">
+            Every time you hire an agent, fire one, or change their config, it gets logged here.
+            Think of it as your lab notebook. Write hypotheses. Track results. Science!
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const entriesHtml = entries.map((e) => {
+      const date = new Date(e.timestamp).toLocaleString();
+      const icon = typeIcons[e.type] ?? "📝";
+      const verdictColor = verdictColors[e.verdict] ?? "#9aa0b0";
+      const resultStr = e.result.tasksCompleted !== null
+        ? `${e.result.tasksCompleted} tasks completed`
+        : "results pending";
+      return `
+        <div style="background: var(--card-bg, #1e2130); border: 1px solid var(--border, #33364a); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 18px;">${icon}</span>
+            <span style="font-size: 14px; font-weight: 600; color: var(--text, #e8eaf0);">${e.agentName}</span>
+            <span style="font-size: 11px; color: #6b7280; margin-left: auto;">${date}</span>
+          </div>
+          <div style="font-size: 12px; color: #9aa0b0; margin-bottom: 6px;">
+            <span style="color: #6b7280;">Hypothesis:</span> ${e.hypothesis.replace(/</g, "&lt;")}
+          </div>
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">
+            <span style="color: #4b5563;">Before:</span> ${e.setup.before.replace(/</g, "&lt;")}
+          </div>
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">
+            <span style="color: #4b5563;">After:</span> ${e.setup.after.replace(/</g, "&lt;")}
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
+            <span style="font-size: 11px; color: ${verdictColor}; font-weight: 600; text-transform: uppercase;">${e.verdict}</span>
+            <span style="font-size: 11px; color: #6b7280;">${resultStr}</span>
+            <select class="exp-verdict-select" data-entry-id="${e.id}" style="margin-left: auto; font-size: 11px; padding: 2px 6px; background: var(--card-bg, #1e2130); color: var(--text, #e8eaf0); border: 1px solid var(--border, #33364a); border-radius: 4px;">
+              <option value="">Set verdict…</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="refuted">Refuted</option>
+              <option value="inconclusive">Inconclusive</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+          ${e.notes ? `<div style="font-size: 11px; color: #6b7280; margin-top: 6px; font-style: italic;">"${e.notes.replace(/</g, "&lt;")}"</div>` : ""}
+          <input class="exp-notes-input" data-entry-id="${e.id}" placeholder="Add notes…" value="${e.notes.replace(/"/g, "&quot;")}" style="width: 100%; margin-top: 6px; font-size: 11px; padding: 4px 8px; background: var(--card-bg, #1e2130); color: var(--text, #e8eaf0); border: 1px solid var(--border, #33364a); border-radius: 4px;" />
+        </div>
+      `;
+    }).join("");
+
+    container.innerHTML = `
+      <div style="margin-bottom: 12px;">
+        <div style="font-size: 16px; font-weight: 700; color: var(--text, #e8eaf0);">🧪 Experiment Log</div>
+        <div style="font-size: 12px; color: #9aa0b0; margin-top: 2px;">${entries.length} experiment${entries.length === 1 ? "" : "s"} logged. Every hire, fire, and config change is a data point.</div>
+      </div>
+      ${entriesHtml}
+    `;
+
+    // Wire verdict selects
+    container.querySelectorAll<HTMLSelectElement>(".exp-verdict-select").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const entryId = sel.dataset.entryId!;
+        this.net.send({ type: "update_experiment_entry", entryId, verdict: sel.value });
+      });
+    });
+
+    // Wire notes inputs
+    container.querySelectorAll<HTMLInputElement>(".exp-notes-input").forEach((input) => {
+      input.addEventListener("change", () => {
+        const entryId = input.dataset.entryId!;
+        this.net.send({ type: "update_experiment_entry", entryId, notes: input.value });
+      });
+    });
+  }
+
+  private renderDecorationView(container: HTMLElement): void {
+    const categories: DecorationCategory[] = ["furniture", "plants", "wall_decor", "flooring", "lighting", "special"];
+    const categoryLabels: Record<string, string> = {
+      furniture: "🪑 Furniture",
+      plants: "🪴 Plants",
+      wall_decor: "🖼️ Wall Decor",
+      flooring: "🟫 Flooring",
+      lighting: "💡 Lighting",
+      special: "🏆 Special",
+    };
+
+    // Compute unlock stats
+    const tasksDone = [...this.store.board.values()].filter((c) => c.status === "done").length;
+    const agentsHired = this.store.agents.size;
+    const achievementsUnlocked = achievements.getUnlockedCount();
+    const stats = { tasksDone, agentsHired, dayStreak: 0, achievementsUnlocked };
+
+    const decorations = this.store.decorations;
+
+    container.innerHTML = `
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">🪑 Office Decoration</div>
+        <div style="font-size: 12px; color: #9aa0b0;">Click an item to enter placement mode. Click on the floor to place. Click an existing decoration to remove it. Press ESC to exit.</div>
+      </div>
+      <div style="display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;">
+        ${categories.map((cat) => `<button class="btn deco-cat-btn" data-cat="${cat}" style="font-size: 11px; padding: 4px 10px;">${categoryLabels[cat]}</button>`).join("")}
+      </div>
+      <div id="deco-item-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px;"></div>
+      <div style="margin-top: 16px; border-top: 1px solid #333; padding-top: 12px;">
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Placed Decorations (${decorations.length})</div>
+        <div id="deco-placed-list" style="display: flex; flex-direction: column; gap: 4px;"></div>
+      </div>
+    `;
+
+    // Category buttons
+    let activeCategory: DecorationCategory = "furniture";
+    const grid = container.querySelector("#deco-item-grid") as HTMLElement;
+
+    const renderGrid = () => {
+      const items = DECORATION_CATALOG.filter((c) => c.category === activeCategory);
+      grid.innerHTML = items.map((item) => {
+        const unlocked = this.isDecorationUnlocked(item.type, stats);
+        return `
+          <div class="deco-item ${unlocked ? "" : "locked"}" data-type="${item.type}" style="
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 10px 6px; border-radius: 8px; cursor: ${unlocked ? "pointer" : "not-allowed"};
+            background: ${unlocked ? "#1a1d2e" : "#111"}; border: 1px solid ${unlocked ? "#333" : "#222"};
+            transition: border-color 0.15s;
+          " ${unlocked ? "" : "title=\"Unlock: " + item.unlockRequirement + "\""}>
+            <span style="font-size: 28px; ${unlocked ? "" : "filter: grayscale(1); opacity: 0.4;"}">${item.emoji}</span>
+            <span style="font-size: 10px; color: ${unlocked ? "#ccc" : "#555"}; text-align: center;">${item.label}</span>
+            ${unlocked ? "" : `<span style="font-size: 9px; color: #666;">🔒 ${item.unlockRequirement}</span>`}
+          </div>
+        `;
+      }).join("");
+
+      // Wire item clicks
+      grid.querySelectorAll(".deco-item").forEach((el) => {
+        if (el.classList.contains("locked")) return;
+        el.addEventListener("click", () => {
+          const type = (el as HTMLElement).dataset.type!;
+          this.enterDecorationPlacementMode(type);
+        });
+      });
+    };
+
+    container.querySelectorAll(".deco-cat-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        activeCategory = (btn as HTMLElement).dataset.cat as DecorationCategory;
+        container.querySelectorAll(".deco-cat-btn").forEach((b) => (b as HTMLElement).style.background = "");
+        (btn as HTMLElement).style.background = "#2a2d4e";
+        renderGrid();
+      });
+    });
+
+    // Highlight first category
+    const firstBtn = container.querySelector(".deco-cat-btn") as HTMLElement;
+    if (firstBtn) firstBtn.style.background = "#2a2d4e";
+    renderGrid();
+
+    // Render placed decorations list
+    const placedList = container.querySelector("#deco-placed-list") as HTMLElement;
+    if (decorations.length === 0) {
+      placedList.innerHTML = `<div style="color: #666; font-size: 12px;">No decorations placed yet. Select an item above and click on the office floor!</div>`;
+    } else {
+      placedList.innerHTML = decorations.map((d) => {
+        const item = DECORATION_CATALOG.find((c) => c.type === d.type);
+        return `
+          <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #1a1d2e; border-radius: 6px;">
+            <span style="font-size: 20px;">${item?.emoji ?? "📦"}</span>
+            <span style="font-size: 12px; color: #ccc;">${item?.label ?? d.type} at (${d.tileX}, ${d.tileY})</span>
+            <button class="btn" data-remove="${d.id}" style="margin-left: auto; font-size: 11px; padding: 2px 8px; color: #f87171;">Remove</button>
+          </div>
+        `;
+      }).join("");
+      placedList.querySelectorAll("[data-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          this.net.send({ type: "remove_decoration", decorationId: (btn as HTMLElement).dataset.remove! });
+        });
+      });
+    }
+  }
+
+  private isDecorationUnlocked(type: string, stats: { tasksDone: number; agentsHired: number; dayStreak: number; achievementsUnlocked: number }): boolean {
+    const item = DECORATION_CATALOG.find((c) => c.type === type);
+    if (!item) return false;
+    switch (item.unlockRequirement) {
+      case "10 tasks": return stats.tasksDone >= 10;
+      case "50 tasks": return stats.tasksDone >= 50;
+      case "100 tasks": return stats.tasksDone >= 100;
+      case "5 agents hired": return stats.agentsHired >= 5;
+      case "7-day streak": return stats.dayStreak >= 7;
+      default: return true;
+    }
+  }
+
+  private enterDecorationPlacementMode(type: string): void {
+    const scene = this.store.sceneRef as any;
+    if (scene && typeof scene.enterDecorationMode === "function") {
+      scene.enterDecorationMode(type);
+      this.store.toast(`Placement mode: ${DECORATION_CATALOG.find((c) => c.type === type)?.label ?? type}. Click floor to place, ESC to exit.`);
+    }
+  }
+
+  private renderTechTreeView(container: HTMLElement): void {
+    const progress = this.store.officeProgress;
+    if (!progress) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:#888;">Loading office progression…</div>`;
+      return;
+    }
+
+    const pct = progress.xpForNextLevel > 0 ? Math.round((progress.xpForCurrentLevel / progress.xpForNextLevel) * 100) : 100;
+    const levelLabels: Record<number, string> = {
+      1: "Basic Task Board", 2: "Schedules", 3: "Handoffs", 4: "Phase Gates",
+      5: "V-Model", 6: "Parallel Execution", 7: "Compound Chains",
+      8: "A/B Testing", 9: "Org Collaboration", 10: "Prestige",
+    };
+
+    let levelRows = "";
+    for (let lvl = 1; lvl <= 10; lvl++) {
+      const isCurrent = lvl === progress.level;
+      const isUnlocked = lvl <= progress.level;
+      const xpReq = [0, 500, 1500, 3000, 5000, 8000, 12000, 20000, 35000, 50000][lvl - 1];
+      const maxA = [3, 5, 6, 7, 8, 9, 10, 12, 15, 20][lvl - 1];
+      const label = levelLabels[lvl] ?? "";
+      levelRows += `
+        <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;${isCurrent ? "background:rgba(100,200,255,0.15);border:1px solid rgba(100,200,255,0.3);" : ""}">
+          <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;${isUnlocked ? "background:linear-gradient(135deg,#4caf50,#2196f3);color:#fff;" : "background:#333;color:#666;"}">${lvl}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;${isUnlocked ? "" : "color:#666;"}">${label}</div>
+            <div style="font-size:11px;color:#888;">${xpReq.toLocaleString()} XP · ${maxA} agents max</div>
+          </div>
+          ${isCurrent ? '<span style="font-size:11px;color:#4fc3f7;">● Current</span>' : isUnlocked ? '<span style="font-size:16px;">✓</span>' : '<span style="font-size:16px;color:#444;">🔒</span>'}
+        </div>`;
+    }
+
+    container.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+          <div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;background:linear-gradient(135deg,#4caf50,#2196f3);color:#fff;">${progress.level}</div>
+          <div>
+            <div style="font-size:18px;font-weight:700;">Office Level ${progress.level}</div>
+            <div style="font-size:12px;color:#888;">${progress.xp.toLocaleString()} total XP · ${progress.maxAgents} agents max · ${progress.prestigeCount > 0 ? `${progress.prestigeCount} prestige` : "no prestige"}</div>
+          </div>
+        </div>
+        <div style="background:#222;border-radius:8px;height:12px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#4caf50,#8bc34a);transition:width 0.5s;"></div>
+        </div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">${progress.xpForCurrentLevel} / ${progress.xpForNextLevel} XP to Level ${progress.level + 1}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">${levelRows}</div>
+      <div style="margin-top:16px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:11px;color:#888;">
+        <strong>XP Sources:</strong><br>
+        Task completed: +10 XP · Agent hired: +50 XP · Day active: +25 XP<br>
+        Achievement unlocked: +100 XP · Schedule executed: +15 XP · World explored: +200 XP
+      </div>
+    `;
+  }
+
+  private renderSocialPanel(container: HTMLElement): void {
+    const social = this.store.officeSocial;
+    const isVisitor = this.store.roomType === "private" && this.store.accessLevel !== "manage";
+
+    if (!social) {
+      container.innerHTML = `<div style="text-align:center;padding:20px;color:#888;">Loading social…</div>`;
+      return;
+    }
+
+    const likeBtnText = social.likes.some((l) => l.likerId === this.store.userId) ? "👍 Liked" : "👍 Like";
+    const notesHtml = social.stickyNotes.length === 0
+      ? '<div style="color:#666;font-size:12px;padding:12px;">No sticky notes yet.</div>'
+      : social.stickyNotes.map((n) => `
+        <div style="background:${n.color};padding:10px;border-radius:6px;margin-bottom:8px;font-size:12px;box-shadow:2px 2px 4px rgba(0,0,0,0.2);">
+          <div style="font-weight:600;margin-bottom:4px;">${n.authorName}</div>
+          <div>${n.text.replace(/</g, "&lt;")}</div>
+          <div style="font-size:10px;opacity:0.7;margin-top:4px;">${new Date(n.createdAt).toLocaleDateString()}</div>
+        </div>`).join("");
+
+    const visitorsHtml = social.recentVisitors.length === 0
+      ? '<div style="color:#666;font-size:12px;">No visitors yet.</div>'
+      : social.recentVisitors.slice().reverse().map((v) => `
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+          <span>${v.visitorName}</span>
+          <span style="color:#888;">${new Date(v.visitedAt).toLocaleDateString()}</span>
+        </div>`).join("");
+
+    container.innerHTML = `
+      <div style="display:flex;gap:12px;margin-bottom:16px;">
+        <button class="btn" id="social-like-btn" style="font-size:12px;padding:6px 14px;">${likeBtnText}</button>
+        <div style="font-size:20px;font-weight:700;">${social.likeCount}</div>
+        <div style="font-size:12px;color:#888;align-self:center;">likes · ${social.recentVisitors.length} visitors</div>
+      </div>
+      ${isVisitor ? `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Leave a sticky note:</div>
+        <textarea id="sticky-note-input" rows="2" placeholder="Write something nice…" style="width:100%;background:#222;border:1px solid #444;border-radius:6px;padding:8px;color:#fff;font-size:12px;resize:vertical;"></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button class="btn" id="sticky-note-color" style="font-size:11px;padding:3px 8px;background:#ffeb3b;color:#333;">Color</button>
+          <button class="btn primary" id="sticky-note-submit" style="font-size:11px;padding:3px 12px;">Post</button>
+        </div>
+      </div>` : ""}
+      <div style="margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Sticky Notes</div>
+        ${notesHtml}
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Recent Visitors</div>
+        ${visitorsHtml}
+      </div>
+    `;
+
+    const likeBtn = document.getElementById("social-like-btn");
+    if (likeBtn) {
+      likeBtn.addEventListener("click", () => {
+        const ownerId = this.store.roomOwnerId;
+        if (!ownerId) return;
+        if (social.likes.some((l) => l.likerId === this.store.userId)) {
+          this.net.send({ type: "unlike_office", officeOwnerId: ownerId });
+        } else {
+          this.net.send({ type: "like_office", officeOwnerId: ownerId });
+        }
+      });
+    }
+
+    if (isVisitor) {
+      const submitBtn = document.getElementById("sticky-note-submit");
+      const noteInput = document.getElementById("sticky-note-input") as HTMLTextAreaElement | null;
+      const colorBtn = document.getElementById("sticky-note-color") as HTMLButtonElement | null;
+      let currentColor = "#ffeb3b";
+      const colors = ["#ffeb3b", "#ffcc80", "#b2dfdb", "#f8bbd0", "#d1c4e9"];
+      let colorIdx = 0;
+      if (colorBtn) {
+        colorBtn.addEventListener("click", () => {
+          colorIdx = (colorIdx + 1) % colors.length;
+          currentColor = colors[colorIdx];
+          (colorBtn as HTMLElement).style.background = currentColor;
+        });
+      }
+      if (submitBtn && noteInput) {
+        submitBtn.addEventListener("click", () => {
+          const text = noteInput.value.trim();
+          if (!text) return;
+          const ownerId = this.store.roomOwnerId;
+          if (!ownerId) return;
+          this.net.send({ type: "leave_sticky_note", officeOwnerId: ownerId, text, color: currentColor });
+          noteInput.value = "";
+        });
+      }
+    }
+  }
+
+  private renderAgentGrowth(agentId: string, container: HTMLElement): void {
+    const growth = this.store.agentGrowthData.get(agentId);
+    if (!growth || growth.totalTasks === 0) {
+      container.innerHTML = `<div style="color:#666;font-size:11px;padding:8px;">No growth data yet. Complete tasks to see performance trends.</div>`;
+      return;
+    }
+
+    const trendIcon = growth.trend === "improving" ? "📈" : growth.trend === "declining" ? "📉" : "➡️";
+    const trendColor = growth.trend === "improving" ? "#4caf50" : growth.trend === "declining" ? "#f44336" : "#888";
+
+    const sparkPoints = growth.recentHistory.map((h, i) => {
+      const x = (i / Math.max(growth.recentHistory.length - 1, 1)) * 120;
+      const y = 30 - (h.success ? 25 : 5);
+      return `${x},${y}`;
+    }).join(" ");
+
+    container.innerHTML = `
+      <div style="padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;margin-top:8px;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Agent Growth</div>
+        <div style="display:flex;gap:16px;margin-bottom:8px;">
+          <div><span style="color:#888;font-size:10px;">Tasks</span><br><span style="font-size:14px;font-weight:600;">${growth.totalTasks}</span></div>
+          <div><span style="color:#888;font-size:10px;">Success</span><br><span style="font-size:14px;font-weight:600;">${Math.round(growth.successRate * 100)}%</span></div>
+          <div><span style="color:#888;font-size:10px;">Avg Time</span><br><span style="font-size:14px;font-weight:600;">${growth.avgCompletionMin.toFixed(1)}m</span></div>
+          <div><span style="color:#888;font-size:10px;">Trend</span><br><span style="font-size:14px;color:${trendColor};">${trendIcon}</span></div>
+        </div>
+        ${growth.specialty ? `<div style="font-size:11px;color:#888;margin-bottom:6px;">Specialty: <span style="color:#4fc3f7;">${growth.specialty}</span></div>` : ""}
+        <svg width="120" height="35" style="display:block;">
+          <polyline points="${sparkPoints}" fill="none" stroke="${trendColor}" stroke-width="1.5" />
+        </svg>
+      </div>
+    `;
+  }
+
+  private renderChallengeView(container: HTMLElement): void {
+    const challenge = this.store.activeChallenge;
+    const result = this.store.challengeResult;
+
+    if (result) {
+      this.renderChallengeResult(container, result);
+      return;
+    }
+
+    if (!challenge) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:#888;">Loading challenge…</div>`;
+      return;
+    }
+
+    const agentOptions = challenge.agents.map((a) =>
+      `<option value="${a.id}">${a.name} (${a.specialties.join(", ")})</option>`
+    ).join("");
+
+    let tasksHtml = "";
+    for (const task of challenge.tasks) {
+      const deps = task.dependsOn.length > 0
+        ? `<span style="color:#6b7280;font-size:11px;"> ← depends on: ${task.dependsOn.map((d) => challenge.tasks.find((t) => t.id === d)?.title ?? d).join(", ")}</span>`
+        : "";
+      tasksHtml += `
+        <div style="background:rgba(20,22,30,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div>
+              <span style="font-weight:600;color:#e8eaf0;">${task.title}</span>
+              <span style="color:#4fc3f7;font-size:11px;margin-left:6px;">${task.category}</span>
+              ${deps}
+            </div>
+            <span style="color:#9aa0b0;font-size:11px;">${task.baseDurationMin}m base</span>
+          </div>
+          <select id="challenge-assign-${task.id}" style="width:100%;padding:4px 8px;background:rgba(20,22,30,0.8);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e8eaf0;font-size:12px;">
+            <option value="">— Select agent —</option>
+            ${agentOptions}
+          </select>
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      <div class="dash-section">
+        <div class="dash-section-title">🏆 ${challenge.title}</div>
+        <div class="dash-section-body">
+          <div style="margin-bottom:12px;color:#9aa0b0;font-size:13px;">${challenge.description}</div>
+          <div style="display:flex;gap:16px;margin-bottom:12px;">
+            <div><span style="color:#888;font-size:11px;">Tasks</span><br><span style="font-size:18px;font-weight:600;">${challenge.tasks.length}</span></div>
+            <div><span style="color:#888;font-size:11px;">Agents</span><br><span style="font-size:18px;font-weight:600;">${challenge.agents.length}</span></div>
+            <div><span style="color:#888;font-size:11px;">Optimal Time</span><br><span style="font-size:18px;font-weight:600;color:#4caf50;">${challenge.optimalTimeMin}m</span></div>
+          </div>
+          <div style="margin-bottom:6px;font-size:12px;color:#9aa0b0;">Assign each task to the agent that minimizes total completion time. Specialists finish tasks in base time; non-specialists take 1.5x longer.</div>
+        </div>
+      </div>
+      ${tasksHtml}
+      <button class="btn primary" id="challenge-submit" style="width:100%;margin-top:8px;">Submit Assignment</button>
+    `;
+
+    const submitBtn = document.getElementById("challenge-submit");
+    if (submitBtn) {
+      submitBtn.addEventListener("click", () => {
+        const assignments: { taskId: string; agentId: string }[] = [];
+        let allAssigned = true;
+        for (const task of challenge.tasks) {
+          const select = document.getElementById(`challenge-assign-${task.id}`) as HTMLSelectElement | null;
+          const agentId = select?.value ?? "";
+          if (!agentId) {
+            allAssigned = false;
+            break;
+          }
+          assignments.push({ taskId: task.id, agentId });
+        }
+        if (!allAssigned) {
+          submitBtn.textContent = "⚠ Assign all tasks first!";
+          setTimeout(() => { submitBtn.textContent = "Submit Assignment"; }, 2000);
+          return;
+        }
+        this.net.send({ type: "submit_challenge", challengeId: challenge.id, assignments });
+        submitBtn.textContent = "Scoring…";
+        (submitBtn as HTMLButtonElement).disabled = true;
+      });
+    }
+  }
+
+  private renderChallengeResult(container: HTMLElement, result: ChallengeResult): void {
+    const scoreColor = result.score >= 90 ? "#4caf50" : result.score >= 70 ? "#ffa726" : "#f44336";
+    const grade = result.score >= 95 ? "S" : result.score >= 85 ? "A" : result.score >= 70 ? "B" : result.score >= 50 ? "C" : "D";
+
+    let breakdownHtml = "";
+    for (const b of result.breakdown) {
+      const isCritical = result.criticalPath.includes(b.taskId);
+      breakdownHtml += `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;">
+          ${isCritical ? '<span style="color:#ff9800;">🔥</span>' : '<span style="color:#666;">○</span>'}
+          <span style="flex:1;color:#c4c8d4;">${b.taskTitle}</span>
+          <span style="color:#9aa0b0;">${b.agentName}</span>
+          <span style="color:${b.isSpecialty ? "#4caf50" : "#ffa726"};">${b.isSpecialty ? "★" : "×1.5"}</span>
+          <span style="color:#e8eaf0;font-weight:600;min-width:40px;text-align:right;">${b.durationMin}m</span>
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      <div class="dash-section" style="border-color:${scoreColor};border-width:2px;">
+        <div class="dash-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>🏆 Challenge Result</span>
+          <span style="font-size:32px;font-weight:900;color:${scoreColor};">${grade}</span>
+        </div>
+        <div class="dash-section-body">
+          <div style="display:flex;gap:24px;margin-bottom:12px;">
+            <div><span style="color:#888;font-size:11px;">Your Time</span><br><span style="font-size:20px;font-weight:600;">${result.userTimeMin}m</span></div>
+            <div><span style="color:#888;font-size:11px;">Optimal</span><br><span style="font-size:20px;font-weight:600;color:#4caf50;">${result.optimalTimeMin}m</span></div>
+            <div><span style="color:#888;font-size:11px;">Score</span><br><span style="font-size:20px;font-weight:600;color:${scoreColor};">${result.score}/100</span></div>
+          </div>
+          <div style="font-size:12px;color:#9aa0b0;margin-bottom:12px;">
+            ${result.score >= 95 ? "Perfect optimization! You found the optimal assignment." :
+              result.score >= 85 ? "Excellent! Very close to optimal." :
+              result.score >= 70 ? "Good effort. Room for improvement." :
+              result.score >= 50 ? "Decent, but the optimal solution is significantly faster." :
+              "Far from optimal. Try matching agent specialties to task categories."}
+          </div>
+          <div style="margin-bottom:8px;font-size:12px;color:#9aa0b0;">🔥 = critical path task</div>
+          ${breakdownHtml}
+        </div>
+      </div>
+      <button class="btn primary" id="challenge-new" style="width:100%;margin-top:12px;">New Challenge</button>
+    `;
+
+    const newBtn = document.getElementById("challenge-new");
+    if (newBtn) {
+      newBtn.addEventListener("click", () => {
+        this.store.activeChallenge = null;
+        this.store.challengeResult = null;
+        this.net.send({ type: "request_challenge" });
+      });
+    }
+  }
+
+  private renderDecomposeView(container: HTMLElement): void {
+    const goals = [...this.store.board.values()].filter((c) => c.type === "goal" && c.manualDecompose);
+    const allCards = [...this.store.board.values()];
+
+    // Check for decomposition score to display
+    const scoreData = this.store.decompositionScore;
+
+    let html = "";
+
+    // Score display if available
+    if (scoreData) {
+      const s = scoreData.score;
+      const gradeColor = s.grade === "S" ? "#ffd700" : s.grade === "A" ? "#58c866" : s.grade === "B" ? "#3a8cd4" : s.grade === "C" ? "#f0ad4e" : "#e74c3c";
+      html += `
+        <div class="dash-section" style="border-color: ${gradeColor}; border-width: 2px;">
+          <div class="dash-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🧩 Decomposition Score</span>
+            <span style="font-size: 28px; font-weight: 900; color: ${gradeColor};">${s.grade}</span>
+          </div>
+          <div class="dash-section-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+              <div><b>Overall:</b> ${s.overall}/100</div>
+              <div><b>Coverage:</b> ${s.coverage}/100</div>
+              <div><b>Parallelism:</b> ${s.parallelism}/100</div>
+              <div><b>Depth:</b> ${s.dependencyDepth}/100</div>
+              <div><b>Granularity:</b> ${s.granularity}/100</div>
+              <div><b>Execution:</b> ${s.executionSuccess}/100</div>
+            </div>
+            <div style="margin-bottom: 6px; font-size: 12px; color: #9aa0b0;">
+              ${s.subtaskCount} subtasks · ${s.reworkCount} rework · ${s.longestPath}-deep chain · ${s.maxParallel} parallel
+            </div>
+            <div>${s.summary}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Goal creation form
+    html += `
+      <div class="dash-section">
+        <div class="dash-section-title">🎯 Create a Goal to Decompose</div>
+        <div class="dash-section-body">
+          <input id="decompose-goal-title" maxlength="200" placeholder="Enter your high-level goal…" style="width: 100%; margin-bottom: 6px; padding: 6px 8px; background: rgba(20,22,30,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #e8eaf0;" />
+          <textarea id="decompose-goal-desc" rows="2" placeholder="Detailed description (optional)" style="width: 100%; margin-bottom: 6px; padding: 6px 8px; background: rgba(20,22,30,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #e8eaf0; resize: vertical;"></textarea>
+          <button class="btn primary" id="decompose-create-goal" style="width: 100%;">Create Goal</button>
+        </div>
+      </div>
+    `;
+
+    // List existing manual-decompose goals with their subtasks
+    if (goals.length > 0) {
+      html += `<div class="dash-section"><div class="dash-section-title">📋 Your Goals</div>`;
+      for (const goal of goals) {
+        const subtasks = allCards.filter((c) => c.parentGoalId === goal.id);
+        const completed = subtasks.filter((c) => c.status === "done").length;
+        const allDone = subtasks.length > 0 && completed === subtasks.length;
+
+        html += `
+          <div style="background: rgba(20,22,30,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+            <div style="font-weight: 600; color: #e8eaf0; margin-bottom: 4px;">${goal.title}</div>
+            <div style="font-size: 12px; color: #9aa0b0; margin-bottom: 8px;">${subtasks.length} subtasks · ${completed}/${subtasks.length} done</div>
+        `;
+
+        // Show subtasks
+        if (subtasks.length > 0) {
+          html += `<div style="margin-bottom: 8px;">`;
+          for (const st of subtasks) {
+            const statusIcon = st.status === "done" ? "✅" : st.status === "in_progress" ? "🔄" : st.status === "backlog" ? "📋" : "⏸";
+            const agentName = st.assignedAgentId ? this.store.agents.get(st.assignedAgentId)?.name ?? "?" : "Unassigned";
+            const deps = st.dependsOnCardIds?.length ?? 0;
+            html += `<div style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px;">${statusIcon} <span style="flex: 1; color: #c4c8d4;">${st.title}</span> <span style="color: #6b7280;">${agentName}</span>${deps > 0 ? `<span style="color: #6b7280;">←${deps}</span>` : ""}</div>`;
+          }
+          html += `</div>`;
+        }
+
+        // Add subtask form
+        html += `
+          <div style="display: flex; gap: 4px; margin-bottom: 6px;">
+            <input id="decompose-subtask-title-${goal.id}" maxlength="200" placeholder="Subtask title…" style="flex: 1; padding: 4px 8px; background: rgba(20,22,30,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #e8eaf0; font-size: 12px;" />
+            <button class="btn" id="decompose-add-subtask-${goal.id}" style="font-size: 11px; padding: 2px 8px;">+ Subtask</button>
+          </div>
+        `;
+
+        // Score button (only if all subtasks done)
+        if (allDone) {
+          html += `<button class="btn primary" id="decompose-score-${goal.id}" style="width: 100%; font-size: 12px;">📊 Score This Decomposition</button>`;
+        }
+
+        // Show existing score if present
+        if (goal.decompositionScore) {
+          const s = goal.decompositionScore;
+          const gradeColor = s.grade === "S" ? "#ffd700" : s.grade === "A" ? "#58c866" : s.grade === "B" ? "#3a8cd4" : s.grade === "C" ? "#f0ad4e" : "#e74c3c";
+          html += `<div style="margin-top: 8px; padding: 8px; background: rgba(20,22,30,0.4); border-radius: 4px; text-align: center;"><span style="font-size: 24px; font-weight: 900; color: ${gradeColor};">${s.grade}</span> <span style="color: #9aa0b0; font-size: 12px;">${s.overall}/100 — ${s.summary}</span></div>`;
+        }
+
+        html += `</div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="dash-section"><div class="dash-section-body" style="text-align: center; color: #6b7280;">No goals yet. Create one above to start decomposing.</div></div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Wire up goal creation
+    const createGoalBtn = document.getElementById("decompose-create-goal");
+    if (createGoalBtn) {
+      createGoalBtn.addEventListener("click", () => {
+        const titleEl = document.getElementById("decompose-goal-title") as HTMLInputElement;
+        const descEl = document.getElementById("decompose-goal-desc") as HTMLTextAreaElement;
+        const title = titleEl.value.trim();
+        if (!title) return;
+        this.net.send({ type: "create_goal", title, description: descEl.value.trim() || undefined });
+        titleEl.value = "";
+        descEl.value = "";
+      });
+    }
+
+    // Wire up subtask creation and scoring for each goal
+    for (const goal of goals) {
+      const addBtn = document.getElementById(`decompose-add-subtask-${goal.id}`);
+      if (addBtn) {
+        addBtn.addEventListener("click", () => {
+          const input = document.getElementById(`decompose-subtask-title-${goal.id}`) as HTMLInputElement;
+          const title = input.value.trim();
+          if (!title) return;
+          // Create card then link it to the goal
+          this.net.send({ type: "create_card", title });
+          // We need to wait for the card to be created, then link it
+          // The card ID isn't known yet, so we'll link it after a short delay
+          setTimeout(() => {
+            const cards = [...this.store.board.values()].sort((a, b) => b.createdAt - a.createdAt);
+            const newest = cards.find((c) => c.title === title && !c.parentGoalId);
+            if (newest) {
+              this.net.send({ type: "link_subtask", parentGoalId: goal.id, subtaskCardId: newest.id });
+            }
+          }, 500);
+          input.value = "";
+        });
+      }
+
+      const scoreBtn = document.getElementById(`decompose-score-${goal.id}`);
+      if (scoreBtn) {
+        scoreBtn.addEventListener("click", () => {
+          this.net.send({ type: "score_decomposition", goalCardId: goal.id });
+        });
+      }
+    }
+  }
+
+  private renderAutomationDashboard(container: HTMLElement): void {
+    const stats = this.store.automationStats;
+    if (!stats) {
+      container.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #6b7280; font-size: 14px;">Loading automation stats…</div>`;
+      return;
+    }
+
+    const successPct = Math.round(stats.successRate * 100);
+    const idlePct = Math.round(stats.idlePct * 100);
+    const automationPct = Math.round(stats.automationRate * 100);
+    const avgMin = stats.avgCompletionMin.toFixed(1);
+
+    const successColor = successPct >= 80 ? "#58c866" : successPct >= 50 ? "#f0ad4e" : "#e74c3c";
+    const idleColor = idlePct <= 30 ? "#58c866" : idlePct <= 60 ? "#f0ad4e" : "#e74c3c";
+
+    container.innerHTML = `
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+        <div class="dash-card">
+          <div class="dash-card-label">Throughput (1h)</div>
+          <div class="dash-card-value">${stats.throughput} <span class="dash-card-unit">tasks/hr</span></div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-label">Avg Completion</div>
+          <div class="dash-card-value">${avgMin} <span class="dash-card-unit">min</span></div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-label">Success Rate</div>
+          <div class="dash-card-value" style="color: ${successColor};">${successPct}%</div>
+          <div class="dash-bar"><div class="dash-bar-fill" style="width: ${successPct}%; background: ${successColor};"></div></div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-label">Idle Rate</div>
+          <div class="dash-card-value" style="color: ${idleColor};">${idlePct}%</div>
+          <div class="dash-bar"><div class="dash-bar-fill" style="width: ${idlePct}%; background: ${idleColor};"></div></div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+        <div class="dash-card-sm">
+          <div class="dash-card-label">Automation</div>
+          <div class="dash-card-value-sm">${automationPct}%</div>
+        </div>
+        <div class="dash-card-sm">
+          <div class="dash-card-label">Pipeline Depth</div>
+          <div class="dash-card-value-sm">${stats.pipelineDepth}</div>
+        </div>
+        <div class="dash-card-sm">
+          <div class="dash-card-label">Agents</div>
+          <div class="dash-card-value-sm">${stats.agentCount}</div>
+        </div>
+      </div>
+
+      <div class="dash-section">
+        <div class="dash-section-title">🏆 Top Performer</div>
+        <div class="dash-section-body">${stats.busiestAgent ? `${stats.busiestAgent} — ${stats.totalTasksDone} total tasks completed` : "No tasks completed yet"}</div>
+      </div>
+
+      <div class="dash-section">
+        <div class="dash-section-title">📋 Summary</div>
+        <div class="dash-section-body">
+          ${stats.throughput > 0
+            ? `Your team completed <b>${stats.throughput}</b> task${stats.throughput === 1 ? "" : "s"} in the last hour at <b>${avgMin} min/task</b> average.`
+            : `No tasks completed in the last hour. Your team is ${idlePct >= 80 ? "mostly idle" : "partially active"}.`}
+          ${stats.pipelineDepth > 0 ? ` Pipeline depth: <b>${stats.pipelineDepth}</b> stage${stats.pipelineDepth === 1 ? "" : "s"}.` : ""}
+          ${automationPct > 50 ? " Automation is running smoothly." : " Consider setting up schedules to increase automation."}
+        </div>
+      </div>
+    `;
+  }
+
+  private showAwayReport(): void {
+    const report = this.store.awayReport;
+    if (!report) return;
+
+    const modal = document.getElementById("away-report-modal")!;
+    const eventList = report.events.length > 0
+      ? report.events.map((e) => {
+          const time = new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const icon = e.type === "task_complete" ? "✅" : e.type === "task_error" ? "⚠️" : e.type === "hire" ? "🤖" : e.type === "fuse" ? "🔀" : "📋";
+          return `<div class="away-event"><span class="away-event-icon">${icon}</span><span class="away-event-time">${time}</span><span class="away-event-text">${e.text.replace(/</g, "&lt;")}</span></div>`;
+        }).join("")
+      : `<div class="away-empty">No notable events while you were away.</div>`;
+
+    const stats: string[] = [];
+    if (report.tasksCompleted > 0) stats.push(`<span class="away-stat"><span class="away-stat-num">${report.tasksCompleted}</span><span class="away-stat-label">tasks completed</span></span>`);
+    if (report.tasksErrored > 0) stats.push(`<span class="away-stat"><span class="away-stat-num">${report.tasksErrored}</span><span class="away-stat-label">errors</span></span>`);
+    if (report.agentsHired > 0) stats.push(`<span class="away-stat"><span class="away-stat-num">${report.agentsHired}</span><span class="away-stat-label">agents hired</span></span>`);
+    stats.push(`<span class="away-stat"><span class="away-stat-num">${report.currentAgentCount}</span><span class="away-stat-label">agents now</span></span>`);
+    stats.push(`<span class="away-stat"><span class="away-stat-num">${report.totalTasksDone}</span><span class="away-stat-label">total tasks</span></span>`);
+
+    modal.innerHTML = `
+      <div class="ach-modal-content" style="max-width: 520px;">
+        <div class="ach-modal-header">
+          <span class="ach-modal-title">📋 While You Were Away</span>
+          <button class="x" id="away-close">✕</button>
+        </div>
+        <div style="padding: 16px 20px;">
+          <div class="away-headline">${report.headline}</div>
+          <div class="away-stats">${stats.join("")}</div>
+          <div class="away-events-title">Recent activity</div>
+          <div class="away-events">${eventList}</div>
+        </div>
+      </div>
+    `;
+    modal.hidden = false;
+
+    document.getElementById("away-close")!.addEventListener("click", () => {
+      modal.hidden = true;
+      modal.innerHTML = "";
+      this.store.awayReport = null;
+    });
+  }
+
+  private showConciergeNudge(): void {
+    const nudge = this.store.conciergeNudge;
+    const bubble = document.getElementById("concierge-bubble")!;
+    const textEl = document.getElementById("concierge-text")!;
+    const actionBtn = document.getElementById("concierge-action")!;
+    if (!nudge) {
+      bubble.hidden = true;
+      return;
+    }
+    textEl.textContent = nudge.text;
+    if (nudge.actionLabel && nudge.actionType) {
+      actionBtn.hidden = false;
+      actionBtn.textContent = nudge.actionLabel;
+      actionBtn.onclick = () => {
+        this.handleConciergeAction(nudge.actionType!);
+        this.dismissConcierge(nudge.nudgeId);
+      };
+    } else {
+      actionBtn.hidden = true;
+    }
+    bubble.hidden = false;
+    // Auto-hide after 15 seconds
+    setTimeout(() => {
+      if (this.store.conciergeNudge?.nudgeId === nudge.nudgeId) {
+        this.dismissConcierge(nudge.nudgeId);
+      }
+    }, 15_000);
+  }
+
+  private dismissConcierge(nudgeId: string): void {
+    const bubble = document.getElementById("concierge-bubble")!;
+    bubble.hidden = true;
+    this.store.conciergeNudge = null;
+    this.net.send({ type: "dismiss_concierge", nudgeId });
+  }
+
+  private handleConciergeAction(actionType: string): void {
+    switch (actionType) {
+      case "open_market":
+        document.getElementById("marketplace-btn")?.click();
+        break;
+      case "open_board":
+        this.store.toggleBoard(true);
+        break;
+      case "open_settings":
+        document.getElementById("settings-btn")?.click();
+        break;
+      case "open_achievements":
+        this.store.toggleAchievements(true);
+        break;
+      case "open_leaderboards":
+        this.store.toggleAchievements(true);
+        // Switch to leaderboards tab
+        const lbTab = document.querySelector("[data-ach-tab='leaderboards']") as HTMLElement;
+        lbTab?.click();
+        break;
+    }
+  }
+
+  private renderNextSteps(): void {
+    const panel = document.getElementById("next-steps")!;
+    const list = document.getElementById("next-steps-list")!;
+    if (!panel || !list) return;
+
+    const suggestions = computeSuggestions(this.store);
+    if (suggestions.length === 0) {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+    list.innerHTML = suggestions.map((s) =>
+      `<div class="next-step-item" data-action="${s.action}"><span class="next-step-icon">${s.icon}</span><span class="next-step-label">${this.escape(s.label)}</span></div>`
+    ).join("");
+
+    list.querySelectorAll(".next-step-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const action = el.getAttribute("data-action") || "";
+        this.handleConciergeAction(action);
+      });
     });
   }
 

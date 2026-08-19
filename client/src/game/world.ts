@@ -17,6 +17,7 @@ import { HUDSystem } from "./hud";
 import { achievements } from "./achievements";
 import WorldgenWorker from "./worldgen.worker?worker";
 import { saveChunkCanvas, removeChunkCanvas, preloadChunkCanvases } from "./chunk-cache";
+import { Inventory } from "./inventory";
 
 /**
  * World offset: the world tile grid starts at the bottom-left corner of the
@@ -95,6 +96,7 @@ const MAX_LIGHTS_PER_CHUNK = 8;
 const MAX_HP = 100;
 const CREATURE_CAP = 30;
 const FRIENDLY_CAP = 12;
+const SLUG_CAP = 15;
 const STONE_INTERVAL = 2500;
 const BEAST_SPAWN_INTERVAL = 8000; // check for legendary beast spawns
 
@@ -784,6 +786,162 @@ class Creature {
   }
 }
 
+/** A slow slug creature that wanders meadows — low threat, drops slug_slime. */
+class Slug {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private hp = 10;
+  private damage = 3;
+  private alive = true;
+  private world: WorldLayer;
+  private walkTimer = 0;
+  private wanderAt = 0;
+  private targetX: number;
+  private targetY: number;
+  private moving = false;
+  private lastDir = 0;
+  private attackCd = 0;
+  private trailAt = 0;
+  private aggroUntil = 0;
+
+  constructor(world: WorldLayer, x: number, y: number) {
+    this.world = world;
+    const scene = world.scene;
+    const radius = 10;
+
+    this.shadow = scene.add.ellipse(0, 2, radius * 2.8, radius * 0.9, 0x000000, 0.15);
+    this.sprite = scene.add.sprite(0, 0, "creature-slug", 0).setOrigin(0.5, 0.7).setScale(0.7);
+    this.container = scene.add.container(x, y, [this.shadow, this.sprite]).setDepth(20 + y);
+    this.targetX = x;
+    this.targetY = y;
+  }
+
+  get alive_(): boolean { return this.alive; }
+
+  update(time: number, dt: number, playerX: number, playerY: number): { hit: boolean; damage: number } | null {
+    if (!this.alive) return null;
+
+    const dx = playerX - this.container.x;
+    const dy = playerY - this.container.y;
+    const dist = Math.hypot(dx, dy);
+
+    // aggro at close range — chase slowly
+    if (dist < 120 && dist > 30) {
+      this.aggroUntil = time + 3000;
+    }
+    const aggro = time < this.aggroUntil;
+
+    if (aggro && dist > 30) {
+      this.targetX = playerX;
+      this.targetY = playerY;
+      this.moving = true;
+    } else if (!this.moving && time > this.wanderAt) {
+      // wander slowly
+      const range = 4;
+      for (let tries = 0; tries < 6; tries++) {
+        const wdx = Math.floor((Math.random() - 0.5) * range * 2);
+        const wdy = Math.floor((Math.random() - 0.5) * range * 2);
+        const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + wdx;
+        const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + wdy;
+        if (this.world.isCreatureWalkable(tx, ty)) {
+          this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
+          this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
+          this.moving = true;
+          break;
+        }
+      }
+      this.wanderAt = time + 5000 + Math.random() * 8000;
+    }
+
+    // move toward target — very slow
+    if (this.moving) {
+      const mdx = this.targetX - this.container.x;
+      const mdy = this.targetY - this.container.y;
+      const md = Math.hypot(mdx, mdy);
+      const speed = aggro ? 35 : 20;
+      const step = speed * (dt / 1000);
+      if (md <= step) {
+        this.container.setPosition(this.targetX, this.targetY);
+        this.moving = false;
+      } else {
+        const nx = this.container.x + (mdx / md) * step;
+        const ny = this.container.y + (mdy / md) * step;
+        const { tx, ty } = this.world.pixelToTile(nx, ny);
+        if (this.world.isCreatureWalkable(tx, ty)) {
+          this.container.setPosition(nx, ny);
+          this.lastDir = dirFromVelocity(mdx, mdy);
+        } else {
+          this.moving = false;
+        }
+      }
+      this.container.setDepth(20 + this.container.y);
+    }
+
+    // animation
+    const is3d = has8Directions(this.sprite);
+    if (is3d) {
+      if (this.moving) {
+        this.walkTimer += dt;
+        const anim = Math.floor(this.walkTimer / 300) % 2 + 1;
+        this.sprite.setFrame(anim * DIRS_3D + this.lastDir);
+      } else {
+        this.sprite.setFrame(this.lastDir);
+      }
+    } else {
+      this.sprite.setFlipX(this.lastDir >= 4 && this.lastDir <= 6);
+      if (this.moving) {
+        this.walkTimer += dt;
+        const frame = Math.floor(this.walkTimer / 300) % 2 + 1;
+        this.sprite.setFrame(frame);
+      } else {
+        this.sprite.setFrame(0);
+      }
+    }
+
+    // slime trail VFX
+    if (this.moving && time > this.trailAt) {
+      this.trailAt = time + 600;
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y + 4, 0x6a8a4a, 2, 15);
+    }
+
+    // attack — weak, close range
+    this.attackCd -= dt;
+    if (dist < 30 && this.attackCd <= 0) {
+      this.attackCd = 1500;
+      this.sprite.setFrame(is3d ? 3 * DIRS_3D + this.lastDir : 3);
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0x6a8a4a, 3, 30);
+      return { hit: true, damage: this.damage };
+    }
+    return null;
+  }
+
+  takeDamage(amount: number): void {
+    this.hp -= amount;
+    this.world.vfx?.hitFlash(this.sprite);
+    this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0x6a8a4a, 6, 60);
+    this.world.vfx?.damageNumber(this.container.x, this.container.y - 20, amount);
+    if (this.hp <= 0) {
+      this.alive = false;
+      this.world.vfx?.deathDissolve(this.container.x, this.container.y, 0x6a8a4a, 0.6);
+      this.world.audio?.death();
+      // drop slug_slime
+      const drops = 1 + Math.floor(Math.random() * 2);
+      this.world.inventory.addItem("slug_slime", drops);
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0x8aaa6a, 8, 50);
+      this.world.store.toast(`Defeated a slug! Dropped ${drops} slug slime. 🐌`);
+      achievements.unlock("slug_slayer");
+      if (achievements.incStat("slugsKilled") >= 10) achievements.unlock("slug_exterminator");
+      this.container.destroy();
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.container.destroy();
+  }
+}
+
 /** A friendly creature that wanders peacefully near the office — no combat. */
 class FriendlyCreature {
   container: Phaser.GameObjects.Container;
@@ -931,7 +1089,831 @@ class FriendlyCreature {
   }
 }
 
-/** A captured creature deployed as a combat ally — follows player, attacks hostiles. */
+// ============================================================
+// DOG NPC — friendly yellow lab with fetch mechanic
+// ============================================================
+
+type DogState = "wander" | "chase_ball" | "retrieve" | "return_to_owner" | "sit";
+
+/** A thrown ball that arcs through the air and lands in water. */
+class FetchBall {
+  img: Phaser.GameObjects.Image;
+  vx: number;
+  vy: number;
+  alive = true;
+  landed = false;
+  landX: number;
+  landY: number;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, vx: number, vy: number, landX: number, landY: number) {
+    this.img = scene.add.image(x, y, resolveItemTex(scene, "tennis-ball")).setDepth(50).setScale(0.4);
+    this.vx = vx;
+    this.vy = vy;
+    this.landX = landX;
+    this.landY = landY;
+  }
+
+  update(dt: number): void {
+    if (!this.alive || this.landed) return;
+    const bdt = dt / 1000;
+    this.img.x += this.vx * bdt;
+    this.img.y += this.vy * bdt;
+    this.vx *= 0.99;
+    this.vy *= 0.99;
+    // check if ball reached the target landing spot
+    const dist = Math.hypot(this.img.x - this.landX, this.img.y - this.landY);
+    if (dist < 12 || Math.hypot(this.vx, this.vy) < 8) {
+      this.img.setPosition(this.landX, this.landY);
+      this.landed = true;
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.img.destroy();
+  }
+}
+
+/** A friendly dog NPC that wanders near water and fetches thrown balls. */
+class Dog {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private alive = true;
+  private world: WorldLayer;
+  private state: DogState = "wander";
+  private targetX: number;
+  private targetY: number;
+  private wanderAt = 0;
+  private walkTimer = 0;
+  private facingRight = true;
+  private ballTarget: FetchBall | null = null;
+  private fetchCount = 0;
+  private happyUntil = 0;
+  private sitUntil = 0;
+
+  constructor(world: WorldLayer, x: number, y: number) {
+    this.world = world;
+    const scene = world.scene;
+    this.shadow = scene.add.ellipse(0, 4, 28, 10, 0x000000, 0.15);
+    this.sprite = scene.add.sprite(0, 0, "friendly-dog", 0).setOrigin(0.5, 0.7).setScale(0.5);
+    this.container = scene.add.container(x, y, [this.shadow, this.sprite]).setDepth(20 + y);
+    this.targetX = x;
+    this.targetY = y;
+  }
+
+  get alive_(): boolean { return this.alive; }
+
+  /** Assign a ball for the dog to fetch. */
+  fetchBall(ball: FetchBall): void {
+    this.ballTarget = ball;
+    this.state = "chase_ball";
+  }
+
+  update(time: number, dt: number, playerX: number, playerY: number): void {
+    if (!this.alive) return;
+    const distToPlayer = Math.hypot(playerX - this.container.x, playerY - this.container.y);
+
+    // state machine
+    switch (this.state) {
+      case "sit": {
+        if (time > this.sitUntil) {
+          this.state = "wander";
+          this.wanderAt = time + 500;
+        }
+        break;
+      }
+      case "wander": {
+        // follow player loosely if far away
+        if (distToPlayer > 400) {
+          this.targetX = playerX + (Math.random() - 0.5) * 100;
+          this.targetY = playerY + (Math.random() - 0.5) * 100;
+          this.state = "return_to_owner";
+          break;
+        }
+        // wander randomly
+        if (time > this.wanderAt) {
+          const range = 6;
+          for (let tries = 0; tries < 8; tries++) {
+            const wdx = Math.floor((Math.random() - 0.5) * range * 2);
+            const wdy = Math.floor((Math.random() - 0.5) * range * 2);
+            const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + wdx;
+            const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + wdy;
+            if (this.world.isCreatureWalkable(tx, ty)) {
+              this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
+              this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
+              break;
+            }
+          }
+          this.wanderAt = time + 3000 + Math.random() * 4000;
+        }
+        // occasionally sit and rest
+        if (Math.random() < 0.002 && distToPlayer < 200) {
+          this.state = "sit";
+          this.sitUntil = time + 2000 + Math.random() * 3000;
+        }
+        break;
+      }
+      case "chase_ball": {
+        if (!this.ballTarget || !this.ballTarget.alive) {
+          this.state = "wander";
+          this.ballTarget = null;
+          break;
+        }
+        if (this.ballTarget.landed) {
+          this.targetX = this.ballTarget.img.x;
+          this.targetY = this.ballTarget.img.y;
+          const bd = Math.hypot(this.targetX - this.container.x, this.targetY - this.container.y);
+          if (bd < 20) {
+            // got the ball! switch to retrieve
+            this.ballTarget.destroy();
+            this.ballTarget = null;
+            this.state = "retrieve";
+            this.targetX = playerX;
+            this.targetY = playerY;
+            this.happyUntil = time + 3000;
+          }
+        }
+        break;
+      }
+      case "retrieve": {
+        // bring ball back to player
+        this.targetX = playerX;
+        this.targetY = playerY;
+        const d = Math.hypot(this.targetX - this.container.x, this.targetY - this.container.y);
+        if (d < 40) {
+          // delivered! give reward
+          this.fetchCount++;
+          this.world.onDogFetch(this.fetchCount);
+          this.state = "sit";
+          this.sitUntil = time + 1500 + Math.random() * 1000;
+          // tail wag VFX
+          this.world.vfx?.sparkBurst(this.container.x, this.container.y - 5, 0xffdd44, 8, 40);
+        }
+        break;
+      }
+      case "return_to_owner": {
+        const d = Math.hypot(this.targetX - this.container.x, this.targetY - this.container.y);
+        if (d < 60) {
+          this.state = "wander";
+          this.wanderAt = time + 1000;
+        }
+        break;
+      }
+    }
+
+    // movement
+    const mdx = this.targetX - this.container.x;
+    const mdy = this.targetY - this.container.y;
+    const md = Math.hypot(mdx, mdy);
+    const isMoving = this.state === "chase_ball" || this.state === "retrieve" || this.state === "return_to_owner" ||
+                     (this.state === "wander" && md > 4);
+    const speed = this.state === "chase_ball" ? 120 : this.state === "retrieve" ? 90 : 55;
+    const step = speed * (dt / 1000);
+
+    if (isMoving && md > 2) {
+      if (md <= step) {
+        this.container.setPosition(this.targetX, this.targetY);
+      } else {
+        const nx = this.container.x + (mdx / md) * step;
+        const ny = this.container.y + (mdy / md) * step;
+        const { tx, ty } = this.world.pixelToTile(nx, ny);
+        if (this.world.isCreatureWalkable(tx, ty) || this.state === "chase_ball") {
+          // allow dog to walk on water tiles when fetching
+          this.container.setPosition(nx, ny);
+          this.facingRight = mdx > 0;
+        }
+      }
+    }
+
+    this.container.setDepth(20 + this.container.y);
+
+    // animation
+    this.sprite.setFlipX(!this.facingRight);
+    if (this.state === "retrieve") {
+      // frame 3 = holding ball
+      this.sprite.setFrame(3);
+    } else if (isMoving) {
+      this.walkTimer += dt;
+      const frame = Math.floor(this.walkTimer / 200) % 2 + 1;
+      this.sprite.setFrame(frame);
+    } else {
+      this.sprite.setFrame(0);
+    }
+
+    // happy bark particles
+    if (time < this.happyUntil && Math.random() < 0.05) {
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y - 10, 0xffdd44, 2, 15);
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    this.container.destroy();
+  }
+}
+
+// ============================================================
+// LEPRECHAUN NPC — wandering trickster with quests and personality
+// ============================================================
+
+type LepState = "wander" | "flee" | "interact" | "vanish" | "cooldown";
+
+interface LepTradeStep {
+  require: string;
+  requireCount: number;
+  give: string;
+  giveCount: number;
+  dialogue: string;
+}
+
+const LEP_TRADE_CHAIN: LepTradeStep[] = [
+  { require: "wedge", requireCount: 1, give: "axe", giveCount: 1, dialogue: "A magical wedge! Ye drive a hard bargain, human. Take this axe — ye'll need it where ye're going." },
+  { require: "wood", requireCount: 5, give: "gold_coin", giveCount: 3, dialogue: "Wood for gold? A fair trade, a fair trade... but gold always comes with a price, heh heh." },
+  { require: "slug_slime", requireCount: 5, give: "four_leaf_clover", giveCount: 1, dialogue: "Slug slime for luck? Ye're a strange one. Here — a four-leaf clover. May it bring ye fortune... or something else entirely." },
+  { require: "fish", requireCount: 3, give: "void_shard", giveCount: 2, dialogue: "Fish from the lake... tasty. Take these shards. Ye'll want them when the shadows grow longer. And they will, human. They will." },
+];
+
+/** Apply a leprechaun trade reward, handling void_shard specially. */
+function applyLepReward(world: WorldLayer, give: string, count: number): void {
+  if (give === "void_shard") {
+    world.addShards(count);
+  } else {
+    for (let i = 0; i < count; i++) world.inventory.addItem(give, 1);
+  }
+}
+
+const LEP_RIDDLES = [
+  "What walks on four legs in the morning, two at noon, and three in the evening? Bah, ye've heard that one.",
+  "I've a pot of gold at the end of the rainbow. But have ye ever found the end of a rainbow, human? No. No one has. Curious, isn't it?",
+  "They say we grant wishes. But what if the wish grants you? Think on that, human.",
+  "The trees here have eyes. The water has memory. And me? I've been watching ye for quite some time.",
+  "Ye chase creatures and slay beasts. But have ye ever wondered what chases ye? Something to ponder over your next pint.",
+  "I've lived a long time, human. Long enough to know that every gift has a cost. Every trade... a consequence.",
+  "The void between worlds is hungry. Ye've felt it, haven't ye? That chill when the sun sets. It's not the cold. It's something... waiting.",
+];
+
+const LEP_STEAL_LINES = [
+  "Ooh, what's this? I'll be taking that! 🍀",
+  "Finders keepers, human!",
+  "Ye won't miss it... probably.",
+  "A tax for crossing me territory, heh heh!",
+];
+
+class Leprechaun {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private glow: Phaser.GameObjects.Image;
+  private alive = true;
+  private world: WorldLayer;
+  private state: LepState = "wander";
+  private targetX: number;
+  private targetY: number;
+  private wanderAt = 0;
+  private walkTimer = 0;
+  private facingRight = true;
+  private tradeIndex = 0;
+  private encounterCount = 0;
+  private cooldownUntil = 0;
+  private stolenItem: string | null = null;
+  private fleeUntil = 0;
+  private speakUntil = 0;
+  private speechText: Phaser.GameObjects.Text | null = null;
+
+  constructor(world: WorldLayer, x: number, y: number) {
+    this.world = world;
+    const scene = world.scene;
+    this.shadow = scene.add.ellipse(0, 4, 24, 8, 0x000000, 0.2);
+    this.sprite = scene.add.sprite(0, 0, "leprechaun-npc", 0).setOrigin(0.5, 0.7).setScale(0.8);
+    this.glow = scene.add
+      .image(0, 0, "soft-glow")
+      .setDisplaySize(40, 40)
+      .setTint(0x44ff44)
+      .setAlpha(0.06)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(19);
+    this.container = scene.add.container(x, y, [this.glow, this.shadow, this.sprite]).setDepth(20 + y);
+    this.targetX = x;
+    this.targetY = y;
+  }
+
+  get alive_(): boolean { return this.alive; }
+  get tradeStep_(): LepTradeStep | null { return this.tradeIndex < LEP_TRADE_CHAIN.length ? LEP_TRADE_CHAIN[this.tradeIndex] : null; }
+  get encounterCount_(): number { return this.encounterCount; }
+
+  private speak(text: string, duration = 3000): void {
+    if (this.speechText) this.speechText.destroy();
+    this.speechText = this.world.scene.add.text(0, -30, text, {
+      fontSize: "12px",
+      color: "#88ff88",
+      backgroundColor: "#000000aa",
+      padding: { x: 6, y: 3 },
+      wordWrap: { width: 200 },
+    }).setOrigin(0.5, 1).setDepth(100);
+    this.container.add(this.speechText);
+    this.speakUntil = this.world.scene.time.now + duration;
+  }
+
+  update(time: number, dt: number, playerX: number, playerY: number): void {
+    if (!this.alive) return;
+    const distToPlayer = Math.hypot(playerX - this.container.x, playerY - this.container.y);
+
+    // clean up speech
+    if (this.speechText && time > this.speakUntil) {
+      this.speechText.destroy();
+      this.speechText = null;
+    }
+
+    switch (this.state) {
+      case "cooldown": {
+        if (time > this.cooldownUntil) {
+          this.state = "wander";
+          this.wanderAt = time + 500;
+        }
+        break;
+      }
+      case "vanish": {
+        // fade out and destroy
+        this.container.setAlpha(Math.max(0, this.container.alpha - dt * 0.003));
+        if (this.container.alpha <= 0) {
+          this.destroy();
+        }
+        break;
+      }
+      case "flee": {
+        if (time > this.fleeUntil) {
+          this.state = "wander";
+          this.wanderAt = time + 1000;
+          break;
+        }
+        // run away from player
+        const dx = this.container.x - playerX;
+        const dy = this.container.y - playerY;
+        const d = Math.hypot(dx, dy);
+        if (d > 0) {
+          this.targetX = this.container.x + (dx / d) * 200;
+          this.targetY = this.container.y + (dy / d) * 200;
+        }
+        // if far enough, stop fleeing
+        if (d > 300) {
+          this.state = "wander";
+          this.wanderAt = time + 1000;
+          // if we stole something, drop it as a reward for chasing
+          if (this.stolenItem) {
+            this.world.onLeprechaunCaught(this.stolenItem);
+            this.stolenItem = null;
+            this.speak("Fine, fine! Take it back! 🍀", 2000);
+          }
+        }
+        break;
+      }
+      case "interact": {
+        // stand still while player decides
+        if (distToPlayer > 150) {
+          this.state = "wander";
+          this.wanderAt = time + 500;
+        }
+        break;
+      }
+      case "wander": {
+        // if player approaches and we haven't been encountered yet
+        if (distToPlayer < 80 && time > this.cooldownUntil) {
+          this.encounterCount++;
+          this.state = "interact";
+
+          // decide behavior based on encounter count and randomness
+          if (this.encounterCount === 1) {
+            // first encounter — offer trade or riddle
+            const step = this.tradeStep_;
+            if (step && this.world.inventory.hasItem(step.require)) {
+              this.speak(`Ah, a human with a ${step.require}! Trade with me? Press E.`, 4000);
+            } else if (step) {
+              this.speak(`Bring me ${step.requireCount}x ${step.require} and I'll make it worth your while. 🍀`, 4000);
+            } else {
+              this.speak(LEP_RIDDLES[Math.floor(Math.random() * LEP_RIDDLES.length)], 4000);
+            }
+          } else if (this.encounterCount > 1 && Math.random() < 0.4 && this.world.inventory.getItems().some(s => s !== null && s.type === "material")) {
+            // mischievous steal — grab a random material item and flee
+            const items = this.world.inventory.getItems().filter(s => s !== null && s.type === "material");
+            if (items.length > 0) {
+              const stolen = items[Math.floor(Math.random() * items.length)];
+              if (stolen) {
+                this.world.inventory.removeItem(stolen.id, 1);
+                this.stolenItem = stolen.id;
+                this.speak(LEP_STEAL_LINES[Math.floor(Math.random() * LEP_STEAL_LINES.length)], 2000);
+                this.state = "flee";
+                this.fleeUntil = time + 5000;
+                this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0x44ff44, 12, 60);
+                break;
+              }
+            }
+            this.speak(LEP_RIDDLES[Math.floor(Math.random() * LEP_RIDDLES.length)], 4000);
+          } else {
+            // offer trade or riddle
+            const step = this.tradeStep_;
+            if (step && this.world.inventory.hasItem(step.require)) {
+              this.speak(`Got that ${step.require} for me? Press E to trade. 🍀`, 4000);
+            } else if (step) {
+              this.speak(`I still need ${step.requireCount}x ${step.require}. Find them, human.`, 4000);
+            } else {
+              this.speak(LEP_RIDDLES[Math.floor(Math.random() * LEP_RIDDLES.length)], 4000);
+            }
+          }
+          break;
+        }
+
+        // follow player loosely if far
+        if (distToPlayer > 500) {
+          this.targetX = playerX + (Math.random() - 0.5) * 200;
+          this.targetY = playerY + (Math.random() - 0.5) * 200;
+          break;
+        }
+
+        // wander randomly
+        if (time > this.wanderAt) {
+          const range = 5;
+          for (let tries = 0; tries < 8; tries++) {
+            const wdx = Math.floor((Math.random() - 0.5) * range * 2);
+            const wdy = Math.floor((Math.random() - 0.5) * range * 2);
+            const tx = Math.floor((this.container.x - this.world.offset.x) / TILE_PX) + wdx;
+            const ty = Math.floor((this.container.y - this.world.offset.y) / TILE_PX) + wdy;
+            if (this.world.isCreatureWalkable(tx, ty)) {
+              this.targetX = tx * TILE_PX + TILE_PX / 2 + this.world.offset.x;
+              this.targetY = ty * TILE_PX + TILE_PX / 2 + this.world.offset.y;
+              break;
+            }
+          }
+          this.wanderAt = time + 2000 + Math.random() * 3000;
+        }
+        break;
+      }
+    }
+
+    // movement
+    const mdx = this.targetX - this.container.x;
+    const mdy = this.targetY - this.container.y;
+    const md = Math.hypot(mdx, mdy);
+    const isMoving = this.state === "flee" || (this.state === "wander" && md > 4);
+    const speed = this.state === "flee" ? 140 : 60;
+    const step = speed * (dt / 1000);
+
+    if (isMoving && md > 2) {
+      if (md <= step) {
+        this.container.setPosition(this.targetX, this.targetY);
+      } else {
+        const nx = this.container.x + (mdx / md) * step;
+        const ny = this.container.y + (mdy / md) * step;
+        const { tx, ty } = this.world.pixelToTile(nx, ny);
+        if (this.world.isCreatureWalkable(tx, ty)) {
+          this.container.setPosition(nx, ny);
+          this.facingRight = mdx > 0;
+        }
+      }
+    }
+
+    this.container.setDepth(20 + this.container.y);
+
+    // animation
+    this.sprite.setFlipX(!this.facingRight);
+    if (this.state === "flee") {
+      this.walkTimer += dt;
+      const frame = Math.floor(this.walkTimer / 150) % 2 + 1;
+      this.sprite.setFrame(frame === 1 ? 3 : 1); // alternate flee/walk
+    } else if (isMoving) {
+      this.walkTimer += dt;
+      const frame = Math.floor(this.walkTimer / 250) % 2 + 1;
+      this.sprite.setFrame(frame);
+    } else {
+      this.sprite.setFrame(0);
+    }
+
+    // pulse glow
+    const pulse = 0.06 + Math.sin(time * 0.003) * 0.03;
+    this.glow.setAlpha(pulse);
+  }
+
+  /** Called when player presses E near the leprechaun — handles trading. */
+  tryInteract(time: number): boolean {
+    if (this.state !== "interact") return false;
+    const step = this.tradeStep_;
+    if (!step) {
+      this.speak("I've nothing left to trade, human. But I'll be watching... always watching.", 3000);
+      return false;
+    }
+    if (this.world.inventory.getQuantity(step.require) >= step.requireCount) {
+      // complete the trade
+      this.world.inventory.removeItem(step.require, step.requireCount);
+      applyLepReward(this.world, step.give, step.giveCount);
+      this.speak(step.dialogue, 5000);
+      this.tradeIndex++;
+      this.world.vfx?.celebrate(this.container.x, this.container.y);
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xffdd00, 16, 80);
+      this.world.audio.recruit();
+      this.world.onLeprechaunTrade(this.tradeIndex);
+      // enter cooldown then vanish
+      this.state = "vanish";
+      this.cooldownUntil = time + 30000;
+      return true;
+    } else {
+      this.speak(`Ye don't have enough ${step.require}. I need ${step.requireCount}. Come back when ye do.`, 3000);
+      return false;
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
+    if (this.speechText) this.speechText.destroy();
+    this.container.destroy();
+  }
+}
+
+// ============================================================
+// WIFE NPC — cabin companion with dialogue and cooking
+// ============================================================
+
+const WIFE_GREETINGS = [
+  "Welcome home, dear. The cabin looks lovely, doesn't it?",
+  "I picked some berries by the shore. We'll have them with dinner.",
+  "The lake is so peaceful at dusk. I could watch it forever.",
+  "I heard something in the woods earlier... probably just the wind.",
+  "Did you see that little green man again? He gives me the creeps.",
+  "I've been thinking... we built something real here. Something worth protecting.",
+];
+
+const WIFE_FISH_COOK = [
+  "Mmm, fresh fish! Let me cook that for you. 🐟",
+  "You always bring the best catches. Dinner is served!",
+  "One grilled fish, coming right up!",
+  "Nothing like lake fish cooked over an open flame.",
+];
+
+const WIFE_HINTS = [
+  "If you have a fishing rod, try casting into the lake. The fish love worms at dusk.",
+  "I saw some slimes near the forest. Be careful out there.",
+  "That leprechaun... he visited while you were away. Asked strange questions about you.",
+  "The flowers by the shore bloom at different times. Have you noticed?",
+  "Sometimes I hear singing from the lake at night. Beautiful... but lonely.",
+  "There's something buried under the big tree on the hill. I can feel it.",
+  "The leprechaun said something odd last time... 'Every gift has a price.' What did he mean?",
+  "I keep having the same dream. A purple light, opening like an eye... then I wake up.",
+  "Do you ever feel like... someone arranged all of this? The lake, the trees, us?",
+  "I tried to leave the cabin today. I couldn't. My feet just... stopped. Isn't that funny?",
+];
+
+type WifeState = "idle" | "wander" | "talk";
+
+class Wife {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Sprite;
+  private speechText: Phaser.GameObjects.Text | null = null;
+  private world: WorldLayer;
+  private state: WifeState = "idle";
+  private alive = true;
+  private homeX: number;
+  private homeY: number;
+  private targetX: number;
+  private targetY: number;
+  private lastDir = 1; // 1=right, -1=left
+  private animFrame = 0;
+  private animTimer = 0;
+  private nextActionTime = 0;
+  private speechUntil = 0;
+  private greetingIndex = 0;
+  private hintIndex = 0;
+  private cookedFishCount = 0;
+
+  constructor(world: WorldLayer, x: number, y: number) {
+    this.world = world;
+    this.homeX = x;
+    this.homeY = y;
+    this.targetX = x;
+    this.targetY = y;
+    const scene = world.scene;
+    this.sprite = scene.add.sprite(0, 0, "wife-npc", 0).setDepth(1).setScale(1.2);
+    this.container = scene.add.container(x, y, [this.sprite]).setDepth(25 + y);
+  }
+
+  get alive_(): boolean { return this.alive; }
+
+  private speak(text: string, duration = 4000): void {
+    if (this.speechText) this.speechText.destroy();
+    this.speechText = this.world.scene.add.text(
+      this.container.x,
+      this.container.y - 35,
+      text,
+      {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "11px",
+        color: "#ffffff",
+        backgroundColor: "rgba(0,0,0,0.7)",
+        padding: { x: 6, y: 4 },
+        wordWrap: { width: 200 },
+      },
+    ).setOrigin(0.5).setDepth(100);
+    this.speechUntil = this.world.scene.time.now + duration;
+  }
+
+  update(time: number, dt: number, playerX: number, playerY: number): void {
+    if (!this.alive) return;
+
+    // Clean up speech
+    if (this.speechText && time > this.speechUntil) {
+      this.speechText.destroy();
+      this.speechText = null;
+    }
+
+    // Update speech position
+    if (this.speechText) {
+      this.speechText.setPosition(this.container.x, this.container.y - 35);
+    }
+
+    // State machine
+    if (this.state === "idle") {
+      if (time > this.nextActionTime) {
+        // Randomly wander or stay idle
+        if (Math.random() < 0.6) {
+          this.state = "wander";
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 30 + Math.random() * 50;
+          this.targetX = this.homeX + Math.cos(angle) * dist;
+          this.targetY = this.homeY + Math.sin(angle) * dist;
+        } else {
+          this.nextActionTime = time + 2000 + Math.random() * 3000;
+        }
+      }
+    } else if (this.state === "wander") {
+      const dx = this.targetX - this.container.x;
+      const dy = this.targetY - this.container.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 5) {
+        this.state = "idle";
+        this.nextActionTime = time + 2000 + Math.random() * 4000;
+        this.animFrame = 0;
+      } else {
+        const speed = 30;
+        const step = (speed * dt) / 1000;
+        const nx = this.container.x + (dx / d) * step;
+        const ny = this.container.y + (dy / d) * step;
+        this.container.setPosition(nx, ny);
+        this.container.setDepth(25 + ny);
+        this.lastDir = dx > 0 ? 1 : -1;
+        this.sprite.setFlipX(this.lastDir < 0);
+        // Animate walk
+        this.animTimer += dt;
+        if (this.animTimer > 250) {
+          this.animFrame = this.animFrame === 0 ? 1 : 0;
+          this.sprite.setFrame(this.animFrame);
+          this.animTimer = 0;
+        }
+      }
+    } else if (this.state === "talk") {
+      // Face the player
+      this.lastDir = playerX > this.container.x ? 1 : -1;
+      this.sprite.setFlipX(this.lastDir < 0);
+      if (time > this.speechUntil) {
+        this.state = "idle";
+        this.nextActionTime = time + 2000;
+      }
+    }
+  }
+
+  tryInteract(time: number): boolean {
+    // Check if player has fish to cook
+    const fishCount = this.world.inventory.getQuantity("fish");
+    if (fishCount > 0) {
+      this.world.inventory.removeItem("fish", 1);
+      this.cookedFishCount++;
+      const line = WIFE_FISH_COOK[Math.floor(Math.random() * WIFE_FISH_COOK.length)];
+      this.speak(line, 3000);
+      // Heal player
+      this.world.heal(20);
+      this.world.store.toast("🐟 Cooked fish! +20 HP");
+      this.world.vfx?.sparkBurst(this.container.x, this.container.y, 0xffaa44, 8, 40);
+      this.world.audio.uiClick();
+      this.state = "talk";
+      if (this.cookedFishCount >= 1) achievements.unlock("first_cooked_fish");
+      if (this.cookedFishCount >= 10) achievements.unlock("master_chef");
+      return true;
+    }
+
+    // Otherwise, give dialogue — rotate through greetings and hints
+    if (this.greetingIndex < WIFE_GREETINGS.length) {
+      this.speak(WIFE_GREETINGS[this.greetingIndex], 5000);
+      this.greetingIndex++;
+    } else {
+      this.speak(WIFE_HINTS[this.hintIndex % WIFE_HINTS.length], 5000);
+      this.hintIndex++;
+    }
+    this.state = "talk";
+    return true;
+  }
+
+  /** Called by the dark twist to make the wife speak her final lines. */
+  speakFromDarkTwist(text: string, duration: number): void {
+    this.speak(text, duration);
+    this.state = "talk";
+  }
+
+  destroy(): void {
+    if (this.speechText) this.speechText.destroy();
+    this.container.destroy();
+    this.alive = false;
+  }
+}
+
+// ============================================================
+// FISHING MECHANIC
+// ============================================================
+
+type FishingState = "idle" | "casting" | "waiting" | "reeling";
+
+class FishingLine {
+  container: Phaser.GameObjects.Container;
+  private line: Phaser.GameObjects.Graphics;
+  private bobber: Phaser.GameObjects.Arc;
+  private world: WorldLayer;
+  private state: FishingState = "idle";
+  private biteTime = 0;
+  private hasBite = false;
+  private alive = true;
+
+  constructor(world: WorldLayer) {
+    this.world = world;
+    const scene = world.scene;
+    this.line = scene.add.graphics().setDepth(50);
+    this.bobber = scene.add.circle(0, 0, 3, 0xff4444).setDepth(51).setVisible(false);
+    this.container = scene.add.container(0, 0, [this.line, this.bobber]).setDepth(50);
+  }
+
+  get alive_(): boolean { return this.alive; }
+  get state_(): FishingState { return this.state; }
+  get hasBite_(): boolean { return this.hasBite; }
+
+  cast(fromX: number, fromY: number, toX: number, toY: number, time: number): void {
+    this.container.setPosition(fromX, fromY);
+    this.bobber.setPosition(toX - fromX, toY - fromY).setVisible(true);
+    this.state = "casting";
+    // Transition to waiting after a short cast animation
+    this.world.scene.time.delayedCall(500, () => {
+      if (this.state === "casting") {
+        this.state = "waiting";
+        // Random bite time: 2-8 seconds
+        this.biteTime = time + 2000 + Math.random() * 6000;
+        this.hasBite = false;
+      }
+    });
+  }
+
+  update(time: number): void {
+    if (this.state === "waiting" && !this.hasBite && time >= this.biteTime) {
+      this.hasBite = true;
+      // Bob the bobber
+      this.world.scene.tweens.add({
+        targets: this.bobber,
+        y: this.bobber.y - 4,
+        duration: 200,
+        yoyo: true,
+        repeat: 3,
+      });
+      this.world.store.toast("🐟 A fish is biting! Press E to reel it in!");
+    }
+
+    // Draw fishing line
+    if (this.state !== "idle") {
+      this.line.clear();
+      this.line.lineStyle(1, 0xffffff, 0.6);
+      this.line.beginPath();
+      this.line.moveTo(0, 0);
+      this.line.lineTo(this.bobber.x, this.bobber.y);
+      this.line.strokePath();
+    }
+  }
+
+  reel(): { success: boolean; fish: boolean } {
+    if (this.state === "waiting" && this.hasBite) {
+      this.reset();
+      return { success: true, fish: true };
+    }
+    // Reeled too early or too late
+    this.reset();
+    return { success: false, fish: false };
+  }
+
+  reset(): void {
+    this.state = "idle";
+    this.hasBite = false;
+    this.bobber.setVisible(false);
+    this.line.clear();
+  }
+
+  destroy(): void {
+    this.line.destroy();
+    this.bobber.destroy();
+    this.container.destroy();
+    this.alive = false;
+  }
+}/** A captured creature deployed as a combat ally — follows player, attacks hostiles. */
 class DeployedAlly {
   container: Phaser.GameObjects.Container;
   private alive = true;
@@ -1379,8 +2361,12 @@ export class WorldLayer {
   private damageFlash!: Phaser.GameObjects.Rectangle;
   creatures: Creature[] = [];
   beasts: LegendaryBeast[] = [];
+  slugs: Slug[] = [];
   private stones: Stone[] = [];
   private friendlies: FriendlyCreature[] = [];
+  private dogs: Dog[] = [];
+  private fetchBalls: FetchBall[] = [];
+  private leprechauns: Leprechaun[] = [];
   private hp = MAX_HP;
   private currentAmbientBiome: string | null = null;
   private tennisChunks = new Set<string>();
@@ -1388,13 +2374,21 @@ export class WorldLayer {
   private lastSpawnTime = 0;
   private lastBeastTime = 0;
   private lastFriendlySpawnTime = 0;
+  private lastSlugSpawnTime = 0;
+  private lastDogSpawnTime = 0;
+  private lastLeprechaunSpawnTime = 0;
+
+  // --- inventory ---
+  inventory = new Inventory();
 
   // --- golf state ---
-  private hasGolfClub = false;
+  /** Speedrun timer: timestamp when golf club was first picked up (null = not started). */
+  speedrunStartTime: number | null = null;
   private golfBall: Phaser.GameObjects.Image | null = null;
   private golfBallVx = 0;
   private golfBallVy = 0;
   private golfBallActive = false;
+  private golfLastClub: string | null = null;
   private golfHint!: HintTag;
   private golfPowerBar!: Phaser.GameObjects.Graphics;
   private golfPower = 0; // 0..1 oscillating
@@ -1403,11 +2397,12 @@ export class WorldLayer {
   private golfHolesSunk = 0;
   private golfStrokes = 0; // strokes on current hole
   private golfTotalStrokes = 0; // total strokes across all holes
+  private golfPar = 0; // par for current hole (0 = not yet computed)
+  private golfTotalPar = 0; // total par across all holes played
   private golfFlagCacheKey = "";
   private golfFlagCache: { flagX: number; flagY: number; foundFlag: boolean } | null = null;
 
   // --- tennis state ---
-  private hasTennisRacket = false;
   private tennisBall: Phaser.GameObjects.Image | null = null;
   private tennisBallVx = 0;
   private tennisBallVy = 0;
@@ -1423,7 +2418,6 @@ export class WorldLayer {
   private tennisWallCache: { wallX: number; wallY: number; foundWall: boolean } | null = null;
 
   // --- axe / leprechaun / big tree state ---
-  private hasAxe = false;
   private axeHint!: HintTag;
   private bigTreesChopped = 0;
 
@@ -1435,7 +2429,6 @@ export class WorldLayer {
   private weaponCooldownBar!: Phaser.GameObjects.Graphics;
   private lastNoWeaponToast = 0;
   private voidShards = 0;
-  private ownedWeapons: WeaponType[] = [];
 
   // --- nemesis registry ---
   nemesis = new NemesisRegistry();
@@ -1457,8 +2450,41 @@ export class WorldLayer {
   private flowers = 0;
   private flowerHint!: HintTag;
 
+  // --- dog fetch state ---
+  private fetchHint!: HintTag;
+
+  // --- leprechaun NPC state ---
+  private lepHint!: HintTag;
+
+  // --- cabin building state ---
+  private buildHint!: HintTag;
+  private cabinBuilt = false;
+  private cabinTileX = -1;
+  private cabinTileY = -1;
+
+  // --- wife NPC + fishing state ---
+  private wife: Wife | null = null;
+  private fishingLine: FishingLine | null = null;
+  private fishHint!: HintTag;
+  private fishCaught = 0;
+  private campfireSprite: Phaser.GameObjects.Sprite | null = null;
+
+  // --- leprechaun dark twist state ---
+  private lepTradesDone = 0;
+  private darkTwistTriggered = false;
+  private darkTwistPhase = 0; // 0=not started, 1=lep appears, 2=monologue, 3=wife fades, 4=rift opens, 5=complete
+  private darkTwistTimer = 0;
+  private darkLepContainer: Phaser.GameObjects.Container | null = null;
+  private darkLepSprite: Phaser.GameObjects.Sprite | null = null;
+  private darkLepSpeech: Phaser.GameObjects.Text | null = null;
+  private darkRiftGfx: Phaser.GameObjects.GameObject | null = null;
+
   /** Current player HP (read-only access for achievement checks). */
   get playerHp(): number { return this.hp; }
+  /** Cabin position for wife NPC spawning (Phase 8). */
+  get cabinPos(): { x: number; y: number } | null {
+    return this.cabinBuilt ? { x: this.cabinTileX, y: this.cabinTileY } : null;
+  }
   /** Clear death state — called by scene after teleport completes. */
   clearDeath(): void { this.isDying = false; }
   private officeGrid: Grid | null = null;
@@ -1526,6 +2552,18 @@ export class WorldLayer {
     // axe / leprechaun / big tree interaction hint
     this.axeHint = createHintTag(scene);
 
+    // fetch / dog interaction hint
+    this.fetchHint = createHintTag(scene);
+
+    // leprechaun NPC interaction hint
+    this.lepHint = createHintTag(scene);
+
+    // cabin building hint
+    this.buildHint = createHintTag(scene);
+
+    // fishing hint
+    this.fishHint = createHintTag(scene);
+
     // weapon cooldown bar — shows above player while on cooldown
     this.weaponCooldownBar = scene.add.graphics().setDepth(410).setVisible(false);
 
@@ -1551,6 +2589,11 @@ export class WorldLayer {
     // lights/vfx/audio/hud, and clears per-instance chunk state.
     this.scene.events.once("shutdown", () => this.destroy());
   }
+
+  /** Public read-only access to owned weapons (for scene snapshot). */
+  get ownedWeaponsList(): string[] { return this.inventory.getOwnedWeapons(); }
+  /** Public read-only access to current weapon (for scene snapshot). */
+  get currentWeapon(): string | null { return this.weapon; }
 
   /** Get hostility level at a pixel position (0–5). */
   getHostilityAt(px: number, py: number): number {
@@ -1761,6 +2804,14 @@ export class WorldLayer {
   healFull(): void {
     this.hp = MAX_HP;
     this.hud.setHealth(this.hp, MAX_HP);
+  }
+
+  /** Heal player by a specific amount (capped at max). */
+  heal(amount: number): void {
+    if (this.hp < MAX_HP) {
+      this.hp = Math.min(MAX_HP, this.hp + amount);
+      this.hud.setHealth(this.hp, MAX_HP);
+    }
   }
 
   /** Get speed multiplier at a pixel position (1 = normal, <1 = slow). */
@@ -2304,6 +3355,11 @@ export class WorldLayer {
     const overlayTextures: Record<number, string> = {
       [TILE.GOLF_CLUB]: "golf-club",
       [TILE.GOLF_BALL]: "golf-ball",
+      [TILE.GOLF_BAG]: "golf-bag",
+      [TILE.DRIVER]: "golf-club",
+      [TILE.IRON_CLUB]: "golf-club",
+      [TILE.WEDGE]: "golf-club",
+      [TILE.PUTTER]: "golf-club",
       [TILE.BIG_TREE]: "big-tree",
       [TILE.BIG_ROCK]: "big-rock",
       [TILE.PALM_TREE]: "palm-tree",
@@ -2316,10 +3372,16 @@ export class WorldLayer {
       [TILE.TENNIS_RACKET]: "tennis-racket",
       [TILE.TENNIS_BALL]: "tennis-ball",
       [TILE.TENNIS_NET]: "tennis-net",
+      [TILE.CABIN_WALL]: "cabin-wall",
+      [TILE.CABIN_DOOR]: "cabin-door",
+      [TILE.CABIN_WINDOW]: "cabin-window",
+      [TILE.CABIN_ROOF]: "cabin-roof",
+      [TILE.LAKE_SHORE]: "lake-shore",
     };
 
     const edgeTileColors: Record<number, string> = {
       [TILE.WATER]: "rgba(42,80,110,0.7)",
+      [TILE.LAKE]: "rgba(30,60,90,0.7)",
       [TILE.POND]: "rgba(40,70,50,0.6)",
       [TILE.LAVA]: "rgba(30,8,4,0.8)",
       [TILE.ACID]: "rgba(50,80,16,0.6)",
@@ -2349,7 +3411,9 @@ export class WorldLayer {
     const ctx = canvasTex.getContext();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    const worldTilesTex = this.scene.textures.get("world-tiles");
+    const worldTilesTex = this.scene.textures.exists("world-tiles-theme")
+      ? this.scene.textures.get("world-tiles-theme")
+      : this.scene.textures.get("world-tiles");
 
     const job: RenderJob = {
       chunk, texKey, canvasTex, ctx, ssTilePx, SS,
@@ -2367,7 +3431,8 @@ export class WorldLayer {
     const y = job.currentRow;
 
     const tileToFrame = (tile: number, variant: number): number => {
-      if (tile === TILE.WATER) return 21;
+      if (tile === TILE.WATER || tile === TILE.LAKE) return 21;
+      if (tile === TILE.LAKE_SHORE) return TILE.SAND + variant * WORLD_TILE_FRAMES;
       if (tile >= 22) return TILE.GRASS + variant * WORLD_TILE_FRAMES;
       return tile + variant * WORLD_TILE_FRAMES;
     };
@@ -2700,6 +3765,13 @@ export class WorldLayer {
           waterSprite.play({ key: "water-anim", repeat: -1 }, true);
           container.add(waterSprite);
         }
+        if (tile === TILE.LAKE && (x % 3 === 0) && (y % 3 === 0)) {
+          const lakeSprite = this.scene.add.sprite(ox + px, oy + py, "world-tiles", 21);
+          lakeSprite.setOrigin(0, 0);
+          lakeSprite.play({ key: "water-anim", repeat: -1 }, true);
+          lakeSprite.setTint(0x4488aa);
+          container.add(lakeSprite);
+        }
 
         if (tile === TILE.FOUNTAIN) {
           const fountainSprite = this.scene.add.sprite(
@@ -2973,6 +4045,49 @@ export class WorldLayer {
         }
       }
 
+      // --- spawn slugs in the meadow (hostility 0) — garden pests ---
+      if (this.slugs.length < SLUG_CAP && time - this.lastSlugSpawnTime > 2000 + Math.random() * 3000) {
+        this.lastSlugSpawnTime = time;
+        if (Math.round(hostility) === 0) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 150 + Math.random() * 250;
+          const sx = playerX + Math.cos(angle) * dist;
+          const sy = playerY + Math.sin(angle) * dist;
+          const { tx, ty } = this.pixelToTile(sx, sy);
+          if (this.isCreatureWalkable(tx, ty)) {
+            this.slugs.push(new Slug(this, sx, sy));
+          }
+        }
+      }
+
+      // --- spawn dog in meadow (hostility 0) — friendly fetch companion ---
+      if (this.dogs.length === 0 && time - this.lastDogSpawnTime > 8000 && Math.round(hostility) === 0) {
+        this.lastDogSpawnTime = time;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 200 + Math.random() * 200;
+        const sx = playerX + Math.cos(angle) * dist;
+        const sy = playerY + Math.sin(angle) * dist;
+        const { tx, ty } = this.pixelToTile(sx, sy);
+        if (this.isCreatureWalkable(tx, ty)) {
+          this.dogs.push(new Dog(this, sx, sy));
+          this.store.toast("🐶 A friendly dog appeared near the water!");
+        }
+      }
+
+      // --- spawn leprechaun NPC in forest/ruins/wasteland (hostility >= 2) ---
+      if (this.leprechauns.length === 0 && time - this.lastLeprechaunSpawnTime > 15000 && hostility >= 2) {
+        this.lastLeprechaunSpawnTime = time;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 250 + Math.random() * 200;
+        const sx = playerX + Math.cos(angle) * dist;
+        const sy = playerY + Math.sin(angle) * dist;
+        const { tx, ty } = this.pixelToTile(sx, sy);
+        if (this.isCreatureWalkable(tx, ty)) {
+          this.leprechauns.push(new Leprechaun(this, sx, sy));
+          this.store.toast("🍀 A leprechaun is lurking nearby...");
+        }
+      }
+
       // --- throw stones at player from random directions ---
       if (hostility >= 2 && time - this.lastStoneTime > STONE_INTERVAL - hostility * 500) {
         this.lastStoneTime = time;
@@ -3049,6 +4164,25 @@ export class WorldLayer {
       this.stones = [];
       for (const f of this.friendlies) f.destroy();
       this.friendlies = [];
+      for (const sl of this.slugs) sl.destroy();
+      this.slugs = [];
+      for (const dg of this.dogs) dg.destroy();
+      this.dogs = [];
+      for (const fb of this.fetchBalls) fb.destroy();
+      this.fetchBalls = [];
+      for (const lep of this.leprechauns) lep.destroy();
+      this.leprechauns = [];
+      if (this.wife) { this.wife.destroy(); this.wife = null; }
+      if (this.fishingLine) { this.fishingLine.destroy(); this.fishingLine = null; }
+      if (this.campfireSprite) { this.campfireSprite.destroy(); this.campfireSprite = null; }
+      if (this.darkLepContainer) { this.darkLepContainer.destroy(); this.darkLepContainer = null; }
+      if (this.darkLepSpeech) { this.darkLepSpeech.destroy(); this.darkLepSpeech = null; }
+      if (this.darkRiftGfx) { this.darkRiftGfx.destroy(); this.darkRiftGfx = null; }
+      this.darkLepSprite = null;
+      // Preserve phase 8 (twist complete) so empty_cabin achievement can still trigger
+      if (this.darkTwistPhase !== 8) this.darkTwistPhase = 0;
+      this.fishHint.setVisible(false);
+      this.buildHint.setVisible(false);
       // heal in office
       if (this.hp < MAX_HP) {
         this.hp = Math.min(MAX_HP, this.hp + 20 * (dt / 1000));
@@ -3116,6 +4250,52 @@ export class WorldLayer {
       if (fd > 900) f.destroy();
     }
     this.friendlies = this.friendlies.filter((f) => f.alive_);
+
+    // --- update slugs ---
+    for (const sl of this.slugs) {
+      const hit = sl.update(time, dt, playerX, playerY);
+      if (hit && time > this.invulnUntil && !this.isDying) {
+        this.takeDamage(hit.damage, playerX, playerY, time);
+      }
+      const sld = Math.hypot(playerX - sl.container.x, playerY - sl.container.y);
+      if (sld > 900) sl.destroy();
+    }
+    this.slugs = this.slugs.filter((sl) => sl.alive_);
+
+    // --- update fetch balls ---
+    for (const fb of this.fetchBalls) {
+      fb.update(dt);
+    }
+    this.fetchBalls = this.fetchBalls.filter((fb) => fb.alive);
+
+    // --- update dogs ---
+    for (const dg of this.dogs) {
+      dg.update(time, dt, playerX, playerY);
+      const dd = Math.hypot(playerX - dg.container.x, playerY - dg.container.y);
+      if (dd > 1200) dg.destroy();
+    }
+    this.dogs = this.dogs.filter((dg) => dg.alive_);
+
+    // --- update leprechauns ---
+    for (const lep of this.leprechauns) {
+      lep.update(time, dt, playerX, playerY);
+      const ld = Math.hypot(playerX - lep.container.x, playerY - lep.container.y);
+      if (ld > 1500) lep.destroy();
+    }
+    this.leprechauns = this.leprechauns.filter((lep) => lep.alive_);
+
+    // --- update wife NPC ---
+    if (this.wife) {
+      this.wife.update(time, dt, playerX, playerY);
+    }
+
+    // --- update fishing line ---
+    if (this.fishingLine) {
+      this.fishingLine.update(time);
+    }
+
+    // --- update leprechaun dark twist ---
+    this.updateDarkTwist(time, playerX, playerY);
 
     // --- update deployed allies ---
     for (const a of this.deployedAllies) {
@@ -3185,6 +4365,21 @@ export class WorldLayer {
           const dist = Math.hypot(this.arrow.x - b.container.x, this.arrow.y - b.container.y);
           if (dist < 30) {
             b.takeDamage(this.arrowDamage);
+            this.vfx.sparkBurst(this.arrow.x, this.arrow.y, 0x44ffdd, 10, 80);
+            this.audio.hit();
+            hitSomething = true;
+            break;
+          }
+        }
+      }
+
+      // Check slug collisions
+      if (!hitSomething) {
+        for (const sl of this.slugs) {
+          if (!sl.alive_) continue;
+          const dist = Math.hypot(this.arrow.x - sl.container.x, this.arrow.y - sl.container.y);
+          if (dist < 24) {
+            sl.takeDamage(this.arrowDamage);
             this.vfx.sparkBurst(this.arrow.x, this.arrow.y, 0x44ffdd, 10, 80);
             this.audio.hit();
             hitSomething = true;
@@ -3286,12 +4481,17 @@ export class WorldLayer {
         const ballDt = dt / 1000;
         this.golfBall.x += this.golfBallVx * ballDt;
         this.golfBall.y += this.golfBallVy * ballDt;
-        // friction — ball slows down
-        this.golfBallVx *= 0.985;
-        this.golfBallVy *= 0.985;
-        // check if ball reached the flag
+        // terrain-based friction
         const { tx: btx, ty: bty } = this.pixelToTile(this.golfBall.x, this.golfBall.y);
         const ballTile = this.getTileAt(btx, bty);
+        let friction = 0.985; // default (grass)
+        if (ballTile === TILE.FAIRWAY) friction = 0.992; // rolls far
+        else if (ballTile === TILE.SAND_TRAP) friction = this.golfLastClub === "wedge" ? 0.975 : 0.92; // wedge escapes sand
+        else if (ballTile === TILE.TEE_BOX) friction = 0.995; // tee off, minimal drag
+        else if (ballTile === TILE.POND) friction = 0.8; // water — ball stops fast
+        this.golfBallVx *= friction;
+        this.golfBallVy *= friction;
+        // check if ball reached the flag
         if (ballTile === TILE.GOLF_FLAG) {
           // SUNK!
           const bx = this.golfBall.x;
@@ -3304,12 +4504,25 @@ export class WorldLayer {
           this.vfx.celebrate(bx, by);
           this.vfx.sparkBurst(bx, by, 0xffdd44, 30, 120);
           this.vfx.shake("medium");
-          const scoreLabel = this.golfStrokes === 1 ? "HOLE IN ONE!" : this.golfStrokes <= 3 ? "Great round!" : this.golfStrokes <= 5 ? "Nice!" : "Sunk it!";
-          this.store.toast(`${scoreLabel} 🏌️ Hole ${this.golfHolesSunk}: ${this.golfStrokes} stroke${this.golfStrokes > 1 ? "s" : ""}. Total: ${this.golfTotalStrokes}`);
+          const par = this.golfPar || 4;
+          const diff = this.golfStrokes - par;
+          let scoreLabel: string;
+          if (this.golfStrokes === 1) scoreLabel = "HOLE IN ONE!";
+          else if (diff <= -4) scoreLabel = "CONDOR!";
+          else if (diff === -3) scoreLabel = "ALBATROSS!";
+          else if (diff === -2) scoreLabel = "EAGLE!";
+          else if (diff === -1) scoreLabel = "BIRDIE!";
+          else if (diff === 0) scoreLabel = "PAR!";
+          else scoreLabel = "Sunk it!";
+          this.golfTotalPar += par;
+          const vsPar = this.golfTotalStrokes - this.golfTotalPar;
+          const vsParStr = vsPar <= 0 ? `${vsPar} under par` : `+${vsPar} over par`;
+          this.store.toast(`${scoreLabel} 🏌️ Hole ${this.golfHolesSunk}: ${this.golfStrokes} stroke${this.golfStrokes > 1 ? "s" : ""} (par ${par}). Total: ${this.golfTotalStrokes} (${vsParStr})`);
           achievements.unlock("hole_in_one");
           this.audio.recruit(); // celebratory sound
           // reset strokes for next hole
           this.golfStrokes = 0;
+          this.golfPar = 0;
           // spawn ball at the next hole's tee box
           const spawned = this.spawnBallAtNextHole(btx, bty);
           if (spawned) {
@@ -3317,19 +4530,87 @@ export class WorldLayer {
           } else {
             this.store.toast("No more holes nearby — explore to find more! 🏌️");
           }
-        } else if (Math.hypot(this.golfBallVx, this.golfBallVy) < 5) {
-          // ball stopped — place it on the ground so player can hit it again
+        } else if (ballTile === TILE.POND && Math.hypot(this.golfBallVx, this.golfBallVy) < 15) {
+          // water hazard — ball sinks in pond
+          const wx = this.golfBall.x;
+          const wy = this.golfBall.y;
           this.golfBallActive = false;
-          this.setTileAt(btx, bty, TILE.GOLF_BALL);
           this.golfBall?.setVisible(false);
           this.golfBall = null;
-          this.store.toast(`Ball stopped. Stroke ${this.golfStrokes}. Walk up and hit again! 🏌️`);
+          this.golfStrokes++; // penalty stroke
+          const par = this.golfPar || 4;
+          if (this.golfStrokes >= par && this.golfFlagCache?.foundFlag) {
+            // penalty reached par — auto-sink, no bogey
+            this.store.toast(`💦 Water hazard! +1 penalty. The course guides your ball home... ✨ (par ${par} reached)`);
+            achievements.unlock("water_hazard");
+            this.vfx.sparkBurst(wx, wy, 0x4488ff, 12, 60);
+            // launch ball to flag from water edge
+            const dropPx = btx * TILE_PX + TILE_PX / 2 + this.offset.x;
+            const dropPy = (bty - 1) * TILE_PX + TILE_PX / 2 + this.offset.y;
+            const dx = this.golfFlagCache.flagX - dropPx;
+            const dy = this.golfFlagCache.flagY - dropPy;
+            const dist = Math.hypot(dx, dy);
+            const autoSpeed = Math.max(dist * 3, 200);
+            this.golfBallVx = (dx / dist) * autoSpeed;
+            this.golfBallVy = (dy / dist) * autoSpeed;
+            this.golfBall = this.scene.add.image(dropPx, dropPy, resolveItemTex(this.scene, "golf-ball")).setDepth(50).setScale(0.3);
+            this.golfBallActive = true;
+            this.vfx.sparkBurst(dropPx, dropPy, 0x44ff88, 16, 80);
+          } else {
+            this.store.toast(`💦 Water hazard! +1 penalty stroke. (Stroke ${this.golfStrokes}) Drop near the edge and hit again.`);
+            achievements.unlock("water_hazard");
+            this.vfx.sparkBurst(wx, wy, 0x4488ff, 12, 60);
+            // place ball back on grass near the water's edge
+            const dropTx = btx;
+            const dropTy = bty - 1;
+            if (this.getTileAt(dropTx, dropTy) !== TILE.POND) {
+              this.setTileAt(dropTx, dropTy, TILE.GOLF_BALL);
+            } else {
+              // try other directions
+              for (const [dx2, dy2] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
+                if (this.getTileAt(btx + dx2, bty + dy2) !== TILE.POND) {
+                  this.setTileAt(btx + dx2, bty + dy2, TILE.GOLF_BALL);
+                  break;
+                }
+              }
+            }
+          }
+        } else if (Math.hypot(this.golfBallVx, this.golfBallVy) < 5) {
+          // ball stopped — check if player has reached par (no bogey allowed)
+          const par = this.golfPar || 4;
+          if (this.golfStrokes >= par && this.golfFlagCache?.foundFlag) {
+            // AUTO-SINK: the course guides the ball home — no bogey possible
+            const bx = this.golfBall.x;
+            const by = this.golfBall.y;
+            const dx = this.golfFlagCache.flagX - bx;
+            const dy = this.golfFlagCache.flagY - by;
+            const dist = Math.hypot(dx, dy);
+            const autoSpeed = Math.max(dist * 3, 200);
+            this.golfBallVx = (dx / dist) * autoSpeed;
+            this.golfBallVy = (dy / dist) * autoSpeed;
+            this.vfx.sparkBurst(bx, by, 0x44ff88, 16, 80);
+            this.store.toast(`The course guides your ball home... ✨ (par ${par} reached)`);
+            // keep ball active — it will sink on next frame when it hits the flag
+          } else {
+            // ball stopped — place it on the ground so player can hit it again
+            this.golfBallActive = false;
+            this.setTileAt(btx, bty, TILE.GOLF_BALL);
+            this.golfBall?.setVisible(false);
+            this.golfBall = null;
+            if (ballTile === TILE.SAND_TRAP) {
+              this.store.toast(`Ball landed in a sand trap! ⛳ Stroke ${this.golfStrokes}. Tip: use a Wedge to escape.`);
+            } else {
+              this.store.toast(`Ball stopped. Stroke ${this.golfStrokes}. Walk up and hit again! 🏌️`);
+            }
+          }
         }
       }
 
       // scan nearby tiles for golf items (use loaded-only to avoid mid-frame chunk gen)
       let nearestClub: { tx: number; ty: number; d: number } | null = null;
       let nearestBall: { tx: number; ty: number; d: number } | null = null;
+      let nearestGolfBag: { tx: number; ty: number; d: number } | null = null;
+      let nearestClubTile: { tx: number; ty: number; d: number; tile: number } | null = null;
       for (let dy = -2; dy <= 2; dy++) {
         for (let dx = -2; dx <= 2; dx++) {
           const ctx2 = ptx + dx;
@@ -3345,17 +4626,78 @@ export class WorldLayer {
           if (t === TILE.GOLF_BALL && (!nearestBall || d < nearestBall.d)) {
             nearestBall = { tx: ctx2, ty: cty2, d };
           }
+          if (t === TILE.GOLF_BAG && (!nearestGolfBag || d < nearestGolfBag.d)) {
+            nearestGolfBag = { tx: ctx2, ty: cty2, d };
+          }
+          if ((t === TILE.DRIVER || t === TILE.IRON_CLUB || t === TILE.WEDGE || t === TILE.PUTTER) &&
+              (!nearestClubTile || d < nearestClubTile.d)) {
+            nearestClubTile = { tx: ctx2, ty: cty2, d, tile: t };
+          }
         }
       }
 
-      // show hint and handle E press
-      if (nearestClub && nearestClub.d < 100 && !this.hasGolfClub) {
+      // golf bag pickup — introduces inventory system
+      if (nearestGolfBag && nearestGolfBag.d < 100 && !this.inventory.hasItem("golf_bag")) {
+        this.golfHint
+          .setText(isTouchDevice() ? "TAP Pick up golf bag" : "E: Pick up golf bag")
+          .setPosition(nearestGolfBag.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestGolfBag.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.inventory.addItem("golf_bag");
+          this.setTileAt(nearestGolfBag.tx, nearestGolfBag.ty, TILE.GRASS);
+          this.store.toast("Golf bag! ⛳ Find clubs to fill it. Press 1-6 to swap items.");
+          this.vfx.sparkBurst(
+            nearestGolfBag.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestGolfBag.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0x88cc88, 12, 60,
+          );
+          this.audio.uiClick();
+          achievements.unlock("golf_bag_pickup");
+        }
+      } else if (nearestClubTile && nearestClubTile.d < 100 && !this.inventory.hasItem(
+        nearestClubTile.tile === TILE.DRIVER ? "driver" :
+        nearestClubTile.tile === TILE.IRON_CLUB ? "iron" :
+        nearestClubTile.tile === TILE.WEDGE ? "wedge" : "putter"
+      )) {
+        const clubId =
+          nearestClubTile.tile === TILE.DRIVER ? "driver" :
+          nearestClubTile.tile === TILE.IRON_CLUB ? "iron" :
+          nearestClubTile.tile === TILE.WEDGE ? "wedge" : "putter";
+        const clubName =
+          nearestClubTile.tile === TILE.DRIVER ? "Driver" :
+          nearestClubTile.tile === TILE.IRON_CLUB ? "Iron" :
+          nearestClubTile.tile === TILE.WEDGE ? "Sand Wedge" : "Putter";
+        const clubToast =
+          nearestClubTile.tile === TILE.DRIVER ? "Driver! High power, low accuracy. Press the slot number to equip." :
+          nearestClubTile.tile === TILE.IRON_CLUB ? "Iron! Versatile mid-range club." :
+          nearestClubTile.tile === TILE.WEDGE ? "Sand Wedge! Escapes sand traps. Try it!" :
+          "Putter! Low power, pinpoint accuracy.";
+        this.golfHint
+          .setText(isTouchDevice() ? `TAP Pick up ${clubName}` : `E: Pick up ${clubName}`)
+          .setPosition(nearestClubTile.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestClubTile.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.inventory.addItem(clubId);
+          this.equipWeapon("golf_club");
+          this.setTileAt(nearestClubTile.tx, nearestClubTile.ty, TILE.TEE_BOX);
+          this.store.toast(`Picked up ${clubName}! ${clubToast}`);
+          this.vfx.sparkBurst(
+            nearestClubTile.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestClubTile.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0x88cc88, 10, 60,
+          );
+          achievements.unlock("club_pickup");
+          if (this.speedrunStartTime === null) {
+            this.speedrunStartTime = Date.now();
+          }
+        }
+      } else if (nearestClub && nearestClub.d < 100 && !this.inventory.hasGolfClub()) {
         this.golfHint
           .setText(isTouchDevice() ? "TAP Pick up golf club" : "E: Pick up golf club")
           .setPosition(nearestClub.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestClub.ty * TILE_PX + this.offset.y - 10)
           .setVisible(true);
         if (ePressed) {
-          this.hasGolfClub = true;
+          this.inventory.addItem("golf_club");
           this.equipWeapon("golf_club");
           this.setTileAt(nearestClub.tx, nearestClub.ty, TILE.TEE_BOX);
           this.store.toast("Picked up golf club! ⛳ Press SPACE to swing.");
@@ -3365,8 +4707,11 @@ export class WorldLayer {
             0x88cc88, 10, 60,
           );
           achievements.unlock("club_pickup");
+          if (this.speedrunStartTime === null) {
+            this.speedrunStartTime = Date.now();
+          }
         }
-      } else if (nearestBall && nearestBall.d < 100 && this.hasGolfClub && !this.golfBallActive) {
+      } else if (nearestBall && nearestBall.d < 100 && this.inventory.hasGolfClub() && !this.golfBallActive) {
         // find the flag direction — cached per ball tile to avoid 41x41 scan every frame
         const ballKey = `${nearestBall.tx},${nearestBall.ty}`;
         let flagX = 0, flagY = 0, foundFlag = false;
@@ -3384,14 +4729,30 @@ export class WorldLayer {
           }
           this.golfFlagCacheKey = ballKey;
           this.golfFlagCache = { flagX, flagY, foundFlag };
+          // compute par for this hole based on ball-to-flag distance (generous)
+          if (foundFlag && this.golfPar === 0) {
+            const flagTileX = Math.round((flagX - this.offset.x) / TILE_PX - 0.5);
+            const flagTileY = Math.round((flagY - this.offset.y) / TILE_PX - 0.5);
+            const tileDist = Math.hypot(flagTileX - nearestBall.tx, flagTileY - nearestBall.ty);
+            this.golfPar = Math.max(4, Math.ceil(tileDist / 4) + 2);
+          }
         }
         const ballPx = nearestBall.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
         const ballPy = nearestBall.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
 
+        // club type modifiers
+        const activeClub = this.inventory.getActiveClub();
+        const clubName = activeClub === "driver" ? "Driver" : activeClub === "iron" ? "Iron" : activeClub === "wedge" ? "Wedge" : activeClub === "putter" ? "Putter" : "Club";
+        // power range per club type
+        const powerMin = activeClub === "putter" ? 0.05 : activeClub === "wedge" ? 0.15 : activeClub === "iron" ? 0.2 : 0.25;
+        const powerMax = activeClub === "putter" ? 0.35 : activeClub === "wedge" ? 0.7 : activeClub === "iron" ? 0.85 : 1.0;
+        // accuracy: deviation in radians (0 = perfect)
+        const inaccuracy = activeClub === "putter" ? 0 : activeClub === "wedge" ? 0.03 : activeClub === "iron" ? 0.08 : 0.15;
+
         // power bar is active — oscillate and show above player
         this.golfPowerActive = true;
         this.golfHint
-          .setText(`E: Swing! (stroke ${this.golfStrokes + 1})`)
+          .setText(`${isTouchDevice() ? "TAP" : "E"}: Swing ${clubName}! (stroke ${this.golfStrokes + 1}${this.golfPar ? `, par ${this.golfPar}` : ""})`)
           .setPosition(ballPx, ballPy - 30)
           .setVisible(true);
 
@@ -3405,11 +4766,13 @@ export class WorldLayer {
         const barH = 8;
         const barX = playerX - barW / 2;
         const barY = playerY - 110;
-        const power = this.golfPower;
+        // map raw 0..1 to club power range for display
+        const displayPower = powerMin + this.golfPower * (powerMax - powerMin);
+        const power = displayPower;
         // color: blue (0x4488ff) at 0 → yellow (0xffdd44) at 0.5 → red (0xff4444) at 1
-        const r = Math.floor(0x44 + (0xff - 0x44) * power);
-        const g = Math.floor(0x88 + (0x44 - 0x88) * power);
-        const b = Math.floor(0xff + (0x44 - 0xff) * power);
+        const r = Math.floor(0x44 + (0xff - 0x44) * this.golfPower);
+        const g = Math.floor(0x88 + (0x44 - 0x88) * this.golfPower);
+        const b = Math.floor(0xff + (0x44 - 0xff) * this.golfPower);
         const fillColor = (r << 16) | (g << 8) | b;
 
         this.golfPowerBar.clear();
@@ -3418,21 +4781,39 @@ export class WorldLayer {
         this.golfPowerBar.fillRoundedRect(barX - 2, barY - 2, barW + 4, barH + 4, 3);
         // fill
         this.golfPowerBar.fillStyle(fillColor, 1);
-        this.golfPowerBar.fillRoundedRect(barX, barY, barW * power, barH, 2);
+        this.golfPowerBar.fillRoundedRect(barX, barY, barW * this.golfPower, barH, 2);
         // border
         this.golfPowerBar.lineStyle(1, 0xffffff, 0.5);
         this.golfPowerBar.strokeRoundedRect(barX, barY, barW, barH, 2);
         this.golfPowerBar.setVisible(true);
 
         if (ePressed) {
-          // capture power: 0.15 (min) to 1.0 (max) → speed 120 to 550
-          const hitSpeed = 120 + power * 430;
-          if (foundFlag) {
+          // capture power mapped to club range → speed
+          const hitSpeed = 80 + power * 480;
+          this.golfLastClub = activeClub;
+          // check if ball is on a sand trap
+          const ballTileType = this.getTileAtLoaded(nearestBall.tx, nearestBall.ty);
+          const isMagicalWedgeShot = activeClub === "wedge" && ballTileType === TILE.SAND_TRAP;
+          if (isMagicalWedgeShot && foundFlag) {
+            // MAGICAL WEDGE — auto hole in one from sand!
             const dx = flagX - ballPx;
             const dy = flagY - ballPy;
             const dist = Math.hypot(dx, dy);
-            this.golfBallVx = (dx / dist) * hitSpeed;
-            this.golfBallVy = (dy / dist) * hitSpeed;
+            const magicSpeed = Math.max(dist * 3, 200);
+            this.golfBallVx = (dx / dist) * magicSpeed;
+            this.golfBallVy = (dy / dist) * magicSpeed;
+            this.vfx.sparkBurst(ballPx, ballPy, 0x44ff88, 24, 100);
+            this.store.toast("✨ MAGICAL WEDGE! The sand glows green... the ball flies true! ✨");
+            achievements.unlock("magical_wedge");
+          } else if (foundFlag) {
+            const dx = flagX - ballPx;
+            const dy = flagY - ballPy;
+            let angle = Math.atan2(dy, dx);
+            if (inaccuracy > 0) {
+              angle += (Math.random() - 0.5) * 2 * inaccuracy;
+            }
+            this.golfBallVx = Math.cos(angle) * hitSpeed;
+            this.golfBallVy = Math.sin(angle) * hitSpeed;
           } else {
             this.golfBallVx = 0;
             this.golfBallVy = hitSpeed;
@@ -3441,11 +4822,13 @@ export class WorldLayer {
           this.golfBallActive = true;
           this.golfStrokes++;
           this.setTileAt(nearestBall.tx, nearestBall.ty, TILE.TEE_BOX);
-          this.vfx.sparkBurst(ballPx, ballPy, 0xffffff, 8 + Math.floor(power * 16), 60 + power * 80);
+          if (!isMagicalWedgeShot) {
+            this.vfx.sparkBurst(ballPx, ballPy, 0xffffff, 8 + Math.floor(power * 16), 60 + power * 80);
+          }
           this.audio.golfSwing();
           achievements.unlock("first_swing");
-          const powerLabel = power > 0.75 ? "POWER DRIVE!" : power > 0.4 ? "Nice shot!" : "Soft tap.";
-          this.store.toast(`Fore! ${powerLabel} Stroke ${this.golfStrokes}. 🏏`);
+          const powerLabel = isMagicalWedgeShot ? "MAGICAL!" : this.golfPower > 0.75 ? "POWER DRIVE!" : this.golfPower > 0.4 ? "Nice shot!" : "Soft tap.";
+          this.store.toast(`Fore! ${clubName} — ${powerLabel} Stroke ${this.golfStrokes}. 🏌️`);
           // reset power bar
           this.golfPowerActive = false;
           this.golfPower = 0;
@@ -3482,7 +4865,10 @@ export class WorldLayer {
         this.arrowActive = false;
       }
       this.captureHint.setVisible(false);
-      // recall deployed allies when entering office
+      this.fetchHint.setVisible(false);
+      this.lepHint.setVisible(false);
+      this.buildHint.setVisible(false);
+      this.fishHint.setVisible(false);
       if (this.deployedAllies.length > 0) {
         this.recallAllies();
       }
@@ -3587,13 +4973,14 @@ export class WorldLayer {
       }
 
       // show hint and handle E press for racket pickup
-      if (nearestRacket && nearestRacket.d < 100 && !this.hasTennisRacket) {
+      if (nearestRacket && nearestRacket.d < 100 && !this.inventory.hasItem("tennis_racket")) {
         this.tennisHint
           .setText(isTouchDevice() ? "TAP Pick up tennis racket" : "E: Pick up tennis racket")
           .setPosition(nearestRacket.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestRacket.ty * TILE_PX + this.offset.y - 10)
           .setVisible(true);
         if (ePressed) {
-          this.hasTennisRacket = true;
+          this.inventory.addItem("tennis_racket");
+          this.inventory.addItem("tennis_ball", 3);
           this.equipWeapon("tennis_racket");
           this.setTileAt(nearestRacket.tx, nearestRacket.ty, TILE.TENNIS_COURT);
           this.store.toast("Picked up tennis racket! 🎾 Press SPACE to bonk.");
@@ -3604,7 +4991,7 @@ export class WorldLayer {
           );
           achievements.unlock("tennis_pickup");
         }
-      } else if (nearestTennisBall && nearestTennisBall.d < 100 && this.hasTennisRacket && !this.tennisBallActive) {
+      } else if (nearestTennisBall && nearestTennisBall.d < 100 && this.inventory.hasItem("tennis_racket") && !this.tennisBallActive) {
         // find the nearest wall — cached per ball tile
         const ballKey = `${nearestTennisBall.tx},${nearestTennisBall.ty}`;
         let wallX = 0, wallY = 0, foundWall = false;
@@ -3754,6 +5141,244 @@ export class WorldLayer {
       this.flowerHint.setVisible(false);
     }
 
+    // --- dog fetch: throw ball into water ---
+    if (outside) {
+      let nearestWater: { x: number; y: number; d: number } | null = null;
+      const { tx: wptx, ty: wpty } = this.pixelToTile(playerX, playerY);
+      for (let dy = -6; dy <= 6; dy++) {
+        for (let dx = -6; dx <= 6; dx++) {
+          const wtx = wptx + dx;
+          const wty = wpty + dy;
+          const tile = this.getTileAtLoaded(wtx, wty);
+          if (tile === TILE.WATER || tile === TILE.POND) {
+            const wx = wtx * TILE_PX + TILE_PX / 2 + this.offset.x;
+            const wy = wty * TILE_PX + TILE_PX / 2 + this.offset.y;
+            const d = Math.hypot(playerX - wx, playerY - wy);
+            if (!nearestWater || d < nearestWater.d) {
+              nearestWater = { x: wx, y: wy, d };
+            }
+          }
+        }
+      }
+
+      const hasBall = this.inventory.hasItem("tennis_ball") || this.inventory.hasItem("stick");
+      const hasDog = this.dogs.length > 0;
+      if (nearestWater && nearestWater.d < 400 && hasBall && hasDog) {
+        this.fetchHint
+          .setText(isTouchDevice() ? "TAP Throw ball" : "E: Throw ball 🎾")
+          .setPosition(nearestWater.x, nearestWater.y - 20)
+          .setVisible(true);
+        if (ePressed) {
+          // consume the item — try tennis ball first, then stick
+          if (!this.inventory.removeItem("tennis_ball")) {
+            this.inventory.removeItem("stick");
+          }
+          // throw ball toward water
+          const dx = nearestWater.x - playerX;
+          const dy = nearestWater.y - playerY;
+          const dist = Math.hypot(dx, dy);
+          const speed = 200;
+          const vx = (dx / dist) * speed;
+          const vy = (dy / dist) * speed;
+          const ball = new FetchBall(this.scene, playerX, playerY - 10, vx, vy, nearestWater.x, nearestWater.y);
+          this.fetchBalls.push(ball);
+          // assign nearest dog to fetch
+          let nearestDog: Dog | null = null;
+          let nearestDogDist = Infinity;
+          for (const dg of this.dogs) {
+            const d = Math.hypot(dg.container.x - nearestWater.x, dg.container.y - nearestWater.y);
+            if (d < nearestDogDist) {
+              nearestDogDist = d;
+              nearestDog = dg;
+            }
+          }
+          if (nearestDog) {
+            nearestDog.fetchBall(ball);
+          }
+          this.vfx.sparkBurst(playerX, playerY - 10, 0xccff44, 6, 40);
+          this.audio.uiClick();
+        }
+      } else {
+        this.fetchHint.setVisible(false);
+      }
+    } else {
+      this.fetchHint.setVisible(false);
+    }
+
+    // --- NPC leprechaun interaction ---
+    if (outside && this.leprechauns.length > 0) {
+      let nearestLepNPC: Leprechaun | null = null;
+      let nearestLepDist = Infinity;
+      for (const lep of this.leprechauns) {
+        if (!lep.alive_) continue;
+        const d = Math.hypot(playerX - lep.container.x, playerY - lep.container.y);
+        if (d < nearestLepDist) {
+          nearestLepDist = d;
+          nearestLepNPC = lep;
+        }
+      }
+      if (nearestLepNPC && nearestLepDist < 100) {
+        const step = nearestLepNPC.tradeStep_;
+        if (step && this.inventory.getQuantity(step.require) >= step.requireCount) {
+          this.lepHint
+            .setText(isTouchDevice() ? `TAP Trade ${step.require} → ${step.give}` : `E: Trade ${step.require} → ${step.give} 🍀`)
+            .setPosition(nearestLepNPC.container.x, nearestLepNPC.container.y - 30)
+            .setVisible(true);
+          if (ePressed) {
+            nearestLepNPC.tryInteract(time);
+          }
+        } else if (step) {
+          this.lepHint
+            .setText(`Bring ${step.requireCount}x ${step.require}`)
+            .setPosition(nearestLepNPC.container.x, nearestLepNPC.container.y - 30)
+            .setVisible(true);
+        } else {
+          this.lepHint.setVisible(false);
+        }
+      } else {
+        this.lepHint.setVisible(false);
+      }
+    } else {
+      this.lepHint.setVisible(false);
+    }
+
+    // --- cabin building near lake shore ---
+    if (outside && !this.cabinBuilt) {
+      const { tx: bptx, ty: bpty } = this.pixelToTile(playerX, playerY);
+      let nearestShore: { tx: number; ty: number; d: number } | null = null;
+      for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const stx = bptx + dx;
+          const sty = bpty + dy;
+          const t = this.getTileAtLoaded(stx, sty);
+          if (t === TILE.LAKE_SHORE) {
+            const sx = stx * TILE_PX + TILE_PX / 2 + this.offset.x;
+            const sy = sty * TILE_PX + TILE_PX / 2 + this.offset.y;
+            const d = Math.hypot(playerX - sx, playerY - sy);
+            if (!nearestShore || d < nearestShore.d) {
+              nearestShore = { tx: stx, ty: sty, d };
+            }
+          }
+        }
+      }
+      const woodCount = this.inventory.getQuantity("wood");
+      if (nearestShore && nearestShore.d < 100 && woodCount >= 10) {
+        this.buildHint
+          .setText(isTouchDevice() ? "TAP Build cabin (10 wood)" : "E: Build cabin (10 wood) 🏠")
+          .setPosition(nearestShore.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestShore.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+        if (ePressed) {
+          this.inventory.removeItem("wood", 10);
+          this.buildCabin(nearestShore.tx, nearestShore.ty);
+          this.store.toast("🏠 Built a cozy cabin by the lake!");
+          this.vfx.celebrate(
+            nearestShore.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestShore.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+          );
+          this.vfx.sparkBurst(
+            nearestShore.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
+            nearestShore.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
+            0xddaa44, 20, 80,
+          );
+          this.audio.uiClick();
+          achievements.unlock("cabin_builder");
+        }
+      } else if (nearestShore && nearestShore.d < 100 && woodCount < 10) {
+        this.buildHint
+          .setText(`Need 10 wood (have ${woodCount})`)
+          .setPosition(nearestShore.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestShore.ty * TILE_PX + this.offset.y - 10)
+          .setVisible(true);
+      } else {
+        this.buildHint.setVisible(false);
+      }
+    } else {
+      this.buildHint.setVisible(false);
+    }
+
+    // --- wife NPC interaction ---
+    if (outside && this.wife) {
+      const wifeDist = Math.hypot(playerX - this.wife.container.x, playerY - this.wife.container.y);
+      if (wifeDist < 80) {
+        const fishCount = this.inventory.getQuantity("fish");
+        const hint = fishCount > 0
+          ? (isTouchDevice() ? "TAP Cook fish (+20 HP)" : "E: Cook fish (+20 HP) 🐟")
+          : (isTouchDevice() ? "TAP Talk" : "E: Talk 💬");
+        this.fishHint
+          .setText(hint)
+          .setPosition(this.wife.container.x, this.wife.container.y - 30)
+          .setVisible(true);
+        if (ePressed) {
+          this.wife.tryInteract(time);
+          achievements.unlock("wife_companion");
+        }
+      } else {
+        this.fishHint.setVisible(false);
+      }
+    } else {
+      this.fishHint.setVisible(false);
+    }
+
+    // --- fishing mechanic ---
+    if (outside && this.inventory.hasItem("fishing_rod")) {
+      // If already fishing, handle reel
+      if (this.fishingLine && this.fishingLine.alive_ && this.fishingLine.state_ !== "idle") {
+        if (ePressed) {
+          const result = this.fishingLine.reel();
+          if (result.success && result.fish) {
+            this.inventory.addItem("fish", 1);
+            this.fishCaught++;
+            this.store.toast("🐟 Caught a fish!");
+            this.vfx.sparkBurst(playerX, playerY, 0x44aaff, 8, 40);
+            this.audio.uiClick();
+            achievements.unlock("first_fish");
+            if (this.fishCaught >= 10) achievements.unlock("fish_master");
+          } else {
+            this.store.toast("The fish got away...");
+          }
+        }
+        this.fishHint
+          .setText(this.fishingLine.hasBite_ ? "E: REEL IN! 🐟" : "Waiting for a bite...")
+          .setPosition(playerX, playerY - 30)
+          .setVisible(true);
+      } else {
+        // Check if near lake water
+        const { tx: ftx, ty: fty } = this.pixelToTile(playerX, playerY);
+        let nearestLake: { tx: number; ty: number; d: number } | null = null;
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const ltx = ftx + dx;
+            const lty = fty + dy;
+            const t = this.getTileAtLoaded(ltx, lty);
+            if (t === TILE.LAKE) {
+              const lx = ltx * TILE_PX + TILE_PX / 2 + this.offset.x;
+              const ly = lty * TILE_PX + TILE_PX / 2 + this.offset.y;
+              const d = Math.hypot(playerX - lx, playerY - ly);
+              if (!nearestLake || d < nearestLake.d) {
+                nearestLake = { tx: ltx, ty: lty, d };
+              }
+            }
+          }
+        }
+        if (nearestLake && nearestLake.d < 120) {
+          this.fishHint
+            .setText(isTouchDevice() ? "TAP Cast line" : "E: Cast line 🎣")
+            .setPosition(playerX, playerY - 30)
+            .setVisible(true);
+          if (ePressed) {
+            if (!this.fishingLine) this.fishingLine = new FishingLine(this);
+            const targetX = nearestLake.tx * TILE_PX + TILE_PX / 2 + this.offset.x;
+            const targetY = nearestLake.ty * TILE_PX + TILE_PX / 2 + this.offset.y;
+            this.fishingLine.cast(playerX, playerY - 10, targetX, targetY, time);
+            this.store.toast("🎣 Cast the line! Wait for a bite...");
+          }
+        } else {
+          this.fishHint.setVisible(false);
+        }
+      }
+    } else if (!this.fishingLine || this.fishingLine.state_ === "idle") {
+      this.fishHint.setVisible(false);
+    }
+
     // --- axe pickup, leprechaun trade, big tree chopping ---
     if (outside) {
       const { tx: ptx2, ty: pty2 } = this.pixelToTile(playerX, playerY);
@@ -3775,16 +5400,17 @@ export class WorldLayer {
           if (t === TILE.PALM_TREE) achievements.unlock("palm_grove");
           if (t === TILE.MYSTIC_TREE) achievements.unlock("mystic_grove");
           if (t === TILE.BIG_ROCK) achievements.unlock("big_rock_hunter");
+          if (t === TILE.LAKE || t === TILE.LAKE_SHORE) achievements.unlock("lake_discovery");
         }
       }
 
-      if (nearestAxe && nearestAxe.d < 100 && !this.hasAxe) {
+      if (nearestAxe && nearestAxe.d < 100 && !this.inventory.hasItem("axe")) {
         this.axeHint
           .setText(isTouchDevice() ? "TAP Pick up axe" : "E: Pick up axe")
           .setPosition(nearestAxe.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestAxe.ty * TILE_PX + this.offset.y - 10)
           .setVisible(true);
         if (ePressed) {
-          this.hasAxe = true;
+          this.inventory.addItem("axe");
           this.equipWeapon("axe");
           this.setTileAt(nearestAxe.tx, nearestAxe.ty, TILE.GRASS);
           this.store.toast("Picked up axe! 🪓 Press SPACE to attack.");
@@ -3795,17 +5421,31 @@ export class WorldLayer {
           );
           this.audio.uiClick();
         }
-      } else if (nearestLep && nearestLep.d < 100 && this.hasGolfClub && !this.hasAxe) {
+      } else if (nearestLep && nearestLep.d < 100 && this.inventory.hasGolfClub() && !this.inventory.hasItem("axe")) {
+        // Legacy: static tile leprechaun still offers one-time club→axe trade
+        const hasWedge = this.inventory.hasItem("wedge");
+        const tradeText = hasWedge
+          ? (isTouchDevice() ? "TAP Trade magical wedge for axe" : "E: Trade magical wedge for axe")
+          : (isTouchDevice() ? "TAP Trade club for axe" : "E: Trade club for axe");
         this.axeHint
-          .setText(isTouchDevice() ? "TAP Trade club for axe" : "E: Trade club for axe")
+          .setText(tradeText)
           .setPosition(nearestLep.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestLep.ty * TILE_PX + this.offset.y - 10)
           .setVisible(true);
         if (ePressed) {
-          this.hasGolfClub = false;
-          this.hasAxe = true;
+          if (hasWedge) {
+            this.inventory.removeItem("wedge");
+          } else {
+            const items = this.inventory.getItems();
+            const clubItem = items.find(i => i && (i.id === "golf_club" || i.id === "driver" || i.id === "iron" || i.id === "wedge" || i.id === "putter"));
+            if (clubItem) this.inventory.removeItem(clubItem.id);
+          }
+          this.inventory.addItem("axe");
           this.equipWeapon("axe");
           this.setTileAt(nearestLep.tx, nearestLep.ty, TILE.GRASS);
-          this.store.toast("Traded golf club for axe! The leprechaun vanishes. 🍀🪓 Press SPACE to attack.");
+          const tradeToast = hasWedge
+            ? "Traded the magical wedge for axe! The leprechaun cackles and vanishes with his prize. 🍀🪓"
+            : "Traded golf club for axe! The leprechaun vanishes. 🍀🪓 Press SPACE to attack.";
+          this.store.toast(tradeToast);
           this.vfx.sparkBurst(
             nearestLep.tx * TILE_PX + TILE_PX / 2 + this.offset.x,
             nearestLep.ty * TILE_PX + TILE_PX / 2 + this.offset.y,
@@ -3818,7 +5458,7 @@ export class WorldLayer {
           this.audio.recruit();
           achievements.unlock("leprechaun_trade");
         }
-      } else if (nearestBigTree && nearestBigTree.d < 100 && this.hasAxe) {
+      } else if (nearestBigTree && nearestBigTree.d < 100 && this.inventory.hasItem("axe")) {
         this.axeHint
           .setText(isTouchDevice() ? "TAP Chop big tree" : "E: Chop big tree")
           .setPosition(nearestBigTree.tx * TILE_PX + TILE_PX / 2 + this.offset.x, nearestBigTree.ty * TILE_PX + this.offset.y - 10)
@@ -3836,6 +5476,10 @@ export class WorldLayer {
           this.audio.hit();
           achievements.unlock("first_chop");
           if (this.bigTreesChopped >= 20) achievements.unlock("lumberjack");
+          // wood + stick drops
+          this.inventory.addItem("wood", 2);
+          if (this.inventory.getQuantity("wood") >= 10) achievements.unlock("wood_gatherer");
+          if (Math.random() < 0.5) this.inventory.addItem("stick", 1);
           // 40% chance of loot
           if (Math.random() < 0.4) {
             achievements.unlock("tree_loot");
@@ -3894,23 +5538,17 @@ export class WorldLayer {
     this.weapon = type;
     this.weaponDamage = def.damage;
     this.weaponCooldownMax = def.cooldown;
-    if (!this.ownedWeapons.includes(type)) {
-      this.ownedWeapons.push(type);
-    }
   }
 
   /** Cycle to next owned weapon. */
   swapWeapon(): void {
-    if (this.ownedWeapons.length <= 1) {
-      this.store.toast("No other weapons to swap to.");
-      return;
+    this.inventory.cycleActive();
+    const activeType = this.inventory.getActiveWeaponType();
+    if (activeType) {
+      this.equipWeapon(activeType);
+      const def = WEAPONS[activeType];
+      this.store.toast(`Equipped: ${def.name} (${def.damage} dmg)`);
     }
-    const currentIdx = this.ownedWeapons.indexOf(this.weapon!);
-    const nextIdx = (currentIdx + 1) % this.ownedWeapons.length;
-    const next = this.ownedWeapons[nextIdx];
-    this.equipWeapon(next);
-    const def = WEAPONS[next];
-    this.store.toast(`Equipped: ${def.name} (${def.damage} dmg)`);
   }
 
   /** Add void shards and check for upgrade threshold. */
@@ -3918,31 +5556,36 @@ export class WorldLayer {
     this.voidShards += count;
     this.store.toast(`+${count} void shard${count > 1 ? "s" : ""} (total: ${this.voidShards})`);
     // Upgrade thresholds: 5 shards → iron sword, 15 → void blade
-    if (this.voidShards >= 5 && !this.ownedWeapons.includes("iron_sword")) {
+    if (this.voidShards >= 5 && !this.inventory.hasItem("iron_sword")) {
+      this.inventory.addItem("iron_sword");
       this.equipWeapon("iron_sword");
       this.voidShards -= 5;
       this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
       this.store.toast("Forged Iron Sword from void shards! (25 dmg, 600ms cd)");
       achievements.unlock("iron_sword_pickup");
-    } else if (this.voidShards >= 15 && !this.ownedWeapons.includes("void_blade")) {
+    } else if (this.voidShards >= 15 && !this.inventory.hasItem("void_blade")) {
+      this.inventory.addItem("void_blade");
       this.equipWeapon("void_blade");
       this.voidShards -= 15;
       this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
       this.store.toast("Forged Void Blade from void shards! (40 dmg, 400ms cd)");
       achievements.unlock("void_blade_pickup");
-    } else if (this.voidShards >= 30 && !this.ownedWeapons.includes("flame_greatsword")) {
+    } else if (this.voidShards >= 30 && !this.inventory.hasItem("flame_greatsword")) {
+      this.inventory.addItem("flame_greatsword");
       this.equipWeapon("flame_greatsword");
       this.voidShards -= 30;
       this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
       this.store.toast("Forged Flame Greatsword! (60 dmg, AoE splash)");
       achievements.unlock("legendary_weapon");
-    } else if (this.voidShards >= 30 && !this.ownedWeapons.includes("void_daggers")) {
+    } else if (this.voidShards >= 30 && !this.inventory.hasItem("void_daggers")) {
+      this.inventory.addItem("void_daggers");
       this.equipWeapon("void_daggers");
       this.voidShards -= 30;
       this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
       this.store.toast("Forged Void Daggers! (35 dmg x2, 300ms cd)");
       achievements.unlock("legendary_weapon");
-    } else if (this.voidShards >= 30 && !this.ownedWeapons.includes("crystal_bow")) {
+    } else if (this.voidShards >= 30 && !this.inventory.hasItem("crystal_bow")) {
+      this.inventory.addItem("crystal_bow");
       this.equipWeapon("crystal_bow");
       this.voidShards -= 30;
       this.vfx.celebrate(this.scene.cameras.main.midPoint.x, this.scene.cameras.main.midPoint.y);
@@ -4006,7 +5649,7 @@ export class WorldLayer {
         nemesis: this.nemesis.serialize(),
         roster: this.capturedRoster,
         voidShards: this.voidShards,
-        ownedWeapons: this.ownedWeapons,
+        inventory: this.inventory.serialize(),
       };
       localStorage.setItem("agentHeights_nemesis", JSON.stringify(data));
     } catch {
@@ -4023,7 +5666,7 @@ export class WorldLayer {
       if (data.nemesis) this.nemesis.deserialize(data.nemesis);
       if (data.roster) this.capturedRoster = data.roster;
       if (data.voidShards) this.voidShards = data.voidShards;
-      if (data.ownedWeapons) this.ownedWeapons = data.ownedWeapons;
+      if (data.inventory) this.inventory.deserialize(data.inventory);
     } catch {
       // ignore corrupt data
     }
@@ -4103,7 +5746,7 @@ export class WorldLayer {
     footer.className = "nemesis-codex-footer";
     footer.innerHTML = `
       <div class="nemesis-footer-stat"><span class="icon"> shards</span> Void Shards: <span class="val">${this.voidShards}</span></div>
-      <div class="nemesis-footer-stat"><span class="icon"> Weapons</span> <span class="val">${this.ownedWeapons.length}</span></div>
+      <div class="nemesis-footer-stat"><span class="icon"> Weapons</span> <span class="val">${this.inventory.getOwnedWeapons().length}</span></div>
     `;
     card.appendChild(footer);
 
@@ -4325,6 +5968,22 @@ export class WorldLayer {
         }
       }
 
+      // Also hit slugs
+      for (const sl of this.slugs) {
+        if (!sl.alive_) continue;
+        const dx = sl.container.x - playerX;
+        const dy = sl.container.y - playerY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > def.range) continue;
+        const angle = Math.atan2(dy, dx);
+        let diff = Math.abs(angle - facingAngle);
+        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff <= hitConeRad) {
+          sl.takeDamage(this.weaponDamage);
+          if (def.hitsTwice) sl.takeDamage(this.weaponDamage);
+        }
+      }
+
       // AoE splash for flame greatsword
       if (def.aoeRadius) {
         for (const c of this.creatures) {
@@ -4339,6 +5998,13 @@ export class WorldLayer {
           const dist = Math.hypot(b.container.x - playerX, b.container.y - playerY);
           if (dist <= def.aoeRadius) {
             b.takeDamage(this.weaponDamage);
+          }
+        }
+        for (const sl of this.slugs) {
+          if (!sl.alive_) continue;
+          const dist = Math.hypot(sl.container.x - playerX, sl.container.y - playerY);
+          if (dist <= def.aoeRadius) {
+            sl.takeDamage(this.weaponDamage);
           }
         }
         this.vfx.shockwave(playerX, playerY, def.color, 3);
@@ -4390,6 +6056,363 @@ export class WorldLayer {
     this.vfx.sparkBurst(endX, endY, color, 6, 60);
   }
 
+  /** Called when a leprechaun trade is completed. */
+  onLeprechaunTrade(tradesCompleted: number): void {
+    achievements.unlock("leprechaun_trade");
+    if (tradesCompleted >= 2) achievements.unlock("leprechaun_dealer");
+    if (tradesCompleted >= 4) {
+      achievements.unlock("leprechaun_master");
+      this.lepTradesDone = 4;
+    }
+  }
+
+  /** Check if the dark twist should trigger — all 4 trades done, cabin built, player near cabin. */
+  private updateDarkTwist(time: number, playerX: number, playerY: number): void {
+    // Trigger condition: all 4 trades done, wife exists, player near cabin, not yet triggered
+    if (!this.darkTwistTriggered && this.lepTradesDone >= 4 && this.wife && this.cabinBuilt) {
+      const cabinPx = this.cabinTileX * TILE_PX + TILE_PX / 2 + this.offset.x;
+      const cabinPy = this.cabinTileY * TILE_PX + TILE_PX / 2 + this.offset.y;
+      const dist = Math.hypot(playerX - cabinPx, playerY - cabinPy);
+      if (dist < 200) {
+        this.startDarkTwist(time, cabinPx, cabinPy);
+      }
+      return;
+    }
+
+    // Advance the dark twist sequence
+    if (this.darkTwistTriggered && this.darkTwistPhase > 0) {
+      this.advanceDarkTwist(time, playerX, playerY);
+    }
+
+    // Check for empty cabin return after dark twist is complete
+    if (this.darkTwistPhase === 8 && this.cabinBuilt) {
+      const cabinPx = this.cabinTileX * TILE_PX + TILE_PX / 2 + this.offset.x;
+      const cabinPy = this.cabinTileY * TILE_PX + TILE_PX / 2 + this.offset.y;
+      const dist = Math.hypot(playerX - cabinPx, playerY - cabinPy);
+      if (dist < 100) {
+        achievements.unlock("empty_cabin");
+      }
+    }
+  }
+
+  /** Begin the dark twist sequence at the cabin. */
+  private startDarkTwist(time: number, cabinX: number, cabinY: number): void {
+    this.darkTwistTriggered = true;
+    this.darkTwistPhase = 1;
+    this.darkTwistTimer = time + 1000; // 1s before lep appears
+
+    // Screen darkening effect
+    this.store.toast("Something is wrong... the air grows cold.");
+    this.vfx?.sparkBurst(cabinX, cabinY, 0xaa00ff, 30, 120);
+
+    // Spawn the dark leprechaun near the cabin
+    const lepX = cabinX + 60;
+    const lepY = cabinY + 20;
+    const scene = this.scene;
+    this.darkLepSprite = scene.add.sprite(0, 0, "leprechaun-npc", 0).setDepth(1).setScale(1.3).setTint(0xaa44ff);
+    this.darkLepContainer = scene.add.container(lepX, lepY, [this.darkLepSprite]).setDepth(30 + lepY);
+    // glow
+    const glow = scene.add.image(0, 0, "void-glow").setDepth(0).setScale(0.8).setAlpha(0.4);
+    this.darkLepContainer.add(glow);
+
+    this.darkLepSpeech = scene.add.text(lepX, lepY - 40, "", {
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      fontSize: "12px",
+      color: "#ddaaff",
+      backgroundColor: "rgba(20,0,30,0.85)",
+      padding: { x: 8, y: 5 },
+      wordWrap: { width: 280 },
+    }).setOrigin(0.5).setDepth(100);
+
+    achievements.unlock("dark_twist");
+  }
+
+  /** Advance through the dark twist phases. */
+  private advanceDarkTwist(time: number, playerX: number, playerY: number): void {
+    if (!this.darkLepContainer || !this.darkLepSpeech) return;
+    const lepX = this.darkLepContainer.x;
+    const lepY = this.darkLepContainer.y;
+
+    // Update speech position
+    this.darkLepSpeech.setPosition(lepX, lepY - 40);
+
+    // Face the player
+    if (this.darkLepSprite) {
+      this.darkLepSprite.setFlipX(playerX < lepX);
+    }
+
+    switch (this.darkTwistPhase) {
+      case 1: // Lep appears, first line
+        if (time >= this.darkTwistTimer) {
+          this.darkLepSpeech.setText("So... ye finally came home to yer little cabin. How cozy.");
+          this.darkTwistPhase = 2;
+          this.darkTwistTimer = time + 4000;
+        }
+        break;
+
+      case 2: // The reveal
+        if (time >= this.darkTwistTimer) {
+          this.darkLepSpeech.setText("Did ye really think a wife would just... appear? Waiting for ye by a lake? Ye built that cabin with wood I led ye to find.");
+          this.darkTwistPhase = 3;
+          this.darkTwistTimer = time + 6000;
+        }
+        break;
+
+      case 3: // Wife is an illusion
+        if (time >= this.darkTwistTimer) {
+          this.darkLepSpeech.setText("She was never real, human. A pretty illusion. A lure. I needed ye settled... comfortable... distracted. And now ye are.");
+          // Start wife fade
+          if (this.wife) {
+            this.wife.speakFromDarkTwist("I... I thought I was... real? Am I... not... real?", 5000);
+            this.scene.tweens.add({
+              targets: this.wife.container,
+              alpha: 0,
+              duration: 4000,
+              ease: "Power2",
+            });
+          }
+          this.darkTwistPhase = 4;
+          this.darkTwistTimer = time + 5000;
+        }
+        break;
+
+      case 4: // The theft + void rift
+        if (time >= this.darkTwistTimer) {
+          this.darkLepSpeech.setText("Thank ye for the gold, the clover, the fish... all of it. Every gift has a price, human. I told ye. I ALWAYS told ye.");
+          // Steal gold coins and four_leaf_clover
+          const goldStolen = this.inventory.getQuantity("gold_coin");
+          if (goldStolen > 0) this.inventory.removeItem("gold_coin", goldStolen);
+          if (this.inventory.hasItem("four_leaf_clover")) this.inventory.removeItem("four_leaf_clover");
+          this.store.toast("💔 The leprechaun stole your gold and four-leaf clover!");
+          this.vfx?.sparkBurst(lepX, lepY, 0xffdd00, 20, 100);
+
+          // Open void rift at cabin center
+          const cabinPx = this.cabinTileX * TILE_PX + TILE_PX / 2 + this.offset.x;
+          const cabinPy = this.cabinTileY * TILE_PX + TILE_PX / 2 + this.offset.y;
+          this.openVoidRift(cabinPx, cabinPy);
+
+          this.darkTwistPhase = 5;
+          this.darkTwistTimer = time + 4000;
+        }
+        break;
+
+      case 5: // Lep vanishes, rift spawns creatures
+        if (time >= this.darkTwistTimer) {
+          this.darkLepSpeech.setText("The void is hungry, human. And ye fed it well. Goodbye... for now.");
+          this.darkTwistPhase = 6;
+          this.darkTwistTimer = time + 3000;
+        }
+        break;
+
+      case 6: // Lep fades, spawn wraiths
+        if (time >= this.darkTwistTimer) {
+          // Fade out the dark leprechaun
+          this.scene.tweens.add({
+            targets: this.darkLepContainer,
+            alpha: 0,
+            duration: 1500,
+            ease: "Power2",
+            onComplete: () => {
+              if (this.darkLepContainer) { this.darkLepContainer.destroy(); this.darkLepContainer = null; }
+              if (this.darkLepSpeech) { this.darkLepSpeech.destroy(); this.darkLepSpeech = null; }
+              this.darkLepSprite = null;
+            },
+          });
+
+          // Destroy wife
+          if (this.wife) {
+            this.wife.destroy();
+            this.wife = null;
+          }
+
+          // Spawn void wraiths near the cabin
+          const cabinPx = this.cabinTileX * TILE_PX + TILE_PX / 2 + this.offset.x;
+          const cabinPy = this.cabinTileY * TILE_PX + TILE_PX / 2 + this.offset.y;
+          for (let i = 0; i < 4; i++) {
+            const angle = (i / 4) * Math.PI * 2;
+            const sx = cabinPx + Math.cos(angle) * 80;
+            const sy = cabinPy + Math.sin(angle) * 80;
+            const { tx, ty } = this.pixelToTile(sx, sy);
+            if (this.isCreatureWalkable(tx, ty)) {
+              const wraith = new Creature(this, sx, sy, 4); // high hostility = wraith
+              this.creatures.push(wraith);
+              this.vfx?.sparkBurst(sx, sy, 0xaa00ff, 10, 60);
+            }
+          }
+          this.store.toast("⚠️ Void wraiths emerge from the rift! Defend yourself!");
+
+          // Pulse the rift
+          if (this.darkRiftGfx) {
+            this.scene.tweens.add({
+              targets: this.darkRiftGfx,
+              alpha: 0.3,
+              duration: 2000,
+              yoyo: true,
+              repeat: -1,
+            });
+          }
+
+          this.darkTwistPhase = 7;
+          this.darkTwistTimer = time + 8000;
+        }
+        break;
+
+      case 7: // Rift closes after time
+        if (time >= this.darkTwistTimer) {
+          // Close the rift
+          if (this.darkRiftGfx) {
+            this.scene.tweens.add({
+              targets: this.darkRiftGfx,
+              alpha: 0,
+              duration: 2000,
+              ease: "Power2",
+              onComplete: () => {
+                if (this.darkRiftGfx) { this.darkRiftGfx.destroy(); this.darkRiftGfx = null; }
+              },
+            });
+          }
+          this.store.toast("The void rift seals... but the cabin is silent now.");
+          this.darkTwistPhase = 8; // complete
+          achievements.unlock("dark_twist_survivor");
+        }
+        break;
+    }
+  }
+
+  /** Open a visual void rift at a position. */
+  private openVoidRift(x: number, y: number): void {
+    const scene = this.scene;
+    if (scene.textures.exists("void-rift")) {
+      const riftImg = scene.add.image(x, y, "void-rift").setDepth(28);
+      riftImg.setScale(1.2);
+      this.darkRiftGfx = riftImg;
+    } else {
+      const gfx = scene.add.graphics().setDepth(28);
+      gfx.fillStyle(0x440066, 0.6);
+      gfx.fillEllipse(x, y, 80, 50);
+      gfx.lineStyle(3, 0xaa00ff, 0.8);
+      gfx.strokeEllipse(x, y, 80, 50);
+      gfx.lineStyle(1, 0xddaaff, 0.5);
+      gfx.strokeEllipse(x, y, 60, 38);
+      this.darkRiftGfx = gfx;
+    }
+
+    // Add void glow light
+    this.vfx?.sparkBurst(x, y, 0xaa00ff, 40, 150);
+  }
+
+  /** Build a cabin at the given tile location (near lake shore). 3x3 structure. */
+  private buildCabin(tx: number, ty: number): void {
+    // Find a build spot — 2 tiles away from shore, on walkable ground
+    let buildX = tx;
+    let buildY = ty;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const ox = Math.floor((Math.random() - 0.5) * 4);
+      const oy = Math.floor((Math.random() - 0.5) * 4);
+      const cx = tx + ox;
+      const cy = ty + oy;
+      // Check 3x3 area is clear (walkable and not water/lake)
+      let clear = true;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const t = this.getTileAtLoaded(cx + dx, cy + dy);
+          if (t === TILE.LAKE || t === TILE.WATER || t === TILE.POND || t === TILE.LAVA || t === TILE.VOID) {
+            clear = false;
+            break;
+          }
+        }
+        if (!clear) break;
+      }
+      if (clear) {
+        buildX = cx;
+        buildY = cy;
+        break;
+      }
+    }
+
+    // Place 3x3 cabin:
+    //  R R R
+    //  W D W   (D=door, W=wall, one wall has window)
+    //  W W W
+    const layout = [
+      [TILE.CABIN_ROOF, TILE.CABIN_ROOF, TILE.CABIN_ROOF],
+      [TILE.CABIN_WALL, TILE.CABIN_DOOR, TILE.CABIN_WINDOW],
+      [TILE.CABIN_WALL, TILE.CABIN_WALL, TILE.CABIN_WALL],
+    ];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const tile = layout[dy + 1][dx + 1];
+        this.setTileAt(buildX + dx, buildY + dy, tile);
+      }
+    }
+    this.cabinBuilt = true;
+    this.cabinTileX = buildX;
+    this.cabinTileY = buildY;
+
+    // Spawn wife NPC at the cabin door
+    const doorPx = buildX * TILE_PX + TILE_PX / 2 + this.offset.x;
+    const doorPy = (buildY + 1) * TILE_PX + TILE_PX / 2 + this.offset.y; // below door
+    this.wife = new Wife(this, doorPx, doorPy);
+
+    // Spawn campfire next to the cabin
+    const firePx = (buildX - 1) * TILE_PX + TILE_PX / 2 + this.offset.x;
+    const firePy = (buildY + 1) * TILE_PX + TILE_PX / 2 + this.offset.y;
+    if (this.scene.textures.exists("campfire")) {
+      if (!this.scene.anims.exists("campfire-anim")) {
+        this.scene.anims.create({
+          key: "campfire-anim",
+          frames: [
+            { key: "campfire", frame: "campfire-0" },
+            { key: "campfire", frame: "campfire-1" },
+          ],
+          frameRate: 6,
+          repeat: -1,
+        });
+      }
+      this.campfireSprite = this.scene.add.sprite(firePx, firePy, "campfire", "campfire-0");
+      this.campfireSprite.setOrigin(0.5, 0.7);
+      this.campfireSprite.play("campfire-anim", true);
+    }
+
+    // Give player a fishing rod
+    this.inventory.addItem("fishing_rod");
+    this.store.toast("🎣 Got a fishing rod! Cast into the lake to catch fish.");
+  }
+
+  /** Called when the player catches a fleeing leprechaun that stole an item. */
+  onLeprechaunCaught(stolenItem: string): void {
+    this.inventory.addItem(stolenItem, 1);
+    this.inventory.addItem("gold_coin", 1);
+    this.store.toast("🍀 You caught the leprechaun! Got your item back + a gold coin!");
+    achievements.unlock("leprechaun_chase");
+  }
+
+  /** Called when the dog successfully retrieves a thrown ball. */
+  onDogFetch(count: number): void {
+    // heal a small amount
+    if (this.hp < MAX_HP) {
+      this.hp = Math.min(MAX_HP, this.hp + 5);
+      this.hud.setHealth(this.hp, MAX_HP);
+    }
+    // give a small reward — sometimes fish, sometimes stick
+    if (Math.random() < 0.4) {
+      this.inventory.addItem("fish", 1);
+      this.store.toast("🎾 Good boy! The dog brought back a fish too!");
+    } else if (Math.random() < 0.3) {
+      this.inventory.addItem("stick", 1);
+    }
+    // return the tennis ball
+    this.inventory.addItem("tennis_ball", 1);
+
+    achievements.unlock("fetch_boy");
+    if (count >= 10) {
+      achievements.unlock("fetch_master");
+    }
+    if (count >= 25) {
+      achievements.unlock("fetch_legend");
+    }
+  }
+
   /** Player takes damage — flash red, shake screen, update health bar, maybe teleport home. */
   private takeDamage(amount: number, playerX: number, playerY: number, time: number): void {
     this.hp -= amount;
@@ -4433,6 +6456,20 @@ export class WorldLayer {
       this.stones = [];
       for (const f of this.friendlies) f.destroy();
       this.friendlies = [];
+      for (const sl of this.slugs) sl.destroy();
+      this.slugs = [];
+      for (const dg of this.dogs) dg.destroy();
+      this.dogs = [];
+      for (const fb of this.fetchBalls) fb.destroy();
+      this.fetchBalls = [];
+      for (const lep of this.leprechauns) lep.destroy();
+      this.leprechauns = [];
+      if (this.wife) { this.wife.destroy(); this.wife = null; }
+      if (this.fishingLine) { this.fishingLine.destroy(); this.fishingLine = null; }
+      if (this.darkLepContainer) { this.darkLepContainer.destroy(); this.darkLepContainer = null; }
+      if (this.darkLepSpeech) { this.darkLepSpeech.destroy(); this.darkLepSpeech = null; }
+      if (this.darkRiftGfx) { this.darkRiftGfx.destroy(); this.darkRiftGfx = null; }
+      this.darkLepSprite = null;
       if (this.arrowActive) {
         this.arrow?.destroy();
         this.arrow = null;
@@ -4495,6 +6532,16 @@ export class WorldLayer {
     for (const g of this.chunkGraphics.values()) g.destroy();
     for (const g of this.ghosts.values()) g.destroy();
     for (const f of this.friendlies) f.destroy();
+    for (const sl of this.slugs) sl.destroy();
+    for (const dg of this.dogs) dg.destroy();
+    for (const fb of this.fetchBalls) fb.destroy();
+    for (const lep of this.leprechauns) lep.destroy();
+    if (this.wife) this.wife.destroy();
+    if (this.fishingLine) this.fishingLine.destroy();
+    if (this.campfireSprite) this.campfireSprite.destroy();
+    if (this.darkLepContainer) this.darkLepContainer.destroy();
+    if (this.darkLepSpeech) this.darkLepSpeech.destroy();
+    if (this.darkRiftGfx) this.darkRiftGfx.destroy();
     // Clean up cached canvas textures to free GPU memory
     for (const chunk of this.chunks.values()) {
       this.invalidateChunkTexture(chunk.cx, chunk.cy);

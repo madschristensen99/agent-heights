@@ -2,6 +2,7 @@ import { getToken, isAuthEnabled } from "./auth";
 import { SUBSCRIPTION_TIER_LIST, type SubscriptionTier, type BillingPeriod } from "../../shared/types";
 
 export interface PaymentState {
+  entrancePaid: boolean;
   subscriptionActive: boolean;
   subscriptionStatus: string;
   subscriptionTier: SubscriptionTier | null;
@@ -49,6 +50,15 @@ async function stripeApi(path: string, method = "POST", body?: Record<string, un
   }
 }
 
+export async function startEntranceFeeCheckout(): Promise<void> {
+  const result = await stripeApi("/api/stripe/checkout-entrance", "POST");
+  if (typeof result.url === "string") {
+    window.location.href = result.url;
+  } else {
+    alert((result.error as string) ?? "Failed to start checkout");
+  }
+}
+
 export async function startSubscriptionCheckout(tier: SubscriptionTier, billingPeriod: BillingPeriod = "annual"): Promise<void> {
   const result = await stripeApi("/api/stripe/checkout-subscription", "POST", { tier, billingPeriod });
   if (typeof result.url === "string") {
@@ -72,6 +82,7 @@ export async function refreshPaymentStatus(): Promise<void> {
   const result = await stripeApi("/api/stripe/status", "GET");
   if (result && !result.error) {
     updatePaymentState({
+      entrancePaid: (result.entrancePaid as boolean) ?? false,
       subscriptionActive: result.subscriptionActive as boolean,
       subscriptionStatus: result.subscriptionStatus as string,
       subscriptionTier: (result.subscriptionTier as SubscriptionTier | null) ?? null,
@@ -105,9 +116,9 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
 
       <div id="payment-subscription-section" style="display:none;flex-direction:column;gap:0.7rem;background:rgba(18,22,36,0.7);border:1px solid #2a2e42;border-radius:12px;padding:1.5rem;margin-bottom:1rem;">
         <button id="start-99-btn" style="padding:1rem 1.5rem;border-radius:10px;border:none;background:linear-gradient(180deg,#58c866,#3da64a);color:#0d0d0d;font-size:1.15rem;font-weight:800;cursor:pointer;transition:filter 0.15s,transform 0.1s;letter-spacing:0.02em;">
-          Start for 99¢/mo
+          Enter for 99¢
         </button>
-        <p style="color:#7a8090;font-size:0.75rem;text-align:center;margin:-0.2rem 0 0.3rem;">Hire and manage up to 4 AI agents. Cancel anytime.</p>
+        <p style="color:#7a8090;font-size:0.75rem;text-align:center;margin:-0.2rem 0 0.3rem;">One-time payment to unlock task execution. Includes ~$0.50 usage credit.</p>
         <div style="border-top:1px solid #2a2e42;margin:0.3rem 0;"></div>
         <h2 style="font-size:1.1rem;color:#58c866;margin:0 0 0.3rem;">Choose Your Plan</h2>
         <p style="color:#a0a5b4;font-size:0.85rem;margin:0 0 0.8rem;line-height:1.4;">Subscribe to hire and manage AI agents in your own private office. Cancel anytime.</p>
@@ -200,6 +211,15 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
     if (!currentState.subscriptionActive) {
       subscriptionSection.style.display = "flex";
       activeSection.style.display = "none";
+      // Show entry fee button only if not yet paid
+      const start99Wrapper = start99Btn.parentElement?.querySelector("p");
+      if (currentState.entrancePaid) {
+        start99Btn.style.display = "none";
+        if (start99Wrapper) start99Wrapper.style.display = "none";
+      } else {
+        start99Btn.style.display = "block";
+        if (start99Wrapper) start99Wrapper.style.display = "block";
+      }
       tierCardsContainer.innerHTML = SUBSCRIPTION_TIER_LIST.map(t => buildTierCard(t, false)).join("");
     } else {
       subscriptionSection.style.display = "none";
@@ -232,7 +252,7 @@ export function createPaymentOverlay(): { show: () => void; hide: () => void } {
   onPaymentChange(renderState);
 
   const start99Btn = overlay.querySelector("#start-99-btn") as HTMLButtonElement;
-  start99Btn.addEventListener("click", () => void startSubscriptionCheckout("starter", "monthly"));
+  start99Btn.addEventListener("click", () => void startEntranceFeeCheckout());
   start99Btn.addEventListener("mouseenter", () => { start99Btn.style.filter = "brightness(1.1)"; });
   start99Btn.addEventListener("mouseleave", () => { start99Btn.style.filter = "none"; });
   start99Btn.addEventListener("mousedown", () => { start99Btn.style.transform = "scale(0.98)"; });

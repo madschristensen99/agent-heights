@@ -1,8 +1,9 @@
 import Stripe from "stripe";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
-import { SUBSCRIPTION_TIERS, parseTier, COMMAND_CENTER_ADMINS, type SubscriptionTier, type BillingPeriod } from "../shared/types.js";
+import { SUBSCRIPTION_TIERS, parseTier, COMMAND_CENTER_ADMINS, ENTRY_FEE_CENTS, ENTRY_FEE_USAGE_CREDIT, type SubscriptionTier, type BillingPeriod } from "../shared/types.js";
 import { handleAssetUpgradeWebhook } from "./asset-upgrade.js";
-import { sendSubscriptionConfirmationEmail, sendSubscriptionCanceledEmail } from "./email.js";
+import { sendSubscriptionConfirmationEmail, sendSubscriptionCanceledEmail, sendEntranceFeeConfirmationEmail } from "./email.js";
+import { ProfileManager } from "./profile.js";
 
 const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
@@ -28,7 +29,7 @@ function calcTaxCents(baseCents: number): number {
 const FREE_TIER_AGENT_LIMIT = 2;
 
 export interface PaymentStatus {
-  entrancePaid: boolean; // always true now — entrance fee removed
+  entrancePaid: boolean;
   subscriptionStatus: string;
   subscriptionActive: boolean;
   subscriptionTier: SubscriptionTier | null;
@@ -67,10 +68,10 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
     }
 
     if (error || !data) {
-      return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: FREE_TIER_AGENT_LIMIT, usageCap: 0, currentPeriodEnd: null };
+      return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: FREE_TIER_AGENT_LIMIT, usageCap: 0, currentPeriodEnd: null };
     }
 
-    const entrancePaid = true; // Entrance fee removed — always true
+    const entrancePaid = Boolean(data.entrance_paid);
 
     const now = Math.floor(Date.now() / 1000);
     const subscriptionActive =
@@ -84,7 +85,11 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
     // locked out with agentLimit=0 and usageCap=0.
     const effectiveTier = tier ?? (subscriptionActive ? "starter" : null);
     const agentLimit = effectiveTier ? SUBSCRIPTION_TIERS[effectiveTier].agentLimit : FREE_TIER_AGENT_LIMIT;
-    const usageCap = effectiveTier ? SUBSCRIPTION_TIERS[effectiveTier].usageCap : 0;
+    // Entry tier (paid $0.99 but no subscription): gets entry credit as usage cap
+    // Free tier (no payment): usageCap = 0 (can hire but can't run tasks)
+    const usageCap = effectiveTier
+      ? SUBSCRIPTION_TIERS[effectiveTier].usageCap
+      : entrancePaid ? ENTRY_FEE_USAGE_CREDIT : 0;
 
     return {
       entrancePaid,
@@ -96,7 +101,7 @@ export async function getUserPaymentStatus(userId: string, email?: string | null
       currentPeriodEnd: data.current_period_end ?? null,
     };
   } catch {
-    return { entrancePaid: true, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: FREE_TIER_AGENT_LIMIT, usageCap: 0, currentPeriodEnd: null };
+    return { entrancePaid: false, subscriptionStatus: "none", subscriptionActive: false, subscriptionTier: null, agentLimit: FREE_TIER_AGENT_LIMIT, usageCap: 0, currentPeriodEnd: null };
   }
 }
 
@@ -123,7 +128,57 @@ async function getOrCreateStripeCustomer(userId: string, email: string): Promise
   return customer.id;
 }
 
-// ── Entrance fee removed — checkout-entrance route deleted ──
+/** Create a one-time $0.99 entrance fee checkout session. */
+export async function createEntranceFeeCheckoutSession(
+  userId: string,
+  email: string,
+): Promise<{ url: string } | { error: string }> {
+  if (!stripe) return { error: "Stripe not configured" };
+  if (!APP_URL) return { error: "APP_URL not configured" };
+
+  try {
+    const customerId = await getOrCreateStripeCustomer(userId, email);
+
+    const taxCents = calcTaxCents(ENTRY_FEE_CENTS);
+    const lineItems: any[] = [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: ENTRY_FEE_CENTS,
+          product_data: {
+            name: "Agent Heights — Entry Fee",
+            description: "One-time payment to unlock task execution. Includes ~$0.50 usage credit.",
+          },
+        },
+      },
+    ];
+    if (taxCents > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: taxCents,
+          product_data: { name: `Sales Tax (${SALES_TAX_PERCENT}%)` },
+        },
+      });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "payment",
+      line_items: lineItems,
+      metadata: { userId, type: "entrance" },
+      success_url: `${APP_URL}/?payment=entrance_success`,
+      cancel_url: `${APP_URL}/?payment=entrance_cancel`,
+    });
+
+    return { url: session.url! };
+  } catch (err) {
+    console.error("[stripe] entrance fee checkout error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to create checkout session" };
+  }
+}
 
 export async function createSubscriptionCheckoutSession(
   userId: string,
@@ -239,8 +294,28 @@ export async function handleStripeWebhook(
         if (!userId) break;
 
         if (session.metadata?.type === "entrance") {
-          // Entrance fee removed — no-op, but keep for backward compat
-          console.log(`[stripe] legacy entrance fee payment for user ${userId} — entrance fee removed, ignoring`);
+          await supabaseAdmin
+            .from("user_payments")
+            .upsert({
+              user_id: userId,
+              entrance_paid: true,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "user_id" });
+          console.log(`[stripe] entrance fee paid for user ${userId}`);
+          void ProfileManager.ingestEntrancePayment(userId).catch(() => {});
+
+          // Send entrance fee confirmation email
+          try {
+            const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId);
+            const email = userData.user?.email;
+            if (email) {
+              void sendEntranceFeeConfirmationEmail(email).catch((err) =>
+                console.error("[stripe] entrance fee email failed:", err),
+              );
+            }
+          } catch (err) {
+            console.error("[stripe] failed to get user email for entrance fee confirmation:", err);
+          }
         }
 
         if (session.metadata?.type === "asset_upgrade") {
@@ -410,7 +485,16 @@ export async function handleStripeRequest(
     return true;
   }
 
-  // ── Entrance fee route removed ──
+  // POST /api/stripe/checkout-entrance — one-time $0.99 entry fee
+  if (url === "/api/stripe/checkout-entrance" && req.method === "POST") {
+    const result = await createEntranceFeeCheckoutSession(user.id, user.email ?? "");
+    if ("error" in result) {
+      json(res, 400, result);
+    } else {
+      json(res, 200, result);
+    }
+    return true;
+  }
 
   // POST /api/stripe/checkout-subscription — create tiered subscription checkout
   if (url === "/api/stripe/checkout-subscription" && req.method === "POST") {
@@ -419,7 +503,7 @@ export async function handleStripeRequest(
     try { parsed = JSON.parse(body.toString()); } catch { /* empty body is fine */ }
     const tier = parseTier(parsed.tier);
     if (!tier) {
-      json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro | business" });
+      json(res, 400, { error: "Missing or invalid 'tier' field. Expected: starter | pro" });
       return true;
     }
     const billingPeriod: BillingPeriod = parsed.billingPeriod === "monthly" ? "monthly" : "annual";

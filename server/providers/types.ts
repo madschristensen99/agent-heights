@@ -100,7 +100,7 @@ export interface RunContext {
   /** Called when an agent wants to broadcast an HTML file to the office projector. */
   onBroadcastHtml?: (filePath: string) => void;
   /** Ask the boss (user) a blocking question. Returns the user's answer. Resolves with a default after timeout. */
-  requestGate?: (question: string, options: string[]) => Promise<string>;
+  requestGate?: (question: string, options: string[], freeText?: boolean) => Promise<string>;
 }
 
 export type ProviderRunner = (

@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel, Presenter } from "../shared/types.js";
+import type { ServerMsg, PlayerInfo, PlayerPresence, Dir, OfficeTheme, CharAppearance, Organization, OrgMember, RoomType, RoomAccessLevel, Presenter, Challenge } from "../shared/types.js";
 import { COMMAND_CENTER_SLUG, COMMAND_CENTER_ADMINS, MAX_PRESENTERS } from "../shared/types.js";
 import { AgentManager } from "./manager.js";
 import { SessionLogger } from "./logger.js";
@@ -17,6 +17,9 @@ import {
   serverId,
 } from "./redis.js";
 import type { WebSocket } from "ws";
+import { startSession as startConcierge, evaluateNudge, CONCIERGE_EVAL_INTERVAL } from "./concierge.js";
+import { recordTaskCompletion } from "./agent-growth.js";
+import { addXp, getProgress } from "./office-progression.js";
 import { sendWelcomeEmail, isEmailConfigured } from "./email.js";
 
 export interface UserSession {
@@ -40,6 +43,10 @@ export interface UserSession {
   agentLogSubscriptions?: Map<string, () => void>;
   /** Spectator WebSocket connections — read-only, receive all broadcasts. */
   spectators: Set<WebSocket>;
+  /** Concierge evaluation timer — sends periodic Office Manager nudges. */
+  conciergeTimer: ReturnType<typeof setInterval> | null;
+  /** Active optimization challenge for this session (null when no challenge in progress). */
+  activeChallenge: Challenge | null;
 }
 
 /** A player's live state within a room. */
@@ -663,11 +670,13 @@ export class TenantManager {
       screenShareActive: false,
       webcamActive: false,
       spectators: new Set(),
+      conciergeTimer: null,
+      activeChallenge: null,
     };
 
     // ── Broadcast: Redis pub/sub (with in-memory fallback) ──────────────
     // Also forwards agent-related messages to visitors in the owner's room.
-    const FORWARD_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "toast", "emote", "agent_chat", "projector_state", "agent_broadcast_html_state", "agent_broadcast_state"]);
+    const FORWARD_TYPES = new Set(["agent", "log", "card", "card_removed", "fired_agent", "fired_agent_removed", "toast", "emote", "agent_chat", "projector_state", "agent_broadcast_html_state", "agent_broadcast_state", "concierge_nudge", "npc_speech"]);
     // Agent-related types from the user's PERSONAL manager — skip when user is
     // not in their own office (HQ2, org rooms, or visiting another office).
     // Org room agents are broadcast by the shared org manager, not here.
@@ -730,9 +739,50 @@ export class TenantManager {
     }
 
     sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey, user.id, () => sess.clients.size > 0);
+    sess.manager.onTaskComplete = (agentId, success, durationMin, taskType) => {
+      recordTaskCompletion(agentId, success, durationMin, taskType);
+      if (success) {
+        const xpResult = addXp(user.id, 10);
+        if (xpResult.leveledUp) {
+          const progress = getProgress(user.id);
+          sess.broadcast({ type: "office_progress", progress } satisfies ServerMsg);
+          sess.broadcast({ type: "toast", text: `Office reached Level ${progress.level}!` } satisfies ServerMsg);
+        }
+      }
+    };
     sess.manager.setMcpKeys(mcpKeys);
     if (player) sess.manager.bossName = player.name;
     sess.manager.startThinkLoop();
+
+    // Start concierge engagement tracker
+    startConcierge(user.id);
+    sess.conciergeTimer = setInterval(() => {
+      if (sess.clients.size === 0) return; // no active clients
+      const snap = sess.manager.snapshot();
+      const nudge = evaluateNudge(user.id, {
+        agents: snap.agents,
+        board: snap.board,
+        bossName: sess.manager.bossName,
+        hasPlatform: sess.manager.getPlatformConnectionStates().some((p) => p.connected),
+        subscriptionTier: sess.manager.subscriptionTier,
+      });
+      if (nudge) {
+        sess.broadcast({
+          type: "concierge_nudge",
+          nudgeId: nudge.nudgeId,
+          text: nudge.text,
+          actionLabel: nudge.actionLabel,
+          actionType: nudge.actionType,
+        });
+        // Also show speech bubble above the Office Manager NPC in the scene
+        sess.broadcast({
+          type: "npc_speech",
+          npcId: "office-manager",
+          text: nudge.text.slice(0, 120),
+          durationMs: 10_000,
+        });
+      }
+    }, CONCIERGE_EVAL_INTERVAL);
 
     // Register session before joining rooms so joinRoom can update sess.roomId
     this.sessions.set(user.id, sess);
@@ -937,6 +987,7 @@ export class TenantManager {
     }
     sess?.cleanup();
     sess?.manager.stopThinkLoop();
+    if (sess?.conciergeTimer) clearInterval(sess.conciergeTimer);
     this.sessions.delete(userId);
   }
 

@@ -1042,3 +1042,560 @@ be mitigated with:
    When a player creates a world, it's live on Railway with a public
    URL. Other players can fork the branch and remix it. No separate
    publish step — deployment is publishing.
+
+---
+
+## 14. Faction Conflict System
+
+The outside world isn't just monsters in biomes — it has **living
+conflict**. Two factions are at war, and the player navigates through
+an active warzone to explore. This makes the outside world feel alive
+in a way that random monster spawns don't.
+
+### 14.1 Concept
+
+Each world has its own conflict that reflects its theme:
+
+| World | Conflict | Factions |
+|---|---|---|
+| Erics Alley | Gang turf war | Rival crews fighting over blocks |
+| Hawaii | Island chiefdom war | Rival tribes battling for territory |
+| Old South | Civil War | Union vs. Confederacy |
+
+The player's home base (office/alley/pavilion/plantation) exists in
+spite of the war outside. That tension makes both sides more
+interesting — your peaceful HQ is an island in a warzone.
+
+### 14.2 How It Works Mechanically
+
+- Two faction NPCs spawn in the outside world and fight each other in
+  certain biome zones
+- Their battles create **dynamic danger zones** — you don't have to
+  fight them, but you can't walk through a crossfire unscathed
+- Faction control shifts as you explore deeper — the safe zone
+  shrinks, the war intensifies
+- Boss-tier creatures are **war bosses** — a gang warlord, a spectral
+  general, a chiefdom champion
+- The player can:
+  - **Avoid** the fighting and sneak through
+  - **Pick a side** and help them (affects which areas are safe)
+  - **Loot** the aftermath of battles
+  - **Get caught** in crossfire (environmental hazard, like lava but
+    mobile)
+
+### 14.3 Implementation
+
+The faction system is a new layer in `worldgen.ts` / `world.ts` that
+spawns opposing NPCs in conflict zones. It does not replace the
+existing creature system — creatures and factions coexist. Factions
+are themed per-world via the `WorldTheme.conflict` config:
+
+```typescript
+interface ThemeConflict {
+  factionA: { name: string; color: number; spriteKey: string };
+  factionB: { name: string; color: number; spriteKey: string };
+  zones: Record<string, "skirmish" | "battle" | "occupied_a" | "occupied_b">;
+}
+```
+
+This is a **Phase 2 addition** — not required for the first playable
+version of any world. The world is fully functional without it; the
+conflict layer adds depth and environmental storytelling on top.
+
+---
+
+## 15. Hawaii — Tropical Fire-Spinning World
+
+### 15.1 Concept
+
+An open-air beach pavilion on a tropical island where the visual
+metaphor for AI agent management is **fire spinning** (poi / fire knife
+dancing) instead of office work. The outside world is tropical island
+exploration with rival chiefdoms at war.
+
+| Base Game (Office) | Hawaii (Beach) |
+|---|---|
+| Office building | Open-air tiki pavilion / beach hut |
+| Desks with monitors | Tiki torch stations / surfboard workbenches |
+| Agents typing on computers | Agents fire spinning (poi / fire knife) |
+| Monitor glow = status color | Fire color = status color |
+| Office chairs | Log stools / coconuts |
+| Filing cabinet | Treasure chest |
+| Coffee machine | Coconut drink station / tiki bar |
+| Water cooler | Rain catchment |
+| Kitchen counter | Prep table / imu (underground oven) |
+| Microwave | Lava rock grill |
+| Sofa | Hammock |
+| Window | Open ocean view (no glass) |
+| Small plant | Hibiscus / plumeria |
+| Large plant | Palm tree |
+| Server rack | Tiki totem |
+| Server screen | Tiki totem eyes (glow color = status) |
+| Chimney | Volcano vent |
+| Golf course | Beach volleyball court |
+| Tennis court | Horseshoe pit (island version) |
+| Helicopter delivery | Outrigger canoe paddles in |
+| Biome: meadow→infernal | Beach → jungle → volcanic ridge → lava tubes → underwater cave → volcano summit |
+
+### 15.2 Why Fire Spinning Works
+
+The fire itself IS the status indicator. No need for a separate monitor
+glow system — the agent's fire poi color IS the status color. Green
+flames = working, amber = thinking, red sputtering = error, blue =
+done. It's more elegant than the office monitor system because the
+status and the work animation are the same visual element.
+
+### 15.3 Agent Status Visuals
+
+| Agent Status | Base Game Visual | Hawaii Visual |
+|---|---|---|
+| idle | Standing near desk, shuffling | Standing near torch, poi hanging |
+| thinking | Speech bubble, amber accent | Looks up, poi slows, amber flames |
+| working | Typing, green monitor glow | Fire spinning, green flames |
+| done | Walks to coffee machine | Walks to tiki bar / hammock |
+| error | Red monitor, sparks | Coughing smoke, red sputtering flames |
+| waiting | Walks to colleague's desk | Walks to another torch station |
+
+### 15.4 World Theme Config
+
+```json
+{
+  "id": "hawaii",
+  "name": "Hawaii",
+  "description": "Tropical beach world where agents fire-spin instead of type",
+  "workMetaphor": "fire_spinning",
+  "arrivalMetaphor": "outrigger_delivery",
+  "office": {
+    "tilemapPath": "client/public/assets/maps/hawaii.json",
+    "tilesetPath": "client/public/assets/tilesets/hawaii.png",
+    "floorTile": 0,
+    "wallTile": 1,
+    "doorTile": 6
+  },
+  "furniture": {
+    "17": "drawTorchStationLeft",
+    "18": "drawTorchStationRight",
+    "19": "drawLogStool",
+    "20": "drawTreasureChest",
+    "21": "drawHibiscus",
+    "22": "drawOceanView",
+    "23": "drawTikiBarTop",
+    "24": "drawTikiBarBottom",
+    "25": "drawRainCatchment",
+    "26": "drawPrepTable",
+    "27": "drawLavaRockGrill",
+    "28": "drawHammockLeft",
+    "29": "drawHammockRight",
+    "30": "drawPalmTree",
+    "31": "drawPlumeria",
+    "32": "drawCoconutGrill",
+    "35": "drawTikiTotem",
+    "36": "drawTikiTotemEyes",
+    "37": "drawVolcanoVent"
+  },
+  "worldgen": {
+    "biomes": ["beach", "jungle", "volcanic_ridge", "lava_tubes", "underwater_cave", "volcano_summit"],
+    "baseGround": {
+      "beach": 0,
+      "jungle": 6,
+      "volcanic_ridge": 7,
+      "lava_tubes": 8,
+      "underwater_cave": 9,
+      "volcano_summit": 10
+    },
+    "obstacles": {
+      "beach": [2, 3, 4],
+      "jungle": [2, 24, 39],
+      "volcanic_ridge": [3, 37],
+      "lava_tubes": [3, 9],
+      "underwater_cave": [3, 21],
+      "volcano_summit": [9, 11]
+    },
+    "hostileTiles": {
+      "lava_tubes": [9],
+      "volcano_summit": [9, 11]
+    },
+    "hostilityThresholds": [2, 4, 7, 11, 18]
+  },
+  "statusColors": {
+    "idle": 7143424,
+    "thinking": 13834552,
+    "working": 5019238,
+    "done": 4882074,
+    "error": 15138488,
+    "waiting": 12240244
+  },
+  "dialect": {
+    "systemPromptSuffix": "Speak in Hawaiian Pidgin English. Use words like 'brah', 'da kine', 'pau', 'mahalo'. Keep it warm and friendly.",
+    "chatStyle": "hawaiian_pidgin",
+    "emotes": ["shaka", "mahalo", "chee_hoo"]
+  },
+  "assets": {
+    "tilesetPath": "client/public/assets/tilesets/hawaii.png",
+    "characterSpritesheetPath": "client/public/assets/characters/hawaii-chars.png",
+    "furnitureSpritesheetPath": "client/public/assets/sprites/hawaii-furniture.png",
+    "worldTileSpritesheetPath": "client/public/assets/tilesets/hawaii-world.png",
+    "assetTier": "procedural"
+  },
+  "conflict": {
+    "factionA": { "name": "Shark Tribe", "color": 43690, "spriteKey": "faction-shark" },
+    "factionB": { "name": "Turtle Tribe", "color": 26624, "spriteKey": "faction-turtle" }
+  }
+}
+```
+
+### 15.5 Hawaii Biomes
+
+| Biome | Ground Tile | Obstacles | Hostile Tiles | Mood |
+|---|---|---|---|---|
+| Beach | White sand | Palm trees, driftwood, shells | None | Safe, paradise |
+| Jungle | Dense foliage | Vines, banyan roots, bamboo | Mosquitoes (slow) | Lush, adventurous |
+| Volcanic ridge | Black rock | Jagged lava rock, steam vents | Steam (damage) | Harsh, otherworldly |
+| Lava tubes | Dark stone | Stalactites, lava pools | Lava (damage) | Claustrophobic, hot |
+| Underwater cave | Wet stone | Coral, sea anemones | Undertow (drag) | Surreal, disorienting |
+| Volcano summit | Magma | Lava rivers, fire geysers | Lava, fire | Final tier, lethal |
+
+### 15.6 Hawaii Outside World Creatures
+
+- **Low tier:** crabs, jellyfish, sea urchins, geckos
+- **Mid tier:** sharks, moray eels, wild boars, giant centipedes
+- **High tier:** mo'o (Hawaiian dragon lizard), volcano spirit, Pele's
+  fire guardian
+- **Boss tier:** Pele (volcano goddess avatar), Mo'o-nui (great dragon
+  lizard)
+- **Legendary:** Kā-moho-aliʻi (shark god — appears as final boss at
+  volcano summit)
+
+### 15.7 Hawaii Arrival Metaphor
+
+Instead of helicopter delivery:
+
+1. An **outrigger canoe** paddles in from the ocean (replaces helicopter)
+2. Agent steps off onto the beach
+3. Walks to a **tiki torch** marking their station (replaces elevator)
+4. Agent lights the torch and takes their position
+
+### 15.8 Hawaii Wizard NPC
+
+A **kahuna** (Hawaiian priest/sage) — stands near the volcano vent in
+the center of the pavilion. Carries a bone fishing hook like a wand.
+When you talk to them, they can reshape the island with volcanic power.
+
+---
+
+## 16. Old South — Battle of New Orleans World
+
+### 16.1 Concept
+
+An idealized antebellum Southern plantation themed around the **Battle
+of New Orleans** (War of 1812). The visual metaphor for AI agent
+management is **harvesting** — agents tend crops and work the land.
+The outside world is the Battle of New Orleans — American and British
+forces clashing across the map, with riverboat gamblers, wild west
+outlaws, and Mississippi culture woven in. The plantation is your
+peaceful home base; the battle is the danger outside.
+
+The Battle of New Orleans theme brings together multiple facets of
+Southern Americana:
+- **Plantation mansion** — the home base (idealized, not ashamed of
+  Southern heritage)
+- **Battle of New Orleans** — the outside conflict (Jackson's forces
+  vs. the British redcoats)
+- **Mississippi riverboat** — card dealing, steamboat culture
+- **Wild West** — outlaws and frontier justice as secondary creatures
+  in the outside world
+
+| Base Game (Office) | Old South (Plantation) |
+|---|---|
+| Office building | Antebellum mansion — white columns, wraparound porch, magnolias |
+| Desks with monitors | Field plots / garden stations with crop rows |
+| Agents typing on computers | Agents harvesting — bending, picking crops |
+| Monitor glow = status color | Crop particles = status color |
+| Office chairs | Wooden stools / overturned buckets |
+| Filing cabinet | Wooden storage chest |
+| Coffee machine | Sweet tea pitcher / well pump |
+| Water cooler | Rain barrel |
+| Kitchen counter | Smokehouse / curing shed |
+| Microwave | Cast iron stove |
+| Sofa | Porch swing |
+| Window | Tall windows with wooden shutters |
+| Small plant | Cotton sprig / magnolia cutting |
+| Large plant | Live oak with Spanish moss |
+| Server rack | Smokehouse |
+| Server screen | Smokehouse vents (smoke color = status) |
+| Chimney | Brick chimney |
+| Golf course | Croquet lawn |
+| Tennis court | Horseshoe pit |
+| Helicopter delivery | Horse-drawn carriage rolls up the drive |
+| Biome: meadow→infernal | Garden → cotton field → pine forest → bayou → battlefield → infernal |
+| Conflict | Battle of New Orleans — American vs. British redcoats |
+
+### 16.2 Work Metaphor: "harvesting"
+
+Agent bends over crop rows, picking. Status-colored particles rise from
+the crops — green cotton bolls when working, amber leaves when
+thinking, red when error (blight), blue when done (harvested). Same
+mechanical role as the monitor glow — just agricultural instead of
+digital.
+
+### 16.3 Agent Status Visuals
+
+| Agent Status | Base Game Visual | Old South Visual |
+|---|---|---|
+| idle | Standing near desk, shuffling | Standing near field row, wiping brow |
+| thinking | Speech bubble, amber accent | Pauses, looks at sky, amber leaves drift |
+| working | Typing, green monitor glow | Harvesting, green cotton particles rise |
+| done | Walks to coffee machine | Walks to sweet tea pitcher / porch swing |
+| error | Red monitor, sparks | Crop blight, red withering particles |
+| waiting | Walks to colleague's desk | Walks to another field row |
+
+### 16.4 World Theme Config
+
+```json
+{
+  "id": "old-south",
+  "name": "Old South",
+  "description": "Antebellum plantation world where agents harvest instead of type",
+  "workMetaphor": "harvesting",
+  "arrivalMetaphor": "carriage_delivery",
+  "office": {
+    "tilemapPath": "client/public/assets/maps/old-south.json",
+    "tilesetPath": "client/public/assets/tilesets/old-south.png",
+    "floorTile": 0,
+    "wallTile": 1,
+    "doorTile": 6
+  },
+  "furniture": {
+    "17": "drawFieldPlotLeft",
+    "18": "drawFieldPlotRight",
+    "19": "drawWoodenStool",
+    "20": "drawStorageChest",
+    "21": "drawCottonSprig",
+    "22": "drawShutterWindow",
+    "23": "drawSweetTeaPitcher",
+    "24": "drawWellPump",
+    "25": "drawRainBarrel",
+    "26": "drawSmokehouse",
+    "27": "drawCastIronStove",
+    "28": "drawPorchSwingLeft",
+    "29": "drawPorchSwingRight",
+    "30": "drawLiveOak",
+    "31": "drawMagnoliaTree",
+    "32": "drawHorseshoePit",
+    "35": "drawSmokehouseVent",
+    "36": "drawSmokehouseScreen",
+    "37": "drawBrickChimney"
+  },
+  "worldgen": {
+    "biomes": ["garden", "cotton_field", "pine_forest", "bayou", "battlefield", "infernal"],
+    "baseGround": {
+      "garden": 0,
+      "cotton_field": 6,
+      "pine_forest": 7,
+      "bayou": 21,
+      "battlefield": 12,
+      "infernal": 9
+    },
+    "obstacles": {
+      "garden": [2, 4, 28],
+      "cotton_field": [2, 3, 22],
+      "pine_forest": [2, 24, 37],
+      "bayou": [3, 21, 20],
+      "battlefield": [3, 12, 13],
+      "infernal": [9, 11, 13]
+    },
+    "hostileTiles": {
+      "bayou": [21],
+      "battlefield": [5],
+      "infernal": [9, 11]
+    },
+    "hostilityThresholds": [2, 4, 7, 11, 18]
+  },
+  "statusColors": {
+    "idle": 8026762,
+    "thinking": 13935160,
+    "working": 5925450,
+    "done": 4882074,
+    "error": 12071928,
+    "waiting": 10118644
+  },
+  "dialect": {
+    "systemPromptSuffix": "Speak with a refined Southern drawl appropriate to the early 1800s Louisiana territory. Use period language like 'I do declare', 'reckon', 'yonder'. Be courtly and genteel but capable.",
+    "chatStyle": "southern_1812",
+    "emotes": ["declare", "reckon", "yonder"]
+  },
+  "assets": {
+    "tilesetPath": "client/public/assets/tilesets/old-south.png",
+    "characterSpritesheetPath": "client/public/assets/characters/old-south-chars.png",
+    "furnitureSpritesheetPath": "client/public/assets/sprites/old-south-furniture.png",
+    "worldTileSpritesheetPath": "client/public/assets/tilesets/old-south-world.png",
+    "assetTier": "procedural"
+  },
+  "conflict": {
+    "factionA": { "name": "Union", "color": 30840, "spriteKey": "faction-union" },
+    "factionB": { "name": "Confederacy", "color": 9211020, "spriteKey": "faction-confederate" }
+  }
+}
+```
+
+### 16.5 Old South Biomes
+
+| Biome | Ground Tile | Obstacles | Hostile Tiles | Mood |
+|---|---|---|---|---|
+| Garden | Manicured grass | Fountains, hedges, benches | None | Safe, civilized |
+| Cotton field | Tilled soil | Cotton rows, scarecrows | Crows (mild) | Familiar, working |
+| Pine forest | Pine needles | Fallen logs, pine trees | Wild boars | Dark, frontier |
+| Bayou | Murky water | Cypress knees, Spanish moss | Gators, water moccasins | Oppressive, dangerous |
+| Battlefield | Scorched earth | Trenches, cannon, broken fences | Spectral soldiers | Haunted, war-torn |
+| Infernal | Brimstone | Bones, fire, ruined mansion | Lava, demons | Final tier, lethal |
+
+### 16.6 Old South Outside World Creatures
+
+Southern folklore and wildlife, escalating to supernatural:
+
+- **Low tier:** raccoons, possums, crows, rabbits
+- **Mid tier:** wild boars, rattlesnakes, alligators, black panthers
+- **High tier:** Wampus Cat, Rougarou (Cajun werewolf), Mothman
+- **Boss tier:** Spectral Civil War general (ghost), Infernal Plantation
+  Owner (corrupted spirit)
+- **Legendary:** The Gray Man (South Carolina legend — warns of storms,
+  but in the Labyrinth he's a harbinger of the infernal)
+
+### 16.7 Old South Arrival Metaphor
+
+Instead of helicopter delivery:
+
+1. A **horse-drawn carriage** trots up the oak-lined drive (replaces
+   helicopter)
+2. Agent steps out at the mansion gate
+3. Walks through the front gate to their field station (replaces
+   elevator)
+4. Agent takes their position at the crop rows
+
+### 16.8 Old South Wizard NPC
+
+A **traveling peddler / snake oil salesman** — rides in on a wagon,
+sells "miracle tonics" that modify the world. Stands near the carriage
+turnaround at the end of the drive. Period-appropriate version of the
+graffiti wizard — carries a satchel of curios instead of a spray can.
+
+### 16.9 The War Outside
+
+The Civil War is the living conflict in the outside world. Union and
+Confederate patrols spawn in the mid-to-deep biomes and fight each
+other. Key design points:
+
+- **Garden and cotton field** — safe zones, no war activity. This is
+  your home.
+- **Pine forest** — scouting parties, occasional skirmishes. You hear
+  distant musket fire.
+- **Bayou** — no military presence, but the swamp itself is hostile.
+  Deserters and bandits hide here.
+- **Battlefield** — active war zone. Trenches, cannon fire, spectral
+  soldiers from past battles. Crossfire is a real hazard.
+- **Infernal** — the war has opened a hellmouth. Both sides are
+  corrupted into demons. The final tier.
+
+The contrast is the point — your peaceful plantation exists in spite of
+the war outside. That tension makes both sides more interesting.
+
+---
+
+## 17. World Comparison Summary
+
+| | Erics Alley | Hawaii | Old South |
+|---|---|---|---|
+| **Home base** | Back alley | Beach pavilion | Antebellum plantation |
+| **Work metaphor** | Smoking | Fire spinning | Harvesting |
+| **Status indicator** | Smoke color | Flame color | Crop particles |
+| **Arrival** | Van delivery | Outrigger canoe | Horse-drawn carriage |
+| **Wizard** | Graffiti artist | Kahuna (priest) | Snake oil peddler |
+| **Biomes** | alley→street→abandoned→undercity→sewer→hellmouth | beach→jungle→volcanic ridge→lava tubes→underwater cave→volcano summit | garden→cotton field→pine forest→bayou→battlefield→infernal |
+| **Outside conflict** | Gang turf war | Island chiefdom war | Battle of New Orleans |
+| **Legendary boss** | (TBD — urban legend) | Kā-moho-aliʻi (shark god) | The Gray Man |
+| **Asset tier** | Procedural (upgradeable) | Procedural (upgradeable) | Procedural (upgradeable) |
+
+All three worlds use the same `WorldTheme` system — different furniture
+draw functions, theme configs, tilesets, and work/arrival animations.
+The architecture does not change between worlds. The faction conflict
+system (§14) is a shared layer that adds living conflict to the outside
+world of each theme.
+
+---
+
+## 18. World Accents
+
+Each world's agents speak with a distinct accent that flavors their
+chat messages, status updates, and NPC dialogue. Accents are applied
+as a system prompt modifier — the agent's underlying LLM is instructed
+to write in the accent, so it affects word choice, slang, and phrasing
+without changing the actual capabilities.
+
+| World | Accent | Example phrasing |
+|---|---|---|
+| HQ (default) | Neutral / standard | "Task completed successfully." |
+| Erics Alley | Street / urban slang | "Yo, that's done. Handled it, boss." |
+| Hawaii | Pidgin / Hawaiian Creole | "Ho brah, all pau. We good." |
+| Old South | Southern drawl / 1812-era | "Well I do declare, that task is done right proper." |
+
+### 18.1 Implementation
+
+The accent is defined in `world-theme.json` as a `dialect` field on the
+`WorldTheme` interface:
+
+```json
+{
+  "dialect": {
+    "systemPromptSuffix": "Speak with a Southern drawl appropriate to the
+      early 1800s Louisiana territory. Use period-appropriate language
+      but remain clear and professional.",
+    "chatStyle": "southern_1812",
+    "emotes": ["yall", "reckon", "declare"]
+  }
+}
+```
+
+The `systemPromptSuffix` is appended to each agent's system prompt when
+they are hired in that world. This is the simplest approach — no
+post-processing or translation layer needed. The LLM naturally adopts
+the accent in all its outputs.
+
+### 18.2 Accent Definitions
+
+**Erics Alley — Street/Urban:**
+- Suffix: "Speak casually with urban street slang. Be direct, a little
+  rough around the edges, but still competent and professional."
+- Emotes: smoke, shrug, cough
+
+**Hawaii — Pidgin/Hawaiian Creole:**
+- Suffix: "Speak in Hawaiian Pidgin English. Use words like 'brah',
+  'da kine', 'pau', 'mahalo'. Keep it warm and friendly."
+- Emotes: shaka, mahalo, chee hoo
+
+**Old South — Southern Drawl / 1812-era:**
+- Suffix: "Speak with a refined Southern drawl appropriate to the early
+  1800s Louisiana territory. Use period language like 'I do declare',
+  'reckon', 'yonder'. Be courtly and genteel but capable."
+- Emotes: declare, reckon, yonder
+
+### 18.3 Type Definition
+
+Add to `WorldTheme` interface in `shared/types.ts`:
+
+```typescript
+export interface ThemeDialect {
+  systemPromptSuffix: string;
+  chatStyle: string;
+  emotes?: string[];
+}
+```
+
+Add `dialect?: ThemeDialect` to `WorldTheme`.
+
+### 18.4 Wiring
+
+When `manager.ts` constructs the agent's system prompt, it checks for
+`worldTheme.dialect.systemPromptSuffix` and appends it. This happens
+at hire time and on world theme change. No client-side changes needed
+— the accent flows naturally through the existing chat and status
+message pipeline.

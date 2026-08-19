@@ -19,6 +19,12 @@ import { SS_FACTOR } from "./world";
 import * as loadingOverlay from "./loading-overlay";
 import { setCharTextureProvider, setCharComponentProvider } from "./chargen";
 import type { CharTextureProvider, CharComponentProvider } from "../../../shared/char-draw";
+import { generateAlleyTileset, generateAlleyWorldTiles } from "./alley-tiles";
+import { generateHawaiiTileset, generateHawaiiWorldTiles } from "./hawaii-tiles";
+import { generateSouthTileset, generateSouthWorldTiles } from "./south-tiles";
+import "./furniture-alley"; // auto-registers alley furniture drawing functions
+import "./furniture-hawaii"; // auto-registers hawaii furniture drawing functions
+import "./furniture-south"; // auto-registers old south furniture drawing functions
 
 /**
  * Boot scene — shows a loading bar while assets load, then generates all
@@ -174,6 +180,26 @@ export class BootScene extends Phaser.Scene {
     const theme = this.cache.json.get("world-theme") as WorldTheme | undefined;
     if (theme) {
       this.registry.set("worldTheme", theme);
+
+      // Generate procedural tilesets for procedural-tier themes that have
+      // their own tileset path but no AI spritesheet loaded.
+      if (theme.assets?.assetTier !== "ai" && theme.office?.tilesetPath) {
+        // For Erics Alley, generate the procedural tileset and world tiles
+        if (theme.id === "erics-alley") {
+          generateAlleyTileset(this, "tiles-theme");
+          generateAlleyWorldTiles(this);
+        }
+        // For Hawaii, generate the procedural tileset and world tiles
+        if (theme.id === "hawaii") {
+          generateHawaiiTileset(this, "tiles-theme");
+          generateHawaiiWorldTiles(this);
+        }
+        // For Old South, generate the procedural tileset and world tiles
+        if (theme.id === "old-south") {
+          generateSouthTileset(this, "tiles-theme");
+          generateSouthWorldTiles(this);
+        }
+      }
     }
 
     // For procedural-tier worlds, remove AI atlas textures and 3D creature

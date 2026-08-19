@@ -31,6 +31,9 @@ import type {
   TaskCategory,
   TaskPhase,
   OfficeMCPServer,
+  WorldTheme,
+  AutomationStats,
+  DecompositionScore,
 } from "../shared/types.js";
 import { ACCENTS, CHAR_VARIANTS, DEFAULT_SETTINGS, DEFAULT_PERSONALITY, OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, ACCENT_COLOR_OPTIONS, randomPersonality } from "../shared/types.js";
 import type { ProviderRunner } from "./providers/types.js";
@@ -43,6 +46,7 @@ import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
 import { getProviderConfig } from "./providers/api-config.js";
 import { recordUsage, getMonthlySpend, getUsageCap } from "./usage.js";
+import { supabaseAdmin } from "./supabase.js";
 import { CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
 import { fetchCatalog } from "./mcp-store.js";
 import { searchPulseMCP, shouldSearchPulseMCP, extractSearchQuery } from "./pulsemcp.js";
@@ -52,6 +56,8 @@ import { getOrCreateAgentWallet as getCrossmintWallet, getAgentBalances as getCr
 import type { CircleServiceConfig } from "./providers/premium-proxy.js";
 import { OfficeState } from "./office-state.js";
 import { registerServer, listServers, getServerConfigs, unregisterServer, loadServers, restartServer } from "./mcp-forge.js";
+import { ProfileManager } from "./profile.js";
+import { sendCreditDepletion } from "./funnel-emails.js";
 
 /** Build a compact categorized summary of the curated MCP catalog from DB. */
 async function catalogSummary(): Promise<string> {
@@ -437,8 +443,16 @@ export class AgentManager {
   private pendingHandoffs = new Map<string, { targetId: string; task: string; result: string; cardId: string | null; notifyId?: string }>();
   /** Current subscription tier — set by server when payment status is loaded. */
   subscriptionTier: SubscriptionTier | null = null;
+  /** Whether the user has paid the one-time entry fee. */
+  entrancePaid = false;
   /** Max agents allowed for this user's tier. */
   agentLimit = 0;
+  /** Timestamp of last WebSocket activity from the user. */
+  lastActiveAt = Date.now();
+  /** Timestamp of last inbound platform message from the user. */
+  lastPlatformEngagementAt = 0;
+  /** Timestamp of last platform notification sent (rate limit). */
+  private lastPlatformNotificationAt = 0;
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
   setApiKey(key: string | null): void {
@@ -526,6 +540,8 @@ export class AgentManager {
   }
 
   private isUserConnectedFn: () => boolean;
+  private dialectSuffix: string | null = null;
+  public onTaskComplete: ((agentId: string, success: boolean, durationMin: number, taskType: string) => void) | null = null;
 
   constructor(
     rootDir: string,
@@ -542,6 +558,20 @@ export class AgentManager {
     mkdirSync(this.workspaceRoot, { recursive: true });
     mkdirSync(join(this.workspaceRoot, "shared"), { recursive: true });
     this.apiKey = apiKey;
+
+    // Load world-theme.json dialect (accent) if present on disk
+    try {
+      const themePath = join(rootDir, "client/public/assets/world-theme.json");
+      if (existsSync(themePath)) {
+        const theme = JSON.parse(readFileSync(themePath, "utf8")) as WorldTheme;
+        if (theme.dialect?.systemPromptSuffix) {
+          this.dialectSuffix = theme.dialect.systemPromptSuffix;
+          console.log(`[manager] World dialect loaded: ${theme.dialect.chatStyle ?? theme.id}`);
+        }
+      }
+    } catch (e) {
+      // No theme or parse error — fine, default neutral accent
+    }
 
     // reload the office from the save file
     const savedPendingTasks = saved?.pendingTasks ?? {};
@@ -1106,6 +1136,16 @@ export class AgentManager {
     return this.platformStates;
   }
 
+  /** Get user activity status for retention system. */
+  getActivityStatus(): { lastActiveAt: number; lastPlatformEngagementAt: number } {
+    return { lastActiveAt: this.lastActiveAt, lastPlatformEngagementAt: this.lastPlatformEngagementAt };
+  }
+
+  /** Mark platform engagement when an inbound message is received from the user. */
+  markPlatformEngagement(): void {
+    this.lastPlatformEngagementAt = Date.now();
+  }
+
   private static autoReconfigureDone = false;
   private static hermesGatewayInitialized = false;
 
@@ -1421,6 +1461,82 @@ export class AgentManager {
     return [...this.schedules.values()];
   }
 
+  /** Compute real-time automation throughput stats. */
+  computeAutomationStats(): AutomationStats {
+    const now = Date.now();
+    const oneHourAgo = now - 60 * 60 * 1000;
+    const npcIds = new Set([OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID]);
+
+    let recentTasks = 0;
+    let totalSuccess = 0;
+    let totalHistory = 0;
+    let totalDurationMs = 0;
+    let busiestName: string | null = null;
+    let busiestCount = 0;
+    let idleAgents = 0;
+    let hireableCount = 0;
+    let totalTasksDone = 0;
+
+    for (const rt of this.agents.values()) {
+      if (npcIds.has(rt.info.id)) continue;
+      hireableCount++;
+
+      totalTasksDone += rt.info.tasksDone;
+
+      if (rt.info.status === "idle") idleAgents++;
+
+      // Count recent tasks (last 1h) from history
+      for (const h of rt.taskHistory) {
+        if (h.ts >= oneHourAgo) recentTasks++;
+        totalHistory++;
+        if (h.success) totalSuccess++;
+        totalDurationMs += h.durationMs;
+      }
+
+      if (rt.info.tasksDone > busiestCount) {
+        busiestCount = rt.info.tasksDone;
+        busiestName = rt.info.name;
+      }
+    }
+
+    // Compute pipeline depth (longest handoff chain from schedules)
+    const handoffMap = new Map<string, string>();
+    for (const sched of this.schedules.values()) {
+      if (sched.enabled && sched.handoffTo) {
+        handoffMap.set(sched.agentId, sched.handoffTo);
+      }
+    }
+    let maxDepth = 0;
+    for (const start of handoffMap.keys()) {
+      let depth = 0;
+      let current: string | undefined = start;
+      const visited = new Set<string>();
+      while (current && !visited.has(current)) {
+        visited.add(current);
+        current = handoffMap.get(current);
+        depth++;
+      }
+      if (depth > maxDepth) maxDepth = depth;
+    }
+
+    // Automation rate: scheduled tasks vs total
+    const enabledSchedules = [...this.schedules.values()].filter((s) => s.enabled).length;
+    const totalTasks = totalHistory || 1;
+    const automationRate = totalTasks > 0 ? Math.min(1, enabledSchedules / (enabledSchedules + hireableCount)) : 0;
+
+    return {
+      throughput: recentTasks,
+      successRate: totalHistory > 0 ? totalSuccess / totalHistory : 1,
+      avgCompletionMin: totalHistory > 0 ? (totalDurationMs / totalHistory) / 60000 : 0,
+      busiestAgent: busiestName,
+      idlePct: hireableCount > 0 ? idleAgents / hireableCount : 1,
+      automationRate,
+      pipelineDepth: maxDepth,
+      totalTasksDone,
+      agentCount: hireableCount,
+    };
+  }
+
   /** Get a single agent's info by ID, or null if not found. */
   getAgentInfo(agentId: string): AgentInfo | null {
     return this.agents.get(agentId)?.info ?? null;
@@ -1576,6 +1692,18 @@ export class AgentManager {
     await this.hire(cleanName, "cline", model, systemPrompt, "worker", undefined, undefined, mcpServers, undefined, cdpSolana, crossmintWallet, isPremium, circleServices, skills);
     // Find the agent we just hired by name
     const rt = [...this.agents.values()].find((a) => a.info.name === cleanName);
+    // Surface MCP OAuth requirements if the new agent has remote MCP servers
+    if (mcpServers && mcpServers.length > 0 && rt) {
+      const needsAuth = mcpServers.filter(s => s.url);
+      if (needsAuth.length > 0) {
+        this.broadcast({
+          type: "mcp_auth_required",
+          agentId: rt.info.id,
+          agentName: cleanName,
+          servers: needsAuth.map(s => ({ name: s.name ?? "MCP Server", url: s.url! })),
+        });
+      }
+    }
     return rt?.info.id ?? "";
   }
 
@@ -1706,7 +1834,7 @@ export class AgentManager {
       this.broadcast({
         type: "payment_required",
         reason: "subscription",
-        message: "The Wizard is a premium world-builder. Upgrade to the Pro plan ($4.99/mo) or higher to assign tasks to the Wizard.",
+        message: "The Wizard is a premium world-builder. Upgrade to the Pro plan ($19.99/mo) or higher to assign tasks to the Wizard.",
         tier: this.subscriptionTier,
       });
       return;
@@ -1730,6 +1858,18 @@ export class AgentManager {
       const pos = rt.taskQueue.length;
       this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task queued (#${pos}).` });
       this.log(rt, "status", `Queued task: ${cleanTask}`);
+      // Update card to "paused" so it's visually distinct from unclaimed backlog cards
+      if (effectiveCardId) {
+        const card = this.board.get(effectiveCardId);
+        if (card && (card.status === "backlog" || card.status === "in_progress")) {
+          card.status = "paused";
+          card.assignedAgentId = agentId;
+          card.statusChangedAt = Date.now();
+          this.persistBoard();
+          this.broadcast({ type: "card", card });
+          this.broadcastGanttUpdate();
+        }
+      }
       return;
     }
 
@@ -1858,7 +1998,7 @@ export class AgentManager {
   /** Check monthly usage cap before running a task. Blocks with a payment_required message if exceeded. */
   private async runTaskWithUsageCap(rt: AgentRuntime, task: string, isResume: boolean): Promise<void> {
     if (this.userId) {
-      const cap = getUsageCap(this.subscriptionTier);
+      const cap = getUsageCap(this.subscriptionTier, this.entrancePaid);
       if (cap > 0) {
         const spend = await getMonthlySpend(this.userId);
         if (spend >= cap) {
@@ -1872,6 +2012,18 @@ export class AgentManager {
           });
           this.setStatus(rt, "idle");
           rt.info.task = null;
+          // Send credit depletion email (fire-and-forget)
+          if (this.userId) {
+            void (async () => {
+              try {
+                const { data: authData } = await supabaseAdmin.auth.admin.getUserById(this.userId);
+                const email = authData.user?.email;
+                if (email) {
+                  void sendCreditDepletion(this.userId, email, Boolean(this.subscriptionTier)).catch(() => {});
+                }
+              } catch { /* ignore */ }
+            })();
+          }
           return;
         }
       }
@@ -1883,6 +2035,19 @@ export class AgentManager {
   private drainQueue(rt: AgentRuntime): void {
     if (rt.taskQueue.length === 0) return;
     const next = rt.taskQueue.shift()!;
+    // Update card status from paused/backlog → in_progress
+    if (next.cardId) {
+      const card = this.board.get(next.cardId);
+      if (card && (card.status === "paused" || card.status === "backlog")) {
+        card.status = "in_progress";
+        card.assignedAgentId = rt.info.id;
+        card.lockedBy = rt.info.id;
+        card.statusChangedAt = Date.now();
+        this.persistBoard();
+        this.broadcast({ type: "card", card });
+        this.broadcastGanttUpdate();
+      }
+    }
     if (next.freshStart) {
       rt.memorySummary = this.buildMemorySummary(rt);
       rt.freshStart = true;
@@ -1912,10 +2077,6 @@ export class AgentManager {
         rt.info.id !== WIZARD_ID &&
         rt.info.status !== "thinking" && rt.info.status !== "working" && rt.info.status !== "waiting",
     );
-    if (free.length === 0) {
-      this.broadcast({ type: "toast", text: "Everyone is busy (or nobody works here yet)." });
-      return;
-    }
 
     // Create a goal card on the board for visibility
     const goalCard: TaskCard = {
@@ -1940,15 +2101,22 @@ export class AgentManager {
     // Try to route through the Office Manager for decomposition
     const officeManager = this.agents.get(OFFICE_MANAGER_ID);
     if (officeManager && officeManager.info.status !== "thinking" && officeManager.info.status !== "working" && officeManager.info.status !== "waiting") {
-      this.log(officeManager, "status", `Office goal received — decomposing for the team.`);
+      const msg = free.length === 0
+        ? `Office goal sent to the Office Manager — she'll hire agents and delegate.`
+        : `Office goal sent to the Office Manager for delegation.`;
+      this.log(officeManager, "status", `Office goal received — ${free.length === 0 ? "office is empty, will hire and decompose" : "decomposing for the team"}.`);
       this.broadcast({ type: "huddle", agentIds: free.map((rt) => rt.info.id) });
       // Assign to the Office Manager with the goal card — its managerBrief will handle decomposition
       this.startTask(officeManager, clean, undefined, goalCard.id, false);
-      this.broadcast({ type: "toast", text: `Office goal sent to the Office Manager for delegation.` });
+      this.broadcast({ type: "toast", text: msg });
       return;
     }
 
-    // Fallback: Office Manager unavailable — route to a single agent (stop rule: sequential work shouldn't fan out)
+    // Fallback: Office Manager unavailable
+    if (free.length === 0) {
+      this.broadcast({ type: "toast", text: "Everyone is busy (or nobody works here yet). The Office Manager is also unavailable — try again in a moment." });
+      return;
+    }
     const pick = free.sort((a, b) => {
       // Prefer idle agents, then those with fewer completed tasks (less fatigued)
       const aIdle = a.info.status === "idle" ? 0 : 1;
@@ -2467,7 +2635,13 @@ export class AgentManager {
     const card = this.board.get(cardId);
     const rt = this.agents.get(agentId);
     if (!card || !rt) return;
-    if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
+    // Check dependencies before starting
+    if (!this.canStartCard(card)) {
+      this.broadcast({ type: "toast", text: `Can't start "${card.title.slice(0, 40)}" — waiting on dependencies.` });
+      return;
+    }
+    const isBusy = rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting";
+    if (isBusy) {
       this.broadcast({ type: "toast", text: `${rt.info.name} is busy — task will be queued.` });
     }
     // unassign any previous agent from this card
@@ -2475,9 +2649,9 @@ export class AgentManager {
       const prev = this.agents.get(card.assignedAgentId);
       if (prev) prev.cardId = null;
     }
-    card.status = "in_progress";
+    card.status = isBusy ? "paused" : "in_progress";
     card.assignedAgentId = agentId;
-    card.lockedBy = agentId;
+    card.lockedBy = isBusy ? undefined : agentId;
     card.statusChangedAt = Date.now();
     if (!card.originalAgentId) card.originalAgentId = agentId;
     card.revertedAt = null;
@@ -2686,6 +2860,202 @@ export class AgentManager {
     this.broadcastGanttUpdate();
   }
 
+  /** Create a goal card for manual decomposition by the user. */
+  createGoal(title: string, description?: string): void {
+    const clean = title.trim();
+    if (!clean) return;
+    const goalCard: TaskCard = {
+      id: randomUUID().slice(0, 8),
+      title: clean.length > 80 ? clean.slice(0, 77) + "…" : clean,
+      description: description?.trim() || clean,
+      status: "in_progress",
+      assignedAgentId: null,
+      createdAt: Date.now(),
+      type: "goal",
+      progress: 0,
+      manualDecompose: true,
+    };
+    this.board.set(goalCard.id, goalCard);
+    this.persistBoard();
+    this.broadcast({ type: "card", card: goalCard });
+    this.broadcast({ type: "toast", text: "Goal created — add subtask cards and assign them to your agents." });
+  }
+
+  /** Score a manual decomposition after all subtasks complete. */
+  scoreDecomposition(goalCardId: string): DecompositionScore | null {
+    const goal = this.board.get(goalCardId);
+    if (!goal || goal.type !== "goal") return null;
+
+    // Gather all subtask cards linked to this goal
+    const subtasks = [...this.board.values()].filter(
+      (c) => c.parentGoalId === goalCardId,
+    );
+
+    if (subtasks.length === 0) return null;
+
+    // Build dependency graph and compute metrics
+    const cardIds = new Set(subtasks.map((c) => c.id));
+    const deps = new Map<string, string[]>();
+    for (const c of subtasks) {
+      deps.set(c.id, (c.dependsOnCardIds ?? []).filter((id) => cardIds.has(id)));
+    }
+
+    // Longest path (critical path length) via topological sort
+    const longestPath = this.computeLongestPath(subtasks, deps);
+
+    // Max parallel width (max number of tasks at any dependency level)
+    const maxParallel = this.computeMaxParallel(subtasks, deps);
+
+    // Rework count: subtasks that were reverted or have reworkCount
+    const reworkCount = subtasks.filter((c) => c.revertedAt != null).length;
+
+    // Execution success
+    const completed = subtasks.filter((c) => c.status === "done").length;
+    const executionSuccess = subtasks.length > 0
+      ? Math.round((completed / subtasks.length) * 100)
+      : 0;
+
+    // Coverage: heuristic based on subtask count vs goal description length
+    // More subtasks covering a complex goal = better coverage
+    const goalWordCount = goal.description.split(/\s+/).length;
+    const idealSubtaskCount = Math.max(2, Math.min(8, Math.ceil(goalWordCount / 10)));
+    const coverage = Math.min(100, Math.round((subtasks.length / idealSubtaskCount) * 100));
+
+    // Parallelism: ratio of max parallel width to total subtasks
+    const parallelism = subtasks.length > 1
+      ? Math.round((maxParallel / subtasks.length) * 100)
+      : 100;
+
+    // Dependency depth: shallower = better. Invert: 1 level = 100, 5+ levels = 0
+    const dependencyDepth = Math.max(0, Math.round(100 - (longestPath - 1) * 25));
+
+    // Granularity: sweet spot is 3-7 subtasks
+    const n = subtasks.length;
+    let granularity: number;
+    if (n === 1) granularity = 20;
+    else if (n <= 3) granularity = 70 + (n - 2) * 10;
+    else if (n <= 7) granularity = 100;
+    else if (n <= 12) granularity = 100 - (n - 7) * 10;
+    else granularity = Math.max(20, 50 - (n - 12) * 5);
+
+    // Execution success penalty for rework
+    const reworkPenalty = reworkCount * 15;
+    const adjustedExecution = Math.max(0, executionSuccess - reworkPenalty);
+
+    // Overall score (weighted average)
+    const overall = Math.round(
+      coverage * 0.20 +
+      parallelism * 0.20 +
+      dependencyDepth * 0.15 +
+      granularity * 0.15 +
+      adjustedExecution * 0.30,
+    );
+
+    // Letter grade
+    let grade: string;
+    if (overall >= 90) grade = "S";
+    else if (overall >= 80) grade = "A";
+    else if (overall >= 65) grade = "B";
+    else if (overall >= 50) grade = "C";
+    else grade = "D";
+
+    const summary = `${subtasks.length} subtasks, ${reworkCount} rework, ${longestPath}-deep chain, ${maxParallel} parallel. ` +
+      (overall >= 80 ? "Excellent decomposition!" : overall >= 65 ? "Solid breakdown." : overall >= 50 ? "Workable but could be better." : "Consider restructuring your decomposition.");
+
+    const score: DecompositionScore = {
+      grade,
+      overall,
+      coverage,
+      parallelism,
+      dependencyDepth,
+      granularity,
+      executionSuccess: adjustedExecution,
+      subtaskCount: subtasks.length,
+      reworkCount,
+      longestPath,
+      maxParallel,
+      summary,
+    };
+
+    // Persist score on the goal card
+    goal.decompositionScore = score;
+    this.persistBoard();
+    this.broadcast({ type: "card", card: goal });
+
+    // ── Elegant Solution Detection ──
+    // Bronze: zero rework + 2+ parallel paths
+    // Silver: zero rework + 2+ parallel paths + all subtasks completed (executionSuccess = 100)
+    // Gold: zero rework + 3+ parallel paths + executionSuccess = 100 + granularity >= 80
+    let elegantTier: "bronze" | "silver" | "gold" | null = null;
+    if (reworkCount === 0 && maxParallel >= 2) {
+      if (maxParallel >= 3 && adjustedExecution === 100 && granularity >= 80) {
+        elegantTier = "gold";
+      } else if (adjustedExecution === 100) {
+        elegantTier = "silver";
+      } else {
+        elegantTier = "bronze";
+      }
+    }
+
+    if (elegantTier) {
+      this.broadcast({ type: "elegant_solution", goalCardId, tier: elegantTier, score } satisfies ServerMsg);
+      const tierEmoji = elegantTier === "gold" ? "🥇" : elegantTier === "silver" ? "🥈" : "🥉";
+      this.broadcast({ type: "toast", text: `${tierEmoji} Elegant Solution detected! ${elegantTier.toUpperCase()} tier — zero rework, ${maxParallel} parallel paths.` });
+    }
+
+    return score;
+  }
+
+  /** Compute the longest dependency chain length via topological sort. */
+  private computeLongestPath(subtasks: TaskCard[], deps: Map<string, string[]>): number {
+    const memo = new Map<string, number>();
+
+    const dfs = (id: string): number => {
+      if (memo.has(id)) return memo.get(id)!;
+      const d = deps.get(id) ?? [];
+      if (d.length === 0) {
+        memo.set(id, 1);
+        return 1;
+      }
+      const maxDep = Math.max(...d.map((depId) => dfs(depId)));
+      const result = maxDep + 1;
+      memo.set(id, result);
+      return result;
+    };
+
+    let max = 0;
+    for (const c of subtasks) {
+      max = Math.max(max, dfs(c.id));
+    }
+    return max;
+  }
+
+  /** Compute max parallel width (max tasks at any dependency level). */
+  private computeMaxParallel(subtasks: TaskCard[], deps: Map<string, string[]>): number {
+    const levels = new Map<string, number>();
+
+    const getLevel = (id: string): number => {
+      if (levels.has(id)) return levels.get(id)!;
+      const d = deps.get(id) ?? [];
+      if (d.length === 0) {
+        levels.set(id, 0);
+        return 0;
+      }
+      const maxDep = Math.max(...d.map((depId) => getLevel(depId)));
+      const result = maxDep + 1;
+      levels.set(id, result);
+      return result;
+    };
+
+    const levelCounts = new Map<number, number>();
+    for (const c of subtasks) {
+      const lvl = getLevel(c.id);
+      levelCounts.set(lvl, (levelCounts.get(lvl) ?? 0) + 1);
+    }
+
+    return Math.max(0, ...levelCounts.values());
+  }
+
   /** Broadcast a Gantt update with all cards and their dependencies. */
   private broadcastGanttUpdate(): void {
     const cards = [...this.board.values()];
@@ -2701,6 +3071,71 @@ export class AgentManager {
       }
     }
     this.broadcast({ type: "gantt_update", cards, dependencies });
+  }
+
+  /** Detect breakthrough performance from an agent. */
+  private checkBreakthrough(rt: AgentRuntime, task: string, durationMs: number): void {
+    // Only check hireable agents (not NPC IDs)
+    if (rt.info.id === OFFICE_MANAGER_ID || rt.info.id === HERMES_ID || rt.info.id === WIZARD_ID) return;
+
+    const history = rt.taskHistory;
+    const successes = history.filter((h) => h.success);
+
+    // Trigger 1: Success rate >90% on first 3+ tasks
+    if (successes.length >= 3 && rt.info.tasksDone <= 5) {
+      const successRate = successes.length / history.length;
+      if (successRate >= 0.9) {
+        this.broadcast({
+          type: "breakthrough",
+          agentId: rt.info.id,
+          agentName: rt.info.name,
+          trigger: "high_success_rate",
+          description: `${rt.info.name} has a ${Math.round(successRate * 100)}% success rate on their first ${history.length} tasks. Either you hired well or they're showing off. Possibly both.`,
+        } satisfies ServerMsg);
+        return;
+      }
+    }
+
+    // Trigger 2: Completes a task 2x faster than the agent's historical average
+    if (successes.length >= 3) {
+      const prevDurations = successes.slice(1).map((h) => h.durationMs).filter((d) => d > 0);
+      if (prevDurations.length >= 2) {
+        const avg = prevDurations.reduce((a, b) => a + b, 0) / prevDurations.length;
+        if (avg > 0 && durationMs < avg * 0.5) {
+          this.broadcast({
+            type: "breakthrough",
+            agentId: rt.info.id,
+            agentName: rt.info.name,
+            trigger: "fast_completion",
+            description: `${rt.info.name} just completed a task in ${Math.round(durationMs / 1000)}s — twice as fast as their average. Something clicked. Or they're caffeinated. Or both.`,
+          } satisfies ServerMsg);
+          return;
+        }
+      }
+    }
+
+    // Trigger 3: Completes a task 2x faster than any other agent on similar tasks
+    const allAgents = [...this.agents.values()].filter((a) =>
+      a.info.id !== rt.info.id &&
+      a.info.id !== OFFICE_MANAGER_ID &&
+      a.info.id !== HERMES_ID &&
+      a.info.id !== WIZARD_ID
+    );
+    for (const other of allAgents) {
+      const otherSuccesses = other.taskHistory.filter((h) => h.success);
+      if (otherSuccesses.length < 2) continue;
+      const otherAvg = otherSuccesses.reduce((sum, h) => sum + h.durationMs, 0) / otherSuccesses.length;
+      if (otherAvg > 0 && durationMs < otherAvg * 0.5) {
+        this.broadcast({
+          type: "breakthrough",
+          agentId: rt.info.id,
+          agentName: rt.info.name,
+          trigger: "faster_than_peers",
+          description: `${rt.info.name} finished in ${Math.round(durationMs / 1000)}s — twice as fast as ${other.info.name}'s average. Not a competition. But it kind of is.`,
+        } satisfies ServerMsg);
+        return;
+      }
+    }
   }
 
   /** Task completed successfully — move the card to done. */
@@ -2761,6 +3196,16 @@ export class AgentManager {
   /** Get the shared workspace path. */
   getSharedWorkspace(): string {
     return join(this.workspaceRoot, "shared");
+  }
+
+  /** Get the workspace root path (for retention system to read events.jsonl). */
+  getWorkspaceRoot(): string {
+    return this.workspaceRoot;
+  }
+
+  /** Get the world dialect suffix (for retention emails). */
+  getDialectSuffix(): string | null {
+    return this.dialectSuffix;
   }
 
   /** Get an agent's current log entries (for log history on subscribe). */
@@ -2894,6 +3339,89 @@ export class AgentManager {
   }
 
   // ── Autonomous think loop ──────────────────────────────────────────────
+
+  /** Send a notification to the user's connected chat platform when a major task
+   *  (assigned via website) completes and the user is not currently active.
+   *  Rate-limited to 1 notification per 30 min. Only for tasks > 5 min. */
+  private async notifyConnectedPlatform(rt: AgentRuntime, task: string, finalText: string): Promise<void> {
+    if (this.shuttingDown || !this.hermesClient) return;
+
+    // Only notify for major tasks (> 5 min)
+    if (!rt.taskStartedAt || Date.now() - rt.taskStartedAt < 5 * 60 * 1000) return;
+
+    // Rate limit: 1 notification per 30 min
+    const now = Date.now();
+    if (now - this.lastPlatformNotificationAt < 30 * 60 * 1000) return;
+
+    // Find a connected platform with a home channel
+    const creds = this.save.getPlatformCredentials();
+    let targetPlatform: string | null = null;
+    let targetChannel: string | null = null;
+
+    // Check Telegram first (most common)
+    if (creds.TELEGRAM_BOT_TOKEN && creds.TELEGRAM_HOME_CHANNEL) {
+      targetPlatform = "telegram";
+      targetChannel = creds.TELEGRAM_HOME_CHANNEL;
+    } else if (creds.SLACK_BOT_TOKEN && creds.SLACK_HOME_CHANNEL) {
+      targetPlatform = "slack";
+      targetChannel = creds.SLACK_HOME_CHANNEL;
+    } else if (creds.DISCORD_BOT_TOKEN && creds.DISCORD_HOME_CHANNEL) {
+      targetPlatform = "discord";
+      targetChannel = creds.DISCORD_HOME_CHANNEL;
+    }
+
+    // Also check platformStates for connected platforms
+    if (!targetPlatform) {
+      for (const ps of this.platformStates) {
+        if (ps.connected) {
+          // Try to find a home channel in creds for this platform
+          const platKey = ps.platform.toUpperCase();
+          const channelKey = `${platKey}_HOME_CHANNEL`;
+          const channel = (creds as Record<string, string>)[channelKey];
+          if (channel) {
+            targetPlatform = ps.platform;
+            targetChannel = channel;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!targetPlatform || !targetChannel) return;
+
+    // Check if user is currently active on the website (within 5 min)
+    if (now - this.lastActiveAt < 5 * 60 * 1000) return;
+
+    // Build agent-originated message
+    const taskSummary = task.slice(0, 80);
+    let message = `Hey boss, ${rt.info.name} here. Just finished "${taskSummary}". Come check it out when you have a sec.`;
+
+    // Apply dialect if set
+    if (this.dialectSuffix) {
+      message += `\n\n— ${rt.info.name}`;
+    }
+
+    this.lastPlatformNotificationAt = now;
+
+    console.log(`[manager] Sending platform notification to ${targetChannel} via ${targetPlatform} for task completion`);
+    this.emitPlatformEvent(targetPlatform, "outbound", rt.info.name, message.slice(0, 500));
+
+    const ok = await this.hermesClient.sendMessage(targetPlatform, targetChannel, message);
+    if (ok) {
+      console.log(`[manager] Platform notification sent to ${targetChannel} via ${targetPlatform}`);
+      // Also send a narrated screenshot
+      void this.sendNarratedScreenshot(targetPlatform, targetChannel, {
+        agentName: rt.info.name,
+        task,
+        event: "task_completed",
+        roster: this.getNarrationRoster(),
+        agentOutput: finalText,
+        elapsedMs: now - (rt.taskStartedAt ?? now),
+      }).catch(() => {});
+    } else {
+      console.warn(`[manager] Platform notification failed for ${targetChannel} via ${targetPlatform}`);
+    }
+  }
 
   /** Periodic tick: send proactive narrated updates to platform users with active tasks. */
   private tickProactiveUpdates(): void {
@@ -3120,11 +3648,50 @@ export class AgentManager {
     return rt.info.skills.includes(card.category);
   }
 
+  /** Check if all dependencies of a card are satisfied (prerequisites done or in review). */
+  private canStartCard(card: TaskCard): boolean {
+    if (!card.dependsOnCardIds || card.dependsOnCardIds.length === 0) return true;
+    return card.dependsOnCardIds.every(depId => {
+      const dep = this.board.get(depId);
+      return dep && (dep.status === "done" || dep.status === "review_pending");
+    });
+  }
+
   /** An idle agent decides what to do autonomously. */
   private autonomousThink(rt: AgentRuntime): void {
     const p = rt.info.personality ?? DEFAULT_PERSONALITY;
     // Update mood
     this.updateMood(rt);
+
+    // 0. Auto-claim: idle agents pick up unassigned backlog cards matching their skills
+    if (rt.info.status === "idle" && rt.info.role !== "manager" && rt.info.id !== HERMES_ID && rt.info.id !== WIZARD_ID) {
+      const claimable = [...this.board.values()]
+        .filter(c =>
+          c.status === "backlog" &&
+          !c.assignedAgentId &&
+          c.type !== "chat" &&
+          c.type !== "goal" &&
+          this.canStartCard(c) &&
+          this.agentCanHandleCard(rt, c),
+        )
+        .sort((a, b) => {
+          const aMatch = a.category && rt.info.skills?.includes(a.category) ? 0 : 1;
+          const bMatch = b.category && rt.info.skills?.includes(b.category) ? 0 : 1;
+          if (aMatch !== bMatch) return aMatch - bMatch;
+          return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+        });
+
+      if (claimable.length > 0) {
+        const card = claimable[0];
+        if (card.revertedAt && Date.now() - card.revertedAt < 30_000) {
+          // 30s cooldown after a failed attempt — skip to emotes
+        } else {
+          this.log(rt, "status", `Picked up card: "${card.title.slice(0, 60)}"`);
+          this.assignCard(card.id, rt.info.id);
+          return;
+        }
+      }
+    }
 
     // 1. Devops (Hermes): monitor office task health and alert on stuck/error cards
     if (rt.info.role === "devops") {
@@ -3258,6 +3825,7 @@ export class AgentManager {
       `=== END API & TOOL BUDGET RULES ===`,
       `IMPORTANT: You must actually DO the work first using your tools (write_files, bash, read_files, etc.) before calling submit_and_exit. Do not just talk about doing the work — use the tools to create files, run commands, etc. After doing the work, read back any files you created to verify they exist and contain what you intended. Only then call submit_and_exit with verified=true and a summary of what you did. Calling submit_and_exit without having done the work is a failure. Do not just reply with text — always use submit_and_exit to complete the task.`,
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
+      this.dialectSuffix ? `\n\n=== WORLD DIALECT ===\n${this.dialectSuffix}` : "",
     ].join(" ");
   }
 
@@ -3271,6 +3839,9 @@ export class AgentManager {
         rt.info.status !== "working" &&
         rt.info.status !== "waiting",
     );
+    const allWorkers = [...this.agents.values()].filter(
+      (rt) => rt.info.id !== mgr.info.id && rt.info.role !== "manager",
+    );
     const roster =
       free
         .map(
@@ -3278,14 +3849,79 @@ export class AgentManager {
             `- ${rt.info.name} (${rt.info.tasksDone} tasks done)`,
         )
         .join("\n") || "(nobody is free right now)";
+
+    // If the office is empty or nobody is free, suggest hiring agents
+    let hireSuggestion = "";
+    if (allWorkers.length === 0) {
+      hireSuggestion = [
+        `\n⚠️ The office is empty. You MUST hire agents before delegating.`,
+        `Use the hire_agent tool to hire workers. Suggested agents for this goal:`,
+        this.suggestAgentsForGoal(goal),
+        `\nHire 2-3 agents with complementary skills, then decompose the goal into subtasks for them.`,
+        `After hiring, reply with ONLY a JSON array of subtasks for the newly hired agents.`,
+      ].join("\n");
+    } else if (free.length === 0) {
+      hireSuggestion = `\nAll current workers are busy. Consider using hire_agent to bring in more help if the goal requires skills nobody has.`;
+    }
+
     return [
       `The boss has given the office this goal:\n"${goal}"`,
       `Free staff right now:\n${roster}`,
+      hireSuggestion,
       `Break the goal into one clear, self-contained subtask per worker you want to involve. Use only the workers listed; not everyone needs a subtask. Subtasks run in separate workspaces, so each must stand alone.`,
       `If a subtask depends on another subtask's output, set "dependsOn" to the name of the worker whose output is needed. Dependent tasks will be queued until the prerequisite finishes.`,
       `Do not use any tools and do not do the work yourself. Reply with ONLY a JSON array, no markdown fences, like:\n[{"name":"Pixel","task":"...","dependsOn":""}]`,
-      `If nobody is free, reply [].`,
+      `If nobody is free and you can't hire, reply [].`,
     ].join("\n\n");
+  }
+
+  /** Suggest agents to hire based on goal keywords. */
+  private suggestAgentsForGoal(goal: string): string {
+    const goalLower = goal.toLowerCase();
+    const agentTemplates = [
+      { keywords: ["react", "frontend", "ui", "css", "tailwind", "component", "html", "vue", "svelte"],
+        name: "Pixel", model: "deepseek-v4-flash", prompt: "Frontend developer specializing in React, CSS, and UI components.", skills: "frontend" },
+      { keywords: ["api", "backend", "server", "database", "endpoint", "node", "python", "express", "rest", "graphql"],
+        name: "Cipher", model: "deepseek-v4-flash", prompt: "Backend engineer specializing in APIs, databases, and server logic.", skills: "backend" },
+      { keywords: ["deploy", "docker", "infrastructure", "ci", "railway", "devops", "kubernetes"],
+        name: "Stack", model: "deepseek-v4-flash", prompt: "DevOps engineer for deployments, CI/CD, and infrastructure.", skills: "devops" },
+      { keywords: ["research", "analyze", "investigate", "study", "survey", "report"],
+        name: "Sage", model: "deepseek-v4-flash", prompt: "Research analyst who investigates topics and produces reports.", skills: "research" },
+      { keywords: ["write", "blog", "article", "content", "docs", "documentation", "copy"],
+        name: "Quill", model: "deepseek-v4-flash", prompt: "Technical writer for documentation, articles, and content.", skills: "writing" },
+      { keywords: ["solana", "ethereum", "crypto", "token", "nft", "blockchain", "web3", "smart contract", "defi"],
+        name: "Hash", model: "deepseek-v4-flash", prompt: "Blockchain developer for smart contracts and Web3 integrations.", skills: "crypto" },
+      { keywords: ["data", "analytics", "csv", "json", "parse", "transform", "etl", "chart"],
+        name: "Data", model: "deepseek-v4-flash", prompt: "Data analyst who processes, transforms, and visualizes data.", skills: "data" },
+    ];
+
+    const suggestions: string[] = [];
+    for (const tmpl of agentTemplates) {
+      if (tmpl.keywords.some(k => goalLower.includes(k))) {
+        suggestions.push(`- hire_agent(name="${tmpl.name}", model="${tmpl.model}", systemPrompt="${tmpl.prompt}") — skills: ${tmpl.skills}`);
+      }
+    }
+    if (suggestions.length === 0) {
+      suggestions.push(`- hire_agent(name="Spark", model="deepseek-v4-flash", systemPrompt="General-purpose developer who can handle coding tasks across the stack.")`);
+    }
+    if (suggestions.length === 1) {
+      suggestions.push(`- hire_agent(name="Atlas", model="deepseek-v4-flash", systemPrompt="General-purpose developer who can handle coding tasks across the stack.")`);
+    }
+    return suggestions.join("\n");
+  }
+
+  /** Infer task categories from an agent's system prompt for skill-based card matching. */
+  private inferSkillsFromPrompt(prompt: string): TaskCategory[] {
+    const p = prompt.toLowerCase();
+    const skills: TaskCategory[] = [];
+    if (/\breact|vue|angular|svelte|frontend|css|tailwind|html|ui|component\b/.test(p)) skills.push("frontend");
+    if (/\bapi|backend|server|endpoint|database|sql|node|python|express|rest|graphql\b/.test(p)) skills.push("backend");
+    if (/\bdeploy|docker|kubernetes|ci\/cd|pipeline|infrastructure|railway|devops\b/.test(p)) skills.push("devops");
+    if (/\bdata|analytics|csv|json|parse|transform|etl|chart\b/.test(p)) skills.push("data");
+    if (/\bwrite|blog|article|content|copy|documentation|docs\b/.test(p)) skills.push("writing");
+    if (/\bresearch|investigate|analyze|study|survey|report\b/.test(p)) skills.push("research");
+    if (/\bsolana|ethereum|crypto|wallet|token|nft|blockchain|web3|defi|smart contract\b/.test(p)) skills.push("crypto");
+    return skills.length > 0 ? skills : ["general"];
   }
 
   private async runTask(rt: AgentRuntime, task: string, isResume = false): Promise<void> {
@@ -3474,9 +4110,11 @@ export class AgentManager {
               // Respect agent limit (exclude permanent NPCs)
               if (this.agentLimit > 0 && this.hireableAgentCount >= this.agentLimit) {
                 this.log(rt, "status", `Tried to hire ${name} but agent limit reached (${this.hireableAgentCount}/${this.agentLimit}).`);
+                this.broadcast({ type: "payment_required", reason: "agent_limit", message: `Agent limit reached (${this.agentLimit}). Upgrade to hire more.`, agentLimit: this.agentLimit });
                 return "";
               }
-              return this.hireAgent(name, model, systemPrompt);
+              const skills = this.inferSkillsFromPrompt(systemPrompt);
+              return this.hireAgent(name, model, systemPrompt, undefined, undefined, undefined, undefined, undefined, skills);
             }
           : undefined,
         delegateTask: rt.info.role === "devops"
@@ -3517,40 +4155,50 @@ export class AgentManager {
             isChat: false,
           });
         },
-        requestGate: (question: string, options: string[]): Promise<string> => {
+        requestGate: (question: string, options: string[], freeText = false): Promise<string> => {
           return new Promise((resolve) => {
             const gateId = randomUUID();
             const userConnected = this.isUserConnectedFn();
-            this.broadcast({ type: "agent_gate", gateId, agentId: rt.info.id, agentName: rt.info.name, question, options });
-            this.log(rt, "status", `Asked the boss: "${question}" (options: ${options.join(", ")})`);
+            this.broadcast({ type: "agent_gate", gateId, agentId: rt.info.id, agentName: rt.info.name, question, options, freeText });
+            this.log(rt, "status", `Asked the boss: "${question}"${freeText ? " (free-text)" : ` (options: ${options.join(", ")})`}`);
 
             // If user is not in the office, forward the gate through outbound channels
             if (!userConnected) {
               const platformCtx = rt.platformContext;
               if (platformCtx && this.hermesClient) {
                 // Task came from a messaging platform — send gate question there
-                const optionList = options.map((o, i) => `${i + 1}. ${o}`).join("\n");
-                const gateMsg = `❓ ${rt.info.name} needs your decision:\n\n${question}\n\nReply with a number:\n${optionList}`;
-                this.hermesClient.sendMessage(platformCtx.platform, platformCtx.sender, gateMsg).then((ok) => {
-                  if (ok) {
-                    this.log(rt, "status", `Gate question sent to ${platformCtx.sender} via ${platformCtx.platform}`);
-                  } else {
+                if (freeText) {
+                  const gateMsg = `❓ ${rt.info.name} needs your input:\n\n${question}\n\nReply with your answer.`;
+                  this.hermesClient.sendMessage(platformCtx.platform, platformCtx.sender, gateMsg).then((ok) => {
+                    if (ok) this.log(rt, "status", `Gate question sent to ${platformCtx.sender} via ${platformCtx.platform}`);
+                    else this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will auto-resolve on timeout`);
+                  }).catch(() => {
                     this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will auto-resolve on timeout`);
-                  }
-                }).catch(() => {
-                  this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will auto-resolve on timeout`);
-                });
+                  });
+                } else {
+                  const optionList = options.map((o, i) => `${i + 1}. ${o}`).join("\n");
+                  const gateMsg = `❓ ${rt.info.name} needs your decision:\n\n${question}\n\nReply with a number:\n${optionList}`;
+                  this.hermesClient.sendMessage(platformCtx.platform, platformCtx.sender, gateMsg).then((ok) => {
+                    if (ok) this.log(rt, "status", `Gate question sent to ${platformCtx.sender} via ${platformCtx.platform}`);
+                    else this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will auto-resolve on timeout`);
+                  }).catch(() => {
+                    this.log(rt, "status", `Failed to send gate via ${platformCtx.platform} — will auto-resolve on timeout`);
+                  });
+                }
               }
               // No platform context: let the auto-resolve timeout handle it
             }
 
             // Auto-resolve: 5 min if user is connected (in-game popup), 30 min for outbound
             const timeoutMs = userConnected ? 5 * 60 * 1000 : 30 * 60 * 1000;
+            const defaultAnswer = freeText ? "" : (options[0] ?? "");
             const timer = setTimeout(() => {
               if (rt.pendingGate?.id === gateId) {
                 rt.pendingGate = null;
-                this.log(rt, "status", `Boss didn't respond in ${Math.round(timeoutMs / 60000)} minutes — proceeding with best judgment.`);
-                resolve(options[0]);
+                const mins = Math.round(timeoutMs / 60000);
+                this.log(rt, "status", `Boss didn't respond in ${mins} minutes — proceeding with "${defaultAnswer || "best judgment"}".`);
+                this.broadcast({ type: "toast", text: `${rt.info.name} waited ${mins}min and proceeded with "${defaultAnswer || "best judgment"}".` });
+                resolve(defaultAnswer);
               }
             }, timeoutMs);
             rt.pendingGate = { id: gateId, resolve, timer, options };
@@ -3581,6 +4229,15 @@ export class AgentManager {
             (ev.kind === "result" && ev.text !== "✓ Task complete." && ev.text !== "Task complete.")
           ) {
             finalText = ev.text;
+            // Broadcast decomposition text in real-time for the Office Manager
+            if (isManager && !isReviewTask && ev.kind === "text") {
+              this.broadcast({
+                type: "manager_decomposing",
+                agentId: rt.info.id,
+                text: ev.text,
+                goalCardId: rt.cardId ?? null,
+              });
+            }
           }
           this.log(rt, ev.kind, ev.text);
 
@@ -3697,6 +4354,7 @@ export class AgentManager {
         // Release any agent that was waiting for this task to finish.
         if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
         this.logEvent("task_complete", `${rt.info.name} completed: "${task.slice(0, 100)}"`);
+        if (this.userId) void ProfileManager.ingestTaskComplete(this.userId, task).catch(() => {});
 
         // If this task came from a messaging platform, send the result back
         if (rt.platformContext && finalText) {
@@ -3723,6 +4381,9 @@ export class AgentManager {
           this.platformAssignedAgent.delete(platform);
           this.broadcastMailboxUpdate(platform);
           rt.platformContext = null;
+        } else if (!rt.platformContext) {
+          // Task was NOT initiated from a platform — notify connected platform if user is away
+          void this.notifyConnectedPlatform(rt, task, finalText);
         }
       } else if (sawError && !abort.signal.aborted) {
         this.notifyManagersOfCompletion(rt, task, "Task failed.", true);
@@ -3784,6 +4445,7 @@ export class AgentManager {
           rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           this.updateAgentSkillPerformance(rt, task, false, duration);
+          if (this.onTaskComplete) this.onTaskComplete(rt.info.id, false, duration / 60000, rt.cardId ? "card" : "general");
           // Auto-record task failure in the office state graph
           this.officeState.addNode("task", task.slice(0, 200), rt.info.id, rt.info.name, "failed");
           this.setStatus(rt, "error");
@@ -3804,6 +4466,9 @@ export class AgentManager {
           rt.taskHistory.unshift({ task, success: true, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           this.updateAgentSkillPerformance(rt, task, true, duration);
+          if (this.onTaskComplete) this.onTaskComplete(rt.info.id, true, duration / 60000, rt.cardId ? "card" : "general");
+          // Breakthrough detection
+          this.checkBreakthrough(rt, task, duration);
           // Auto-record task completion in the office state graph
           this.officeState.addNode("task", task.slice(0, 200), rt.info.id, rt.info.name, "done");
           this.setStatus(rt, "done");
@@ -3830,6 +4495,36 @@ export class AgentManager {
             // Check if all subtasks of a parent goal are complete (merge node)
             if (card?.parentGoalId) {
               this.checkGoalCompletion(card.parentGoalId);
+            }
+            // If this was a merge/review card, mark the parent goal as done
+            if (card?.type === "review" && card.parentGoalId) {
+              const goalCard = this.board.get(card.parentGoalId);
+              if (goalCard && goalCard.type === "goal" && goalCard.status !== "done") {
+                goalCard.status = "done";
+                goalCard.statusChangedAt = Date.now();
+                this.persistBoard();
+                this.broadcast({ type: "card", card: goalCard });
+                this.broadcastGanttUpdate();
+                this.broadcast({ type: "toast", text: `Goal complete: "${goalCard.title.slice(0, 60)}"` });
+              }
+            }
+            // Auto-assign dependent cards whose dependencies are now satisfied
+            if (rt.cardId || card) {
+              const completedCardId = rt.cardId ?? card?.id;
+              if (completedCardId) {
+                const dependentCards = [...this.board.values()]
+                  .filter(c => c.dependsOnCardIds?.includes(completedCardId) && c.status === "backlog" && !c.assignedAgentId);
+                for (const depCard of dependentCards) {
+                  if (this.canStartCard(depCard)) {
+                    // If the completing agent is now idle, assign to them
+                    if (rt.info.status === "idle") {
+                      this.log(rt, "status", `Auto-continuing to dependent task: "${depCard.title.slice(0, 60)}"`);
+                      this.assignCard(depCard.id, rt.info.id);
+                      break;
+                    }
+                  }
+                }
+              }
             }
           }
           rt.cardId = null;
@@ -3933,6 +4628,45 @@ export class AgentManager {
     }
   }
 
+  /** Find an agent by name with fuzzy matching (exact, contains, reverse contains, Levenshtein). */
+  private findAgentByName(name: string, excludeId: string): AgentRuntime | undefined {
+    const lower = name.toLowerCase().trim();
+    const candidates = [...this.agents.values()].filter(
+      rt => rt.info.id !== excludeId && rt.info.role !== "manager",
+    );
+    // 1. Exact match
+    let match = candidates.find(rt => rt.info.name.toLowerCase() === lower);
+    if (match) return match;
+    // 2. Contains match
+    match = candidates.find(rt => rt.info.name.toLowerCase().includes(lower));
+    if (match) return match;
+    // 3. Reverse contains (LLM used a longer name)
+    match = candidates.find(rt => lower.includes(rt.info.name.toLowerCase()));
+    if (match) return match;
+    // 4. Levenshtein distance <= 2
+    match = candidates.find(rt => this.levenshtein(lower, rt.info.name.toLowerCase()) <= 2);
+    return match;
+  }
+
+  /** Compute Levenshtein edit distance between two strings. */
+  private levenshtein(a: string, b: string): number {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const prev = new Array(b.length + 1);
+    const curr = new Array(b.length + 1);
+    for (let i = 0; i <= b.length; i++) prev[i] = i;
+    for (let i = 0; i < a.length; i++) {
+      curr[0] = i + 1;
+      for (let j = 0; j < b.length; j++) {
+        const cost = a[i] === b[j] ? 0 : 1;
+        curr[j + 1] = Math.min(prev[j + 1] + 1, curr[j] + 1, prev[j] + cost);
+      }
+      for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+    }
+    return prev[b.length];
+  }
+
   /** Parse a manager's JSON plan and assign each subtask to a free worker. */
   private delegate(mgr: AgentRuntime, goal: string, planText: string): void {
     const start = planText.indexOf("[");
@@ -3972,24 +4706,23 @@ export class AgentManager {
         continue;
       }
 
-      const target = [...this.agents.values()].find(
-        (rt) =>
-          rt.info.name.toLowerCase() === name.toLowerCase() &&
-          rt.info.id !== mgr.info.id &&
-          rt.info.role !== "manager",
-      );
+      const target = this.findAgentByName(name, mgr.info.id);
       if (!target) {
         this.log(mgr, "status", `Skipped a subtask for "${name}" — nobody by that name.`);
+        this.broadcast({ type: "toast", text: `Office Manager tried to delegate to "${name}" but nobody by that name exists.` });
         continue;
       }
 
-      // Create a subtask card linked to the goal card
+      const isBusy = target.info.status === "thinking" || target.info.status === "working" || target.info.status === "done" || target.info.status === "waiting";
+
+      // Create a subtask card linked to the goal card with correct initial status
       const subtaskCard: TaskCard = {
         id: randomUUID().slice(0, 8),
         title: subtask.length > 80 ? subtask.slice(0, 77) + "…" : subtask,
         description: subtask,
-        status: "backlog",
-        assignedAgentId: null,
+        status: isBusy ? "paused" : "in_progress",
+        assignedAgentId: target.info.id,
+        lockedBy: isBusy ? undefined : target.info.id,
         createdAt: Date.now(),
         statusChangedAt: Date.now(),
         type: "task",
@@ -3997,17 +4730,14 @@ export class AgentManager {
         phase: "implementation",
         category: this.inferCategory(subtask),
       };
+      // Auto-estimate duration from the target agent's historical performance
+      const estimate = this.estimateTaskDuration(target, subtask);
+      if (estimate) subtaskCard.estimatedMinutes = estimate;
       this.board.set(subtaskCard.id, subtaskCard);
       this.persistBoard();
       this.broadcast({ type: "card", card: subtaskCard });
 
       const taskText = `${subtask}\n\n(Delegated by ${mgr.info.name}, the office manager, toward the boss's goal: "${goal}")`;
-      if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "done" || target.info.status === "waiting") {
-        // Queue it — the agent is busy
-        this.assign(target.info.id, taskText, undefined, subtaskCard.id);
-        sent++;
-        continue;
-      }
       this.assign(target.info.id, taskText, undefined, subtaskCard.id);
       assigned.set(name.toLowerCase(), { agentId: target.info.id, cardId: subtaskCard.id });
       sent++;
@@ -4016,14 +4746,8 @@ export class AgentManager {
     // Queue deferred tasks — they'll be assigned after their dependency completes
     // via the completeHandoff mechanism (the prerequisite worker hands off to the dependent)
     for (const d of deferred) {
-      const target = [...this.agents.values()].find(
-        (rt) => rt.info.name.toLowerCase() === d.name.toLowerCase() &&
-          rt.info.id !== mgr.info.id &&
-          rt.info.role !== "manager",
-      );
-      const prereq = [...this.agents.values()].find(
-        (rt) => rt.info.name.toLowerCase() === d.dependsOn.toLowerCase(),
-      );
+      const target = this.findAgentByName(d.name, mgr.info.id);
+      const prereq = this.findAgentByName(d.dependsOn, mgr.info.id);
       if (target && prereq) {
         // Create a deferred subtask card with dependency link
         const prereqEntry = assigned.get(d.dependsOn.toLowerCase());
@@ -4441,7 +5165,7 @@ export class AgentManager {
       this.broadcast({
         type: "payment_required",
         reason: "subscription",
-        message: "The Wizard is a premium world-builder. Upgrade to the Pro plan ($4.99/mo) or higher to chat with the Wizard and shape your worlds.",
+        message: "The Wizard is a premium world-builder. Upgrade to the Pro plan ($19.99/mo) or higher to chat with the Wizard and shape your worlds.",
         tier: this.subscriptionTier,
       });
       return;
@@ -4475,7 +5199,7 @@ export class AgentManager {
     }
     // Check usage cap before chatting
     if (this.userId) {
-      const cap = getUsageCap(this.subscriptionTier);
+      const cap = getUsageCap(this.subscriptionTier, this.entrancePaid);
       if (cap > 0) {
         const spend = await getMonthlySpend(this.userId);
         if (spend >= cap) {
@@ -5516,6 +6240,7 @@ export class AgentManager {
       }
     }
     if (event.direction === "inbound") {
+      this.markPlatformEngagement();
       this.routePlatformEvent(event.platform, event.sender, event.text);
     }
   }

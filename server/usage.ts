@@ -1,6 +1,6 @@
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import { calculateCost } from "./providers/pricing.js";
-import { SUBSCRIPTION_TIERS, type SubscriptionTier } from "../shared/types.js";
+import { SUBSCRIPTION_TIERS, ENTRY_FEE_USAGE_CREDIT, type SubscriptionTier } from "../shared/types.js";
 
 export interface UsageRecord {
   userId: string;
@@ -154,10 +154,13 @@ export async function getMonthlySpend(userId: string): Promise<number> {
   }
 }
 
-/** Get the monthly usage cap in USD for a subscription tier. Returns 0 for no subscription. */
-export function getUsageCap(tier: SubscriptionTier | null): number {
-  if (!tier) return 0;
-  return SUBSCRIPTION_TIERS[tier].usageCap / 100; // convert cents to dollars
+/** Get the monthly usage cap in USD for a subscription tier.
+ *  Returns entry fee credit ($0.50) for entry tier (paid but no subscription).
+ *  Returns 0 for free tier (no payment). */
+export function getUsageCap(tier: SubscriptionTier | null, entrancePaid = false): number {
+  if (tier) return SUBSCRIPTION_TIERS[tier].usageCap / 100; // convert cents to dollars
+  if (entrancePaid) return ENTRY_FEE_USAGE_CREDIT / 100;
+  return 0;
 }
 
 /** Get the monthly premium API cap in USD for a subscription tier. Returns 0 for no subscription. */

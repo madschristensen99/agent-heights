@@ -108,6 +108,8 @@ const PROTECTED_TILES = new Set<number>([
   TILE.GOLF_CLUB, TILE.GOLF_BALL, TILE.GOLF_FLAG, TILE.TEE_BOX,
   TILE.AXE, TILE.LEPRECHAUN, TILE.BIG_TREE, TILE.BIG_ROCK, TILE.FOUNTAIN,
   TILE.PALM_TREE, TILE.MYSTIC_TREE,
+  TILE.LAKE, TILE.LAKE_SHORE,
+  TILE.GOLF_BAG, TILE.DRIVER, TILE.IRON_CLUB, TILE.WEDGE, TILE.PUTTER,
   TILE.TENNIS_COURT, TILE.TENNIS_WALL, TILE.TENNIS_RACKET, TILE.TENNIS_BALL, TILE.TENNIS_NET,
 ]);
 
@@ -294,6 +296,11 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
     placeWaterCluster(tiles, rng);
   }
 
+  // lakes — large bodies of water with shore, in meadow/forest (low hostility)
+  if ((biome === "meadow" || biome === "forest") && hRounded <= 1 && rng() < 0.12) {
+    placeLake(tiles, rng);
+  }
+
   // acid vat clusters — rare, only in ruins/wasteland
   if ((biome === "ruins" || biome === "wasteland") && rng() < 0.08) {
     placeAcidCluster(tiles, rng);
@@ -329,7 +336,9 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
   const CLEAR_SPARE = new Set<number>([
     TILE.GOLF_CLUB, TILE.GOLF_BALL, TILE.GOLF_FLAG, TILE.TEE_BOX,
     TILE.AXE, TILE.LEPRECHAUN, TILE.FOUNTAIN,
+    TILE.LAKE, TILE.LAKE_SHORE,
     TILE.TENNIS_COURT, TILE.TENNIS_WALL, TILE.TENNIS_RACKET, TILE.TENNIS_BALL, TILE.TENNIS_NET,
+    TILE.GOLF_BAG, TILE.DRIVER, TILE.IRON_CLUB, TILE.WEDGE, TILE.PUTTER,
   ]);
   for (let y = 0; y < CHUNK_SIZE; y++) {
     for (let x = 0; x < CHUNK_SIZE; x++) {
@@ -339,6 +348,17 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
       if (d <= clearRadius && !CLEAR_SPARE.has(tiles[idx(x, y)])) {
         tiles[idx(x, y)] = baseTile;
       }
+    }
+  }
+
+  // Place golf bag near the office door (only in chunk 0,0)
+  if (cx === 0 && cy === 0) {
+    const bagWX = 12;
+    const bagWY = 4;
+    const bagX = bagWX - cx * CHUNK_SIZE;
+    const bagY = bagWY - cy * CHUNK_SIZE;
+    if (bagX >= 0 && bagX < CHUNK_SIZE && bagY >= 0 && bagY < CHUNK_SIZE) {
+      tiles[idx(bagX, bagY)] = TILE.GOLF_BAG;
     }
   }
 
@@ -667,6 +687,43 @@ function placeWaterCluster(tiles: number[], rng: () => number): void {
   }
 }
 
+/** Place a lake — large body of water (LAKE tiles) surrounded by LAKE_SHORE tiles. */
+function placeLake(tiles: number[], rng: () => number): void {
+  const cx = 8 + Math.floor(rng() * (CHUNK_SIZE - 16));
+  const cy = 8 + Math.floor(rng() * (CHUNK_SIZE - 16));
+  const r = 5 + Math.floor(rng() * 4); // radius 5-8 — bigger than water clusters
+
+  // First pass: place LAKE tiles in organic shape
+  const lakeTiles: { x: number; y: number }[] = [];
+  for (let y = cy - r - 2; y <= cy + r + 2; y++) {
+    for (let x = cx - r - 2; x <= cx + r + 2; x++) {
+      if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE) continue;
+      const d = Math.hypot(x - cx, y - cy);
+      const edgeNoise = (Math.sin(x * 1.7) + Math.cos(y * 2.1) + rng() * 1.2) * 0.7;
+      if (d <= r + edgeNoise && canOverwrite(tiles, idx(x, y))) {
+        tiles[idx(x, y)] = TILE.LAKE;
+        lakeTiles.push({ x, y });
+      }
+    }
+  }
+
+  // Second pass: surround lake with shore tiles
+  for (const { x, y } of lakeTiles) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const sx = x + dx;
+        const sy = y + dy;
+        if (sx < 0 || sx >= CHUNK_SIZE || sy < 0 || sy >= CHUNK_SIZE) continue;
+        const t = tiles[idx(sx, sy)];
+        if (t !== TILE.LAKE && t !== TILE.LAKE_SHORE && canOverwrite(tiles, idx(sx, sy))) {
+          tiles[idx(sx, sy)] = TILE.LAKE_SHORE;
+        }
+      }
+    }
+  }
+}
+
 /** Place an acid vat cluster — small group of acid tiles. */
 function placeAcidCluster(tiles: number[], rng: () => number): void {
   const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
@@ -898,10 +955,18 @@ function placeGolfCourseNearOffice(tiles: number[], rng: () => number, cx: numbe
   // golf ball at the tee
   tiles[idx(teeLocalX, teeLocalY)] = TILE.GOLF_BALL;
 
-  // golf club next to the ball
+  // Driver next to the ball at the tee
   const clubOffset = rng() < 0.5 ? -1 : 1;
   const clubX = Math.max(ox, Math.min(ox + courseW - 1, teeLocalX + clubOffset));
-  tiles[idx(clubX, teeLocalY)] = TILE.GOLF_CLUB;
+  tiles[idx(clubX, teeLocalY)] = TILE.DRIVER;
+
+  // Putter near the flag
+  const putterOffset = rng() < 0.5 ? -1 : 1;
+  const putterX = Math.max(ox, Math.min(ox + courseW - 1, flagX + putterOffset));
+  const putterY = Math.max(oy, Math.min(oy + courseH - 1, flagY - 1));
+  if (tiles[idx(putterX, putterY)] !== TILE.GOLF_FLAG && canOverwrite(tiles, idx(putterX, putterY))) {
+    tiles[idx(putterX, putterY)] = TILE.PUTTER;
+  }
 }
 
 /** Place an expanded golf course — wider fairway, tee area with club & ball, sand traps, water hazard, and flag. */
@@ -981,10 +1046,21 @@ function placeGolfCourse(tiles: number[], rng: () => number): void {
   // golf ball at the tee
   tiles[idx(teeX, teeY)] = TILE.GOLF_BALL;
 
-  // golf club next to the ball
+  // random club type next to the ball
+  const clubTypes = [TILE.DRIVER, TILE.IRON_CLUB, TILE.WEDGE];
+  const clubTile = clubTypes[Math.floor(rng() * clubTypes.length)];
   const clubOffset = rng() < 0.5 ? -1 : 1;
   const clubX = Math.max(ox, Math.min(ox + fw - 1, teeX + clubOffset));
-  tiles[idx(clubX, teeY)] = TILE.GOLF_CLUB;
+  tiles[idx(clubX, teeY)] = clubTile;
+
+  // Sand Wedge next to sand traps if present
+  if (rng() < 0.5) {
+    const wedgeX = Math.max(ox, Math.min(ox + fw - 1, flagX - 2));
+    const wedgeY = Math.max(oy, Math.min(oy + fh - 1, flagY - 1));
+    if (canOverwrite(tiles, idx(wedgeX, wedgeY))) {
+      tiles[idx(wedgeX, wedgeY)] = TILE.WEDGE;
+    }
+  }
 }
 
 /** Place a park feature — pond, bench, or hedge garden. */
@@ -1218,6 +1294,11 @@ export function isWalkable(tile: number): boolean {
     case TILE.GOLF_CLUB:
     case TILE.GOLF_BALL:
     case TILE.GOLF_FLAG:
+    case TILE.GOLF_BAG:
+    case TILE.DRIVER:
+    case TILE.IRON_CLUB:
+    case TILE.WEDGE:
+    case TILE.PUTTER:
     case TILE.AXE:
     case TILE.LEPRECHAUN:
     case TILE.TEE_BOX:
@@ -1225,6 +1306,8 @@ export function isWalkable(tile: number): boolean {
     case TILE.TENNIS_RACKET:
     case TILE.TENNIS_BALL:
     case TILE.TENNIS_NET:
+    case TILE.LAKE_SHORE:
+    case TILE.CABIN_DOOR:
       return true;
     default:
       return false;
@@ -1240,6 +1323,8 @@ export function tileSpeed(tile: number): number {
       return 0.5;
     case TILE.POND:
       return 0.6;
+    case TILE.LAKE:
+      return 0.5;
     case TILE.TENNIS_NET:
       return 0.3;
     default:

@@ -16,6 +16,7 @@ store.wireAchievements();
 net.onMessage = (msg) => {
   if (msg.type === "payment_status") {
     updatePaymentState({
+      entrancePaid: msg.entrancePaid,
       subscriptionActive: msg.subscriptionActive,
       subscriptionStatus: msg.subscriptionStatus,
       subscriptionTier: msg.subscriptionTier,
@@ -123,6 +124,7 @@ if (isSpectator) {
 
     if (!isAuthEnabled) {
       authOverlay.hide();
+      store.userId = "dev";
       if (!connected) { net.connect(); connected = true; }
       return;
     }
@@ -136,6 +138,7 @@ if (isSpectator) {
         if (connected) { net.disconnect(); connected = false; }
       }
       currentUserId = newUserId;
+      store.userId = newUserId;
       authOverlay.hide();
       const token = getToken();
       net.setToken(token);

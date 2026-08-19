@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Store, HelicopterDelivery } from "../store";
 import type { Net } from "../net";
 import { AgentNPC, OfficeManagerNPC, HermesNPC, WizardNPC, feetOf, tileOf, TILE_PX, getThemeStatusColors, agentTextureKey, createHintTag, type HintTag, type Dir } from "./agent";
-import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE, type Presenter, MAX_PRESENTERS } from "../../../shared/types";
+import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type AgentInfo, type AgentStatus, type LogEntry, type PlatformEvent, PLATFORM_CREDENTIAL_FIELDS, PLATFORM_CATALOG, getPlatformEntry, type WorldTheme, DEFAULT_APPEARANCE, type Presenter, MAX_PRESENTERS, DECORATION_CATALOG } from "../../../shared/types";
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
@@ -102,6 +102,16 @@ export class OfficeScene extends Phaser.Scene {
   private officeManager: OfficeManagerNPC | null = null;
   private hermes: HermesNPC | null = null;
   private wizard: WizardNPC | null = null;
+  /** Active NPC speech bubble text objects, keyed by npcId. */
+  private npcSpeechBubbles = new Map<string, Phaser.GameObjects.Text>();
+  /** When each NPC's speech bubble should expire, keyed by npcId. */
+  private npcSpeechExpiry = new Map<string, number>();
+  /** Cooldown for proximity-triggered speech per NPC, keyed by npcId. */
+  private npcProximityCooldown = new Map<string, number>();
+  private decorationSprites: Phaser.GameObjects.Container[] = [];
+  private decorationMode = false;
+  private selectedDecorationType: string | null = null;
+  private decorationGhost: Phaser.GameObjects.Container | null = null;
   private officeManagerSeat: Tile | null = null;
   private officeManagerOfficeZone: Phaser.GameObjects.Zone | null = null;
   private seats: Tile[] = [];
@@ -222,6 +232,11 @@ export class OfficeScene extends Phaser.Scene {
   private trophyGfx!: Phaser.GameObjects.Graphics;
   private trophyAchCount = -1;
   private sceneStart = 0;
+  private wasOutside = false;
+  private outsideSnapshot: { achievements: Set<string>; weapons: string[]; creaturesKilled: number; bossesSlain: number } | null = null;
+  private weaponRackTile: Tile = { x: 4, y: 8 };
+  private weaponRackGfx!: Phaser.GameObjects.Graphics;
+  private weaponRackSig = "";
 
   private hallOfFameTile: Tile = { x: 1, y: 5 };
   private hallOfFameHint!: HintTag;
@@ -289,10 +304,20 @@ export class OfficeScene extends Phaser.Scene {
   private playerDir: Dir = "down";
   private playerTexKey = "boss-default";
   private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "M" | "SPACE", Phaser.Input.Keyboard.Key>;
+  private hotbarEl: HTMLDivElement | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private monitorGlows: Phaser.GameObjects.Arc[] = [];
+  // Smoke puffs for smoking work metaphor — pool of rising circles
+  private smokePuffs: { arc: Phaser.GameObjects.Arc; vy: number; life: number; maxLife: number }[] = [];
+  private smokeEmitTimer = 0;
+  // Fire particles for fire_spinning work metaphor
+  private fireParticles: { arc: Phaser.GameObjects.Arc; vy: number; vx: number; life: number; maxLife: number }[] = [];
+  private fireEmitTimer = 0;
+  // Harvest particles for harvesting work metaphor
+  private harvestParticles: { arc: Phaser.GameObjects.Arc; vy: number; life: number; maxLife: number }[] = [];
+  private harvestEmitTimer = 0;
   private skyGfx!: Phaser.GameObjects.Graphics;
   private lastSkyView: { x: number; y: number; w: number; h: number } | null = null;
   private clouds: { sprite: Phaser.GameObjects.Image; speed: number; baseAlpha: number; phase: number; fadeSpeed: number; yBase: number }[] = [];
@@ -397,6 +422,7 @@ export class OfficeScene extends Phaser.Scene {
       this.heliSafetyTimer?.remove();
       this.heliSafetyTimer = null;
       this.heliSound?.stop();
+      this.destroyHotbar();
       this.heliSound = null;
       this.heliActive = false;
       this.pendingHeliDeliveries = [];
@@ -616,6 +642,13 @@ export class OfficeScene extends Phaser.Scene {
       for (const overlay of this.monitorMatrixOverlays.values()) overlay.destroy();
       this.monitorMatrixOverlays.clear();
       this.matrixColumns = [];
+      // Clean up smoke puffs from smoking work metaphor
+      for (const p of this.smokePuffs) p.arc.destroy();
+      this.smokePuffs = [];
+      for (const p of this.fireParticles) p.arc.destroy();
+      this.fireParticles = [];
+      for (const p of this.harvestParticles) p.arc.destroy();
+      this.harvestParticles = [];
     });
     // HQ2 and org rooms use the agentHeights (big open office) theme; private offices use user's chosen theme.
     // Before room_state arrives, roomId is null — default to HQ2 theme since that's where
@@ -1157,6 +1190,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawScreenShareStation();
           this.drawClock();
           this.drawTrophyCase();
+          this.drawWeaponRack();
           this.drawHallOfFameBoard();
           this.drawExteriorChimney();
           this.drawCulturalWalls();
@@ -1274,6 +1308,11 @@ export class OfficeScene extends Phaser.Scene {
                 }
               });
             }
+          });
+
+          // NPC speech bubbles from server (e.g. concierge nudges as speech)
+          this.store.npcSpeechListeners.push((npcId, text, durationMs) => {
+            this.showNpcSpeechBubble(npcId, text, durationMs);
           });
 
           // Subscribe to mailbox message responses — only open a new panel if
@@ -1405,11 +1444,26 @@ export class OfficeScene extends Phaser.Scene {
           this.cursors = this.input.keyboard!.createCursorKeys();
           this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,M,SPACE") as OfficeScene["keys"];
           this.input.keyboard!.on("keydown-ESC", () => {
+            if (this.decorationMode) {
+              this.exitDecorationMode();
+              return;
+            }
             this.store.select(null);
             this.store.toggleBoard(false);
           });
           // never swallow keystrokes meant for HUD inputs (onboarding, task box, …)
           this.input.keyboard!.disableGlobalCapture();
+
+          // --- hotbar UI ---
+          this.createHotbar();
+          // number keys 1-6 select hotbar slots
+          for (let i = 1; i <= 6; i++) {
+            this.input.keyboard!.on(`keydown-${i}`, () => {
+              this.world.inventory.setActive(i - 1);
+              const wt = this.world.inventory.getActiveWeaponType();
+              if (wt) this.world.equipWeapon(wt);
+            });
+          }
 
           if (!this.wired) {
             this.wired = true;
@@ -1466,6 +1520,7 @@ export class OfficeScene extends Phaser.Scene {
               }
               this.world.syncGhosts();
               this.updateChimneySmoke();
+              this.renderDecorations();
             });
             this.store.onHuddle((agentIds) => {
               if (this.ready) this.startHuddle(agentIds);
@@ -1856,34 +1911,218 @@ export class OfficeScene extends Phaser.Scene {
     this.textures.addImage(key, canvas as unknown as HTMLImageElement);
   }
 
-  /** Update lighting: monitor glows, day/night cycle, vignette refresh. */
+  /** Update lighting: monitor glows (or smoke puffs for smoking theme), day/night cycle, vignette refresh. */
   private updateLighting(time: number): void {
     // Day/night darkness and brightness boost are handled by LightingSystem (lighting.ts).
-    // This method only handles monitor glows and matrix rain.
+    // This method only handles monitor glows / smoke puffs and matrix rain.
 
-    // monitor glows: pulse for working agents
-    const pulse = 0.15 + Math.sin(time * 0.003) * 0.05;
-    // Build deskIndex→agent map once instead of [...values()].find() per monitor
-    const deskAgentMap = new Map<number, { status: AgentStatus; deskIndex: number }>();
-    for (const agent of this.store.agents.values()) {
-      if (agent.deskIndex >= 0) deskAgentMap.set(agent.deskIndex, agent);
-    }
-    this.monitors.forEach((m, i) => {
-      const glow = this.monitorGlows[i];
-      if (!glow) return;
-      const agent = deskAgentMap.get(i);
-      if (agent && agent.status !== "idle" && agent.status !== "waiting") {
-        const color = getThemeStatusColors(this.worldTheme)[agent.status];
-        glow.setPosition(m.x, m.y + 4);
-        glow.setFillStyle(color, pulse);
-        glow.setVisible(true);
-      } else {
-        glow.setVisible(false);
+    const isSmoking = this.worldTheme?.workMetaphor === "smoking";
+    const isFireSpinning = this.worldTheme?.workMetaphor === "fire_spinning";
+    const isHarvesting = this.worldTheme?.workMetaphor === "harvesting";
+
+    if (isSmoking) {
+      // Hide all monitor glows — smoke replaces them
+      for (const glow of this.monitorGlows) glow.setVisible(false);
+      this.updateSmokePuffs(time);
+    } else if (isFireSpinning) {
+      // Hide all monitor glows — fire replaces them
+      for (const glow of this.monitorGlows) glow.setVisible(false);
+      this.updateFireSpinning(time);
+    } else if (isHarvesting) {
+      // Hide all monitor glows — crop particles replace them
+      for (const glow of this.monitorGlows) glow.setVisible(false);
+      this.updateHarvestParticles(time);
+    } else {
+      // monitor glows: pulse for working agents
+      const pulse = 0.15 + Math.sin(time * 0.003) * 0.05;
+      // Build deskIndex→agent map once instead of [...values()].find() per monitor
+      const deskAgentMap = new Map<number, { status: AgentStatus; deskIndex: number }>();
+      for (const agent of this.store.agents.values()) {
+        if (agent.deskIndex >= 0) deskAgentMap.set(agent.deskIndex, agent);
       }
-    });
+      this.monitors.forEach((m, i) => {
+        const glow = this.monitorGlows[i];
+        if (!glow) return;
+        const agent = deskAgentMap.get(i);
+        if (agent && agent.status !== "idle" && agent.status !== "waiting") {
+          const color = getThemeStatusColors(this.worldTheme)[agent.status];
+          glow.setPosition(m.x, m.y + 4);
+          glow.setFillStyle(color, pulse);
+          glow.setVisible(true);
+        } else {
+          glow.setVisible(false);
+        }
+      });
+    }
 
     // matrix rain overlay for working monitors
     this.updateMatrixRain(time);
+  }
+
+  /** Emit and update smoke puffs for the smoking work metaphor. */
+  private updateSmokePuffs(time: number): void {
+    const statusColors = getThemeStatusColors(this.worldTheme);
+    const dt = this.game.loop.delta;
+
+    // Emit new puffs every ~200ms from each active agent
+    this.smokeEmitTimer += dt;
+    const shouldEmit = this.smokeEmitTimer >= 200;
+    if (shouldEmit) this.smokeEmitTimer = 0;
+
+    for (const [id, agent] of this.store.agents) {
+      if (agent.status === "idle" || agent.status === "waiting" || agent.status === "done") continue;
+      const npc = this.npcs.get(id);
+      if (!npc) continue;
+
+      if (shouldEmit) {
+        const color = statusColors[agent.status];
+        const px = npc.container.x + (Math.random() - 0.5) * 8;
+        const py = npc.container.y - 16;
+        const arc = this.add.circle(px, py, 3 + Math.random() * 3, color, 0.5)
+          .setDepth(9)
+          .setBlendMode(Phaser.BlendModes.NORMAL);
+        this.smokePuffs.push({
+          arc,
+          vy: -0.3 - Math.random() * 0.2,
+          life: 0,
+          maxLife: 1500 + Math.random() * 500,
+        });
+      }
+    }
+
+    // Update existing puffs — rise, expand, fade
+    for (let i = this.smokePuffs.length - 1; i >= 0; i--) {
+      const p = this.smokePuffs[i];
+      p.life += dt;
+      if (p.life >= p.maxLife) {
+        p.arc.destroy();
+        this.smokePuffs.splice(i, 1);
+        continue;
+      }
+      const t = p.life / p.maxLife;
+      p.arc.y += p.vy * (dt / 16.67);
+      p.arc.x += Math.sin(p.life * 0.005) * 0.3;
+      p.arc.setRadius(3 + t * 12);
+      p.arc.setAlpha(0.5 * (1 - t));
+    }
+
+    // Cap pool size
+    while (this.smokePuffs.length > 80) {
+      const p = this.smokePuffs.shift();
+      p?.arc.destroy();
+    }
+  }
+
+  /** Emit and update fire particles for the fire_spinning work metaphor. */
+  private updateFireSpinning(time: number): void {
+    const statusColors = getThemeStatusColors(this.worldTheme);
+    const dt = this.game.loop.delta;
+
+    this.fireEmitTimer += dt;
+    const shouldEmit = this.fireEmitTimer >= 150;
+    if (shouldEmit) this.fireEmitTimer = 0;
+
+    for (const [id, agent] of this.store.agents) {
+      if (agent.status === "idle" || agent.status === "waiting" || agent.status === "done") continue;
+      const npc = this.npcs.get(id);
+      if (!npc) continue;
+
+      if (shouldEmit) {
+        const color = statusColors[agent.status];
+        // Emit fire particles in a spinning arc around the agent
+        for (let j = 0; j < 3; j++) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 12 + Math.random() * 8;
+          const px = npc.container.x + Math.cos(angle) * radius;
+          const py = npc.container.y - 16 + Math.sin(angle) * radius * 0.5;
+          const arc = this.add.circle(px, py, 2 + Math.random() * 3, color, 0.7)
+            .setDepth(9)
+            .setBlendMode(Phaser.BlendModes.ADD);
+          this.fireParticles.push({
+            arc,
+            vy: -0.5 - Math.random() * 0.3,
+            vx: Math.cos(angle) * 0.5,
+            life: 0,
+            maxLife: 600 + Math.random() * 300,
+          });
+        }
+      }
+    }
+
+    // Update existing fire particles
+    for (let i = this.fireParticles.length - 1; i >= 0; i--) {
+      const p = this.fireParticles[i];
+      p.life += dt;
+      if (p.life >= p.maxLife) {
+        p.arc.destroy();
+        this.fireParticles.splice(i, 1);
+        continue;
+      }
+      const t = p.life / p.maxLife;
+      p.arc.y += p.vy * (dt / 16.67);
+      p.arc.x += p.vx * (dt / 16.67);
+      p.vx *= 0.96;
+      p.arc.setRadius(2 + t * 6);
+      p.arc.setAlpha(0.7 * (1 - t));
+    }
+
+    while (this.fireParticles.length > 120) {
+      const p = this.fireParticles.shift();
+      p?.arc.destroy();
+    }
+  }
+
+  /** Emit and update harvest particles for the harvesting work metaphor. */
+  private updateHarvestParticles(time: number): void {
+    const statusColors = getThemeStatusColors(this.worldTheme);
+    const dt = this.game.loop.delta;
+
+    this.harvestEmitTimer += dt;
+    const shouldEmit = this.harvestEmitTimer >= 250;
+    if (shouldEmit) this.harvestEmitTimer = 0;
+
+    for (const [id, agent] of this.store.agents) {
+      if (agent.status === "idle" || agent.status === "waiting" || agent.status === "done") continue;
+      const npc = this.npcs.get(id);
+      if (!npc) continue;
+
+      if (shouldEmit) {
+        const color = statusColors[agent.status];
+        // Emit crop particles rising from below the agent
+        const px = npc.container.x + (Math.random() - 0.5) * 12;
+        const py = npc.container.y - 4;
+        const arc = this.add.circle(px, py, 2 + Math.random() * 2, color, 0.6)
+          .setDepth(9)
+          .setBlendMode(Phaser.BlendModes.NORMAL);
+        this.harvestParticles.push({
+          arc,
+          vy: -0.4 - Math.random() * 0.2,
+          life: 0,
+          maxLife: 1000 + Math.random() * 400,
+        });
+      }
+    }
+
+    // Update existing harvest particles
+    for (let i = this.harvestParticles.length - 1; i >= 0; i--) {
+      const p = this.harvestParticles[i];
+      p.life += dt;
+      if (p.life >= p.maxLife) {
+        p.arc.destroy();
+        this.harvestParticles.splice(i, 1);
+        continue;
+      }
+      const t = p.life / p.maxLife;
+      p.arc.y += p.vy * (dt / 16.67);
+      p.arc.x += Math.sin(p.life * 0.008) * 0.4;
+      p.arc.setRadius(2 + t * 4);
+      p.arc.setAlpha(0.6 * (1 - t));
+    }
+
+    while (this.harvestParticles.length > 80) {
+      const p = this.harvestParticles.shift();
+      p?.arc.destroy();
+    }
   }
 
   /** Everyone called to ASSIGN-TO-ALL gathers in a ring around the boss. */
@@ -2261,6 +2500,13 @@ export class OfficeScene extends Phaser.Scene {
 
     // ── Pointer down: track for pinch, pan, or tap-to-walk ──
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // Decoration placement mode — intercept all clicks
+      if (this.decorationMode) {
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.tryPlaceDecoration(worldPoint.x, worldPoint.y);
+        return;
+      }
+
       // Ignore clicks on interactive game objects (agents, monitors) — they have their own handlers
       if (this.input.manager.hitTest(pointer, [], this.cameras.main).length > 0) return;
 
@@ -2285,6 +2531,11 @@ export class OfficeScene extends Phaser.Scene {
 
     // ── Pointer move: handle pinch-zoom, pan, and tap movement detection ──
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      // Decoration ghost follows cursor
+      if (this.decorationMode && this.decorationGhost) {
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.updateDecorationGhost(worldPoint.x, worldPoint.y);
+      }
       if (!this.pinchPointers.has(pointer.id)) return;
 
       // Detect if this is a tap vs drag
@@ -4048,6 +4299,268 @@ export class OfficeScene extends Phaser.Scene {
     this.world.audio.uiClick();
   }
 
+  /** Show a speech bubble above an NPC. */
+  private showNpcSpeechBubble(npcId: string, text: string, durationMs: number): void {
+    const container = this.getNpcContainer(npcId);
+    if (!container) return;
+
+    // Remove existing bubble for this NPC
+    this.hideNpcSpeechBubble(npcId);
+
+    const bubble = this.add.text(container.x, container.y - 70, text, {
+      fontFamily: "var(--font-body, monospace)",
+      fontSize: "13px",
+      color: "#ffffff",
+      backgroundColor: "rgba(20, 22, 30, 0.92)",
+      padding: { x: 8, y: 5 },
+      wordWrap: { width: 220 },
+      fixedWidth: 0,
+    });
+    bubble.setOrigin(0.5, 1);
+    bubble.setDepth(10000);
+    bubble.setScrollFactor(1);
+
+    this.npcSpeechBubbles.set(npcId, bubble);
+    this.npcSpeechExpiry.set(npcId, this.time.now + durationMs);
+  }
+
+  /** Hide a speech bubble for an NPC. */
+  private hideNpcSpeechBubble(npcId: string): void {
+    const bubble = this.npcSpeechBubbles.get(npcId);
+    if (bubble) {
+      bubble.destroy();
+      this.npcSpeechBubbles.delete(npcId);
+    }
+    this.npcSpeechExpiry.delete(npcId);
+  }
+
+  /** Get the container for an NPC by ID. */
+  private getNpcContainer(npcId: string): Phaser.GameObjects.Container | null {
+    if (npcId === OFFICE_MANAGER_ID && this.officeManager) return this.officeManager.container;
+    if (npcId === HERMES_ID && this.hermes) return this.hermes.container;
+    if (npcId === WIZARD_ID && this.wizard) return this.wizard.container;
+    const npc = this.npcs.get(npcId);
+    return npc ? npc.container : null;
+  }
+
+  /** Update speech bubble positions and remove expired ones. */
+  private updateNpcSpeechBubbles(time: number): void {
+    for (const [npcId, bubble] of this.npcSpeechBubbles) {
+      const expiry = this.npcSpeechExpiry.get(npcId);
+      if (expiry && time >= expiry) {
+        this.hideNpcSpeechBubble(npcId);
+        continue;
+      }
+      const container = this.getNpcContainer(npcId);
+      if (container) {
+        bubble.setPosition(container.x, container.y - 70);
+      }
+    }
+  }
+
+  // ── Office Decoration System ──────────────────────────────────────────
+
+  renderDecorations(): void {
+    // Clear existing decoration sprites
+    for (const sprite of this.decorationSprites) sprite.destroy();
+    this.decorationSprites = [];
+
+    if (!this.grid) return;
+    const decorations = this.store.decorations;
+    if (!decorations || decorations.length === 0) return;
+
+    for (const deco of decorations) {
+      const catalogItem = DECORATION_CATALOG.find((c) => c.type === deco.type);
+      if (!catalogItem) continue;
+
+      const px = deco.tileX * TILE_PX + (catalogItem.width * TILE_PX) / 2;
+      const py = deco.tileY * TILE_PX + (catalogItem.height * TILE_PX) / 2;
+
+      const container = this.add.container(px, py);
+      const depth = 100 + deco.tileY * TILE_PX;
+
+      // Draw a simple colored rect with emoji text as placeholder sprite
+      const bg = this.add.rectangle(0, 0, catalogItem.width * TILE_PX * 0.8, catalogItem.height * TILE_PX * 0.8, 0x000000, 0.3);
+      bg.setDepth(depth);
+      container.add(bg);
+
+      const text = this.add.text(0, 0, catalogItem.emoji, { fontSize: `${Math.min(catalogItem.width, catalogItem.height) * 40}px` });
+      text.setOrigin(0.5);
+      text.setDepth(depth + 1);
+      container.add(text);
+
+      container.setDepth(depth);
+      container.setInteractive({ useHandCursor: true });
+      container.on("pointerdown", () => {
+        if (this.decorationMode) {
+          // Click on existing decoration in placement mode = remove it
+          this.net?.send({ type: "remove_decoration", decorationId: deco.id });
+        }
+      });
+
+      this.decorationSprites.push(container);
+    }
+  }
+
+  enterDecorationMode(decorationType: string): void {
+    this.decorationMode = true;
+    this.selectedDecorationType = decorationType;
+    this.createDecorationGhost();
+  }
+
+  exitDecorationMode(): void {
+    this.decorationMode = false;
+    this.selectedDecorationType = null;
+    if (this.decorationGhost) {
+      this.decorationGhost.destroy();
+      this.decorationGhost = null;
+    }
+  }
+
+  private createDecorationGhost(): void {
+    if (!this.selectedDecorationType || !this.grid) return;
+    const catalogItem = DECORATION_CATALOG.find((c) => c.type === this.selectedDecorationType);
+    if (!catalogItem) return;
+
+    this.decorationGhost = this.add.container(0, 0);
+    const bg = this.add.rectangle(0, 0, catalogItem.width * TILE_PX * 0.8, catalogItem.height * TILE_PX * 0.8, 0x4ade80, 0.4);
+    bg.setOrigin(0.5);
+    const text = this.add.text(0, 0, catalogItem.emoji, { fontSize: "32px" });
+    text.setOrigin(0.5);
+    this.decorationGhost.add([bg, text]);
+    this.decorationGhost.setDepth(9999);
+    this.decorationGhost.setAlpha(0.7);
+  }
+
+  updateDecorationGhost(pointerX: number, pointerY: number): void {
+    if (!this.decorationGhost || !this.selectedDecorationType || !this.grid) return;
+    const catalogItem = DECORATION_CATALOG.find((c) => c.type === this.selectedDecorationType);
+    if (!catalogItem) return;
+
+    const tileX = Math.floor(pointerX / TILE_PX);
+    const tileY = Math.floor(pointerY / TILE_PX);
+    const px = tileX * TILE_PX + (catalogItem.width * TILE_PX) / 2;
+    const py = tileY * TILE_PX + (catalogItem.height * TILE_PX) / 2;
+
+    this.decorationGhost.setPosition(px, py);
+
+    // Check validity — within grid bounds and walkable
+    const valid = this.isDecorationValid(tileX, tileY, catalogItem.width, catalogItem.height);
+    const bg = this.decorationGhost.getAt(0) as Phaser.GameObjects.Rectangle;
+    bg.setFillStyle(valid ? 0x4ade80 : 0xf87171, 0.4);
+  }
+
+  private isDecorationValid(tileX: number, tileY: number, w: number, h: number): boolean {
+    if (!this.grid) return false;
+    // Check bounds
+    if (tileX < 0 || tileY < 0 || tileX + w > this.grid.width || tileY + h > this.grid.height) return false;
+    // Check all tiles are walkable (not walls or furniture)
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        if (!this.grid.ok(tileX + dx, tileY + dy)) return false;
+      }
+    }
+    // Check collision with existing decorations
+    for (const deco of this.store.decorations) {
+      const existingItem = DECORATION_CATALOG.find((c) => c.type === deco.type);
+      if (!existingItem) continue;
+      if (!(tileX + w <= deco.tileX || deco.tileX + existingItem.width <= tileX ||
+            tileY + h <= deco.tileY || deco.tileY + existingItem.height <= tileY)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  tryPlaceDecoration(pointerX: number, pointerY: number): void {
+    if (!this.decorationMode || !this.selectedDecorationType || !this.grid) return;
+    const catalogItem = DECORATION_CATALOG.find((c) => c.type === this.selectedDecorationType);
+    if (!catalogItem) return;
+
+    const tileX = Math.floor(pointerX / TILE_PX);
+    const tileY = Math.floor(pointerY / TILE_PX);
+
+    if (this.isDecorationValid(tileX, tileY, catalogItem.width, catalogItem.height)) {
+      this.net?.send({
+        type: "place_decoration",
+        decoration: { type: this.selectedDecorationType, tileX, tileY, variant: 0 },
+      });
+    }
+  }
+
+  /** Check proximity to NPCs and show speech bubbles when player walks near. */
+  private checkNpcProximity(time: number): void {
+    const PROXIMITY_RADIUS = 120;
+    const COOLDOWN_MS = 30_000; // Don't re-trigger for 30s per NPC
+    const myRole = this._myUserId ? this.store.roomPlayers.get(this._myUserId)?.role : undefined;
+    const isVisitor = (myRole === "member" || myRole === "guest") && this.store.roomId !== "hq2";
+
+    const checkNpc = (npcId: string, container: Phaser.GameObjects.Container | null, lines: string[]) => {
+      if (!container) return;
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, container.x, container.y);
+      const cooldown = this.npcProximityCooldown.get(npcId) ?? 0;
+      if (dist < PROXIMITY_RADIUS && time > cooldown && !this.npcSpeechBubbles.has(npcId)) {
+        const text = lines[Math.floor(Math.random() * lines.length)];
+        this.showNpcSpeechBubble(npcId, text, 5000);
+        this.npcProximityCooldown.set(npcId, time + COOLDOWN_MS);
+      }
+    };
+
+    if (this.officeManager && !isVisitor) {
+      const dominant = this.store.aspirationProfile?.dominant ?? null;
+      const officeManagerLines: Record<string, string[]> = {
+        builder: [
+          "Your pipeline is running. I'd say 'like clockwork' but clocks are more predictable.",
+          "I see you've automated three tasks. The agents are starting to wonder if you still work here.",
+          "Nice handoff chain. You've built a machine that runs without you. Isn't that the dream?",
+          "Throughput is up. Idle time is down. I'd celebrate but I know you're already optimizing the next thing.",
+        ],
+        explorer: [
+          "New MCP servers in the marketplace. Because what your agents really need is more distractions.",
+          "Try a different model on your next agent. Variety is the spice of... well, everything.",
+          "There's a whole marketplace of tools out there. Your agents are like kids in a candy store. Expensive candy.",
+        ],
+        puzzle_solver: [
+          "Got a complex problem? I could break it down for you. Or you could do it yourself. Your call, boss.",
+          "A well-structured task graph is a beautiful thing. A poorly structured one is... also a thing.",
+          "Dependencies mapped out? Good. Nothing worse than an agent waiting for something that was never coming.",
+        ],
+        creator: [
+          "Your office is looking nice. I'd say 'homey' but I'm an AI and I don't have a home.",
+          "New theme looks good. The agents noticed. They didn't say anything, but I could tell.",
+          "Nice outfit. The wardrobe system exists and you're using it. That's... that's the whole point.",
+        ],
+        strategist: [
+          "Your team is growing. Have you checked the leaderboards? Of course you have. You're a strategist.",
+          "Planning the next hire? I'm here. I'm always here. That's my job.",
+          "Consistency pays off. The ranks will follow. I read that on a poster once.",
+        ],
+        warrior: [
+          "Heard there's something nasty outside. You could send an agent. Or you could go yourself. You'll go yourself.",
+          "Your combat record is impressive, boss. The agents are intimidated. I'm not. I'm behind a desk.",
+          "Creatures won't slay themselves. That's why they have you. Lucky them.",
+        ],
+      };
+      const lines = (dominant ? officeManagerLines[dominant] : null) ?? [
+        "Need help? I'm here. Not going anywhere. Literally — I'm seated.",
+        "Your office is looking good. I say that every time but I mean it every time.",
+        "Want me to break down a goal? I'm very good at making big problems into small problems.",
+        "Just let me know if you need anything, boss. I'll be at my desk. I'm always at my desk.",
+      ];
+      checkNpc(OFFICE_MANAGER_ID, this.officeManager.container, lines);
+    }
+
+    if (this.hermes && !isVisitor) {
+      checkNpc(HERMES_ID, this.hermes.container, [
+        "Mail's sorted. Nothing urgent. Which is more than I can say for your task board.",
+        "I'll deliver this message. Unlike some people around here, I actually finish my tasks.",
+        "All systems running. Your agents? Well, that's a different department.",
+        "No new mail. I'd say 'good news' but I know you'd rather have something to do.",
+        "I'm the mail clerk. I deliver things. It's honest work. Unlike whatever your agents are doing.",
+      ]);
+    }
+  }
+
   /** Update proximity hints — show the interactable that E will actually trigger (priority order). */
   private updateAllHints(time: number): void {
     // Hide all hints first
@@ -5151,10 +5664,26 @@ export class OfficeScene extends Phaser.Scene {
     return this.add.container(0, 0, [skids, body, rotor]);
   }
 
-  /** Summon the helicopter — full cinematic sequence.
+  /** Summon the helicopter (or van) — full cinematic sequence.
    *  The heli descends from high above the pad straight down, lands softly,
-   *  then unloads the agent. */
+   *  then unloads the agent. For van_delivery themes, a van drives in instead. */
   private triggerHelicopter(delivery?: HelicopterDelivery): void {
+    // Route to van delivery if the theme calls for it
+    if (this.worldTheme?.arrivalMetaphor === "van_delivery") {
+      this.triggerVanDelivery(delivery);
+      return;
+    }
+    // Route to outrigger delivery if the theme calls for it
+    if (this.worldTheme?.arrivalMetaphor === "outrigger_delivery") {
+      this.triggerOutriggerDelivery(delivery);
+      return;
+    }
+    // Route to carriage delivery if the theme calls for it
+    if (this.worldTheme?.arrivalMetaphor === "carriage_delivery") {
+      this.triggerCarriageDelivery(delivery);
+      return;
+    }
+
     this.heliActive = true;
     this.heliDelivery = delivery ?? null;
     const agentName = delivery?.name ?? "Agent";
@@ -5178,24 +5707,7 @@ export class OfficeScene extends Phaser.Scene {
     // is purely cosmetic — syncAgents() will replace the cosmetic sprite
     // with the real NPC when the server confirms.
     // Skip if the server already created the agent (Office Manager hire).
-    if (delivery && !delivery.alreadyHired) {
-      const net = this.game.registry.get("net") as import("../net").Net;
-      net.send({
-        type: "hire",
-        name: delivery.name,
-        provider: "cline",
-        model: delivery.model,
-        systemPrompt: delivery.systemPrompt,
-        role: "worker",
-        appearance: delivery.appearance,
-        mcpServers: delivery.mcpServers,
-        cdpSolana: delivery.cdpSolana,
-        crossmintWallet: delivery.crossmintWallet,
-        isPremium: delivery.isPremium,
-        circleServices: delivery.circleServices,
-        skills: delivery.skills,
-      });
-    }
+    this.sendHireMessage(delivery);
 
     const padCx = this.padCenter.x;
     const padCy = this.padCenter.y;
@@ -5225,6 +5737,542 @@ export class OfficeScene extends Phaser.Scene {
       onComplete: () => {
         // landed — pause for rotor spin-down, then unload agent
         this.time.delayedCall(500, () => this.heliUnload());
+      },
+    });
+  }
+
+  /** Send the hire WS message — extracted so both helicopter and van can use it. */
+  private sendHireMessage(delivery?: HelicopterDelivery): void {
+    if (delivery && !delivery.alreadyHired) {
+      const net = this.game.registry.get("net") as import("../net").Net;
+      net.send({
+        type: "hire",
+        name: delivery.name,
+        provider: "cline",
+        model: delivery.model,
+        systemPrompt: delivery.systemPrompt,
+        role: "worker",
+        appearance: delivery.appearance,
+        mcpServers: delivery.mcpServers,
+        cdpSolana: delivery.cdpSolana,
+        crossmintWallet: delivery.crossmintWallet,
+        isPremium: delivery.isPremium,
+        circleServices: delivery.circleServices,
+        skills: delivery.skills,
+      });
+    }
+  }
+
+  /** Van delivery cinematic — a beat-up van drives in from the left,
+   *  stops at the pad, agent hops out and walks to the office entrance. */
+  private triggerVanDelivery(delivery?: HelicopterDelivery): void {
+    this.heliActive = true;
+    this.heliDelivery = delivery ?? null;
+    const agentName = delivery?.name ?? "Agent";
+    this.store.toast(`Van incoming! ${agentName} arriving...`);
+
+    this.heliSafetyTimer?.remove();
+    this.heliSafetyTimer = this.time.delayedCall(15000, () => {
+      console.warn("[van-debug] safety timeout — forcing endHelicopter");
+      this.endHelicopter();
+    });
+
+    this.sendHireMessage(delivery);
+
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+
+    // Create the van as a container
+    const van = this.drawDeliveryVan();
+    van.setPosition(padCx - 700, padCy);
+    van.setDepth(-0.4);
+    van.setAlpha(0);
+    this.heliContainer = van;
+
+    // Fade in and drive to the pad
+    this.tweens.add({
+      targets: van,
+      alpha: 1,
+      duration: 400,
+      ease: "Cubic.in",
+    });
+
+    this.tweens.add({
+      targets: van,
+      x: padCx,
+      duration: 2500,
+      ease: "Cubic.out",
+      onComplete: () => {
+        // Van stopped — pause, then unload agent
+        this.time.delayedCall(600, () => this.vanUnload());
+      },
+    });
+  }
+
+  /** Draw a beat-up delivery van as a container. */
+  private drawDeliveryVan(): Phaser.GameObjects.Container {
+    // Shadow
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.25);
+    shadow.fillEllipse(0, 28, 100, 14);
+
+    // Van body — boxy, rusted
+    const body = this.add.graphics();
+    // Cargo box (back)
+    body.fillStyle(0x6a7078, 1);
+    body.fillRoundedRect(-44, -24, 56, 48, 3);
+    // Cab (front)
+    body.fillStyle(0x5a6068, 1);
+    body.fillRoundedRect(12, -20, 32, 44, 4);
+    // Rust patches
+    body.fillStyle(0x8a4a2a, 0.35);
+    body.fillRect(-30, -10, 12, 8);
+    body.fillRect(-20, 8, 8, 6);
+    body.fillRect(18, -8, 6, 10);
+
+    // Windshield
+    body.fillStyle(0x2a2a3a, 0.8);
+    body.fillRoundedRect(16, -16, 24, 16, 2);
+    body.fillStyle(0x4a4a5a, 0.3);
+    body.fillRect(16, -16, 24, 4);
+
+    // Side door line
+    body.lineStyle(1, 0x3a3a40, 0.6);
+    body.beginPath();
+    body.moveTo(-16, -24);
+    body.lineTo(-16, 24);
+    body.strokePath();
+
+    // Back doors
+    body.lineStyle(1, 0x3a3a40, 0.6);
+    body.beginPath();
+    body.moveTo(-44, 0);
+    body.lineTo(-12, 0);
+    body.strokePath();
+
+    // Graffiti on side
+    body.fillStyle(0x9a3a5a, 0.5);
+    body.fillRect(-38, -6, 14, 8);
+
+    // Wheels
+    body.fillStyle(0x1a1a1e, 1);
+    body.fillCircle(-28, 24, 8);
+    body.fillCircle(28, 24, 8);
+    body.fillStyle(0x3a3a40, 1);
+    body.fillCircle(-28, 24, 4);
+    body.fillCircle(28, 24, 4);
+
+    // Headlight
+    body.fillStyle(0xffee88, 0.8);
+    body.fillCircle(42, -4, 3);
+    body.fillStyle(0xffee88, 0.2);
+    body.fillCircle(42, -4, 6);
+
+    return this.add.container(0, 0, [shadow, body]);
+  }
+
+  /** Agent exits van and walks to the office entrance. */
+  private vanUnload(): void {
+    if (!this.heliContainer) return;
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+    const exitX = 14 * TILE_PX + 32;
+    const exitY = 3 * TILE_PX + 52;
+
+    // Generate agent texture
+    let agentKey = "char-heli-delivery";
+    if (this.heliDelivery?.appearance) {
+      generateCharTexture(this, agentKey, this.heliDelivery.appearance);
+      this.ensureCharAnimations(agentKey);
+    } else {
+      const spriteIdx = this.heliDelivery?.sprite ?? 0;
+      agentKey = `char-${spriteIdx}`;
+    }
+
+    const label = this.add
+      .text(0, -108, this.heliDelivery?.name ?? "AGENT", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "16px",
+        color: "#1d2126",
+        stroke: "#f4f6f8",
+        strokeThickness: 3,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.7);
+
+    const sprite = this.add
+      .sprite(0, 0, agentKey, 6)
+      .setOrigin(0.5, 1)
+      .setScale(1);
+
+    // Agent appears at the back of the van
+    const agent = this.add.container(padCx - 30, padCy, [sprite, label]);
+    agent.setDepth(-0.3);
+    this.heliAgent = agent;
+    sprite.play(`${agentKey}-walk-down`);
+
+    // Walk to the office entrance (same exit point as helicopter elevator)
+    this.tweens.add({
+      targets: agent,
+      x: exitX,
+      y: exitY,
+      duration: 1800,
+      ease: "Quad.inOut",
+      onComplete: () => {
+        // Process deferred agents
+        if (this.pendingHeliAgents.length > 0) {
+          this.syncPendingHeliAgents(exitX, exitY);
+        }
+        if (this.heliAgent && sprite.active) {
+          this.heliAgent.setDepth(10 + exitY);
+          sprite.play(`${agentKey}-idle-down`);
+        }
+        // Van drives away
+        this.vanDriveAway();
+      },
+    });
+  }
+
+  /** Van drives off to the right and disappears. */
+  private vanDriveAway(): void {
+    if (!this.heliContainer) {
+      this.endHelicopter();
+      return;
+    }
+    const padCx = this.padCenter.x;
+
+    this.tweens.add({
+      targets: this.heliContainer,
+      x: padCx + 800,
+      alpha: 0,
+      duration: 2000,
+      ease: "Cubic.in",
+      onComplete: () => {
+        this.endHelicopter();
+      },
+    });
+  }
+
+  /** Outrigger canoe delivery cinematic — a canoe paddles in from the left,
+   *  beaches at the pad, agent steps off and walks to the pavilion entrance. */
+  private triggerOutriggerDelivery(delivery?: HelicopterDelivery): void {
+    this.heliActive = true;
+    this.heliDelivery = delivery ?? null;
+    const agentName = delivery?.name ?? "Agent";
+    this.store.toast(`Outrigger incoming! ${agentName} paddling in...`);
+
+    this.heliSafetyTimer?.remove();
+    this.heliSafetyTimer = this.time.delayedCall(15000, () => {
+      console.warn("[outrigger-debug] safety timeout — forcing endHelicopter");
+      this.endHelicopter();
+    });
+
+    this.sendHireMessage(delivery);
+
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+
+    const canoe = this.drawOutriggerCanoe();
+    canoe.setPosition(padCx - 700, padCy);
+    canoe.setDepth(-0.4);
+    canoe.setAlpha(0);
+    this.heliContainer = canoe;
+
+    this.tweens.add({
+      targets: canoe,
+      alpha: 1,
+      duration: 400,
+      ease: "Cubic.in",
+    });
+
+    this.tweens.add({
+      targets: canoe,
+      x: padCx,
+      duration: 3000,
+      ease: "Cubic.out",
+      onComplete: () => {
+        this.time.delayedCall(600, () => this.outriggerUnload());
+      },
+    });
+  }
+
+  /** Draw an outrigger canoe as a container. */
+  private drawOutriggerCanoe(): Phaser.GameObjects.Container {
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.2);
+    shadow.fillEllipse(0, 20, 90, 12);
+
+    const canoe = this.add.graphics();
+    // Hull
+    canoe.fillStyle(0x8a6a3a, 1);
+    canoe.fillEllipse(0, 0, 80, 24);
+    canoe.fillStyle(0x6a4a2a, 1);
+    canoe.fillEllipse(0, 2, 70, 16);
+    // Outrigger float
+    canoe.fillStyle(0x6a5a3a, 1);
+    canoe.fillEllipse(30, 16, 30, 10);
+    // Connecting bars
+    canoe.fillStyle(0x4a3a2a, 1);
+    canoe.fillRect(10, 6, 4, 12);
+    canoe.fillRect(22, 6, 4, 12);
+    // Paddler silhouette
+    canoe.fillStyle(0x3a2a1a, 0.7);
+    canoe.fillCircle(-10, -8, 5);
+    canoe.fillRect(-13, -6, 6, 12);
+    // Paddle
+    canoe.lineStyle(2, 0x6a4a2a, 0.8);
+    canoe.beginPath();
+    canoe.moveTo(-10, -4);
+    canoe.lineTo(-24, -12);
+    canoe.strokePath();
+    canoe.fillStyle(0x8a6a3a, 0.8);
+    canoe.fillRect(-28, -14, 6, 4);
+
+    return this.add.container(0, 0, [shadow, canoe]);
+  }
+
+  /** Agent steps off the canoe and walks to the pavilion entrance. */
+  private outriggerUnload(): void {
+    if (!this.heliContainer) return;
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+    const exitX = 14 * TILE_PX + 32;
+    const exitY = 3 * TILE_PX + 52;
+
+    let agentKey = "char-heli-delivery";
+    if (this.heliDelivery?.appearance) {
+      generateCharTexture(this, agentKey, this.heliDelivery.appearance);
+      this.ensureCharAnimations(agentKey);
+    } else {
+      const spriteIdx = this.heliDelivery?.sprite ?? 0;
+      agentKey = `char-${spriteIdx}`;
+    }
+
+    const label = this.add
+      .text(0, -108, this.heliDelivery?.name ?? "AGENT", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "16px",
+        color: "#1d2126",
+        stroke: "#f4f6f8",
+        strokeThickness: 3,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.7);
+
+    const sprite = this.add
+      .sprite(0, 0, agentKey, 6)
+      .setOrigin(0.5, 1)
+      .setScale(1);
+
+    const agent = this.add.container(padCx + 20, padCy, [sprite, label]);
+    agent.setDepth(-0.3);
+    this.heliAgent = agent;
+    sprite.play(`${agentKey}-walk-down`);
+
+    this.tweens.add({
+      targets: agent,
+      x: exitX,
+      y: exitY,
+      duration: 1800,
+      ease: "Quad.inOut",
+      onComplete: () => {
+        if (this.pendingHeliAgents.length > 0) {
+          this.syncPendingHeliAgents(exitX, exitY);
+        }
+        if (this.heliAgent && sprite.active) {
+          this.heliAgent.setDepth(10 + exitY);
+          sprite.play(`${agentKey}-idle-down`);
+        }
+        // Canoe paddles away
+        if (this.heliContainer) {
+          this.tweens.add({
+            targets: this.heliContainer,
+            x: padCx + 800,
+            alpha: 0,
+            duration: 2500,
+            ease: "Cubic.in",
+            onComplete: () => this.endHelicopter(),
+          });
+        } else {
+          this.endHelicopter();
+        }
+      },
+    });
+  }
+
+  /** Horse-drawn carriage delivery cinematic — a carriage trots in from the left,
+   *  stops at the pad, agent steps out and walks to the mansion entrance. */
+  private triggerCarriageDelivery(delivery?: HelicopterDelivery): void {
+    this.heliActive = true;
+    this.heliDelivery = delivery ?? null;
+    const agentName = delivery?.name ?? "Agent";
+    this.store.toast(`Carriage incoming! ${agentName} arriving...`);
+
+    this.heliSafetyTimer?.remove();
+    this.heliSafetyTimer = this.time.delayedCall(15000, () => {
+      console.warn("[carriage-debug] safety timeout — forcing endHelicopter");
+      this.endHelicopter();
+    });
+
+    this.sendHireMessage(delivery);
+
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+
+    const carriage = this.drawCarriage();
+    carriage.setPosition(padCx - 700, padCy);
+    carriage.setDepth(-0.4);
+    carriage.setAlpha(0);
+    this.heliContainer = carriage;
+
+    this.tweens.add({
+      targets: carriage,
+      alpha: 1,
+      duration: 400,
+      ease: "Cubic.in",
+    });
+
+    this.tweens.add({
+      targets: carriage,
+      x: padCx,
+      duration: 3000,
+      ease: "Cubic.out",
+      onComplete: () => {
+        this.time.delayedCall(700, () => this.carriageUnload());
+      },
+    });
+  }
+
+  /** Draw a horse-drawn carriage as a container. */
+  private drawCarriage(): Phaser.GameObjects.Container {
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.2);
+    shadow.fillEllipse(10, 28, 120, 14);
+
+    const carriage = this.add.graphics();
+    // Horse body
+    carriage.fillStyle(0x5a3a2a, 1);
+    carriage.fillRoundedRect(-50, -16, 30, 28, 4);
+    // Horse head
+    carriage.fillStyle(0x5a3a2a, 1);
+    carriage.fillTriangle(-50, -14, -60, -22, -50, -6);
+    // Horse legs
+    carriage.fillStyle(0x4a2a1a, 1);
+    carriage.fillRect(-46, 10, 4, 14);
+    carriage.fillRect(-30, 10, 4, 14);
+    // Horse mane
+    carriage.fillStyle(0x3a2a1a, 0.8);
+    carriage.fillRect(-48, -18, 10, 6);
+    // Harness lines
+    carriage.lineStyle(1, 0x3a2a1a, 0.6);
+    carriage.beginPath();
+    carriage.moveTo(-22, -4);
+    carriage.lineTo(-10, -4);
+    carriage.strokePath();
+    // Carriage body
+    carriage.fillStyle(0x6a4a2a, 1);
+    carriage.fillRoundedRect(-10, -22, 44, 40, 6);
+    // Carriage roof
+    carriage.fillStyle(0x4a3a2a, 1);
+    carriage.fillRoundedRect(-14, -28, 52, 10, 4);
+    // Window
+    carriage.fillStyle(0x2a2a3a, 0.7);
+    carriage.fillRoundedRect(-4, -18, 24, 16, 2);
+    carriage.fillStyle(0x4a4a5a, 0.3);
+    carriage.fillRect(-4, -18, 24, 3);
+    // Door line
+    carriage.lineStyle(1, 0x3a2a1a, 0.5);
+    carriage.beginPath();
+    carriage.moveTo(12, -22);
+    carriage.lineTo(12, 18);
+    carriage.strokePath();
+    // Wheels
+    carriage.fillStyle(0x1a1a1e, 1);
+    carriage.fillCircle(-2, 22, 9);
+    carriage.fillCircle(26, 22, 9);
+    carriage.fillStyle(0x3a3a40, 1);
+    carriage.fillCircle(-2, 22, 5);
+    carriage.fillCircle(26, 22, 5);
+    // Spokes
+    carriage.lineStyle(1, 0x6a6a70, 0.5);
+    carriage.beginPath();
+    carriage.moveTo(-2, 17); carriage.lineTo(-2, 27);
+    carriage.moveTo(-7, 22); carriage.lineTo(3, 22);
+    carriage.moveTo(26, 17); carriage.lineTo(26, 27);
+    carriage.moveTo(21, 22); carriage.lineTo(31, 22);
+    carriage.strokePath();
+
+    return this.add.container(0, 0, [shadow, carriage]);
+  }
+
+  /** Agent exits carriage and walks to the mansion entrance. */
+  private carriageUnload(): void {
+    if (!this.heliContainer) return;
+    const padCx = this.padCenter.x;
+    const padCy = this.padCenter.y;
+    const exitX = 14 * TILE_PX + 32;
+    const exitY = 3 * TILE_PX + 52;
+
+    let agentKey = "char-heli-delivery";
+    if (this.heliDelivery?.appearance) {
+      generateCharTexture(this, agentKey, this.heliDelivery.appearance);
+      this.ensureCharAnimations(agentKey);
+    } else {
+      const spriteIdx = this.heliDelivery?.sprite ?? 0;
+      agentKey = `char-${spriteIdx}`;
+    }
+
+    const label = this.add
+      .text(0, -108, this.heliDelivery?.name ?? "AGENT", {
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        fontSize: "16px",
+        color: "#1d2126",
+        stroke: "#f4f6f8",
+        strokeThickness: 3,
+      })
+      .setResolution(4)
+      .setOrigin(0.5, 1)
+      .setScale(0.7);
+
+    const sprite = this.add
+      .sprite(0, 0, agentKey, 6)
+      .setOrigin(0.5, 1)
+      .setScale(1);
+
+    const agent = this.add.container(padCx + 10, padCy, [sprite, label]);
+    agent.setDepth(-0.3);
+    this.heliAgent = agent;
+    sprite.play(`${agentKey}-walk-down`);
+
+    this.tweens.add({
+      targets: agent,
+      x: exitX,
+      y: exitY,
+      duration: 1800,
+      ease: "Quad.inOut",
+      onComplete: () => {
+        if (this.pendingHeliAgents.length > 0) {
+          this.syncPendingHeliAgents(exitX, exitY);
+        }
+        if (this.heliAgent && sprite.active) {
+          this.heliAgent.setDepth(10 + exitY);
+          sprite.play(`${agentKey}-idle-down`);
+        }
+        // Carriage trots away
+        if (this.heliContainer) {
+          this.tweens.add({
+            targets: this.heliContainer,
+            x: padCx + 800,
+            alpha: 0,
+            duration: 2500,
+            ease: "Cubic.in",
+            onComplete: () => this.endHelicopter(),
+          });
+        } else {
+          this.endHelicopter();
+        }
       },
     });
   }
@@ -5958,6 +7006,152 @@ export class OfficeScene extends Phaser.Scene {
     this.updateTrophyCase();
   }
 
+  /** Trigger contextual agent reactions when the boss returns from the outside world. */
+  private triggerReturnReaction(snap: { achievements: Set<string>; weapons: string[]; creaturesKilled: number; bossesSlain: number }): void {
+    const currentAch = achievements.getUnlockedIds();
+    const newAch: string[] = [];
+    for (const id of currentAch) {
+      if (!snap.achievements.has(id)) newAch.push(id);
+    }
+    const newWeapons = this.world.ownedWeaponsList.filter(w => !snap.weapons.includes(w));
+    const killDiff = achievements.getStat("creaturesKilled") - snap.creaturesKilled;
+    const bossDiff = achievements.getStat("bossesSlain") - snap.bossesSlain;
+
+    // Priority: boss kill > new legendary weapon > new weapon > kills > general return
+    let reactionText: string | null = null;
+    let agentId: string | undefined;
+    let delay = 500;
+
+    if (newAch.includes("infernal_sovereign_kill")) {
+      reactionText = "The boss is carrying a glowing crown. I'm not asking where they got it. I'm just... not asking.";
+      agentId = HERMES_ID;
+      delay = 800;
+    } else if (newAch.includes("void_leviathan_kill")) {
+      reactionText = "The boss killed something from the void. The actual void. And they just walked back in like it was nothing.";
+      delay = 800;
+    } else if (newAch.includes("ash_wyrm_kill")) {
+      reactionText = "Is that... dragon smoke on the boss? They killed a dragon. An actual dragon. And came to work.";
+      delay = 800;
+    } else if (newAch.includes("stone_colossus_kill")) {
+      reactionText = "The boss toppled a Stone Colossus. A giant. Made of stone. And they're just... checking the task board.";
+      delay = 800;
+    } else if (newAch.includes("groveheart_kill")) {
+      reactionText = "The boss took down Groveheart. I still don't know what that is but the boss looks satisfied.";
+      delay = 800;
+    } else if (newAch.includes("beast_slayer")) {
+      reactionText = "The boss killed a legendary beast outside. They're back. They look different. More... confident?";
+      delay = 700;
+    } else if (newWeapons.some(w => ["flame_greatsword", "void_daggers", "crystal_bow"].includes(w))) {
+      reactionText = "The boss is carrying a legendary weapon. I feel like we should be paying them more. Or less. I'm not sure which.";
+      delay = 700;
+    } else if (newWeapons.includes("void_blade")) {
+      reactionText = "The boss has a void blade now. I'm not asking where they got it. I'm not asking.";
+      agentId = HERMES_ID;
+      delay = 700;
+    } else if (newWeapons.includes("iron_sword")) {
+      reactionText = "The boss forged an iron sword from void shards. That sentence shouldn't make sense but here we are.";
+      delay = 600;
+    } else if (bossDiff > 0) {
+      reactionText = `The boss is back. They killed ${bossDiff > 1 ? `${bossDiff} bosses` : "a boss"} while they were out. Just thought you should know.`;
+      delay = 600;
+    } else if (killDiff >= 5) {
+      reactionText = `The boss is back. ${killDiff} creatures fewer in the world. They're doing the lord's work out there.`;
+      delay = 500;
+    } else if (killDiff > 0) {
+      reactionText = "The boss is back. Something out there is dead. They look pleased about it.";
+      delay = 500;
+    } else if (newAch.length > 0) {
+      // Generic return with new achievements but no kills
+      reactionText = "The boss is back from the outside. They look like they accomplished something out there.";
+      delay = 500;
+    } else {
+      // Returned without any new achievements — just a welcome back
+      const welcomes = [
+        "The boss is back! How was the outside? We held down the fort.",
+        "Welcome back, boss. Everything's still running. Mostly.",
+        "Boss is back. We missed you. Well, I missed you. The others were busy.",
+      ];
+      reactionText = welcomes[Math.floor(Math.random() * welcomes.length)];
+      delay = 400;
+    }
+
+    this.store.postFeedMessage(reactionText, agentId, delay);
+
+    // If there was a boss kill, add a second delayed reaction from a different agent
+    if (bossDiff > 0 || newAch.some(a => a.includes("_kill"))) {
+      const secondReactions = [
+        "I'm not saying I'm impressed. I'm just saying I updated the Hall of Fame.",
+        "The boss walks in, weapon still glowing, and just sits down to check emails. Hardcore.",
+        "We need to talk about the boss's outside activities. In a good way. In a very good way.",
+      ];
+      const secondText = secondReactions[Math.floor(Math.random() * secondReactions.length)];
+      this.store.postFeedMessage(secondText, undefined, delay + 2000);
+    }
+  }
+
+  /** The crown placement sequence — the AH equivalent of the CoD match-ending killcam. */
+  private triggerCrownPlacementSequence(): void {
+    const trophyPx = { x: this.trophyTile.x * TILE_PX + 32, y: this.trophyTile.y * TILE_PX + 40 };
+
+    // Phase 1: Camera zoom to trophy case for dramatic effect
+    this.cameras.main.pan(trophyPx.x, trophyPx.y, 800, "Sine.inOut");
+    this.cameras.main.zoomTo(1.8, 800, "Sine.inOut");
+
+    // Phase 2 (2s later): Speechless "..." posts from random agents
+    const hireable = [...this.store.agents.values()].filter(
+      (a) => a.id !== OFFICE_MANAGER_ID && a.id !== HERMES_ID && a.id !== WIZARD_ID,
+    );
+    const speechlessAgents = hireable.slice(0, Math.min(3, hireable.length));
+    for (let i = 0; i < speechlessAgents.length; i++) {
+      this.store.postFeedMessage("...", speechlessAgents[i].id, 2000 + i * 400);
+    }
+
+    // Phase 3 (4s later): Hermes delivers the line
+    this.store.postFeedMessage(
+      "The crown is in the case. I've logged every task, every kill, every step that got you here. This office has a conqueror running it. I'll be honest — I didn't expect that when I took this job.",
+      HERMES_ID,
+      4000,
+    );
+
+    // Phase 4 (4.5s later): Golden particle burst + camera shake + achievement unlock
+    this.time.delayedCall(4500, () => {
+      this.world.vfx.sparkBurst(trophyPx.x, trophyPx.y, 0xffdd44, 40, 150);
+      this.world.vfx.sparkBurst(trophyPx.x, trophyPx.y, 0xffaa00, 30, 100);
+      this.world.vfx.celebrate(trophyPx.x, trophyPx.y);
+      this.world.vfx.shake("large");
+      this.cameras.main.flash(500, 255, 215, 0, true);
+      achievements.unlock("from_cubicle_to_conqueror");
+      // Record speedrun time if timer was started
+      if (this.world.speedrunStartTime !== null) {
+        const elapsed = Date.now() - this.world.speedrunStartTime;
+        achievements.setStat("speedrunTimeMs", elapsed);
+        const minutes = Math.floor(elapsed / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
+        this.store.toast(`👑 Crown placed! Speedrun time: ${minutes}:${seconds.toString().padStart(2, "0")}`);
+      } else {
+        this.store.toast("👑 The Sovereign Crown has been placed. From Cubicle to Conqueror.");
+      }
+      this.updateTrophyCase();
+    });
+
+    // Phase 5 (6s later): Second wave of agent reactions + camera reset
+    const secondWave = [
+      "I'm going to remember where I was when that happened.",
+      "The boss just placed a crown in the trophy case. This is a tech startup. What is happening.",
+      "I've updated the Hall of Fame. It felt insufficient.",
+    ];
+    for (let i = 0; i < Math.min(2, hireable.length); i++) {
+      const text = secondWave[Math.floor(Math.random() * secondWave.length)];
+      this.store.postFeedMessage(text, undefined, 6000 + i * 800);
+    }
+
+    // Reset camera after the sequence
+    this.time.delayedCall(7000, () => {
+      this.cameras.main.zoomTo(1, 600, "Sine.inOut");
+      this.cameras.main.pan(this.player.x, this.player.y, 600, "Sine.inOut");
+    });
+  }
+
   /** Redraw the trophy case with current achievement unlock state. */
   private updateTrophyCase(): void {
     const g = this.trophyGfx;
@@ -6059,6 +7253,141 @@ export class OfficeScene extends Phaser.Scene {
         idx++;
       }
     }
+
+    // Crown display — golden crown above the case when from_cubicle_to_conqueror is unlocked
+    if (achievements.isUnlocked("from_cubicle_to_conqueror")) {
+      const cx = tx;
+      const cy = ty - 18;
+      // glow halo
+      g.fillStyle(0xffdd44, 0.15);
+      g.fillCircle(cx, cy, 14);
+      g.fillStyle(0xffdd44, 0.08);
+      g.fillCircle(cx, cy, 20);
+      // crown shape — 3 spikes with gems
+      g.fillStyle(0xffd700, 1);
+      g.beginPath();
+      g.moveTo(cx - 10, cy + 4);
+      g.lineTo(cx - 10, cy - 2);
+      g.lineTo(cx - 6, cy + 2);
+      g.lineTo(cx - 3, cy - 6);
+      g.lineTo(cx, cy + 2);
+      g.lineTo(cx + 3, cy - 6);
+      g.lineTo(cx + 6, cy + 2);
+      g.lineTo(cx + 10, cy - 2);
+      g.lineTo(cx + 10, cy + 4);
+      g.closePath();
+      g.fillPath();
+      // base band
+      g.fillStyle(0xffaa00, 1);
+      g.fillRect(cx - 10, cy + 3, 20, 3);
+      // gems
+      g.fillStyle(0xff4444, 1);
+      g.fillCircle(cx - 6, cy + 1, 1.5);
+      g.fillStyle(0x44aaff, 1);
+      g.fillCircle(cx, cy + 1, 1.5);
+      g.fillStyle(0x44ff44, 1);
+      g.fillCircle(cx + 6, cy + 1, 1.5);
+      // sparkle
+      g.fillStyle(0xffffff, 0.6);
+      g.fillCircle(cx - 3, cy - 4, 1);
+      g.fillCircle(cx + 4, cy - 3, 0.8);
+    }
+  }
+
+  /** Draw a weapon rack on the wall next to the trophy case. */
+  private drawWeaponRack(): void {
+    this.weaponRackGfx = this.add.graphics().setDepth(3);
+    this.updateWeaponRack();
+  }
+
+  /** Update the weapon rack display based on owned weapons. */
+  private updateWeaponRack(): void {
+    const g = this.weaponRackGfx;
+    if (!g) return;
+    g.clear();
+
+    const weapons = this.world.ownedWeaponsList;
+    const sig = weapons.join(",");
+    if (sig === this.weaponRackSig) return;
+    this.weaponRackSig = sig;
+
+    if (weapons.length === 0) return; // empty rack — don't draw
+
+    const rx = this.weaponRackTile.x * TILE_PX + 32;
+    const ry = this.weaponRackTile.y * TILE_PX - 56;
+    const rackW = 72;
+    const rackH = 80;
+
+    // wooden frame
+    g.fillStyle(0x1a1008, 1);
+    g.fillRoundedRect(rx - rackW / 2 - 5, ry - 5, rackW + 10, rackH + 10, 5);
+    g.fillStyle(0x3a2818, 1);
+    g.fillRoundedRect(rx - rackW / 2 - 3, ry - 3, rackW + 6, rackH + 6, 4);
+    // dark interior
+    g.fillStyle(0x0a0808, 1);
+    g.fillRoundedRect(rx - rackW / 2, ry, rackW, rackH, 3);
+
+    // weapon icon colors
+    const weaponColors: Record<string, number> = {
+      tennis_racket: 0xeeff44,
+      golf_club: 0xdddd44,
+      axe: 0xcc8844,
+      iron_sword: 0xaaaacc,
+      void_blade: 0xaa44ff,
+      flame_greatsword: 0xff6020,
+      void_daggers: 0x8844cc,
+      crystal_bow: 0x44ddff,
+    };
+
+    // draw weapon slots — 2 columns, up to 4 rows
+    const cols = 2;
+    const slotW = 28;
+    const slotH = 18;
+    const gapX = (rackW - cols * slotW) / (cols + 1);
+    const gapY = 8;
+
+    for (let i = 0; i < weapons.length && i < 8; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const sx = rx - rackW / 2 + gapX + col * (slotW + gapX);
+      const sy = ry + gapY + row * (slotH + gapY);
+      const w = weapons[i];
+      const color = weaponColors[w] ?? 0xaaaaaa;
+
+      // weapon shape — simple stylized icon
+      g.fillStyle(color, 0.9);
+      if (w === "crystal_bow") {
+        // bow shape
+        g.lineStyle(2, color, 0.9);
+        g.beginPath();
+        g.arc(sx + slotW / 2, sy + slotH / 2, 8, Math.PI * 0.3, Math.PI * 0.7, false);
+        g.strokePath();
+        g.lineStyle(1, 0xffffff, 0.4);
+        g.beginPath();
+        g.moveTo(sx + slotW / 2 - 6, sy + slotH / 2);
+        g.lineTo(sx + slotW / 2 + 6, sy + slotH / 2);
+        g.strokePath();
+      } else if (w === "void_daggers") {
+        // two small blades
+        g.fillRect(sx + 6, sy + 4, 3, 10);
+        g.fillRect(sx + 16, sy + 4, 3, 10);
+        g.fillStyle(0x5a4030, 0.8);
+        g.fillRect(sx + 5, sy + 13, 5, 3);
+        g.fillRect(sx + 15, sy + 13, 5, 3);
+      } else {
+        // generic sword/weapon — blade + handle
+        g.fillRect(sx + slotW / 2 - 1, sy + 2, 2, 10);
+        g.fillStyle(0x5a4030, 0.8);
+        g.fillRect(sx + slotW / 2 - 4, sy + 11, 8, 3);
+        // shine
+        g.fillStyle(0xffffff, 0.3);
+        g.fillRect(sx + slotW / 2 - 1, sy + 3, 1, 5);
+      }
+    }
+
+    // glass sheen
+    g.fillStyle(0xffffff, 0.03);
+    g.fillRoundedRect(rx - rackW / 2 + 2, ry + 2, rackW - 4, rackH / 3, 2);
   }
 
   /** Draw a cork-board bulletin board hanging on the south wall — the Hall of Fame. */
@@ -7405,7 +8734,12 @@ export class OfficeScene extends Phaser.Scene {
       const hofPx = { x: this.hallOfFameTile.x * TILE_PX + 10, y: this.hallOfFameTile.y * TILE_PX + 32 };
       const hofDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, hofPx.x, hofPx.y);
       if (trophyDist < 120) {
-        this.store.toggleAchievements();
+        // Crown placement sequence: if Sovereign is killed but crown not yet placed
+        if (achievements.isUnlocked("infernal_sovereign_kill") && !achievements.isUnlocked("from_cubicle_to_conqueror")) {
+          this.triggerCrownPlacementSequence();
+        } else {
+          this.store.toggleAchievements();
+        }
       } else if (hofDist < 120) {
         this.store.toggleHallOfFame();
       } else
@@ -7535,6 +8869,10 @@ export class OfficeScene extends Phaser.Scene {
       this.wizard?.update(time, dt);
     }
 
+    // NPC speech bubbles — update positions, check proximity triggers
+    this.updateNpcSpeechBubbles(time);
+    this.checkNpcProximity(time);
+
     // selection ring
     const sel = this.store.selectedId ? this.npcs.get(this.store.selectedId) : null;
     const selOfficeManager = this.store.selectedId === OFFICE_MANAGER_ID ? this.officeManager : null;
@@ -7648,6 +8986,16 @@ export class OfficeScene extends Phaser.Scene {
     // --- achievements: exploration ---
     if (outside) {
       achievements.unlock("step_outside");
+      // Snapshot state when first going outside
+      if (!this.wasOutside) {
+        this.wasOutside = true;
+        this.outsideSnapshot = {
+          achievements: achievements.getUnlockedIds(),
+          weapons: [...this.world.ownedWeaponsList],
+          creaturesKilled: achievements.getStat("creaturesKilled"),
+          bossesSlain: achievements.getStat("bossesSlain"),
+        };
+      }
       const hostility = this.world.getHostilityAt(this.player.x, this.player.y);
       if (hostility >= 0) achievements.unlock("meadow_explorer");
       if (hostility >= 1) achievements.unlock("forest_explorer");
@@ -7666,6 +9014,13 @@ export class OfficeScene extends Phaser.Scene {
       if (this.world.playerHp > 0 && this.world.playerHp < 10) {
         achievements.unlock("close_call");
       }
+      // Return-from-outside-world reaction: detect transition and post agent reaction
+      if (this.wasOutside && this.outsideSnapshot) {
+        this.wasOutside = false;
+        const snap = this.outsideSnapshot;
+        this.outsideSnapshot = null;
+        this.triggerReturnReaction(snap);
+      }
     }
 
     // insomniac: 60 min in one session
@@ -7676,6 +9031,10 @@ export class OfficeScene extends Phaser.Scene {
     if (!outside && achCount !== this.trophyAchCount) {
       this.trophyAchCount = achCount;
       this.updateTrophyCase();
+    }
+    // weapon rack — update when owned weapons change
+    if (!outside) {
+      this.updateWeaponRack();
     }
     // trophy case & hall of fame proximity hints — handled by updateAllHints above
 
@@ -9482,6 +10841,102 @@ export class OfficeScene extends Phaser.Scene {
       if (!workingDesks.has(deskIdx)) {
         overlay.setVisible(false);
       }
+    }
+  }
+
+  /** Create the DOM-based hotbar UI wired to the inventory system. */
+  private createHotbar(): void {
+    this.destroyHotbar();
+    const el = document.createElement("div");
+    el.className = "hotbar";
+    el.style.cssText = `
+      position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 4px; z-index: 500; pointer-events: none;
+      font-family: var(--font-pixel, system-ui, sans-serif);
+    `;
+    document.body.appendChild(el);
+    this.hotbarEl = el;
+
+    // Subscribe to inventory changes
+    this.world.inventory.onChange(() => this.updateHotbar());
+    this.updateHotbar();
+  }
+
+  /** Re-render hotbar slots from current inventory state. */
+  private updateHotbar(): void {
+    if (!this.hotbarEl) return;
+    const items = this.world.inventory.getItems();
+    const max = this.world.inventory.maxSlotCount;
+    const active = this.world.inventory.activeSlot;
+
+    this.hotbarEl.innerHTML = "";
+    for (let i = 0; i < max; i++) {
+      const item = items[i];
+      const slot = document.createElement("div");
+      slot.className = "hotbar-slot" + (i === active ? " active" : "") + (item ? "" : " empty");
+      slot.style.cssText = `
+        width: 44px; height: 44px; border-radius: 8px;
+        background: ${i === active ? "rgba(58,140,212,0.35)" : "rgba(20,22,30,0.65)"};
+        border: 2px solid ${i === active ? "#3a8cd4" : "rgba(255,255,255,0.15)"};
+        display: flex; align-items: center; justify-content: center;
+        position: relative; backdrop-filter: blur(4px);
+        transition: border-color 0.15s, background 0.15s;
+        ${item ? "cursor: pointer; pointer-events: auto;" : ""}
+      `;
+
+      if (item) {
+        slot.title = `${item.name}${item.description ? " — " + item.description : ""}`;
+        const icon = document.createElement("span");
+        icon.style.cssText = "font-size: 22px; line-height: 1; user-select: none;";
+        icon.textContent = item.icon;
+        slot.appendChild(icon);
+
+        // quantity badge for materials
+        if (item.quantity && item.quantity > 1) {
+          const badge = document.createElement("span");
+          badge.style.cssText = `
+            position: absolute; bottom: 2px; right: 3px;
+            font-size: 10px; font-weight: bold; color: #fff;
+            background: rgba(0,0,0,0.6); border-radius: 4px;
+            padding: 0 3px; line-height: 14px;
+          `;
+          badge.textContent = String(item.quantity);
+          slot.appendChild(badge);
+        }
+
+        // slot number
+        const num = document.createElement("span");
+        num.style.cssText = `
+          position: absolute; top: 1px; left: 3px;
+          font-size: 9px; color: rgba(255,255,255,0.4); font-weight: bold;
+        `;
+        num.textContent = String(i + 1);
+        slot.appendChild(num);
+
+        slot.addEventListener("click", () => {
+          this.world.inventory.setActive(i);
+          const wt = this.world.inventory.getActiveWeaponType();
+          if (wt) this.world.equipWeapon(wt);
+        });
+      } else {
+        // empty slot — show number
+        const num = document.createElement("span");
+        num.style.cssText = `
+          font-size: 11px; color: rgba(255,255,255,0.2); font-weight: bold;
+        `;
+        num.textContent = String(i + 1);
+        slot.appendChild(num);
+      }
+
+      this.hotbarEl.appendChild(slot);
+    }
+  }
+
+  /** Remove the hotbar DOM element. */
+  private destroyHotbar(): void {
+    if (this.hotbarEl) {
+      this.hotbarEl.remove();
+      this.hotbarEl = null;
     }
   }
 

@@ -281,7 +281,7 @@ export async function makeTools(cwd: string, opts?: {
   wizardBranch?: string;
   onBroadcastHtml?: (filePath: string) => void;
   model?: string;
-  requestGate?: (question: string, options: string[]) => Promise<string>;
+  requestGate?: (question: string, options: string[], freeText?: boolean) => Promise<string>;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -745,7 +745,8 @@ export async function makeTools(cwd: string, opts?: {
       "Ask the boss (your manager) a blocking question when you need a decision before proceeding. " +
       "Provide a clear question and a list of possible options. The boss will choose one. " +
       "Use this when you're stuck on an ambiguous requirement, need approval for an approach, " +
-      "or must choose between alternatives that affect the task outcome.",
+      "or must choose between alternatives that affect the task outcome. " +
+      "For open-ended questions (e.g. asking for an API key or URL), set freeText=true and omit options.",
     inputSchema: {
       type: "object",
       properties: {
@@ -753,26 +754,34 @@ export async function makeTools(cwd: string, opts?: {
         options: {
           type: "array",
           items: { type: "string" },
-          description: "List of possible answers for the boss to choose from (2-6 options)",
+          description: "List of possible answers for the boss to choose from (2-6 options). Omit if freeText=true.",
           minItems: 2,
           maxItems: 6,
         },
+        freeText: {
+          type: "boolean",
+          description: "Set to true for open-ended questions (e.g. 'What is your API key?'). Omit options when using this.",
+        },
       },
-      required: ["question", "options"],
+      required: ["question"],
     },
     async execute(input: any) {
       if (!opts?.requestGate) {
         return "Unable to reach the boss right now. Use your best judgment to proceed.";
       }
       const question = String(input.question ?? "").trim();
+      const freeText = Boolean(input.freeText);
       const options = Array.isArray(input.options)
         ? input.options.map((o: any) => String(o)).filter(Boolean)
         : [];
-      if (!question || options.length < 2) {
-        return "Invalid question or options. Provide a clear question and at least 2 options.";
+      if (!question) {
+        return "Invalid question. Provide a clear question.";
+      }
+      if (!freeText && options.length < 2) {
+        return "Invalid options. Provide at least 2 options or set freeText=true.";
       }
       try {
-        const answer = await opts.requestGate(question, options);
+        const answer = await opts.requestGate(question, freeText ? [] : options, freeText);
         return `The boss answered: "${answer}"`;
       } catch {
         return "The boss didn't respond in time. Use your best judgment to proceed.";

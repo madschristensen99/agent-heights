@@ -1,6 +1,7 @@
-import { LayoutGrid, Users, KanbanSquare, Settings, Power, Clock, Store, Server, Skull, BarChart3, GitBranch } from "lucide-react";
+import { LayoutGrid, Users, KanbanSquare, Settings, Power, Clock, Store, Server, Skull, BarChart3, GitBranch, TrendingUp } from "lucide-react";
+import { COMMAND_CENTER_ADMINS } from "@shared/types";
 
-export type View = "fleet" | "agent" | "board" | "gantt" | "vmodel" | "settings" | "schedules" | "marketplace" | "mcp" | "fired" | "files" | "memory" | "wallet";
+export type View = "fleet" | "agent" | "board" | "gantt" | "vmodel" | "settings" | "schedules" | "marketplace" | "mcp" | "fired" | "files" | "memory" | "wallet" | "stats";
 
 interface SidebarProps {
   view: View;
@@ -12,9 +13,11 @@ interface SidebarProps {
   firedCount: number;
   connected: boolean;
   bossName: string;
+  userEmail: string | null;
 }
 
-export function Sidebar({ view, onViewChange, agentCount, boardCount, scheduleCount, mcpCount, firedCount, connected, bossName }: SidebarProps) {
+export function Sidebar({ view, onViewChange, agentCount, boardCount, scheduleCount, mcpCount, firedCount, connected, bossName, userEmail }: SidebarProps) {
+  const isAdmin = userEmail != null && COMMAND_CENTER_ADMINS.includes(userEmail.toLowerCase());
   const navItems = [
     { id: "fleet" as View, icon: Users, label: "Fleet", badge: agentCount },
     { id: "board" as View, icon: KanbanSquare, label: "Task Board", badge: boardCount },
@@ -25,6 +28,7 @@ export function Sidebar({ view, onViewChange, agentCount, boardCount, scheduleCo
     { id: "mcp" as View, icon: Server, label: "MCP Servers", badge: mcpCount },
     { id: "fired" as View, icon: Skull, label: "Fired / Vacation", badge: firedCount },
     { id: "settings" as View, icon: Settings, label: "Settings", badge: undefined },
+    ...(isAdmin ? [{ id: "stats" as View, icon: TrendingUp, label: "Platform Stats", badge: undefined }] : []),
   ];
 
   return (

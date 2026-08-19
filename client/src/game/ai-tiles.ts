@@ -134,6 +134,7 @@ export function resolveItemTex(scene: Phaser.Scene, procKey: string): string {
  */
 export const AI_CREATURE_TEXTURES: Record<string, string[]> = {
   "creature-slime": ["ai-fur-creature_slime_0", "ai-fur-creature_slime_1", "ai-fur-creature_slime_2", "ai-fur-creature_slime_3"],
+  "creature-slug": ["ai-fur-creature_slug_0", "ai-fur-creature_slug_1", "ai-fur-creature_slug_2", "ai-fur-creature_slug_3"],
   "creature-wolf": ["ai-fur-creature_wolf_0", "ai-fur-creature_wolf_1", "ai-fur-creature_wolf_2", "ai-fur-creature_wolf_3"],
   "creature-skeleton": ["ai-fur-creature_skeleton_0", "ai-fur-creature_skeleton_1", "ai-fur-creature_skeleton_2", "ai-fur-creature_skeleton_3"],
   "creature-imp": ["ai-fur-creature_imp_0", "ai-fur-creature_imp_1", "ai-fur-creature_imp_2", "ai-fur-creature_imp_3"],
@@ -148,6 +149,7 @@ export const AI_CREATURE_TEXTURES: Record<string, string[]> = {
   "friendly-fairy-bunny": ["ai-fur-friendly_fairy_bunny_0", "ai-fur-friendly_fairy_bunny_1", "ai-fur-friendly_fairy_bunny_2", "ai-fur-friendly_fairy_bunny_3"],
   "friendly-baby-dragon": ["ai-fur-friendly_baby_dragon_0", "ai-fur-friendly_baby_dragon_1", "ai-fur-friendly_baby_dragon_2", "ai-fur-friendly_baby_dragon_3"],
   "friendly-crystal-fox": ["ai-fur-friendly_crystal_fox_0", "ai-fur-friendly_crystal_fox_1", "ai-fur-friendly_crystal_fox_2", "ai-fur-friendly_crystal_fox_3"],
+  "friendly-dog": ["ai-fur-friendly_dog_0", "ai-fur-friendly_dog_1", "ai-fur-friendly_dog_2", "ai-fur-friendly_dog_3"],
 };
 
 /** Creature asset keys (without prefix) for loading from furniture/ directory. */

@@ -1,0 +1,87 @@
+{
+  "id": "erics-alley",
+  "name": "Erics Alley",
+  "description": "Gritty back alley world where agents smoke instead of type. Cardboard box stations, barrel fires, dumpsters as filing cabinets, van deliveries.",
+  "workMetaphor": "smoking",
+  "arrivalMetaphor": "van_delivery",
+  "office": {
+    "tilemapPath": "client/public/assets/maps/erics-alley.json",
+    "tilesetPath": "client/public/assets/tilesets/erics-alley.png",
+    "floorTile": 0,
+    "wallTile": 1,
+    "doorTile": 6
+  },
+  "furniture": {
+    "17": "drawCardboardStationLeft",
+    "18": "drawCardboardStationRight",
+    "19": "drawCrateStool",
+    "20": "drawDumpster",
+    "21": "drawWeedPatch",
+    "22": "drawAlleyWindow",
+    "23": "drawBarrelFireTop",
+    "24": "drawBarrelFireBottom",
+    "25": "drawShoppingCart",
+    "26": "drawAlleyCounter",
+    "27": "drawPuddle",
+    "28": "drawTrashCan",
+    "29": "drawMattressLeft",
+    "30": "drawMattressRight",
+    "31": "drawDeadPlant",
+    "32": "drawSprayPaintCan",
+    "35": "drawFuseBox",
+    "36": "drawFuseBoxScreen",
+    "37": "drawSteamVent"
+  },
+  "worldgen": {
+    "biomes": ["alley", "street", "abandoned", "undercity", "sewer", "hellmouth"],
+    "baseGround": {
+      "alley": 0,
+      "street": 6,
+      "abandoned": 7,
+      "undercity": 8,
+      "sewer": 21,
+      "hellmouth": 9
+    },
+    "obstacles": {
+      "alley": [2, 3, 4],
+      "street": [2, 3, 20],
+      "abandoned": [2, 12, 13],
+      "undercity": [3, 10, 37],
+      "sewer": [3, 21, 20],
+      "hellmouth": [9, 11, 13]
+    },
+    "hostileTiles": {
+      "sewer": [21],
+      "hellmouth": [9, 11]
+    },
+    "hostilityThresholds": [2, 4, 7, 11, 18]
+  },
+  "interactables": {
+    "redButton": { "tileId": 25, "x": 25, "y": 7, "interactionType": "hire" },
+    "wardrobe": { "tileId": 20, "x": 1, "y": 10, "interactionType": "customize" },
+    "nemesisTerminal": { "tileId": 36, "x": 28, "y": 10, "interactionType": "nemesis" },
+    "mailbox": { "tileId": 28, "x": 1, "y": 7, "interactionType": "mail" }
+  },
+  "statusColors": {
+    "idle": 6970744,
+    "thinking": 15235000,
+    "working": 5019238,
+    "done": 4882074,
+    "error": 14702168,
+    "waiting": 11829316
+  },
+  "emotes": {
+    "smoke": 0,
+    "cough": 1,
+    "shrug": 2
+  },
+  "dialect": {
+    "systemPromptSuffix": "Speak casually with urban street slang. Be direct, a little rough around the edges, but still competent and professional. Use contractions and keep sentences punchy.",
+    "chatStyle": "street_urban",
+    "emotes": ["smoke", "shrug", "cough"]
+  },
+  "assets": {
+    "tilesetPath": "client/public/assets/tilesets/erics-alley.png",
+    "assetTier": "procedural"
+  }
+}

@@ -407,7 +407,102 @@ const CREATURE_DESIGNS: CreatureDesign[] = [
       ctx.restore();
     },
   },
-  // Hostility 1: Wolf — quadruped predator with fur, fangs, and muscular build
+  // Slug — slow garden pest, drops slug_slime
+  {
+    name: "slug",
+    baseColor: 0x6a8a4a,
+    accentColor: 0x8aaa6a,
+    eyeColor: 0x222222,
+    size: 28,
+    draw: (ctx, frame, s, c) => {
+      const cx = s * 0.5;
+      const groundY = s * 0.82;
+      const squish = frame === 1 ? 0.9 : frame === 2 ? 1.1 : frame === 3 ? 0.8 : 1;
+      const stretch = frame === 1 ? 1.1 : frame === 2 ? 0.95 : 1;
+
+      drawGroundShadow(ctx, cx, groundY, s * 0.3);
+
+      // slime trail behind slug
+      ctx.save();
+      ctx.fillStyle = rgba(lighten(c.baseColor, 0.3), 0.25);
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.25, groundY - 2, s * 0.2, s * 0.06, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.15, groundY - 1, s * 0.15, s * 0.05, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // body — elongated oval, semi-glossy
+      ctx.save();
+      const bodyW = s * 0.4 * stretch;
+      const bodyH = s * 0.22 * squish;
+      const bodyY = s * 0.6;
+      const grad = ctx.createRadialGradient(cx - 4, bodyY - 4, 2, cx, bodyY, bodyW);
+      grad.addColorStop(0, rgba(lighten(c.baseColor, 0.3), 0.95));
+      grad.addColorStop(0.6, rgba(c.baseColor, 0.9));
+      grad.addColorStop(1, rgba(darken(c.baseColor, 0.25), 0.95));
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(cx, bodyY, bodyW, bodyH, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // glossy highlight on top
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.08, bodyY - bodyH * 0.5, s * 0.12, s * 0.04, -0.2, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(0xffffff, 0.3);
+      ctx.fill();
+
+      // mantle — raised bump on the back (head area)
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.1, bodyY - bodyH * 0.3, s * 0.14, s * 0.1, 0, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(lighten(c.baseColor, 0.15), 0.9);
+      ctx.fill();
+
+      // eyestalks — two thin stalks with eyes on top
+      const stalkWave = frame === 1 ? 2 : frame === 2 ? -2 : frame === 3 ? 5 : 0;
+      const stalkBaseX = cx + s * 0.18;
+      const stalkBaseY = bodyY - bodyH * 0.3;
+      // left stalk
+      ctx.strokeStyle = rgba(c.baseColor, 1);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(stalkBaseX - 4, stalkBaseY);
+      ctx.quadraticCurveTo(stalkBaseX - 5, stalkBaseY - s * 0.12 + stalkWave, stalkBaseX - 4, stalkBaseY - s * 0.15 + stalkWave);
+      ctx.stroke();
+      // right stalk
+      ctx.beginPath();
+      ctx.moveTo(stalkBaseX + 4, stalkBaseY);
+      ctx.quadraticCurveTo(stalkBaseX + 5, stalkBaseY - s * 0.12 - stalkWave, stalkBaseX + 4, stalkBaseY - s * 0.15 - stalkWave);
+      ctx.stroke();
+      // eyes — dark dots on stalks
+      ctx.fillStyle = rgba(c.eyeColor, 1);
+      ctx.beginPath();
+      ctx.arc(stalkBaseX - 4, stalkBaseY - s * 0.15 + stalkWave, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(stalkBaseX + 4, stalkBaseY - s * 0.15 - stalkWave, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // eye shine
+      ctx.fillStyle = rgba(0xffffff, 0.6);
+      ctx.beginPath();
+      ctx.arc(stalkBaseX - 3.5, stalkBaseY - s * 0.15 + stalkWave - 0.5, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(stalkBaseX + 4.5, stalkBaseY - s * 0.15 - stalkWave - 0.5, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // attack frame — rearing up, mouth open
+      if (frame === 3) {
+        ctx.beginPath();
+        ctx.arc(stalkBaseX, stalkBaseY + 2, s * 0.04, 0, Math.PI);
+        ctx.fillStyle = rgba(0x441111, 0.8);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    },
+  },
   {
     name: "wolf",
     baseColor: 0x5a4a3a,
@@ -3201,6 +3296,68 @@ function drawGolfClub(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.restore();
 }
 
+/** Draw a golf bag with club heads poking out. */
+function drawGolfBag(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const bagW = size * 0.35;
+  const bagH = size * 0.45;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.beginPath();
+  ctx.ellipse(cx + 2, cy + bagH / 2 + 4, bagW * 0.6, bagW * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // club heads poking out the top (3 clubs)
+  const clubColors = [0x88cc88, 0xcc8888, 0x8888cc];
+  for (let i = 0; i < 3; i++) {
+    const clubX = cx - bagW * 0.25 + i * bagW * 0.25;
+    const clubTopY = cy - bagH / 2 - size * 0.12;
+    ctx.strokeStyle = rgba(clubColors[i], 0.9);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(clubX, cy - bagH / 2 + 2);
+    ctx.lineTo(clubX - 3, clubTopY);
+    ctx.stroke();
+    // small club head
+    ctx.fillStyle = rgba(clubColors[i], 1);
+    ctx.beginPath();
+    ctx.arc(clubX - 3, clubTopY, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // bag body — leather gradient
+  const bagGrad = ctx.createLinearGradient(cx - bagW / 2, 0, cx + bagW / 2, 0);
+  bagGrad.addColorStop(0, rgba(0x4a3a2a, 1));
+  bagGrad.addColorStop(0.5, rgba(0x6a5a3a, 1));
+  bagGrad.addColorStop(1, rgba(0x4a3a2a, 1));
+  ctx.fillStyle = bagGrad;
+  ctx.beginPath();
+  ctx.roundRect(cx - bagW / 2, cy - bagH / 2, bagW, bagH, 4);
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x2a1a0a, 0.8);
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // bag strap
+  ctx.strokeStyle = rgba(0x3a2a1a, 0.9);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - bagW / 2 + 3, cy - bagH / 2 + 4);
+  ctx.lineTo(cx + bagW / 2 - 3, cy - bagH / 2 + 4);
+  ctx.stroke();
+
+  // pocket
+  ctx.fillStyle = rgba(0x3a2a1a, 0.8);
+  ctx.beginPath();
+  ctx.roundRect(cx - bagW * 0.3, cy + bagH * 0.1, bagW * 0.6, bagH * 0.3, 2);
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x2a1a0a, 0.6);
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+}
+
 /** Draw a golf ball with dimples. */
 function drawGolfBall(ctx: CanvasRenderingContext2D, size: number): void {
   const cx = size / 2;
@@ -3302,15 +3459,22 @@ function drawTeeBox(ctx: CanvasRenderingContext2D, size: number): void {
 }
 
 /** Draw a leprechaun — small green-clothed figure with a hat. */
-function drawLeprechaun(ctx: CanvasRenderingContext2D, size: number): void {
+function drawLeprechaun(ctx: CanvasRenderingContext2D, size: number, frame = 0): void {
   const cx = size / 2;
   const cy = size / 2;
+  const legPhase = frame === 1 ? 2 : frame === 2 ? -2 : 0;
+  const armWave = frame === 3 ? 4 : 0;
 
   // shadow
   ctx.fillStyle = rgba(0x000000, 0.25);
   ctx.beginPath();
   ctx.ellipse(cx + 1, cy + size * 0.2, size * 0.18, size * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // legs — small, animated
+  ctx.fillStyle = rgba(0x1a4a1a, 1);
+  ctx.fillRect(cx - size * 0.06, cy + size * 0.14, size * 0.04, size * 0.08 + legPhase);
+  ctx.fillRect(cx + size * 0.02, cy + size * 0.14, size * 0.04, size * 0.08 - legPhase);
 
   // body — green coat
   ctx.fillStyle = rgba(0x2a8a2a, 1);
@@ -3328,6 +3492,15 @@ function drawLeprechaun(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.fillRect(cx - size * 0.12, cy + size * 0.08, size * 0.24, size * 0.04);
   ctx.fillStyle = rgba(0xffdd00, 1);
   ctx.fillRect(cx - size * 0.02, cy + size * 0.08, size * 0.04, size * 0.04);
+
+  // arms — green sleeves, wave when fleeing
+  ctx.fillStyle = rgba(0x2a8a2a, 1);
+  ctx.beginPath();
+  ctx.ellipse(cx - size * 0.13, cy + size * 0.04 - armWave, size * 0.04, size * 0.08, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + size * 0.13, cy + size * 0.04 - armWave, size * 0.04, size * 0.08, 0.3, 0, Math.PI * 2);
+  ctx.fill();
 
   // head — skin tone
   ctx.fillStyle = rgba(0xddaa77, 1);
@@ -3362,6 +3535,356 @@ function drawLeprechaun(ctx: CanvasRenderingContext2D, size: number): void {
   // buckle on band
   ctx.fillStyle = rgba(0xffdd00, 1);
   ctx.fillRect(cx - size * 0.015, cy - size * 0.16, size * 0.03, size * 0.03);
+
+  // frame 3 (flee): motion lines behind
+  if (frame === 3) {
+    ctx.strokeStyle = rgba(0xffffff, 0.3);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - size * 0.2, cy);
+    ctx.lineTo(cx - size * 0.12, cy);
+    ctx.moveTo(cx - size * 0.22, cy + size * 0.06);
+    ctx.lineTo(cx - size * 0.14, cy + size * 0.06);
+    ctx.stroke();
+  }
+}
+
+// ============================================================
+// LAKE SHORE TEXTURE — sandy shore with reeds
+// ============================================================
+
+/** Draw a lake shore tile — sand with patches of grass and water reeds. */
+function drawLakeShore(ctx: CanvasRenderingContext2D, size: number): void {
+  // sandy base
+  ctx.fillStyle = rgba(0xd4c488, 1);
+  ctx.fillRect(0, 0, size, size);
+  // sand texture — small dots
+  ctx.fillStyle = rgba(0xc4b478, 0.5);
+  for (let i = 0; i < 12; i++) {
+    const sx = Math.random() * size;
+    const sy = Math.random() * size;
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+  // grass patches — darker green tufts
+  ctx.fillStyle = rgba(0x5a8a3a, 0.7);
+  for (let i = 0; i < 4; i++) {
+    const gx = Math.random() * size;
+    const gy = Math.random() * size;
+    ctx.beginPath();
+    ctx.ellipse(gx, gy, 3, 1.5, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // reeds — tall thin lines near water edge (bottom of tile)
+  ctx.strokeStyle = rgba(0x4a7a2a, 0.8);
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const rx = size * 0.15 + (i / 5) * size * 0.7;
+    const ry = size * 0.7 + Math.random() * size * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(rx, ry);
+    ctx.lineTo(rx + (Math.random() - 0.5) * 3, ry - 6 - Math.random() * 4);
+    ctx.stroke();
+  }
+  // water edge — subtle blue tint at bottom
+  const grad = ctx.createLinearGradient(0, size * 0.8, 0, size);
+  grad.addColorStop(0, "rgba(40,80,110,0)");
+  grad.addColorStop(1, "rgba(40,80,110,0.3)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, size * 0.8, size, size * 0.2);
+}
+
+// ============================================================
+// CAMPFIRE TEXTURE — cozy fire for cabin cooking
+// ============================================================
+
+/** Draw a campfire — stones around a glowing fire. 2 frames for flicker. */
+function drawCampfire(ctx: CanvasRenderingContext2D, size: number, frame = 0): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  // stone ring
+  ctx.fillStyle = rgba(0x888888, 1);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const sx = cx + Math.cos(a) * size * 0.28;
+    const sy = cy + Math.sin(a) * size * 0.22 + size * 0.05;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, size * 0.06, size * 0.04, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // fire glow — orange/red
+  const flicker = frame === 0 ? 1 : 0.85;
+  ctx.fillStyle = rgba(0xff6600, 0.7 * flicker);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, size * 0.18, size * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // inner flame — yellow
+  ctx.fillStyle = rgba(0xffdd44, 0.8 * flicker);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - size * 0.02, size * 0.1, size * 0.08, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // flame tips — animated
+  ctx.fillStyle = rgba(0xff8800, 0.6 * flicker);
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.06, cy - size * 0.04);
+  ctx.lineTo(cx, cy - size * 0.14 - (frame === 0 ? 2 : 0));
+  ctx.lineTo(cx + size * 0.06, cy - size * 0.04);
+  ctx.closePath();
+  ctx.fill();
+  // logs — brown crossed
+  ctx.strokeStyle = rgba(0x6a4a2a, 0.9);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.12, cy + size * 0.04);
+  ctx.lineTo(cx + size * 0.12, cy + size * 0.04);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.1, cy + size * 0.08);
+  ctx.lineTo(cx + size * 0.1, cy + size * 0.08);
+  ctx.stroke();
+}
+
+// ============================================================
+// VOID RIFT TEXTURE — ominous purple tear in reality
+// ============================================================
+
+/** Draw a void rift — jagged purple tear with glowing edges. */
+function drawVoidRift(ctx: CanvasRenderingContext2D, size: number): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  // outer glow — dark purple
+  ctx.fillStyle = rgba(0x220044, 0.6);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, size * 0.45, size * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // rift body — deep void
+  ctx.fillStyle = rgba(0x110022, 0.9);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, size * 0.35, size * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // jagged edges — purple
+  ctx.strokeStyle = rgba(0xaa00ff, 0.8);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, size * 0.35, size * 0.2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // inner glow — bright purple
+  ctx.strokeStyle = rgba(0xddaaff, 0.5);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, size * 0.25, size * 0.14, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // crack lines — radiating from center
+  ctx.strokeStyle = rgba(0xcc88ff, 0.4);
+  ctx.lineWidth = 0.8;
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * size * 0.4, cy + Math.sin(a) * size * 0.25);
+    ctx.stroke();
+  }
+}
+
+// ============================================================
+// CABIN TEXTURES — wooden cabin tiles for lake-side building
+// ============================================================
+
+/** Draw a cabin wall tile — horizontal log construction. */
+function drawCabinWall(ctx: CanvasRenderingContext2D, size: number): void {
+  // base wood color
+  ctx.fillStyle = rgba(0x8b6f47, 1);
+  ctx.fillRect(0, 0, size, size);
+  // horizontal log lines
+  ctx.strokeStyle = rgba(0x6b5237, 0.8);
+  ctx.lineWidth = 1;
+  const logH = size / 4;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, i * logH);
+    ctx.lineTo(size, i * logH);
+    ctx.stroke();
+  }
+  // log end circles on left and right
+  ctx.fillStyle = rgba(0xa08560, 0.6);
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.arc(2, i * logH + logH / 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size - 2, i * logH + logH / 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // subtle wood grain
+  ctx.strokeStyle = rgba(0x7a5f3a, 0.3);
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, i * logH + logH * 0.3);
+    ctx.lineTo(size, i * logH + logH * 0.3);
+    ctx.stroke();
+  }
+}
+
+/** Draw a cabin door tile — wooden door with handle. */
+function drawCabinDoor(ctx: CanvasRenderingContext2D, size: number): void {
+  // wall background
+  drawCabinWall(ctx, size);
+  // door — darker wood, centered
+  const dw = size * 0.5;
+  const dh = size * 0.8;
+  const dx = (size - dw) / 2;
+  const dy = size - dh;
+  ctx.fillStyle = rgba(0x5a4a2f, 1);
+  ctx.fillRect(dx, dy, dw, dh);
+  // door frame
+  ctx.strokeStyle = rgba(0x3a2a15, 1);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(dx, dy, dw, dh);
+  // vertical planks
+  ctx.strokeStyle = rgba(0x4a3a20, 0.6);
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(dx + dw / 2, dy);
+  ctx.lineTo(dx + dw / 2, dy + dh);
+  ctx.stroke();
+  // door handle
+  ctx.fillStyle = rgba(0xddaa44, 1);
+  ctx.beginPath();
+  ctx.arc(dx + dw * 0.75, dy + dh * 0.5, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw a cabin window tile — glowing warm window. */
+function drawCabinWindow(ctx: CanvasRenderingContext2D, size: number): void {
+  // wall background
+  drawCabinWall(ctx, size);
+  // window — warm glow
+  const ww = size * 0.4;
+  const wh = size * 0.4;
+  const wx = (size - ww) / 2;
+  const wy = (size - wh) / 2;
+  // window glow
+  ctx.fillStyle = rgba(0xffdd88, 0.85);
+  ctx.fillRect(wx, wy, ww, wh);
+  // window frame
+  ctx.strokeStyle = rgba(0x3a2a15, 1);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(wx, wy, ww, wh);
+  // cross mullions
+  ctx.beginPath();
+  ctx.moveTo(wx + ww / 2, wy);
+  ctx.lineTo(wx + ww / 2, wy + wh);
+  ctx.moveTo(wx, wy + wh / 2);
+  ctx.lineTo(wx + ww, wy + wh / 2);
+  ctx.stroke();
+}
+
+/** Draw a cabin roof tile — dark shingled roof. */
+function drawCabinRoof(ctx: CanvasRenderingContext2D, size: number): void {
+  // base roof color — dark brown
+  ctx.fillStyle = rgba(0x4a3520, 1);
+  ctx.fillRect(0, 0, size, size);
+  // shingle rows
+  const shingleH = size / 5;
+  for (let i = 0; i < 5; i++) {
+    const y = i * shingleH;
+    ctx.fillStyle = rgba(i % 2 === 0 ? 0x5a4030 : 0x3a2515, 0.7);
+    ctx.fillRect(0, y, size, shingleH);
+    // shingle dividers
+    ctx.strokeStyle = rgba(0x2a1a08, 0.5);
+    ctx.lineWidth = 0.5;
+    const offset = i % 2 === 0 ? 0 : shingleH / 2;
+    for (let x = offset; x < size; x += shingleH) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + shingleH);
+      ctx.stroke();
+    }
+  }
+  // roof edge highlight
+  ctx.strokeStyle = rgba(0x6a5040, 0.4);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(size, 0);
+  ctx.stroke();
+}
+
+// ============================================================
+// WIFE NPC — cabin companion sprite
+// ============================================================
+
+/** Draw a wife NPC — simple woman with dress and hair, 2 frames (idle, walk). */
+function drawWife(ctx: CanvasRenderingContext2D, size: number, frame = 0): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const legPhase = frame === 1 ? 1.5 : 0;
+
+  // shadow
+  ctx.fillStyle = rgba(0x000000, 0.25);
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, cy + size * 0.2, size * 0.14, size * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // legs — simple, animated
+  ctx.fillStyle = rgba(0xddaa77, 1);
+  ctx.fillRect(cx - size * 0.05, cy + size * 0.1, size * 0.04, size * 0.08 + legPhase);
+  ctx.fillRect(cx + size * 0.01, cy + size * 0.1, size * 0.04, size * 0.08 - legPhase);
+
+  // dress — blue, triangular
+  ctx.fillStyle = rgba(0x4488cc, 1);
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.04, cy - size * 0.02);
+  ctx.lineTo(cx - size * 0.14, cy + size * 0.14);
+  ctx.lineTo(cx + size * 0.14, cy + size * 0.14);
+  ctx.lineTo(cx + size * 0.04, cy - size * 0.02);
+  ctx.closePath();
+  ctx.fill();
+  // dress shading
+  ctx.fillStyle = rgba(0x336699, 0.4);
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.04, cy - size * 0.02);
+  ctx.lineTo(cx - size * 0.14, cy + size * 0.14);
+  ctx.lineTo(cx, cy + size * 0.14);
+  ctx.closePath();
+  ctx.fill();
+
+  // arms — simple
+  ctx.fillStyle = rgba(0xddaa77, 1);
+  ctx.beginPath();
+  ctx.ellipse(cx - size * 0.08, cy + size * 0.02, size * 0.025, size * 0.06, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + size * 0.08, cy + size * 0.02, size * 0.025, size * 0.06, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // head — skin tone
+  ctx.fillStyle = rgba(0xeebb88, 1);
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.08, size * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  // hair — brown, flowing
+  ctx.fillStyle = rgba(0x885533, 1);
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.1, size * 0.09, Math.PI, Math.PI * 2);
+  ctx.fill();
+  // hair sides
+  ctx.fillRect(cx - size * 0.08, cy - size * 0.1, size * 0.04, size * 0.08);
+  ctx.fillRect(cx + size * 0.04, cy - size * 0.1, size * 0.04, size * 0.08);
+
+  // eyes
+  ctx.fillStyle = rgba(0x000000, 0.8);
+  ctx.beginPath();
+  ctx.arc(cx - size * 0.025, cy - size * 0.08, 1, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.025, cy - size * 0.08, 1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // smile
+  ctx.strokeStyle = rgba(0x884422, 0.7);
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.05, size * 0.02, 0.2, Math.PI - 0.2);
+  ctx.stroke();
 }
 
 // ============================================================
@@ -3857,6 +4380,105 @@ function drawInteriorWall(
 }
 
 // ============================================================
+// DOG NPC — yellow lab, 4 frames (idle, walk1, walk2, fetch)
+// ============================================================
+
+function drawDog(ctx: CanvasRenderingContext2D, frame: number, s: number): void {
+  const cx = s * 0.5;
+  const groundY = s * 0.85;
+  const legPhase = frame === 1 ? 3 : frame === 2 ? -3 : 0;
+  const tailWag = frame === 1 ? 8 : frame === 2 ? -8 : frame === 3 ? 12 : 0;
+  const earFloppy = frame === 3 ? 3 : 0;
+
+  drawGroundShadow(ctx, cx, groundY, s * 0.35);
+
+  // --- hind leg (far, darker) ---
+  drawLimb(ctx, cx - s * 0.12, s * 0.55, cx - s * 0.14 + legPhase, groundY - 2, 5, 3, 0xd4b860);
+
+  // --- tail — short and thick, wagging ---
+  ctx.save();
+  ctx.strokeStyle = rgba(0xe8d080, 1);
+  ctx.lineWidth = 7;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.22, s * 0.45);
+  ctx.quadraticCurveTo(cx - s * 0.28, s * 0.38 + tailWag * 0.3, cx - s * 0.26, s * 0.28 + tailWag);
+  ctx.stroke();
+  ctx.restore();
+
+  // --- body — pale yellow, stocky build ---
+  ctx.save();
+  const bodyGrad = ctx.createRadialGradient(cx - 3, s * 0.5, 2, cx, s * 0.55, s * 0.3);
+  bodyGrad.addColorStop(0, rgba(0xf0d870, 1));
+  bodyGrad.addColorStop(0.6, rgba(0xe8d080, 1));
+  bodyGrad.addColorStop(1, rgba(0xd0b850, 1));
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.ellipse(cx, s * 0.55, s * 0.24, s * 0.15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // --- front leg (near) ---
+  drawLimb(ctx, cx + s * 0.08, s * 0.6, cx + s * 0.1 - legPhase, groundY - 2, 5, 3, 0xe8d080);
+
+  // --- head — rounded with snout ---
+  ctx.save();
+  const headX = cx + s * 0.2;
+  const headY = s * 0.42;
+  // head sphere — broad lab head
+  ctx.fillStyle = rgba(0xf0d870, 1);
+  ctx.beginPath();
+  ctx.arc(headX, headY, s * 0.11, 0, Math.PI * 2);
+  ctx.fill();
+  // snout — broad blocky muzzle
+  ctx.fillStyle = rgba(0xe8d080, 1);
+  ctx.beginPath();
+  ctx.ellipse(headX + s * 0.09, headY + s * 0.04, s * 0.07, s * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // nose
+  ctx.fillStyle = rgba(0x222222, 1);
+  ctx.beginPath();
+  ctx.arc(headX + s * 0.12, headY + s * 0.01, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // eye
+  ctx.fillStyle = rgba(0x222222, 1);
+  ctx.beginPath();
+  ctx.arc(headX + 2, headY - 2, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // eye shine
+  ctx.fillStyle = rgba(0xffffff, 0.6);
+  ctx.beginPath();
+  ctx.arc(headX + 2.5, headY - 2.5, 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // mouth — happy pant
+  ctx.strokeStyle = rgba(0x222222, 0.8);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(headX + s * 0.08, headY + s * 0.04, s * 0.025, 0.1, Math.PI - 0.1);
+  ctx.stroke();
+
+  // ear — short, triangular, flopped forward
+  ctx.fillStyle = rgba(0xd0b850, 1);
+  ctx.beginPath();
+  ctx.ellipse(headX - s * 0.05, headY + s * 0.02 + earFloppy, s * 0.045, s * 0.05, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // --- fetch frame: dog holding ball in mouth ---
+  if (frame === 3) {
+    ctx.fillStyle = rgba(0xccff44, 1);
+    ctx.beginPath();
+    ctx.arc(cx + s * 0.32, s * 0.45, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = rgba(0x88aa22, 0.5);
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+}
+
+// ============================================================
 // MAIN TEXTURE GENERATION ENTRY POINT
 // ============================================================
 
@@ -3866,15 +4488,19 @@ const TEX_SIZE = 128;
 
 /** All procedural texture keys created by generateAllTextures, for force-removal. */
 const ALL_PROC_KEYS = [
-  "creature-slime", "creature-wolf", "creature-skeleton", "creature-imp",
+  "creature-slime", "creature-slug", "creature-wolf", "creature-skeleton", "creature-imp",
   "creature-wraith", "creature-fire-elemental",
   "beast-groveheart", "beast-stone-colossus", "beast-ash-wyrm",
   "beast-void-leviathan", "beast-infernal-sovereign",
   "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
+  "friendly-dog",
   "stone-proj", "spark", "dust", "shockwave", "recruit-beam", "slash-vfx", "crystal-arrow",
   "soft-glow", "fire-glow", "void-glow", "crystal-glow",
   "golf-club", "golf-ball", "axe", "net",
-  "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "fountain-sheet",
+  "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "leprechaun-npc", "fountain-sheet",
+  "cabin-wall", "cabin-door", "cabin-window", "cabin-roof",
+  "lake-shore", "campfire", "void-rift",
+  "wife-npc",
   "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
   "emote-icons",
   "interior-wall-0", "interior-wall-1", "interior-wall-2",
@@ -3991,6 +4617,34 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         canvasTex.refresh();
         registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
       }
+    },
+  });
+
+  // --- Dog NPC spritesheet ---
+  steps.push({
+    name: "Dog NPC",
+    fn: () => {
+      const key = "friendly-dog";
+      if (tex.exists(key)) return;
+
+      const aiKey = aiCreatureKey(tex, key);
+      if (aiKey) {
+        buildAiSpritesheet(tex, key, aiKey, CREATURE_FRAMES, TEX_SIZE);
+        return;
+      }
+
+      const sheetW = TEX_SIZE * CREATURE_FRAMES;
+      const sheetH = TEX_SIZE;
+      const canvasTex = createCanvasTexture(tex, key, sheetW, sheetH);
+      const ctx = canvasTex.getContext();
+      for (let f = 0; f < CREATURE_FRAMES; f++) {
+        ctx.save();
+        ctx.translate(f * TEX_SIZE, 0);
+        drawDog(ctx, f, TEX_SIZE);
+        ctx.restore();
+      }
+      canvasTex.refresh();
+      registerFrames(tex.get(key)!, CREATURE_FRAMES, TEX_SIZE);
     },
   });
 
@@ -4121,6 +4775,11 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         drawGolfClub(ct.getContext(), 64);
         ct.refresh();
       }
+      if (!tex.exists("golf-bag") && !aiItemKey(tex, "golf-bag")) {
+        const ct = createCanvasTexture(tex, "golf-bag", 64, 64);
+        drawGolfBag(ct.getContext(), 64);
+        ct.refresh();
+      }
       if (!tex.exists("golf-ball") && !aiItemKey(tex, "golf-ball")) {
         const ct = createCanvasTexture(tex, "golf-ball", 64, 64);
         drawGolfBall(ct.getContext(), 64);
@@ -4167,6 +4826,88 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
         const ct = createCanvasTexture(tex, "leprechaun", 64, 64);
         drawLeprechaun(ct.getContext(), 64);
         ct.refresh();
+      }
+      // leprechaun NPC spritesheet — 4 frames for wandering animation
+      if (!tex.exists("leprechaun-npc")) {
+        const LEP_FRAMES = 4;
+        const LEP_SIZE = 64;
+        const ct = createCanvasTexture(tex, "leprechaun-npc", LEP_SIZE * LEP_FRAMES, LEP_SIZE);
+        const ctx = ct.getContext();
+        for (let f = 0; f < LEP_FRAMES; f++) {
+          ctx.save();
+          ctx.translate(f * LEP_SIZE, 0);
+          drawLeprechaun(ctx, LEP_SIZE, f);
+          ctx.restore();
+        }
+        ct.refresh();
+        registerFrames(tex.get("leprechaun-npc")!, LEP_FRAMES, LEP_SIZE);
+      }
+      // cabin tiles — wall, door, window, roof
+      if (!tex.exists("cabin-wall")) {
+        const ct = createCanvasTexture(tex, "cabin-wall", 64, 64);
+        drawCabinWall(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("cabin-door")) {
+        const ct = createCanvasTexture(tex, "cabin-door", 64, 64);
+        drawCabinDoor(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("cabin-window")) {
+        const ct = createCanvasTexture(tex, "cabin-window", 64, 64);
+        drawCabinWindow(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("cabin-roof")) {
+        const ct = createCanvasTexture(tex, "cabin-roof", 64, 64);
+        drawCabinRoof(ct.getContext(), 64);
+        ct.refresh();
+      }
+      // lake shore tile
+      if (!tex.exists("lake-shore")) {
+        const ct = createCanvasTexture(tex, "lake-shore", 64, 64);
+        drawLakeShore(ct.getContext(), 64);
+        ct.refresh();
+      }
+      // campfire spritesheet — 2 frames for flicker animation
+      if (!tex.exists("campfire")) {
+        const CF_SIZE = 48;
+        const CF_FRAMES = 2;
+        const ct = createCanvasTexture(tex, "campfire", CF_SIZE * CF_FRAMES, CF_SIZE);
+        const ctx = ct.getContext();
+        for (let f = 0; f < CF_FRAMES; f++) {
+          ctx.save();
+          ctx.translate(f * CF_SIZE, 0);
+          drawCampfire(ctx, CF_SIZE, f);
+          ctx.restore();
+        }
+        ct.refresh();
+        if (tex.get("campfire")) {
+          const cfTex = tex.get("campfire")!;
+          cfTex.add("campfire-0", 0, 0, 0, CF_SIZE, CF_SIZE);
+          cfTex.add("campfire-1", 0, CF_SIZE, 0, CF_SIZE, CF_SIZE);
+        }
+      }
+      // void rift texture
+      if (!tex.exists("void-rift")) {
+        const ct = createCanvasTexture(tex, "void-rift", 96, 64);
+        drawVoidRift(ct.getContext(), 96);
+        ct.refresh();
+      }
+      // wife NPC spritesheet — 2 frames (idle, walk)
+      if (!tex.exists("wife-npc")) {
+        const WIFE_FRAMES = 2;
+        const WIFE_SIZE = 48;
+        const ct = createCanvasTexture(tex, "wife-npc", WIFE_SIZE * WIFE_FRAMES, WIFE_SIZE);
+        const ctx = ct.getContext();
+        for (let f = 0; f < WIFE_FRAMES; f++) {
+          ctx.save();
+          ctx.translate(f * WIFE_SIZE, 0);
+          drawWife(ctx, WIFE_SIZE, f);
+          ctx.restore();
+        }
+        ct.refresh();
+        registerFrames(tex.get("wife-npc")!, WIFE_FRAMES, WIFE_SIZE);
       }
       if (!tex.exists("fountain-sheet")) {
         const FOUNTAIN_FRAMES = 4;

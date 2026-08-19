@@ -1,6 +1,7 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus, Presenter } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
+import { getReactionsForAchievement, NPC_IDS, checkContextTrigger } from "./ui/agent-reactions";
 
 type Listener = () => void;
 
@@ -52,7 +53,151 @@ export class Store {
     achievements.setSendFn((data) => {
       this.sendFn?.({ type: "achievement_update", ...data });
     });
+    achievements.onUnlock((def) => {
+      this.postAgentReaction(def.id);
+    });
   }
+
+  /** Post an in-character agent reaction to the office feed when an achievement unlocks. */
+  private postAgentReaction(achievementId: string): void {
+    const reactions = getReactionsForAchievement(achievementId);
+    if (reactions.length === 0) return;
+    const reaction = reactions[Math.floor(Math.random() * reactions.length)];
+
+    const postReaction = () => {
+      let agent: AgentInfo | undefined;
+      if (reaction.agentId) {
+        agent = this.agents.get(reaction.agentId);
+      }
+      if (!agent) {
+        const hireable = [...this.agents.values()].filter((a) => !NPC_IDS.has(a.id));
+        if (hireable.length > 0) {
+          agent = hireable[Math.floor(Math.random() * hireable.length)];
+        } else {
+          agent = this.agents.get(reaction.agentId ?? "");
+        }
+      }
+      if (!agent) return;
+      this.feed.push({
+        agentId: agent.id,
+        name: agent.name,
+        accent: agent.accent ?? "#9aa0b0",
+        entry: { ts: Date.now(), kind: "status", text: reaction.text },
+        seq: this.feedSeq++,
+      });
+      if (this.feed.length > FEED_MAX) this.feed.splice(0, this.feed.length - FEED_MAX);
+    };
+
+    if (reaction.delayMs) {
+      setTimeout(postReaction, reaction.delayMs);
+    } else {
+      postReaction();
+    }
+  }
+
+  /** Track last-fired time for context triggers. */
+  private contextTriggerLastFired = new Map<string, number>();
+  /** Track previous board state for context trigger detection. */
+  private prevBoardSize = 0;
+  private prevAgentCount = 0;
+
+  /** Check context-triggered reactions on state changes. Called from emit(). */
+  private checkContextTriggers(): void {
+    const now = Date.now();
+    const hireable = [...this.agents.values()].filter((a) => !NPC_IDS.has(a.id));
+    const cards = [...this.board.values()];
+
+    // Detect: overloaded agent (5+ tasks assigned to one agent)
+    const taskCounts = new Map<string, number>();
+    for (const c of cards) {
+      if (c.assignedAgentId && c.status !== "done") {
+        taskCounts.set(c.assignedAgentId, (taskCounts.get(c.assignedAgentId) ?? 0) + 1);
+      }
+    }
+    for (const [agentId, count] of taskCounts) {
+      if (count >= 5) {
+        const agent = this.agents.get(agentId);
+        if (agent) {
+          const result = checkContextTrigger("overloaded_agent", { agentName: agent.name }, this.contextTriggerLastFired, now);
+          if (result) this.postContextReaction(result.agentId, result.text);
+        }
+        break;
+      }
+    }
+
+    // Detect: new card created with no dependencies and no description
+    if (cards.length > this.prevBoardSize) {
+      const newest = cards.sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (newest && !newest.description?.trim() && !newest.dependsOnCardIds?.length) {
+        const result = checkContextTrigger("empty_description", {}, this.contextTriggerLastFired, now);
+        if (result) this.postContextReaction(result.agentId, result.text);
+      } else if (newest && !newest.dependsOnCardIds?.length) {
+        const result = checkContextTrigger("no_dependencies", {}, this.contextTriggerLastFired, now);
+        if (result) this.postContextReaction(result.agentId, result.text);
+      }
+    }
+    this.prevBoardSize = cards.length;
+
+    // Detect: all agents idle
+    if (hireable.length > 0 && hireable.every((a) => a.status === "idle")) {
+      const result = checkContextTrigger("all_idle", {}, this.contextTriggerLastFired, now);
+      if (result) this.postContextReaction(result.agentId, result.text);
+    }
+
+    // Detect: agent count decreased (fired)
+    if (this.agents.size < this.prevAgentCount && this.prevAgentCount > 0) {
+      const result = checkContextTrigger("agent_fired", { agentName: "someone", taskCount: "several" }, this.contextTriggerLastFired, now);
+      if (result) this.postContextReaction(result.agentId, result.text);
+    }
+    this.prevAgentCount = this.agents.size;
+  }
+
+  /** Post a context-triggered reaction to the feed. */
+  private postContextReaction(agentId: string | undefined, text: string): void {
+    let agent: AgentInfo | undefined;
+    if (agentId) agent = this.agents.get(agentId);
+    if (!agent) {
+      const hireable = [...this.agents.values()].filter((a) => !NPC_IDS.has(a.id));
+      if (hireable.length > 0) agent = hireable[Math.floor(Math.random() * hireable.length)];
+    }
+    if (!agent) return;
+    this.feed.push({
+      agentId: agent.id,
+      name: agent.name,
+      accent: agent.accent ?? "#9aa0b0",
+      entry: { ts: Date.now(), kind: "status", text },
+      seq: this.feedSeq++,
+    });
+    if (this.feed.length > FEED_MAX) this.feed.splice(0, this.feed.length - FEED_MAX);
+  }
+
+  /** Post a custom message to the office feed from a specific agent (or random hireable). */
+  postFeedMessage(text: string, agentId?: string, delayMs?: number): void {
+    const post = () => {
+      let agent: AgentInfo | undefined;
+      if (agentId) {
+        agent = this.agents.get(agentId);
+      }
+      if (!agent) {
+        const hireable = [...this.agents.values()].filter((a) => !NPC_IDS.has(a.id));
+        if (hireable.length > 0) {
+          agent = hireable[Math.floor(Math.random() * hireable.length)];
+        }
+      }
+      if (!agent) return;
+      this.feed.push({
+        agentId: agent.id,
+        name: agent.name,
+        accent: agent.accent ?? "#9aa0b0",
+        entry: { ts: Date.now(), kind: "status", text },
+        seq: this.feedSeq++,
+      });
+      if (this.feed.length > FEED_MAX) this.feed.splice(0, this.feed.length - FEED_MAX);
+    };
+    if (delayMs) setTimeout(post, delayMs);
+    else post();
+  }
+
   agents = new Map<string, AgentInfo>();
   logs = new Map<string, LogEntry[]>();
   board = new Map<string, TaskCard>();
@@ -67,6 +212,7 @@ export class Store {
   feedVersion = 0;
   private feedSeq = 0;
   player: PlayerInfo | null = null;
+  userId: string | null = null;
   settings: GameSettings = structuredClone(DEFAULT_SETTINGS);
   selectedId: string | null = null;
   connected = false;
@@ -83,7 +229,7 @@ export class Store {
   /** Listener array for capability gap reports. */
   capabilityGapListeners: ((gaps: { skill: string; requiredBy: string; suggestion: string }[]) => void)[] = [];
   /** Current pending decision gate from an agent (null if none). */
-  pendingGate: { gateId: string; agentId: string; agentName: string; question: string; options: string[] } | null = null;
+  pendingGate: { gateId: string; agentId: string; agentName: string; question: string; options: string[]; freeText?: boolean } | null = null;
   /** Listener array for decision gate notifications. */
   gateListeners: (() => void)[] = [];
   achievementsOpen = false;
@@ -134,11 +280,16 @@ export class Store {
   subscriptionActive = true;
   subscriptionStatus = "none";
   subscriptionTier: SubscriptionTier | null = null;
+  entrancePaid = false;
   agentLimit = 0;
   usageCap = 0;
   currentPeriodEnd: number | null = null;
   paymentRequired: { reason: "subscription" | "agent_limit" | "usage_cap"; message: string; tier?: SubscriptionTier | null; agentLimit?: number; monthlySpend?: number; usageCap?: number } | null = null;
   scheduledDeletionAt: number | null = null;
+  /** Whether the platform connection nudge has been shown (persisted in localStorage). */
+  platformNudgeShown = localStorage.getItem("ah_platform_nudge") === "1";
+  /** Listeners called when a platform nudge should be shown. */
+  platformNudgeListeners: ((kind: "first_hire" | "first_task", agentName: string) => void)[] = [];
   /** Asset upgrade state for the current portal world. */
   assetUpgradeStatus: AssetUpgradeStatus = "none";
   assetUpgradeProgress: { stage: string; percent: number; label: string } | null = null;
@@ -153,6 +304,7 @@ export class Store {
   agentBroadcastHtmlUrl: string | null = null;
   /** Access level for the current room: no_access, tour, talk, or manage. */
   accessLevel: RoomAccessLevel = "no_access";
+  roomOwnerId: string | null = null;
   /** Room type from the most recent room_state — available immediately, no rooms_list race. */
   roomType: RoomType | null = null;
   pendingInvite: PendingInvite | null = null;
@@ -225,6 +377,70 @@ export class Store {
   /** Fired when the server returns agent recommendations from onboarding. */
   agentRecommendationListeners = new Set<(recommendations: { agentId: string; name: string; summary: string; reason: string; image_url: string | null }[]) => void>();
 
+  /** Fired when the server returns leaderboard results. */
+  leaderboardListeners: ((entries: LeaderboardEntry[], category: LeaderboardCategory, period: "weekly" | "alltime") => void)[] = [];
+
+  /** Fired when the server returns a trophy profile. */
+  trophyProfileListeners: ((profile: TrophyProfile | null) => void)[] = [];
+
+  /** Current concierge nudge from the Office Manager (or null). */
+  conciergeNudge: { nudgeId: string; text: string; actionLabel: string | null; actionType: string | null } | null = null;
+  /** Fired when a concierge nudge arrives. */
+  conciergeListeners: (() => void)[] = [];
+
+  /** Current NPC speech bubble: { npcId, text, durationMs } or null. */
+  npcSpeech: { npcId: string; text: string; durationMs: number } | null = null;
+  /** Fired when an NPC speech bubble arrives. */
+  npcSpeechListeners: ((npcId: string, text: string, durationMs: number) => void)[] = [];
+
+  /** Real-time decomposition text from the Office Manager (or null). */
+  managerDecomposingText: string | null = null;
+  managerDecomposingGoalCardId: string | null = null;
+  decomposingListeners: (() => void)[] = [];
+
+  /** Aspiration profile from server — used for personalization. */
+  aspirationProfile: AspirationProfile | null = null;
+
+  /** Aspiration-gated feature unlocks. */
+  aspirationUnlocks: AspirationUnlocks | null = null;
+
+  /** Automation stats from server — for the automation dashboard. */
+  automationStats: AutomationStats | null = null;
+
+  /** Decomposition score from server — shown when a manual decomposition completes. */
+  decompositionScore: { goalCardId: string; score: DecompositionScore } | null = null;
+
+  /** Elegant solution detection — triggers celebration animation. */
+  elegantSolution: { goalCardId: string; tier: "bronze" | "silver" | "gold"; score: DecompositionScore } | null = null;
+
+  /** Experiment log entries from server. */
+  experimentLog: ExperimentEntry[] = [];
+
+  /** Breakthrough notification from server — triggers celebration. */
+  breakthrough: { agentId: string; agentName: string; trigger: string; description: string } | null = null;
+
+  /** Active optimization challenge from server. */
+  activeChallenge: Challenge | null = null;
+  /** Most recent challenge result (shown after submission). */
+  challengeResult: ChallengeResult | null = null;
+
+  /** Office decorations from server. */
+  decorations: OfficeDecoration[] = [];
+
+  /** Office social state (likes, sticky notes, visitors) for the currently visited office. */
+  officeSocial: OfficeSocialState | null = null;
+
+  /** Office progression (XP, level, prestige). */
+  officeProgress: OfficeLevelInfo | null = null;
+
+  /** Agent growth data keyed by agentId. */
+  agentGrowthData: Map<string, AgentGrowth> = new Map();
+
+  /** Away report from server — shown on reconnect after >2h absence. */
+  awayReport: AwayReport | null = null;
+  /** Fired when an away report arrives. */
+  awayReportListeners: (() => void)[] = [];
+
   /** Platform connection states from Hermes Agent gateway */
   platformStates: PlatformConnectionState[] = [];
 
@@ -257,6 +473,7 @@ export class Store {
     this.subscriptionActive = true;
     this.subscriptionStatus = "none";
     this.subscriptionTier = null;
+    this.entrancePaid = false;
     this.agentLimit = 0;
     this.usageCap = 0;
     this.currentPeriodEnd = null;
@@ -548,6 +765,7 @@ export class Store {
   }
 
   private emit(): void {
+    this.checkContextTriggers();
     for (const fn of this.listeners) fn();
   }
 
@@ -666,6 +884,9 @@ export class Store {
         if (this.feed.length > FEED_MAX) this.feed.splice(0, this.feed.length - FEED_MAX);
         for (const f of this.feed) f.seq = this.feedSeq++;
         this.feedVersion++;
+        // Store aspiration profile if present
+        if (msg.aspirationProfile) this.aspirationProfile = msg.aspirationProfile;
+        if (msg.aspirationUnlocks) this.aspirationUnlocks = msg.aspirationUnlocks;
         break;
       }
       case "player":
@@ -700,6 +921,12 @@ export class Store {
             achievements.addToSet("personalities", sig);
             if (achievements.getSetSize("personalities") >= 5) achievements.unlock("personality_variety");
           }
+          // Nudge user to connect a chat platform after first hire
+          if (!this.platformNudgeShown && !NPC_IDS.has(msg.agent.id)) {
+            this.platformNudgeShown = true;
+            localStorage.setItem("ah_platform_nudge", "1");
+            for (const fn of this.platformNudgeListeners) fn("first_hire", msg.agent.name);
+          }
         }
         if (prev && msg.agent.tasksDone > prev.tasksDone) {
           const diff = msg.agent.tasksDone - prev.tasksDone;
@@ -709,6 +936,12 @@ export class Store {
           if (total >= 50) achievements.unlock("fifty_tasks");
           if (total >= 100) achievements.unlock("hundred_tasks");
           if (msg.agent.tasksDone >= 25) achievements.unlock("star_employee");
+          // Nudge user to connect a chat platform after first task completion
+          if (total === 1 && !this.platformNudgeShown) {
+            this.platformNudgeShown = true;
+            localStorage.setItem("ah_platform_nudge", "1");
+            for (const fn of this.platformNudgeListeners) fn("first_task", msg.agent.name);
+          }
         }
         break;
       }
@@ -782,7 +1015,7 @@ export class Store {
         break;
       }
       case "agent_gate": {
-        this.pendingGate = { gateId: msg.gateId, agentId: msg.agentId, agentName: msg.agentName, question: msg.question, options: msg.options };
+        this.pendingGate = { gateId: msg.gateId, agentId: msg.agentId, agentName: msg.agentName, question: msg.question, options: msg.options, freeText: msg.freeText };
         for (const fn of this.gateListeners) fn();
         break;
       }
@@ -1103,6 +1336,7 @@ export class Store {
         this.subscriptionActive = msg.subscriptionActive;
         this.subscriptionStatus = msg.subscriptionStatus;
         this.subscriptionTier = msg.subscriptionTier;
+        this.entrancePaid = msg.entrancePaid;
         this.agentLimit = msg.agentLimit;
         this.usageCap = msg.usageCap;
         this.currentPeriodEnd = msg.currentPeriodEnd;
@@ -1147,6 +1381,7 @@ export class Store {
         this.projectorChannel = msg.projectorChannel ?? "off";
         this.accessLevel = msg.accessLevel ?? "no_access";
         this.roomType = msg.roomType ?? null;
+        this.roomOwnerId = msg.ownerId ?? null;
         this.roomPlayers.clear();
         for (const p of msg.players) {
           this.roomPlayers.set(p.userId, p);
@@ -1414,6 +1649,118 @@ export class Store {
       }
       case "agent_recommendations": {
         for (const fn of this.agentRecommendationListeners) fn(msg.recommendations);
+        return;
+      }
+      case "leaderboard": {
+        for (const fn of this.leaderboardListeners) fn(msg.entries, msg.category, msg.period);
+        return;
+      }
+      case "trophy_profile": {
+        for (const fn of this.trophyProfileListeners) fn(msg.profile);
+        return;
+      }
+      case "concierge_nudge": {
+        this.conciergeNudge = { nudgeId: msg.nudgeId, text: msg.text, actionLabel: msg.actionLabel, actionType: msg.actionType };
+        for (const fn of this.conciergeListeners) fn();
+        return;
+      }
+      case "npc_speech": {
+        this.npcSpeech = { npcId: msg.npcId, text: msg.text, durationMs: msg.durationMs };
+        for (const fn of this.npcSpeechListeners) fn(msg.npcId, msg.text, msg.durationMs);
+        return;
+      }
+      case "mcp_auth_required": {
+        this.toast(`${msg.agentName} needs authorization for ${msg.servers.length} service(s).`);
+        this.select(msg.agentId);
+        return;
+      }
+      case "manager_decomposing": {
+        this.managerDecomposingText = msg.text;
+        this.managerDecomposingGoalCardId = msg.goalCardId;
+        for (const fn of this.decomposingListeners) fn();
+        return;
+      }
+      case "away_report": {
+        this.awayReport = msg.report;
+        for (const fn of this.awayReportListeners) fn();
+        return;
+      }
+      case "automation_stats": {
+        this.automationStats = msg.stats;
+        this.emit();
+        return;
+      }
+      case "decomposition_score": {
+        this.decompositionScore = { goalCardId: msg.goalCardId, score: msg.score };
+        this.emit();
+        return;
+      }
+      case "elegant_solution": {
+        // Unlock the corresponding achievement
+        const tierKey = msg.tier === "gold" ? "elegant_gold" : msg.tier === "silver" ? "elegant_silver" : "elegant_bronze";
+        // Also unlock lower tiers
+        if (msg.tier === "gold") {
+          achievements.unlock("elegant_bronze");
+          achievements.unlock("elegant_silver");
+        } else if (msg.tier === "silver") {
+          achievements.unlock("elegant_bronze");
+        }
+        achievements.unlock(tierKey);
+        // Store for celebration UI
+        this.elegantSolution = { goalCardId: msg.goalCardId, tier: msg.tier, score: msg.score };
+        this.emit();
+        return;
+      }
+      case "experiment_log": {
+        this.experimentLog = msg.entries;
+        this.emit();
+        return;
+      }
+      case "experiment_entry": {
+        // Update or prepend the entry
+        const idx = this.experimentLog.findIndex((e) => e.id === msg.entry.id);
+        if (idx >= 0) {
+          this.experimentLog[idx] = msg.entry;
+        } else {
+          this.experimentLog.unshift(msg.entry);
+        }
+        this.emit();
+        return;
+      }
+      case "breakthrough": {
+        this.breakthrough = { agentId: msg.agentId, agentName: msg.agentName, trigger: msg.trigger, description: msg.description };
+        this.emit();
+        return;
+      }
+      case "challenge": {
+        this.activeChallenge = msg.challenge;
+        this.challengeResult = null;
+        this.emit();
+        return;
+      }
+      case "challenge_result": {
+        this.challengeResult = msg.result;
+        this.emit();
+        return;
+      }
+      case "decorations": {
+        this.decorations = msg.decorations;
+        this.emit();
+        return;
+      }
+      case "office_social": {
+        this.officeSocial = msg.social;
+        this.emit();
+        return;
+      }
+      case "office_progress": {
+        this.officeProgress = msg.progress;
+        this.emit();
+        return;
+      }
+      case "agent_growth": {
+        this.agentGrowthData.set(msg.agentId, msg.growth);
+        this.emit();
         return;
       }
     }

@@ -437,6 +437,13 @@ export interface ThemeAgentWorkAnim {
   frameRate: number;
 }
 
+/** Dialect / accent override for a themed world. */
+export interface ThemeDialect {
+  systemPromptSuffix: string;
+  chatStyle: string;
+  emotes?: string[];
+}
+
 /** Asset fidelity tier — procedural (free) or AI-generated (paid upgrade). */
 export type AssetTier = "procedural" | "ai";
 
@@ -481,6 +488,7 @@ export interface WorldTheme {
   tiles?: Record<string, ThemeTile>;
   interactables: Record<string, ThemeInteractable>;
   agentWorkAnim?: ThemeAgentWorkAnim;
+  dialect?: ThemeDialect;
   statusColors?: ThemeStatusColors;
   emotes?: Record<string, number>;
   assets: ThemeAssets;
@@ -542,6 +550,19 @@ export const TILE = {
   BIG_ROCK: 37,
   PALM_TREE: 38,
   MYSTIC_TREE: 39,
+  GOLF_BAG: 40,
+  DRIVER: 41,
+  IRON_CLUB: 42,
+  WEDGE: 43,
+  PUTTER: 44,
+  SLUG: 45,
+  DOG: 46,
+  LAKE: 47,
+  LAKE_SHORE: 48,
+  CABIN_WALL: 49,
+  CABIN_DOOR: 50,
+  CABIN_WINDOW: 51,
+  CABIN_ROOF: 52,
 } as const;
 
 /** Number of base frames in the world-tiles spritesheet (one per tile type, including 3 water animation frames). */
@@ -620,6 +641,112 @@ export interface TaskCard {
   lockedBy?: string | null;
   /** Timestamp of the last status change (for stale review detection). */
   statusChangedAt?: number;
+  /** If true on a goal card, the user will manually decompose instead of the Office Manager. */
+  manualDecompose?: boolean;
+  /** Decomposition score (set after all subtasks complete on a manually decomposed goal). */
+  decompositionScore?: DecompositionScore | null;
+}
+
+// ── Decomposition Scoring ────────────────────────────────────────────────────
+
+export interface DecompositionScore {
+  /** Letter grade S/A/B/C/D. */
+  grade: string;
+  /** 0-100 overall score. */
+  overall: number;
+  /** Coverage: did subtasks address all aspects of the goal? (0-100, LLM-evaluated or heuristic) */
+  coverage: number;
+  /** Parallelism: could tasks run concurrently? (0-100, based on dependency graph) */
+  parallelism: number;
+  /** Dependency depth: shallower = better. (0-100, inverted longest path) */
+  dependencyDepth: number;
+  /** Granularity: not too coarse, not too fine. (0-100) */
+  granularity: number;
+  /** Execution success: did all tasks complete without rework? (0-100) */
+  executionSuccess: number;
+  /** Number of subtasks. */
+  subtaskCount: number;
+  /** Number of subtasks that required rework. */
+  reworkCount: number;
+  /** Longest dependency chain length. */
+  longestPath: number;
+  /** Max parallel width (max concurrent tasks possible). */
+  maxParallel: number;
+  /** Breakdown text for display. */
+  summary: string;
+}
+
+// ── Optimization Challenges (Phase 4B) ───────────────────────────────────────
+
+export interface ChallengeTask {
+  id: string;
+  title: string;
+  /** Estimated duration in minutes if assigned to a specialist. */
+  baseDurationMin: number;
+  /** Category: research, writing, coding, review, general. */
+  category: string;
+  /** IDs of tasks that must complete before this one can start. */
+  dependsOn: string[];
+}
+
+export interface ChallengeAgent {
+  id: string;
+  name: string;
+  /** Categories this agent excels at — tasks in these categories take baseDurationMin. */
+  specialties: string[];
+  /** Multiplier applied to base duration for non-specialty tasks (e.g. 1.5 = 50% slower). */
+  nonspecialtyMultiplier: number;
+}
+
+export interface Challenge {
+  id: string;
+  title: string;
+  description: string;
+  tasks: ChallengeTask[];
+  agents: ChallengeAgent[];
+  /** Theoretical optimal total completion time in minutes (critical path). */
+  optimalTimeMin: number;
+  createdAt: number;
+}
+
+export interface ChallengeAssignment {
+  taskId: string;
+  agentId: string;
+}
+
+export interface ChallengeResult {
+  challengeId: string;
+  assignments: ChallengeAssignment[];
+  /** User's total completion time in minutes (critical path with their assignments). */
+  userTimeMin: number;
+  /** Optimal time in minutes. */
+  optimalTimeMin: number;
+  /** Score = (optimal / user) * 100. 100 = perfect. */
+  score: number;
+  /** Per-task breakdown: { taskId, agentName, durationMin, isSpecialty }. */
+  breakdown: { taskId: string; taskTitle: string; agentName: string; durationMin: number; isSpecialty: boolean }[];
+  /** Critical path task IDs in order. */
+  criticalPath: string[];
+}
+
+// ── Experiment Log ────────────────────────────────────────────────────────────
+
+export interface ExperimentEntry {
+  id: string;
+  timestamp: number;
+  userId: string;
+  type: "config_change" | "mcp_install" | "model_swap" | "agent_hire" | "agent_fire";
+  agentId: string;
+  agentName: string;
+  hypothesis: string;
+  setup: { before: string; after: string };
+  result: {
+    successRate: number | null;
+    avgTime: number | null;
+    tasksCompleted: number | null;
+  };
+  verdict: "confirmed" | "refuted" | "inconclusive" | "pending";
+  notes: string;
 }
 
 export interface AgentSchedule {
@@ -853,6 +980,7 @@ export type ClientMsg =
   | { type: "clear"; agentId: string }
   | { type: "clear_all" }
   | { type: "create_card"; title: string; description?: string }
+  | { type: "create_goal"; title: string; description?: string }
   | { type: "assign_card"; cardId: string; agentId: string }
   | { type: "move_card"; cardId: string; status: CardStatus }
   | { type: "delete_card"; cardId: string }
@@ -866,6 +994,15 @@ export type ClientMsg =
   | { type: "link_subtask"; parentGoalId: string; subtaskCardId: string }
   | { type: "set_card_dependency"; cardId: string; dependsOnCardId: string }
   | { type: "remove_card_dependency"; cardId: string; dependsOnCardId: string }
+  | { type: "score_decomposition"; goalCardId: string }
+  | { type: "request_challenge" }
+  | { type: "submit_challenge"; challengeId: string; assignments: ChallengeAssignment[] }
+  | { type: "request_experiment_log" }
+  | { type: "update_experiment_entry"; entryId: string; hypothesis?: string; verdict?: string; notes?: string }
+  | { type: "request_decorations" }
+  | { type: "place_decoration"; decoration: DecorationPlacement }
+  | { type: "remove_decoration"; decorationId: string }
+  | { type: "move_decoration"; decorationId: string; tileX: number; tileY: number }
   | { type: "recruit"; firedAgentId: string }
   | { type: "fuse"; agentA: string; agentB: string; name: string; systemPrompt: string; appearance?: CharAppearance; personality?: PersonalityTraits }
   | { type: "railway_query" }
@@ -958,6 +1095,7 @@ export type ClientMsg =
   | { type: "set_mailbox_platform"; slot: number; platform: string | null }
   | { type: "reply_mailbox"; platform: string; target: string; text: string }
   | { type: "request_mail_digest" }
+  | { type: "request_automation_stats" }
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
@@ -974,7 +1112,17 @@ export type ClientMsg =
   | { type: "list_world_templates" }
   | { type: "achievement_update"; unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }
   | { type: "resolve_gate"; gateId: string; resolution: string }
-  | { type: "recommend_agents"; text: string };
+  | { type: "recommend_agents"; text: string }
+  | { type: "set_stated_intent"; intent: string }
+  | { type: "get_leaderboard"; category: LeaderboardCategory; period: "weekly" | "alltime" }
+  | { type: "get_trophy_profile"; username: string }
+  | { type: "dismiss_concierge"; nudgeId: string }
+  | { type: "request_office_social"; officeOwnerId: string }
+  | { type: "leave_sticky_note"; officeOwnerId: string; text: string; color: string }
+  | { type: "like_office"; officeOwnerId: string }
+  | { type: "unlike_office"; officeOwnerId: string }
+  | { type: "request_office_progress" }
+  | { type: "request_agent_growth"; agentId: string };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -987,6 +1135,8 @@ export type ServerMsg =
       board: TaskCard[];
       schedules: AgentSchedule[];
       world: WorldState | null;
+      aspirationProfile?: AspirationProfile;
+      aspirationUnlocks?: AspirationUnlocks;
     }
   | { type: "player"; player: PlayerInfo }
   | { type: "settings"; settings: GameSettings }
@@ -1022,7 +1172,7 @@ export type ServerMsg =
   | { type: "crossmint_fund_result"; agentId: string; success: boolean; message: string }
   | { type: "crossmint_onramp_url"; agentId: string; url: string | null; error?: string }
   | { type: "refresh_token" }
-  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel; roomType?: RoomType }
+  | { type: "room_state"; roomId: string; name: string; players: PlayerPresence[]; privateOfficeId?: string; projectorChannel?: string; accessLevel?: RoomAccessLevel; roomType?: RoomType; ownerId?: string }
   | { type: "player_joined"; roomId: string; player: PlayerPresence }
   | { type: "player_left"; roomId: string; userId: string }
   | { type: "player_moved"; roomId: string; userId: string; x: number; y: number; dir: Dir }
@@ -1109,8 +1259,287 @@ export type ServerMsg =
   | { type: "world_gen_error"; error: string }
   | { type: "achievements_sync"; unlocked: string[]; stats: Record<string, number>; sets: Record<string, string[]> }
   | { type: "achievements_saved" }
-  | { type: "agent_gate"; gateId: string; agentId: string; agentName: string; question: string; options: string[] }
-  | { type: "agent_recommendations"; recommendations: { agentId: string; name: string; summary: string; reason: string; image_url: string | null }[] };
+  | { type: "agent_gate"; gateId: string; agentId: string; agentName: string; question: string; options: string[]; freeText?: boolean }
+  | { type: "agent_recommendations"; recommendations: { agentId: string; name: string; summary: string; reason: string; image_url: string | null }[] }
+  | { type: "leaderboard"; entries: LeaderboardEntry[]; period: "weekly" | "alltime"; category: LeaderboardCategory }
+  | { type: "trophy_profile"; profile: TrophyProfile | null }
+  | { type: "concierge_nudge"; nudgeId: string; text: string; actionLabel: string | null; actionType: string | null }
+  | { type: "npc_speech"; npcId: string; text: string; durationMs: number }
+  | { type: "mcp_auth_required"; agentId: string; agentName: string; servers: { name: string; url: string }[] }
+  | { type: "manager_decomposing"; agentId: string; text: string; goalCardId: string | null }
+  | { type: "away_report"; report: AwayReport }
+  | { type: "automation_stats"; stats: AutomationStats }
+  | { type: "decomposition_score"; goalCardId: string; score: DecompositionScore }
+  | { type: "elegant_solution"; goalCardId: string; tier: "bronze" | "silver" | "gold"; score: DecompositionScore }
+  | { type: "challenge"; challenge: Challenge }
+  | { type: "challenge_result"; result: ChallengeResult }
+  | { type: "experiment_log"; entries: ExperimentEntry[] }
+  | { type: "experiment_entry"; entry: ExperimentEntry }
+  | { type: "breakthrough"; agentId: string; agentName: string; trigger: string; description: string }
+  | { type: "decorations"; decorations: OfficeDecoration[] }
+  | { type: "office_social"; officeOwnerId: string; social: OfficeSocialState }
+  | { type: "office_progress"; progress: OfficeLevelInfo }
+  | { type: "agent_growth"; agentId: string; growth: AgentGrowth };
+
+// ── Away Report ──────────────────────────────────────────────────────────────
+
+export interface AwayReportEvent {
+  type: string;
+  text: string;
+  ts: number;
+}
+
+export interface AwayReport {
+  /** When the user was last active (ms epoch). */
+  lastActiveAt: number;
+  /** When the report was generated (ms epoch). */
+  generatedAt: number;
+  /** Human-readable duration string, e.g. "3h 20m". */
+  awayDuration: string;
+  /** Tasks completed while away. */
+  tasksCompleted: number;
+  /** Tasks that errored while away. */
+  tasksErrored: number;
+  /** Agents hired while away. */
+  agentsHired: number;
+  /** Total tasks completed by all agents (current snapshot sum). */
+  totalTasksDone: number;
+  /** Current agent count (excluding NPC agents). */
+  currentAgentCount: number;
+  /** Notable events (capped at 10, most recent first). */
+  events: AwayReportEvent[];
+  /** Aspiration-aware headline, e.g. "Your pipeline completed 12 tasks while you were away." */
+  headline: string;
+}
+
+// ── Aspiration Unlocks ───────────────────────────────────────────────────────
+
+export type DecorationCategory = "furniture" | "plants" | "wall_decor" | "flooring" | "lighting" | "special";
+
+export interface DecorationCatalogItem {
+  type: string;
+  label: string;
+  category: DecorationCategory;
+  emoji: string;
+  width: number;
+  height: number;
+  unlockRequirement: string;
+}
+
+export interface DecorationPlacement {
+  type: string;
+  tileX: number;
+  tileY: number;
+  variant: number;
+}
+
+export interface OfficeDecoration {
+  id: string;
+  type: string;
+  tileX: number;
+  tileY: number;
+  variant: number;
+  placedAt: number;
+}
+
+export const DECORATION_CATALOG: DecorationCatalogItem[] = [
+  { type: "bookshelf", label: "Bookshelf", category: "furniture", emoji: "📚", width: 1, height: 1, unlockRequirement: "10 tasks" },
+  { type: "filing_cabinet", label: "Filing Cabinet", category: "furniture", emoji: "🗄️", width: 1, height: 1, unlockRequirement: "10 tasks" },
+  { type: "whiteboard", label: "Whiteboard", category: "furniture", emoji: "📋", width: 2, height: 1, unlockRequirement: "10 tasks" },
+  { type: "couch", label: "Couch", category: "furniture", emoji: "🛋️", width: 2, height: 1, unlockRequirement: "10 tasks" },
+  { type: "small_plant", label: "Small Plant", category: "plants", emoji: "🪴", width: 1, height: 1, unlockRequirement: "50 tasks" },
+  { type: "large_plant", label: "Large Plant", category: "plants", emoji: "🌳", width: 1, height: 1, unlockRequirement: "50 tasks" },
+  { type: "flower_arrangement", label: "Flowers", category: "plants", emoji: "💐", width: 1, height: 1, unlockRequirement: "50 tasks" },
+  { type: "poster", label: "Poster", category: "wall_decor", emoji: "🖼️", width: 1, height: 1, unlockRequirement: "100 tasks" },
+  { type: "painting", label: "Painting", category: "wall_decor", emoji: "🎨", width: 1, height: 1, unlockRequirement: "100 tasks" },
+  { type: "clock", label: "Clock", category: "wall_decor", emoji: "🕐", width: 1, height: 1, unlockRequirement: "100 tasks" },
+  { type: "motivational_sign", label: "Motivational Sign", category: "wall_decor", emoji: "💪", width: 1, height: 1, unlockRequirement: "100 tasks" },
+  { type: "rug", label: "Rug", category: "flooring", emoji: "🟫", width: 2, height: 2, unlockRequirement: "7-day streak" },
+  { type: "mat", label: "Welcome Mat", category: "flooring", emoji: "🚪", width: 1, height: 1, unlockRequirement: "7-day streak" },
+  { type: "desk_lamp", label: "Desk Lamp", category: "lighting", emoji: "💡", width: 1, height: 1, unlockRequirement: "7-day streak" },
+  { type: "floor_lamp", label: "Floor Lamp", category: "lighting", emoji: "🏮", width: 1, height: 1, unlockRequirement: "7-day streak" },
+  { type: "string_lights", label: "String Lights", category: "lighting", emoji: "✨", width: 3, height: 1, unlockRequirement: "7-day streak" },
+  { type: "trophy_case", label: "Trophy Case", category: "special", emoji: "🏆", width: 1, height: 1, unlockRequirement: "5 agents hired" },
+  { type: "helipad_model", label: "Helipad Model", category: "special", emoji: "🚁", width: 1, height: 1, unlockRequirement: "5 agents hired" },
+  { type: "mini_golf", label: "Mini Golf Set", category: "special", emoji: "⛳", width: 2, height: 1, unlockRequirement: "5 agents hired" },
+];
+
+// ── Social Interactions (Phase 5B) ───────────────────────────────────────────
+
+export interface StickyNote {
+  id: string;
+  officeOwnerId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  color: string;
+  createdAt: number;
+}
+
+export interface OfficeLike {
+  officeOwnerId: string;
+  likerId: string;
+  likerName: string;
+  createdAt: number;
+}
+
+export interface VisitorEntry {
+  id: string;
+  officeOwnerId: string;
+  visitorId: string;
+  visitorName: string;
+  visitedAt: number;
+}
+
+export interface OfficeSocialState {
+  likes: OfficeLike[];
+  stickyNotes: StickyNote[];
+  recentVisitors: VisitorEntry[];
+  likeCount: number;
+}
+
+// ── Office Tech Tree (Phase 6A) ──────────────────────────────────────────────
+
+export interface OfficeLevelInfo {
+  level: number;
+  xp: number;
+  xpForCurrentLevel: number;
+  xpForNextLevel: number;
+  prestigeCount: number;
+  maxAgents: number;
+  features: string[];
+}
+
+export const OFFICE_LEVEL_TABLE: { level: number; xpRequired: number; maxAgents: number; features: string[] }[] = [
+  { level: 1, xpRequired: 0, maxAgents: 3, features: ["basic_task_board"] },
+  { level: 2, xpRequired: 500, maxAgents: 5, features: ["schedules"] },
+  { level: 3, xpRequired: 1500, maxAgents: 6, features: ["handoffs"] },
+  { level: 4, xpRequired: 3000, maxAgents: 7, features: ["phase_gates"] },
+  { level: 5, xpRequired: 5000, maxAgents: 8, features: ["v_model"] },
+  { level: 6, xpRequired: 8000, maxAgents: 9, features: ["parallel_execution"] },
+  { level: 7, xpRequired: 12000, maxAgents: 10, features: ["compound_chains"] },
+  { level: 8, xpRequired: 20000, maxAgents: 12, features: ["ab_testing"] },
+  { level: 9, xpRequired: 35000, maxAgents: 15, features: ["org_collaboration"] },
+  { level: 10, xpRequired: 50000, maxAgents: 20, features: ["prestige"] },
+];
+
+export function getOfficeLevelForXp(xp: number): { level: number; xpIntoLevel: number; xpForNextLevel: number; maxAgents: number; features: string[] } {
+  let level = 1;
+  for (const entry of OFFICE_LEVEL_TABLE) {
+    if (xp >= entry.xpRequired) {
+      level = entry.level;
+    } else {
+      break;
+    }
+  }
+  const currentEntry = OFFICE_LEVEL_TABLE[level - 1];
+  const nextEntry = OFFICE_LEVEL_TABLE[level] ?? currentEntry;
+  const xpIntoLevel = xp - currentEntry.xpRequired;
+  const xpForNextLevel = nextEntry.xpRequired - currentEntry.xpRequired;
+  return { level, xpIntoLevel, xpForNextLevel, maxAgents: currentEntry.maxAgents, features: currentEntry.features };
+}
+
+// ── Agent Growth Trajectories (Phase 6B) ─────────────────────────────────────
+
+export interface AgentGrowthPoint {
+  timestamp: number;
+  success: boolean;
+  durationMin: number;
+  taskType: string;
+}
+
+export interface AgentGrowth {
+  totalTasks: number;
+  successRate: number;
+  avgCompletionMin: number;
+  specialty: string | null;
+  trend: "improving" | "stagnating" | "declining";
+  recentHistory: AgentGrowthPoint[];
+}
+
+// ── Aspiration Unlocks ───────────────────────────────────────────────────────
+
+export interface AspirationUnlocks {
+  pipelineGraph: boolean;
+  automationDashboard: boolean;
+  experimentLog: boolean;
+  abComparison: boolean;
+  decompositionScoring: boolean;
+  optimizationChallenges: boolean;
+  officeDecoration: boolean;
+  socialInteractions: boolean;
+  officeTechTree: boolean;
+  agentGrowth: boolean;
+}
+
+// ── Automation Stats ─────────────────────────────────────────────────────────
+
+export interface AutomationStats {
+  /** Tasks per hour (rolling 1h window). */
+  throughput: number;
+  /** Success rate (0-1). */
+  successRate: number;
+  /** Average completion time in minutes. */
+  avgCompletionMin: number;
+  /** Busiest agent name. */
+  busiestAgent: string | null;
+  /** Aggregate idle time percentage (0-1). */
+  idlePct: number;
+  /** Percentage of tasks from schedules vs manual (0-1). */
+  automationRate: number;
+  /** Longest active handoff chain. */
+  pipelineDepth: number;
+  /** Total tasks completed across all agents. */
+  totalTasksDone: number;
+  /** Current agent count (excluding NPCs). */
+  agentCount: number;
+}
+
+// ── Leaderboards & Trophy Room ──────────────────────────────────────────────
+
+export type LeaderboardCategory = "deepest_explorers" | "fastest_crown" | "most_creatures_slain" | "most_tasks_completed" | "boss_rating";
+
+export interface LeaderboardEntry {
+  rank: number;
+  playerName: string;
+  score: number;
+  scoreLabel: string;
+  userId: string;
+}
+
+export interface TrophyProfile {
+  playerName: string;
+  workspaceName: string;
+  unlockedAchievements: { id: string; name: string; desc: string; icon: string; tier: string }[];
+  stats: Record<string, number>;
+  weaponsCollected: string[];
+  crownPlaced: boolean;
+  speedrunTimeMs: number | null;
+  agentCount: number;
+  screenshotUrl: string | null;
+}
+
+// ── Sprint 4: Concierge & Suggestions ───────────────────────────────────────
+
+/** A suggestion item for the Next Steps panel in the HUD. */
+export interface SuggestionItem {
+  id: string;
+  label: string;
+  icon: string;
+  action: string;
+  priority: number;
+}
+
+/** Aspiration profile sent to client for personalization. */
+export interface AspirationProfile {
+  warrior: number;
+  builder: number;
+  explorer: number;
+  puzzle_solver: number;
+  creator: number;
+  strategist: number;
+  dominant: string | null;
+}
 
 /** A presenter broadcasting to the room projector (screen share or webcam). */
 export interface Presenter {
@@ -1143,32 +1572,38 @@ export interface TierInfo {
   description: string;
   annualPrice: number;  // cents per year (10 months — 2 months free)
   annualLabel: string;  // display label for annual
+  hidden?: boolean;     // if true, not shown in public tier list (admin/legacy only)
 }
+
+/** One-time entry fee in cents. Includes ~$0.50 usage credit. */
+export const ENTRY_FEE_CENTS = 99;
+/** Usage credit included with entry fee, in cents. */
+export const ENTRY_FEE_USAGE_CREDIT = 50;
 
 export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
   starter: {
     id: "starter",
-    price: 99,
-    label: "$0.99/mo",
+    price: 399,
+    label: "$3.99/mo",
     name: "Starter",
     agentLimit: 4,
-    usageCap: 80,
-    premiumCap: 50,
+    usageCap: 320,
+    premiumCap: 200,
     description: "Hire and manage up to 4 AI agents in your office.",
-    annualPrice: 990,
-    annualLabel: "$9.90/yr",
+    annualPrice: 3990,
+    annualLabel: "$39.90/yr",
   },
   pro: {
     id: "pro",
-    price: 499,
-    label: "$4.99/mo",
+    price: 1999,
+    label: "$19.99/mo",
     name: "Pro",
-    agentLimit: 6,
-    usageCap: 400,
-    premiumCap: 300,
-    description: "Hire and manage up to 6 AI agents in your office.",
-    annualPrice: 4990,
-    annualLabel: "$49.90/yr",
+    agentLimit: 8,
+    usageCap: 1600,
+    premiumCap: 1200,
+    description: "Hire and manage up to 8 AI agents in your office.",
+    annualPrice: 19990,
+    annualLabel: "$199.90/yr",
   },
   business: {
     id: "business",
@@ -1181,10 +1616,11 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierInfo> = {
     description: "Hire and manage up to 8 AI agents in your office.",
     annualPrice: 19990,
     annualLabel: "$199.90/yr",
+    hidden: true,
   },
 };
 
-export const SUBSCRIPTION_TIER_LIST = Object.values(SUBSCRIPTION_TIERS);
+export const SUBSCRIPTION_TIER_LIST = Object.values(SUBSCRIPTION_TIERS).filter(t => !t.hidden);
 
 /** Determine the tier from a stored string, defaulting to "none". */
 export function parseTier(s: string | null | undefined): SubscriptionTier | null {

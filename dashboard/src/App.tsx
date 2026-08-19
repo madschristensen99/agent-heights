@@ -17,11 +17,14 @@ import { FiredAgents } from "./components/FiredAgents";
 import { FileBrowser } from "./components/FileBrowser";
 import { MemoryViewer } from "./components/MemoryViewer";
 import { WalletPanel } from "./components/WalletPanel";
+import { PlatformStats } from "./components/PlatformStats";
+import { getUserEmail } from "./lib/auth";
 
 function DashboardApp() {
   const { connected, agents, board, schedules, officeMcpServers, firedAgents, vacationedAgents, player } = useDashboard();
   const [view, setView] = useState<View>("fleet");
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const userEmail = getUserEmail();
 
   const handleSelectAgent = (id: string) => {
     setSelectedAgent(id);
@@ -47,6 +50,7 @@ function DashboardApp() {
         firedCount={firedAgents.length + vacationedAgents.length}
         connected={connected}
         bossName={player?.name ?? "User"}
+        userEmail={userEmail}
       />
       {view === "fleet" && <AgentFleet onSelectAgent={handleSelectAgent} />}
       {view === "agent" && selectedAgent && (
@@ -66,6 +70,7 @@ function DashboardApp() {
       {view === "mcp" && <MCPManager />}
       {view === "fired" && <FiredAgents />}
       {view === "settings" && <Settings />}
+      {view === "stats" && <PlatformStats />}
       {view === "files" && selectedAgent && (
         <FileBrowser agentId={selectedAgent} onBack={() => setView("agent")} />
       )}

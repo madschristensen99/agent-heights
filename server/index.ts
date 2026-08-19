@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize, resolve, relative } from "node:path";
 import { readFile, stat, readdir, writeFile, unlink, mkdir, lstat } from "node:fs/promises";
 import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance, Presenter } from "../shared/types.js";
-import { SERVER_PORT, isValidAppearance, MAX_PRESENTERS } from "../shared/types.js";
+import { SERVER_PORT, isValidAppearance, MAX_PRESENTERS, COMMAND_CENTER_ADMINS } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleMcpCatalogRequest } from "./mcp-store.js";
@@ -28,10 +28,52 @@ import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
 import { handleAssetUpgradeRequest, runAssetGenerationJob } from "./asset-upgrade.js";
 import { getUsageSummary } from "./usage.js";
+import {
+  getOverviewStats, getUserTimeseries, getRevenueBreakdown, getRevenueHistory,
+  getUsageStats, getConversionFunnel, getSubscriptions, getRealtimeStats, getEngagementStats,
+} from "./admin-stats.js";
 import { getProviderConfig } from "./providers/api-config.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
 import { scheduleDeletion, cancelDeletion, getDeletionStatus, processExpiredDeletions, GRACE_PERIOD_DAYS } from "./account.js";
 import { HermesProcessManager } from "./hermes-process.js";
+import { startRetentionLoop, type RetentionManagerEntry } from "./retention.js";
+import { ProfileManager } from "./profile.js";
+import { getLeaderboard, getTrophyProfile } from "./leaderboards.js";
+import { renderTrophyPage, renderTrophyNotFound } from "./trophy-room.js";
+import { dismissNudge, trackActivity } from "./concierge.js";
+import { recordSignalByKey, preloadProfile, getCachedProfile, getUnlocks } from "./aspirations.js";
+import { generateAwayReport } from "./away-report.js";
+import { logAgentHire, logAgentFire, getEntries, updateEntry } from "./experiment-log.js";
+import { getDecorations, placeDecoration, removeDecoration, moveDecoration } from "./office-deco.js";
+import { getSocialState, leaveStickyNote, likeOffice, unlikeOffice, recordVisit } from "./office-social.js";
+import { getProgress, addXp, getMaxAgents } from "./office-progression.js";
+import { getGrowth, clearGrowth } from "./agent-growth.js";
+import { generateChallenge, scoreChallenge } from "./challenges.js";
+
+// ── User activity persistence (retention system) ─────────────────────────
+
+async function persistUserActivity(userId: string, lastActiveAt: number, lastPlatformEngagementAt: number): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  await supabaseAdmin
+    .from("user_payments")
+    .update({ last_active_at: lastActiveAt, last_platform_engagement_at: lastPlatformEngagementAt })
+    .eq("user_id", userId);
+}
+
+async function loadUserActivity(userId: string): Promise<{ lastActiveAt: number; lastPlatformEngagementAt: number; retentionEmailTier: number; lastRetentionEmailAt: number | null }> {
+  if (!isSupabaseConfigured) return { lastActiveAt: Date.now(), lastPlatformEngagementAt: 0, retentionEmailTier: 0, lastRetentionEmailAt: null };
+  const { data } = await supabaseAdmin
+    .from("user_payments")
+    .select("last_active_at, last_platform_engagement_at, retention_email_tier, last_retention_email_at")
+    .eq("user_id", userId)
+    .single();
+  return {
+    lastActiveAt: data?.last_active_at ?? Date.now(),
+    lastPlatformEngagementAt: data?.last_platform_engagement_at ?? 0,
+    retentionEmailTier: data?.retention_email_tier ?? 0,
+    lastRetentionEmailAt: data?.last_retention_email_at ?? null,
+  };
+}
 
 /** Throttle map for rate-limit toasts — one per 5s per user. */
 const rateLimitToastMap = new Map<string, number>();
@@ -393,6 +435,82 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // ── Admin platform stats (admin-only) ──────────────────────────────────
+  if (req.url?.split("?")[0]?.startsWith("/api/admin/stats")) {
+    const headers = applySecurityHeaders({ "Content-Type": "application/json" });
+    if (!isSupabaseConfigured) {
+      res.writeHead(503, headers);
+      res.end(JSON.stringify({ error: "Supabase not configured" }));
+      return;
+    }
+    const authHeader = req.headers["authorization"];
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) {
+      res.writeHead(401, headers);
+      res.end(JSON.stringify({ error: "Authentication required" }));
+      return;
+    }
+    void verifyToken(token).then(async (user) => {
+      if (!user || !user.email || !COMMAND_CENTER_ADMINS.includes(user.email.toLowerCase())) {
+        res.writeHead(403, headers);
+        res.end(JSON.stringify({ error: "Admin access required" }));
+        return;
+      }
+      const path = req.url!.split("?")[0];
+      const params = new URLSearchParams(req.url!.split("?")[1] ?? "");
+
+      try {
+        if (path === "/api/admin/stats/overview") {
+          const stats = await getOverviewStats(tenants);
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else if (path === "/api/admin/stats/users") {
+          const days = Math.min(parseInt(params.get("days") ?? "30", 10) || 30, 365);
+          const stats = await getUserTimeseries(days);
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else if (path === "/api/admin/stats/revenue") {
+          const months = Math.min(parseInt(params.get("months") ?? "12", 10) || 12, 24);
+          const [breakdown, history] = await Promise.all([
+            getRevenueBreakdown(),
+            getRevenueHistory(months),
+          ]);
+          res.writeHead(200, headers);
+          res.end(JSON.stringify({ ...breakdown, history }));
+        } else if (path === "/api/admin/stats/usage") {
+          const days = Math.min(parseInt(params.get("days") ?? "30", 10) || 30, 365);
+          const stats = await getUsageStats(days);
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else if (path === "/api/admin/stats/conversion") {
+          const stats = await getConversionFunnel();
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else if (path === "/api/admin/stats/subscriptions") {
+          const stats = await getSubscriptions();
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else if (path === "/api/admin/stats/realtime") {
+          const stats = await getRealtimeStats(tenants);
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else if (path === "/api/admin/stats/engagement") {
+          const stats = await getEngagementStats();
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else {
+          res.writeHead(404, headers);
+          res.end(JSON.stringify({ error: "Unknown stats endpoint" }));
+        }
+      } catch (err) {
+        console.error("[admin-stats] error:", err);
+        res.writeHead(500, headers);
+        res.end(JSON.stringify({ error: "Failed to fetch stats" }));
+      }
+    });
+    return;
+  }
+
   // OAuth callback for MCP servers (e.g. Robinhood)
   if (req.url?.split("?")[0] === "/oauth/callback") {
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -691,6 +809,31 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // Public trophy room: /u/{username}
+  const trophyPath = req.url?.split("?")[0] ?? "";
+  if (trophyPath.startsWith("/u/")) {
+    const username = decodeURIComponent(trophyPath.slice(3));
+    if (username) {
+      void (async () => {
+        try {
+          const profile = await getTrophyProfile(username);
+          if (!profile) {
+            res.writeHead(404, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8" }));
+            res.end(renderTrophyNotFound(username));
+            return;
+          }
+          res.writeHead(200, applySecurityHeaders({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" }));
+          res.end(renderTrophyPage(profile));
+        } catch (err) {
+          console.error("[trophy] page error:", err);
+          res.writeHead(500, applySecurityHeaders());
+          res.end("Internal server error");
+        }
+      })();
+      return;
+    }
+  }
+
   // Dashboard routes — serve from dist-dashboard/
   const urlPath = req.url?.split("?")[0] ?? "/";
   if (urlPath === "/dashboard" || urlPath.startsWith("/dashboard/")) {
@@ -901,6 +1044,29 @@ wss.on("connection", async (ws, req) => {
   }
   sess.clients.add(ws);
 
+  // Load persisted activity timestamps for retention system
+  if (user.id !== "dev") {
+    void loadUserActivity(user.id).then(async (activity) => {
+      const prevActiveAt = activity.lastActiveAt;
+      sess.manager.lastActiveAt = Date.now(); // they're active right now
+      sess.manager.lastPlatformEngagementAt = activity.lastPlatformEngagementAt;
+
+      // Generate "while you were away" report if away > 2h
+      if (prevActiveAt > 0 && Date.now() - prevActiveAt >= 2 * 60 * 60 * 1000) {
+        try {
+          const report = await generateAwayReport(sess.manager, user.id, prevActiveAt);
+          if (report) {
+            ws.send(JSON.stringify({ type: "away_report", report } satisfies ServerMsg));
+          }
+        } catch (err) {
+          console.warn("[away-report] failed to generate:", err);
+        }
+      }
+    }).catch(() => {});
+    // Preload aspiration profile into cache for sync access by concierge
+    void preloadProfile(user.id).catch(() => {});
+  }
+
   // Send snapshot based on which room the user is in
   const currentRoom = sess.roomId ? tenants.getRoom(sess.roomId) : null;
   const accessLevel = currentRoom ? tenants.computeAccessLevel(currentRoom, sess.user.id) : "no_access";
@@ -909,6 +1075,7 @@ wss.on("connection", async (ws, req) => {
     const roomMgr = tenants.getRoomManager(currentRoom.id);
     if (roomMgr) {
       const snap = roomMgr.snapshot();
+      const cachedProfile = getCachedProfile(sess.user.id);
       ws.send(JSON.stringify({
         type: "snapshot",
         agents: snap.agents,
@@ -918,6 +1085,8 @@ wss.on("connection", async (ws, req) => {
         board: snap.board,
         schedules: roomMgr.snapshotSchedules(),
         world: roomMgr.worldState(),
+        aspirationProfile: cachedProfile ? { warrior: cachedProfile.warrior, builder: cachedProfile.builder, explorer: cachedProfile.explorer, puzzle_solver: cachedProfile.puzzle_solver, creator: cachedProfile.creator, strategist: cachedProfile.strategist, dominant: cachedProfile.dominant } : undefined,
+        aspirationUnlocks: getUnlocks(sess.user.id),
       } satisfies ServerMsg));
       // Send mailbox states so flags are correct on initial load
       for (const mb of roomMgr.getMailboxSnapshots()) {
@@ -926,10 +1095,12 @@ wss.on("connection", async (ws, req) => {
       // Send platform connection states so client knows which platforms are connected
       ws.send(JSON.stringify({ type: "platform_connection", states: roomMgr.getPlatformConnectionStates() } satisfies ServerMsg));
     } else {
-      ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], schedules: [], player: sess.player, settings: sess.manager.settings, world: null } satisfies ServerMsg));
+      const fallbackProfile = getCachedProfile(sess.user.id);
+      ws.send(JSON.stringify({ type: "snapshot", agents: [], logs: {}, board: [], schedules: [], player: sess.player, settings: sess.manager.settings, world: null, aspirationProfile: fallbackProfile ? { warrior: fallbackProfile.warrior, builder: fallbackProfile.builder, explorer: fallbackProfile.explorer, puzzle_solver: fallbackProfile.puzzle_solver, creator: fallbackProfile.creator, strategist: fallbackProfile.strategist, dominant: fallbackProfile.dominant } : undefined, aspirationUnlocks: getUnlocks(sess.user.id) } satisfies ServerMsg));
     }
   } else {
     // HQ2 or no room — empty snapshot
+    const hqProfile = getCachedProfile(sess.user.id);
     ws.send(JSON.stringify({
       type: "snapshot",
       agents: [],
@@ -939,6 +1110,8 @@ wss.on("connection", async (ws, req) => {
       player: sess.player,
       settings: sess.manager.settings,
       world: null,
+      aspirationProfile: hqProfile ? { warrior: hqProfile.warrior, builder: hqProfile.builder, explorer: hqProfile.explorer, puzzle_solver: hqProfile.puzzle_solver, creator: hqProfile.creator, strategist: hqProfile.strategist, dominant: hqProfile.dominant } : undefined,
+      aspirationUnlocks: getUnlocks(sess.user.id),
     } satisfies ServerMsg));
     // Still send mailbox + platform states from the user's personal manager
     for (const mb of sess.manager.getMailboxSnapshots()) {
@@ -979,7 +1152,8 @@ wss.on("connection", async (ws, req) => {
 
       // Update the manager with subscription info
       sess.manager.subscriptionTier = payStatus.subscriptionTier;
-      sess.manager.agentLimit = payStatus.agentLimit;
+      sess.manager.agentLimit = payStatus.agentLimit + getMaxAgents(sess.user.id) - 3; // office level adds slots beyond base 3
+      sess.manager.entrancePaid = payStatus.entrancePaid;
 
       ws.send(JSON.stringify({
         type: "payment_status",
@@ -1074,6 +1248,17 @@ wss.on("connection", async (ws, req) => {
     }
     try {
       const { manager, session: sessLog, save } = sess;
+
+      // Track user activity for retention system
+      manager.lastActiveAt = Date.now();
+
+      // Track concierge engagement signals
+      trackActivity(sess.user.id, {
+        agentCount: manager.snapshot().agents.filter((a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard").length,
+        taskCount: manager.snapshot().board.length,
+        chatted: msg.type === "chat",
+        connectedPlatform: manager.getPlatformConnectionStates().some((p) => p.connected),
+      });
 
       // Unified permission system: check access level for the current room
       const accessLevel = tenants.getRoomAccessLevel(sess.user.id);
@@ -1196,6 +1381,7 @@ wss.on("connection", async (ws, req) => {
         }
         case "set_settings":
           activeManager.setSettings(msg.settings);
+          void recordSignalByKey(sess.user.id, "office_theme_changed");
           if (msg.settings.railway?.enabled) {
             checkRailwayStatus().then((status) => {
               sess.broadcast({ type: "railway_status", ok: status.ok, message: status.message });
@@ -1204,6 +1390,24 @@ wss.on("connection", async (ws, req) => {
           break;
         case "hire":
           await activeManager.hire(msg.name, msg.provider, msg.model, msg.systemPrompt ?? "", msg.role ?? "worker", msg.sprite, msg.appearance, msg.mcpServers, msg.personality, msg.cdpSolana, msg.crossmintWallet, msg.isPremium, msg.circleServices, msg.skills, msg.acl);
+          void ProfileManager.ingestHire(sess.user.id, msg.name).catch(() => {});
+          void recordSignalByKey(sess.user.id, "strategic_hire");
+          const xpResult = addXp(sess.user.id, 50);
+          if (xpResult.leveledUp) {
+            const progress = getProgress(sess.user.id);
+            ws.send(JSON.stringify({ type: "office_progress", progress } satisfies ServerMsg));
+            ws.send(JSON.stringify({ type: "toast", text: `Office reached Level ${progress.level}!` } satisfies ServerMsg));
+          }
+          if (msg.mcpServers && msg.mcpServers.length > 0) void recordSignalByKey(sess.user.id, "mcp_server_installed");
+          // Log to experiment journal
+          {
+            const snap = activeManager.snapshot();
+            const hiredAgent = snap.agents.find((a) => a.name === msg.name);
+            if (hiredAgent) {
+              const entry = logAgentHire(sess.user.id, hiredAgent);
+              ws.send(JSON.stringify({ type: "experiment_entry", entry } satisfies ServerMsg));
+            }
+          }
           break;
         case "update_agent": {
           if (msg.systemPrompt !== undefined) {
@@ -1215,6 +1419,7 @@ wss.on("connection", async (ws, req) => {
           if (!sess.player) break;
           sess.player = { ...sess.player, appearance: msg.appearance };
           save.setPlayer(sess.player);
+          void recordSignalByKey(sess.user.id, "character_customized");
           sess.broadcast({ type: "player", player: sess.player });
           // Update RoomPlayer appearance and notify others in the room
           if (sess.roomId) {
@@ -1239,25 +1444,29 @@ wss.on("connection", async (ws, req) => {
           break;
         }
         case "assign": {
-          if (!activeManager.subscriptionTier) {
-            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to assign tasks to your agents." });
+          if (!activeManager.subscriptionTier && !activeManager.entrancePaid) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Pay a $0.99 one-time entry fee to assign tasks to your agents." });
             break;
           }
           activeManager.assign(msg.agentId, msg.task, msg.handoffTo);
+          void recordSignalByKey(sess.user.id, "manual_agent_assignment");
+          if (msg.handoffTo) void recordSignalByKey(sess.user.id, "handoff_created");
           break;
         }
         case "assign_new": {
-          if (!activeManager.subscriptionTier) {
-            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to assign tasks to your agents." });
+          if (!activeManager.subscriptionTier && !activeManager.entrancePaid) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Pay a $0.99 one-time entry fee to assign tasks to your agents." });
             break;
           }
           activeManager.assignNew(msg.agentId, msg.task, msg.handoffTo);
+          if (msg.handoffTo) void recordSignalByKey(sess.user.id, "handoff_created");
+          void recordSignalByKey(sess.user.id, "manual_agent_assignment");
           break;
         }
         case "chat": {
-          // Subscription gate: block inference for users without an active subscription
-          if (!activeManager.subscriptionTier) {
-            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to chat with your agents." });
+          // Gate: block inference for users without entry fee or subscription
+          if (!activeManager.subscriptionTier && !activeManager.entrancePaid) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Pay a $0.99 one-time entry fee to chat with your agents." });
             break;
           }
           // Per-agent ACL check
@@ -1295,9 +1504,14 @@ wss.on("connection", async (ws, req) => {
           activeManager.chat(msg.agentId, msg.text);
           break;
         }
-        case "assign_all":
+        case "assign_all": {
+          if (!activeManager.subscriptionTier && !activeManager.entrancePaid) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Pay a $0.99 one-time entry fee to assign tasks to your agents." });
+            break;
+          }
           activeManager.assignAll(msg.task);
           break;
+        }
         case "stop":
           activeManager.stop(msg.agentId);
           break;
@@ -1311,6 +1525,16 @@ wss.on("connection", async (ws, req) => {
           await activeManager.fire(msg.agentId);
           screenshots.stopAll(msg.agentId);
           await closeAgentBrowser(msg.agentId);
+          void recordSignalByKey(sess.user.id, "agent_fired");
+          clearGrowth(msg.agentId);
+          // Log to experiment journal
+          {
+            const agentInfo = activeManager.getAgentInfo(msg.agentId);
+            if (agentInfo) {
+              const entry = logAgentFire(sess.user.id, agentInfo);
+              ws.send(JSON.stringify({ type: "experiment_entry", entry } satisfies ServerMsg));
+            }
+          }
           break;
         case "vacation":
           await activeManager.vacation(msg.agentId);
@@ -1327,6 +1551,111 @@ wss.on("connection", async (ws, req) => {
         case "create_card":
           activeManager.createCard(msg.title, msg.description);
           break;
+        case "create_goal":
+          activeManager.createGoal(msg.title, msg.description);
+          break;
+        case "score_decomposition": {
+          const score = activeManager.scoreDecomposition(msg.goalCardId);
+          if (score) {
+            ws.send(JSON.stringify({ type: "decomposition_score", goalCardId: msg.goalCardId, score } satisfies ServerMsg));
+          }
+          break;
+        }
+        case "request_challenge": {
+          const challenge = generateChallenge();
+          sess.activeChallenge = challenge;
+          ws.send(JSON.stringify({ type: "challenge", challenge } satisfies ServerMsg));
+          break;
+        }
+        case "submit_challenge": {
+          if (!sess.activeChallenge || sess.activeChallenge.id !== msg.challengeId) {
+            ws.send(JSON.stringify({ type: "toast", text: "Challenge expired. Request a new one." } satisfies ServerMsg));
+            break;
+          }
+          const result = scoreChallenge(sess.activeChallenge, msg.assignments);
+          ws.send(JSON.stringify({ type: "challenge_result", result } satisfies ServerMsg));
+          if (result.score >= 90) {
+            void recordSignalByKey(sess.user.id, "manual_subtask_with_deps");
+          }
+          sess.activeChallenge = null;
+          break;
+        }
+        case "request_experiment_log": {
+          const entries = getEntries(sess.user.id);
+          ws.send(JSON.stringify({ type: "experiment_log", entries } satisfies ServerMsg));
+          break;
+        }
+        case "update_experiment_entry": {
+          const updated = updateEntry(sess.user.id, msg.entryId, {
+            hypothesis: msg.hypothesis,
+            verdict: msg.verdict,
+            notes: msg.notes,
+          });
+          if (updated) {
+            ws.send(JSON.stringify({ type: "experiment_entry", entry: updated } satisfies ServerMsg));
+          }
+          break;
+        }
+        case "request_decorations": {
+          const decorations = getDecorations(sess.user.id);
+          ws.send(JSON.stringify({ type: "decorations", decorations } satisfies ServerMsg));
+          break;
+        }
+        case "place_decoration": {
+          const placed = placeDecoration(sess.user.id, msg.decoration);
+          if (placed) {
+            const decorations = getDecorations(sess.user.id);
+            ws.send(JSON.stringify({ type: "decorations", decorations } satisfies ServerMsg));
+          }
+          break;
+        }
+        case "remove_decoration": {
+          removeDecoration(sess.user.id, msg.decorationId);
+          const decorations = getDecorations(sess.user.id);
+          ws.send(JSON.stringify({ type: "decorations", decorations } satisfies ServerMsg));
+          break;
+        }
+        case "move_decoration": {
+          moveDecoration(sess.user.id, msg.decorationId, msg.tileX, msg.tileY);
+          const decorations = getDecorations(sess.user.id);
+          ws.send(JSON.stringify({ type: "decorations", decorations } satisfies ServerMsg));
+          break;
+        }
+        case "request_office_social": {
+          const social = getSocialState(msg.officeOwnerId);
+          ws.send(JSON.stringify({ type: "office_social", officeOwnerId: msg.officeOwnerId, social } satisfies ServerMsg));
+          break;
+        }
+        case "leave_sticky_note": {
+          const note = leaveStickyNote(msg.officeOwnerId, sess.user.id, sess.player?.name ?? "Visitor", msg.text, msg.color);
+          if (note) {
+            const social = getSocialState(msg.officeOwnerId);
+            ws.send(JSON.stringify({ type: "office_social", officeOwnerId: msg.officeOwnerId, social } satisfies ServerMsg));
+          }
+          break;
+        }
+        case "like_office": {
+          likeOffice(msg.officeOwnerId, sess.user.id, sess.player?.name ?? "Visitor");
+          const social = getSocialState(msg.officeOwnerId);
+          ws.send(JSON.stringify({ type: "office_social", officeOwnerId: msg.officeOwnerId, social } satisfies ServerMsg));
+          break;
+        }
+        case "unlike_office": {
+          unlikeOffice(msg.officeOwnerId, sess.user.id);
+          const social = getSocialState(msg.officeOwnerId);
+          ws.send(JSON.stringify({ type: "office_social", officeOwnerId: msg.officeOwnerId, social } satisfies ServerMsg));
+          break;
+        }
+        case "request_office_progress": {
+          const progress = getProgress(sess.user.id);
+          ws.send(JSON.stringify({ type: "office_progress", progress } satisfies ServerMsg));
+          break;
+        }
+        case "request_agent_growth": {
+          const growth = getGrowth(msg.agentId);
+          ws.send(JSON.stringify({ type: "agent_growth", agentId: msg.agentId, growth } satisfies ServerMsg));
+          break;
+        }
         case "assign_card":
           activeManager.assignCard(msg.cardId, msg.agentId);
           break;
@@ -1341,6 +1670,7 @@ wss.on("connection", async (ws, req) => {
           break;
         case "advance_phase":
           activeManager.advancePhase(msg.cardId);
+          void recordSignalByKey(sess.user.id, "phase_gate_used");
           break;
         case "set_due_date":
           activeManager.setDueDate(msg.cardId, msg.dueDate);
@@ -1362,12 +1692,20 @@ wss.on("connection", async (ws, req) => {
           break;
         case "set_card_dependency":
           activeManager.setCardDependency(msg.cardId, msg.dependsOnCardId);
+          void recordSignalByKey(sess.user.id, "manual_subtask_with_deps");
           break;
         case "remove_card_dependency":
           activeManager.removeCardDependency(msg.cardId, msg.dependsOnCardId);
           break;
         case "create_schedule":
           activeManager.createSchedule(msg.agentId, msg.name, msg.task, msg.cronExpression, msg.handoffTo);
+          void recordSignalByKey(sess.user.id, "scheduled_task");
+          const schedXp = addXp(sess.user.id, 15);
+          if (schedXp.leveledUp) {
+            const progress = getProgress(sess.user.id);
+            ws.send(JSON.stringify({ type: "office_progress", progress } satisfies ServerMsg));
+            ws.send(JSON.stringify({ type: "toast", text: `Office reached Level ${progress.level}!` } satisfies ServerMsg));
+          }
           break;
         case "update_schedule":
           activeManager.updateSchedule(msg.scheduleId, { enabled: msg.enabled, name: msg.name, task: msg.task, cronExpression: msg.cronExpression });
@@ -1377,6 +1715,7 @@ wss.on("connection", async (ws, req) => {
           break;
         case "recruit":
           await activeManager.recruit(msg.firedAgentId);
+          void recordSignalByKey(sess.user.id, "agent_rehired_different_config");
           break;
         case "fuse":
           await activeManager.fuseAgents(msg.agentA, msg.agentB, msg.name, msg.systemPrompt, msg.appearance, msg.personality);
@@ -1583,6 +1922,7 @@ wss.on("connection", async (ws, req) => {
               sess.broadcast({ type: "world_gen_error", error: result.error ?? "Unknown error" } as any);
             } else {
               sess.broadcast({ type: "world_generated", deployment: result.deployment, conceptPrompt: result.conceptPrompt } as any);
+              void recordSignalByKey(sess.user.id, "world_generated");
               // Refresh deployments list
               const deps = await listWorldDeployments();
               sess.broadcast({ type: "railway_deployments", deployments: deps.deployments, error: deps.error });
@@ -2026,6 +2366,7 @@ wss.on("connection", async (ws, req) => {
             }
           }
           await sendOutfits(ws, sess);
+          void recordSignalByKey(sess.user.id, "wardrobe_used");
           break;
         }
         case "delete_outfit": {
@@ -2121,6 +2462,10 @@ wss.on("connection", async (ws, req) => {
             sess.broadcast({ type: "toast", text: "Failed to join room." });
             break;
           }
+          // Track visitor for social interactions
+          if (room.ownerId && room.ownerId !== sess.user.id) {
+            recordVisit(room.ownerId, sess.user.id, sess.player?.name ?? "Visitor");
+          }
           const players = tenants.getRoomPlayers(msg.roomId);
           // Send full room state to the joining player
           const joinAccessLevel = tenants.computeAccessLevel(room, sess.user.id);
@@ -2132,6 +2477,7 @@ wss.on("connection", async (ws, req) => {
             privateOfficeId: sess.privateOfficeId ?? undefined,
             accessLevel: joinAccessLevel,
             roomType: room.roomType,
+            ownerId: room.ownerId,
           });
           sendRoomsList();
           // Send mailbox + platform states for the joined room's manager
@@ -3024,9 +3370,9 @@ wss.on("connection", async (ws, req) => {
         }
         // ── Agent task injection + task info ──────────────────────────────
         case "agent_inject_task": {
-          // Subscription gate: block inference for users without an active subscription
-          if (!activeManager.subscriptionTier) {
-            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Subscribe to the Starter plan for $0.99/mo to assign tasks to your agents." });
+          // Gate: block inference for users without entry fee or subscription
+          if (!activeManager.subscriptionTier && !activeManager.entrancePaid) {
+            sess.broadcast({ type: "payment_required", reason: "subscription", message: "Pay a $0.99 one-time entry fee to assign tasks to your agents." });
             break;
           }
           activeManager.assign(msg.agentId, msg.task, msg.handoffTo);
@@ -3093,6 +3439,11 @@ wss.on("connection", async (ws, req) => {
           sess.broadcast({ type: "mail_digest", ...digest });
           break;
         }
+        case "request_automation_stats": {
+          const stats = sess.manager.computeAutomationStats();
+          ws.send(JSON.stringify({ type: "automation_stats", stats } satisfies ServerMsg));
+          break;
+        }
         case "connect_platform": {
           // Return current platform connection states so the client can show
           // the appropriate auth modal. The actual connection happens via
@@ -3145,6 +3496,7 @@ wss.on("connection", async (ws, req) => {
             type: "org_created",
             org: { id: org.id, name: org.name, slug: org.slug, githubOrg: org.githubOrg, createdAt: org.createdAt },
           });
+          void recordSignalByKey(sess.user.id, "org_created");
           break;
         }
         case "list_orgs": {
@@ -3443,9 +3795,62 @@ wss.on("connection", async (ws, req) => {
                 updated_at: new Date().toISOString(),
               }, { onConflict: "user_id" });
             ws.send(JSON.stringify({ type: "achievements_saved" } satisfies ServerMsg));
+
+            // Wire warrior aspiration signals from stats
+            const stats = msg.stats as Record<string, number> | null;
+            if (stats) {
+              if (stats.creaturesKilled && stats.creaturesKilled > 0) void recordSignalByKey(sess.user.id, "creature_killed");
+              if (stats.bossRating && stats.bossRating > 0) void recordSignalByKey(sess.user.id, "boss_slain");
+              if (stats.speedrunTimeMs && stats.speedrunTimeMs > 0) void recordSignalByKey(sess.user.id, "speedrun_recorded");
+              if (stats.maxDepth && stats.maxDepth > 0) void recordSignalByKey(sess.user.id, "world_explored");
+            }
+            // Award XP for each new achievement
+            const newCount = msg.unlocked.length;
+            if (newCount > 0) {
+              const xpResult = addXp(sess.user.id, 100 * newCount);
+              if (xpResult.leveledUp) {
+                const progress = getProgress(sess.user.id);
+                ws.send(JSON.stringify({ type: "office_progress", progress } satisfies ServerMsg));
+                ws.send(JSON.stringify({ type: "toast", text: `Office reached Level ${progress.level}!` } satisfies ServerMsg));
+              }
+            }
           } catch (err) {
             console.error("[achievements] failed to save to DB:", err);
           }
+          break;
+        }
+        case "set_stated_intent": {
+          const intent = String(msg.intent).trim().slice(0, 500);
+          if (!intent) break;
+          void ProfileManager.setStatedIntent(sess.user.id, intent).catch((err: unknown) =>
+            console.warn("[profile] setStatedIntent error:", err),
+          );
+          break;
+        }
+        case "get_leaderboard": {
+          void (async () => {
+            const entries = await getLeaderboard(msg.category, msg.period);
+            ws.send(JSON.stringify({
+              type: "leaderboard",
+              entries,
+              period: msg.period,
+              category: msg.category,
+            } satisfies ServerMsg));
+          })().catch((err) => console.warn("[leaderboard] error:", err));
+          break;
+        }
+        case "get_trophy_profile": {
+          void (async () => {
+            const profile = await getTrophyProfile(msg.username);
+            ws.send(JSON.stringify({
+              type: "trophy_profile",
+              profile,
+            } satisfies ServerMsg));
+          })().catch((err) => console.warn("[trophy] error:", err));
+          break;
+        }
+        case "dismiss_concierge": {
+          dismissNudge(sess.user.id, msg.nudgeId);
           break;
         }
       }
@@ -3493,6 +3898,12 @@ wss.on("connection", async (ws, req) => {
       }
     }
     tenants.handleClientDisconnect(sess.user.id);
+
+    // Persist activity timestamps for retention system
+    const activity = sess.manager.getActivityStatus();
+    void persistUserActivity(sess.user.id, activity.lastActiveAt, activity.lastPlatformEngagementAt).catch((err: unknown) =>
+      console.warn(`[retention] failed to persist activity for ${sess.user.id}:`, err),
+    );
   });
   ws.on("error", () => {
     sess.clients.delete(ws);
@@ -3548,6 +3959,15 @@ server.listen(SERVER_PORT, () => {
   // Restore user sessions at boot so agents resume immediately after a
   // server restart, without waiting for each user to reconnect.
   void tenants.restoreSessionsAtBoot();
+
+  // Start agent-originated retention email loop (runs hourly)
+  startRetentionLoop((): RetentionManagerEntry[] => {
+    return Array.from(tenants.values()).map((sess) => ({
+      manager: sess.manager,
+      userId: sess.user.id,
+    }));
+  });
+  console.log(`[agent-heights] retention email loop started`);
 });
 
 async function shutdown(): Promise<void> {
