@@ -782,11 +782,20 @@ export class OfficeScene extends Phaser.Scene {
             const tilesetName = this.worldTheme.office.tilesetPath.replace(/\.[^.]+$/, "").split("/").pop() ?? "tiles-theme";
             const tiles = map.addTilesetImage(tilesetName, "tiles-theme");
             if (!tiles) throw new Error(`Failed to add tileset "tiles-theme" to map — texture may be missing or broken`);
-            const floorColor = 0x2a2a2a;
+            // Theme-specific floor colors
+            const themeFloorColors: Record<string, number> = {
+              "erics-alley": 0x3a3530,  // dirty concrete
+              "hawaii": 0x8a7a4a,       // sandy wood
+              "old-south": 0x5a3e24,    // dark wood planks
+            };
+            const floorColor = themeFloorColors[this.worldTheme.id] ?? 0x2a2a2a;
+            const gridColor = this.worldTheme.id === "hawaii" ? 0x6a5a3a
+              : this.worldTheme.id === "old-south" ? 0x3a2814
+              : 0x2a2520;
             const bg = this.add.graphics().setDepth(-1);
             bg.fillStyle(floorColor, 1);
             bg.fillRect(0, 0, map.widthInPixels, map.heightInPixels);
-            bg.lineStyle(1, 0x1a1a1a, 0.3);
+            bg.lineStyle(1, gridColor, 0.3);
             for (let x = 0; x <= map.width; x++) {
               bg.moveTo(x * TILE_PX, 0);
               bg.lineTo(x * TILE_PX, map.heightInPixels);
@@ -845,79 +854,85 @@ export class OfficeScene extends Phaser.Scene {
             furniture.setCollisionByProperty({ solid: true });
           }
 
-          // Apply AI wall textures — specific texture per wall side, 50% opacity
-          const tex = this.textures;
-          const brickKey = "ai-wall_0";       // dark red brick — left wall
-          const stoneKey = "ai-wall_2";       // cobblestone — bottom wall
-          const mesoKey = "ai-wall_4";       // mesoamerican — right wall
-          const lightStoneKey = "ai-wall_1";  // gray concrete — top wall
-          const drywallKey = mesoKey; // mesoamerican — right wall
-          const hasBrick = tex.exists(brickKey);
-          const hasStone = tex.exists(stoneKey);
-          const hasLightStone = tex.exists(lightStoneKey);
-          const hasDrywall = tex.exists(drywallKey);
-          const hasMeso = tex.exists(mesoKey);
-          const hasInteriorWall = tex.exists("interior-wall-0");
-          if (hasBrick || hasStone || hasLightStone || hasDrywall || hasMeso || hasInteriorWall) {
-            for (let y = 0; y < map.height; y++) {
-              for (let x = 0; x < map.width; x++) {
-                const wt = walls.getTileAt(x, y);
-                if (!wt) continue;
-                // Skip door tiles (index 13-14) so they remain visible
-                if (wt.index === 13 || wt.index === 14) continue;
-                let wallKey: string | null = null;
-                let wallAlpha = 1;
-                if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone (priority at corners)
-                else if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
-                else if (x === map.width - 1 && hasMeso) wallKey = mesoKey; // right wall = mesoamerican
-                else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
-                else {
-                  // Interior walls — procedural textured walls with depth/shading
-                  const interiorKeys = ["interior-wall-0", "interior-wall-1", "interior-wall-2"];
-                  const intKey = interiorKeys[(x + y) % interiorKeys.length];
-                  if (tex.exists(intKey)) {
-                    wallKey = intKey;
-                    wallAlpha = 1;
+          // Apply AI wall textures + windows — only for non-world themes (HQ/classic).
+          // World themes use their own procedural tilesets with theme-specific walls.
+          if (this.theme !== "world") {
+            const tex = this.textures;
+            const brickKey = "ai-wall_0";       // dark red brick — left wall
+            const stoneKey = "ai-wall_2";       // cobblestone — bottom wall
+            const mesoKey = "ai-wall_4";       // mesoamerican — right wall
+            const lightStoneKey = "ai-wall_1";  // gray concrete — top wall
+            const drywallKey = mesoKey; // mesoamerican — right wall
+            const hasBrick = tex.exists(brickKey);
+            const hasStone = tex.exists(stoneKey);
+            const hasLightStone = tex.exists(lightStoneKey);
+            const hasDrywall = tex.exists(drywallKey);
+            const hasMeso = tex.exists(mesoKey);
+            const hasInteriorWall = tex.exists("interior-wall-0");
+            if (hasBrick || hasStone || hasLightStone || hasDrywall || hasMeso || hasInteriorWall) {
+              for (let y = 0; y < map.height; y++) {
+                for (let x = 0; x < map.width; x++) {
+                  const wt = walls.getTileAt(x, y);
+                  if (!wt) continue;
+                  // Skip door tiles (index 13-14) so they remain visible
+                  if (wt.index === 13 || wt.index === 14) continue;
+                  let wallKey: string | null = null;
+                  let wallAlpha = 1;
+                  if (y === map.height - 1 && hasStone) wallKey = stoneKey; // bottom wall = stone (priority at corners)
+                  else if (x === 0 && hasBrick) wallKey = brickKey;           // left wall = brick
+                  else if (x === map.width - 1 && hasMeso) wallKey = mesoKey; // right wall = mesoamerican
+                  else if (y <= 1 && hasLightStone) wallKey = lightStoneKey; // top wall = light stone
+                  else {
+                    // Interior walls — procedural textured walls with depth/shading
+                    const interiorKeys = ["interior-wall-0", "interior-wall-1", "interior-wall-2"];
+                    const intKey = interiorKeys[(x + y) % interiorKeys.length];
+                    if (tex.exists(intKey)) {
+                      wallKey = intKey;
+                      wallAlpha = 1;
+                    }
                   }
-                }
-                if (wallKey) {
-                  const isStone = wallKey === stoneKey || wallKey === lightStoneKey || wallKey === mesoKey;
-                  const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
-                    .setOrigin(0, 0)
-                    .setDepth(1.05)
-                    .setAlpha(isStone ? 1 : wallAlpha);
-                  ws.setDisplaySize(TILE_PX, TILE_PX);
+                  if (wallKey) {
+                    const isStone = wallKey === stoneKey || wallKey === lightStoneKey || wallKey === mesoKey;
+                    const ws = this.add.image(x * TILE_PX, y * TILE_PX, wallKey)
+                      .setOrigin(0, 0)
+                      .setDepth(1.05)
+                      .setAlpha(isStone ? 1 : wallAlpha);
+                    ws.setDisplaySize(TILE_PX, TILE_PX);
+                  }
                 }
               }
             }
-          }
 
-          // Draw windows on the top wall — hardcoded positions (excludes tiles under board/gantt/projector)
-          const windowXs = [1, 2, 28];
-          for (const x of windowXs) {
-            const wx = x * TILE_PX;
-            const wy = 1 * TILE_PX;
-            const wg = this.add.graphics().setDepth(1.1);
-            // Window frame
-            wg.fillStyle(0x4a4a50, 1);
-            wg.fillRoundedRect(wx + 5, wy + 6, 54, 40, 4);
-            // Glass
-            wg.fillStyle(0x88bbdd, 0.8);
-            wg.fillRoundedRect(wx + 8, wy + 9, 48, 34, 3);
-            // Reflection highlight
-            wg.fillStyle(0xaaddee, 0.5);
-            wg.fillRoundedRect(wx + 10, wy + 11, 20, 14, 2);
-            // Cross mullions
-            wg.lineStyle(1.5, 0x4a4a50, 0.8);
-            wg.beginPath();
-            wg.moveTo(wx + 32, wy + 9);
-            wg.lineTo(wx + 32, wy + 43);
-            wg.moveTo(wx + 8, wy + 26);
-            wg.lineTo(wx + 56, wy + 26);
-            wg.strokePath();
-            // Windowsill
-            wg.fillStyle(0x5a5a60, 1);
-            wg.fillRoundedRect(wx + 4, wy + 44, 56, 5, 2);
+            // Draw windows on the top wall — hardcoded positions (excludes tiles under board/gantt/projector)
+            const windowXs = [1, 2, 28];
+            for (const x of windowXs) {
+              const wx = x * TILE_PX;
+              const wy = 1 * TILE_PX;
+              const wg = this.add.graphics().setDepth(1.1);
+              // Window frame
+              wg.fillStyle(0x4a4a50, 1);
+              wg.fillRoundedRect(wx + 5, wy + 6, 54, 40, 4);
+              // Glass
+              wg.fillStyle(0x88bbdd, 0.8);
+              wg.fillRoundedRect(wx + 8, wy + 9, 48, 34, 3);
+              // Reflection highlight
+              wg.fillStyle(0xaaddee, 0.5);
+              wg.fillRoundedRect(wx + 10, wy + 11, 20, 14, 2);
+              // Cross mullions
+              wg.lineStyle(1.5, 0x4a4a50, 0.8);
+              wg.beginPath();
+              wg.moveTo(wx + 32, wy + 9);
+              wg.lineTo(wx + 32, wy + 43);
+              wg.moveTo(wx + 8, wy + 26);
+              wg.lineTo(wx + 56, wy + 26);
+              wg.strokePath();
+              // Windowsill
+              wg.fillStyle(0x5a5a60, 1);
+              wg.fillRoundedRect(wx + 4, wy + 44, 56, 5, 2);
+            }
+          } else {
+            // World theme — draw theme-specific windows
+            this.drawThemeWindows(walls);
           }
 
           // Overlay enhanced procedural furniture on top of the tile-based furniture layer
@@ -7820,6 +7835,84 @@ export class OfficeScene extends Phaser.Scene {
 
     // Store the smoke position above the chimney cap
     this.chimneyPositions = [{ x: openX + openW / 2, y: capY - 2 }];
+  }
+
+  // ── Theme-specific window drawing for world themes ─────────────────
+
+  /** Draw theme-specific windows on the walls of a world theme office. */
+  private drawThemeWindows(_walls: Phaser.Tilemaps.TilemapLayer): void {
+    const themeId = this.worldTheme?.id;
+    const g = this.add.graphics().setDepth(1.1);
+
+    if (themeId === "erics-alley") {
+      // Barred windows — steel bars over dirty glass, only on top wall
+      const windowXs = [2, 10, 18, 26];
+      for (const x of windowXs) {
+        const wx = x * TILE_PX;
+        const wy = 1 * TILE_PX;
+        // Dirty glass
+        g.fillStyle(0x4a4a3a, 0.6);
+        g.fillRoundedRect(wx + 6, wy + 8, 52, 36, 2);
+        // Steel bars (horizontal)
+        g.lineStyle(3, 0x6a6a6a, 1);
+        g.beginPath();
+        g.moveTo(wx + 6, wy + 18); g.lineTo(wx + 58, wy + 18);
+        g.moveTo(wx + 6, wy + 30); g.lineTo(wx + 58, wy + 30);
+        g.strokePath();
+        // Steel bars (vertical)
+        g.lineStyle(2, 0x5a5a5a, 1);
+        g.beginPath();
+        g.moveTo(wx + 20, wy + 8); g.lineTo(wx + 20, wy + 44);
+        g.moveTo(wx + 42, wy + 8); g.lineTo(wx + 42, wy + 44);
+        g.strokePath();
+        // Frame
+        g.lineStyle(2, 0x3a3a3a, 1);
+        g.strokeRoundedRect(wx + 5, wy + 7, 54, 38, 2);
+      }
+    } else if (themeId === "hawaii") {
+      // Open-air openings — no glass, just wooden frames with ocean view
+      const windowXs = [1, 8, 15, 22, 28];
+      for (const x of windowXs) {
+        const wx = x * TILE_PX;
+        const wy = 1 * TILE_PX;
+        // Ocean view gradient
+        g.fillStyle(0x4a9ab8, 0.5);
+        g.fillRoundedRect(wx + 4, wy + 6, 56, 42, 3);
+        g.fillStyle(0x6ab8d4, 0.3);
+        g.fillRoundedRect(wx + 6, wy + 8, 52, 20, 2);
+        // Bamboo frame
+        g.lineStyle(3, 0x8b6940, 1);
+        g.strokeRoundedRect(wx + 3, wy + 5, 58, 44, 3);
+        // Bamboo mullions
+        g.lineStyle(2, 0x6b4a20, 0.8);
+        g.beginPath();
+        g.moveTo(wx + 32, wy + 6); g.lineTo(wx + 32, wy + 48);
+        g.strokePath();
+      }
+    } else if (themeId === "old-south") {
+      // Plantation shutters — louvered windows
+      const windowXs = [2, 10, 18, 26];
+      for (const x of windowXs) {
+        const wx = x * TILE_PX;
+        const wy = 1 * TILE_PX;
+        // Frame
+        g.fillStyle(0x6b4a2a, 1);
+        g.fillRoundedRect(wx + 4, wy + 6, 56, 42, 3);
+        // Louvers (angled slats)
+        g.fillStyle(0x8b6a3a, 0.9);
+        for (let ly = 10; ly < 44; ly += 5) {
+          g.fillRect(wx + 7, wy + ly, 50, 3);
+        }
+        // Shadow lines on louvers
+        g.fillStyle(0x4a3010, 0.4);
+        for (let ly = 10; ly < 44; ly += 5) {
+          g.fillRect(wx + 7, wy + ly + 2, 50, 1);
+        }
+        // Frame outline
+        g.lineStyle(2, 0x4a3010, 1);
+        g.strokeRoundedRect(wx + 4, wy + 6, 56, 42, 3);
+      }
+    }
   }
 
   // ── Cultural perimeter wall overlays ────────────────────────────────

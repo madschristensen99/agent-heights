@@ -126,7 +126,7 @@ body {
 
 .stats-bar {
   position: absolute;
-  top: 42px;
+  top: 48px;
   left: 0;
   right: 0;
   display: flex;
@@ -213,9 +213,9 @@ body {
   display: none;
 }
 
-/* Hide keyboard hint when hotbar has items to avoid overlap */
+/* Move keyboard hint above hotbar to avoid overlap */
 body.hotbar-visible .hint {
-  display: none;
+  bottom: 64px;
 }
 
 /* ---------------------------------------------------------------- panels */
@@ -2130,6 +2130,16 @@ kbd {
   font-size: 13px;
   font-weight: 500;
   animation: rise 0.25s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toast-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--accent);
 }
 
 @keyframes rise {
@@ -3357,7 +3367,7 @@ kbd {
   }
 
   .stats-bar {
-    top: calc(38px + var(--safe-top));
+    top: calc(44px + var(--safe-top));
     padding: 3px 10px;
     gap: 4px;
     overflow-x: auto;
@@ -4530,8 +4540,11 @@ kbd {
 }
 
 .concierge-avatar {
-  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
+  width: 24px;
+  height: 24px;
 }
 
 .concierge-text {

@@ -457,6 +457,9 @@ export class Store {
   /** Platform connection states from Hermes Agent gateway */
   platformStates: PlatformConnectionState[] = [];
 
+  /** True once the first platform_connection WS message has been received. */
+  platformStatesReceived = false;
+
   /** Platform mailbox state: platform -> { flagUp, pendingCount, lastMessage, assignedAgentId } */
   platformMailboxes = new Map<string, { flagUp: boolean; pendingCount: number; lastMessage: string; assignedAgentId: string | null }>();
 
@@ -517,6 +520,7 @@ export class Store {
     this.worldSeed = 0;
     this.chunkOverrides = {};
     this.platformStates = [];
+    this.platformStatesReceived = false;
     this.platformMailboxes.clear();
     this.initialDataReady = false;
     this.emit();
@@ -1663,6 +1667,7 @@ export class Store {
       }
       case "platform_connection": {
         this.platformStates = msg.states;
+        this.platformStatesReceived = true;
         for (const fn of this.platformConnectionListeners) fn(msg.states);
         return;
       }

@@ -202,6 +202,9 @@ const ICON = {
   micOff: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v5a3 3 0 0 0 5.12 2.12"/><path d="M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><path d="M12 18v4"/><path d="M8 22h8"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`,
   speakerOn: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
   speakerOff: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
+  concierge: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1a7 7 0 0 1 14 0v1"/><path d="M9 8h6"/><path d="M12 4v8"/><circle cx="12" cy="8" r="1" fill="#58c866"/></svg>`,
+  close: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8"/><path d="M11 3l-8 8"/></svg>`,
+  trophy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 4H4v3a3 3 0 0 0 3 3"/><path d="M17 4h3v3a3 3 0 0 1-3 3"/></svg>`,
 };
 
 export class Hud {
@@ -405,10 +408,10 @@ export class Hud {
       </div>
       <div class="toasts" id="toasts"></div>
       <div class="concierge-bubble" id="concierge-bubble" hidden>
-        <span class="concierge-avatar">👩‍💼</span>
+        <span class="concierge-avatar">${ICON.concierge}</span>
         <span class="concierge-text" id="concierge-text"></span>
         <button class="concierge-action btn mini" id="concierge-action" hidden></button>
-        <button class="concierge-close" id="concierge-close">✕</button>
+        <button class="concierge-close" id="concierge-close">${ICON.close}</button>
       </div>
       <div class="next-steps" id="next-steps" hidden>
         <div class="next-steps-title">NEXT STEPS</div>
@@ -556,7 +559,7 @@ export class Hud {
       if (this.store.wardrobeOpen) this.refreshOutfitList();
     });
     achievements.onUnlock((def) => {
-      this.toast(`🏆 ${def.name} — ${def.desc}`);
+      this.toast(`${def.name} — ${def.desc}`, ICON.trophy);
     });
 
     // Leaderboard results from server
@@ -7822,7 +7825,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     return div.innerHTML;
   }
 
-  private toast(text: string): void {
+  private toast(text: string, icon?: string): void {
     const now = Date.now();
     if (text === this.lastToastText && now - this.lastToastTime < 2000) return;
     this.lastToastText = text;
@@ -7830,7 +7833,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const box = document.getElementById("toasts")!;
     const el = document.createElement("div");
     el.className = "toast";
-    el.textContent = text;
+    if (icon) {
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "toast-icon";
+      iconSpan.innerHTML = icon;
+      el.appendChild(iconSpan);
+    }
+    const textSpan = document.createElement("span");
+    textSpan.textContent = text;
+    el.appendChild(textSpan);
     box.appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }

@@ -51,6 +51,10 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
   const pendingCards = allCards.filter((c) => c.status === "backlog" || c.status === "in_progress");
   const unassignedCards = allCards.filter((c) => c.status === "backlog" && !c.assignedAgentId);
 
+  // Maturity check — users who have completed tasks before are not new
+  const tasksDone = achievements.getStat("tasksDone");
+  const isMature = tasksDone >= 3;
+
   // No agents hired yet
   if (hireable.length === 0) {
     items.push({
@@ -84,8 +88,8 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     });
   }
 
-  // No tasks on the board
-  if (allCards.length === 0 && hireable.length > 0) {
+  // No tasks on the board — only suggest for new users; mature users just have an empty board
+  if (allCards.length === 0 && hireable.length > 0 && !isMature) {
     items.push({
       id: "create-task",
       label: "Create a task for your team",
@@ -95,9 +99,10 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     });
   }
 
-  // Hasn't connected any platform
+  // Hasn't connected any platform — only check after platform states have been received
+  // (avoids race condition where platformStates is still [] before the WS message arrives)
   const hasPlatform = store.platformStates.some((p) => p.connected);
-  if (!hasPlatform && hireable.length > 0) {
+  if (store.platformStatesReceived && !hasPlatform && hireable.length > 0) {
     items.push({
       id: "connect-platform",
       label: "Connect Telegram/Slack for notifications",
@@ -107,9 +112,9 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     });
   }
 
-  // Hasn't explored the world
+  // Hasn't explored the world — only for new users
   const creaturesKilled = achievements.getStat("creaturesKilled");
-  if (creaturesKilled === 0 && hireable.length > 0) {
+  if (creaturesKilled === 0 && hireable.length > 0 && !isMature) {
     items.push({
       id: "explore-world",
       label: "Step outside and explore the world",
