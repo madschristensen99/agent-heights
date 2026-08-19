@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { CHAR_VARIANTS, type WorldTheme } from "../../../shared/types";
+import { CHAR_VARIANTS } from "../../../shared/types";
 import { CHAR_FRAME_W, CHAR_FRAME_H, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getTextureGenerationSteps } from "./textures";
 import type { Dir } from "./agent";
@@ -19,9 +19,6 @@ import { SS_FACTOR } from "./world";
 import * as loadingOverlay from "./loading-overlay";
 import { setCharTextureProvider, setCharComponentProvider } from "./chargen";
 import type { CharTextureProvider, CharComponentProvider } from "../../../shared/char-draw";
-import { generateAlleyTileset } from "./alley-tiles";
-import { generateHawaiiTileset } from "./hawaii-tiles";
-import { generateSouthTileset } from "./south-tiles";
 import "./furniture-alley"; // auto-registers alley furniture drawing functions
 import "./furniture-hawaii"; // auto-registers hawaii furniture drawing functions
 import "./furniture-south"; // auto-registers old south furniture drawing functions
@@ -67,17 +64,14 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 64,
     });
 
-    // ── World Theme ──────────────────────────────────────────────────
-    // Load world-theme.json through Phaser's own loader (NOT fetch()).
-    // Phaser does not await Promises returned by async preload(), so a
-    // fetch()-based approach races against loader.start() — if the loader
-    // finishes before the fetch resolves, AI atlases are never queued and
-    // the game silently falls back to procedural textures.
-    this.load.json("world-theme", "assets/world-theme.json?v=" + Date.now());
+    // ── World Theme Tilemaps ────────────────────────────────────────
+    // Preload all 3 known world theme tilemaps so they're available for
+    // runtime theme switching without needing a scene reload of boot.
+    this.load.tilemapTiledJSON("map-erics-alley", `assets/maps/erics-alley.json${v}`);
+    this.load.tilemapTiledJSON("map-hawaii", `assets/maps/hawaii.json${v}`);
+    this.load.tilemapTiledJSON("map-old-south", `assets/maps/old-south.json${v}`);
 
-    // AI texture atlases — always loaded unconditionally. For procedural-tier
-    // worlds, they are removed in create() after reading the theme. This
-    // eliminates the race condition entirely.
+    // AI texture atlases — always loaded unconditionally.
     const atlasVer = "?v=276";
     this.load.image("ai-tiles-atlas", `assets/atlases/ai-tiles-atlas.webp${atlasVer}`);
     this.load.json("ai-tiles-atlas-meta", `assets/atlases/ai-tiles-atlas.json${atlasVer}`);
@@ -119,10 +113,6 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.load.on("loaderror", (file: Phaser.Loader.File) => {
-      if (file.key === "world-theme") {
-        console.log("[boot] world-theme.json not found — running in HQ mode");
-        return;
-      }
       if (file.key === "tiles-theme" || file.key === "map-theme") {
         console.warn(`[boot] ${file.key} not found — will use procedural fallback`);
         this.textures.remove(file.key);
@@ -136,110 +126,11 @@ export class BootScene extends Phaser.Scene {
       console.warn("[Asset Load Error]", file.key, file.url);
     });
 
-    // Theme-specific assets (tilemap, tileset, spritesheets) are queued
-    // after world-theme.json parses, since their paths come from the theme.
-    // Files added via this.load.* during an active load are picked up
-    // automatically by Phaser's loader.
-    let themeAssetsQueued = false;
-    this.load.on("filecomplete", (key: string) => {
-      if (key !== "world-theme" || themeAssetsQueued) return;
-      themeAssetsQueued = true;
-      const themeData = this.cache.json.get("world-theme") as WorldTheme | undefined;
-      if (!themeData) return;
-      console.log(`[boot] World theme found: ${themeData.name} (${themeData.id})`);
-
-      this.load.tilemapTiledJSON("map-theme", themeData.office.tilemapPath);
-
-      // Only load the tileset image for AI-tier themes.
-      // Procedural themes generate their tileset via canvas in create().
-      if (themeData.assets?.assetTier === "ai") {
-        this.load.image("tiles-theme", themeData.office.tilesetPath);
-      }
-
-      if (themeData.assets.worldTileSpritesheetPath) {
-        this.load.spritesheet("world-tiles-theme", themeData.assets.worldTileSpritesheetPath, {
-          frameWidth: 64,
-          frameHeight: 64,
-        });
-      }
-      if (themeData.assets.furnitureSpritesheetPath) {
-        this.load.spritesheet("furniture-theme", themeData.assets.furnitureSpritesheetPath, {
-          frameWidth: 64,
-          frameHeight: 64,
-        });
-      }
-      if (themeData.assets.characterSpritesheetPath) {
-        this.load.spritesheet("chars-theme", themeData.assets.characterSpritesheetPath, {
-          frameWidth: CHAR_FRAME_W,
-          frameHeight: CHAR_FRAME_H,
-        });
-      }
-      if (themeData.agentWorkAnim) {
-        this.load.spritesheet("agent-work-anim", themeData.agentWorkAnim.spritesheetPath, {
-          frameWidth: CHAR_FRAME_W,
-          frameHeight: CHAR_FRAME_H,
-        });
-      }
-    });
   }
 
   create(): void {
 
-    // Read world theme from Phaser's JSON cache (loaded via this.load.json
-    // in preload) and publish it to the registry for downstream scenes.
-    const theme = this.cache.json.get("world-theme") as WorldTheme | undefined;
-    if (theme) {
-      this.registry.set("worldTheme", theme);
-
-      // Generate procedural tilesets for procedural-tier themes that have
-      // their own tileset path but no AI spritesheet loaded.
-      if (theme.assets?.assetTier !== "ai" && theme.office?.tilesetPath) {
-        // For Erics Alley, generate the procedural tileset
-        if (theme.id === "erics-alley") {
-          generateAlleyTileset(this, "tiles-theme");
-        }
-        // For Hawaii, generate the procedural tileset
-        if (theme.id === "hawaii") {
-          generateHawaiiTileset(this, "tiles-theme");
-        }
-        // For Old South, generate the procedural tileset
-        if (theme.id === "old-south") {
-          generateSouthTileset(this, "tiles-theme");
-        }
-      }
-    }
-
-    // For procedural-tier worlds, remove AI atlas textures and 3D creature
-    // spritesheets that were loaded unconditionally in preload() to free
-    // GPU memory. They are not needed for procedural rendering.
-    const isAiTier = !theme || theme.assets?.assetTier === "ai";
-    if (!isAiTier) {
-      const aiTexKeys = [
-        "ai-tiles-atlas", "ai-sprites-atlas",
-        "ai-hair-atlas", "ai-beard-atlas", "ai-shirt-atlas",
-        "ai-pants-atlas", "ai-accessory-atlas", "ai-headFeature-atlas",
-        "creature-slime", "creature-wolf", "creature-skeleton", "creature-imp",
-        "creature-wraith", "creature-fire-elemental",
-        "beast-groveheart", "beast-stone-colossus", "beast-ash-wyrm",
-        "beast-void-leviathan", "beast-infernal-sovereign",
-        "friendly-unicorn", "friendly-fairy-bunny", "friendly-baby-dragon", "friendly-crystal-fox",
-      ];
-      for (const key of aiTexKeys) {
-        if (this.textures.exists(key)) this.textures.remove(key);
-      }
-      const aiMetaKeys = [
-        "ai-tiles-atlas-meta", "ai-sprites-atlas-meta",
-        "ai-hair-atlas-meta", "ai-beard-atlas-meta", "ai-shirt-atlas-meta",
-        "ai-pants-atlas-meta", "ai-accessory-atlas-meta", "ai-headFeature-atlas-meta",
-      ];
-      for (const key of aiMetaKeys) {
-        if (this.cache.json.has(key)) this.cache.json.remove(key);
-      }
-      console.log("[boot] Procedural asset tier — removed AI textures");
-    }
-
-    // Only unpack AI atlases if they were loaded (AI tier or HQ mode).
-    // Procedural-tier worlds skip this entirely.
+    // Only unpack AI atlases if they were loaded.
     if (this.textures.exists("ai-tiles-atlas")) {
       // Unpack tile + sprite atlases into individual Phaser textures.
       // Hair atlas is NOT unpacked — we extract ImageData directly from it

@@ -2,17 +2,27 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import type {
   AgentInfo, LogEntry, TaskCard, ServerMsg, ClientMsg, GameSettings, PlayerInfo,
   AgentSchedule, FiredAgent, VacationedAgent, OfficeMCPServer, WorldState,
+  DecompositionScore, TaskPhase,
 } from "../../shared/types";
 import { WSClient } from "./ws";
 import * as authLib from "./auth";
 
 interface FsEntry { name: string; isDir: boolean; size: number; mtime: number }
 
+export interface CardDependency { from: string; to: string; type: string }
+export interface PhaseGateEvent { cardId: string; phase: TaskPhase; approved: boolean; reviewerId: string; reviewerName: string }
+export interface CapabilityGap { skill: string; requiredBy: string; suggestion: string }
+
 interface DashboardState {
   connected: boolean;
   agents: Map<string, AgentInfo>;
   logs: Map<string, LogEntry[]>;
   board: TaskCard[];
+  dependencies: CardDependency[];
+  decompositionScores: Map<string, DecompositionScore>;
+  elegantSolutions: Map<string, { tier: "bronze" | "silver" | "gold"; score: DecompositionScore }>;
+  phaseGates: PhaseGateEvent[];
+  capabilityGaps: CapabilityGap[];
   settings: GameSettings | null;
   player: PlayerInfo | null;
   toasts: { id: number; text: string }[];
@@ -48,6 +58,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Map<string, AgentInfo>>(new Map());
   const [logs, setLogs] = useState<Map<string, LogEntry[]>>(new Map());
   const [board, setBoard] = useState<TaskCard[]>([]);
+  const [dependencies, setDependencies] = useState<CardDependency[]>([]);
+  const [decompositionScores, setDecompositionScores] = useState<Map<string, DecompositionScore>>(new Map());
+  const [elegantSolutions, setElegantSolutions] = useState<Map<string, { tier: "bronze" | "silver" | "gold"; score: DecompositionScore }>>(new Map());
+  const [phaseGates, setPhaseGates] = useState<PhaseGateEvent[]>([]);
+  const [capabilityGaps, setCapabilityGaps] = useState<CapabilityGap[]>([]);
   const [settings, setSettings] = useState<GameSettings | null>(null);
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
@@ -141,12 +156,36 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         }
         case "gantt_update": {
           setBoard(msg.cards);
+          setDependencies(msg.dependencies ?? []);
           break;
         }
-        case "phase_gate":
-        case "capability_gap":
-          // These are handled by listeners in Phase 5 dashboard views
+        case "phase_gate": {
+          setPhaseGates((prev) => [...prev, {
+            cardId: msg.cardId, phase: msg.phase, approved: msg.approved,
+            reviewerId: msg.reviewerId, reviewerName: msg.reviewerName,
+          }]);
           break;
+        }
+        case "capability_gap": {
+          setCapabilityGaps(msg.gaps ?? []);
+          break;
+        }
+        case "decomposition_score": {
+          setDecompositionScores((prev) => {
+            const next = new Map(prev);
+            next.set(msg.goalCardId, msg.score);
+            return next;
+          });
+          break;
+        }
+        case "elegant_solution": {
+          setElegantSolutions((prev) => {
+            const next = new Map(prev);
+            next.set(msg.goalCardId, { tier: msg.tier, score: msg.score });
+            return next;
+          });
+          break;
+        }
         case "settings": {
           setSettings(msg.settings);
           break;
@@ -314,6 +353,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     agents,
     logs,
     board,
+    dependencies,
+    decompositionScores,
+    elegantSolutions,
+    phaseGates,
+    capabilityGaps,
     settings,
     player,
     toasts,

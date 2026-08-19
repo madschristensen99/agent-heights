@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, WorldTemplate, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 import { getReactionsForAchievement, NPC_IDS, checkContextTrigger } from "./ui/agent-reactions";
@@ -253,12 +253,16 @@ export class Store {
   codeEditorDir: { path: string; type: "file" | "dir"; size: number }[] = [];
   codeEditorFile: { path: string; content: string; sha: string } | null = null;
   codeEditorDirty = false;
-  currentWorld: { branchName: string; host: string; url: string } | null = null;
+  currentWorld: { themeId: string; themeName: string } | null = null;
   worldTransitioning = false;
-  portalTarget: { branchName: string; url: string } | null = null;
+  portalTarget: { themeId: string; themeName: string } | null = null;
   worldsPanelOpen = false;
-  worldTemplates: WorldTemplate[] = [];
   worldGenerating: { worldName: string; stage: string; message: string } | null = null;
+  availableWorlds: { themeId: string; name: string; icon: string; description: string }[] = [
+    { themeId: "erics-alley", name: "Erics Alley", icon: "🏚️", description: "Gritty back alley world where agents smoke instead of type. Cardboard box stations, barrel fires, dumpsters as filing cabinets, van deliveries." },
+    { themeId: "hawaii", name: "Hawaii", icon: "🌋", description: "Tropical island world where agents spin fire instead of type. Tiki bar stations, torch fires, treasure chests as filing cabinets, outrigger deliveries." },
+    { themeId: "old-south", name: "Old South", icon: "🏛️", description: "Antebellum Southern world where agents harvest instead of type. Field plot stations, smokehouses, storage chests as filing cabinets, carriage deliveries." },
+  ];
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */
   mcpKeysStatusListeners: ((results: { serverUrl: string; hasKey: boolean }[]) => void)[] = [];
@@ -509,7 +513,6 @@ export class Store {
     this.worldTransitioning = false;
     this.portalTarget = null;
     this.worldsPanelOpen = false;
-    this.worldTemplates = [];
     this.worldGenerating = null;
     this.worldSeed = 0;
     this.chunkOverrides = {};
@@ -829,10 +832,6 @@ export class Store {
 
   toggleWorldsPanel(open?: boolean): void {
     this.worldsPanelOpen = open ?? !this.worldsPanelOpen;
-    if (this.worldsPanelOpen) {
-      this.sendFn?.({ type: "railway_list_deployments" });
-      this.sendFn?.({ type: "list_world_templates" });
-    }
     this.emit();
   }
 
@@ -1124,7 +1123,7 @@ export class Store {
         if (msg.error) this.toast(`Railway: ${msg.error}`);
         break;
       case "world_templates":
-        this.worldTemplates = msg.templates;
+        // No longer used — worlds are static themes, not server-generated
         break;
       case "world_generating":
         this.worldGenerating = { worldName: msg.worldName, stage: msg.stage, message: msg.message };
@@ -1157,7 +1156,7 @@ export class Store {
           // Refresh deployments list
           this.sendFn?.({ type: "railway_list_deployments" });
           // If we're inside the world that was redeployed, reload the scene
-          if (this.currentWorld && this.currentWorld.branchName === msg.deployment.branchName && this.sceneRef) {
+          if (this.currentWorld && this.sceneRef) {
             this.toast("World rebuilt — reloading...");
             const scene = this.sceneRef as any;
             if (scene?.cameras) {

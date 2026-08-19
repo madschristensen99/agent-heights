@@ -1,0 +1,57 @@
+{
+  "id": "hawaii",
+  "name": "Hawaii",
+  "description": "Tropical island world where agents spin fire instead of type. Tiki bar stations, torch fires, treasure chests as filing cabinets, outrigger deliveries.",
+  "workMetaphor": "fire_spinning",
+  "arrivalMetaphor": "outrigger_delivery",
+  "office": {
+    "tilemapPath": "assets/maps/hawaii.json",
+    "tilesetPath": "assets/tilesets/hawaii.png",
+    "floorTile": 0,
+    "wallTile": 1,
+    "doorTile": 6
+  },
+  "furniture": {
+    "17": "drawTorchStationLeft",
+    "18": "drawTorchStationRight",
+    "19": "drawLogStool",
+    "20": "drawTreasureChest",
+    "21": "drawHibiscus",
+    "22": "drawOceanView",
+    "23": "drawTikiBarTop",
+    "24": "drawTikiBarBottom",
+    "25": "drawRainCatchment",
+    "26": "drawPrepTable",
+    "27": "drawLavaRockGrill",
+    "28": "drawHammockLeft",
+    "29": "drawHammockRight",
+    "30": "drawPalmTree",
+    "31": "drawPlumeria",
+    "32": "drawCoconutGrill",
+    "35": "drawTikiTotem",
+    "36": "drawTikiTotemEyes",
+    "37": "drawVolcanoVent"
+  },
+  "worldgen": {
+    "biomes": ["beach", "jungle", "volcanic_ridge", "lava_tubes", "underwater_cave", "volcano_summit"],
+    "baseGround": { "beach": 0, "jungle": 6, "volcanic_ridge": 7, "lava_tubes": 8, "underwater_cave": 9, "volcano_summit": 10 },
+    "obstacles": { "beach": [2, 3, 4], "jungle": [2, 24, 39], "volcanic_ridge": [3, 37], "lava_tubes": [3, 9], "underwater_cave": [3, 21], "volcano_summit": [9, 11] },
+    "hostileTiles": { "lava_tubes": [9], "volcano_summit": [9, 11] },
+    "hostilityThresholds": [2, 4, 7, 11, 18]
+  },
+  "interactables": {},
+  "statusColors": { "idle": 7143424, "thinking": 13834552, "working": 5019238, "done": 4882074, "error": 15138488, "waiting": 12240244 },
+  "dialect": {
+    "systemPromptSuffix": "Speak in Hawaiian Pidgin English. Use words like 'brah', 'da kine', 'pau', 'mahalo'. Keep it warm and friendly.",
+    "chatStyle": "hawaiian_pidgin",
+    "emotes": ["shaka", "mahalo", "chee_hoo"]
+  },
+  "assets": {
+    "tilesetPath": "assets/tilesets/hawaii.png",
+    "assetTier": "procedural"
+  },
+  "conflict": {
+    "factionA": { "name": "Shark Tribe", "color": 43690, "spriteKey": "faction-shark" },
+    "factionB": { "name": "Turtle Tribe", "color": 26624, "spriteKey": "faction-turtle" }
+  }
+}

@@ -18,12 +18,14 @@ import { FileBrowser } from "./components/FileBrowser";
 import { MemoryViewer } from "./components/MemoryViewer";
 import { WalletPanel } from "./components/WalletPanel";
 import { PlatformStats } from "./components/PlatformStats";
+import { CardDetail } from "./components/CardDetail";
 import { getUserEmail } from "./lib/auth";
 
 function DashboardApp() {
   const { connected, agents, board, schedules, officeMcpServers, firedAgents, vacationedAgents, player } = useDashboard();
   const [view, setView] = useState<View>("fleet");
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const userEmail = getUserEmail();
 
   const handleSelectAgent = (id: string) => {
@@ -62,9 +64,9 @@ function DashboardApp() {
           onViewWallet={(id) => { setSelectedAgent(id); setView("wallet"); }}
         />
       )}
-      {view === "board" && <TaskBoard />}
-      {view === "gantt" && <GanttChart />}
-      {view === "vmodel" && <VModelDiagram />}
+      {view === "board" && <TaskBoard onSelectCard={(id) => setSelectedCardId(id)} />}
+      {view === "gantt" && <GanttChart onSelectCard={(id) => setSelectedCardId(id)} />}
+      {view === "vmodel" && <VModelDiagram onSelectCard={(id) => setSelectedCardId(id)} />}
       {view === "schedules" && <ScheduleView />}
       {view === "marketplace" && <MarketplaceView />}
       {view === "mcp" && <MCPManager />}
@@ -79,6 +81,9 @@ function DashboardApp() {
       )}
       {view === "wallet" && selectedAgent && (
         <WalletPanel agentId={selectedAgent} onBack={() => setView("agent")} />
+      )}
+      {selectedCardId && (
+        <CardDetail cardId={selectedCardId} onClose={() => setSelectedCardId(null)} />
       )}
       <Toasts />
     </div>

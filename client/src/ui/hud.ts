@@ -3465,7 +3465,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         banner.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:500;padding:6px 14px;border-radius:8px;background:rgba(20,20,40,0.92);border:1px solid rgba(74,106,138,0.6);color:#c0e0ff;font-size:13px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(4px);";
         document.body.appendChild(banner);
       }
-      const worldName = this.store.currentWorld.branchName;
+      const worldName = this.store.currentWorld.themeName;
       banner.innerHTML = `🌀 <strong>${esc(worldName)}</strong>`;
       const returnBtn = document.createElement("button");
       returnBtn.textContent = "← Return to HQ";
@@ -7469,11 +7469,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const redeployBtn = document.getElementById("ce-redeploy");
     if (redeployBtn && this.store.currentWorld) {
       redeployBtn.addEventListener("click", () => {
-        const world = this.store.currentWorld!;
-        if (!confirm(`Redeploy "${world.branchName}"? This will rebuild the world on Railway with your latest changes.`)) return;
-        this.store.sendFn?.({ type: "railway_deploy", branchName: world.branchName, repoFullName: "" });
-        this.store.toast("Redeploying world... this may take a minute.");
-        // Close editor so user can watch the world reload
+        this.store.toast("World themes are sandboxed — no redeploy needed.");
         this.store.toggleCodeEditor(false);
       });
     }
@@ -7575,84 +7571,46 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       return;
     }
 
-    const deployments = this.store.deployments;
-
     let html = `<div class="railway-modal-content">`;
     html += `<div class="railway-modal-header">`;
     html += `<span class="railway-modal-title">🌀 WORLDS</span>`;
     html += `<button class="x" id="worlds-close">✕</button>`;
     html += `</div>`;
 
-    // ── World Templates ──
-    if (this.store.worldTemplates.length > 0) {
-      html += `<div style="padding:8px 12px 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">World Templates</div>`;
-      for (const tpl of this.store.worldTemplates) {
-        html += `<div class="railway-project" style="border:1px solid #333;background:#1a1a24;">`;
-        html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px;">`;
-        html += `<span style="font-size:28px;line-height:1;">${esc(tpl.icon)}</span>`;
-        html += `<div style="flex:1;min-width:0;">`;
-        html += `<div style="font-size:14px;font-weight:600;color:#e0e0e0;">${esc(tpl.name)}</div>`;
-        html += `<div style="font-size:11px;color:#888;margin-top:2px;">${esc(tpl.description)}</div>`;
-        html += `</div>`;
-        if (this.store.worldGenerating) {
-          html += `<span style="font-size:11px;color:#e8a838;white-space:nowrap;">⏳ ${esc(this.store.worldGenerating.message)}</span>`;
-        } else {
-          html += `<button class="btn" id="worlds-gen-${esc(tpl.id)}" style="font-size:11px;padding:4px 12px;border:1px solid #4a8a4a;background:#2a4a2a;color:#a0e0a0;white-space:nowrap;cursor:pointer;font-weight:600;">Generate World</button>`;
-        }
-        html += `</div>`;
-        html += `</div>`;
-      }
+    // ── Current World ──
+    if (this.store.currentWorld) {
+      html += `<div style="padding:8px 12px 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Current World</div>`;
+      html += `<div class="railway-project" style="border:1px solid #3a5a3a;background:#1a2a1a;">`;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px;">`;
+      html += `<span style="font-size:28px;line-height:1;">📍</span>`;
+      html += `<div style="flex:1;min-width:0;">`;
+      html += `<div style="font-size:14px;font-weight:600;color:#5ad6a0;">${esc(this.store.currentWorld.themeName)}</div>`;
+      html += `<div style="font-size:11px;color:#888;margin-top:2px;">You are here</div>`;
+      html += `</div>`;
+      html += `<button class="btn" id="worlds-return" style="font-size:11px;padding:4px 12px;border:1px solid #4a8a4a;background:#2a4a2a;color:#a0e0a0;white-space:nowrap;cursor:pointer;font-weight:600;">Return to HQ</button>`;
+      html += `</div>`;
+      html += `</div>`;
       html += `<div style="height:1px;background:#222;margin:8px 0;"></div>`;
     }
 
-    // ── Your Worlds (deployments) ──
-    html += `<div style="padding:0 12px 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Your Worlds</div>`;
-    if (deployments.length === 0) {
-      html += `<div style="padding:20px;text-align:center;color:#888;font-size:14px;">No worlds deployed yet.<br><span style="font-size:12px;">Generate a world from a template above.</span></div>`;
-    } else {
-      for (const dep of deployments) {
-        const statusColor = dep.status.toLowerCase().includes("deploy") || dep.status.toLowerCase().includes("active") || dep.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
-        const isCurrent = this.store.currentWorld?.branchName === dep.branchName;
-        const isUpgraded = dep.assetUpgradeStatus === "ready";
-        const isGenerating = dep.assetUpgradeStatus === "generating" || (this.store.assetUpgradeStatus === "generating" && this.store.assetUpgradeDeploymentId === dep.branchName);
-        html += `<div class="railway-project">`;
-        html += `<div class="railway-project-header">`;
-        html += `<span class="railway-project-name">${esc(dep.branchName)}${isCurrent ? " <span style=\"color:#5ad6a0;font-size:11px;\">● you are here</span>" : ""}${isUpgraded ? " <span style=\"color:#b388ff;font-size:11px;\">✨ AI</span>" : ""}</span>`;
-        if (dep.railwayServiceUrl) {
-          html += `<a class="railway-service-url" href="${esc(dep.railwayServiceUrl)}" target="_blank">open ↗</a>`;
-        }
-        html += `</div>`;
-        html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">`;
-        html += `<span style="font-size:11px;color:${statusColor};">● ${esc(dep.status)}</span>`;
-        if (dep.railwayServiceUrl && !isCurrent) {
-          html += `<button class="btn" id="worlds-enter-${esc(dep.branchName)}" style="font-size:11px;padding:3px 10px;margin-left:auto;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;">🌀 Open Portal</button>`;
-        } else if (isCurrent) {
-          html += `<span style="margin-left:auto;font-size:11px;color:#5ad6a0;">Walk into the green portal to return</span>`;
-        }
-        html += `</div>`;
-
-        // Asset upgrade row
-        if (!isUpgraded && !isGenerating && dep.railwayServiceUrl) {
-          html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #222;margin-top:4px;">`;
-          html += `<span style="font-size:11px;color:#888;">Procedural graphics</span>`;
-          html += `<button class="btn" id="worlds-upgrade-${esc(dep.branchName)}" style="font-size:11px;padding:3px 12px;margin-left:auto;border:1px solid #b388ff;background:#3a2a4a;color:#d0b0ff;font-weight:600;cursor:pointer;">✨ Upgrade — $19.99</button>`;
-          html += `</div>`;
-        } else if (isGenerating) {
-          const prog = this.store.assetUpgradeProgress;
-          const pct = prog?.percent ?? 0;
-          const label = prog?.label ?? "Generating…";
-          html += `<div style="padding:6px 0;border-top:1px solid #222;margin-top:4px;">`;
-          html += `<div style="font-size:11px;color:#b388ff;margin-bottom:4px;">✨ ${esc(label)} ${pct}%</div>`;
-          html += `<div style="width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden;"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#b388ff,#7c4dff);transition:width 0.3s;"></div></div>`;
-          html += `</div>`;
-        } else if (isUpgraded) {
-          html += `<div style="padding:4px 0;border-top:1px solid #222;margin-top:4px;">`;
-          html += `<span style="font-size:11px;color:#b388ff;">✨ AI graphics upgraded</span>`;
-          html += `</div>`;
-        }
-
-        html += `</div>`;
+    // ── Available Worlds ──
+    html += `<div style="padding:0 12px 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Available Worlds</div>`;
+    for (const world of this.store.availableWorlds) {
+      const isCurrent = this.store.currentWorld?.themeId === world.themeId;
+      html += `<div class="railway-project" style="border:1px solid #333;background:#1a1a24;">`;
+      html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px;">`;
+      html += `<span style="font-size:28px;line-height:1;">${esc(world.icon)}</span>`;
+      html += `<div style="flex:1;min-width:0;">`;
+      html += `<div style="font-size:14px;font-weight:600;color:#e0e0e0;">${esc(world.name)}</div>`;
+      html += `<div style="font-size:11px;color:#888;margin-top:2px;">${esc(world.description)}</div>`;
+      html += `</div>`;
+      if (isCurrent) {
+        html += `<span style="font-size:11px;color:#5ad6a0;white-space:nowrap;">● here</span>`;
+      } else {
+        html += `<button class="btn" id="worlds-enter-${esc(world.themeId)}" style="font-size:11px;padding:4px 12px;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;white-space:nowrap;cursor:pointer;font-weight:600;">🌀 Enter</button>`;
       }
+      html += `</div>`;
+      html += `</div>`;
     }
 
     html += `</div>`;
@@ -7664,61 +7622,24 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       this.store.toggleWorldsPanel(false);
     });
 
-    // Wire Generate World buttons (templates)
-    for (const tpl of this.store.worldTemplates) {
-      const btn = document.getElementById(`worlds-gen-${tpl.id}`);
-      if (btn) {
-        btn.addEventListener("click", () => {
-          if (this.net) this.net.send({ type: "generate_world", templateId: tpl.id });
-        });
-      }
+    // Wire Return button
+    const returnBtn = document.getElementById("worlds-return");
+    if (returnBtn) {
+      returnBtn.addEventListener("click", () => {
+        const scene = this.store.sceneRef as any;
+        if (scene?.exitWorld) scene.exitWorld();
+      });
     }
 
-    // Wire Open Portal buttons
-    for (const dep of deployments) {
-      if (!dep.railwayServiceUrl) continue;
-      if (this.store.currentWorld?.branchName === dep.branchName) continue;
-      const btn = document.getElementById(`worlds-enter-${dep.branchName}`);
+    // Wire Enter buttons
+    for (const world of this.store.availableWorlds) {
+      if (this.store.currentWorld?.themeId === world.themeId) continue;
+      const btn = document.getElementById(`worlds-enter-${world.themeId}`);
       if (btn) {
         btn.addEventListener("click", () => {
           const scene = this.store.sceneRef as any;
           if (scene?.openPortal) {
-            scene.openPortal(dep.branchName, dep.railwayServiceUrl!);
-          }
-        });
-      }
-    }
-
-    // Wire Upgrade buttons
-    for (const dep of deployments) {
-      if (!dep.railwayServiceUrl) continue;
-      if (dep.assetUpgradeStatus === "ready" || dep.assetUpgradeStatus === "generating") continue;
-      const upgradeBtn = document.getElementById(`worlds-upgrade-${dep.branchName}`);
-      if (upgradeBtn) {
-        upgradeBtn.addEventListener("click", async () => {
-          // Call Stripe checkout API
-          try {
-            const token = localStorage.getItem("auth_token") ?? "";
-            const res = await fetch("/api/asset-upgrade/checkout", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                deploymentId: dep.branchName,
-                branchName: dep.branchName,
-                repoFullName: dep.repoFullName,
-              }),
-            });
-            const data = await res.json();
-            if (data.url) {
-              window.location.href = data.url;
-            } else {
-              this.store.toast(`Upgrade checkout failed: ${data.error ?? "Unknown error"}`);
-            }
-          } catch (err) {
-            this.store.toast(`Upgrade checkout failed: ${err instanceof Error ? err.message : String(err)}`);
+            scene.openPortal(world.themeId, world.name);
           }
         });
       }

@@ -6,6 +6,9 @@ import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type Agen
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
+import { generateAlleyTileset } from "./alley-tiles";
+import { generateHawaiiTileset } from "./hawaii-tiles";
+import { generateSouthTileset } from "./south-tiles";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getServerByUrl } from "../../../shared/mcp-catalog";
@@ -765,12 +768,10 @@ export class OfficeScene extends Phaser.Scene {
           let walls: Phaser.Tilemaps.TilemapLayer;
           let furniture: Phaser.Tilemaps.TilemapLayer;
           if (this.theme === "world" && this.worldTheme) {
-            map = this.make.tilemap({ key: "map-theme" });
+            map = this.make.tilemap({ key: `map-${this.worldTheme.id}` });
             this.mapRef = map;
-            const tiles = map.addTilesetImage(
-              this.worldTheme.office.tilesetPath.replace(/\.[^.]+$/, "").split("/").pop() ?? "tiles-theme",
-              "tiles-theme",
-            );
+            const tilesetName = this.worldTheme.office.tilesetPath.replace(/\.[^.]+$/, "").split("/").pop() ?? "tiles-theme";
+            const tiles = map.addTilesetImage(tilesetName, "tiles-theme");
             if (!tiles) throw new Error(`Failed to add tileset "tiles-theme" to map — texture may be missing or broken`);
             const floorColor = 0x2a2a2a;
             const bg = this.add.graphics().setDepth(-1);
@@ -2222,40 +2223,45 @@ export class OfficeScene extends Phaser.Scene {
     this.cameras.main.setZoom(this.defaultZoom());
   }
 
-  /** Enter a deployed world — fade out, reconnect WebSocket to the world instance, fade in. */
-  enterWorldPortal(branchName: string, worldUrl: string): void {
+  /** Enter a world theme — fade out, load theme JSON, generate procedural tilesets, restart scene. */
+  async enterWorldPortal(themeId: string, themeName: string): Promise<void> {
     if (this.store.worldTransitioning) return;
     this.store.worldTransitioning = true;
 
-    // Derive WebSocket host from the world URL
-    let host: string;
-    try {
-      const u = new URL(worldUrl);
-      host = u.host;
-    } catch {
-      host = worldUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    }
-
     this.cameras.main.fadeOut(600, 10, 10, 30);
-    this.cameras.main.once("camerafadeoutcomplete", () => {
-      // Reconnect to the world instance
-      const net = this.game.registry.get("net") as Net;
-      net.reconnectToHost(host);
+    this.cameras.main.once("camerafadeoutcomplete", async () => {
+      try {
+        const res = await fetch(`assets/themes/${themeId}.json`);
+        if (!res.ok) throw new Error(`Failed to load theme ${themeId}: ${res.status}`);
+        const theme = await res.json() as WorldTheme;
+        this.registry.set("worldTheme", theme);
 
-      this.store.currentWorld = { branchName, host, url: worldUrl };
-      this.store.worldTransitioning = false;
-      this.store.toggleGitHubPanel(false);
+        // Generate procedural tileset for this theme (boot no longer does this)
+        if (theme.assets?.assetTier !== "ai" && theme.office?.tilesetPath) {
+          if (theme.id === "erics-alley") generateAlleyTileset(this, "tiles-theme");
+          if (theme.id === "hawaii") generateHawaiiTileset(this, "tiles-theme");
+          if (theme.id === "old-south") generateSouthTileset(this, "tiles-theme");
+        }
 
-      // Reset scene state for the new world
-      this.store.reset();
-      this.scene.restart();
+        this.store.currentWorld = { themeId, themeName };
+        this.store.worldTransitioning = false;
+        this.store.toggleGitHubPanel(false);
 
-      this.cameras.main.fadeIn(600, 10, 10, 30);
-      this.store.toast(`Entering world: ${branchName}`);
+        this.store.reset();
+        this.scene.restart();
+
+        this.cameras.main.fadeIn(600, 10, 10, 30);
+        this.store.toast(`Entering world: ${themeName}`);
+      } catch (err) {
+        console.error("[scene] Failed to enter world:", err);
+        this.store.worldTransitioning = false;
+        this.store.toast(`Failed to enter world: ${err instanceof Error ? err.message : String(err)}`);
+        this.cameras.main.fadeIn(600, 10, 10, 30);
+      }
     });
   }
 
-  /** Exit the current world — fade out, reconnect to default host, fade in. */
+  /** Exit the current world — fade out, clear theme, restart scene. */
   exitWorld(): void {
     if (this.store.worldTransitioning) return;
     if (!this.store.currentWorld) return;
@@ -2264,12 +2270,13 @@ export class OfficeScene extends Phaser.Scene {
 
     this.cameras.main.fadeOut(600, 10, 10, 30);
     this.cameras.main.once("camerafadeoutcomplete", () => {
-      const net = this.game.registry.get("net") as Net;
-      net.resetHost();
-
       this.store.currentWorld = null;
       this.store.worldTransitioning = false;
       this.registry.remove("worldTheme");
+
+      // Clean up procedural tileset textures
+      if (this.textures.exists("tiles-theme")) this.textures.remove("tiles-theme");
+      if (this.textures.exists("world-tiles-theme")) this.textures.remove("world-tiles-theme");
 
       this.store.reset();
       this.scene.restart();
@@ -2279,8 +2286,8 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  /** Open a glowing portal near the server racks that leads to a deployed world. */
-  openPortal(branchName: string, worldUrl: string): void {
+  /** Open a glowing portal near the server racks that leads to a world theme. */
+  openPortal(themeId: string, themeName: string): void {
     // Close existing portal if any
     this.closePortal();
 
@@ -2290,7 +2297,7 @@ export class OfficeScene extends Phaser.Scene {
     const px = rack.x * TILE_PX + TILE_PX / 2;
     const py = (rack.y - 2) * TILE_PX + TILE_PX / 2; // 2 tiles above the rack
 
-    this.store.portalTarget = { branchName, url: worldUrl };
+    this.store.portalTarget = { themeId, themeName };
     this.store.toggleGitHubPanel(false);
 
     // Create portal visual: AI sprite if available, else layered glowing circles
@@ -2359,7 +2366,7 @@ export class OfficeScene extends Phaser.Scene {
     this.portalContainer = container;
 
     // Hint text above portal
-    this.portalHint = this.add.text(px, py - 56, `🌀 Walk in to enter\n${branchName}`, {
+    this.portalHint = this.add.text(px, py - 56, `🌀 Walk in to enter\n${themeName}`, {
       fontSize: "12px",
       color: "#c0e0ff",
       align: "center",
@@ -2384,10 +2391,10 @@ export class OfficeScene extends Phaser.Scene {
 
     this.portalCollider = this.physics.add.overlap(this.player, this.portalZone, () => {
       this.closePortal();
-      this.enterWorldPortal(branchName, worldUrl);
+      this.enterWorldPortal(themeId, themeName);
     });
 
-    this.store.toast(`Portal opened — walk in to enter ${branchName}`);
+    this.store.toast(`Portal opened — walk in to enter ${themeName}`);
   }
 
   /** Close and destroy the active portal. */
@@ -8779,14 +8786,8 @@ export class OfficeScene extends Phaser.Scene {
       // server rack — query Railway + GitHub data, or open code editor if inside a world
       if (this.nearestTile(this.serverRackTiles, 150)) {
         if (this.store.currentWorld) {
-          // Inside a deployed world — open code editor for this world's branch
-          this.store.toggleCodeEditor(true);
-          this.store.codeEditorBranch = this.store.currentWorld.branchName;
-          this.store.codeEditorFile = null;
-          this.store.codeEditorPath = "";
-          this.store.codeEditorDir = [];
-          this.store.sendFn?.({ type: "github_list_dir", branchName: this.store.currentWorld.branchName, path: "" });
-          this.store.toast("Opening code editor...");
+          // Inside a world theme — show world info
+          this.store.toast(`Inside world: ${this.store.currentWorld.themeName}`);
         } else {
           const net = this.game.registry.get("net") as Net;
           net.send({ type: "railway_query" });
