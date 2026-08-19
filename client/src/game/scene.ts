@@ -1508,7 +1508,9 @@ export class OfficeScene extends Phaser.Scene {
               }
               if (this.store.roomId === null) return; // room_state not yet received — skip theme check
               const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
-              const desiredTheme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
+              const desiredTheme = this.registry.get("worldTheme")
+                ? "world"
+                : isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
               if (desiredTheme !== this.theme) {
                 console.log("[scene] theme changed — restarting scene");
                 if (desiredTheme === "agentHeights") achievements.unlock("agentHeights_mode");
@@ -1644,7 +1646,9 @@ export class OfficeScene extends Phaser.Scene {
           // to "agentHeights".  Restart if the current room requires a different theme.
           if (this.store.roomId !== null) {
             const isHq2 = this.store.roomId === "hq2" || this.store.isOrgRoom;
-            const desiredTheme = isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
+            const desiredTheme = this.registry.get("worldTheme")
+              ? "world"
+              : isHq2 ? "agentHeights" : (this.store.settings.game.theme === "agentHeights" ? "agentHeights" : "classic");
             if (desiredTheme !== this.theme) {
               console.log(`[scene] ready but theme mismatch: theme=${this.theme} desired=${desiredTheme} (roomId=${this.store.roomId}) — restarting at ${performance.now().toFixed(0)}ms`);
               this.ready = false;
