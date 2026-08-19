@@ -44,7 +44,7 @@ import { HermesClient, PLATFORM_ENV_VAR_MAP } from "./hermes-client.js";
 import { HermesProcessManager, syncHermesEnvFile } from "./hermes-process.js";
 import type { SessionLogger } from "./logger.js";
 import type { Persistence, SaveState } from "./persistence.js";
-import { getProviderConfig } from "./providers/api-config.js";
+import { getProviderConfig, resolveModel } from "./providers/api-config.js";
 import { recordUsage, getMonthlySpend, getUsageCap } from "./usage.js";
 import { supabaseAdmin } from "./supabase.js";
 import { CURATED_AGENTS_SUMMARY } from "../shared/mcp-catalog.js";
@@ -4182,7 +4182,7 @@ export class AgentManager {
             userId: this.userId,
             agentId: rt.info.id,
             agentName: rt.info.name,
-            model: rt.info.model,
+            model: resolveModel(rt.info.model, providerConfig.name),
             provider: providerConfig.name,
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
@@ -5375,7 +5375,7 @@ export class AgentManager {
             userId: this.userId,
             agentId: rt.info.id,
             agentName: rt.info.name,
-            model: rt.info.model,
+            model: resolveModel(rt.info.model, providerConfig.name),
             provider: providerConfig.name,
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,

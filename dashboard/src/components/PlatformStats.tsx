@@ -3,11 +3,12 @@ import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { DollarSign, Users, Activity, TrendingUp, Zap, RefreshCw } from "lucide-react";
+import { DollarSign, Users, Activity, TrendingUp, Zap, RefreshCw, TrendingDown, Wallet } from "lucide-react";
 import { adminApi } from "../lib/admin-api";
 import type {
   OverviewStats, UserTimeseries, RevenueData, UsageStats,
   ConversionFunnel, SubscriptionRow, RealtimeStats, EngagementStats,
+  FinancialMetrics,
 } from "../lib/admin-api";
 
 const CHART_COLORS = ["#58c866", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
@@ -74,12 +75,13 @@ export function PlatformStats() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([]);
   const [realtime, setRealtime] = useState<RealtimeStats | null>(null);
   const [engagement, setEngagement] = useState<EngagementStats | null>(null);
+  const [financials, setFinancials] = useState<FinancialMetrics | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadAll = useCallback(async () => {
     try {
       setError(null);
-      const [ov, us, rev, usg, conv, subs, rt, eng] = await Promise.all([
+      const [ov, us, rev, usg, conv, subs, rt, eng, fin] = await Promise.all([
         adminApi.overview(),
         adminApi.users(30),
         adminApi.revenue(12),
@@ -88,6 +90,7 @@ export function PlatformStats() {
         adminApi.subscriptions(),
         adminApi.realtime(),
         adminApi.engagement(),
+        adminApi.financials(30),
       ]);
       setOverview(ov);
       setUsers(us);
@@ -97,6 +100,7 @@ export function PlatformStats() {
       setSubscriptions(subs);
       setRealtime(rt);
       setEngagement(eng);
+      setFinancials(fin);
     } catch (err: any) {
       setError(err.message ?? "Failed to load stats");
     } finally {
@@ -160,7 +164,7 @@ export function PlatformStats() {
   })) ?? [];
   const revenueHistory = revenue?.history.map(h => ({ month: h.month, mrr: Number(h.mrr.toFixed(2)) })) ?? [];
   const tierData = revenue?.byTier.map(t => ({ name: t.tier, value: t.mrr })) ?? [];
-  const modelData = usage?.byModel.slice(0, 8).map(m => ({ name: m.model, spend: Number(m.spend.toFixed(2)), calls: m.calls })) ?? [];
+  const modelData = usage?.byModel.slice(0, 8).map(m => ({ name: m.model.replace(/-\d{8}$/, "").replace(/^claude-sonnet-4$/, "claude-sonnet"), spend: Number(m.spend.toFixed(2)), calls: m.calls })) ?? [];
   const funnelData = conversion ? [
     { stage: "Registered", value: conversion.totalUsers, fill: CHART_COLORS[0] },
     { stage: "Entrance Paid", value: conversion.entrancePaid, fill: CHART_COLORS[1] },
@@ -168,6 +172,7 @@ export function PlatformStats() {
   ] : [];
   const tierDistData = conversion?.tierDistribution.map(t => ({ name: t.tier, value: t.count })) ?? [];
   const agentStatusData = realtime?.agentsByStatus.map(s => ({ name: s.status, value: s.count })) ?? [];
+  const pnlData = financials?.dailyPnl.map(d => ({ date: fmtDate(d.date), pnl: Number(d.pnl.toFixed(2)), revenue: Number(d.revenue.toFixed(2)), spend: Number(d.spend.toFixed(2)) })) ?? [];
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -195,6 +200,55 @@ export function PlatformStats() {
         <KPICard icon={Zap} label="LLM Spend (30d)" value={fmtMoney(overview?.totalLlmSpend ?? 0)} sub={`Margin ${fmtPct(overview?.grossMarginPct ?? 0)}`} />
         <KPICard icon={TrendingUp} label="ARPU" value={fmtMoney(overview?.arpu ?? 0)} sub={`$${(overview?.grossMargin ?? 0).toFixed(2)} gross margin`} />
         <KPICard icon={Users} label="Online Now" value={fmtNum(overview?.concurrentUsers ?? 0)} sub={`${overview?.concurrentAgents ?? 0} agents active`} />
+      </div>
+
+      {/* Financial KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <KPICard icon={DollarSign} label="Revenue (30d)" value={fmtMoney(financials?.totalRevenue ?? 0)} sub={`MRR ${fmtMoney(financials?.mrr ?? 0)}`} />
+        <KPICard icon={Wallet} label="Gross Profit" value={fmtMoney(financials?.grossProfit ?? 0)} sub={`Margin ${fmtPct(financials?.grossMarginPct ?? 0)}`} />
+        <KPICard icon={TrendingUp} label="EBITDA" value={fmtMoney(financials?.ebitda ?? 0)} sub={`Margin ${fmtPct(financials?.ebitdaMarginPct ?? 0)}`} />
+        <KPICard icon={DollarSign} label="Net Profit" value={fmtMoney(financials?.netProfit ?? 0)} sub="No debt/taxes" />
+        <KPICard icon={Wallet} label="Fixed Costs" value={fmtMoney(financials?.fixedCosts ?? 0)} sub="$5/mo Railway" />
+        <KPICard icon={TrendingDown} label="Burn Rate" value={fmtMoney(financials?.burnRate ?? 0)} sub={financials && financials.ebitda >= 0 ? "Profitable" : "Monthly burn"} />
+      </div>
+
+      {/* P&L Table + Daily P&L Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Profit & Loss Summary (30d)">
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-muted">MRR (monthly)</span><span className="text-text font-semibold">{fmtMoney(financials?.mrr ?? 0)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">One-time Revenue</span><span className="text-text">{fmtMoney(financials?.oneTimeRevenue ?? 0)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Total Revenue (period)</span><span className="text-text font-semibold">{fmtMoney(financials?.totalRevenue ?? 0)}</span></div>
+            <div className="flex justify-between border-t border-border pt-2"><span className="text-muted">LLM Inference Spend</span><span className="text-status-error">{fmtMoney(financials?.llmSpend ?? 0)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Gross Profit</span><span className="text-text font-semibold">{fmtMoney(financials?.grossProfit ?? 0)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Gross Margin</span><span className="text-text">{fmtPct(financials?.grossMarginPct ?? 0)}</span></div>
+            <div className="flex justify-between border-t border-border pt-2"><span className="text-muted">Fixed Costs (Railway)</span><span className="text-status-error">{fmtMoney(financials?.fixedCosts ?? 0)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">EBITDA</span><span className={`font-bold ${(financials?.ebitda ?? 0) >= 0 ? "text-accent" : "text-status-error"}`}>{fmtMoney(financials?.ebitda ?? 0)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">EBITDA Margin</span><span className="text-text">{fmtPct(financials?.ebitdaMarginPct ?? 0)}</span></div>
+            <div className="flex justify-between border-t border-border pt-2"><span className="text-muted">Net Profit</span><span className={`font-bold ${(financials?.netProfit ?? 0) >= 0 ? "text-accent" : "text-status-error"}`}>{fmtMoney(financials?.netProfit ?? 0)}</span></div>
+            {financials && financials.burnRate > 0 && (
+              <div className="flex justify-between"><span className="text-muted">Burn Rate</span><span className="text-status-error">{fmtMoney(financials.burnRate)}/mo</span></div>
+            )}
+          </div>
+        </ChartCard>
+
+        <ChartCard title="Daily P&L (30d)">
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={pnlData}>
+              <defs>
+                <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#58c866" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#58c866" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3e" />
+              <XAxis dataKey="date" tick={{ fill: "#6b7280", fontSize: 11 }} />
+              <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={fmtMoney} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => `$${v.toFixed(2)}`} />
+              <Area type="monotone" dataKey="pnl" stroke="#58c866" fill="url(#pnlGrad)" strokeWidth={2} name="P&L" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartCard>
       </div>
 
       {/* Charts row 1: DAU + Signups */}

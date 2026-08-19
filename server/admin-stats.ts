@@ -694,6 +694,76 @@ export async function getRealtimeStats(tenants: TenantManager): Promise<Realtime
   };
 }
 
+// ── Financials ───────────────────────────────────────────────────────────
+
+export interface FinancialMetrics {
+  mrr: number;
+  oneTimeRevenue: number;
+  totalRevenue: number;
+  llmSpend: number;
+  grossProfit: number;
+  grossMarginPct: number;
+  fixedCosts: number;
+  ebitda: number;
+  ebitdaMarginPct: number;
+  netProfit: number;
+  burnRate: number;
+  dailyPnl: { date: string; revenue: number; spend: number; pnl: number }[];
+}
+
+const FIXED_COST_MONTHLY = 5; // Railway server, $5/mo
+
+export async function getFinancialMetrics(days: number): Promise<FinancialMetrics> {
+  if (!isSupabaseConfigured) {
+    return { mrr: 0, oneTimeRevenue: 0, totalRevenue: 0, llmSpend: 0, grossProfit: 0, grossMarginPct: 0, fixedCosts: 0, ebitda: 0, ebitdaMarginPct: 0, netProfit: 0, burnRate: 0, dailyPnl: [] };
+  }
+
+  const [revenue, usage] = await Promise.all([
+    getRevenueBreakdown(),
+    getUsageStats(days),
+  ]);
+
+  const mrr = revenue.mrr;
+  const oneTimeRevenue = revenue.oneTimeRevenue;
+  // Pro-rate one-time revenue over the period for the period total
+  const periodRevenue = (mrr * (days / 30)) + oneTimeRevenue;
+  const llmSpend = usage.totalSpend;
+  const grossProfit = periodRevenue - llmSpend;
+  const grossMarginPct = periodRevenue > 0 ? (grossProfit / periodRevenue) * 100 : 0;
+  const fixedCosts = FIXED_COST_MONTHLY * (days / 30);
+  const ebitda = grossProfit - fixedCosts;
+  const ebitdaMarginPct = periodRevenue > 0 ? (ebitda / periodRevenue) * 100 : 0;
+  const netProfit = ebitda; // No debt/taxes at this stage
+  const burnRate = ebitda < 0 ? Math.abs(ebitda) : 0;
+
+  // Daily P&L trend
+  const dailySpendMap = new Map(usage.dailySpend.map(d => [d.date, d.value]));
+  const dailyPnl: { date: string; revenue: number; spend: number; pnl: number }[] = [];
+  const dailyRevenue = mrr / 30; // daily MRR pro-rate
+  for (let d = new Date(Date.now() - days * 24 * 60 * 60 * 1000); d <= new Date(); d.setDate(d.getDate() + 1)) {
+    const key = toDayKey(d);
+    const spend = dailySpendMap.get(key) ?? 0;
+    const dailyFixed = FIXED_COST_MONTHLY / 30;
+    const pnl = dailyRevenue - spend - dailyFixed;
+    dailyPnl.push({ date: key, revenue: dailyRevenue, spend, pnl });
+  }
+
+  return {
+    mrr,
+    oneTimeRevenue,
+    totalRevenue: periodRevenue,
+    llmSpend,
+    grossProfit,
+    grossMarginPct,
+    fixedCosts,
+    ebitda,
+    ebitdaMarginPct,
+    netProfit,
+    burnRate,
+    dailyPnl,
+  };
+}
+
 // ── Engagement ───────────────────────────────────────────────────────────
 
 export async function getEngagementStats(): Promise<EngagementStats> {

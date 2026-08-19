@@ -110,6 +110,21 @@ export interface EngagementStats {
   scheduledTasks: number;
 }
 
+export interface FinancialMetrics {
+  mrr: number;
+  oneTimeRevenue: number;
+  totalRevenue: number;
+  llmSpend: number;
+  grossProfit: number;
+  grossMarginPct: number;
+  fixedCosts: number;
+  ebitda: number;
+  ebitdaMarginPct: number;
+  netProfit: number;
+  burnRate: number;
+  dailyPnl: { date: string; revenue: number; spend: number; pnl: number }[];
+}
+
 export const adminApi = {
   overview: () => fetchAdmin("/api/admin/stats/overview") as Promise<OverviewStats>,
   users: (days = 30) => fetchAdmin(`/api/admin/stats/users?days=${days}`) as Promise<UserTimeseries>,
@@ -119,4 +134,5 @@ export const adminApi = {
   subscriptions: () => fetchAdmin("/api/admin/stats/subscriptions") as Promise<SubscriptionRow[]>,
   realtime: () => fetchAdmin("/api/admin/stats/realtime") as Promise<RealtimeStats>,
   engagement: () => fetchAdmin("/api/admin/stats/engagement") as Promise<EngagementStats>,
+  financials: (days = 30) => fetchAdmin(`/api/admin/stats/financials?days=${days}`) as Promise<FinancialMetrics>,
 };

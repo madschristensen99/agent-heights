@@ -31,6 +31,7 @@ import { getUsageSummary } from "./usage.js";
 import {
   getOverviewStats, getUserTimeseries, getRevenueBreakdown, getRevenueHistory,
   getUsageStats, getConversionFunnel, getSubscriptions, getRealtimeStats, getEngagementStats,
+  getFinancialMetrics,
 } from "./admin-stats.js";
 import { getProviderConfig } from "./providers/api-config.js";
 import { applySecurityHeaders, escapeHtml } from "./security.js";
@@ -507,6 +508,11 @@ const server = createServer((req, res) => {
           res.end(JSON.stringify(stats));
         } else if (path === "/api/admin/stats/engagement") {
           const stats = await getEngagementStats();
+          res.writeHead(200, headers);
+          res.end(JSON.stringify(stats));
+        } else if (path === "/api/admin/stats/financials") {
+          const days = Math.min(parseInt(params.get("days") ?? "30", 10) || 30, 365);
+          const stats = await getFinancialMetrics(days);
           res.writeHead(200, headers);
           res.end(JSON.stringify(stats));
         } else {

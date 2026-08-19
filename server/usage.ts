@@ -1,5 +1,6 @@
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 import { calculateCost } from "./providers/pricing.js";
+import { resolveModel, type ProviderName } from "./providers/api-config.js";
 import { SUBSCRIPTION_TIERS, ENTRY_FEE_USAGE_CREDIT, type SubscriptionTier } from "../shared/types.js";
 
 export interface UsageRecord {
@@ -25,8 +26,9 @@ export interface UsageRecord {
 export async function recordUsage(rec: UsageRecord): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
+    const resolvedModel = resolveModel(rec.model, rec.provider as ProviderName);
     const totalCost = rec.totalCost || calculateCost(
-      rec.model,
+      resolvedModel,
       rec.inputTokens,
       rec.outputTokens,
       rec.cacheReadTokens ?? 0,
