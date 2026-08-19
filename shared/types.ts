@@ -444,6 +444,19 @@ export interface ThemeDialect {
   emotes?: string[];
 }
 
+/** A faction in a themed world's conflict system. */
+export interface ThemeConflictFaction {
+  name: string;
+  color: number;
+  spriteKey: string;
+}
+
+/** Conflict configuration for a themed world — two factions at war. */
+export interface ThemeConflict {
+  factionA: ThemeConflictFaction;
+  factionB: ThemeConflictFaction;
+}
+
 /** Asset fidelity tier — procedural (free) or AI-generated (paid upgrade). */
 export type AssetTier = "procedural" | "ai";
 
@@ -491,6 +504,7 @@ export interface WorldTheme {
   dialect?: ThemeDialect;
   statusColors?: ThemeStatusColors;
   emotes?: Record<string, number>;
+  conflict?: ThemeConflict;
   assets: ThemeAssets;
 }
 
@@ -643,6 +657,10 @@ export interface TaskCard {
   statusChangedAt?: number;
   /** If true on a goal card, the user will manually decompose instead of the Office Manager. */
   manualDecompose?: boolean;
+  /** Number of times this card has been sent back for rework by a manager (circuit breaker). */
+  reviewDepth?: number;
+  /** Timestamp of the last stale-review watchdog escalation (prevents re-firing). */
+  lastWatchdogFiredAt?: number;
   /** Decomposition score (set after all subtasks complete on a manually decomposed goal). */
   decompositionScore?: DecompositionScore | null;
 }

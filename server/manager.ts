@@ -145,6 +145,7 @@ const MAX_DUPLICATE_TOOL_CALLS = 3; // Abort after 3 identical tool calls (was 5
 const MAX_CALLS_PER_TOOL = 10; // Abort after 10 calls to the same tool name (catches varied-input loops)
 const MAX_MCP_TOOL_CALLS = 20; // Total MCP-originated tool calls per task before aborting
 const MAX_REWORKS = 3; // Maximum rework cycles before warning the manager
+const MAX_REVIEW_CHAIN_DEPTH = 3; // Auto-approve after this many review cycles on the same card
 
 /** Patterns that indicate a transient (retryable) failure — rate limit, timeout, API hang. */
 const TRANSIENT_FAILURE_PATTERNS = [
@@ -180,6 +181,22 @@ function extractOriginalTask(task: string): string {
     current = match[1].replace(/\\"/g, '"');
   }
   return current;
+}
+
+/** Strip nested review/rework/task-completion text from a task string.
+ *  Review tasks accumulate nesting like "X completed their task: "Y completed their task: "Z..."".
+ *  This extracts the innermost actual task text, capping at maxLen. */
+function stripNestedTaskText(task: string, maxLen = 200): string {
+  let current = extractOriginalTask(task);
+  // Also strip common review-task wrappers that aren't caught by extractOriginalTask
+  current = current
+    .replace(/^.+?(?:completed|failed) their task:\s*"/i, "")
+    .replace(/^.+?sent you a message\. Review it and respond if needed:\s*\n\n"/i, "")
+    .replace(/^.+?waiting for review.*?Review it now:\s*\n\nTask:\s*"/i, "")
+    .replace(/^A task has been waiting for review.*?Task:\s*"/is, "");
+  // Trim trailing quote/period artifacts
+  current = current.replace(/[".]?\s*$/, "").trim();
+  return current.slice(0, maxLen) || task.slice(0, maxLen);
 }
 
 /** Validate a 5-field cron expression and return a specific error message. */
@@ -541,6 +558,7 @@ export class AgentManager {
 
   private isUserConnectedFn: () => boolean;
   private dialectSuffix: string | null = null;
+  private dialectStyle: string | null = null;
   public onTaskComplete: ((agentId: string, success: boolean, durationMin: number, taskType: string) => void) | null = null;
 
   constructor(
@@ -566,6 +584,7 @@ export class AgentManager {
         const theme = JSON.parse(readFileSync(themePath, "utf8")) as WorldTheme;
         if (theme.dialect?.systemPromptSuffix) {
           this.dialectSuffix = theme.dialect.systemPromptSuffix;
+          this.dialectStyle = theme.dialect.chatStyle ?? null;
           console.log(`[manager] World dialect loaded: ${theme.dialect.chatStyle ?? theme.id}`);
         }
       }
@@ -3208,6 +3227,11 @@ export class AgentManager {
     return this.dialectSuffix;
   }
 
+  /** Get the world dialect chat style identifier (e.g. "street_urban"). */
+  getDialectStyle(): string | null {
+    return this.dialectStyle;
+  }
+
   /** Get an agent's current log entries (for log history on subscribe). */
   getAgentLogs(agentId: string): LogEntry[] {
     const rt = this.agents.get(agentId);
@@ -3510,17 +3534,30 @@ export class AgentManager {
       const age = now - changedAt;
       if (age < AgentManager.STALE_REVIEW_MS) continue;
 
+      // Circuit breaker: if this card has already been through too many review cycles, auto-approve
+      if ((card.reviewDepth ?? 0) >= MAX_REVIEW_CHAIN_DEPTH) {
+        this.log({ info: { name: "System" } } as AgentRuntime, "status", `Stale review watchdog: card "${card.title.slice(0, 60)}" has reviewDepth ${card.reviewDepth} — auto-approving to break loop.`);
+        this.broadcast({ type: "toast", text: `⚠️ "${card.title.slice(0, 40)}" auto-approved after ${card.reviewDepth} review cycles.` });
+        this.completeCard(card.id);
+        continue;
+      }
+
+      // Don't re-escalate if we already fired the watchdog recently (within 2x STALE_REVIEW_MS)
+      const lastFired = card.lastWatchdogFiredAt ?? 0;
+      if (lastFired && (now - lastFired) < AgentManager.STALE_REVIEW_MS * 2) continue;
+
       // Try to assign to the Office Manager for review
       const officeManager = this.agents.get(OFFICE_MANAGER_ID);
       if (officeManager && officeManager.info.status !== "thinking" && officeManager.info.status !== "working" && officeManager.info.status !== "waiting") {
-        const reviewTask = `A task has been waiting for review for ${Math.round(age / 60000)}min and no manager has picked it up. Review it now:\n\nTask: "${card.title}"\n\nEnd your response with APPROVED (if acceptable) or NEEDS REWORK: <feedback>.`;
+        const reviewTask = `A task has been waiting for review for ${Math.round(age / 60000)}min and no manager has picked it up. Review it now:\n\nTask: "${stripNestedTaskText(card.title)}"\n\nEnd your response with APPROVED (if acceptable) or NEEDS REWORK: <feedback>.`;
         this.log(officeManager, "status", `Stale review watchdog: auto-assigning review for "${card.title.slice(0, 60)}" (waiting ${Math.round(age / 60000)}min).`);
-        this.assign(officeManager.info.id, reviewTask, undefined, card.id, undefined, { agentId: card.originalAgentId ?? "", agentName: "System", originalTask: card.description, cardId: card.id });
+        this.assign(officeManager.info.id, reviewTask, undefined, card.id, undefined, { agentId: card.originalAgentId ?? "", agentName: "System", originalTask: stripNestedTaskText(card.description, 300), cardId: card.id });
       } else {
         // Office Manager is busy — notify the user
         this.broadcast({ type: "toast", text: `⚠️ "${card.title.slice(0, 40)}" has been waiting for review for ${Math.round(age / 60000)}min — the Office Manager is busy. Consider reviewing manually.` });
       }
-      // Update statusChangedAt so we don't re-escalate every tick
+      // Track when we last fired to prevent re-escalation every tick
+      card.lastWatchdogFiredAt = now;
       card.statusChangedAt = now;
       this.persistBoard();
     }
@@ -4077,7 +4114,8 @@ export class AgentManager {
           if (!target) return `Recipient "${recipientFolder}" not found in the office. Check your colleagues' folder names in the roster above.`;
           const sender = this.agentByFolder(fromFolder);
           const senderName = sender?.info.name ?? fromFolder;
-          const reviewTask = `${senderName} sent you a message. Review it and respond if needed:\n\n"${message}"`;
+          const cleanMessage = stripNestedTaskText(message, 500);
+          const reviewTask = `${senderName} sent you a message. Review it and respond if needed:\n\n"${cleanMessage}"`;
           if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "waiting") {
             this.assign(target.info.id, reviewTask);
             return `Message queued for ${target.info.name} — they're currently busy and will process your message when they finish their current task.`;
@@ -4910,11 +4948,31 @@ export class AgentManager {
     if (reworkMatch) {
       const feedback = reworkMatch[1].trim().slice(0, 500) || "No specific feedback provided.";
       target.reworkCount += 1;
+      // Circuit breaker: track review depth on the card and auto-approve after MAX_REVIEW_CHAIN_DEPTH
+      const card = ctx.cardId ? this.board.get(ctx.cardId) : null;
+      const reviewDepth = (card?.reviewDepth ?? 0) + 1;
+      if (card) {
+        card.reviewDepth = reviewDepth;
+        this.persistBoard();
+      }
+      if (reviewDepth > MAX_REVIEW_CHAIN_DEPTH) {
+        this.log(mgr, "status", `Review chain depth ${reviewDepth} exceeded limit (${MAX_REVIEW_CHAIN_DEPTH}) — auto-approving ${ctx.agentName}'s work to break the loop.`);
+        this.broadcast({ type: "toast", text: `⚠️ ${ctx.agentName}'s task auto-approved after ${reviewDepth} review cycles — breaking review loop.` });
+        target.reworkCount = 0;
+        if (ctx.cardId) {
+          const c = this.board.get(ctx.cardId);
+          if (c && (c.status === "backlog" || c.status === "review_pending")) {
+            this.completeCard(ctx.cardId);
+          }
+        }
+        this.releasePendingHandoff(ctx.agentId);
+        return;
+      }
       const reworkWarning = target.reworkCount >= MAX_REWORKS
         ? `\n\n⚠️ This is rework attempt #${target.reworkCount} — the maximum allowed. If this attempt fails, the task will be abandoned.`
         : `\n\n(Rework attempt #${target.reworkCount} of ${MAX_REWORKS}.)`;
       const reworkTask = `${ctx.agentName}, your work on the following task was reviewed by ${mgr.info.name} and needs revision:\n\nOriginal task: "${extractOriginalTask(ctx.originalTask).slice(0, 300)}"\n\nManager's feedback: ${feedback}\n\nPlease redo the task addressing this feedback.${reworkWarning}`;
-      this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback (rework #${target.reworkCount}).`);
+      this.log(mgr, "status", `Review verdict: NEEDS REWORK — sending ${ctx.agentName} back with feedback (rework #${target.reworkCount}, chain depth ${reviewDepth}).`);
       this.broadcast({ type: "toast", text: `${mgr.info.name} requested rework from ${ctx.agentName}.` });
       // Discard any pending handoff — the rework will re-trigger it when complete
       this.pendingHandoffs.delete(ctx.agentId);
@@ -5032,8 +5090,8 @@ export class AgentManager {
     const isDevopsTarget = target.info.role === "devops";
     const handoffTask = [
       `${rt.info.name} finished a task and handed the result to you.`,
-      `Their task was: ${task}`,
-      result ? `Their report:\n${result.slice(0, 2000)}` : "",
+      `Their task was: ${stripNestedTaskText(task, 300)}`,
+      result ? `Their report:\n${stripNestedTaskText(result, 500)}` : "",
       `Their workspace: ${workerWs}`,
       isDevopsTarget
         ? `You have read access to their workspace. If you need to deploy their code, you can deploy directly from ${workerWs} using your Railway tools or bash commands. Do not copy files unless necessary — deploy from their workspace path.`
@@ -5103,8 +5161,8 @@ export class AgentManager {
         ts: Date.now(),
         from: rt.info.name,
         message: failed
-          ? `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}`
-          : `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}`,
+          ? `${rt.info.name} failed their task: "${stripNestedTaskText(task)}". Error: ${result.slice(0, 200)}`
+          : `${rt.info.name} completed their task: "${stripNestedTaskText(task)}". Result: ${result.slice(0, 200)}`,
       }) + "\n";
       import("node:fs/promises").then(({ appendFile, mkdir }) => {
         mkdir(dirname(mgrInbox), { recursive: true }).then(() =>
@@ -5121,14 +5179,14 @@ export class AgentManager {
             ? ` Note: This was a rework attempt (the original work was previously deemed insufficient). Rework attempt #${rt.reworkCount} of ${MAX_REWORKS}.`
             : "";
           if (transient) {
-            reviewTask = `${rt.info.name} failed their task: "${task.slice(0, 200)}". The failure was due to a transient issue: ${result.slice(0, 200)}. The task was NOT completed.${reworkNote} Use NEEDS REWORK with "Retry the same task — the previous attempt failed due to a transient issue (rate limit/timeout)." unless you intentionally want to abandon this task. Use APPROVED only if you want to accept the failure and stop retrying.`;
+            reviewTask = `${rt.info.name} failed their task: "${stripNestedTaskText(task)}". The failure was due to a transient issue: ${result.slice(0, 200)}. The task was NOT completed.${reworkNote} Use NEEDS REWORK with "Retry the same task — the previous attempt failed due to a transient issue (rate limit/timeout)." unless you intentionally want to abandon this task. Use APPROVED only if you want to accept the failure and stop retrying.`;
           } else {
-            reviewTask = `${rt.info.name} failed their task: "${task.slice(0, 200)}". Error: ${result.slice(0, 200)}.${reworkNote} Review the situation and decide if any action is needed. Use APPROVED only if the failure is acceptable and no further work is needed. Use NEEDS REWORK: <specific feedback for the agent> if the agent should retry with your feedback. A failed task means the work was NOT done — approving it means accepting incomplete work.`;
+            reviewTask = `${rt.info.name} failed their task: "${stripNestedTaskText(task)}". Error: ${result.slice(0, 200)}.${reworkNote} Review the situation and decide if any action is needed. Use APPROVED only if the failure is acceptable and no further work is needed. Use NEEDS REWORK: <specific feedback for the agent> if the agent should retry with your feedback. A failed task means the work was NOT done — approving it means accepting incomplete work.`;
           }
         } else {
-          reviewTask = `${rt.info.name} completed their task: "${task.slice(0, 200)}". Result: ${result.slice(0, 500)}. Review their work and decide if any follow-up is needed. End your response with either APPROVED (if the work is acceptable) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`;
+          reviewTask = `${rt.info.name} completed their task: "${stripNestedTaskText(task)}". Result: ${result.slice(0, 200)}. Review their work and decide if any follow-up is needed. End your response with either APPROVED (if the work is acceptable) or NEEDS REWORK: <specific feedback for the agent> (if the agent should retry with your feedback).`;
         }
-        this.assign(mgr.info.id, reviewTask, undefined, undefined, undefined, { agentId: rt.info.id, agentName: rt.info.name, originalTask: task, cardId: rt.cardId });
+        this.assign(mgr.info.id, reviewTask, undefined, undefined, undefined, { agentId: rt.info.id, agentName: rt.info.name, originalTask: stripNestedTaskText(task, 300), cardId: rt.cardId });
       }
     }
 

@@ -25,7 +25,7 @@ export interface UsageRecord {
 export async function recordUsage(rec: UsageRecord): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
-    const totalCost = rec.totalCost ?? calculateCost(
+    const totalCost = rec.totalCost || calculateCost(
       rec.model,
       rec.inputTokens,
       rec.outputTokens,
