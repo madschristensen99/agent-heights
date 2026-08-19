@@ -1,6 +1,6 @@
 import { useDashboard } from "../lib/store";
 import type { TaskCard, TaskPhase } from "../../shared/types";
-import { GitBranch } from "lucide-react";
+import { GitBranch, ChevronRight, AlertTriangle } from "lucide-react";
 
 const PHASES: TaskPhase[] = ["requirements", "design", "implementation", "verification", "done"];
 
@@ -12,8 +12,16 @@ const PHASE_STYLES: Record<string, { color: string; bg: string; border: string }
   done: { color: "#3b82f6", bg: "rgba(59,130,246,0.1)", border: "border-[#3b82f6]" },
 };
 
-export function VModelDiagram() {
-  const { board, agents } = useDashboard();
+const GRADE_COLORS: Record<string, string> = {
+  S: "text-amber-400", A: "text-green-400", B: "text-blue-400", C: "text-yellow-400", D: "text-red-400",
+};
+
+interface VModelDiagramProps {
+  onSelectCard?: (id: string) => void;
+}
+
+export function VModelDiagram({ onSelectCard }: VModelDiagramProps) {
+  const { board, agents, phaseGates, capabilityGaps, decompositionScores, send } = useDashboard();
 
   const cards = [...board].sort((a, b) => a.createdAt - b.createdAt);
   const agentName = (id: string | null) => id ? agents.get(id)?.name ?? "?" : "—";
@@ -32,6 +40,9 @@ export function VModelDiagram() {
     const isGoal = c.type === "goal";
     const gateIcon = c.status === "done" ? "✓" : c.status === "review_pending" ? "⊘" : "→";
     const gateColor = c.status === "done" ? "text-green-400" : c.status === "review_pending" ? "text-red-400" : "text-muted";
+    const score = decompositionScores.get(c.id) ?? c.decompositionScore;
+    const cardPhaseGates = phaseGates.filter((g) => g.cardId === c.id);
+    const lastGate = cardPhaseGates[cardPhaseGates.length - 1];
 
     return (
       <div
@@ -39,23 +50,53 @@ export function VModelDiagram() {
         className={`rounded-lg p-2.5 border-l-2 ${style.border} group cursor-pointer hover:bg-bg-hover transition-colors`}
         style={{ backgroundColor: style.bg }}
         title={c.description ?? c.title}
+        onClick={() => onSelectCard?.(c.id)}
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-gray-200 flex-1 truncate">
             {isGoal && <span className="text-amber-400 mr-1">◆</span>}
             {c.title.slice(0, 50)}
           </span>
-          <span className={`text-sm font-bold ${gateColor} flex-shrink-0`}>{gateIcon}</span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {score && (
+              <span className={`text-[10px] font-bold ${GRADE_COLORS[score.grade] ?? "text-gray-300"}`} title={`Score: ${score.overall}/100`}>
+                {score.grade}
+              </span>
+            )}
+            {lastGate && (
+              <span
+                className={`text-[10px] ${lastGate.approved ? "text-green-400" : "text-red-400"}`}
+                title={`Gate ${lastGate.approved ? "approved" : "blocked"} by ${lastGate.reviewerName}`}
+              >
+                {lastGate.approved ? "✓" : "✗"}
+              </span>
+            )}
+            <span className={`text-sm font-bold ${gateColor}`}>{gateIcon}</span>
+          </div>
         </div>
-        <div className="text-[10px] text-muted mt-0.5">{agentName(c.assignedAgentId)}</div>
+        <div className="text-[10px] text-muted mt-0.5 flex items-center gap-2">
+          <span>{agentName(c.assignedAgentId)}</span>
+          {c.progress != null && c.progress > 0 && <span>{c.progress}%</span>}
+        </div>
         {c.completionCriteria && c.completionCriteria.length > 0 && (
           <div className="mt-1.5 space-y-0.5">
-            {c.completionCriteria.map((cr) => (
+            {c.completionCriteria.slice(0, 3).map((cr) => (
               <div key={cr.id} className={`text-[10px] ${cr.checked ? "text-green-400 line-through opacity-70" : "text-gray-300"}`}>
                 {cr.checked ? "✓" : "○"} {cr.text}
               </div>
             ))}
+            {c.completionCriteria.length > 3 && (
+              <div className="text-[10px] text-muted">+{c.completionCriteria.length - 3} more</div>
+            )}
           </div>
+        )}
+        {c.status !== "done" && phase !== "done" && (
+          <button
+            onClick={(e) => { e.stopPropagation(); send({ type: "advance_phase", cardId: c.id }); }}
+            className="mt-1.5 flex items-center gap-1 text-[10px] text-muted hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <ChevronRight size={10} /> Advance Phase
+          </button>
         )}
       </div>
     );
@@ -93,8 +134,33 @@ export function VModelDiagram() {
         <div className="flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1 text-green-400"><span>✓</span> Gate Passed</span>
           <span className="flex items-center gap-1 text-red-400"><span>⊘</span> Gate Blocked</span>
+          {capabilityGaps.length > 0 && (
+            <span className="flex items-center gap-1 text-yellow-400">
+              <AlertTriangle size={12} /> {capabilityGaps.length} Gap{capabilityGaps.length > 1 ? "s" : ""}
+            </span>
+          )}
         </div>
       </div>
+
+      {capabilityGaps.length > 0 && (
+        <div className="px-6 py-2 bg-yellow-500/5 border-b border-yellow-500/20">
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle size={14} className="text-yellow-400" />
+            <span className="text-xs font-semibold text-yellow-400">Capability Gaps</span>
+          </div>
+          <div className="space-y-1">
+            {capabilityGaps.map((gap, i) => (
+              <div key={i} className="text-xs text-gray-400">
+                <span className="text-yellow-400 font-medium">{gap.skill}</span>
+                <span className="text-muted mx-1">·</span>
+                <span>required by {gap.requiredBy}</span>
+                <span className="text-muted mx-1">·</span>
+                <span className="text-gray-500">{gap.suggestion}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto px-6 py-4">
         <div className="flex gap-10 min-h-full">

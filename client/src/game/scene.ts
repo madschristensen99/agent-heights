@@ -6,9 +6,9 @@ import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, type CharAppearance, type Agen
 import { Grid, findPath, type Tile } from "./path";
 import { WorldLayer } from "./world";
 import { BloomPipeline, ColorGradePipeline, DOFPipeline } from "./shaders";
-import { generateAlleyTileset } from "./alley-tiles";
-import { generateHawaiiTileset } from "./hawaii-tiles";
-import { generateSouthTileset } from "./south-tiles";
+import { generateAlleyTileset, generateAlleyWorldTiles } from "./alley-tiles";
+import { generateHawaiiTileset, generateHawaiiWorldTiles } from "./hawaii-tiles";
+import { generateSouthTileset, generateSouthWorldTiles } from "./south-tiles";
 import { generateAllTextures } from "./textures";
 import { generateCharTexture, generateCharPreviewDataURL, CHAR_FRAMES_PER_ROW } from "./chargen";
 import { getServerByUrl } from "../../../shared/mcp-catalog";
@@ -1685,7 +1685,14 @@ export class OfficeScene extends Phaser.Scene {
           }
 
           // Fade in from black so the transition from BootScene is seamless.
-          this.cameras.main.fadeIn(400, 0, 0, 0);
+          // Use a longer fade when transitioning between worlds.
+          const worldFadeIn = this.registry.get("worldFadeIn") as boolean | undefined;
+          if (worldFadeIn) {
+            this.cameras.main.fadeIn(600, 10, 10, 30);
+            this.registry.remove("worldFadeIn");
+          } else {
+            this.cameras.main.fadeIn(400, 0, 0, 0);
+          }
 
           // Clean up loading overlay
           loadingOverlay.remove();
@@ -2236,21 +2243,36 @@ export class OfficeScene extends Phaser.Scene {
         const theme = await res.json() as WorldTheme;
         this.registry.set("worldTheme", theme);
 
-        // Generate procedural tileset for this theme (boot no longer does this)
+        // Clean up any stale procedural textures from a previous world
+        if (this.textures.exists("tiles-theme")) this.textures.remove("tiles-theme");
+        if (this.textures.exists("world-tiles-theme")) this.textures.remove("world-tiles-theme");
+
+        // Generate procedural tilesets for this theme (office + world tiles)
         if (theme.assets?.assetTier !== "ai" && theme.office?.tilesetPath) {
-          if (theme.id === "erics-alley") generateAlleyTileset(this, "tiles-theme");
-          if (theme.id === "hawaii") generateHawaiiTileset(this, "tiles-theme");
-          if (theme.id === "old-south") generateSouthTileset(this, "tiles-theme");
+          if (theme.id === "erics-alley") {
+            generateAlleyTileset(this, "tiles-theme");
+            generateAlleyWorldTiles(this);
+          }
+          if (theme.id === "hawaii") {
+            generateHawaiiTileset(this, "tiles-theme");
+            generateHawaiiWorldTiles(this);
+          }
+          if (theme.id === "old-south") {
+            generateSouthTileset(this, "tiles-theme");
+            generateSouthWorldTiles(this);
+          }
         }
 
+        // Set currentWorld AFTER reset so it survives the scene restart
+        this.store.toggleGitHubPanel(false);
+        this.store.reset();
         this.store.currentWorld = { themeId, themeName };
         this.store.worldTransitioning = false;
-        this.store.toggleGitHubPanel(false);
 
-        this.store.reset();
+        // Tell the new scene to do a fade-in
+        this.registry.set("worldFadeIn", true);
         this.scene.restart();
 
-        this.cameras.main.fadeIn(600, 10, 10, 30);
         this.store.toast(`Entering world: ${themeName}`);
       } catch (err) {
         console.error("[scene] Failed to enter world:", err);
@@ -2270,18 +2292,21 @@ export class OfficeScene extends Phaser.Scene {
 
     this.cameras.main.fadeOut(600, 10, 10, 30);
     this.cameras.main.once("camerafadeoutcomplete", () => {
-      this.store.currentWorld = null;
-      this.store.worldTransitioning = false;
       this.registry.remove("worldTheme");
 
       // Clean up procedural tileset textures
       if (this.textures.exists("tiles-theme")) this.textures.remove("tiles-theme");
       if (this.textures.exists("world-tiles-theme")) this.textures.remove("world-tiles-theme");
 
+      // reset first, then clear currentWorld after
       this.store.reset();
+      this.store.currentWorld = null;
+      this.store.worldTransitioning = false;
+
+      // Tell the new scene to do a fade-in
+      this.registry.set("worldFadeIn", true);
       this.scene.restart();
 
-      this.cameras.main.fadeIn(600, 10, 10, 30);
       this.store.toast("Returning to Agent Heights");
     });
   }

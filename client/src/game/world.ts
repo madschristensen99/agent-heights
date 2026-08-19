@@ -4045,10 +4045,10 @@ export class WorldLayer {
         }
       }
 
-      // --- spawn slugs in the meadow (hostility 0) — garden pests ---
+      // --- spawn slugs in forest+ (hostility >= 1) — garden pests ---
       if (this.slugs.length < SLUG_CAP && time - this.lastSlugSpawnTime > 2000 + Math.random() * 3000) {
         this.lastSlugSpawnTime = time;
-        if (Math.round(hostility) === 0) {
+        if (Math.round(hostility) >= 1) {
           const angle = Math.random() * Math.PI * 2;
           const dist = 150 + Math.random() * 250;
           const sx = playerX + Math.cos(angle) * dist;
