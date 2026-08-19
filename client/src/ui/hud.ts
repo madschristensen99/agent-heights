@@ -414,7 +414,7 @@ export class Hud {
         <div class="next-steps-title">NEXT STEPS</div>
         <div class="next-steps-list" id="next-steps-list"></div>
       </div>
-      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · G gantt · N v-model · V voice · M manage projector · click an agent · ESC close · scroll to zoom</div>
+      <div class="hint">WASD/arrows move · E talk/board · H hire · F feed · B board · G gantt · N v-model · V voice · M manage projector · I inventory · click an agent · ESC close · scroll to zoom</div>
       <div class="hint touch">Tap an agent to talk · Tap objects to interact · Pinch to zoom · 2-finger drag to pan</div>
       <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
       <div class="mobile-panel-toggles">
@@ -1938,7 +1938,9 @@ export class Hud {
         ${offlineFriends.length > 0 ? `
         <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
           <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">FRIENDS — OFFLINE (${offlineFriends.length})</div>
-          ${offlineFriends.map(f => friendHtml(f)).join("")}
+          <div style="max-height:200px;overflow-y:auto;">
+            ${offlineFriends.map(f => friendHtml(f)).join("")}
+          </div>
         </div>
         ` : ""}
 

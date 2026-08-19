@@ -310,6 +310,7 @@ export class OfficeScene extends Phaser.Scene {
   private playerTexKey = "boss-default";
   private keys!: Record<"W" | "A" | "S" | "D" | "E" | "Q" | "R" | "T" | "M" | "SPACE", Phaser.Input.Keyboard.Key>;
   private hotbarEl: HTMLDivElement | null = null;
+  private hotbarVisible = true;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private selectRing!: Phaser.GameObjects.Ellipse;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
@@ -1510,6 +1511,11 @@ export class OfficeScene extends Phaser.Scene {
               if (wt) this.world.equipWeapon(wt);
             });
           }
+          // I key toggles hotbar visibility
+          this.input.keyboard!.on("keydown-I", () => {
+            this.hotbarVisible = !this.hotbarVisible;
+            this.updateHotbar();
+          });
 
           if (!this.wired) {
             this.wired = true;
@@ -11042,6 +11048,14 @@ export class OfficeScene extends Phaser.Scene {
     const items = this.world.inventory.getItems();
     const max = this.world.inventory.maxSlotCount;
     const active = this.world.inventory.activeSlot;
+
+    // Auto-hide when all slots empty (no items to show)
+    const hasItems = items.some((it) => it !== null);
+    const shouldShow = this.hotbarVisible && hasItems;
+    this.hotbarEl.style.display = shouldShow ? "flex" : "none";
+    document.body.classList.toggle("hotbar-visible", shouldShow);
+
+    if (!shouldShow) return;
 
     this.hotbarEl.innerHTML = "";
     for (let i = 0; i < max; i++) {

@@ -100,8 +100,8 @@ body {
   padding: 6px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--bevel-dark);
-  border-top-color: var(--bevel-light);
-  border-left-color: var(--bevel-light);
+  border-bottom-width: 2px;
+  border-right-width: 2px;
   transition: border-color 0.05s;
 }
 
@@ -111,10 +111,10 @@ body {
   color: var(--accent);
 }
 .topbar .mini:active {
-  border-top-color: var(--bevel-dark);
-  border-left-color: var(--bevel-dark);
-  border-bottom-color: var(--bevel-light);
-  border-right-color: var(--bevel-light);
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
 }
 
 .conn {
@@ -210,6 +210,11 @@ body {
 }
 
 .hint.touch {
+  display: none;
+}
+
+/* Hide keyboard hint when hotbar has items to avoid overlap */
+body.hotbar-visible .hint {
   display: none;
 }
 
