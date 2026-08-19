@@ -33,25 +33,136 @@
     "37": "drawVolcanoVent"
   },
   "worldgen": {
-    "biomes": ["beach", "jungle", "volcanic_ridge", "lava_tubes", "underwater_cave", "volcano_summit"],
-    "baseGround": { "beach": 0, "jungle": 6, "volcanic_ridge": 7, "lava_tubes": 8, "underwater_cave": 9, "volcano_summit": 10 },
-    "obstacles": { "beach": [2, 3, 4], "jungle": [2, 24, 39], "volcanic_ridge": [3, 37], "lava_tubes": [3, 9], "underwater_cave": [3, 21], "volcano_summit": [9, 11] },
-    "hostileTiles": { "lava_tubes": [9], "volcano_summit": [9, 11] },
-    "hostilityThresholds": [2, 4, 7, 11, 18]
+    "biomes": [
+      "beach",
+      "jungle",
+      "volcanic_ridge",
+      "lava_tubes",
+      "underwater_cave",
+      "volcano_summit"
+    ],
+    "baseGround": {
+      "beach": 0,
+      "jungle": 6,
+      "volcanic_ridge": 7,
+      "lava_tubes": 8,
+      "underwater_cave": 9,
+      "volcano_summit": 10
+    },
+    "obstacles": {
+      "beach": [
+        2,
+        3,
+        4
+      ],
+      "jungle": [
+        2,
+        24,
+        39
+      ],
+      "volcanic_ridge": [
+        3,
+        37
+      ],
+      "lava_tubes": [
+        3,
+        9
+      ],
+      "underwater_cave": [
+        3,
+        21
+      ],
+      "volcano_summit": [
+        9,
+        11
+      ]
+    },
+    "hostileTiles": {
+      "lava_tubes": [
+        9
+      ],
+      "volcano_summit": [
+        9,
+        11
+      ]
+    },
+    "hostilityThresholds": [
+      2,
+      4,
+      7,
+      11,
+      18
+    ]
   },
   "interactables": {},
-  "statusColors": { "idle": 7143424, "thinking": 13834552, "working": 5019238, "done": 4882074, "error": 15138488, "waiting": 12240244 },
+  "statusColors": {
+    "idle": 7143424,
+    "thinking": 13834552,
+    "working": 5019238,
+    "done": 4882074,
+    "error": 15138488,
+    "waiting": 12240244
+  },
   "dialect": {
     "systemPromptSuffix": "Speak in Hawaiian Pidgin English. Use words like 'brah', 'da kine', 'pau', 'mahalo'. Keep it warm and friendly.",
     "chatStyle": "hawaiian_pidgin",
-    "emotes": ["shaka", "mahalo", "chee_hoo"]
+    "emotes": [
+      "shaka",
+      "mahalo",
+      "chee_hoo"
+    ]
   },
   "assets": {
     "tilesetPath": "assets/tilesets/hawaii.png",
     "assetTier": "procedural"
   },
   "conflict": {
-    "factionA": { "name": "Shark Tribe", "color": 43690, "spriteKey": "faction-shark" },
-    "factionB": { "name": "Turtle Tribe", "color": 26624, "spriteKey": "faction-turtle" }
+    "factionA": {
+      "name": "Shark Tribe",
+      "color": 43690,
+      "spriteKey": "faction-shark"
+    },
+    "factionB": {
+      "name": "Turtle Tribe",
+      "color": 26624,
+      "spriteKey": "faction-turtle"
+    }
+  },
+  "sky": {
+    "gradientStops": [
+      {
+        "pos": 0.0,
+        "r": 106,
+        "g": 58,
+        "b": 138
+      },
+      {
+        "pos": 0.3,
+        "r": 230,
+        "g": 106,
+        "b": 138
+      },
+      {
+        "pos": 0.6,
+        "r": 255,
+        "g": 170,
+        "b": 106
+      },
+      {
+        "pos": 0.85,
+        "r": 255,
+        "g": 212,
+        "b": 138
+      },
+      {
+        "pos": 1.0,
+        "r": 166,
+        "g": 212,
+        "b": 196
+      }
+    ],
+    "cloudStyle": "wispy",
+    "cloudCount": 4,
+    "cloudTint": 16768494
   }
 }

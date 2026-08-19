@@ -18,8 +18,9 @@ import {
 } from "./redis.js";
 import type { WebSocket } from "ws";
 import { startSession as startConcierge, evaluateNudge, CONCIERGE_EVAL_INTERVAL } from "./concierge.js";
-import { recordTaskCompletion } from "./agent-growth.js";
+import { recordTaskCompletion, getGrowth } from "./agent-growth.js";
 import { addXp, getProgress } from "./office-progression.js";
+import { recordSignalByKey } from "./aspirations.js";
 import { sendWelcomeEmail, isEmailConfigured, sendRawEmail } from "./email.js";
 import { paragraph, ctaSection, shell, APP_URL, BRAND_ACCENT } from "./email-blocks.js";
 
@@ -757,6 +758,17 @@ export class TenantManager {
           sess.broadcast({ type: "office_progress", progress } satisfies ServerMsg);
           sess.broadcast({ type: "toast", text: `Office reached Level ${progress.level}!` } satisfies ServerMsg);
         }
+
+        // Aspiration signals
+        const snap = sess.manager.snapshot();
+        const hireable = snap.agents.filter((a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard");
+        const busyCount = hireable.filter((a) => a.status === "working" || a.status === "thinking").length;
+        if (busyCount >= 2) void recordSignalByKey(user.id, "multiple_agents_working");
+        void recordSignalByKey(user.id, "task_completed_unattended");
+
+        // Agent performance improved — compare recent vs earlier success rate
+        const growth = getGrowth(agentId);
+        if (growth.trend === "improving") void recordSignalByKey(user.id, "agent_performance_improved");
       }
     };
     sess.manager.setMcpKeys(mcpKeys);

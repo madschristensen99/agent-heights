@@ -460,6 +460,18 @@ export interface ThemeConflict {
 /** Asset fidelity tier — procedural (free) or AI-generated (paid upgrade). */
 export type AssetTier = "procedural" | "ai";
 
+/** Sky configuration for a themed world. */
+export interface ThemeSky {
+  /** Gradient colour stops from top (0.0) to bottom (1.0). */
+  gradientStops: { pos: number; r: number; g: number; b: number }[];
+  /** Cloud style: "fluffy" (default), "wispy", "dark", "none". */
+  cloudStyle?: "fluffy" | "wispy" | "dark" | "none";
+  /** Number of cloud sprites (default 5). */
+  cloudCount?: number;
+  /** Tint colour applied to cloud sprites (default 0xffffff = no tint). */
+  cloudTint?: number;
+}
+
 /** Asset paths for a themed world — all relative to the branch root. */
 export interface ThemeAssets {
   tilesetPath: string;
@@ -506,6 +518,7 @@ export interface WorldTheme {
   emotes?: Record<string, number>;
   conflict?: ThemeConflict;
   assets: ThemeAssets;
+  sky?: ThemeSky;
 }
 
 /** A world template — a concept prompt the Wizard uses to build a world. */

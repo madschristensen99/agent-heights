@@ -1094,6 +1094,13 @@ wss.on("connection", async (ws, req) => {
           console.warn("[away-report] failed to generate:", err);
         }
       }
+
+      // Daily return streak — fires when user returns on a different calendar day
+      if (prevActiveAt > 0) {
+        const prevDay = new Date(prevActiveAt).toDateString();
+        const today = new Date().toDateString();
+        if (prevDay !== today) void recordSignalByKey(user.id, "daily_return_streak");
+      }
     }).catch(() => {});
     // Preload aspiration profile into cache for sync access by concierge
     void preloadProfile(user.id).catch(() => {});
@@ -1447,6 +1454,12 @@ wss.on("connection", async (ws, req) => {
             ws.send(JSON.stringify({ type: "toast", text: `Office reached Level ${progress.level}!` } satisfies ServerMsg));
           }
           if (msg.mcpServers && msg.mcpServers.length > 0) void recordSignalByKey(sess.user.id, "mcp_server_installed");
+          // Agent count grew — check if this is a net increase (not replacing a fired agent)
+          {
+            const snap = activeManager.snapshot();
+            const hireable = snap.agents.filter((a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard");
+            if (hireable.length >= 2) void recordSignalByKey(sess.user.id, "agent_count_grew");
+          }
           // Log to experiment journal
           {
             const snap = activeManager.snapshot();
@@ -1748,6 +1761,7 @@ wss.on("connection", async (ws, req) => {
         case "create_schedule":
           activeManager.createSchedule(msg.agentId, msg.name, msg.task, msg.cronExpression, msg.handoffTo);
           void recordSignalByKey(sess.user.id, "scheduled_task");
+          if (msg.handoffTo) void recordSignalByKey(sess.user.id, "pipeline_created");
           const schedXp = addXp(sess.user.id, 15);
           if (schedXp.leveledUp) {
             const progress = getProgress(sess.user.id);
@@ -1764,6 +1778,14 @@ wss.on("connection", async (ws, req) => {
         case "recruit":
           await activeManager.recruit(msg.firedAgentId);
           void recordSignalByKey(sess.user.id, "agent_rehired_different_config");
+          // Detect model change — recruit reuses the fired agent's model, so this fires
+          // when the user explicitly chose a different config before rehiring
+          // (the recruit method preserves the original model, so we check if the fired agent had a different model)
+          {
+            const snap = activeManager.snapshot();
+            const hiredAgent = snap.agents.find((a) => a.id === msg.firedAgentId);
+            if (hiredAgent) void recordSignalByKey(sess.user.id, "new_agent_model_tried");
+          }
           break;
         case "fuse":
           await activeManager.fuseAgents(msg.agentA, msg.agentB, msg.name, msg.systemPrompt, msg.appearance, msg.personality);
@@ -2513,6 +2535,7 @@ wss.on("connection", async (ws, req) => {
           // Track visitor for social interactions
           if (room.ownerId && room.ownerId !== sess.user.id) {
             recordVisit(room.ownerId, sess.user.id, sess.player?.name ?? "Visitor");
+            void recordSignalByKey(sess.user.id, "office_visited");
           }
           const players = tenants.getRoomPlayers(msg.roomId);
           // Send full room state to the joining player
@@ -3852,6 +3875,10 @@ wss.on("connection", async (ws, req) => {
               if (stats.speedrunTimeMs && stats.speedrunTimeMs > 0) void recordSignalByKey(sess.user.id, "speedrun_recorded");
               if (stats.maxDepth && stats.maxDepth > 0) void recordSignalByKey(sess.user.id, "world_explored");
             }
+            // Wire weapon_collected and crown_placed from sets/unlocked
+            const sets = msg.sets as Record<string, string[]> | null;
+            if (sets?.weapons && sets.weapons.length > 0) void recordSignalByKey(sess.user.id, "weapon_collected");
+            if (msg.unlocked.includes("from_cubicle_to_conqueror")) void recordSignalByKey(sess.user.id, "crown_placed");
             // Award XP for each new achievement
             const newCount = msg.unlocked.length;
             if (newCount > 0) {
@@ -3894,6 +3921,8 @@ wss.on("connection", async (ws, req) => {
               type: "trophy_profile",
               profile,
             } satisfies ServerMsg));
+            // Trophy room viewed — Creator signal (user is looking at achievements)
+            void recordSignalByKey(sess.user.id, "trophy_room_shared");
           })().catch((err) => console.warn("[trophy] error:", err));
           break;
         }

@@ -33,7 +33,14 @@
     "37": "drawSteamVent"
   },
   "worldgen": {
-    "biomes": ["alley", "street", "abandoned", "undercity", "sewer", "hellmouth"],
+    "biomes": [
+      "alley",
+      "street",
+      "abandoned",
+      "undercity",
+      "sewer",
+      "hellmouth"
+    ],
     "baseGround": {
       "alley": 0,
       "street": 6,
@@ -43,24 +50,79 @@
       "hellmouth": 9
     },
     "obstacles": {
-      "alley": [2, 3, 4],
-      "street": [2, 3, 20],
-      "abandoned": [2, 12, 13],
-      "undercity": [3, 10, 37],
-      "sewer": [3, 21, 20],
-      "hellmouth": [9, 11, 13]
+      "alley": [
+        2,
+        3,
+        4
+      ],
+      "street": [
+        2,
+        3,
+        20
+      ],
+      "abandoned": [
+        2,
+        12,
+        13
+      ],
+      "undercity": [
+        3,
+        10,
+        37
+      ],
+      "sewer": [
+        3,
+        21,
+        20
+      ],
+      "hellmouth": [
+        9,
+        11,
+        13
+      ]
     },
     "hostileTiles": {
-      "sewer": [21],
-      "hellmouth": [9, 11]
+      "sewer": [
+        21
+      ],
+      "hellmouth": [
+        9,
+        11
+      ]
     },
-    "hostilityThresholds": [2, 4, 7, 11, 18]
+    "hostilityThresholds": [
+      2,
+      4,
+      7,
+      11,
+      18
+    ]
   },
   "interactables": {
-    "redButton": { "tileId": 25, "x": 25, "y": 7, "interactionType": "hire" },
-    "wardrobe": { "tileId": 20, "x": 1, "y": 10, "interactionType": "customize" },
-    "nemesisTerminal": { "tileId": 36, "x": 28, "y": 10, "interactionType": "nemesis" },
-    "mailbox": { "tileId": 28, "x": 1, "y": 7, "interactionType": "mail" }
+    "redButton": {
+      "tileId": 25,
+      "x": 25,
+      "y": 7,
+      "interactionType": "hire"
+    },
+    "wardrobe": {
+      "tileId": 20,
+      "x": 1,
+      "y": 10,
+      "interactionType": "customize"
+    },
+    "nemesisTerminal": {
+      "tileId": 36,
+      "x": 28,
+      "y": 10,
+      "interactionType": "nemesis"
+    },
+    "mailbox": {
+      "tileId": 28,
+      "x": 1,
+      "y": 7,
+      "interactionType": "mail"
+    }
   },
   "statusColors": {
     "idle": 6970744,
@@ -78,14 +140,57 @@
   "dialect": {
     "systemPromptSuffix": "Speak casually with urban street slang. Be direct, a little rough around the edges, but still competent and professional. Use contractions and keep sentences punchy.",
     "chatStyle": "street_urban",
-    "emotes": ["smoke", "shrug", "cough"]
+    "emotes": [
+      "smoke",
+      "shrug",
+      "cough"
+    ]
   },
   "conflict": {
-    "factionA": { "name": "Steel Dragons", "color": 8912896, "spriteKey": "faction-dragons" },
-    "factionB": { "name": "Concrete Kings", "color": 7368816, "spriteKey": "faction-kings" }
+    "factionA": {
+      "name": "Steel Dragons",
+      "color": 8912896,
+      "spriteKey": "faction-dragons"
+    },
+    "factionB": {
+      "name": "Concrete Kings",
+      "color": 7368816,
+      "spriteKey": "faction-kings"
+    }
   },
   "assets": {
     "tilesetPath": "assets/tilesets/erics-alley.png",
     "assetTier": "procedural"
+  },
+  "sky": {
+    "gradientStops": [
+      {
+        "pos": 0.0,
+        "r": 42,
+        "g": 42,
+        "b": 48
+      },
+      {
+        "pos": 0.4,
+        "r": 58,
+        "g": 54,
+        "b": 50
+      },
+      {
+        "pos": 0.75,
+        "r": 74,
+        "g": 68,
+        "b": 58
+      },
+      {
+        "pos": 1.0,
+        "r": 90,
+        "g": 82,
+        "b": 70
+      }
+    ],
+    "cloudStyle": "dark",
+    "cloudCount": 3,
+    "cloudTint": 8952217
   }
 }

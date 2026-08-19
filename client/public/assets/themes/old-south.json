@@ -33,25 +33,137 @@
     "37": "drawBrickChimney"
   },
   "worldgen": {
-    "biomes": ["garden", "cotton_field", "pine_forest", "bayou", "battlefield", "infernal"],
-    "baseGround": { "garden": 0, "cotton_field": 6, "pine_forest": 7, "bayou": 21, "battlefield": 12, "infernal": 9 },
-    "obstacles": { "garden": [2, 4, 28], "cotton_field": [2, 3, 22], "pine_forest": [2, 24, 37], "bayou": [3, 21, 20], "battlefield": [3, 12, 13], "infernal": [9, 11, 13] },
-    "hostileTiles": { "bayou": [21], "battlefield": [5], "infernal": [9, 11] },
-    "hostilityThresholds": [2, 4, 7, 11, 18]
+    "biomes": [
+      "garden",
+      "cotton_field",
+      "pine_forest",
+      "bayou",
+      "battlefield",
+      "infernal"
+    ],
+    "baseGround": {
+      "garden": 0,
+      "cotton_field": 6,
+      "pine_forest": 7,
+      "bayou": 21,
+      "battlefield": 12,
+      "infernal": 9
+    },
+    "obstacles": {
+      "garden": [
+        2,
+        4,
+        28
+      ],
+      "cotton_field": [
+        2,
+        3,
+        22
+      ],
+      "pine_forest": [
+        2,
+        24,
+        37
+      ],
+      "bayou": [
+        3,
+        21,
+        20
+      ],
+      "battlefield": [
+        3,
+        12,
+        13
+      ],
+      "infernal": [
+        9,
+        11,
+        13
+      ]
+    },
+    "hostileTiles": {
+      "bayou": [
+        21
+      ],
+      "battlefield": [
+        5
+      ],
+      "infernal": [
+        9,
+        11
+      ]
+    },
+    "hostilityThresholds": [
+      2,
+      4,
+      7,
+      11,
+      18
+    ]
   },
   "interactables": {},
-  "statusColors": { "idle": 8026762, "thinking": 13935160, "working": 5925450, "done": 4882074, "error": 12071928, "waiting": 10118644 },
+  "statusColors": {
+    "idle": 8026762,
+    "thinking": 13935160,
+    "working": 5925450,
+    "done": 4882074,
+    "error": 12071928,
+    "waiting": 10118644
+  },
   "dialect": {
     "systemPromptSuffix": "Speak with a refined Southern drawl appropriate to the early 1800s Louisiana territory. Use period language like 'I do declare', 'reckon', 'yonder'. Be courtly and genteel but capable.",
     "chatStyle": "southern_1812",
-    "emotes": ["declare", "reckon", "yonder"]
+    "emotes": [
+      "declare",
+      "reckon",
+      "yonder"
+    ]
   },
   "assets": {
     "tilesetPath": "assets/tilesets/old-south.png",
     "assetTier": "procedural"
   },
   "conflict": {
-    "factionA": { "name": "Union", "color": 30840, "spriteKey": "faction-union" },
-    "factionB": { "name": "Confederacy", "color": 9211020, "spriteKey": "faction-confederate" }
+    "factionA": {
+      "name": "Union",
+      "color": 30840,
+      "spriteKey": "faction-union"
+    },
+    "factionB": {
+      "name": "Confederacy",
+      "color": 9211020,
+      "spriteKey": "faction-confederate"
+    }
+  },
+  "sky": {
+    "gradientStops": [
+      {
+        "pos": 0.0,
+        "r": 90,
+        "g": 122,
+        "b": 154
+      },
+      {
+        "pos": 0.35,
+        "r": 138,
+        "g": 170,
+        "b": 196
+      },
+      {
+        "pos": 0.7,
+        "r": 212,
+        "g": 196,
+        "b": 154
+      },
+      {
+        "pos": 1.0,
+        "r": 232,
+        "g": 212,
+        "b": 164
+      }
+    ],
+    "cloudStyle": "fluffy",
+    "cloudCount": 6,
+    "cloudTint": 16774624
   }
 }

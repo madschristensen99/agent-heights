@@ -22,6 +22,7 @@ export interface AspirationProfile {
   strategist: number;
   dominant: AspirationType | null;
   signalCount: number;
+  lastSignalAt: number;
 }
 
 const ALL_TRACKS: AspirationType[] = ["warrior", "builder", "explorer", "puzzle_solver", "creator", "strategist"];
@@ -61,19 +62,19 @@ export async function recordSignal(
   const profile = await getProfile(userId);
   const now = Date.now();
 
-  const col = SCORE_COLUMN[aspiration];
-  const currentScore = profile[aspiration];
+  // Compute actual elapsed time since last signal
+  const dt = profile.lastSignalAt > 0 ? now - profile.lastSignalAt : 0;
+  const decayFactor = Math.exp(-DECAY_LAMBDA * dt);
 
-  // Apply decay: score *= e^(-lambda * dt) where dt is time since last update
-  // We approximate by decaying all scores uniformly based on last_signal_at
-  const decayedScore = currentScore * Math.exp(-DECAY_LAMBDA * (60 * 1000)); // decay per minute approx
+  // Decay ALL scores based on elapsed time, then add new signal weight
+  for (const track of ALL_TRACKS) {
+    profile[track] = profile[track] * decayFactor;
+  }
 
-  // Add new signal weight, clamp to [0, 1]
-  const newScore = Math.min(1.0, decayedScore + weight);
-
-  // Update the profile object
-  (profile as any)[aspiration] = newScore;
+  // Add new signal weight to the target track, clamp to [0, 1]
+  profile[aspiration] = Math.min(1.0, profile[aspiration] + weight);
   profile.signalCount++;
+  profile.lastSignalAt = now;
 
   // Recompute dominant
   profile.dominant = computeDominant(profile);
@@ -81,10 +82,15 @@ export async function recordSignal(
   // Update cache
   profileCache.set(userId, { ...profile });
 
-  // Persist to DB (fire-and-forget, non-blocking)
+  // Persist all 6 decayed scores to DB (fire-and-forget, non-blocking)
   if (isSupabaseConfigured) {
     const update: Record<string, number | string | null> = {
-      [col]: newScore,
+      warrior_score: profile.warrior,
+      builder_score: profile.builder,
+      explorer_score: profile.explorer,
+      puzzle_solver_score: profile.puzzle_solver,
+      creator_score: profile.creator,
+      strategist_score: profile.strategist,
       signal_count: profile.signalCount,
       last_signal_at: new Date(now).toISOString(),
       dominant_aspiration: profile.dominant,
@@ -127,6 +133,7 @@ export async function getProfile(userId: string): Promise<AspirationProfile> {
           strategist: data.strategist_score ?? 0,
           dominant: data.dominant_aspiration ?? null,
           signalCount: data.signal_count ?? 0,
+          lastSignalAt: data.last_signal_at ? new Date(data.last_signal_at).getTime() : 0,
         };
         profileCache.set(userId, profile);
         return profile;
@@ -146,6 +153,7 @@ export async function getProfile(userId: string): Promise<AspirationProfile> {
     strategist: 0,
     dominant: null,
     signalCount: 0,
+    lastSignalAt: 0,
   };
 }
 

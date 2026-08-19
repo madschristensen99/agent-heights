@@ -1252,9 +1252,7 @@ export class OfficeScene extends Phaser.Scene {
           this.drawTrophyCase();
           this.drawWeaponRack();
           this.drawHallOfFameBoard();
-          this.drawExteriorChimney();
-          this.drawCulturalWalls();
-          this.drawHelipad();
+          this.drawExterior();
           this.drawRedButton();
           this.drawWardrobe();
           this.drawNemesisTerminal();
@@ -1847,6 +1845,16 @@ export class OfficeScene extends Phaser.Scene {
     // World-space, repositioned each frame to cover the camera's world view.
     this.skyGfx = this.add.graphics().setDepth(-2);
 
+    const skyCfg = this.worldTheme?.sky;
+    const cloudStyle = skyCfg?.cloudStyle ?? "fluffy";
+    const cloudCount = skyCfg?.cloudCount ?? 5;
+    const cloudTint = skyCfg?.cloudTint ?? 0xffffff;
+
+    if (cloudStyle === "none") {
+      // No clouds — skip texture generation and sprite creation entirely
+      return;
+    }
+
     // --- Cloud textures (3 variants) ---
     for (let i = 0; i < 3; i++) {
       const key = `cloud-${i}`;
@@ -1855,15 +1863,20 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // --- Cloud sprites (10 instances, world-space above the office) ---
-    const cloudCount = 5;
+    // --- Cloud sprites (world-space above the office) ---
     for (let i = 0; i < cloudCount; i++) {
       const cloudTex = `cloud-${i % 3}`;
       const x = Math.random() * 2000 - 1000;
       const y = -200 - Math.random() * 400;
       const scale = (0.5 + Math.random() * 1.0) * 1.5;
-      const baseAlpha = 0.4 + Math.random() * 0.35;
-      const speed = 15 + Math.random() * 25;
+      const baseAlpha = cloudStyle === "dark"
+        ? 0.2 + Math.random() * 0.2
+        : cloudStyle === "wispy"
+          ? 0.25 + Math.random() * 0.2
+          : 0.4 + Math.random() * 0.35;
+      const speed = cloudStyle === "wispy"
+        ? 8 + Math.random() * 12
+        : 15 + Math.random() * 25;
       const phase = Math.random() * Math.PI * 2;
       const fadeSpeed = 0.0008 + Math.random() * 0.0007;
 
@@ -1871,7 +1884,8 @@ export class OfficeScene extends Phaser.Scene {
         .setOrigin(0.5, 0.5)
         .setDepth(-1.5)
         .setScale(scale)
-        .setAlpha(baseAlpha);
+        .setAlpha(baseAlpha)
+        .setTint(cloudTint);
 
       this.clouds.push({ sprite, speed, baseAlpha, phase, fadeSpeed, yBase: y });
     }
@@ -1891,8 +1905,9 @@ export class OfficeScene extends Phaser.Scene {
     this.lastSkyView = { x: view.x, y: view.y, w: view.width, h: view.height };
     this.skyGfx.clear();
 
-    // Gradient stops (top to bottom)
-    const stops = [
+    // Gradient stops (top to bottom) — theme override or default blue sky
+    const themeStops = this.worldTheme?.sky?.gradientStops;
+    const stops = themeStops ?? [
       { pos: 0.0,  r: 0x4a, g: 0x7a, b: 0x9e },
       { pos: 0.4,  r: 0x6a, g: 0x9a, b: 0xbe },
       { pos: 0.75, r: 0x9a, g: 0xb8, b: 0xd4 },
@@ -7691,7 +7706,373 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Draw the industrial chimney on the exterior left wall, extending above the roof. */
+  // ── Theme-dispatched exterior ───────────────────────────────────────
+
+  /** Master exterior dispatcher — draws theme-specific rooftop, landing pad, and wall decor. */
+  private drawExterior(): void {
+    const themeId = this.worldTheme?.id;
+    if (themeId === "erics-alley") {
+      this.drawAlleyExterior();
+    } else if (themeId === "hawaii") {
+      this.drawHawaiiExterior();
+    } else if (themeId === "old-south") {
+      this.drawSouthExterior();
+    } else {
+      // Default / HQ — original industrial look
+      this.drawExteriorChimney();
+      this.drawCulturalWalls();
+      this.drawHelipad();
+    }
+  }
+
+  /** Alley exterior: water tower, chain-link fence, rooftop landing zone with graffiti "H". */
+  private drawAlleyExterior(): void {
+    const g = this.add.graphics().setDepth(-0.5);
+    const mapPxW = 30 * TILE_PX;
+    const roofY = 0;
+
+    // --- Rooftop water tower (left side) ---
+    const wtX = 180;
+    const wtBaseY = roofY - 8;
+    const wtTopY = roofY - 90;
+    // Legs
+    g.lineStyle(3, 0x4a3a2a, 1);
+    g.beginPath();
+    g.moveTo(wtX - 18, wtBaseY); g.lineTo(wtX - 10, wtTopY);
+    g.moveTo(wtX + 18, wtBaseY); g.lineTo(wtX + 10, wtTopY);
+    g.moveTo(wtX - 6, wtBaseY); g.lineTo(wtX - 3, wtTopY);
+    g.moveTo(wtX + 6, wtBaseY); g.lineTo(wtX + 3, wtTopY);
+    g.strokePath();
+    // Tank body
+    g.fillStyle(0x5a4a3a, 1);
+    g.fillRect(wtX - 22, wtTopY, 44, 30);
+    g.fillStyle(0x6a5a4a, 1);
+    g.fillRect(wtX - 22, wtTopY, 44, 4);
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(wtX - 22, wtTopY + 26, 44, 4);
+    // Bands
+    g.lineStyle(2, 0x3a2a1a, 0.6);
+    g.beginPath(); g.moveTo(wtX - 22, wtTopY + 10); g.lineTo(wtX + 22, wtTopY + 10); g.strokePath();
+    g.beginPath(); g.moveTo(wtX - 22, wtTopY + 20); g.lineTo(wtX + 22, wtTopY + 20); g.strokePath();
+
+    // --- Chain-link fence along roof edge ---
+    g.lineStyle(1.5, 0x5a5a5a, 0.5);
+    for (let fx = TILE_PX; fx < mapPxW - TILE_PX; fx += 8) {
+      g.beginPath(); g.moveTo(fx, roofY - 3); g.lineTo(fx, roofY - 18); g.strokePath();
+    }
+    g.lineStyle(1, 0x5a5a5a, 0.3);
+    for (let fy = roofY - 3; fy > roofY - 18; fy -= 4) {
+      g.beginPath(); g.moveTo(TILE_PX, fy); g.lineTo(mapPxW - TILE_PX, fy); g.strokePath();
+    }
+
+    // --- Rooftop landing zone (replaces helipad) ---
+    const cx = mapPxW / 2 + 240;
+    const padCY = roofY - 120;
+    // Cardboard sheet base
+    g.fillStyle(0x6a5a4a, 0.8);
+    g.fillRect(cx - 150, padCY - 40, 300, 80);
+    g.fillStyle(0x5a4a3a, 0.6);
+    g.fillRect(cx - 150, padCY - 40, 300, 4);
+    g.fillRect(cx - 150, padCY + 36, 300, 4);
+    // Corrugated texture lines
+    g.lineStyle(1, 0x4a3a2a, 0.3);
+    for (let lx = cx - 145; lx < cx + 150; lx += 8) {
+      g.beginPath(); g.moveTo(lx, padCY - 36); g.lineTo(lx, padCY + 36); g.strokePath();
+    }
+    // Spray-painted "H" — rough graffiti style
+    g.lineStyle(6, 0xddaa44, 0.7);
+    g.beginPath();
+    g.moveTo(cx - 30, padCY - 25); g.lineTo(cx - 30, padCY + 25);
+    g.moveTo(cx - 30, padCY); g.lineTo(cx + 30, padCY);
+    g.moveTo(cx + 30, padCY - 25); g.lineTo(cx + 30, padCY + 25);
+    g.strokePath();
+    // Dashed circle around H
+    g.lineStyle(3, 0xddaa44, 0.5);
+    g.strokeCircle(cx, padCY, 55);
+
+    // --- Industrial pipes on left wall ---
+    const pg = this.add.graphics().setDepth(1);
+    pg.lineStyle(4, 0x6a6058, 0.8);
+    pg.beginPath();
+    pg.moveTo(TILE_PX + 8, 0);
+    pg.lineTo(TILE_PX + 8, 3 * TILE_PX);
+    pg.lineTo(TILE_PX + 24, 3 * TILE_PX + 16);
+    pg.lineTo(TILE_PX + 24, 6 * TILE_PX);
+    pg.strokePath();
+    // Pipe joints
+    pg.fillStyle(0x5a5048, 0.8);
+    pg.fillCircle(TILE_PX + 8, 2 * TILE_PX, 5);
+    pg.fillCircle(TILE_PX + 24, 5 * TILE_PX, 5);
+
+    // --- Alley exterior overlays: dumpsters and crates outside south wall ---
+    const eg = this.add.graphics().setDepth(-0.3);
+    const southY = 20 * TILE_PX;
+    // Dumpsters (left and right of south entrance)
+    for (const dx of [3, 25]) {
+      const bx = dx * TILE_PX;
+      eg.fillStyle(0x2a5a3a, 1);
+      eg.fillRect(bx, southY + 4, 56, 40);
+      eg.fillStyle(0x3a6a4a, 1);
+      eg.fillRect(bx, southY + 4, 56, 4);
+      eg.fillStyle(0x1a4a2a, 1);
+      eg.fillRect(bx, southY + 40, 56, 4);
+      // Lid
+      eg.fillStyle(0x3a7a5a, 0.8);
+      eg.fillRect(bx + 2, southY + 2, 52, 6);
+      // Grime streaks
+      eg.fillStyle(0x1a3a1a, 0.3);
+      eg.fillRect(bx + 10, southY + 8, 4, 30);
+      eg.fillRect(bx + 30, southY + 8, 3, 25);
+    }
+    // Crates stacked near dumpster
+    eg.fillStyle(0x6a5a3a, 0.9);
+    eg.fillRect(5 * TILE_PX, southY + 8, 40, 32);
+    eg.fillStyle(0x5a4a2a, 0.9);
+    eg.fillRect(5 * TILE_PX + 44, southY + 16, 28, 24);
+    eg.lineStyle(1, 0x4a3a1a, 0.5);
+    eg.strokeRect(5 * TILE_PX, southY + 8, 40, 32);
+    eg.strokeRect(5 * TILE_PX + 44, southY + 16, 28, 24);
+    // Graffiti tag on south wall
+    eg.lineStyle(3, 0xdd4422, 0.6);
+    eg.beginPath();
+    eg.moveTo(15 * TILE_PX + 10, southY - 2);
+    eg.lineTo(15 * TILE_PX + 20, southY - 12);
+    eg.lineTo(15 * TILE_PX + 30, southY - 2);
+    eg.strokePath();
+  }
+
+  /** Hawaii exterior: thatched roof overhang, tiki torches at corners, beach landing circle. */
+  private drawHawaiiExterior(): void {
+    const g = this.add.graphics().setDepth(-0.5);
+    const mapPxW = 30 * TILE_PX;
+    const roofY = 0;
+
+    // --- Thatched roof overhang along top wall ---
+    const eaveH = 18;
+    const overhang = 14;
+    g.fillStyle(0x8a6a3a, 1);
+    g.fillRect(-overhang, roofY - eaveH, mapPxW + overhang * 2, eaveH);
+    // Thatch texture — vertical lines
+    g.lineStyle(1.5, 0x6a4a2a, 0.5);
+    for (let tx = -overhang + 4; tx < mapPxW + overhang; tx += 6) {
+      g.beginPath(); g.moveTo(tx, roofY - eaveH + 2); g.lineTo(tx, roofY - 2); g.strokePath();
+    }
+    // Eave top highlight
+    g.fillStyle(0xaa8a5a, 1);
+    g.fillRect(-overhang, roofY - eaveH, mapPxW + overhang * 2, 3);
+    // Eave bottom shadow
+    g.fillStyle(0x4a3a1a, 1);
+    g.fillRect(-overhang, roofY - 4, mapPxW + overhang * 2, 4);
+
+    // --- Tiki torches at four corners ---
+    const torchPositions = [
+      { x: TILE_PX + 20, y: roofY + 8 },
+      { x: mapPxW - TILE_PX - 20, y: roofY + 8 },
+      { x: TILE_PX + 20, y: 19 * TILE_PX - 8 },
+      { x: mapPxW - TILE_PX - 20, y: 19 * TILE_PX - 8 },
+    ];
+    for (const tp of torchPositions) {
+      // Bamboo pole
+      g.fillStyle(0x8a6a3a, 1);
+      g.fillRect(tp.x - 3, tp.y - 60, 6, 60);
+      g.fillStyle(0x6a4a2a, 0.5);
+      g.fillRect(tp.x - 3, tp.y - 60, 1, 60);
+      // Segments
+      g.lineStyle(1, 0x5a3a1a, 0.6);
+      for (let seg = 0; seg < 4; seg++) {
+        const sy = tp.y - 12 - seg * 14;
+        g.beginPath(); g.moveTo(tp.x - 3, sy); g.lineTo(tp.x + 3, sy); g.strokePath();
+      }
+      // Flame
+      g.fillStyle(0xff8822, 0.8);
+      g.fillCircle(tp.x, tp.y - 66, 8);
+      g.fillStyle(0xffcc44, 0.6);
+      g.fillCircle(tp.x, tp.y - 68, 5);
+      g.fillStyle(0xffee66, 0.4);
+      g.fillCircle(tp.x, tp.y - 70, 3);
+    }
+
+    // --- Beach landing circle (replaces helipad) ---
+    const cx = mapPxW / 2 + 240;
+    const padCY = roofY - 130;
+    // Sand circle
+    g.fillStyle(0xe6d4a4, 0.7);
+    g.fillEllipse(cx, padCY, 320, 90);
+    g.fillStyle(0xd6c494, 0.5);
+    g.fillEllipse(cx, padCY, 300, 80);
+    // Palm frond ring
+    g.lineStyle(3, 0x4a8a3a, 0.5);
+    g.strokeEllipse(cx, padCY, 280, 70);
+    // Inner sand
+    g.fillStyle(0xf6e4b4, 0.4);
+    g.fillEllipse(cx, padCY, 240, 60);
+    // "H" made of shells
+    g.fillStyle(0xf0e0d0, 0.8);
+    g.fillRect(cx - 28, padCY - 22, 6, 44);
+    g.fillRect(cx + 22, padCY - 22, 6, 44);
+    g.fillRect(cx - 28, padCY - 3, 56, 6);
+
+    // --- Hawaii exterior overlays: palm trees and lava rocks outside south wall ---
+    const eg = this.add.graphics().setDepth(-0.3);
+    const southY = 20 * TILE_PX;
+    // Palm trees (left and right of south entrance)
+    for (const dx of [3, 26]) {
+      const bx = dx * TILE_PX + 32;
+      // Trunk
+      eg.fillStyle(0x8a6a3a, 1);
+      eg.fillRect(bx - 4, southY + 4, 8, 48);
+      // Trunk segments
+      eg.lineStyle(1, 0x6a4a2a, 0.6);
+      for (let seg = 0; seg < 4; seg++) {
+        const sy = southY + 8 + seg * 12;
+        eg.beginPath(); eg.moveTo(bx - 4, sy); eg.lineTo(bx + 4, sy); eg.strokePath();
+      }
+      // Fronds
+      eg.fillStyle(0x4a8a3a, 0.8);
+      for (let a = 0; a < 6; a++) {
+        const angle = (a / 6) * Math.PI * 2;
+        const fx = bx + Math.cos(angle) * 20;
+        const fy = southY + 2 + Math.sin(angle) * 10;
+        eg.beginPath();
+        eg.moveTo(bx, southY + 4);
+        eg.lineTo(fx, fy);
+        eg.lineTo(bx + Math.cos(angle + 0.3) * 12, southY + 4 + Math.sin(angle + 0.3) * 6);
+        eg.closePath();
+        eg.fillPath();
+      }
+    }
+    // Lava rocks
+    eg.fillStyle(0x4a3a3a, 0.8);
+    eg.fillCircle(8 * TILE_PX, southY + 20, 16);
+    eg.fillStyle(0x3a2a2a, 0.6);
+    eg.fillCircle(8 * TILE_PX, southY + 20, 12);
+    eg.fillStyle(0x5a4a4a, 0.5);
+    eg.fillCircle(22 * TILE_PX, southY + 16, 14);
+    // Hibiscus bushes
+    eg.fillStyle(0x4a8a4a, 0.7);
+    eg.fillCircle(14 * TILE_PX, southY + 12, 12);
+    eg.fillStyle(0xff6688, 0.6);
+    eg.fillCircle(14 * TILE_PX, southY + 10, 5);
+    eg.fillCircle(14 * TILE_PX + 6, southY + 14, 4);
+  }
+  private drawSouthExterior(): void {
+    const g = this.add.graphics().setDepth(-0.5);
+    const mapPxW = 30 * TILE_PX;
+    const roofY = 0;
+
+    // --- Two brick chimneys (left and right) ---
+    const chimPositions = [
+      { x: 4 * TILE_PX, w: 32 },
+      { x: 26 * TILE_PX, w: 32 },
+    ];
+    for (const cp of chimPositions) {
+      const chimTopY = roofY - 70;
+      // Body
+      g.fillStyle(0x8a4a3a, 1);
+      g.fillRect(cp.x - cp.w / 2, chimTopY, cp.w, 70);
+      g.fillStyle(0x9a5a4a, 1);
+      g.fillRect(cp.x - cp.w / 2, chimTopY, cp.w, 3);
+      g.fillStyle(0x6a3a2a, 1);
+      g.fillRect(cp.x - cp.w / 2, roofY - 4, cp.w, 4);
+      // Mortar lines
+      g.lineStyle(1, 0x5a2a1a, 0.5);
+      for (let my = chimTopY + 8; my < roofY; my += 10) {
+        g.beginPath(); g.moveTo(cp.x - cp.w / 2, my); g.lineTo(cp.x + cp.w / 2, my); g.strokePath();
+      }
+      // Cap
+      g.fillStyle(0x6a3a2a, 1);
+      g.fillRect(cp.x - cp.w / 2 - 4, chimTopY - 6, cp.w + 8, 6);
+      g.fillStyle(0x7a4a3a, 1);
+      g.fillRect(cp.x - cp.w / 2 - 4, chimTopY - 6, cp.w + 8, 2);
+    }
+
+    // --- Columned porch overhang along top wall ---
+    const porchH = 22;
+    g.fillStyle(0xf0e8d8, 1);
+    g.fillRect(0, roofY - porchH, mapPxW, porchH);
+    g.fillStyle(0xe0d8c8, 1);
+    g.fillRect(0, roofY - porchH, mapPxW, 3);
+    g.fillStyle(0xd0c8b8, 1);
+    g.fillRect(0, roofY - 4, mapPxW, 4);
+    // Columns at regular intervals
+    const colPositions = [3, 8, 14, 20, 26];
+    for (const cx of colPositions) {
+      const px = cx * TILE_PX + TILE_PX / 2;
+      g.fillStyle(0xf0e8d8, 1);
+      g.fillRect(px - 8, roofY - porchH, 16, porchH);
+      g.fillStyle(0xe0d0b8, 0.6);
+      g.fillRect(px - 8, roofY - porchH, 3, porchH);
+      g.fillStyle(0xd0c0a8, 0.6);
+      g.fillRect(px + 5, roofY - porchH, 3, porchH);
+      // Column capital
+      g.fillStyle(0xf0e8d8, 1);
+      g.fillRect(px - 12, roofY - porchH, 24, 4);
+      // Column base
+      g.fillStyle(0xe0d0b8, 1);
+      g.fillRect(px - 10, roofY - 6, 20, 6);
+    }
+
+    // --- Carriage turnaround (replaces helipad) ---
+    const cx = mapPxW / 2 + 240;
+    const padCY = roofY - 130;
+    // Gravel circle
+    g.fillStyle(0xb0a898, 0.6);
+    g.fillEllipse(cx, padCY, 340, 100);
+    g.fillStyle(0xa09888, 0.5);
+    g.fillEllipse(cx, padCY, 320, 90);
+    // Cobblestone ring
+    g.lineStyle(4, 0x9a9080, 0.5);
+    g.strokeEllipse(cx, padCY, 300, 84);
+    // Inner gravel
+    g.fillStyle(0xc0b8a8, 0.4);
+    g.fillEllipse(cx, padCY, 260, 72);
+    // "H" in brick chips
+    g.fillStyle(0x8a4a3a, 0.7);
+    g.fillRect(cx - 30, padCY - 24, 8, 48);
+    g.fillRect(cx + 22, padCY - 24, 8, 48);
+    g.fillRect(cx - 30, padCY - 4, 60, 8);
+
+    // --- Old South exterior overlays: cotton field rows and garden outside south wall ---
+    const eg = this.add.graphics().setDepth(-0.3);
+    const southY = 20 * TILE_PX;
+    // Cotton field rows (left side — furrows with cotton bolls)
+    for (let row = 0; row < 3; row++) {
+      const ry = southY + 6 + row * 16;
+      // Furrow
+      eg.fillStyle(0x8a6a3a, 0.5);
+      eg.fillRect(2 * TILE_PX, ry, 10 * TILE_PX, 12);
+      eg.fillStyle(0x7a5a2a, 0.4);
+      eg.fillRect(2 * TILE_PX, ry + 8, 10 * TILE_PX, 4);
+      // Cotton bolls (white dots along the row)
+      for (let bx = 3; bx < 12; bx += 2) {
+        eg.fillStyle(0xf0f0e8, 0.7);
+        eg.fillCircle(bx * TILE_PX + 16, ry + 6, 4);
+        eg.fillStyle(0xd8d8c8, 0.5);
+        eg.fillCircle(bx * TILE_PX + 14, ry + 4, 2);
+      }
+    }
+    // Magnolia tree (right of south entrance)
+    const magX = 26 * TILE_PX + 32;
+    eg.fillStyle(0x6a4a2a, 1);
+    eg.fillRect(magX - 4, southY + 8, 8, 40);
+    eg.fillStyle(0x3a6a3a, 0.8);
+    eg.fillCircle(magX, southY + 6, 22);
+    eg.fillStyle(0x4a7a4a, 0.6);
+    eg.fillCircle(magX - 8, southY + 2, 14);
+    eg.fillCircle(magX + 8, southY + 4, 12);
+    // Magnolia blossoms
+    eg.fillStyle(0xf0f0e0, 0.7);
+    eg.fillCircle(magX - 6, southY, 5);
+    eg.fillCircle(magX + 10, southY + 6, 4);
+    eg.fillCircle(magX, southY + 10, 4);
+    // Garden path (right side — decorative shrubs)
+    for (let gx = 18; gx < 24; gx += 2) {
+      eg.fillStyle(0x4a6a3a, 0.6);
+      eg.fillCircle(gx * TILE_PX + 16, southY + 16, 10);
+      eg.fillStyle(0x5a7a4a, 0.4);
+      eg.fillCircle(gx * TILE_PX + 12, southY + 12, 5);
+    }
+  }
   private drawExteriorChimney(): void {
     this.chimneyGfx = this.add.graphics().setDepth(1);
     const g = this.chimneyGfx;
@@ -7917,7 +8298,8 @@ export class OfficeScene extends Phaser.Scene {
 
   // ── Cultural perimeter wall overlays ────────────────────────────────
 
-  /** Master method — draws cultural overlays on all four perimeter walls + corners. */
+  /** Master method — draws cultural overlays on perimeter walls + corners.
+   *  Only called for default/HQ theme. World themes have their own exterior decor. */
   private drawCulturalWalls(): void {
     this.drawNorthWallAsian();
     this.drawCornerAccents();
