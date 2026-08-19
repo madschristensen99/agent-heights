@@ -10,6 +10,19 @@ import { OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID } from "../../../shared/types";
 import { achievements } from "../game/achievements";
 import type { Store } from "../store";
 
+/** Inline SVG icons for suggestions — avoids emoji rendering inconsistencies. */
+const SVG_ICONS: Record<string, string> = {
+  robot: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="14" r="1.5"/><circle cx="15" cy="14" r="1.5"/><path d="M12 4v4"/><circle cx="12" cy="3" r="1"/><path d="M2 14v2"/><path d="M22 14v2"/></svg>`,
+  clipboard: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3h6v3H9z"/><path d="M8 10h8"/><path d="M8 14h8"/><path d="M8 18h5"/></svg>`,
+  plus: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>`,
+  pencil: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`,
+  phone: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>`,
+  map: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg>`,
+  flag: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg>`,
+  trophy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 4H4v3a3 3 0 0 0 3 3"/><path d="M17 4h3v3a3 3 0 0 1-3 3"/></svg>`,
+  chart: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>`,
+};
+
 /** Aspiration-based priority boost. Suggestions matching the user's dominant aspiration get a priority reduction. */
 const ASPIRATION_BOOST: Record<string, string[]> = {
   warrior: ["explore-world", "try-golf", "check-achievements"],
@@ -43,7 +56,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "hire-first",
       label: "Hire your first agent",
-      icon: "🤖",
+      icon: SVG_ICONS.robot,
       action: "open_market",
       priority: 1,
     });
@@ -54,7 +67,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "assign-tasks",
       label: `Assign ${unassignedCards.length} unassigned task${unassignedCards.length === 1 ? "" : "s"}`,
-      icon: "📋",
+      icon: SVG_ICONS.clipboard,
       action: "open_board",
       priority: 2,
     });
@@ -65,7 +78,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "hire-more",
       label: "All agents busy — hire more",
-      icon: "➕",
+      icon: SVG_ICONS.plus,
       action: "open_market",
       priority: 3,
     });
@@ -76,7 +89,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "create-task",
       label: "Create a task for your team",
-      icon: "📝",
+      icon: SVG_ICONS.pencil,
       action: "open_board",
       priority: 4,
     });
@@ -88,7 +101,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "connect-platform",
       label: "Connect Telegram/Slack for notifications",
-      icon: "📱",
+      icon: SVG_ICONS.phone,
       action: "open_settings",
       priority: 5,
     });
@@ -100,7 +113,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "explore-world",
       label: "Step outside and explore the world",
-      icon: "🗺️",
+      icon: SVG_ICONS.map,
       action: "go_outside",
       priority: 6,
     });
@@ -112,7 +125,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "try-golf",
       label: "Try the golf course outside",
-      icon: "⛳",
+      icon: SVG_ICONS.flag,
       action: "go_outside",
       priority: 7,
     });
@@ -124,7 +137,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "check-achievements",
       label: "Check your achievement progress",
-      icon: "🏆",
+      icon: SVG_ICONS.trophy,
       action: "open_achievements",
       priority: 8,
     });
@@ -135,7 +148,7 @@ export function computeSuggestions(store: Store): SuggestionItem[] {
     items.push({
       id: "view-leaderboards",
       label: "See how you rank on leaderboards",
-      icon: "📊",
+      icon: SVG_ICONS.chart,
       action: "open_leaderboards",
       priority: 9,
     });

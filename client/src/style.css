@@ -4603,8 +4603,10 @@ kbd {
 }
 
 .next-step-icon {
-  font-size: 1rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
 }
 
 .next-step-label {
