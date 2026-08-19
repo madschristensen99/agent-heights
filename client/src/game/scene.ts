@@ -952,6 +952,7 @@ export class OfficeScene extends Phaser.Scene {
       {
         name: "map objects",
         fn: () => {
+          if (!map) { console.warn("[scene] skipping map objects — tilemap not loaded"); return; }
           // points authored in the Tiled map
           for (const obj of map.getObjectLayer("Points")?.objects ?? []) {
             const tx = Math.floor((obj.x ?? 0) / TILE_PX);
@@ -1375,6 +1376,7 @@ export class OfficeScene extends Phaser.Scene {
       {
         name: "world layer",
         fn: async () => {
+          if (!map) { console.warn("[scene] skipping world layer — tilemap not loaded"); return; }
           this.sceneStart = this.time.now;
 
           this.mapPx = { w: map.widthInPixels, h: map.heightInPixels };
@@ -1395,6 +1397,7 @@ export class OfficeScene extends Phaser.Scene {
       {
         name: "world cleanup & lighting",
         fn: () => {
+          if (!this.world) { console.warn("[scene] skipping world cleanup — world layer not initialized"); return; }
           // Warm up the particle system so the first biome ambient doesn't cause a
           // stutter.  The first ParticleEmitter render compiles WebGL shaders and
           // allocates GPU buffers.  We create the emitter now and let it render for
@@ -7325,7 +7328,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Update the weapon rack display based on owned weapons. */
   private updateWeaponRack(): void {
     const g = this.weaponRackGfx;
-    if (!g) return;
+    if (!g || !this.world) return;
     g.clear();
 
     const weapons = this.world.ownedWeaponsList;

@@ -15,9 +15,9 @@
   --green: #4cb866;
   --red: #e05858;
   --blue: #4a9cd8;
-  --radius: 0px;
-  --radius-sm: 2px;
-  --radius-lg: 0px;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-lg: 8px;
   --radius-md: 4px;
   --shadow: 0 0 0 0 transparent;
   --shadow-lg: 0 0 0 0 transparent;
@@ -2132,7 +2132,7 @@ kbd {
 }
 
 ::-webkit-scrollbar { width: 12px; }
-::-webkit-scrollbar-thumb { background: var(--panel-edge); border-radius: 0; border: 1px solid var(--bevel-dark); }
+::-webkit-scrollbar-thumb { background: var(--panel-edge); border-radius: var(--radius-sm); border: 1px solid var(--bevel-dark); }
 ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
 ::-webkit-scrollbar-track { background: var(--panel-soft); border-left: 1px solid var(--panel-edge-soft); }
 
@@ -2502,7 +2502,7 @@ kbd {
   cursor: pointer;
   font-size: 16px;
   padding: 0 4px;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   transition: border-color 0.05s;
 }
 
