@@ -5,8 +5,8 @@
   "workMetaphor": "smoking",
   "arrivalMetaphor": "van_delivery",
   "office": {
-    "tilemapPath": "client/public/assets/maps/erics-alley.json",
-    "tilesetPath": "client/public/assets/tilesets/erics-alley.png",
+    "tilemapPath": "assets/maps/erics-alley.json",
+    "tilesetPath": "assets/tilesets/erics-alley.png",
     "floorTile": 0,
     "wallTile": 1,
     "doorTile": 6
@@ -81,7 +81,7 @@
     "emotes": ["smoke", "shrug", "cough"]
   },
   "assets": {
-    "tilesetPath": "client/public/assets/tilesets/erics-alley.png",
+    "tilesetPath": "assets/tilesets/erics-alley.png",
     "assetTier": "procedural"
   }
 }

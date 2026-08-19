@@ -770,7 +770,8 @@ export class OfficeScene extends Phaser.Scene {
             const tiles = map.addTilesetImage(
               this.worldTheme.office.tilesetPath.replace(/\.[^.]+$/, "").split("/").pop() ?? "tiles-theme",
               "tiles-theme",
-            )!;
+            );
+            if (!tiles) throw new Error(`Failed to add tileset "tiles-theme" to map — texture may be missing or broken`);
             const floorColor = 0x2a2a2a;
             const bg = this.add.graphics().setDepth(-1);
             bg.fillStyle(floorColor, 1);
@@ -785,9 +786,14 @@ export class OfficeScene extends Phaser.Scene {
               bg.lineTo(map.widthInPixels, y * TILE_PX);
             }
             bg.strokePath();
-            map.createLayer("Ground", tiles)!.setDepth(0).setAlpha(0);
-            walls = map.createLayer("Walls", tiles)!.setDepth(1);
-            furniture = map.createLayer("Furniture", tiles)!.setDepth(2);
+            const groundLayer = map.createLayer("Ground", tiles);
+            if (groundLayer) groundLayer.setDepth(0).setAlpha(0);
+            const wallsLayer = map.createLayer("Walls", tiles);
+            const furnitureLayer = map.createLayer("Furniture", tiles);
+            walls = wallsLayer ?? map.createBlankLayer("Walls", tiles) as Phaser.Tilemaps.TilemapLayer;
+            furniture = furnitureLayer ?? map.createBlankLayer("Furniture", tiles) as Phaser.Tilemaps.TilemapLayer;
+            walls.setDepth(1);
+            furniture.setDepth(2);
             walls.setCollisionByProperty({ solid: true });
             furniture.setCollisionByProperty({ solid: true });
           } else {
@@ -1013,6 +1019,22 @@ export class OfficeScene extends Phaser.Scene {
           }
           this.doorTile = { x: this.spawnTile.x, y: this.spawnTile.y + 2 };
           this.registry.set("spawnTile", this.spawnTile);
+
+          // If the tilemap & collision phase crashed, walkable may be undefined.
+          // Rebuild it from the map so door carving doesn't crash.
+          if (!walkable) {
+            walkable = [];
+            const wl = this.mapRef?.getLayer("Walls");
+            const fl = this.mapRef?.getLayer("Furniture");
+            for (let y = 0; y < map.height; y++) {
+              walkable[y] = [];
+              for (let x = 0; x < map.width; x++) {
+                const w = wl?.data?.[y]?.[x];
+                const f = fl?.data?.[y]?.[x];
+                walkable[y][x] = !(w?.properties?.solid || f?.properties?.solid);
+              }
+            }
+          }
 
           // carve a door gap — make the bottom wall tiles walkable at the door columns
           // so the player can walk straight out into the world.

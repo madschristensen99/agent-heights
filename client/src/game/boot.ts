@@ -19,9 +19,9 @@ import { SS_FACTOR } from "./world";
 import * as loadingOverlay from "./loading-overlay";
 import { setCharTextureProvider, setCharComponentProvider } from "./chargen";
 import type { CharTextureProvider, CharComponentProvider } from "../../../shared/char-draw";
-import { generateAlleyTileset, generateAlleyWorldTiles } from "./alley-tiles";
-import { generateHawaiiTileset, generateHawaiiWorldTiles } from "./hawaii-tiles";
-import { generateSouthTileset, generateSouthWorldTiles } from "./south-tiles";
+import { generateAlleyTileset } from "./alley-tiles";
+import { generateHawaiiTileset } from "./hawaii-tiles";
+import { generateSouthTileset } from "./south-tiles";
 import "./furniture-alley"; // auto-registers alley furniture drawing functions
 import "./furniture-hawaii"; // auto-registers hawaii furniture drawing functions
 import "./furniture-south"; // auto-registers old south furniture drawing functions
@@ -123,6 +123,11 @@ export class BootScene extends Phaser.Scene {
         console.log("[boot] world-theme.json not found — running in HQ mode");
         return;
       }
+      if (file.key === "tiles-theme" || file.key === "map-theme") {
+        console.warn(`[boot] ${file.key} not found — will use procedural fallback`);
+        this.textures.remove(file.key);
+        return;
+      }
       if (file.key.startsWith("creature-") || file.key.startsWith("beast-") || file.key.startsWith("friendly-")) {
         console.warn(`[3D Sprite] ${file.key} not found — using procedural fallback`);
         this.textures.remove(file.key);
@@ -144,7 +149,12 @@ export class BootScene extends Phaser.Scene {
       console.log(`[boot] World theme found: ${themeData.name} (${themeData.id})`);
 
       this.load.tilemapTiledJSON("map-theme", themeData.office.tilemapPath);
-      this.load.image("tiles-theme", themeData.office.tilesetPath);
+
+      // Only load the tileset image for AI-tier themes.
+      // Procedural themes generate their tileset via canvas in create().
+      if (themeData.assets?.assetTier === "ai") {
+        this.load.image("tiles-theme", themeData.office.tilesetPath);
+      }
 
       if (themeData.assets.worldTileSpritesheetPath) {
         this.load.spritesheet("world-tiles-theme", themeData.assets.worldTileSpritesheetPath, {
@@ -184,20 +194,17 @@ export class BootScene extends Phaser.Scene {
       // Generate procedural tilesets for procedural-tier themes that have
       // their own tileset path but no AI spritesheet loaded.
       if (theme.assets?.assetTier !== "ai" && theme.office?.tilesetPath) {
-        // For Erics Alley, generate the procedural tileset and world tiles
+        // For Erics Alley, generate the procedural tileset
         if (theme.id === "erics-alley") {
           generateAlleyTileset(this, "tiles-theme");
-          generateAlleyWorldTiles(this);
         }
-        // For Hawaii, generate the procedural tileset and world tiles
+        // For Hawaii, generate the procedural tileset
         if (theme.id === "hawaii") {
           generateHawaiiTileset(this, "tiles-theme");
-          generateHawaiiWorldTiles(this);
         }
-        // For Old South, generate the procedural tileset and world tiles
+        // For Old South, generate the procedural tileset
         if (theme.id === "old-south") {
           generateSouthTileset(this, "tiles-theme");
-          generateSouthWorldTiles(this);
         }
       }
     }
