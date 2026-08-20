@@ -376,14 +376,10 @@ export class OfficeScene extends Phaser.Scene {
   // --- IDE Bridge: wall dashboard for team monitoring ---
   private wallDashboard: { container: Phaser.GameObjects.Container; titleText: Phaser.GameObjects.Text; bodyText: Phaser.GameObjects.Text; } | null = null;
   private terminalStationTiles: { x: number; y: number }[] = [
-    { x: 26, y: 6 },
-    { x: 27, y: 6 },
-    { x: 28, y: 6 },
-    { x: 26, y: 8 },
-    { x: 27, y: 8 },
-    { x: 28, y: 8 },
-    { x: 26, y: 10 },
-    { x: 27, y: 10 },
+    { x: 22, y: 14 },
+    { x: 24, y: 14 },
+    { x: 26, y: 14 },
+    { x: 28, y: 14 },
   ];
 
   // ── Tap-to-walk + tap-to-interact ──
@@ -11565,50 +11561,57 @@ export class OfficeScene extends Phaser.Scene {
 
   private createTerminalStations(): void {
     this.terminalStations = [];
-    for (const tile of this.terminalStationTiles) {
-      const px = tile.x * TILE_PX + TILE_PX / 2;
-      const py = tile.y * TILE_PX + TILE_PX / 2;
-      const container = this.add.container(px, py).setDepth(10 + py);
-
-      // Desk surface
-      const desk = this.add.graphics();
-      desk.fillStyle(0x2a2a3a, 0.9);
-      desk.fillRoundedRect(-TILE_PX * 0.45, -TILE_PX * 0.1, TILE_PX * 0.9, TILE_PX * 0.25, 3);
-      desk.lineStyle(1, 0x3a3a4a, 0.6);
-      desk.strokeRoundedRect(-TILE_PX * 0.45, -TILE_PX * 0.1, TILE_PX * 0.9, TILE_PX * 0.25, 3);
-      container.add(desk);
-
-      // Monitor (reuses existing monitor spritesheet)
-      const monitor = this.add.sprite(0, -TILE_PX * 0.35, MONITOR_TEX, "2").setDepth(1);
-      container.add(monitor);
-
-      // Glow
-      const glow = this.add.circle(0, -TILE_PX * 0.3, 32, 0x4af0a8, 0).setDepth(0).setBlendMode(Phaser.BlendModes.ADD);
-      container.add(glow);
-
-      // Tool label (above monitor)
-      const toolLabel = this.add.text(0, -TILE_PX * 0.72, "", {
-        fontSize: "9px",
-        color: "#88ffcc",
-        fontFamily: "monospace",
-      }).setOrigin(0.5, 0.5).setDepth(2);
-      container.add(toolLabel);
-
-      // File label (below monitor, on desk)
-      const fileLabel = this.add.text(0, TILE_PX * 0.02, "", {
-        fontSize: "7px",
-        color: "#aaaacc",
-        fontFamily: "monospace",
-      }).setOrigin(0.5, 0.5).setDepth(2);
-      container.add(fileLabel);
-
-      this.terminalStations.push({ container, monitor, glow, toolLabel, fileLabel });
-    }
     this.syncTerminalStations();
   }
 
+  private destroyTerminalStations(): void {
+    for (const station of this.terminalStations) {
+      station.container.destroy(true);
+    }
+    this.terminalStations = [];
+  }
+
+  private createOneStation(tile: { x: number; y: number }): { container: Phaser.GameObjects.Container; monitor: Phaser.GameObjects.Sprite; glow: Phaser.GameObjects.Arc; toolLabel: Phaser.GameObjects.Text; fileLabel: Phaser.GameObjects.Text; } {
+    const px = tile.x * TILE_PX + TILE_PX / 2;
+    const py = tile.y * TILE_PX + TILE_PX / 2;
+    const container = this.add.container(px, py).setDepth(10 + py);
+
+    const desk = this.add.graphics();
+    desk.fillStyle(0x2a2a3a, 0.9);
+    desk.fillRoundedRect(-TILE_PX * 0.45, -TILE_PX * 0.1, TILE_PX * 0.9, TILE_PX * 0.25, 3);
+    desk.lineStyle(1, 0x3a3a4a, 0.6);
+    desk.strokeRoundedRect(-TILE_PX * 0.45, -TILE_PX * 0.1, TILE_PX * 0.9, TILE_PX * 0.25, 3);
+    container.add(desk);
+
+    const monitor = this.add.sprite(0, -TILE_PX * 0.35, MONITOR_TEX, "2").setDepth(1);
+    container.add(monitor);
+
+    const glow = this.add.circle(0, -TILE_PX * 0.3, 32, 0x4af0a8, 0).setDepth(0).setBlendMode(Phaser.BlendModes.ADD);
+    container.add(glow);
+
+    const toolLabel = this.add.text(0, -TILE_PX * 0.72, "", {
+      fontSize: "9px",
+      color: "#88ffcc",
+      fontFamily: "monospace",
+    }).setOrigin(0.5, 0.5).setDepth(2);
+    container.add(toolLabel);
+
+    const fileLabel = this.add.text(0, TILE_PX * 0.02, "", {
+      fontSize: "7px",
+      color: "#aaaacc",
+      fontFamily: "monospace",
+    }).setOrigin(0.5, 0.5).setDepth(2);
+    container.add(fileLabel);
+
+    return { container, monitor, glow, toolLabel, fileLabel };
+  }
+
   private syncTerminalStations(): void {
-    // Merge personal sessions (first) with org member sessions
+    if (!this.store.showTerminalStations) {
+      this.destroyTerminalStations();
+      return;
+    }
+
     const personalSessions = [...this.store.externalSessions.values()].map(s => ({
       sessionId: s.sessionId, userId: s.userId, tool: s.tool, state: s.state,
       currentFile: s.currentFile, gitBranch: s.gitBranch, filesChanged: s.filesChanged,
@@ -11619,7 +11622,19 @@ export class OfficeScene extends Phaser.Scene {
       currentFile: s.currentFile, gitBranch: s.gitBranch, filesChanged: s.filesChanged,
       linesAdded: s.linesAdded, linesRemoved: s.linesRemoved, userName: s.userName,
     }));
-    const sessions = [...personalSessions, ...orgSessions].slice(0, this.terminalStations.length);
+    const sessions = [...personalSessions, ...orgSessions].slice(0, this.terminalStationTiles.length);
+
+    // Destroy excess stations
+    while (this.terminalStations.length > sessions.length) {
+      const station = this.terminalStations.pop()!;
+      station.container.destroy(true);
+    }
+    // Create missing stations
+    while (this.terminalStations.length < sessions.length) {
+      const tile = this.terminalStationTiles[this.terminalStations.length];
+      this.terminalStations.push(this.createOneStation(tile));
+    }
+
     const toolIcons: Record<string, string> = {
       "claude-code": "Claude",
       "codex": "Codex",
@@ -11639,20 +11654,11 @@ export class OfficeScene extends Phaser.Scene {
     for (let i = 0; i < this.terminalStations.length; i++) {
       const station = this.terminalStations[i];
       const session = sessions[i];
-
-      if (!session) {
-        // Empty station — dark monitor, no glow
-        station.monitor.setFrame("2").clearTint();
-        station.glow.setAlpha(0);
-        station.toolLabel.setText("");
-        station.fileLabel.setText("");
-        continue;
-      }
+      if (!session) continue;
 
       const color = stateColors[session.state] ?? 0x4af0a8;
       const toolName = toolIcons[session.tool] ?? "Terminal";
 
-      // Monitor frame: "0" = idle editor, "1" = lit/working, "2" = black
       if (session.state === "active") {
         station.monitor.setFrame("1").setTint(color);
       } else if (session.state === "idle") {
@@ -11663,11 +11669,9 @@ export class OfficeScene extends Phaser.Scene {
         station.monitor.setFrame("2").clearTint();
       }
 
-      // Glow
       const pulse = session.state === "active" ? 0.15 + Math.sin(this.time.now * 0.003) * 0.05 : 0;
       station.glow.setFillStyle(color, pulse);
 
-      // Labels
       const branchTag = session.gitBranch ? ` [${session.gitBranch}]` : "";
       const isOrg = session.userName !== "You";
       const nameTag = isOrg ? `${session.userName} · ` : "";
@@ -11683,51 +11687,57 @@ export class OfficeScene extends Phaser.Scene {
   // ── IDE Bridge: wall dashboard ─────────────────────────────────────
 
   private createWallDashboard(): void {
-    // Place dashboard on the wall at tile (30, 2) — top-right area
-    const px = 30 * TILE_PX + TILE_PX / 2;
-    const py = 2 * TILE_PX + TILE_PX / 2;
-    const container = this.add.container(px, py).setDepth(20);
-
-    // Dark screen background
-    const bg = this.add.rectangle(0, 0, 180, 120, 0x0a0a14, 0.85)
-      .setStrokeStyle(2, 0x2a2a3e)
-      .setOrigin(0.5, 0.5);
-    container.add(bg);
-
-    // Title
-    const titleText = this.add.text(0, -48, "TEAM DASHBOARD", {
-      fontSize: "11px",
-      fontFamily: "monospace",
-      color: "#4af0a8",
-    }).setOrigin(0.5, 0.5);
-    container.add(titleText);
-
-    // Body text — updated by syncWallDashboard
-    const bodyText = this.add.text(0, 5, "", {
-      fontSize: "9px",
-      fontFamily: "monospace",
-      color: "#aaaacc",
-      align: "left",
-    }).setOrigin(0.5, 0.5);
-    container.add(bodyText);
-
-    this.wallDashboard = { container, titleText, bodyText };
     this.syncWallDashboard();
   }
 
-  private syncWallDashboard(): void {
-    if (!this.wallDashboard) return;
+  private destroyWallDashboard(): void {
+    if (this.wallDashboard) {
+      this.wallDashboard.container.destroy(true);
+      this.wallDashboard = null;
+    }
+  }
 
+  private syncWallDashboard(): void {
     const allSessions = [
       ...this.store.externalSessions.values(),
       ...this.store.orgExternalSessions.values(),
     ];
     const active = allSessions.filter(s => s.state === "active" || s.state === "idle");
 
+    // No active sessions — destroy dashboard if it exists
     if (active.length === 0) {
-      this.wallDashboard.bodyText.setText("No active sessions");
-      this.wallDashboard.titleText.setColor("#666688");
+      this.destroyWallDashboard();
       return;
+    }
+
+    // Lazy-create dashboard if it doesn't exist
+    if (!this.wallDashboard) {
+      // Place dashboard on the wall at tile (27, 2) — top-right, in-bounds
+      const px = 27 * TILE_PX + TILE_PX / 2;
+      const py = 2 * TILE_PX + TILE_PX / 2;
+      const container = this.add.container(px, py).setDepth(20);
+
+      const bg = this.add.rectangle(0, 0, 180, 120, 0x0a0a14, 0.85)
+        .setStrokeStyle(2, 0x2a2a3e)
+        .setOrigin(0.5, 0.5);
+      container.add(bg);
+
+      const titleText = this.add.text(0, -48, "TEAM DASHBOARD", {
+        fontSize: "11px",
+        fontFamily: "monospace",
+        color: "#4af0a8",
+      }).setOrigin(0.5, 0.5);
+      container.add(titleText);
+
+      const bodyText = this.add.text(0, 5, "", {
+        fontSize: "9px",
+        fontFamily: "monospace",
+        color: "#aaaacc",
+        align: "left",
+      }).setOrigin(0.5, 0.5);
+      container.add(bodyText);
+
+      this.wallDashboard = { container, titleText, bodyText };
     }
 
     this.wallDashboard.titleText.setColor("#4af0a8");

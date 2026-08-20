@@ -2036,6 +2036,15 @@ export class Hud {
         </div>
 
         <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;margin-top:0.5rem;">
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.4rem;">🖥️ Office Display</h3>
+          <p style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Show terminal stations in your office for connected tools.</p>
+          <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.78rem;color:var(--text);">
+            <input type="checkbox" id="ide-bridge-show-stations" ${this.store.showTerminalStations ? "checked" : ""} style="cursor:pointer;" />
+            Show terminal stations in office
+          </label>
+        </div>
+
+        <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;margin-top:0.5rem;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
             <h3 style="font-size:0.85rem;color:var(--text);margin:0;">📊 Velocity & Analytics</h3>
             <button class="btn" id="ide-bridge-refresh-analytics" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Refresh</button>
@@ -2136,6 +2145,14 @@ export class Hud {
       btn.addEventListener("click", () => {
         const vis = btn.dataset.privacy as "full" | "branch_only" | "hidden";
         this.net.send({ type: "set_ide_bridge_privacy", visibility: vis });
+      });
+    }
+
+    // Show terminal stations toggle
+    const stationsCheckbox = overlay.querySelector("#ide-bridge-show-stations") as HTMLInputElement | null;
+    if (stationsCheckbox) {
+      stationsCheckbox.addEventListener("change", () => {
+        this.store.toggleTerminalStations();
       });
     }
 

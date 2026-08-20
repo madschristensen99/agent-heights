@@ -505,6 +505,14 @@ export class Store {
   orgFeedListeners: ((userId: string, userName: string, sessionId: string, tool: ExternalTool, event: ExternalEvent) => void)[] = [];
   /** Current IDE bridge privacy visibility setting. */
   ideBridgeVisibility: "full" | "branch_only" | "hidden" = "full";
+  /** Whether to render terminal stations in the office scene. Persisted in localStorage. */
+  showTerminalStations: boolean = localStorage.getItem("ah_show_terminal_stations") === "true";
+  /** Toggle terminal station visibility and persist. */
+  toggleTerminalStations(): void {
+    this.showTerminalStations = !this.showTerminalStations;
+    localStorage.setItem("ah_show_terminal_stations", String(this.showTerminalStations));
+    for (const fn of this.externalSessionListeners) fn();
+  }
   /** Velocity trends from the DB (for analytics panel). */
   velocityTrends: VelocityTrend[] = [];
   velocityListeners: (() => void)[] = [];
