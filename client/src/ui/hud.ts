@@ -7710,6 +7710,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const list = document.getElementById("next-steps-list")!;
     if (!panel || !list) return;
 
+    const overlayOpen = ["detail", "board-panel", "gantt-panel", "vmodel-panel"].some(
+      (id) => !(document.getElementById(id)?.hidden ?? true),
+    );
+    if (overlayOpen) {
+      panel.hidden = true;
+      return;
+    }
+
     const suggestions = computeSuggestions(this.store);
     if (suggestions.length === 0) {
       panel.hidden = true;

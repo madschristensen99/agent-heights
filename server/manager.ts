@@ -146,6 +146,7 @@ const MAX_CALLS_PER_TOOL = 10; // Abort after 10 calls to the same tool name (ca
 const MAX_MCP_TOOL_CALLS = 20; // Total MCP-originated tool calls per task before aborting
 const MAX_REWORKS = 3; // Maximum rework cycles before warning the manager
 const MAX_REVIEW_CHAIN_DEPTH = 3; // Auto-approve after this many review cycles on the same card
+const MAX_PENDING_REVIEWS = 5; // Global circuit breaker: stop creating review tasks if this many are already pending
 
 /** Patterns that indicate a transient (retryable) failure — rate limit, timeout, API hang. */
 const TRANSIENT_FAILURE_PATTERNS = [
@@ -4424,7 +4425,11 @@ export class AgentManager {
           void this.notifyConnectedPlatform(rt, task, finalText);
         }
       } else if (sawError && !abort.signal.aborted) {
-        this.notifyManagersOfCompletion(rt, task, "Task failed.", true);
+        if (isManager && isReviewTask) {
+          this.handleManagerReviewFailure(rt);
+        } else {
+          this.notifyManagersOfCompletion(rt, task, "Task failed.", true);
+        }
         this.logEvent("task_error", `${rt.info.name} failed: "${task.slice(0, 100)}" — ${firstErrorText.slice(0, 100)}`);
         // Release any agent that was waiting for this task, even on failure.
         if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
@@ -4606,8 +4611,13 @@ export class AgentManager {
             if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
             // Jump to the finally block's retry path (shouldRetry = true)
           } else {
-            // Notify managers about the failure
-            this.notifyManagersOfCompletion(rt, task, failReason, true);
+            // Notify managers about the failure — unless this is a manager failing a review task,
+            // in which case auto-approve the original work to prevent recursive review loops.
+            if (isManager && isReviewTask) {
+              this.handleManagerReviewFailure(rt);
+            } else {
+              this.notifyManagersOfCompletion(rt, task, failReason, true);
+            }
             this.logEvent("task_error", `${rt.info.name} aborted: "${task.slice(0, 100)}" — ${failReason.slice(0, 100)}`);
 
           // Record in task history
@@ -4931,6 +4941,30 @@ export class AgentManager {
     this.persist();
   }
 
+  /** Handle a manager failing a review task — auto-approve the original work to break
+   *  the recursive review-of-review loop. Without this, a manager failing a review
+   *  would trigger notifyManagersOfCompletion, which assigns review tasks to OTHER
+   *  managers, who can also fail, creating exponential growth. */
+  private handleManagerReviewFailure(mgr: AgentRuntime): void {
+    const ctx = mgr.reviewContext;
+    mgr.reviewContext = null;
+    if (ctx) {
+      const target = this.agents.get(ctx.agentId);
+      if (target) {
+        target.reworkCount = 0;
+        this.log(mgr, "status", `Manager ${mgr.info.name} failed review of ${ctx.agentName}'s work — auto-approving to break review loop.`);
+        this.broadcast({ type: "toast", text: `⚠️ ${ctx.agentName}'s task auto-approved — reviewer ${mgr.info.name} encountered an error.` });
+      }
+      if (ctx.cardId) {
+        const card = this.board.get(ctx.cardId);
+        if (card && (card.status === "backlog" || card.status === "review_pending")) {
+          this.completeCard(ctx.cardId);
+        }
+      }
+      this.releasePendingHandoff(ctx.agentId);
+    }
+  }
+
   /** Process a manager's review verdict (APPROVED or NEEDS REWORK) and act on it. */
   private processReviewVerdict(mgr: AgentRuntime, reviewText: string): void {
     const ctx = mgr.reviewContext;
@@ -5150,6 +5184,24 @@ export class AgentManager {
 
   /** Notify any manager agents about a worker's task completion/failure. */
   private notifyManagersOfCompletion(rt: AgentRuntime, task: string, result: string, failed: boolean): void {
+    // Global circuit breaker: count how many managers are already doing review tasks.
+    // If too many reviews are in flight, skip creating new ones to prevent exponential growth.
+    const pendingReviews = [...this.agents.values()].filter(
+      (m) => m.info.role === "manager" && m.reviewContext,
+    ).length;
+    if (pendingReviews >= MAX_PENDING_REVIEWS) {
+      this.log(rt, "status", `Skipping manager notification — ${pendingReviews} reviews already in flight (limit ${MAX_PENDING_REVIEWS}). Auto-approving to prevent review explosion.`);
+      this.broadcast({ type: "toast", text: `⚠️ Review skipped — too many pending reviews (${pendingReviews}). Auto-approving ${rt.info.name}'s work.` });
+      if (rt.cardId) {
+        const card = this.board.get(rt.cardId);
+        if (card && (card.status === "backlog" || card.status === "review_pending")) {
+          this.completeCard(rt.cardId);
+        }
+      }
+      this.releasePendingHandoff(rt.info.id);
+      return;
+    }
+
     const managers = [...this.agents.values()].filter(
       (m) => m.info.role === "manager" && m.info.id !== rt.info.id,
     );
