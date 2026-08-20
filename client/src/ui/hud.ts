@@ -208,10 +208,15 @@ const ICON = {
   market: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
   rooms: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M14 12h.01"/><path d="M10 12h.01"/></svg>`,
   social: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
-  worlds: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+  worlds: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 0 0-9 9"/><path d="M12 21a9 9 0 0 0 9-9"/><path d="M12 7a5 5 0 0 0-5 5"/><path d="M12 17a5 5 0 0 0 5-5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>`,
   settings: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   help: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>`,
   signout: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>`,
+  portal: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>`,
+  pin: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-7.5 8-13a8 8 0 1 0-16 0c0 5.5 8 13 8 13z"/><circle cx="12" cy="9" r="3"/></svg>`,
+  alley: `<svg width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 28V14l4-6h12l4 6v14"/><path d="M6 14h20"/><path d="M10 8v6M22 8v6"/><path d="M10 20h4M18 20h4"/><path d="M10 24h4M18 24h4"/></svg>`,
+  volcano: `<svg width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 28l8-16 4 6 4-10 8 20z"/><path d="M12 12c2-3 6-3 8 0"/><path d="M14 8c1-2 3-2 4 0"/><path d="M16 4c1-1 2-1 2 0"/></svg>`,
+  columns: `<svg width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h24"/><path d="M6 10v18M10 10v18M16 10v18M22 10v18M26 10v18"/><path d="M3 28h26"/><path d="M5 6h22l-3 4H8z"/></svg>`,
 };
 
 export class Hud {
@@ -664,7 +669,7 @@ export class Hud {
       if (diff <= 0) {
         if (diff < -120_000) {
           el.textContent = "overdue";
-          el.style.color = "var(--red, #e05d5d)";
+          el.style.color = "var(--red)";
         } else {
           el.textContent = "now";
           el.style.color = "var(--green)";
@@ -1631,7 +1636,7 @@ export class Hud {
         targetId: "hire-btn",
       },
       {
-        icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', "#e8a838"),
+        icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', "var(--amber)"),
         title: "The Marketplace",
         body: "The <strong>MARKET</strong> button opens the agent marketplace. Browse ready-to-hire AI agents, or search 22,000+ <strong>MCP servers</strong> to give your agents new tools — file access, API integrations, databases, and more.",
         targetId: "marketplace-btn",
@@ -1655,7 +1660,7 @@ export class Hud {
         targetId: "feed",
       },
       {
-        icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>', "#4f9dde"),
+        icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>', "var(--accent)"),
         title: "Help & Shortcuts",
         body: "Click <strong>? HELP</strong> anytime to replay this tour. Use <strong>WASD</strong> or arrows to walk, <strong>E</strong> to interact, <strong>scroll</strong> to zoom. That's it — you're ready to build your team!",
         targetId: "help-btn",
@@ -1879,8 +1884,8 @@ export class Hud {
 
     return `<div style="margin-top:0.6rem; padding:0.5rem; border:1px solid var(--panel-edge); border-radius:var(--radius-sm); background:var(--panel-soft);">
       <div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.3rem;">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c9852c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span style="font-size:0.65rem; font-weight:600; color:#c9852c;">ROOM SECURITY SUMMARY</span>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span style="font-size:0.65rem; font-weight:600; color:var(--amber);">ROOM SECURITY SUMMARY</span>
       </div>
       ${agentsWithMcp.length > 0 ? `<div style="font-size:0.62rem; color:var(--dim); margin-bottom:0.2rem;">${agentsWithMcp.length} agent${agentsWithMcp.length !== 1 ? "s" : ""} with API access: ${esc(mcpSummary)}</div>` : ""}
       ${restrictedAgents.length > 0
@@ -2339,23 +2344,23 @@ export class Hud {
     overlay.id = "create-org-overlay";
 
     overlay.innerHTML = `
-      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:400px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;">
+      <div style="background:var(--panel);border-radius:12px;padding:1.5rem;width:400px;max-width:90vw;color:var(--text);font-family:'M Plus Rounded 1c',sans-serif;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
           <h2 style="margin:0;font-size:1rem;">🏢 Create Organization</h2>
-          <button class="x" id="org-create-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+          <button class="x" id="org-create-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:0.6rem;">
           <div>
-            <label style="font-size:0.75rem;color:#888;">Name</label>
-            <input id="org-name-input" placeholder="My Organization" style="width:100%;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;margin-top:0.2rem;" />
+            <label style="font-size:0.75rem;color:var(--dim);">Name</label>
+            <input id="org-name-input" placeholder="My Organization" style="width:100%;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:6px;color:var(--text);font-size:0.85rem;margin-top:0.2rem;" />
           </div>
           <div>
-            <label style="font-size:0.75rem;color:#888;">Slug (URL-safe)</label>
-            <input id="org-slug-input" placeholder="my-org" style="width:100%;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;margin-top:0.2rem;" />
+            <label style="font-size:0.75rem;color:var(--dim);">Slug (URL-safe)</label>
+            <input id="org-slug-input" placeholder="my-org" style="width:100%;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:6px;color:var(--text);font-size:0.85rem;margin-top:0.2rem;" />
           </div>
           <div>
-            <label style="font-size:0.75rem;color:#888;">GitHub Org (optional)</label>
-            <input id="org-github-input" placeholder="my-github-org" style="width:100%;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;margin-top:0.2rem;" />
+            <label style="font-size:0.75rem;color:var(--dim);">GitHub Org (optional)</label>
+            <input id="org-github-input" placeholder="my-github-org" style="width:100%;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:6px;color:var(--text);font-size:0.85rem;margin-top:0.2rem;" />
           </div>
           <button class="btn primary" id="org-create-submit" style="font-size:0.85rem;margin-top:0.3rem;">CREATE</button>
         </div>
@@ -2387,27 +2392,27 @@ export class Hud {
     const members = this.store.orgMembers?.orgId === orgId ? this.store.orgMembers.members : [];
 
     overlay.innerHTML = `
-      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;max-height:80vh;overflow-y:auto;">
+      <div style="background:var(--panel);border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;color:var(--text);font-family:'M Plus Rounded 1c',sans-serif;max-height:80vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
           <h2 style="margin:0;font-size:1rem;">👥 Organization Members</h2>
-          <button class="x" id="org-members-close" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">✕</button>
+          <button class="x" id="org-members-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
         </div>
         <div id="org-members-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1rem;">
-          ${members.length === 0 ? '<p style="color:#888;font-size:0.8rem;">No members yet.</p>' : members.map(m => `
-            <div style="display:flex;justify-content:space-between;align-items:center;background:#222;border-radius:6px;padding:0.5rem 0.7rem;">
+          ${members.length === 0 ? '<p style="color:var(--dim);font-size:0.8rem;">No members yet.</p>' : members.map(m => `
+            <div style="display:flex;justify-content:space-between;align-items:center;background:var(--panel-soft);border-radius:6px;padding:0.5rem 0.7rem;">
               <div>
                 <span style="font-size:0.85rem;">${m.userEmail ?? m.userId}</span>
-                <span style="font-size:0.65rem;color:${m.role === 'admin' ? '#4f9dde' : '#888'};margin-left:0.4rem;">${m.role}</span>
+                <span style="font-size:0.65rem;color:${m.role === 'admin' ? 'var(--accent)' : 'var(--dim)'};margin-left:0.4rem;">${m.role}</span>
               </div>
-              <button class="btn" data-remove-member="${m.userId}" style="font-size:0.7rem;padding:0.2rem 0.5rem;color:#c44a4a;">Remove</button>
+              <button class="btn" data-remove-member="${m.userId}" style="font-size:0.7rem;padding:0.2rem 0.5rem;color:var(--red);">Remove</button>
             </div>
           `).join("")}
         </div>
-        <div style="border-top:1px solid #333;padding-top:1rem;">
-          <div style="font-size:0.75rem;color:#888;margin-bottom:0.3rem;">ADD MEMBER BY EMAIL</div>
+        <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">ADD MEMBER BY EMAIL</div>
           <div style="display:flex;gap:0.5rem;">
-            <input id="org-add-email" placeholder="user@example.com" style="flex:1;padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;" />
-            <select id="org-add-role" style="padding:0.5rem;background:#222;border:1px solid #444;border-radius:6px;color:#e0e0e0;font-size:0.85rem;">
+            <input id="org-add-email" placeholder="user@example.com" style="flex:1;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:6px;color:var(--text);font-size:0.85rem;" />
+            <select id="org-add-role" style="padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:6px;color:var(--text);font-size:0.85rem;">
               <option value="member">Member</option>
               <option value="admin">Admin</option>
             </select>
@@ -2446,10 +2451,10 @@ export class Hud {
     overlay.id = "invite-overlay";
 
     overlay.innerHTML = `
-      <div style="background:#1a1d24;border-radius:12px;padding:1.5rem;width:380px;max-width:90vw;color:#e0e0e0;font-family:'M Plus Rounded 1c',sans-serif;text-align:center;">
+      <div style="background:var(--panel);border-radius:12px;padding:1.5rem;width:380px;max-width:90vw;color:var(--text);font-family:'M Plus Rounded 1c',sans-serif;text-align:center;">
         <div style="font-size:2rem;margin-bottom:0.5rem;">📨</div>
         <h2 style="margin:0 0 0.5rem;font-size:1rem;">Room Invitation</h2>
-        <p style="margin:0 0 1rem;font-size:0.9rem;color:#ccc;">
+        <p style="margin:0 0 1rem;font-size:0.9rem;color:var(--dim);">
           <strong>${invite.fromName}</strong> invited you to join<br/>
           <strong>${invite.roomName}</strong>
         </p>
@@ -2525,13 +2530,13 @@ export class Hud {
         </div>
         <div class="tabpanel" data-panel="api" hidden>
           <div class="sec">API KEY</div>
-          <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">Bring your own key — your agents will use it instead of the server's shared key.</p>
-          <div id="api-key-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.hasApiKey ? "#53b86b" : "#e05d5d"};">
+          <p style="font-size:0.8rem;color:var(--dim);margin-bottom:0.5rem;">Bring your own key — your agents will use it instead of the server's shared key.</p>
+          <div id="api-key-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.hasApiKey ? "var(--green)" : "var(--red)"};">
             ${this.store.hasApiKey ? "✓ You have a personal API key set." : "⚠ No personal API key — using the server's shared key."}
           </div>
           <label>API KEY
             <input id="s-api-key" type="password" placeholder="sk-..." autocomplete="off"
-              style="width:100%;padding:0.6rem 0.8rem;border-radius:0.5rem;border:1px solid #333;background:#1a1a1a;color:#e0e0e0;font-size:0.9rem;" />
+              style="width:100%;padding:0.6rem 0.8rem;border-radius:0.5rem;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--text);font-size:0.9rem;" />
           </label>
           <div class="row" style="margin-top:0.75rem;">
             <button class="btn primary" id="s-save-key">SAVE KEY</button>
@@ -2540,15 +2545,15 @@ export class Hud {
         </div>
         <div class="tabpanel" data-panel="spend" hidden>
           <div class="sec">API SPEND (30 DAYS)</div>
-          <div id="spend-loading" style="font-size:0.85rem;color:#888;">Loading…</div>
+          <div id="spend-loading" style="font-size:0.85rem;color:var(--dim);">Loading…</div>
           <div id="spend-content" hidden></div>
-          <div id="spend-cap-info" style="margin-top:1rem;font-size:0.78rem;color:#888;border-top:1px solid #333;padding-top:0.75rem;">
+          <div id="spend-cap-info" style="margin-top:1rem;font-size:0.78rem;color:var(--dim);border-top:1px solid var(--panel-edge);padding-top:0.75rem;">
             Monthly cap: ${this.store.usageCap > 0 ? `$${(this.store.usageCap / 100).toFixed(2)}` : "—"} — upgrade your plan to increase.
           </div>
         </div>
         <div class="tabpanel" data-panel="billing" hidden>
           <div class="sec">SUBSCRIPTION</div>
-          <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "#53b86b" : "#e05d5d"};">
+          <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "var(--green)" : "var(--red)"};">
             ${this.store.subscriptionActive
               ? `✓ ${this.store.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === this.store.subscriptionTier)?.name : "Active"} — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"} available.`
               : `Free plan — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"}, no task execution. Upgrade to run tasks.`}
@@ -2600,19 +2605,19 @@ export class Hud {
           <div class="row">
             <button class="btn danger" id="s-reset">RESET PROFILE</button>
           </div>
-          <div id="s-deletion-warning" hidden style="margin-top:1rem;padding:0.75rem;border:1px solid #c44a4a;border-radius:0.5rem;background:rgba(196,74,74,0.1);">
-            <div style="font-size:0.85rem;color:#e05d5d;margin-bottom:0.5rem;">⚠ Your account is scheduled for deletion on <span id="s-deletion-date"></span>.</div>
-            <div style="font-size:0.78rem;color:#888;margin-bottom:0.75rem;">All agents are stopped. Your data will be permanently erased after this date. Sign in anytime before then to cancel.</div>
+          <div id="s-deletion-warning" hidden style="margin-top:1rem;padding:0.75rem;border:1px solid var(--red);border-radius:0.5rem;background:rgba(220,38,38,0.08);">
+            <div style="font-size:0.85rem;color:var(--red);margin-bottom:0.5rem;">⚠ Your account is scheduled for deletion on <span id="s-deletion-date"></span>.</div>
+            <div style="font-size:0.78rem;color:var(--dim);margin-bottom:0.75rem;">All agents are stopped. Your data will be permanently erased after this date. Sign in anytime before then to cancel.</div>
             <button class="btn" id="s-cancel-deletion">CANCEL DELETION</button>
           </div>
           <div style="margin-bottom:1rem;">
-            <a href="/privacy" target="_blank" style="font-size:0.85rem;color:#7a8090;text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> Privacy Policy</a>
-            <span style="margin:0 0.5rem;color:#444;">·</span>
-            <a href="/terms" target="_blank" style="font-size:0.85rem;color:#7a8090;text-decoration:none;">Terms of Service</a>
+            <a href="/privacy" target="_blank" style="font-size:0.85rem;color:var(--dim);text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> Privacy Policy</a>
+            <span style="margin:0 0.5rem;color:var(--panel-edge);">·</span>
+            <a href="/terms" target="_blank" style="font-size:0.85rem;color:var(--dim);text-decoration:none;">Terms of Service</a>
           </div>
-          <div id="s-delete-account-section" style="margin-top:1rem;border-top:1px solid #333;padding-top:1rem;">
-            <div class="sec" style="color:#c44a4a;">DANGER ZONE</div>
-            <p style="font-size:0.78rem;color:#888;margin-bottom:0.5rem;">Permanently delete your account and all associated data. A 30-day grace period applies — you can cancel by signing back in.</p>
+          <div id="s-delete-account-section" style="margin-top:1rem;border-top:1px solid var(--panel-edge);padding-top:1rem;">
+            <div class="sec" style="color:var(--red);">DANGER ZONE</div>
+            <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem;">Permanently delete your account and all associated data. A 30-day grace period applies — you can cancel by signing back in.</p>
             <button class="btn danger" id="s-delete-account">🗑 DELETE ACCOUNT</button>
           </div>
         </div>
@@ -2864,12 +2869,12 @@ export class Hud {
       { key: "neuroticism", label: "Neuroticism", desc: "Sensitive vs calm" },
     ] as const).map(({ key, label, desc }) => `
       <div class="trait-row" style="margin-bottom:0.5rem;">
-        <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:#ccc;margin-bottom:0.2rem;">
-          <span>${label} <span style="color:#666;font-size:0.7rem;">${desc}</span></span>
-          <span id="h-${key}-val" style="color:#4f9dde;font-weight:600;">${Math.round(personality[key] * 100)}</span>
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--text);margin-bottom:0.2rem;">
+          <span>${label} <span style="color:var(--dim);font-size:0.7rem;">${desc}</span></span>
+          <span id="h-${key}-val" style="color:var(--accent);font-weight:600;">${Math.round(personality[key] * 100)}</span>
         </div>
         <input type="range" id="h-${key}" min="0" max="100" value="${Math.round(personality[key] * 100)}"
-          style="width:100%;accent-color:#4f9dde;" />
+          style="width:100%;accent-color:var(--accent);" />
       </div>
     `).join("");
 
@@ -2908,19 +2913,19 @@ export class Hud {
               <textarea id="h-prompt" rows="3"
                 placeholder="Standing instructions for this agent, e.g. 'You are a senior TypeScript reviewer. Always write tests first.'"></textarea>
             </label>
-            <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:#888;">PERSONALITY</div>
+            <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:var(--dim);">PERSONALITY</div>
             <div id="h-traits" style="padding:0.4rem 0;">
               ${traitSliders}
               <button class="btn" id="h-rand-personality" style="font-size:0.75rem;padding:0.3rem 0.6rem;margin-top:0.3rem;">🎲 RANDOMIZE</button>
             </div>
-            <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:#888;">ACCESS</div>
+            <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:var(--dim);">ACCESS</div>
             <div style="padding:0.3rem 0;">
-              <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:#ccc;cursor:pointer;margin-bottom:0.25rem;">
-                <input type="radio" name="h-access" value="owner" checked style="accent-color:#4f9dde;" />
+              <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:var(--text);cursor:pointer;margin-bottom:0.25rem;">
+                <input type="radio" name="h-access" value="owner" checked style="accent-color:var(--accent);" />
                 Only you can chat
               </label>
-              <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:#ccc;cursor:pointer;">
-                <input type="radio" name="h-access" value="open" style="accent-color:#4f9dde;" />
+              <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:var(--text);cursor:pointer;">
+                <input type="radio" name="h-access" value="open" style="accent-color:var(--accent);" />
                 Everyone with talk access can chat
               </label>
             </div>
@@ -3087,8 +3092,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         seen.add(key);
         return true;
       });
-      if (unique.length === 0) return "<span style='color:#666;'>None</span>";
-      return unique.map((s) => `<span style='display:inline-block;background:#1a1a2e;border:1px solid #333;border-radius:4px;padding:0.15rem 0.5rem;margin:0.15rem;font-size:0.75rem;'>${esc(s.name ?? s.url ?? s.command ?? "MCP")}</span>`).join("");
+      if (unique.length === 0) return "<span style='color:var(--dim);'>None</span>";
+      return unique.map((s) => `<span style='display:inline-block;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:4px;padding:0.15rem 0.5rem;margin:0.15rem;font-size:0.75rem;'>${esc(s.name ?? s.url ?? s.command ?? "MCP")}</span>`).join("");
     };
 
     // Average personality
@@ -3110,12 +3115,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       { key: "neuroticism", label: "Neuroticism" },
     ] as const).map(({ key, label }) => `
       <div class="trait-row" style="margin-bottom:0.5rem;">
-        <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:#ccc;margin-bottom:0.2rem;">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--text);margin-bottom:0.2rem;">
           <span>${label}</span>
-          <span id="f-${key}-val" style="color:#4f9dde;font-weight:600;">${Math.round(personality[key] * 100)}</span>
+          <span id="f-${key}-val" style="color:var(--accent);font-weight:600;">${Math.round(personality[key] * 100)}</span>
         </div>
         <input type="range" id="f-${key}" min="0" max="100" value="${Math.round(personality[key] * 100)}"
-          style="width:100%;accent-color:#4f9dde;" />
+          style="width:100%;accent-color:var(--accent);" />
       </div>
     `).join("");
 
@@ -3124,7 +3129,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     modal.innerHTML = `
       <div class="modal hire-modal" style="max-width:680px;">
         <h2>⚗️ FUSE AGENTS</h2>
-        <p style="color:#888;font-size:0.82rem;margin-bottom:0.8rem;">
+        <p style="color:var(--dim);font-size:0.82rem;margin-bottom:0.8rem;">
           Merge two agents into one. Their MCP servers, wallets, and personalities are combined.
           Both originals are fired. The fused agent starts with a clean slate.
         </p>
@@ -3146,15 +3151,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             </label>
           </div>
           <div class="hire-form" style="flex:1;">
-            <div class="sec" style="font-size:0.8rem;color:#888;margin-top:0.3rem;">MERGED MCP SERVERS</div>
+            <div class="sec" style="font-size:0.8rem;color:var(--dim);margin-top:0.3rem;">MERGED MCP SERVERS</div>
             <div id="f-mcp-display" style="padding:0.4rem 0;margin-bottom:0.4rem;">${mergeMcpDisplay(agentA, firstOther)}</div>
-            <div class="sec" style="font-size:0.8rem;color:#888;">PERSONALITY (averaged)</div>
+            <div class="sec" style="font-size:0.8rem;color:var(--dim);">PERSONALITY (averaged)</div>
             <div id="f-traits" style="padding:0.4rem 0;">
               ${traitSliders}
             </div>
-            <div class="sec" style="font-size:0.8rem;color:#888;margin-top:0.3rem;">WALLETS</div>
-            <div id="f-wallets" style="padding:0.3rem 0;font-size:0.78rem;color:#ccc;">
-              ${((agentA.cdpSolana || firstOther.cdpSolana) ? "🔵 Solana (CDP) " : "")}${((agentA.crossmintWallet || firstOther.crossmintWallet) ? "🟢 Crossmint " : "")}${(!agentA.cdpSolana && !firstOther.cdpSolana && !agentA.crossmintWallet && !firstOther.crossmintWallet) ? "<span style='color:#666;'>None</span>" : ""}
+            <div class="sec" style="font-size:0.8rem;color:var(--dim);margin-top:0.3rem;">WALLETS</div>
+            <div id="f-wallets" style="padding:0.3rem 0;font-size:0.78rem;color:var(--text);">
+              ${((agentA.cdpSolana || firstOther.cdpSolana) ? "🔵 Solana (CDP) " : "")}${((agentA.crossmintWallet || firstOther.crossmintWallet) ? "🟢 Crossmint " : "")}${(!agentA.cdpSolana && !firstOther.cdpSolana && !agentA.crossmintWallet && !firstOther.crossmintWallet) ? "<span style='color:var(--dim);'>None</span>" : ""}
             </div>
           </div>
         </div>
@@ -3183,7 +3188,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       document.getElementById("f-wallets")!.innerHTML =
         ((a.cdpSolana || b.cdpSolana) ? "🔵 Solana (CDP) " : "") +
         ((a.crossmintWallet || b.crossmintWallet) ? "🟢 Crossmint " : "") ||
-        "<span style='color:#666;'>None</span>";
+        "<span style='color:var(--dim);'>None</span>";
     };
 
     document.getElementById("f-cancel")!.addEventListener("click", () => (modal.hidden = true));
@@ -3337,14 +3342,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     banner.style.alignItems = "center";
     banner.style.gap = "8px";
     banner.style.padding = "4px 12px";
-    banner.style.background = "linear-gradient(90deg, #1a1d2e, #2a1d3e)";
-    banner.style.borderBottom = "1px solid #33364a";
+    banner.style.background = "linear-gradient(90deg, var(--panel), var(--panel-soft))";
+    banner.style.borderBottom = "1px solid var(--panel-edge)";
     banner.style.fontSize = "12px";
-    banner.style.color = "#e8eaf0";
+    banner.style.color = "var(--text)";
     banner.innerHTML = `
       <span style="font-size:18px;">${event.icon}</span>
       <span style="font-weight:600;">${event.eventName}</span>
-      <span style="color:#9aa0b0;">${event.description.replace(/</g, "&lt;")}</span>
+      <span style="color:var(--dim);">${event.description.replace(/</g, "&lt;")}</span>
     `;
   }
 
@@ -3538,14 +3543,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       if (!banner) {
         banner = document.createElement("div");
         banner.id = "world-banner";
-        banner.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:500;padding:6px 14px;border-radius:8px;background:rgba(20,20,40,0.92);border:1px solid rgba(74,106,138,0.6);color:#c0e0ff;font-size:13px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(4px);";
+        banner.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:500;padding:6px 14px;border-radius:8px;background:var(--panel);border:1px solid var(--panel-edge);color:var(--accent);font-size:13px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(4px);";
         document.body.appendChild(banner);
       }
       const worldName = this.store.currentWorld.themeName;
-      banner.innerHTML = `🌀 <strong>${esc(worldName)}</strong>`;
+      banner.innerHTML = `${ICON.portal} <strong>${esc(worldName)}</strong>`;
       const returnBtn = document.createElement("button");
       returnBtn.textContent = "← Return to HQ";
-      returnBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;cursor:pointer;font-size:12px;";
+      returnBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--accent);cursor:pointer;font-size:12px;";
       returnBtn.addEventListener("click", () => {
         const scene = this.store.sceneRef as any;
         if (scene?.exitWorld) scene.exitWorld();
@@ -3666,12 +3671,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         <div class="agent-row vac-row" data-vac-id="${a.id}">
           <span class="dot idle"></span>
           <span class="name" style="color:${a.accent};opacity:0.6">🏖️ ${esc(a.name)}</span>
-          <span class="status" style="cursor:pointer;color:#5a9a5a">restore</span>
+          <span class="status" style="cursor:pointer;color:var(--green)">restore</span>
         </div>`,
       )
       .join("");
     const vacSection = vacRows
-      ? `<div style="margin-top:0.4rem;padding-top:0.4rem;border-top:1px solid #333;font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.05em;">On Vacation</div>${vacRows}`
+      ? `<div style="margin-top:0.4rem;padding-top:0.4rem;border-top:1px solid var(--panel-edge);font-size:0.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.05em;">On Vacation</div>${vacRows}`
       : "";
     const title = `<div class="panel-title">STAFF (${this.store.agents.size})
       <button class="icon-btn" id="roster-toggle" title="${this.rosterCollapsed ? "Open staff" : "Collapse"}">
@@ -3730,7 +3735,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         input.type = "text";
         input.value = agent.name;
         input.maxLength = 24;
-        input.style.cssText = `color:${agent.accent};background:#111;border:1px solid ${agent.accent};border-radius:0.25rem;padding:0.15rem 0.4rem;font-size:0.9rem;font-family:inherit;width:10rem;`;
+        input.style.cssText = `color:${agent.accent};background:var(--panel-soft);border:1px solid ${agent.accent};border-radius:0.25rem;padding:0.15rem 0.4rem;font-size:0.9rem;font-family:inherit;width:10rem;`;
         titleEl.innerHTML = "";
         titleEl.appendChild(input);
         input.focus();
@@ -3757,7 +3762,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       · ${agent.id === OFFICE_MANAGER_ID ? "own office" : agent.id === HERMES_ID ? "mail room" : agent.id === WIZARD_ID ? "world builder" : `desk ${agent.deskIndex + 1}`} · ${agent.tasksDone} done
       ${agent.skills && agent.skills.length ? `<div class="agent-skills">${agent.skills.map((s) => `<span class="skill-badge">${esc(s)}</span>`).join("")}</div>` : ""}
       ${agent.acl && this.store.accessLevel !== "manage" && (agent.acl.allowedUserIds !== undefined || agent.acl.allowedRoles !== undefined)
-        ? `<div style="margin-top:0.3rem; display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:#c9852c;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c9852c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Access restricted — chat disabled</div>`
+        ? `<div style="margin-top:0.3rem; display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:var(--amber);"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Access restricted — chat disabled</div>`
         : ""}`;
 
     // Office Manager and Hermes can't be fired, vacationed, or fused
@@ -3879,7 +3884,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             saveBtn.textContent = "✓ Saved";
             setTimeout(() => { saveBtn.textContent = "Save"; }, 2000);
             const statusEl = mcpSection.querySelector(`#d-mcp-status-${i}`) as HTMLSpanElement | null;
-            if (statusEl) { statusEl.textContent = "✓"; statusEl.style.color = "#53b86b"; }
+            if (statusEl) { statusEl.textContent = "✓"; statusEl.style.color = "var(--green)"; }
           });
         }
       });
@@ -3945,9 +3950,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         securitySection.hidden = false;
         const hasHighRisk = securityEntries.some((e) => e.riskLevel === "high");
         const hasMediumRisk = securityEntries.some((e) => e.riskLevel === "medium");
-        const borderColor = hasHighRisk ? "#5a2020" : hasMediumRisk ? "#3a3520" : "var(--panel-edge-soft)";
-        const bgColor = hasHighRisk ? "rgba(90,32,32,0.08)" : hasMediumRisk ? "rgba(58,53,32,0.08)" : "var(--panel-soft)";
-        const headerColor = hasHighRisk ? "var(--red)" : hasMediumRisk ? "#c9852c" : "var(--dim)";
+        const borderColor = hasHighRisk ? "var(--red)" : hasMediumRisk ? "var(--amber)" : "var(--panel-edge-soft)";
+        const bgColor = hasHighRisk ? "rgba(220,38,38,0.08)" : hasMediumRisk ? "rgba(245,158,11,0.08)" : "var(--panel-soft)";
+        const headerColor = hasHighRisk ? "var(--red)" : hasMediumRisk ? "var(--amber)" : "var(--dim)";
         const highCount = securityEntries.filter((e) => e.riskLevel === "high").length;
         const medCount = securityEntries.filter((e) => e.riskLevel === "medium").length;
         let secSummary: string;
@@ -3963,7 +3968,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             </div>
             <div id="sec-expanded" style="display:none; margin-top:0.3rem; padding:0.5rem; border:1px solid ${borderColor}; border-radius:0.375rem; background:${bgColor};">
               ${securityEntries.map((e) => {
-                const rc = e.riskLevel === "high" ? "var(--red)" : e.riskLevel === "medium" ? "#c9852c" : "var(--dim)";
+                const rc = e.riskLevel === "high" ? "var(--red)" : e.riskLevel === "medium" ? "var(--amber)" : "var(--dim)";
                 const rl = e.riskLevel === "high" ? "HIGH RISK" : e.riskLevel === "medium" ? "MEDIUM RISK" : "LOW RISK";
                 return `<div style="margin-bottom:0.4rem; padding-bottom:0.4rem; border-bottom:1px solid var(--panel-edge-soft);">
                   <div style="display:flex; align-items:center; gap:0.3rem; margin-bottom:0.15rem;">
@@ -4143,24 +4148,24 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         ? `$${minPrice.toFixed(4)}/call`
         : `$${minPrice.toFixed(4)}–$${maxPrice.toFixed(4)}/call`;
       premiumSection.innerHTML = `
-        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid #2a1a3a; border-radius:0.5rem; background:rgba(42,26,58,0.15);">
-          <div style="font-size:0.75rem; font-weight:600; color:#b388ff; margin-bottom:0.3rem;">⚡ PREMIUM API SERVICES · ${priceLabel}</div>
+        <div style="margin:0.5rem 0; padding:0.6rem; border:1px solid var(--panel-edge); border-radius:0.5rem; background:var(--accent-light);">
+          <div style="font-size:0.75rem; font-weight:600; color:var(--purple); margin-bottom:0.3rem;">⚡ PREMIUM API SERVICES · ${priceLabel}</div>
           <div style="display:flex; flex-direction:column; gap:0.25rem;">
             ${grouped.map((s, si) => {
               const toolCount = s.tools.length;
-              return `<div style="padding:0.25rem 0.4rem; border:1px solid #2a1a3a; border-radius:0.3rem; background:rgba(18,13,26,0.5);">
+              return `<div style="padding:0.25rem 0.4rem; border:1px solid var(--panel-edge); border-radius:0.3rem; background:var(--accent-light);">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span style="font-size:0.7rem; color:#ccc;">${esc(s.name)}</span>
-                  <span style="font-size:0.65rem; color:#b388ff; font-weight:600;">$${s.pricePerCall.toFixed(4)}/call</span>
+                  <span style="font-size:0.7rem; color:var(--text);">${esc(s.name)}</span>
+                  <span style="font-size:0.65rem; color:var(--purple); font-weight:600;">$${s.pricePerCall.toFixed(4)}/call</span>
                 </div>
-                ${toolCount > 0 ? `<div id="hud-premium-toggle-${si}" style="font-size:0.6rem; color:#b388ff; margin-top:0.2rem; cursor:pointer; user-select:none;">▸ ${toolCount} endpoint${toolCount > 1 ? "s" : ""}</div>
-                <div id="hud-premium-tools-${si}" style="display:none; max-height:100px; overflow-y:auto; margin-top:0.2rem; padding:0.25rem 0.4rem; border:1px solid #2a1a3a; border-radius:0.25rem; background:rgba(13,10,20,0.6);">
-                  ${s.tools.map((t) => `<div style="font-size:0.58rem; color:#888; padding:0.08rem 0; border-bottom:1px solid #1a1525;">${esc(t.name)}</div>`).join("")}
+                ${toolCount > 0 ? `<div id="hud-premium-toggle-${si}" style="font-size:0.6rem; color:var(--purple); margin-top:0.2rem; cursor:pointer; user-select:none;">▸ ${toolCount} endpoint${toolCount > 1 ? "s" : ""}</div>
+                <div id="hud-premium-tools-${si}" style="display:none; max-height:100px; overflow-y:auto; margin-top:0.2rem; padding:0.25rem 0.4rem; border:1px solid var(--panel-edge); border-radius:0.25rem; background:var(--panel-soft);">
+                  ${s.tools.map((t) => `<div style="font-size:0.58rem; color:var(--dim); padding:0.08rem 0; border-bottom:1px solid var(--panel-edge-soft);">${esc(t.name)}</div>`).join("")}
                 </div>` : ""}
               </div>`;
             }).join("")}
           </div>
-          <div style="font-size:0.62rem; color:#666; margin-top:0.4rem; line-height:1.3;">
+          <div style="font-size:0.62rem; color:var(--dim); margin-top:0.4rem; line-height:1.3;">
             Billed to your premium allowance (Starter $0.50 · Pro $3.00 · Business $12.00/mo). Separate from AI inference budget.
           </div>
         </div>
@@ -5186,17 +5191,17 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const chainDiv = document.createElement("div");
       chainDiv.style.marginTop = "16px";
       chainDiv.style.padding = "12px";
-      chainDiv.style.background = "var(--card-bg, #1e2130)";
-      chainDiv.style.border = "1px solid var(--border, #33364a)";
+      chainDiv.style.background = "var(--panel)";
+      chainDiv.style.border = "1px solid var(--panel-edge)";
       chainDiv.style.borderRadius = "8px";
       const agents = [...this.store.agents.values()].filter(
         (a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard",
       );
       const agentOptions = agents.map((a) => `<option value="${a.id}">${a.name.replace(/</g, "&lt;")}</option>`).join("");
       chainDiv.innerHTML = `
-        <div style="font-size:14px;font-weight:700;color:var(--text,#e8eaf0);margin-bottom:8px;">🔗 Compound Schedule Chain</div>
-        <div style="font-size:11px;color:#9aa0b0;margin-bottom:8px;">Create a multi-step pipeline where each schedule triggers the next on completion. Only the first step fires on cron; the rest auto-trigger.</div>
-        <input id="chain-name" placeholder="Chain name (e.g. Daily Report Pipeline)" style="width:100%;font-size:12px;padding:4px 8px;margin-bottom:8px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;" />
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">🔗 Compound Schedule Chain</div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;">Create a multi-step pipeline where each schedule triggers the next on completion. Only the first step fires on cron; the rest auto-trigger.</div>
+        <input id="chain-name" placeholder="Chain name (e.g. Daily Report Pipeline)" style="width:100%;font-size:12px;padding:4px 8px;margin-bottom:8px;background:var(--panel-soft);color:var(--text);border:1px solid var(--panel-edge);border-radius:4px;" />
         <div id="chain-steps" style="display:flex;flex-direction:column;gap:6px;"></div>
         <div style="display:flex;gap:6px;margin-top:8px;">
           <button class="btn" id="chain-add-step" style="font-size:11px;padding:4px 10px;">+ Add Step</button>
@@ -5213,13 +5218,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const stepDiv = document.createElement("div");
         stepDiv.style.cssText = "display:grid;grid-template-columns:30px 1fr 1fr 1fr;gap:4px;align-items:center;";
         stepDiv.innerHTML = `
-          <span style="font-size:11px;color:#6b7280;">${stepCount}.</span>
-          <select class="chain-step-agent" style="font-size:11px;padding:3px 6px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;">
+          <span style="font-size:11px;color:var(--dim);">${stepCount}.</span>
+          <select class="chain-step-agent" style="font-size:11px;padding:3px 6px;background:var(--panel-soft);color:var(--text);border:1px solid var(--panel-edge);border-radius:4px;">
             <option value="">Agent…</option>
             ${agentOptions}
           </select>
-          <input class="chain-step-task" placeholder="Task…" style="font-size:11px;padding:3px 6px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;" />
-          <select class="chain-step-cron" style="font-size:11px;padding:3px 6px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;">
+          <input class="chain-step-task" placeholder="Task…" style="font-size:11px;padding:3px 6px;background:var(--panel-soft);color:var(--text);border:1px solid var(--panel-edge);border-radius:4px;" />
+          <select class="chain-step-cron" style="font-size:11px;padding:3px 6px;background:var(--panel-soft);color:var(--text);border:1px solid var(--panel-edge);border-radius:4px;">
             <option value="0 * * * *">Hourly</option>
             <option value="0 9 * * *">Daily 9am</option>
             <option value="0 9 * * 1">Weekly Mon</option>
@@ -6009,16 +6014,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (dominantInfo) {
       html += `<div style="font-size:28px;margin-bottom:4px;">${dominantInfo.icon}</div>`;
       html += `<div style="font-size:18px;font-weight:600;color:${dominantInfo.color};">Dominant: ${dominantInfo.label}</div>`;
-      html += `<div style="font-size:13px;color:#888;margin-top:4px;">${dash.signalCount} signals recorded</div>`;
+      html += `<div style="font-size:13px;color:var(--dim);margin-top:4px;">${dash.signalCount} signals recorded</div>`;
     } else {
-      html += `<div style="font-size:16px;color:#888;">No dominant aspiration yet</div>`;
-      html += `<div style="font-size:13px;color:#666;margin-top:4px;">Keep playing — your profile emerges after ~5 signals</div>`;
+      html += `<div style="font-size:16px;color:var(--dim);">No dominant aspiration yet</div>`;
+      html += `<div style="font-size:13px;color:var(--dim);margin-top:4px;">Keep playing — your profile emerges after ~5 signals</div>`;
     }
     html += `</div>`;
 
     // ── Radar Chart (canvas) ──
     html += `<div style="display:flex;justify-content:center;margin-bottom:24px;">`;
-    html += `<canvas id="aspiration-radar" width="280" height="280" style="background:#111322;border-radius:12px;"></canvas>`;
+    html += `<canvas id="aspiration-radar" width="280" height="280" style="background:var(--panel-soft);border-radius:12px;"></canvas>`;
     html += `</div>`;
 
     // ── Score bars ──
@@ -6396,15 +6401,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       agent_fire: "👋",
     };
     const verdictColors: Record<string, string> = {
-      confirmed: "#4ade80",
-      refuted: "#f87171",
-      inconclusive: "#fbbf24",
-      pending: "#9aa0b0",
+      confirmed: "var(--green)",
+      refuted: "var(--red)",
+      inconclusive: "var(--amber)",
+      pending: "var(--dim)",
     };
 
     if (entries.length === 0) {
       container.innerHTML = `
-        <div style="text-align: center; padding: 40px; color: #9aa0b0;">
+        <div style="text-align: center; padding: 40px; color: var(--dim);">
           <div style="font-size: 48px; margin-bottom: 12px;">🧪</div>
           <div style="font-size: 16px; margin-bottom: 8px;">No experiments yet</div>
           <div style="font-size: 13px; max-width: 400px; margin: 0 auto;">
@@ -6419,30 +6424,30 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const entriesHtml = entries.map((e) => {
       const date = new Date(e.timestamp).toLocaleString();
       const icon = typeIcons[e.type] ?? "📝";
-      const verdictColor = verdictColors[e.verdict] ?? "#9aa0b0";
+      const verdictColor = verdictColors[e.verdict] ?? "var(--dim)";
       const resultStr = e.result.tasksCompleted !== null
         ? `${e.result.tasksCompleted} tasks completed`
         : "results pending";
       return `
-        <div style="background: var(--card-bg, #1e2130); border: 1px solid var(--border, #33364a); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+        <div style="background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
             <span style="font-size: 18px;">${icon}</span>
-            <span style="font-size: 14px; font-weight: 600; color: var(--text, #e8eaf0);">${e.agentName}</span>
-            <span style="font-size: 11px; color: #6b7280; margin-left: auto;">${date}</span>
+            <span style="font-size: 14px; font-weight: 600; color: var(--text);">${e.agentName}</span>
+            <span style="font-size: 11px; color: var(--dim); margin-left: auto;">${date}</span>
           </div>
-          <div style="font-size: 12px; color: #9aa0b0; margin-bottom: 6px;">
-            <span style="color: #6b7280;">Hypothesis:</span> ${e.hypothesis.replace(/</g, "&lt;")}
+          <div style="font-size: 12px; color: var(--dim); margin-bottom: 6px;">
+            <span style="color: var(--dim);">Hypothesis:</span> ${e.hypothesis.replace(/</g, "&lt;")}
           </div>
-          <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">
-            <span style="color: #4b5563;">Before:</span> ${e.setup.before.replace(/</g, "&lt;")}
+          <div style="font-size: 11px; color: var(--dim); margin-bottom: 4px;">
+            <span style="color: var(--dim);">Before:</span> ${e.setup.before.replace(/</g, "&lt;")}
           </div>
-          <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">
-            <span style="color: #4b5563;">After:</span> ${e.setup.after.replace(/</g, "&lt;")}
+          <div style="font-size: 11px; color: var(--dim); margin-bottom: 6px;">
+            <span style="color: var(--dim);">After:</span> ${e.setup.after.replace(/</g, "&lt;")}
           </div>
           <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
             <span style="font-size: 11px; color: ${verdictColor}; font-weight: 600; text-transform: uppercase;">${e.verdict}</span>
-            <span style="font-size: 11px; color: #6b7280;">${resultStr}</span>
-            <select class="exp-verdict-select" data-entry-id="${e.id}" style="margin-left: auto; font-size: 11px; padding: 2px 6px; background: var(--card-bg, #1e2130); color: var(--text, #e8eaf0); border: 1px solid var(--border, #33364a); border-radius: 4px;">
+            <span style="font-size: 11px; color: var(--dim);">${resultStr}</span>
+            <select class="exp-verdict-select" data-entry-id="${e.id}" style="margin-left: auto; font-size: 11px; padding: 2px 6px; background: var(--panel-soft); color: var(--text); border: 1px solid var(--panel-edge); border-radius: 4px;">
               <option value="">Set verdict…</option>
               <option value="confirmed">Confirmed</option>
               <option value="refuted">Refuted</option>
@@ -6450,8 +6455,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               <option value="pending">Pending</option>
             </select>
           </div>
-          ${e.notes ? `<div style="font-size: 11px; color: #6b7280; margin-top: 6px; font-style: italic;">"${e.notes.replace(/</g, "&lt;")}"</div>` : ""}
-          <input class="exp-notes-input" data-entry-id="${e.id}" placeholder="Add notes…" value="${e.notes.replace(/"/g, "&quot;")}" style="width: 100%; margin-top: 6px; font-size: 11px; padding: 4px 8px; background: var(--card-bg, #1e2130); color: var(--text, #e8eaf0); border: 1px solid var(--border, #33364a); border-radius: 4px;" />
+          ${e.notes ? `<div style="font-size: 11px; color: var(--dim); margin-top: 6px; font-style: italic;">"${e.notes.replace(/</g, "&lt;")}"</div>` : ""}
+          <input class="exp-notes-input" data-entry-id="${e.id}" placeholder="Add notes…" value="${e.notes.replace(/"/g, "&quot;")}" style="width: 100%; margin-top: 6px; font-size: 11px; padding: 4px 8px; background: var(--panel-soft); color: var(--text); border: 1px solid var(--panel-edge); border-radius: 4px;" />
         </div>
       `;
     }).join("");
@@ -6464,8 +6469,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     container.innerHTML = `
       <div style="margin-bottom: 12px;">
-        <div style="font-size: 16px; font-weight: 700; color: var(--text, #e8eaf0);">🧪 Experiment Log</div>
-        <div style="font-size: 12px; color: #9aa0b0; margin-top: 2px;">${entries.length} experiment${entries.length === 1 ? "" : "s"} logged. Every hire, fire, and config change is a data point.</div>
+        <div style="font-size: 16px; font-weight: 700; color: var(--text);">🧪 Experiment Log</div>
+        <div style="font-size: 12px; color: var(--dim); margin-top: 2px;">${entries.length} experiment${entries.length === 1 ? "" : "s"} logged. Every hire, fire, and config change is a data point.</div>
       </div>
       ${abHtml}
       ${entriesHtml}
@@ -6522,13 +6527,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     container.innerHTML = `
       <div style="margin-bottom: 16px;">
         <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">🪑 Office Decoration</div>
-        <div style="font-size: 12px; color: #9aa0b0;">Click an item to enter placement mode. Click on the floor to place. Click an existing decoration to remove it. Press ESC to exit.</div>
+        <div style="font-size: 12px; color: var(--dim);">Click an item to enter placement mode. Click on the floor to place. Click an existing decoration to remove it. Press ESC to exit.</div>
       </div>
       <div style="display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;">
         ${categories.map((cat) => `<button class="btn deco-cat-btn" data-cat="${cat}" style="font-size: 11px; padding: 4px 10px;">${categoryLabels[cat]}</button>`).join("")}
       </div>
       <div id="deco-item-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px;"></div>
-      <div style="margin-top: 16px; border-top: 1px solid #333; padding-top: 12px;">
+      <div style="margin-top: 16px; border-top: 1px solid var(--panel-edge); padding-top: 12px;">
         <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Placed Decorations (${decorations.length})</div>
         <div id="deco-placed-list" style="display: flex; flex-direction: column; gap: 4px;"></div>
       </div>
@@ -6546,12 +6551,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           <div class="deco-item ${unlocked ? "" : "locked"}" data-type="${item.type}" style="
             display: flex; flex-direction: column; align-items: center; gap: 4px;
             padding: 10px 6px; border-radius: 8px; cursor: ${unlocked ? "pointer" : "not-allowed"};
-            background: ${unlocked ? "#1a1d2e" : "#111"}; border: 1px solid ${unlocked ? "#333" : "#222"};
+            background: ${unlocked ? "var(--panel-soft)" : "var(--panel-soft)"}; border: 1px solid ${unlocked ? "var(--panel-edge)" : "var(--panel-edge-soft)"};
             transition: border-color 0.15s;
           " ${unlocked ? "" : "title=\"Unlock: " + item.unlockRequirement + "\""}>
             <span style="font-size: 28px; ${unlocked ? "" : "filter: grayscale(1); opacity: 0.4;"}">${item.emoji}</span>
-            <span style="font-size: 10px; color: ${unlocked ? "#ccc" : "#555"}; text-align: center;">${item.label}</span>
-            ${unlocked ? "" : `<span style="font-size: 9px; color: #666;">🔒 ${item.unlockRequirement}</span>`}
+            <span style="font-size: 10px; color: ${unlocked ? "var(--text)" : "var(--dim)"}; text-align: center;">${item.label}</span>
+            ${unlocked ? "" : `<span style="font-size: 9px; color: var(--dim);">🔒 ${item.unlockRequirement}</span>`}
           </div>
         `;
       }).join("");
@@ -6570,28 +6575,28 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       btn.addEventListener("click", () => {
         activeCategory = (btn as HTMLElement).dataset.cat as DecorationCategory;
         container.querySelectorAll(".deco-cat-btn").forEach((b) => (b as HTMLElement).style.background = "");
-        (btn as HTMLElement).style.background = "#2a2d4e";
+        (btn as HTMLElement).style.background = "var(--accent-light)";
         renderGrid();
       });
     });
 
     // Highlight first category
     const firstBtn = container.querySelector(".deco-cat-btn") as HTMLElement;
-    if (firstBtn) firstBtn.style.background = "#2a2d4e";
+    if (firstBtn) firstBtn.style.background = "var(--accent-light)";
     renderGrid();
 
     // Render placed decorations list
     const placedList = container.querySelector("#deco-placed-list") as HTMLElement;
     if (decorations.length === 0) {
-      placedList.innerHTML = `<div style="color: #666; font-size: 12px;">No decorations placed yet. Select an item above and click on the office floor!</div>`;
+      placedList.innerHTML = `<div style="color: var(--dim); font-size: 12px;">No decorations placed yet. Select an item above and click on the office floor!</div>`;
     } else {
       placedList.innerHTML = decorations.map((d) => {
         const item = DECORATION_CATALOG.find((c) => c.type === d.type);
         return `
-          <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #1a1d2e; border-radius: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel-soft); border-radius: 6px;">
             <span style="font-size: 20px;">${item?.emoji ?? "📦"}</span>
-            <span style="font-size: 12px; color: #ccc;">${item?.label ?? d.type} at (${d.tileX}, ${d.tileY})</span>
-            <button class="btn" data-remove="${d.id}" style="margin-left: auto; font-size: 11px; padding: 2px 8px; color: #f87171;">Remove</button>
+            <span style="font-size: 12px; color: var(--text);">${item?.label ?? d.type} at (${d.tileX}, ${d.tileY})</span>
+            <button class="btn" data-remove="${d.id}" style="margin-left: auto; font-size: 11px; padding: 2px 8px; color: var(--red);">Remove</button>
           </div>
         `;
       }).join("");
@@ -6647,31 +6652,31 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const label = levelLabels[lvl] ?? "";
       levelRows += `
         <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;${isCurrent ? "background:rgba(100,200,255,0.15);border:1px solid rgba(100,200,255,0.3);" : ""}">
-          <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;${isUnlocked ? "background:linear-gradient(135deg,#4caf50,#2196f3);color:#fff;" : "background:#333;color:#666;"}">${lvl}</div>
+          <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;${isUnlocked ? "background:linear-gradient(135deg,var(--green),var(--accent));color:#fff;" : "background:var(--panel-soft);color:var(--dim);"}">${lvl}</div>
           <div style="flex:1;">
-            <div style="font-size:13px;font-weight:600;${isUnlocked ? "" : "color:#666;"}">${label}</div>
-            <div style="font-size:11px;color:#888;">${xpReq.toLocaleString()} XP · ${maxA} agents max</div>
+            <div style="font-size:13px;font-weight:600;${isUnlocked ? "" : "color:var(--dim);"}">${label}</div>
+            <div style="font-size:11px;color:var(--dim);">${xpReq.toLocaleString()} XP · ${maxA} agents max</div>
           </div>
-          ${isCurrent ? '<span style="font-size:11px;color:#4fc3f7;">● Current</span>' : isUnlocked ? '<span style="font-size:16px;">✓</span>' : '<span style="font-size:16px;color:#444;">🔒</span>'}
+          ${isCurrent ? '<span style="font-size:11px;color:var(--accent);">● Current</span>' : isUnlocked ? '<span style="font-size:16px;">✓</span>' : '<span style="font-size:16px;color:var(--panel-edge);">🔒</span>'}
         </div>`;
     }
 
     container.innerHTML = `
       <div style="margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
-          <div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;background:linear-gradient(135deg,#4caf50,#2196f3);color:#fff;">${progress.level}</div>
+          <div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;background:linear-gradient(135deg,var(--green),var(--accent));color:#fff;">${progress.level}</div>
           <div>
             <div style="font-size:18px;font-weight:700;">Office Level ${progress.level}</div>
-            <div style="font-size:12px;color:#888;">${progress.xp.toLocaleString()} total XP · ${progress.maxAgents} agents max · ${progress.prestigeCount > 0 ? `${progress.prestigeCount} prestige` : "no prestige"}</div>
+            <div style="font-size:12px;color:var(--dim);">${progress.xp.toLocaleString()} total XP · ${progress.maxAgents} agents max · ${progress.prestigeCount > 0 ? `${progress.prestigeCount} prestige` : "no prestige"}</div>
           </div>
         </div>
-        <div style="background:#222;border-radius:8px;height:12px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#4caf50,#8bc34a);transition:width 0.5s;"></div>
+        <div style="background:var(--panel-soft);border-radius:8px;height:12px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--green),var(--accent));transition:width 0.5s;"></div>
         </div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">${progress.xpForCurrentLevel} / ${progress.xpForNextLevel} XP to Level ${progress.level + 1}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:4px;">${progress.xpForCurrentLevel} / ${progress.xpForNextLevel} XP to Level ${progress.level + 1}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;">${levelRows}</div>
-      <div style="margin-top:16px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:11px;color:#888;">
+      <div style="margin-top:16px;padding:12px;background:var(--panel-soft);border-radius:8px;font-size:11px;color:var(--dim);">
         <strong>XP Sources:</strong><br>
         Task completed: +10 XP · Agent hired: +50 XP · Day active: +25 XP<br>
         Achievement unlocked: +100 XP · Schedule executed: +15 XP · World explored: +200 XP
@@ -6684,13 +6689,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const isVisitor = this.store.roomType === "private" && this.store.accessLevel !== "manage";
 
     if (!social) {
-      container.innerHTML = `<div style="text-align:center;padding:20px;color:#888;">Loading social…</div>`;
+      container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--dim);">Loading social…</div>`;
       return;
     }
 
     const likeBtnText = social.likes.some((l) => l.likerId === this.store.userId) ? "👍 Liked" : "👍 Like";
     const notesHtml = social.stickyNotes.length === 0
-      ? '<div style="color:#666;font-size:12px;padding:12px;">No sticky notes yet.</div>'
+      ? '<div style="color:var(--dim);font-size:12px;padding:12px;">No sticky notes yet.</div>'
       : social.stickyNotes.map((n) => `
         <div style="background:${n.color};padding:10px;border-radius:6px;margin-bottom:8px;font-size:12px;box-shadow:2px 2px 4px rgba(0,0,0,0.2);">
           <div style="font-weight:600;margin-bottom:4px;">${n.authorName}</div>
@@ -6699,25 +6704,25 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         </div>`).join("");
 
     const visitorsHtml = social.recentVisitors.length === 0
-      ? '<div style="color:#666;font-size:12px;">No visitors yet.</div>'
+      ? '<div style="color:var(--dim);font-size:12px;">No visitors yet.</div>'
       : social.recentVisitors.slice().reverse().map((v) => `
         <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
           <span>${v.visitorName}</span>
-          <span style="color:#888;">${new Date(v.visitedAt).toLocaleDateString()}</span>
+          <span style="color:var(--dim);">${new Date(v.visitedAt).toLocaleDateString()}</span>
         </div>`).join("");
 
     container.innerHTML = `
       <div style="display:flex;gap:12px;margin-bottom:16px;">
         <button class="btn" id="social-like-btn" style="font-size:12px;padding:6px 14px;">${likeBtnText}</button>
         <div style="font-size:20px;font-weight:700;">${social.likeCount}</div>
-        <div style="font-size:12px;color:#888;align-self:center;">likes · ${social.recentVisitors.length} visitors</div>
+        <div style="font-size:12px;color:var(--dim);align-self:center;">likes · ${social.recentVisitors.length} visitors</div>
       </div>
       ${isVisitor ? `
       <div style="margin-bottom:16px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Leave a sticky note:</div>
-        <textarea id="sticky-note-input" rows="2" placeholder="Write something nice…" style="width:100%;background:#222;border:1px solid #444;border-radius:6px;padding:8px;color:#fff;font-size:12px;resize:vertical;"></textarea>
+        <textarea id="sticky-note-input" rows="2" placeholder="Write something nice…" style="width:100%;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:6px;padding:8px;color:var(--text);font-size:12px;resize:vertical;"></textarea>
         <div style="display:flex;gap:6px;margin-top:6px;">
-          <button class="btn" id="sticky-note-color" style="font-size:11px;padding:3px 8px;background:#ffeb3b;color:#333;">Color</button>
+          <button class="btn" id="sticky-note-color" style="font-size:11px;padding:3px 8px;background:#ffeb3b;color:#1a1d28;">Color</button>
           <button class="btn primary" id="sticky-note-submit" style="font-size:11px;padding:3px 12px;">Post</button>
         </div>
       </div>` : ""}
@@ -6774,12 +6779,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
   private renderAgentGrowth(agentId: string, container: HTMLElement): void {
     const growth = this.store.agentGrowthData.get(agentId);
     if (!growth || growth.totalTasks === 0) {
-      container.innerHTML = `<div style="color:#666;font-size:11px;padding:8px;">No growth data yet. Complete tasks to see performance trends.</div>`;
+      container.innerHTML = `<div style="color:var(--dim);font-size:11px;padding:8px;">No growth data yet. Complete tasks to see performance trends.</div>`;
       return;
     }
 
     const trendIcon = growth.trend === "improving" ? "📈" : growth.trend === "declining" ? "📉" : "➡️";
-    const trendColor = growth.trend === "improving" ? "#4caf50" : growth.trend === "declining" ? "#f44336" : "#888";
+    const trendColor = growth.trend === "improving" ? "var(--green)" : growth.trend === "declining" ? "var(--red)" : "var(--dim)";
 
     const sparkPoints = growth.recentHistory.map((h, i) => {
       const x = (i / Math.max(growth.recentHistory.length - 1, 1)) * 120;
@@ -6788,15 +6793,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     }).join(" ");
 
     container.innerHTML = `
-      <div style="padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;margin-top:8px;">
+      <div style="padding:8px;background:var(--panel-soft);border-radius:8px;margin-top:8px;">
         <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Agent Growth</div>
         <div style="display:flex;gap:16px;margin-bottom:8px;">
-          <div><span style="color:#888;font-size:10px;">Tasks</span><br><span style="font-size:14px;font-weight:600;">${growth.totalTasks}</span></div>
-          <div><span style="color:#888;font-size:10px;">Success</span><br><span style="font-size:14px;font-weight:600;">${Math.round(growth.successRate * 100)}%</span></div>
-          <div><span style="color:#888;font-size:10px;">Avg Time</span><br><span style="font-size:14px;font-weight:600;">${growth.avgCompletionMin.toFixed(1)}m</span></div>
-          <div><span style="color:#888;font-size:10px;">Trend</span><br><span style="font-size:14px;color:${trendColor};">${trendIcon}</span></div>
+          <div><span style="color:var(--dim);font-size:10px;">Tasks</span><br><span style="font-size:14px;font-weight:600;">${growth.totalTasks}</span></div>
+          <div><span style="color:var(--dim);font-size:10px;">Success</span><br><span style="font-size:14px;font-weight:600;">${Math.round(growth.successRate * 100)}%</span></div>
+          <div><span style="color:var(--dim);font-size:10px;">Avg Time</span><br><span style="font-size:14px;font-weight:600;">${growth.avgCompletionMin.toFixed(1)}m</span></div>
+          <div><span style="color:var(--dim);font-size:10px;">Trend</span><br><span style="font-size:14px;color:${trendColor};">${trendIcon}</span></div>
         </div>
-        ${growth.specialty ? `<div style="font-size:11px;color:#888;margin-bottom:6px;">Specialty: <span style="color:#4fc3f7;">${growth.specialty}</span></div>` : ""}
+        ${growth.specialty ? `<div style="font-size:11px;color:var(--dim);margin-bottom:6px;">Specialty: <span style="color:var(--accent);">${growth.specialty}</span></div>` : ""}
         <svg width="120" height="35" style="display:block;">
           <polyline points="${sparkPoints}" fill="none" stroke="${trendColor}" stroke-width="1.5" />
         </svg>
@@ -6825,19 +6830,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     let tasksHtml = "";
     for (const task of challenge.tasks) {
       const deps = task.dependsOn.length > 0
-        ? `<span style="color:#6b7280;font-size:11px;"> ← depends on: ${task.dependsOn.map((d) => challenge.tasks.find((t) => t.id === d)?.title ?? d).join(", ")}</span>`
+        ? `<span style="color:var(--dim);font-size:11px;"> ← depends on: ${task.dependsOn.map((d) => challenge.tasks.find((t) => t.id === d)?.title ?? d).join(", ")}</span>`
         : "";
       tasksHtml += `
-        <div style="background:rgba(20,22,30,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;margin-bottom:8px;">
+        <div style="background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:6px;padding:10px;margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div>
-              <span style="font-weight:600;color:#e8eaf0;">${task.title}</span>
-              <span style="color:#4fc3f7;font-size:11px;margin-left:6px;">${task.category}</span>
+              <span style="font-weight:600;color:var(--text);">${task.title}</span>
+              <span style="color:var(--accent);font-size:11px;margin-left:6px;">${task.category}</span>
               ${deps}
             </div>
-            <span style="color:#9aa0b0;font-size:11px;">${task.baseDurationMin}m base</span>
+            <span style="color:var(--dim);font-size:11px;">${task.baseDurationMin}m base</span>
           </div>
-          <select id="challenge-assign-${task.id}" style="width:100%;padding:4px 8px;background:rgba(20,22,30,0.8);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e8eaf0;font-size:12px;">
+          <select id="challenge-assign-${task.id}" style="width:100%;padding:4px 8px;background:var(--panel);border:1px solid var(--panel-edge);border-radius:4px;color:var(--text);font-size:12px;">
             <option value="">— Select agent —</option>
             ${agentOptions}
           </select>
@@ -6849,13 +6854,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       <div class="dash-section">
         <div class="dash-section-title">🏆 ${challenge.title}</div>
         <div class="dash-section-body">
-          <div style="margin-bottom:12px;color:#9aa0b0;font-size:13px;">${challenge.description}</div>
+          <div style="margin-bottom:12px;color:var(--dim);font-size:13px;">${challenge.description}</div>
           <div style="display:flex;gap:16px;margin-bottom:12px;">
-            <div><span style="color:#888;font-size:11px;">Tasks</span><br><span style="font-size:18px;font-weight:600;">${challenge.tasks.length}</span></div>
-            <div><span style="color:#888;font-size:11px;">Agents</span><br><span style="font-size:18px;font-weight:600;">${challenge.agents.length}</span></div>
-            <div><span style="color:#888;font-size:11px;">Optimal Time</span><br><span style="font-size:18px;font-weight:600;color:#4caf50;">${challenge.optimalTimeMin}m</span></div>
+            <div><span style="color:var(--dim);font-size:11px;">Tasks</span><br><span style="font-size:18px;font-weight:600;">${challenge.tasks.length}</span></div>
+            <div><span style="color:var(--dim);font-size:11px;">Agents</span><br><span style="font-size:18px;font-weight:600;">${challenge.agents.length}</span></div>
+            <div><span style="color:var(--dim);font-size:11px;">Optimal Time</span><br><span style="font-size:18px;font-weight:600;color:var(--green);">${challenge.optimalTimeMin}m</span></div>
           </div>
-          <div style="margin-bottom:6px;font-size:12px;color:#9aa0b0;">Assign each task to the agent that minimizes total completion time. Specialists finish tasks in base time; non-specialists take 1.5x longer.</div>
+          <div style="margin-bottom:6px;font-size:12px;color:var(--dim);">Assign each task to the agent that minimizes total completion time. Specialists finish tasks in base time; non-specialists take 1.5x longer.</div>
         </div>
       </div>
       ${tasksHtml}
@@ -6889,19 +6894,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
   }
 
   private renderChallengeResult(container: HTMLElement, result: ChallengeResult): void {
-    const scoreColor = result.score >= 90 ? "#4caf50" : result.score >= 70 ? "#ffa726" : "#f44336";
+    const scoreColor = result.score >= 90 ? "var(--green)" : result.score >= 70 ? "var(--amber)" : "var(--red)";
     const grade = result.score >= 95 ? "S" : result.score >= 85 ? "A" : result.score >= 70 ? "B" : result.score >= 50 ? "C" : "D";
 
     let breakdownHtml = "";
     for (const b of result.breakdown) {
       const isCritical = result.criticalPath.includes(b.taskId);
       breakdownHtml += `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;">
-          ${isCritical ? '<span style="color:#ff9800;">🔥</span>' : '<span style="color:#666;">○</span>'}
-          <span style="flex:1;color:#c4c8d4;">${b.taskTitle}</span>
-          <span style="color:#9aa0b0;">${b.agentName}</span>
-          <span style="color:${b.isSpecialty ? "#4caf50" : "#ffa726"};">${b.isSpecialty ? "★" : "×1.5"}</span>
-          <span style="color:#e8eaf0;font-weight:600;min-width:40px;text-align:right;">${b.durationMin}m</span>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--panel-edge-soft);font-size:12px;">
+          ${isCritical ? '<span style="color:var(--amber);">🔥</span>' : '<span style="color:var(--dim);">○</span>'}
+          <span style="flex:1;color:var(--text);">${b.taskTitle}</span>
+          <span style="color:var(--dim);">${b.agentName}</span>
+          <span style="color:${b.isSpecialty ? "var(--green)" : "var(--amber)"};">${b.isSpecialty ? "★" : "×1.5"}</span>
+          <span style="color:var(--text);font-weight:600;min-width:40px;text-align:right;">${b.durationMin}m</span>
         </div>
       `;
     }
@@ -6914,18 +6919,18 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         </div>
         <div class="dash-section-body">
           <div style="display:flex;gap:24px;margin-bottom:12px;">
-            <div><span style="color:#888;font-size:11px;">Your Time</span><br><span style="font-size:20px;font-weight:600;">${result.userTimeMin}m</span></div>
-            <div><span style="color:#888;font-size:11px;">Optimal</span><br><span style="font-size:20px;font-weight:600;color:#4caf50;">${result.optimalTimeMin}m</span></div>
-            <div><span style="color:#888;font-size:11px;">Score</span><br><span style="font-size:20px;font-weight:600;color:${scoreColor};">${result.score}/100</span></div>
+            <div><span style="color:var(--dim);font-size:11px;">Your Time</span><br><span style="font-size:20px;font-weight:600;">${result.userTimeMin}m</span></div>
+            <div><span style="color:var(--dim);font-size:11px;">Optimal</span><br><span style="font-size:20px;font-weight:600;color:var(--green);">${result.optimalTimeMin}m</span></div>
+            <div><span style="color:var(--dim);font-size:11px;">Score</span><br><span style="font-size:20px;font-weight:600;color:${scoreColor};">${result.score}/100</span></div>
           </div>
-          <div style="font-size:12px;color:#9aa0b0;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--dim);margin-bottom:12px;">
             ${result.score >= 95 ? "Perfect optimization! You found the optimal assignment." :
               result.score >= 85 ? "Excellent! Very close to optimal." :
               result.score >= 70 ? "Good effort. Room for improvement." :
               result.score >= 50 ? "Decent, but the optimal solution is significantly faster." :
               "Far from optimal. Try matching agent specialties to task categories."}
           </div>
-          <div style="margin-bottom:8px;font-size:12px;color:#9aa0b0;">🔥 = critical path task</div>
+          <div style="margin-bottom:8px;font-size:12px;color:var(--dim);">🔥 = critical path task</div>
           ${breakdownHtml}
         </div>
       </div>
@@ -6970,7 +6975,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               <div><b>Granularity:</b> ${s.granularity}/100</div>
               <div><b>Execution:</b> ${s.executionSuccess}/100</div>
             </div>
-            <div style="margin-bottom: 6px; font-size: 12px; color: #9aa0b0;">
+            <div style="margin-bottom: 6px; font-size: 12px; color: var(--dim);">
               ${s.subtaskCount} subtasks · ${s.reworkCount} rework · ${s.longestPath}-deep chain · ${s.maxParallel} parallel
             </div>
             <div>${s.summary}</div>
@@ -6984,8 +6989,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       <div class="dash-section">
         <div class="dash-section-title">🎯 Create a Goal to Decompose</div>
         <div class="dash-section-body">
-          <input id="decompose-goal-title" maxlength="200" placeholder="Enter your high-level goal…" style="width: 100%; margin-bottom: 6px; padding: 6px 8px; background: rgba(20,22,30,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #e8eaf0;" />
-          <textarea id="decompose-goal-desc" rows="2" placeholder="Detailed description (optional)" style="width: 100%; margin-bottom: 6px; padding: 6px 8px; background: rgba(20,22,30,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #e8eaf0; resize: vertical;"></textarea>
+          <input id="decompose-goal-title" maxlength="200" placeholder="Enter your high-level goal…" style="width: 100%; margin-bottom: 6px; padding: 6px 8px; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 4px; color: var(--text);" />
+          <textarea id="decompose-goal-desc" rows="2" placeholder="Detailed description (optional)" style="width: 100%; margin-bottom: 6px; padding: 6px 8px; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 4px; color: var(--text); resize: vertical;"></textarea>
           <button class="btn primary" id="decompose-create-goal" style="width: 100%;">Create Goal</button>
         </div>
       </div>
@@ -7000,9 +7005,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const allDone = subtasks.length > 0 && completed === subtasks.length;
 
         html += `
-          <div style="background: rgba(20,22,30,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-            <div style="font-weight: 600; color: #e8eaf0; margin-bottom: 4px;">${goal.title}</div>
-            <div style="font-size: 12px; color: #9aa0b0; margin-bottom: 8px;">${subtasks.length} subtasks · ${completed}/${subtasks.length} done</div>
+          <div style="background: var(--panel-soft); border: 1px solid var(--panel-edge); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+            <div style="font-weight: 600; color: var(--text); margin-bottom: 4px;">${goal.title}</div>
+            <div style="font-size: 12px; color: var(--dim); margin-bottom: 8px;">${subtasks.length} subtasks · ${completed}/${subtasks.length} done</div>
         `;
 
         // Show subtasks
@@ -7012,7 +7017,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             const statusIcon = st.status === "done" ? "✅" : st.status === "in_progress" ? "🔄" : st.status === "backlog" ? "📋" : "⏸";
             const agentName = st.assignedAgentId ? this.store.agents.get(st.assignedAgentId)?.name ?? "?" : "Unassigned";
             const deps = st.dependsOnCardIds?.length ?? 0;
-            html += `<div style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px;">${statusIcon} <span style="flex: 1; color: #c4c8d4;">${st.title}</span> <span style="color: #6b7280;">${agentName}</span>${deps > 0 ? `<span style="color: #6b7280;">←${deps}</span>` : ""}</div>`;
+            html += `<div style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px;">${statusIcon} <span style="flex: 1; color: var(--text);">${st.title}</span> <span style="color: var(--dim);">${agentName}</span>${deps > 0 ? `<span style="color: var(--dim);">←${deps}</span>` : ""}</div>`;
           }
           html += `</div>`;
         }
@@ -7020,7 +7025,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         // Add subtask form
         html += `
           <div style="display: flex; gap: 4px; margin-bottom: 6px;">
-            <input id="decompose-subtask-title-${goal.id}" maxlength="200" placeholder="Subtask title…" style="flex: 1; padding: 4px 8px; background: rgba(20,22,30,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #e8eaf0; font-size: 12px;" />
+            <input id="decompose-subtask-title-${goal.id}" maxlength="200" placeholder="Subtask title…" style="flex: 1; padding: 4px 8px; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 4px; color: var(--text); font-size: 12px;" />
             <button class="btn" id="decompose-add-subtask-${goal.id}" style="font-size: 11px; padding: 2px 8px;">+ Subtask</button>
           </div>
         `;
@@ -7183,10 +7188,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           <span style="font-size:24px;">${score.badge}</span>
           <div>
             <div style="font-size:14px;font-weight:600;color:${score.badgeColor};">${score.badge}</div>
-            <div style="font-size:11px;color:#9aa0b0;">Throughput: ${score.throughput}/hr · Success: ${Math.round(score.successRate * 100)}% · Autonomy: ${Math.round(score.autonomyRate * 100)}% · Chains: ${score.chainCount}</div>
+            <div style="font-size:11px;color:var(--dim);">Throughput: ${score.throughput}/hr · Success: ${Math.round(score.successRate * 100)}% · Autonomy: ${Math.round(score.autonomyRate * 100)}% · Chains: ${score.chainCount}</div>
           </div>
         </div>
-        ${score.suggestions.map((s) => `<div style="font-size:11px;color:#9aa0b0;margin-bottom:2px;">• ${s.replace(/</g, "&lt;")}</div>`).join("")}
+        ${score.suggestions.map((s) => `<div style="font-size:11px;color:var(--dim);margin-bottom:2px;">• ${s.replace(/</g, "&lt;")}</div>`).join("")}
         <button class="btn" id="req-efficiency-btn" style="font-size: 11px; padding: 3px 10px; margin-top: 6px;">Recalculate</button>
       </div>
     </div>`;
@@ -7203,15 +7208,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       return `<div class="dash-section">
         <div class="dash-section-title">💰 Resource Allocation</div>
         <div class="dash-section-body">
-          <div style="font-size:12px;color:#9aa0b0;margin-bottom:8px;">Distribute your budget across agents. Total: 100 points.</div>
+          <div style="font-size:12px;color:var(--dim);margin-bottom:8px;">Distribute your budget across agents. Total: 100 points.</div>
           ${agents.map((a) => `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-              <span style="font-size:12px;width:100px;color:#ccc;">${a.name}</span>
-              <input type="range" min="0" max="100" value="${Math.floor(100 / agents.length)}" class="alloc-slider" data-agent-id="${a.id}" style="flex:1;" />
-              <span class="alloc-value" data-agent-id="${a.id}" style="font-size:11px;width:30px;text-align:right;color:#9aa0b0;">${Math.floor(100 / agents.length)}</span>
+              <span style="font-size:12px;width:100px;color:var(--text);">${a.name}</span>
+              <input type="range" min="0" max="100" value="${Math.floor(100 / agents.length)}" class="alloc-slider" data-agent-id="${a.id}" style="flex:1;accent-color:var(--accent);" />
+              <span class="alloc-value" data-agent-id="${a.id}" style="font-size:11px;width:30px;text-align:right;color:var(--dim);">${Math.floor(100 / agents.length)}</span>
             </div>
           `).join("")}
-          <div style="font-size:11px;color:#6b7280;margin-top:4px;">Total: <span id="alloc-total">${Math.floor(100 / agents.length) * agents.length}</span> / 100</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:4px;">Total: <span id="alloc-total">${Math.floor(100 / agents.length) * agents.length}</span> / 100</div>
           <button class="btn" id="alloc-submit-btn" style="font-size: 12px; padding: 4px 12px; margin-top: 6px;">Allocate Resources</button>
         </div>
       </div>`;
@@ -7219,15 +7224,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     return `<div class="dash-section">
       <div class="dash-section-title">💰 Resource Allocation</div>
       <div class="dash-section-body">
-        <div style="font-size:12px;color:#9aa0b0;margin-bottom:8px;">Budget: ${alloc.totalBudget} points across ${alloc.allocations.length} agents.</div>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:8px;">Budget: ${alloc.totalBudget} points across ${alloc.allocations.length} agents.</div>
         ${alloc.allocations.map((a) => `
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <span style="font-size:12px;width:100px;color:#ccc;">${a.agentName}</span>
-            <div style="flex:1;height:8px;background:#222538;border-radius:4px;overflow:hidden;">
-              <div style="width:${a.budget}%;height:100%;background:#f59e0b;border-radius:4px;"></div>
+            <span style="font-size:12px;width:100px;color:var(--text);">${a.agentName}</span>
+            <div style="flex:1;height:8px;background:var(--panel-soft);border-radius:4px;overflow:hidden;">
+              <div style="width:${a.budget}%;height:100%;background:var(--amber);border-radius:4px;"></div>
             </div>
-            <span style="font-size:11px;width:30px;text-align:right;color:#f59e0b;">${a.budget}</span>
-            <span style="font-size:10px;width:40px;text-align:right;color:#6b7280;">${Math.round(a.utilization * 100)}% util</span>
+            <span style="font-size:11px;width:30px;text-align:right;color:var(--amber);">${a.budget}</span>
+            <span style="font-size:10px;width:40px;text-align:right;color:var(--dim);">${Math.round(a.utilization * 100)}% util</span>
           </div>
         `).join("")}
         <button class="btn" id="alloc-reset-btn" style="font-size: 11px; padding: 3px 10px; margin-top: 6px;">Reallocate</button>
@@ -7552,9 +7557,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     const panel = document.createElement("div");
     panel.style.cssText = `
-      background: #1a1d2e; border: 1px solid #2a2d4e; border-radius: 12px;
-      padding: 32px; max-width: 520px; width: 90%; color: #e0e0e0;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px;
+      padding: 32px; max-width: 520px; width: 90%; color: var(--text);
+      box-shadow: var(--shadow-lg);
     `;
 
     const QUESTIONS: { question: string; options: { label: string; aspiration: string }[] }[] = [
@@ -7661,7 +7666,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
       const skip = document.createElement("button");
       skip.textContent = "Skip";
-      skip.style.cssText = `margin-top: 12px; background: transparent; border: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit;`;
+      skip.style.cssText = `margin-top: 12px; background: transparent; border: none; color: var(--dim); cursor: pointer; font-size: 12px; font-family: inherit;`;
       skip.onclick = () => {
         this.store.aspirationQuiz = false;
         overlay.remove();
@@ -7693,6 +7698,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         // Switch to leaderboards tab
         const lbTab = document.querySelector("[data-ach-tab='leaderboards']") as HTMLElement;
         lbTab?.click();
+        break;
+      case "explore_world":
+        document.getElementById("worlds-btn")?.click();
         break;
     }
   }
@@ -7919,26 +7927,26 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     html += `<div style="padding:1rem;max-height:70vh;overflow-y:auto;">`;
 
     if (servers.length === 0) {
-      html += `<p style="color:#888;font-size:0.85rem;text-align:center;padding:2rem 0;">No MCP servers forged yet. Agents can build and register MCP servers using the <code>register_mcp_server</code> tool.</p>`;
+      html += `<p style="color:var(--dim);font-size:0.85rem;text-align:center;padding:2rem 0;">No MCP servers forged yet. Agents can build and register MCP servers using the <code>register_mcp_server</code> tool.</p>`;
     } else {
       for (const s of servers) {
-        const statusColor = s.status === "running" ? "#4caf50" : s.status === "error" ? "#f44336" : "#888";
-        html += `<div style="background:#1a1a2e;border:1px solid #333;border-radius:0.5rem;padding:0.8rem;margin-bottom:0.6rem;">`;
+        const statusColor = s.status === "running" ? "var(--green)" : s.status === "error" ? "var(--red)" : "var(--dim)";
+        html += `<div style="background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:0.5rem;padding:0.8rem;margin-bottom:0.6rem;">`;
         html += `<div style="display:flex;justify-content:space-between;align-items:start;">`;
-        html += `<div><strong style="color:#e0e0e0;">${s.name}</strong> <span style="color:${statusColor};font-size:0.75rem;">● ${s.status}</span></div>`;
+        html += `<div><strong style="color:var(--text);">${s.name}</strong> <span style="color:${statusColor};font-size:0.75rem;">● ${s.status}</span></div>`;
         html += `<button class="btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;" data-forge-unregister="${s.id}">Remove</button>`;
         html += `</div>`;
         if (s.description) {
-          html += `<p style="color:#888;font-size:0.78rem;margin:0.3rem 0;">${s.description}</p>`;
+          html += `<p style="color:var(--dim);font-size:0.78rem;margin:0.3rem 0;">${s.description}</p>`;
         }
-        html += `<p style="color:#666;font-size:0.72rem;margin:0.2rem 0;">Built by ${s.builtByName} · ${s.runtime} · ${s.entryFile}</p>`;
+        html += `<p style="color:var(--dim);font-size:0.72rem;margin:0.2rem 0;">Built by ${s.builtByName} · ${s.runtime} · ${s.entryFile}</p>`;
         if (s.error) {
-          html += `<p style="color:#f44336;font-size:0.72rem;margin:0.2rem 0;">${s.error}</p>`;
+          html += `<p style="color:var(--red);font-size:0.72rem;margin:0.2rem 0;">${s.error}</p>`;
         }
         if (s.tools.length > 0) {
           html += `<div style="margin-top:0.4rem;">`;
           for (const t of s.tools) {
-            html += `<span style="display:inline-block;background:#2a2a4a;border:1px solid #444;border-radius:0.3rem;padding:0.15rem 0.5rem;margin:0.15rem 0.15rem 0 0;font-size:0.72rem;color:#8fc9f0;">${t.name}</span>`;
+            html += `<span style="display:inline-block;background:var(--accent-light);border:1px solid var(--panel-edge);border-radius:0.3rem;padding:0.15rem 0.5rem;margin:0.15rem 0.15rem 0 0;font-size:0.72rem;color:var(--accent);">${t.name}</span>`;
           }
           html += `</div>`;
         }
@@ -7986,7 +7994,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       html += `<div class="railway-error-hint">Add a GitHub Personal Access Token via Settings → MCP Keys (GitHub server).</div>`;
       html += `</div>`;
     } else {
-      html += `<div style="padding:8px 12px;color:#8fc9f0;font-size:13px;">Connected as <b>${esc(status.login ?? "unknown")}</b></div>`;
+      html += `<div style="padding:8px 12px;color:var(--accent);font-size:13px;">Connected as <b>${esc(status.login ?? "unknown")}</b></div>`;
 
       const data = this.store.githubData;
       if (data?.error) {
@@ -7994,18 +8002,18 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       }
 
       // Create new world fork
-      html += `<div style="padding:8px 12px;border-bottom:1px solid #2a3a4a;">`;
-      html += `<div style="font-size:12px;color:#aaa;margin-bottom:6px;">Create new world fork:</div>`;
+      html += `<div style="padding:8px 12px;border-bottom:1px solid var(--panel-edge);">`;
+      html += `<div style="font-size:12px;color:var(--dim);margin-bottom:6px;">Create new world fork:</div>`;
       html += `<div style="display:flex;gap:6px;">`;
-      html += `<input id="github-branch-name" placeholder="world-name" maxlength="40" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #3a4a5a;background:#1a2a3a;color:#e0e0e0;font-size:13px;" />`;
-      html += `<button id="github-fork-btn" style="padding:6px 12px;border-radius:6px;border:1px solid #3a6a5a;background:#2a5a4a;color:#e0e0e0;cursor:pointer;font-size:13px;">Fork & Create Branch</button>`;
+      html += `<input id="github-branch-name" placeholder="world-name" maxlength="40" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--text);font-size:13px;" />`;
+      html += `<button id="github-fork-btn" style="padding:6px 12px;border-radius:6px;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--text);cursor:pointer;font-size:13px;">Fork & Create Branch</button>`;
       html += `</div>`;
       html += `</div>`;
 
       // List existing branches with deploy controls
       if (data && data.branches.length > 0) {
         html += `<div class="railway-projects">`;
-        html += `<div style="padding:8px 12px;font-size:12px;color:#aaa;">World branches (${data.branches.length}):</div>`;
+        html += `<div style="padding:8px 12px;font-size:12px;color:var(--dim);">World branches (${data.branches.length}):</div>`;
         for (const branch of data.branches) {
           const isDeploying = this.store.deployingBranch === branch.name;
           const existingDeploy = this.store.deployments.find(d => d.branchName === branch.name);
@@ -8020,14 +8028,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           if (branch.name !== "main" && branch.name !== "master") {
             html += `<button class="btn" id="github-edit-${esc(branch.name)}" style="font-size:11px;padding:3px 8px;margin:4px 0;">📝 Edit Code</button>`;
             if (isDeploying) {
-              html += `<span style="font-size:11px;color:#e8a040;padding:3px 8px;">⏳ deploying...</span>`;
+              html += `<span style="font-size:11px;color:var(--amber);padding:3px 8px;">⏳ deploying...</span>`;
             } else if (existingDeploy) {
-              const statusColor = existingDeploy.status.toLowerCase().includes("deploy") || existingDeploy.status.toLowerCase().includes("active") || existingDeploy.status.toLowerCase().includes("running") ? "#3d9152" : "#888";
+              const statusColor = existingDeploy.status.toLowerCase().includes("deploy") || existingDeploy.status.toLowerCase().includes("active") || existingDeploy.status.toLowerCase().includes("running") ? "var(--green)" : "var(--dim)";
               html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">`;
               html += `<span style="font-size:11px;color:${statusColor};">● ${esc(existingDeploy.status)}</span>`;
               if (existingDeploy.railwayServiceUrl) {
-                html += `<a href="${esc(existingDeploy.railwayServiceUrl)}" target="_blank" style="font-size:11px;color:#5a9ad6;">open ↗</a>`;
-                html += `<button class="btn" id="github-enter-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;margin-left:auto;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;">🌀 Open Portal</button>`;
+                html += `<a href="${esc(existingDeploy.railwayServiceUrl)}" target="_blank" style="font-size:11px;color:var(--accent);">open ↗</a>`;
+                html += `<button class="btn" id="github-enter-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;margin-left:auto;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--accent);display:inline-flex;align-items:center;gap:3px;">${ICON.portal} Open Portal</button>`;
               }
               html += `<button class="btn" id="github-stop-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;${existingDeploy.railwayServiceUrl ? "" : "margin-left:auto;"}">Stop</button>`;
               html += `<button class="btn danger" id="github-deldep-${esc(branch.name)}" style="font-size:10px;padding:2px 6px;">Delete</button>`;
@@ -8183,19 +8191,19 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     }
     this.codeEditorSig = sig;
 
-    let html = `<div style="width:90vw;max-width:1100px;height:85vh;background:#1a1a2e;border:1px solid #3a4a5a;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">`;
+    let html = `<div style="width:90vw;max-width:1100px;height:85vh;background:var(--panel);border:1px solid var(--panel-edge);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">`;
 
     // Header
-    html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #2a3a4a;background:#16213e;">`;
-    html += `<span style="color:#8fc9f0;font-size:14px;font-weight:bold;">📝 ${esc(branch)} — ${esc(file ? file.path : this.store.codeEditorPath || "/")}</span>`;
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--panel-edge);background:var(--panel-soft);">`;
+    html += `<span style="color:var(--accent);font-size:14px;font-weight:bold;">📝 ${esc(branch)} — ${esc(file ? file.path : this.store.codeEditorPath || "/")}</span>`;
     html += `<div style="display:flex;gap:6px;">`;
     if (file) {
-      html += `<button id="ce-save" style="padding:4px 10px;border-radius:6px;border:1px solid #3a6a5a;background:#2a5a4a;color:#e0e0e0;cursor:pointer;font-size:12px;">💾 Save</button>`;
-      html += `<button id="ce-delete" style="padding:4px 10px;border-radius:6px;border:1px solid #6a3a3a;background:#5a2a2a;color:#e0e0e0;cursor:pointer;font-size:12px;">🗑 Delete</button>`;
+      html += `<button id="ce-save" style="padding:4px 10px;border-radius:6px;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--text);cursor:pointer;font-size:12px;">💾 Save</button>`;
+      html += `<button id="ce-delete" style="padding:4px 10px;border-radius:6px;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--red);cursor:pointer;font-size:12px;">🗑 Delete</button>`;
     }
-    html += `<button id="ce-new-file" style="padding:4px 10px;border-radius:6px;border:1px solid #3a4a6a;background:#2a3a5a;color:#e0e0e0;cursor:pointer;font-size:12px;">+ New File</button>`;
+    html += `<button id="ce-new-file" style="padding:4px 10px;border-radius:6px;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--text);cursor:pointer;font-size:12px;">+ New File</button>`;
     if (this.store.currentWorld) {
-      html += `<button id="ce-redeploy" style="padding:4px 10px;border-radius:6px;border:1px solid #6a4a2a;background:#5a3a1a;color:#ffd0a0;cursor:pointer;font-size:12px;">🚀 Redeploy World</button>`;
+      html += `<button id="ce-redeploy" style="padding:4px 10px;border-radius:6px;border:1px solid var(--panel-edge);background:var(--panel-soft);color:var(--amber);cursor:pointer;font-size:12px;">🚀 Redeploy World</button>`;
     }
     html += `<button class="x" id="ce-close" style="margin-left:4px;">✕</button>`;
     html += `</div></div>`;
@@ -8204,18 +8212,18 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     html += `<div style="display:flex;flex:1;overflow:hidden;">`;
 
     // File tree sidebar
-    html += `<div style="width:240px;border-right:1px solid #2a3a4a;overflow-y:auto;padding:4px 0;">`;
+    html += `<div style="width:240px;border-right:1px solid var(--panel-edge);overflow-y:auto;padding:4px 0;">`;
     // Breadcrumb / back button
     if (this.store.codeEditorPath) {
-      html += `<div id="ce-up" style="padding:4px 12px;cursor:pointer;color:#aaa;font-size:12px;hover:color:#fff;">📁 ../</div>`;
+      html += `<div id="ce-up" style="padding:4px 12px;cursor:pointer;color:var(--dim);font-size:12px;">📁 ../</div>`;
     }
     for (const entry of dir) {
       const icon = entry.type === "dir" ? "📁" : "📄";
       const name = entry.path.split("/").pop() ?? entry.path;
-      html += `<div class="ce-entry" data-path="${esc(entry.path)}" data-type="${entry.type}" style="padding:3px 12px;cursor:pointer;color:#ccc;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${icon} ${esc(name)}</div>`;
+      html += `<div class="ce-entry" data-path="${esc(entry.path)}" data-type="${entry.type}" style="padding:3px 12px;cursor:pointer;color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${icon} ${esc(name)}</div>`;
     }
     if (dir.length === 0) {
-      html += `<div style="padding:8px 12px;color:#666;font-size:12px;">Loading...</div>`;
+      html += `<div style="padding:8px 12px;color:var(--dim);font-size:12px;">Loading...</div>`;
     }
     html += `</div>`;
 
@@ -8224,11 +8232,11 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (file) {
       html += `<div id="ce-monaco" style="flex:1;overflow:hidden;"></div>`;
       // Commit message + save bar
-      html += `<div style="padding:6px 8px;border-top:1px solid #2a3a4a;display:flex;gap:6px;align-items:center;background:#161b22;">`;
-      html += `<input id="ce-commit-msg" placeholder="Commit message..." maxlength="100" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid #3a4a5a;background:#0d1117;color:#c9d1d9;font-size:12px;" value="Update ${esc(file.path.split("/").pop() ?? file.path)}" />`;
+      html += `<div style="padding:6px 8px;border-top:1px solid var(--panel-edge);display:flex;gap:6px;align-items:center;background:var(--panel-soft);">`;
+      html += `<input id="ce-commit-msg" placeholder="Commit message..." maxlength="100" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--panel-edge);background:var(--panel);color:var(--text);font-size:12px;" value="Update ${esc(file.path.split("/").pop() ?? file.path)}" />`;
       html += `</div>`;
     } else {
-      html += `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#555;font-size:14px;">Select a file to edit</div>`;
+      html += `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:14px;">Select a file to edit</div>`;
     }
     html += `</div>`;
 
@@ -8430,7 +8438,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     let html = `<div class="railway-modal-content">`;
     html += `<div class="railway-modal-header">`;
-    html += `<span class="railway-modal-title">🌀 WORLDS</span>`;
+    html += `<span class="railway-modal-title">${ICON.worlds} WORLDS</span>`;
     html += `<button class="x" id="worlds-close">✕</button>`;
     html += `</div>`;
 
@@ -8439,7 +8447,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       html += `<div style="padding:8px 12px 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Current World</div>`;
       html += `<div class="railway-project" style="border:1px solid #3a5a3a;background:#1a2a1a;">`;
       html += `<div style="display:flex;align-items:center;gap:10px;padding:8px;">`;
-      html += `<span style="font-size:28px;line-height:1;">📍</span>`;
+      html += `<span style="line-height:1;color:#5ad6a0;display:flex;align-items:center;">${ICON.pin}</span>`;
       html += `<div style="flex:1;min-width:0;">`;
       html += `<div style="font-size:14px;font-weight:600;color:#5ad6a0;">${esc(this.store.currentWorld.themeName)}</div>`;
       html += `<div style="font-size:11px;color:#888;margin-top:2px;">You are here</div>`;
@@ -8456,7 +8464,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const isCurrent = this.store.currentWorld?.themeId === world.themeId;
       html += `<div class="railway-project" style="border:1px solid #333;background:#1a1a24;">`;
       html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px;">`;
-      html += `<span style="font-size:28px;line-height:1;">${esc(world.icon)}</span>`;
+      html += `<span style="line-height:1;color:#aaa;display:flex;align-items:center;">${(ICON as any)[world.icon] ?? ICON.worlds}</span>`;
       html += `<div style="flex:1;min-width:0;">`;
       html += `<div style="font-size:14px;font-weight:600;color:#e0e0e0;">${esc(world.name)}</div>`;
       html += `<div style="font-size:11px;color:#888;margin-top:2px;">${esc(world.description)}</div>`;
@@ -8464,7 +8472,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       if (isCurrent) {
         html += `<span style="font-size:11px;color:#5ad6a0;white-space:nowrap;">● here</span>`;
       } else {
-        html += `<button class="btn" id="worlds-enter-${esc(world.themeId)}" style="font-size:11px;padding:4px 12px;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;white-space:nowrap;cursor:pointer;font-weight:600;">🌀 Enter</button>`;
+        html += `<button class="btn" id="worlds-enter-${esc(world.themeId)}" style="font-size:11px;padding:4px 12px;border:1px solid #4a6a8a;background:#2a4a6a;color:#c0e0ff;white-space:nowrap;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:4px;">${ICON.portal} Enter</button>`;
       }
       html += `</div>`;
       html += `</div>`;
@@ -8724,25 +8732,25 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const fmtTokens = (t: number) => t >= 1_000_000 ? `${(t / 1_000_000).toFixed(1)}M` : t >= 1000 ? `${(t / 1000).toFixed(1)}K` : String(t);
 
       let html = `<div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap;">`;
-      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">TOTAL COST</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${fmtCost(data.totalCost)}</div></div>`;
-      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">API CALLS</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${data.totalCalls}</div></div>`;
-      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">INPUT TOKENS</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${fmtTokens(data.totalInputTokens)}</div></div>`;
-      html += `<div style="background:#1a1a1a;border:1px solid #333;border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:#888;">OUTPUT TOKENS</div><div style="font-size:1.1rem;font-weight:600;color:#e0e0e0;">${fmtTokens(data.totalOutputTokens)}</div></div>`;
+      html += `<div style="background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:var(--dim);">TOTAL COST</div><div style="font-size:1.1rem;font-weight:600;color:var(--text);">${fmtCost(data.totalCost)}</div></div>`;
+      html += `<div style="background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:var(--dim);">API CALLS</div><div style="font-size:1.1rem;font-weight:600;color:var(--text);">${data.totalCalls}</div></div>`;
+      html += `<div style="background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:var(--dim);">INPUT TOKENS</div><div style="font-size:1.1rem;font-weight:600;color:var(--text);">${fmtTokens(data.totalInputTokens)}</div></div>`;
+      html += `<div style="background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:0.5rem;padding:0.6rem 0.8rem;min-width:100px;"><div style="font-size:0.7rem;color:var(--dim);">OUTPUT TOKENS</div><div style="font-size:1.1rem;font-weight:600;color:var(--text);">${fmtTokens(data.totalOutputTokens)}</div></div>`;
       html += `</div>`;
 
       // Monthly cap progress bar
       const currentMonth = new Date().toISOString().slice(0, 7);
       const monthSpend = (data.byDay ?? []).filter((d: any) => d.date.startsWith(currentMonth)).reduce((s: number, d: any) => s + d.cost, 0);
       const capPct = Math.min(100, (monthSpend / 30) * 100);
-      const capColor = monthSpend >= 30 ? "#e05d5d" : monthSpend >= 25 ? "#e8c44a" : "#53b86b";
+      const capColor = monthSpend >= 30 ? "var(--red)" : monthSpend >= 25 ? "var(--amber)" : "var(--green)";
       html += `<div class="sec">THIS MONTH — $${monthSpend.toFixed(2)} / $30.00</div>`;
-      html += `<div style="background:#1a1a1a;border-radius:0.4rem;height:20px;overflow:hidden;margin-bottom:1rem;border:1px solid #333;"><div style="width:${capPct}%;height:100%;background:${capColor};border-radius:0.4rem;transition:width 0.3s;"></div></div>`;
+      html += `<div style="background:var(--panel-soft);border-radius:0.4rem;height:20px;overflow:hidden;margin-bottom:1rem;border:1px solid var(--panel-edge);"><div style="width:${capPct}%;height:100%;background:${capColor};border-radius:0.4rem;transition:width 0.3s;"></div></div>`;
 
 
       if (data.byAgent?.length > 0) {
         html += `<div class="sec">BY AGENT</div><div style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:1rem;">`;
         for (const a of data.byAgent) {
-          html += `<div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:0.3rem 0.5rem;background:#1a1a1a;border-radius:0.4rem;"><span style="color:#ccc;">${esc(a.agentName)}</span><span style="color:#888;">${fmtCost(a.cost)} · ${a.calls} calls</span></div>`;
+          html += `<div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:0.3rem 0.5rem;background:var(--panel-soft);border-radius:0.4rem;"><span style="color:var(--text);">${esc(a.agentName)}</span><span style="color:var(--dim);">${fmtCost(a.cost)} · ${a.calls} calls</span></div>`;
         }
         html += `</div>`;
       }
@@ -8752,7 +8760,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const maxCost = Math.max(...data.byDay.map((d: any) => d.cost), 0.001);
         for (const d of data.byDay) {
           const barWidth = Math.max(2, (d.cost / maxCost) * 100);
-          html += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;"><span style="color:#888;min-width:70px;">${d.date}</span><div style="flex:1;background:#1a1a1a;border-radius:0.25rem;height:16px;overflow:hidden;"><div style="width:${barWidth}%;height:100%;background:#c44a4a;border-radius:0.25rem;"></div></div><span style="color:#ccc;min-width:60px;text-align:right;">${fmtCost(d.cost)}</span></div>`;
+          html += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;"><span style="color:var(--dim);min-width:70px;">${d.date}</span><div style="flex:1;background:var(--panel-soft);border-radius:0.25rem;height:16px;overflow:hidden;"><div style="width:${barWidth}%;height:100%;background:var(--accent);border-radius:0.25rem;"></div></div><span style="color:var(--text);min-width:60px;text-align:right;">${fmtCost(d.cost)}</span></div>`;
         }
         html += `</div>`;
       }

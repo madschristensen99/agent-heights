@@ -2447,7 +2447,7 @@ export class OfficeScene extends Phaser.Scene {
     this.portalContainer = container;
 
     // Hint text above portal
-    this.portalHint = this.add.text(px, py - 56, `🌀 Walk in to enter\n${themeName}`, {
+    this.portalHint = this.add.text(px, py - 56, `Walk in to enter\n${themeName}`, {
       fontSize: "12px",
       color: "#c0e0ff",
       align: "center",
@@ -2569,7 +2569,7 @@ export class OfficeScene extends Phaser.Scene {
     this.portalContainer = container;
 
     // Hint text
-    this.portalHint = this.add.text(px, py - 60, "🌀 Return to HQ", {
+    this.portalHint = this.add.text(px, py - 60, "Return to HQ", {
       fontSize: "12px",
       color: "#c0ffd0",
       align: "center",

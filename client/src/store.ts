@@ -259,9 +259,9 @@ export class Store {
   worldsPanelOpen = false;
   worldGenerating: { worldName: string; stage: string; message: string } | null = null;
   availableWorlds: { themeId: string; name: string; icon: string; description: string }[] = [
-    { themeId: "erics-alley", name: "Erics Alley", icon: "🏚️", description: "Gritty back alley world where agents smoke instead of type. Cardboard box stations, barrel fires, dumpsters as filing cabinets, van deliveries." },
-    { themeId: "hawaii", name: "Hawaii", icon: "🌋", description: "Tropical island world where agents spin fire instead of type. Tiki bar stations, torch fires, treasure chests as filing cabinets, outrigger deliveries." },
-    { themeId: "old-south", name: "Old South", icon: "🏛️", description: "Antebellum Southern world where agents harvest instead of type. Field plot stations, smokehouses, storage chests as filing cabinets, carriage deliveries." },
+    { themeId: "erics-alley", name: "Erics Alley", icon: "alley", description: "Gritty back alley world where agents smoke instead of type. Cardboard box stations, barrel fires, dumpsters as filing cabinets, van deliveries." },
+    { themeId: "hawaii", name: "Hawaii", icon: "volcano", description: "Tropical island world where agents spin fire instead of type. Tiki bar stations, torch fires, treasure chests as filing cabinets, outrigger deliveries." },
+    { themeId: "old-south", name: "Old South", icon: "columns", description: "Antebellum Southern world where agents harvest instead of type. Field plot stations, smokehouses, storage chests as filing cabinets, carriage deliveries." },
   ];
   hasApiKey = false;
   /** Listeners called when server responds with MCP key status batch. */

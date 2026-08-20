@@ -1,29 +1,29 @@
 :root {
-  --bg: #0f1117;
-  --panel: #1a1d28;
-  --panel-soft: #222631;
-  --panel-gradient: #1a1d28;
-  --panel-edge: #2a2e3a;
-  --panel-edge-soft: #2e3340;
-  --text: #e4e6eb;
-  --dim: #8b909f;
-  --accent: #5b9bf5;
-  --accent-dark: #3d7ee0;
-  --accent-light: rgba(91, 155, 245, 0.12);
-  --accent-glow: rgba(91, 155, 245, 0.3);
-  --amber: #f0b050;
-  --green: #5dd97f;
-  --red: #f06565;
-  --blue: #5b9bf5;
-  --purple: #a78bfa;
-  --yellow: #f9ca24;
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-soft: #f0f1f4;
+  --panel-gradient: #ffffff;
+  --panel-edge: #d8dbe2;
+  --panel-edge-soft: #e4e7ed;
+  --text: #1a1d28;
+  --dim: #6b7280;
+  --accent: #3d7ee0;
+  --accent-dark: #2563eb;
+  --accent-light: rgba(61, 126, 224, 0.08);
+  --accent-glow: rgba(61, 126, 224, 0.2);
+  --amber: #d97706;
+  --green: #16a34a;
+  --red: #dc2626;
+  --blue: #3d7ee0;
+  --purple: #7c3aed;
+  --yellow: #ca8a04;
   --radius: 8px;
   --radius-sm: 6px;
   --radius-lg: 12px;
   --radius-md: 6px;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
   --shadow-glow: 0 0 12px var(--accent-glow);
   --font-pixel: "M PLUS Rounded 1c", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -647,12 +647,12 @@ body.hotbar-visible .hint {
 .log code {
   font-family: var(--font-mono);
   font-size: 11px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.04);
   padding: 1px 5px;
   border-radius: var(--radius-sm);
 }
 .log pre {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.03);
   border: 1px solid var(--panel-edge-soft);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
@@ -675,7 +675,7 @@ textarea,
 input,
 select {
   width: 100%;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--panel-soft);
   border: 1px solid var(--panel-edge);
   border-radius: var(--radius-sm);
   color: var(--text);
@@ -1907,7 +1907,7 @@ kbd {
   padding: 6px 8px;
   border-radius: var(--radius-sm);
   border-left: 3px solid;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--panel-soft);
   font-size: 11px;
 }
 
@@ -2271,7 +2271,7 @@ kbd {
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--panel-edge);
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--panel-soft);
   transition: border-color 0.05s;
 }
 
@@ -2371,7 +2371,7 @@ kbd {
   padding: 16px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--panel-edge);
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--panel-soft);
   text-align: center;
 }
 
@@ -2465,7 +2465,7 @@ kbd {
   gap: 12px;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--panel-soft);
   border: 1px solid var(--panel-edge);
 }
 
@@ -2585,7 +2585,7 @@ kbd {
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   border: 2px solid rgba(255, 215, 0, 0.4);
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: var(--panel-soft);
 }
 
 .hof-spotlight-medal {
@@ -2636,7 +2636,7 @@ kbd {
   padding: 8px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--panel-edge-soft);
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--panel-soft);
   transition: border-color 0.05s;
 }
 
@@ -2664,7 +2664,7 @@ kbd {
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   border: 1px solid var(--panel-edge);
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--panel-soft);
 }
 
 .hof-name {
@@ -2782,7 +2782,7 @@ kbd {
 }
 
 .railway-error-hint code {
-  background: rgba(0,0,0,0.08);
+  background: rgba(0,0,0,0.04);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: 11px;
@@ -2795,7 +2795,7 @@ kbd {
 }
 
 .railway-project {
-  background: rgba(0,0,0,0.03);
+  background: var(--panel-soft);
   border: 1px solid;
   border-color: var(--panel-edge-soft);
   border-radius: var(--radius-sm);
@@ -2819,7 +2819,7 @@ kbd {
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--dim);
-  background: rgba(0,0,0,0.06);
+  background: rgba(0,0,0,0.04);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
 }
@@ -3772,7 +3772,7 @@ kbd {
   padding: 0.05rem 0.3rem;
   border-radius: 0.2rem;
   background: var(--green);
-  color: #0f1117;
+  color: #fff;
 }
 
 .sched-item.disabled .sched-enabled-label {
@@ -4480,8 +4480,8 @@ kbd {
   flex-wrap: wrap;
   margin-bottom: 16px;
   padding: 12px 0;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--panel-edge);
+  border-bottom: 1px solid var(--panel-edge);
 }
 
 .away-stat {
@@ -4525,7 +4525,7 @@ kbd {
   align-items: flex-start;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--panel-edge-soft);
 }
 
 .away-event-icon {

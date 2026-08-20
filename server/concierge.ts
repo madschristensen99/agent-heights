@@ -6,7 +6,7 @@
  * 1 nudge per 8 minutes, max 2 per session.
  */
 
-import type { AgentInfo, TaskCard } from "../shared/types";
+import type { AgentInfo, TaskCard, FulfillmentStats } from "../shared/types";
 import { getCachedProfile, type AspirationType } from "./aspirations.js";
 
 type DialectStyle = string | null;
@@ -134,6 +134,7 @@ export function evaluateNudge(
     hasPlatform: boolean;
     subscriptionTier: string | null;
     dialectStyle: string | null;
+    fulfillmentStats?: FulfillmentStats | null;
   },
 ): ConciergeNudge | null {
   const s = getOrCreateState(userId);
@@ -167,6 +168,7 @@ function pickNudge(
     hasPlatform: boolean;
     subscriptionTier: string | null;
     dialectStyle: string | null;
+    fulfillmentStats?: FulfillmentStats | null;
   },
   now: number,
   dominant: AspirationType | null,
@@ -230,6 +232,13 @@ function pickNudge(
       actionLabel: "Hire Agent",
       actionType: "open_market",
     };
+  }
+
+  // ── Fulfillment gap nudges (highest priority among aspiration-aware) ──
+  // If user shows interest in a track but isn't acting on it, nudge toward action.
+  if (ctx.fulfillmentStats) {
+    const gapNudge = pickFulfillmentGapNudge(ctx.fulfillmentStats, greet, dialectStyle, now, s);
+    if (gapNudge) return gapNudge;
   }
 
   // ── Aspiration-aware nudges ──
@@ -447,3 +456,85 @@ function getAspirationIdleTips(bossName: string, dominant: AspirationType | null
 
 /** Get the evaluation interval in milliseconds. */
 export const CONCIERGE_EVAL_INTERVAL = EVAL_INTERVAL_MS;
+
+const FULFILLMENT_GAP_THRESHOLD = -15; // nudge when fulfillment is 15+ points below detection
+
+const GAP_NUDGE_TEMPLATES: Record<string, {
+  default: (greet: string, det: number, ful: number) => string;
+  street_urban?: (greet: string, det: number, ful: number) => string;
+  hawaiian_pidgin?: (greet: string, det: number, ful: number) => string;
+  southern_1812?: (greet: string, det: number, ful: number) => string;
+  actionLabel: string;
+  actionType: string;
+}> = {
+  warrior: {
+    default: (g, d, f) => `${g}, your Warrior interest is at ${d}% but you're only at ${f}% fulfillment. Step outside and hunt some creatures — every battle counts toward your combat record.`,
+    street_urban: (g, d, f) => `${g}, you're feeling the Warrior vibe (${d}%) but only living it at ${f}%. Get out there and hunt — your combat record ain't gonna build itself.`,
+    actionLabel: "Explore World",
+    actionType: "explore_world",
+  },
+  builder: {
+    default: (g, d, f) => `${g}, your Builder interest is at ${d}% but fulfillment is only ${f}%. Setting up a schedule or pipeline would close that gap fast — automation is the name of the game.`,
+    street_urban: (g, d, f) => `${g}, you're into building (${d}%) but only at ${f}% fulfillment. Set up a schedule or chain — that's how you turn interest into real output.`,
+    actionLabel: "Open Settings",
+    actionType: "open_settings",
+  },
+  explorer: {
+    default: (g, d, f) => `${g}, your Explorer interest is at ${d}% but fulfillment is only ${f}%. Try a new MCP server or experiment with a different agent model — discovery is waiting.`,
+    street_urban: (g, d, f) => `${g}, you're curious (${d}%) but only exploring at ${f}%. Try a new MCP server or switch up an agent model — go see what's out there.`,
+    actionLabel: "Open Market",
+    actionType: "open_market",
+  },
+  puzzle_solver: {
+    default: (g, d, f) => `${g}, your Puzzle Solver interest is at ${d}% but fulfillment is only ${f}%. Decomposing a task into subtasks with dependencies would scratch that itch perfectly.`,
+    street_urban: (g, d, f) => `${g}, you like solving puzzles (${d}%) but only at ${f}% fulfillment. Break down a task into subtasks with dependencies — that's your jam.`,
+    actionLabel: "View Task Board",
+    actionType: "open_board",
+  },
+  creator: {
+    default: (g, d, f) => `${g}, your Creator interest is at ${d}% but fulfillment is only ${f}%. New themes, decorations, and outfits are ready in settings — give the office your personal touch.`,
+    street_urban: (g, d, f) => `${g}, you're feeling creative (${d}%) but only at ${f}% fulfillment. New themes and fits are in settings — make the office yours.`,
+    actionLabel: "Open Settings",
+    actionType: "open_settings",
+  },
+  strategist: {
+    default: (g, d, f) => `${g}, your Strategist interest is at ${d}% but fulfillment is only ${f}%. Check the leaderboards or consider creating an org — there's a competitive layer waiting for you.`,
+    street_urban: (g, d, f) => `${g}, you're thinking strategic (${d}%) but only at ${f}% fulfillment. Check the leaderboards or start an org — time to compete.`,
+    actionLabel: "View Leaderboards",
+    actionType: "open_leaderboards",
+  },
+};
+
+function pickFulfillmentGapNudge(
+  fs: FulfillmentStats,
+  greet: string,
+  dialectStyle: DialectStyle,
+  now: number,
+  s: ConciergeState,
+): ConciergeNudge | null {
+  // Find tracks with significant negative gap (interest > achievement)
+  const bigGaps = fs.gaps.filter((g) => g.gap <= FULFILLMENT_GAP_THRESHOLD);
+  if (bigGaps.length === 0) return null;
+
+  // Pick the worst gap, but avoid repeating the same track as last nudge
+  const sorted = [...bigGaps].sort((a, b) => a.gap - b.gap);
+  const lastNudgeTrack = s.lastNudgeId?.replace(/^nudge-gap-/, "").replace(/-\d+$/, "");
+  const pick = sorted.find((g) => g.track !== lastNudgeTrack) ?? sorted[0];
+
+  const template = GAP_NUDGE_TEMPLATES[pick.track];
+  if (!template) return null;
+
+  const text = dialectNudge(dialectStyle, {
+    default: template.default(greet, pick.detection, pick.fulfillment),
+    street_urban: template.street_urban?.(greet, pick.detection, pick.fulfillment),
+    hawaiian_pidgin: template.hawaiian_pidgin?.(greet, pick.detection, pick.fulfillment),
+    southern_1812: template.southern_1812?.(greet, pick.detection, pick.fulfillment),
+  });
+
+  return {
+    nudgeId: `nudge-gap-${pick.track}-${now}`,
+    text,
+    actionLabel: template.actionLabel,
+    actionType: template.actionType,
+  };
+}

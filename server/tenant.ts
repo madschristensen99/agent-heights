@@ -21,6 +21,7 @@ import { startSession as startConcierge, evaluateNudge, CONCIERGE_EVAL_INTERVAL 
 import { recordTaskCompletion, getGrowth } from "./agent-growth.js";
 import { addXp, getProgress } from "./office-progression.js";
 import { recordSignalByKey } from "./aspirations.js";
+import { computeFulfillment } from "./fulfillment.js";
 import { sendWelcomeEmail, isEmailConfigured, sendRawEmail } from "./email.js";
 import { paragraph, ctaSection, shell, APP_URL, BRAND_ACCENT } from "./email-blocks.js";
 
@@ -780,6 +781,9 @@ export class TenantManager {
     sess.conciergeTimer = setInterval(() => {
       if (sess.clients.size === 0) return; // no active clients
       const snap = sess.manager.snapshot();
+      const schedules = sess.manager.snapshotSchedules();
+      const totalTasksDone = snap.agents.reduce((sum, a) => sum + (a.tasksDone ?? 0), 0);
+      const fulfillmentStats = computeFulfillment(user.id, snap.agents, schedules, totalTasksDone);
       const nudge = evaluateNudge(user.id, {
         agents: snap.agents,
         board: snap.board,
@@ -787,6 +791,7 @@ export class TenantManager {
         hasPlatform: sess.manager.getPlatformConnectionStates().some((p) => p.connected),
         subscriptionTier: sess.manager.subscriptionTier,
         dialectStyle: sess.manager.getDialectStyle(),
+        fulfillmentStats,
       });
       if (nudge) {
         sess.broadcast({
