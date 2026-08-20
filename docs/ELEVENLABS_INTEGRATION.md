@@ -1,71 +1,185 @@
-# ElevenLabs Integration — Agent Heights
+# ElevenLabs Speech Engine Integration — Agent Heights
 
 ## Overview
 
-Give agents **voices**. When an agent says something, a short one-sentence line is
-spoken aloud via ElevenLabs TTS while the full response stays in the text feed.
-Add generative sound effects to the office so it feels alive — keyboard typing,
-coffee machines, chairs, ambient office hum.
+Two layers of audio for the office:
 
-The office becomes audible.
+1. **Real-time voice conversations** — Player talks to agents via microphone.
+   ElevenLabs Speech Engine handles STT + TTS + turn-taking; our server keeps
+   all agent logic (Cline, MCP tools, task system, usage caps).
+2. **Procedural office SFX** — Client-side synthesized sound effects (keyboard,
+   chair, coffee machine, ambient hum). Zero API cost, no key needed.
 
----
-
-## Architecture
-
-```
-Agent LLM produces text
-  → Server parses SPOKEN: prefix
-  → Strips spoken line from displayed text
-  → Calls ElevenLabs streaming TTS with the spoken line
-  → Streams audio chunks back through WebSocket as binary frames
-  → Client plays audio + shows full text in feed
-```
-
-```
-Player walks near idle agent
-  → Client detects proximity
-  → Sends "greet" message to server
-  → Server runs lightweight greeting prompt (no tools, ~1 sentence)
-  → ElevenLabs TTS on the greeting
-  → Audio plays, short text bubble appears above agent
-```
+The office becomes a place you can *talk* to.
 
 ---
 
-## 1. Agent Voice (TTS)
+## Why Speech Engine (not ElevenAgents)
 
-### 1.1 The SPOKEN Prefix Pattern
+ElevenLabs offers two products for voice AI:
 
-The system prompt is modified to instruct agents to begin replies with a single
-spoken sentence:
+| Product | Agent logic lives | Tools | Fit |
+|---|---|---|---|
+| **ElevenAgents** (Conversational AI) | ElevenLabs platform | Platform-managed | Standalone voice bots |
+| **Speech Engine** | Your server | Your existing tools | ✅ Agent Heights |
+
+Agent Heights already has a full agent runtime: Cline provider, MCP tools,
+task queues, usage caps, subscription gating, personality system. Speech Engine
+lets us keep all of that — ElevenLabs handles audio I/O only.
+
+**Flow:**
 
 ```
-When you reply to your boss, begin with SPOKEN: <one short sentence>
-then your full response on a new line.
-The SPOKEN line will be read aloud. The rest is text-only.
+Browser (mic) → ElevenLabs STT → transcript → our server
+  → manager.chat(agentId, transcript)
+  → agent LLM produces response (with tools, MCP, etc.)
+  → server streams response text back via sendResponse()
+  → ElevenLabs TTS → audio plays in browser
 ```
 
-Server-side, `manager.ts` regex-parses `^SPOKEN: (.+?)\n` from the agent's text:
+The SDK manages WebSocket routing, session lifecycle, ping/pong, turn-taking,
+and interruption handling. We just provide the response text.
 
-- Strips it from `entry.text` (what shows in the feed/detail panel)
-- Sets `entry.spoken = "the one sentence"`
-- Client sees `entry.spoken` → triggers TTS playback
-- Full text remains in the feed as before
+---
 
-This gives exactly the desired UX: short line spoken aloud, longer version in text.
+## 1. Speech Engine Architecture
 
-### 1.2 Server-Side Voice Proxy
+### 1.1 Server Setup
 
-API key stays server-side. New module `server/providers/voice.ts`:
+New module `server/providers/voice.ts`:
 
-- Maintains a voice ID map (assign each agent a voice based on personality/title)
-- Calls ElevenLabs streaming TTS endpoint:
-  `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream`
-- Streams audio chunks back through the WebSocket as binary frames
-- Uses `eleven_turbo_v2_5` model for lowest latency (~300ms first-byte)
+```typescript
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
-### 1.3 Voice Assignment
+const elevenlabs = new ElevenLabsClient({
+  apiKey: process.env.ELEVENLABS_API_KEY,
+});
+
+// Create Speech Engine resource (one-time setup)
+const engine = await elevenlabs.speechEngine.create({
+  name: "Agent Heights Voice",
+  speechEngine: { wsUrl: process.env.PUBLIC_WS_URL }, // wss://agentheights.com/ws-voice
+  overrides: { firstMessage: true },
+  tts: {
+    modelId: "eleven_flash_v2_5",
+    voiceId: "default",
+    optimizeStreamingLatency: "2",
+  },
+  asr: {
+    provider: "scribe_realtime",
+    keywords: ["Agent Heights", "Cline", "Railway", "MCP"],
+  },
+});
+// Store engine.engineId in ELEVENLABS_SPEECH_ENGINE_ID env var
+```
+
+### 1.2 Attaching to the HTTP Server
+
+```typescript
+const engine = await elevenlabs.speechEngine.get(process.env.ELEVENLABS_SPEECH_ENGINE_ID!);
+engine.attach(httpServer, "/ws-voice", {
+  debug: process.env.NODE_ENV !== "production",
+  onInit: async (session) => {
+    // Called when a new conversation starts
+    // session.conversationId is available here
+  },
+  onTranscript: async (session, transcript) => {
+    // 1. Identify which agent the user is talking to
+    //    (from session metadata passed at conversation start)
+    const agentId = session.conversationId.split(":")[0];
+    const userId = session.conversationId.split(":")[1];
+
+    // 2. Treat transcript as untrusted user input — validate
+    const clean = transcript.trim().slice(0, 2000);
+    if (!clean) return;
+
+    // 3. Run through existing manager.chat() pipeline
+    //    Collect the agent's response text
+    const responseText = await collectAgentResponse(userId, agentId, clean);
+
+    // 4. Stream response back — ElevenLabs converts to speech
+    await session.sendResponse(responseText);
+  },
+  onClose: (session) => {
+    // Clean disconnect
+  },
+  onDisconnect: (session) => {
+    // Unexpected WebSocket drop
+  },
+});
+```
+
+### 1.3 Token Endpoint (Browser Auth)
+
+The browser never sees the API key. Server issues a conversation token:
+
+```typescript
+// GET /api/voice-token?agentId=xxx
+app.get("/api/voice-token", async (req, res) => {
+  const agentId = req.query.agentId as string;
+  const userId = req.user.id;
+
+  const response = await elevenlabs.conversationalAi.conversations.getWebrtcToken({
+    agentId: process.env.ELEVENLABS_SPEECH_ENGINE_ID!,
+  });
+
+  res.json({
+    token: response.token,
+    conversationId: `${agentId}:${userId}`, // passed to Speech Engine
+  });
+});
+```
+
+### 1.4 Browser Client
+
+Using `@elevenlabs/react`:
+
+```typescript
+import { useConversation } from "@elevenlabs/react";
+
+const conversation = useConversation({
+  onConnect: () => console.log("voice connected"),
+  onDisconnect: () => console.log("voice disconnected"),
+  onError: (error) => console.error(error),
+  onMessage: (msg) => {
+    // Show agent's text response in the game feed
+    if (msg.source === "agent") {
+      store.addLogEntry(activeAgentId, { ts: Date.now(), kind: "text", text: msg.message });
+    }
+  },
+});
+
+async function startVoiceChat(agentId: string) {
+  await navigator.mediaDevices.getUserMedia({ audio: true });
+  const { token } = await fetch(`/api/voice-token?agentId=${agentId}`).then(r => r.json());
+  await conversation.startSession({
+    conversationToken: token,
+    overrides: {
+      agent: { firstMessage: undefined }, // no greeting — user initiated
+    },
+  });
+}
+```
+
+### 1.5 Security: Untrusted Transcript
+
+Speech-recognition text can contain prompt-injection attempts from user speech
+or played audio. The server must:
+
+- Treat transcript as untrusted user input (same as chat text today)
+- Do NOT map raw speech text directly into tool calls or privileged actions
+- The existing `manager.chat()` pipeline already validates: usage caps,
+  subscription gating, ACL checks, 2000-char limit, agent status checks
+- For tool-using agents, the agent's own system prompt + Cline's tool approval
+  flow provides additional validation
+
+---
+
+## 2. Voice Assignment
+
+Each agent gets a distinct voice. The Speech Engine resource has a default voice,
+but we can override per-conversation by configuring voice IDs on the resource
+or by using different Speech Engine resources per voice character.
 
 Map personality types to ElevenLabs pre-made voice IDs:
 
@@ -84,99 +198,82 @@ Map personality types to ElevenLabs pre-made voice IDs:
 | The Manager | Upbeat, clear, mid-range |
 | Office Manager | Warm, professional, welcoming female voice |
 
-Voice IDs are stored in a config map. Users can optionally override per-agent
-in settings.
-
-### 1.4 WebSocket Binary Frames
-
-Audio is streamed as binary WebSocket frames alongside the existing JSON text
-frames:
-
-- JSON frame: `{ type: "log", agentId, entry: { ts, kind, text, spoken } }` —
-  same as today, just with the new `spoken` field
-- Binary frames: raw audio chunks (MP3 or PCM) prefixed with a 4-byte agent ID
-  header so the client knows which agent is "talking"
-- Client decodes via Web Audio API (`decodeAudioData`) or a hidden `<audio>`
-  element for MP3 streaming
-
-Frame format for binary:
-
-```
-[4 bytes: agent ID length][N bytes: agent ID][M bytes: audio chunk]
-```
-
-Client reassembles chunks per agent, plays through the audio system.
-
-### 1.5 Latency & Cost
-
-- **eleven_turbo_v2_5**: ~300ms first-byte latency, good for real-time speech
-- **eleven_multilingual_v2**: higher quality, ~1s latency, fallback
-- **Cost**: ~$0.30 per 1K characters for standard voices
-- **Mitigation**: Only TTS the one-sentence spoken line (~50-100 chars), not
-  the full response. Cache common greetings. Skip TTS for tool/status logs.
+Voice IDs are stored in a config map in `server/providers/voice.ts`. Users can
+optionally override per-agent in settings.
 
 ---
 
-## 2. Greetings
+## 3. Text Chat Fallback (SPOKEN Prefix)
 
-### 2.1 Office Manager Greeting (Already Visual — Add Audio)
+For text-only chat (no microphone), we keep the SPOKEN prefix pattern so agents
+still get a voice line when typing:
 
-OfficeManagerNPC already has a greeting state machine
-(`client/src/game/agent.ts:497-551`): when the player enters her office zone,
-she stands up, walks to a greet tile, faces the player, and idles for 3.5
-seconds. Currently no text or audio is produced.
+```
+When you reply to your boss, begin with SPOKEN: <one short sentence>
+then your full response on a new line.
+The SPOKEN line will be read aloud. The rest is text-only.
+```
 
-Enhancement:
+Server-side, `manager.ts` regex-parses `^SPOKEN: (.+?)\n` from the agent's text:
 
-1. When OfficeManagerNPC enters "greeting" state, client sends `{ type: "greet",
-   agentId: OFFICE_MANAGER_ID }` to server
-2. Server runs a lightweight greeting prompt (no tools, ~1 sentence): *"Your
-   boss just walked into your office. Greet them warmly in one short sentence."*
-3. ElevenLabs TTS on the greeting line
-4. Audio plays, short text bubble appears above Office Manager
+- Strips it from `entry.text` (what shows in the feed/detail panel)
+- Sets `entry.spoken = "the one sentence"`
+- Client sees `entry.spoken` → triggers TTS playback via a lightweight
+  `fetch` to ElevenLabs TTS API (server-side proxy, no SDK needed for this path)
+- Full text remains in the feed as before
 
-### 2.2 Agent Proximity Greetings
+This gives the desired UX for text chat: short line spoken aloud, longer
+version in text. For voice chat, the full response is spoken naturally by
+Speech Engine.
 
-When the player walks near an idle agent (similar to Office Manager's zone detection but
-simpler — distance check):
+---
 
-1. Client detects player within ~2 tiles of an idle agent they haven't greeted
-   recently
+## 4. Greetings
+
+### 4.1 Voice Greeting (Speech Engine)
+
+When the player clicks the mic button on an agent, the Speech Engine session
+starts with a first message override:
+
+```typescript
+await conversation.startSession({
+  conversationToken: token,
+  overrides: {
+    agent: { firstMessage: `Hey boss, what's up?` }, // agent-specific greeting
+  },
+});
+```
+
+The first message is generated server-side from the agent's personality and
+recent activity (e.g. "Just finishing up that thing you asked for.").
+
+### 4.2 Text Greeting (Proximity)
+
+When the player walks near an idle agent (no mic needed):
+
+1. Client detects player within ~2 tiles of an idle agent
 2. Client sends `{ type: "greet", agentId }` to server
-3. Server runs a short greeting prompt — lighter than a full chat:
-   - Shorter prompt (no tool use, no workspace context)
-   - Instructs agent to say one casual line in character
-   - Examples: "Hey boss, what's up?" / "Oh, hey! Need something?" / "Just
-     finishing up that thing you asked for."
-4. TTS on the greeting, speech bubble above the agent NPC
-5. Cooldown per agent (~30s) to avoid spamming
+3. Server runs a short greeting prompt (no tools, ~1 sentence)
+4. Response appears as a speech bubble above the agent NPC
+5. If voice is enabled, TTS plays the greeting line
+6. Cooldown per agent (~30s) to avoid spamming
 
-### 2.3 New ClientMsg
-
-Add to `shared/types.ts`:
+### 4.3 New ClientMsg
 
 ```typescript
 | { type: "greet"; agentId: string }
+| { type: "voice_start"; agentId: string }
+| { type: "voice_stop" }
 ```
-
-Server handles this in `server/index.ts` alongside the existing `"chat"` case.
-Manager gets a new `greet(agentId)` method that:
-
-- Checks agent is idle (no greeting busy agents)
-- Runs a minimal prompt through the provider
-- Parses `SPOKEN:` line (or uses the whole response if short enough)
-- Sends TTS + log entry as usual
 
 ---
 
-## 3. Generative Sound Effects
+## 5. Procedural Office SFX
 
-### 3.1 Approach: Hybrid
+### 5.1 Approach
 
-**Procedural (client-side, zero cost)** — extend the existing `AudioSystem`
-in `client/src/game/audio.ts`:
-
-New office SFX methods:
+Extend the existing `AudioSystem` in `client/src/game/audio.ts` — zero API
+cost, no key needed:
 
 | Method | Description |
 |---|---|
@@ -191,34 +288,17 @@ New office SFX methods:
 | `agentSitDown()` | Chair + fabric rustle combo |
 | `agentStandUp()` | Reverse of sit down |
 
-New office ambient loop:
+Office ambient loop:
 
 - Low-frequency drone (office HVAC)
 - Occasional distant keyboard clicks (random intervals, very quiet)
 - Occasional chair creak
 - Very low volume, always on in office scene
 
-**ElevenLabs Sound Effects API (server-side, sparingly)**:
+### 5.2 Lift AudioSystem to Scene Level
 
-- Endpoint: `POST https://api.elevenlabs.io/v1/sound-generation`
-- Use for unique ambient loops or special event sounds that are hard to
-  synthesize:
-  - "Quiet open-plan office with distant conversations and keyboard typing"
-    (30s loop for office ambient)
-  - "Celebratory office party pop" (for task completion)
-  - "Sci-fi notification ping" (for Railway deploy events)
-- Cache generated sounds (deterministic per prompt + seed) — generate once,
-  store as base64 or file, replay locally
-- Higher quality than procedural, but API cost per generation
-
-### 3.2 Office Audio System
-
-The `AudioSystem` currently lives on `WorldLayer` (the expedition/world map)
-only. The office scene has no audio.
-
-**Recommended**: Lift `AudioSystem` to the scene level so both office and world
-share one `AudioContext`. This avoids dual AudioContext issues and lets the
-office play SFX + ambient while the world plays biome music.
+The `AudioSystem` currently lives on `WorldLayer` (expedition/world map) only.
+The office scene has no audio.
 
 Changes to `client/src/game/scene.ts`:
 
@@ -226,10 +306,8 @@ Changes to `client/src/game/scene.ts`:
 - Pass it to `WorldLayer` (instead of WorldLayer creating its own)
 - Office scene calls `audio.playOfficeAmbient()` on create
 - Office scene calls SFX methods on events (agent sits, task done, etc.)
-- World layer calls `audio.playMusic(biome)` when entering world (already
-  works, just references the shared instance)
 
-### 3.3 Event → SFX Mapping
+### 5.3 Event → SFX Mapping
 
 | Game Event | SFX | Source |
 |---|---|---|
@@ -243,17 +321,17 @@ Changes to `client/src/game/scene.ts`:
 | Coffee machine interaction | `coffeePour()` | Scene coffee tile |
 | Water cooler interaction | `waterBubbler()` | Scene cooler tile |
 | Door / entering world | `doorOpen()` | Scene transition |
-| Office Manager greeting | TTS + `chairSqueak()` | OfficeManagerNPC greeting state |
+| Voice chat starts | `chairSqueak()` | Mic button click |
 | Agent greeting (proximity) | TTS | Proximity detection |
 
 ---
 
-## 4. Type Changes
+## 6. Type Changes
 
 ### `shared/types.ts`
 
 ```typescript
-// LogEntry — add optional spoken field
+// LogEntry — add optional spoken field (for text chat TTS fallback)
 export interface LogEntry {
   ts: number;
   kind: LogKind;
@@ -262,10 +340,12 @@ export interface LogEntry {
   spoken?: string;
 }
 
-// ClientMsg — add greet
+// ClientMsg — add greet + voice control
 export type ClientMsg =
   | ...existing...
-  | { type: "greet"; agentId: string };
+  | { type: "greet"; agentId: string }
+  | { type: "voice_start"; agentId: string }
+  | { type: "voice_stop" };
 
 // GameSettings — add voice settings
 export interface GameSettings {
@@ -275,40 +355,46 @@ export interface GameSettings {
   voice: {
     enabled: boolean;
     volume: number;       // 0..1
-    model: string;        // "eleven_turbo_v2_5" | "eleven_multilingual_v2"
+    ttsModel: string;     // "eleven_flash_v2_5" | "eleven_turbo_v2_5"
   };
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
   ...,
-  voice: { enabled: true, volume: 0.7, model: "eleven_turbo_v2_5" },
+  voice: { enabled: true, volume: 0.7, ttsModel: "eleven_flash_v2_5" },
 };
+
+// ServerMsg — add voice state
+export type ServerMsg =
+  | ...existing...
+  | { type: "voice_state"; active: boolean; agentId: string | null };
 ```
 
 ---
 
-## 5. File Change Summary
+## 7. File Change Summary
 
 | File | Change |
 |---|---|
-| `shared/types.ts` | Add `spoken?` to `LogEntry`, add `"greet"` to `ClientMsg`, add `voice` to `GameSettings` |
-| `server/providers/voice.ts` | **New file** — ElevenLabs TTS client, voice ID map, streaming audio relay |
-| `server/manager.ts` | Parse `SPOKEN:` prefix, add `greet()` method, call voice provider, modify `buildSystemPrompt()` |
-| `server/index.ts` | Handle `"greet"` message, handle binary WS frames for audio streaming |
-| `client/src/game/audio.ts` | Add TTS playback method, add office SFX, add office ambient loop |
+| `shared/types.ts` | Add `spoken?` to `LogEntry`, `"greet"` + `"voice_start"` + `"voice_stop"` to `ClientMsg`, `voice` to `GameSettings`, `"voice_state"` to `ServerMsg` |
+| `server/providers/voice.ts` | **New file** — Speech Engine setup, attach to HTTP server, onTranscript callback → manager.chat(), token endpoint, voice ID map, TTS proxy for text chat fallback |
+| `server/manager.ts` | Parse `SPOKEN:` prefix, add `greet()` method, add `collectResponse()` helper for voice callback, modify `buildSystemPrompt()` |
+| `server/index.ts` | Handle `"greet"` / `"voice_start"` / `"voice_stop"` messages, add `/api/voice-token` HTTP route, attach Speech Engine on startup |
+| `client/src/game/audio.ts` | Add office SFX methods, add office ambient loop |
 | `client/src/game/scene.ts` | Lift AudioSystem to scene level, wire office audio, proximity greeting detection |
 | `client/src/game/agent.ts` | Add speech bubble text for spoken lines, trigger SFX on state changes |
-| `client/src/store.ts` | Handle `spoken` field on log entries, trigger audio playback |
-| `client/src/net.ts` | Handle binary WS frames for audio chunks |
-| `client/src/ui/hud.ts` | Add voice settings to settings modal (enable/disable, volume slider) |
-| `.env.example` | Add `ELEVENLABS_API_KEY` |
-| `package.json` | Add `@elevenlabs/elevenlabs-js` dependency (optional — can also use raw fetch) |
+| `client/src/store.ts` | Handle `spoken` field on log entries, handle `voice_state` messages |
+| `client/src/net.ts` | No binary WS frames needed — Speech Engine uses its own WebSocket + WebRTC |
+| `client/src/ui/hud.ts` | Add mic button to agent detail panel, voice settings to settings modal, voice state indicator |
+| `client/src/voice.ts` | **New file** — `@elevenlabs/react` `useConversation` wrapper, mic permission handling, voice session lifecycle |
+| `.env.example` | Add `ELEVENLABS_API_KEY`, `ELEVENLABS_SPEECH_ENGINE_ID`, `PUBLIC_WS_URL` |
+| `package.json` | Add `@elevenlabs/elevenlabs-js` (server) + `@elevenlabs/react` (client) |
 
 ---
 
-## 6. Implementation Phases
+## 8. Implementation Phases
 
-### Phase 1 — Office Audio + Procedural SFX
+### Phase 1 — Procedural Office SFX (zero cost, no API key)
 
 - Lift `AudioSystem` to scene level
 - Add office ambient loop
@@ -316,74 +402,108 @@ export const DEFAULT_SETTINGS: GameSettings = {
 - Wire SFX to game events (agent sit/stand, task done, coffee machine)
 - No API key needed, zero cost, instant
 
-### Phase 2 — Agent Voice (TTS)
+### Phase 2 — Speech Engine Setup + Voice Chat
 
-- Add `ELEVENLABS_API_KEY` to env
-- Create `server/providers/voice.ts`
-- Modify `buildSystemPrompt()` to instruct `SPOKEN:` prefix
-- Parse `SPOKEN:` in manager, set `entry.spoken`
-- Stream audio through WebSocket binary frames
-- Client plays TTS audio on log entries with `spoken` field
+- Add `ELEVENLABS_API_KEY` + `ELEVENLABS_SPEECH_ENGINE_ID` to env
+- Create Speech Engine resource (one-time CLI script)
+- Create `server/providers/voice.ts` — attach to HTTP server
+- Implement `onTranscript` callback → `manager.chat()` → `sendResponse()`
+- Add `/api/voice-token` endpoint
+- Add `client/src/voice.ts` — `@elevenlabs/react` wrapper
+- Add mic button to agent detail panel in HUD
 - Voice assignment map per personality
+- Usage cap + subscription gating applies to voice chats (same as text chat)
 
-### Phase 3 — Greetings
+### Phase 3 — Text Chat TTS + Greetings
 
-- Add `"greet"` ClientMsg
-- Implement `manager.greet()` — lightweight prompt, no tools
-- Office Manager greeting: trigger on her existing "greeting" state
+- Implement SPOKEN prefix parsing in `manager.ts`
+- Server-side TTS proxy for `entry.spoken` (lightweight fetch, no SDK)
+- Client plays TTS audio on log entries with `spoken` field
+- Add `"greet"` ClientMsg + `manager.greet()` method
+- Office Manager greeting: trigger on her existing greeting state
 - Agent proximity greetings: distance check in scene update loop
 - Cooldown system to prevent spam
 - Speech bubble text above NPC for the spoken line
 
-### Phase 4 — ElevenLabs Sound Effects (Optional)
+### Phase 4 — Polish + Spatial Audio
 
-- Generate high-quality ambient loops via Sound Effects API
-- Cache generated sounds locally
-- Use for special events that are hard to synthesize procedurally
-- Fallback to procedural SFX if API is unavailable
+- Volume scales with distance from agent (closer = louder)
+- Voice activity indicator on agent NPCs (speaking animation)
+- Interruption handling (user interrupts agent mid-sentence)
+- Emotional voice settings (stressed when working, relaxed when idle)
+- ElevenLabs Sound Effects API for special event sounds (optional)
 
 ---
 
-## 7. Environment Variables
+## 9. Environment Variables
 
 ```bash
-# .env addition
+# ElevenLabs Speech Engine
+# Get an API key at https://elevenlabs.io — free tier includes 10K chars/month
 ELEVENLABS_API_KEY=your-elevenlabs-api-key
+
+# Speech Engine resource ID (created once via setup script)
+# Created by running: tsx scripts/create-speech-engine.ts
+ELEVENLABS_SPEECH_ENGINE_ID=your-speech-engine-id
+
+# Public WebSocket URL for Speech Engine server (must be reachable by ElevenLabs)
+# In production: wss://agentheights.com/ws-voice
+# In dev (with ngrok): wss://your-ngrok-url.ngrok.app/ws-voice
+PUBLIC_WS_URL=wss://agentheights.com/ws-voice
 ```
 
-Get a key at https://elevenlabs.io — free tier includes 10K characters/month.
-
 If `ELEVENLABS_API_KEY` is not set, voice features gracefully degrade:
-- No TTS playback (agents are silent, text-only as today)
+- No voice chat (mic button hidden or disabled)
+- No TTS for text chat (agents are silent, text-only as today)
 - Procedural SFX still work (no API key needed)
 - Settings modal shows voice options as disabled
 
 ---
 
-## 8. Competitor Reference
+## 10. Cost Considerations
+
+- **Speech Engine (voice chat)**: Pay per conversation minute. STT + TTS + LLM
+  turn-taking handled by ElevenLabs. Cost depends on conversation length.
+- **TTS (text chat fallback)**: ~$0.30 per 1K characters. Only the one-sentence
+  SPOKEN line is synthesized (~50-100 chars per response).
+- **Mitigation**: Usage caps apply to voice chats (same pipeline as text chat).
+  Subscription gating: voice chat requires entry fee or subscription. Skip TTS
+  for tool/status logs. Cache common greetings.
+- **Free tier**: 10K characters/month — enough for development + testing.
+
+---
+
+## 11. Competitor Reference
 
 From the HERMES.md competitive analysis:
 
 > **BossRoom** — Multiplayer 3D office. Voice chat (Deepgram + Inworld TTS with
 > HRTF spatial audio). Agents do real work. Shows the voice embodiment angle.
 > Spatial audio is interesting — agents have *voices* that get louder as you
-> approach. Agent Heights could add this.
+> approach.
 
-This integration brings that capability to Agent Heights with ElevenLabs as the TTS
-provider, plus the unique `SPOKEN:` prefix pattern that separates the spoken
-line from the full text response — something BossRoom doesn't do.
+Speech Engine gives Agent Heights the same capability with key advantages:
+
+- **Agent logic stays server-side** — all tools, MCP servers, task system,
+  usage caps remain in our control (BossRoom uses platform-managed agents)
+- **SPOKEN prefix for text chat** — separates spoken line from full text
+  response, so text users get voice too without a mic
+- **Existing pipeline reuse** — voice chat goes through the same `manager.chat()`
+  pipeline as text chat, so subscription gating, ACL checks, usage caps, and
+  agent personality all apply automatically
 
 ---
 
-## 9. Future Enhancements
+## 12. Future Enhancements
 
 - **Spatial audio**: Volume scales with distance from agent (closer = louder)
 - **Voice cloning**: Let users clone their own voice for agents
-- **Multi-agent conversation**: Agents talk to each other, each with their own
-  voice, audible in the office
-- **Voice messages**: Player can speak to agents via microphone (STT → agent →
-  TTS response loop)
-- **Emotional voice settings**: Adjust stability/style based on agent status
-  (stressed when working, relaxed when idle)
-- **ElevenLabs Conversational AI**: Replace the current prompt → TTS pipeline
-  with ElevenLabs' real-time conversational AI agent for lower latency
+- **Multi-agent voice**: Agents talk to each other, each with their own voice,
+  audible in the office
+- **Voice messages**: Asynchronous voice messages (player records, agent
+  responds when idle)
+- **Emotional voice**: Adjust stability/style based on agent status (stressed
+  when working, relaxed when idle)
+- **Custom wake words**: "Hey [agent name]" to start a voice session without
+  clicking
+- **Phone integration**: ElevenLabs SIP support — call your agents from a phone

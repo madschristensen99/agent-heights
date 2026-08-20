@@ -10,6 +10,8 @@ const SILENT_MSG_TYPES = new Set([
   "online_players", "room_occupancy",
   "ab_comparison", "efficiency_score", "resource_allocation", "seasonal_event",
   "fulfillment_stats",
+  "external_session_update", "external_session_removed",
+  "external_feed_event", "external_sessions_sync",
 ]);
 
 export class Net {

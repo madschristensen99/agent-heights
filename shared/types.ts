@@ -1040,6 +1040,35 @@ export interface OfficeMCPServer {
   error?: string;
 }
 
+// ── IDE Bridge (external coding tool visibility) ─────────────────────────────
+
+export type ExternalTool = "vscode" | "cursor" | "windsurf" | "claude-code" | "codex" | "aider" | "unknown";
+
+export interface ExternalEvent {
+  type: "file_edit" | "file_save" | "git_commit" | "git_branch" | "test_run" | "test_result" | "command" | "ai_completion" | "ai_chat" | "session_start" | "session_end" | "error";
+  timestamp: number;
+  file?: string;
+  linesAdded?: number;
+  linesRemoved?: number;
+  message?: string;
+  success?: boolean;
+}
+
+export interface ExternalSession {
+  sessionId: string;
+  userId: string;
+  tool: ExternalTool;
+  state: "active" | "idle" | "error" | "disconnected";
+  currentFile?: string;
+  language?: string;
+  gitBranch?: string;
+  filesChanged: number;
+  linesAdded: number;
+  linesRemoved: number;
+  lastActivity: number;
+  events: ExternalEvent[];
+}
+
 export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
@@ -1214,7 +1243,10 @@ export type ClientMsg =
   | { type: "list_online_players" }
   | { type: "seed_aspirations"; aspirations: string[] }
   | { type: "request_aspiration_dashboard" }
-  | { type: "request_fulfillment" };
+  | { type: "request_fulfillment" }
+  | { type: "external_connect"; tool: ExternalTool; sessionId: string; token: string; currentFile?: string; language?: string; gitBranch?: string }
+  | { type: "external_activity"; sessionId: string; state: "active" | "idle" | "error"; currentFile?: string; language?: string; gitBranch?: string; filesChanged?: number; linesAdded?: number; linesRemoved?: number; events?: ExternalEvent[] }
+  | { type: "external_disconnect"; sessionId: string };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1386,7 +1418,11 @@ export type ServerMsg =
   | { type: "efficiency_score"; throughput: number; successRate: number; autonomyRate: number; chainCount: number; badge: string; badgeColor: string; suggestions: string[] }
   | { type: "resource_allocation"; totalBudget: number; allocations: { agentId: string; agentName: string; budget: number; utilization: number }[] }
   | { type: "seasonal_event"; eventName: string; theme: string; icon: string; description: string; decorations: { type: string; x: number; y: number; sprite: string }[] }
-  | { type: "fulfillment_stats"; stats: FulfillmentStats };
+  | { type: "fulfillment_stats"; stats: FulfillmentStats }
+  | { type: "external_session_update"; session: ExternalSession }
+  | { type: "external_session_removed"; sessionId: string }
+  | { type: "external_feed_event"; sessionId: string; tool: ExternalTool; event: ExternalEvent }
+  | { type: "external_sessions_sync"; sessions: ExternalSession[] };
 
 // ── Away Report ──────────────────────────────────────────────────────────────
 

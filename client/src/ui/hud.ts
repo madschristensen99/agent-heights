@@ -208,6 +208,7 @@ const ICON = {
   market: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
   rooms: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M14 12h.01"/><path d="M10 12h.01"/></svg>`,
   social: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  terminal: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
   worlds: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 0 0-9 9"/><path d="M12 21a9 9 0 0 0 9-9"/><path d="M12 7a5 5 0 0 0-5 5"/><path d="M12 17a5 5 0 0 0 5-5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>`,
   settings: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   help: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>`,
@@ -280,6 +281,7 @@ export class Hud {
         <button class="btn mini topbar-btn" id="marketplace-btn">${ICON.market} <span>MARKET</span></button>
         <button class="btn mini topbar-btn" id="rooms-btn">${ICON.rooms} <span>ROOMS</span></button>
         <button class="btn mini topbar-btn" id="social-btn">${ICON.social} <span>SOCIAL</span></button>
+        <button class="btn mini topbar-btn" id="ide-bridge-btn">${ICON.terminal} <span>IDE</span></button>
         <button class="btn mini topbar-btn" id="worlds-btn">${ICON.worlds} <span>WORLDS</span></button>
         <button class="btn mini topbar-btn" id="voice-btn" title="Toggle microphone">${ICON.micOff}</button>
         <button class="btn mini topbar-btn" id="speaker-btn" title="Toggle speaker (mute/unmute incoming audio)">${ICON.speakerOn}</button>
@@ -477,6 +479,9 @@ export class Hud {
       this.net.send({ type: "list_friends" });
       this.net.send({ type: "list_online_players" });
       this.openSocialPanel();
+    });
+    document.getElementById("ide-bridge-btn")!.addEventListener("click", () => {
+      this.openIdeBridgePanel();
     });
     document.getElementById("worlds-btn")!.addEventListener("click", () => {
       this.store.toggleWorldsPanel();
@@ -1901,6 +1906,107 @@ export class Hud {
           ? `<div style="font-size:0.62rem; color:var(--dim);">No agents are ACL-restricted. Consider restricting sensitive agents before inviting.</div>`
           : ""}
     </div>`;
+  }
+
+  private openIdeBridgePanel(): void {
+    const existing = document.getElementById("ide-bridge-overlay");
+    if (existing) { existing.remove(); return; }
+
+    const overlay = document.createElement("div");
+    overlay.id = "ide-bridge-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+
+    const sessions = [...this.store.externalSessions.values()];
+    const wsHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? `ws://${window.location.hostname}:3001`
+      : `wss://${window.location.host}`;
+
+    const stateBadge = (state: string) => {
+      const colors: Record<string, string> = { active: "var(--accent)", idle: "var(--dim)", error: "#ff4a4a", disconnected: "var(--panel-edge)" };
+      return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[state] ?? colors.idle};margin-right:0.4rem;"></span>${state}`;
+    };
+
+    const toolLabel: Record<string, string> = {
+      "claude-code": "Claude Code", "codex": "Codex", "aider": "Aider",
+      "vscode": "VS Code", "cursor": "Cursor", "windsurf": "Windsurf", "unknown": "Terminal",
+    };
+
+    const sessionHtml = sessions.length === 0
+      ? `<div style="color:var(--dim);text-align:center;padding:2rem;">No active external sessions.<br>Connect a CLI tool to see it here.</div>`
+      : sessions.map(s => {
+          const fileShort = s.currentFile ? s.currentFile.split("/").pop() : "—";
+          const branchTag = s.gitBranch ? ` <span style="color:var(--dim);">[${s.gitBranch}]</span>` : "";
+          const recentEvents = s.events.slice(-5).map(e => {
+            const icons: Record<string, string> = {
+              file_edit: "✏️", file_save: "💾", git_commit: "📦", git_branch: "🌿",
+              test_run: "🧪", test_result: e.success ? "✅" : "❌", command: "⚙️",
+              ai_completion: "🤖", ai_chat: "💬", session_start: "▶️", session_end: "⏹️", error: "⚠️",
+            };
+            const time = new Date(e.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            return `<div style="font-size:0.7rem;color:var(--dim);padding:0.1rem 0;">${icons[e.type] ?? "•"} ${time} ${e.type}${e.file ? ` ${e.file.split("/").pop()}` : ""}${e.message ? ` — ${e.message.slice(0, 60)}` : ""}</div>`;
+          }).join("");
+          return `
+            <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:6px;padding:0.8rem;margin-bottom:0.6rem;">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;">
+                <span style="font-size:0.9rem;font-weight:600;color:var(--text);">${toolLabel[s.tool] ?? "Terminal"}</span>
+                ${branchTag}
+                <span style="margin-left:auto;font-size:0.75rem;">${stateBadge(s.state)}</span>
+              </div>
+              <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">📂 ${fileShort}</div>
+              <div style="font-size:0.7rem;color:var(--dim);margin-bottom:0.4rem;">
+                ${s.filesChanged} files · +${s.linesAdded} / -${s.linesRemoved} lines
+              </div>
+              <div style="border-top:1px solid var(--panel-edge);padding-top:0.4rem;">
+                ${recentEvents || '<div style="font-size:0.7rem;color:var(--dim);">No recent events</div>'}
+              </div>
+            </div>`;
+        }).join("");
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--panel-edge);border-radius:10px;padding:1.5rem;width:min(520px,90vw);max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <h2 style="margin:0;font-size:1.1rem;color:var(--text);">🖥️ IDE Bridge</h2>
+          <button class="btn" id="ide-bridge-close" style="font-size:0.75rem;padding:0.2rem 0.5rem;">✕</button>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;">Active Sessions</h3>
+          ${sessionHtml}
+        </div>
+
+        <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;">
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;">Connect a Tool</h3>
+          <p style="font-size:0.75rem;color:var(--dim);margin-bottom:0.6rem;">
+            Install the <code style="background:var(--panel);padding:0.1rem 0.3rem;border-radius:3px;">ah-cli</code> package and run one of:
+          </p>
+          <div style="background:var(--panel);border-radius:6px;padding:0.6rem;font-family:monospace;font-size:0.72rem;color:var(--text);margin-bottom:0.6rem;">
+            <div style="margin-bottom:0.3rem;"># Watch a project directory</div>
+            <div style="color:var(--accent);">ah watch --tool claude-code</div>
+            <div style="margin-top:0.5rem;margin-bottom:0.3rem;"># Wrap a CLI command</div>
+            <div style="color:var(--accent);">ah wrap "codex fix-bug.ts"</div>
+            <div style="margin-top:0.5rem;margin-bottom:0.3rem;"># Claude Code hook</div>
+            <div style="color:var(--accent);">ah-hook --after-edit</div>
+          </div>
+          <p style="font-size:0.7rem;color:var(--dim);">
+            Sessions connect to <code style="font-size:0.7rem;">${wsHost}</code> using your auth token.
+            Only metadata is sent — never file contents.
+          </p>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay || (e.target as HTMLElement).id === "ide-bridge-close") overlay.remove();
+    });
+
+    // Auto-refresh on session changes
+    const refresh = () => {
+      if (!overlay.isConnected) return;
+      this.store.externalSessionListeners = this.store.externalSessionListeners.filter(fn => fn !== refresh);
+      overlay.remove();
+      this.openIdeBridgePanel();
+    };
+    this.store.externalSessionListeners.push(refresh);
   }
 
   private openSocialPanel(): void {

@@ -790,6 +790,9 @@ export class TenantManager {
     sess.conciergeTimer = setInterval(() => {
       if (sess.clients.size === 0) return; // no active clients
       const snap = sess.manager.snapshot();
+      // Skip concierge for idle sessions — only NPC agents (office-manager, hermes, wizard)
+      const userAgents = snap.agents.filter((a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard");
+      if (userAgents.length === 0) return;
       const schedules = sess.manager.snapshotSchedules();
       const totalTasksDone = snap.agents.reduce((sum, a) => sum + (a.tasksDone ?? 0), 0);
       const fulfillmentStats = computeFulfillment(user.id, snap.agents, schedules, totalTasksDone);

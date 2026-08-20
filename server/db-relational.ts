@@ -362,7 +362,7 @@ export class RelationalPersistence {
       }).catch(() => {
         this.flushInFlight = null;
       });
-    }, 400);
+    }, 3000);
   }
 
   private async flush(): Promise<void> {
@@ -404,69 +404,40 @@ export class RelationalPersistence {
       }
     }
 
-    if (this.pendingWorld && this.state.world) {
-      this.pendingWorld = false;
-      try {
-        await supabaseAdmin
-          .from("agent_heights_world_state")
-          .upsert({
-            room_id: this.roomId,
-            owner_id: this.userId,
-            seed: this.state.world.seed,
-            fired_agents: this.state.world.firedAgents,
-            vacationed_agents: this.state.world.vacationedAgents ?? [],
-            chunk_overrides: this.state.world.chunkOverrides ?? {},
-          });
-      } catch (err) {
-        console.error("[db-rel] setWorld failed:", err);
+    // Merge all world_state upserts into a single query when multiple are pending
+    const worldPending = this.pendingWorld || this.pendingPendingTasks || this.pendingPlatformCredentials;
+    if (worldPending) {
+      const upsertData: Record<string, unknown> = {
+        room_id: this.roomId,
+        owner_id: this.userId,
+      };
+      if (this.pendingWorld && this.state.world) {
+        upsertData.seed = this.state.world.seed;
+        upsertData.fired_agents = this.state.world.firedAgents;
+        upsertData.vacationed_agents = this.state.world.vacationedAgents ?? [];
+        upsertData.chunk_overrides = this.state.world.chunkOverrides ?? {};
       }
-    }
-
-    if (this.pendingPendingTasks) {
-      const taskCount = Object.keys(this.state.pendingTasks ?? {}).length;
-      console.log(`[db-rel] flush: writing pending_tasks for user ${this.userId} (${taskCount} agent(s))...`);
+      if (this.pendingPendingTasks) {
+        upsertData.pending_tasks = this.state.pendingTasks ?? {};
+      }
+      if (this.pendingPlatformCredentials) {
+        upsertData.platform_credentials = this.state.platformCredentials ?? {};
+      }
       try {
         const result = await supabaseAdmin
           .from("agent_heights_world_state")
-          .upsert({
-            room_id: this.roomId,
-            owner_id: this.userId,
-            pending_tasks: this.state.pendingTasks ?? {},
-          }, { onConflict: "room_id" });
+          .upsert(upsertData, { onConflict: "room_id" });
         if (result.error) {
-          console.error(`[db-rel] setPendingTasks upsert error for user ${this.userId}:`, result.error);
-          this.pendingPendingTasks = true; // Retry on next flush
+          console.error(`[db-rel] world_state upsert error for user ${this.userId}:`, result.error);
+          // Retry: leave pending flags as-is
         } else {
-          this.pendingPendingTasks = false; // Only clear on success
-          console.log(`[db-rel] flush: pending_tasks written successfully for user ${this.userId}`);
+          if (this.pendingWorld) this.pendingWorld = false;
+          if (this.pendingPendingTasks) this.pendingPendingTasks = false;
+          if (this.pendingPlatformCredentials) this.pendingPlatformCredentials = false;
         }
       } catch (err) {
-        console.error("[db-rel] setPendingTasks failed:", err);
-        this.pendingPendingTasks = true; // Retry on next flush
-      }
-    }
-
-    if (this.pendingPlatformCredentials) {
-      const credKeys = Object.keys(this.state.platformCredentials ?? {});
-      console.log(`[db-rel] flush: writing platform_credentials for user ${this.userId} (${credKeys.join(", ") || "empty"})...`);
-      try {
-        const result = await supabaseAdmin
-          .from("agent_heights_world_state")
-          .upsert({
-            room_id: this.roomId,
-            owner_id: this.userId,
-            platform_credentials: this.state.platformCredentials ?? {},
-          }, { onConflict: "room_id" });
-        if (result.error) {
-          console.error(`[db-rel] platform_credentials upsert error for user ${this.userId}:`, result.error);
-          this.pendingPlatformCredentials = true;
-        } else {
-          this.pendingPlatformCredentials = false;
-          console.log(`[db-rel] flush: platform_credentials written successfully for user ${this.userId}`);
-        }
-      } catch (err) {
-        console.error("[db-rel] platform_credentials failed:", err);
-        this.pendingPlatformCredentials = true;
+        console.error("[db-rel] world_state upsert failed:", err);
+        // Leave pending flags as-is for retry
       }
     }
 
@@ -545,58 +516,90 @@ export class RelationalPersistence {
       }
     }
 
-    // Sync logs — only append new entries
-    // We compare against what we loaded to avoid re-inserting
-    for (const agent of agents) {
-      const agentLogs = logs[agent.id] ?? [];
-      if (agentLogs.length === 0) continue;
-
-      // Get current count for this agent (only non-archived)
-      const { count } = await supabaseAdmin
+    // Sync logs — batch approach to minimize DB queries
+    // Instead of 4 queries per agent, do: 1 batch count + 1 batch insert + batch trim
+    const agentsWithLogs = agents.filter((a) => (logs[a.id] ?? []).length > 0);
+    if (agentsWithLogs.length > 0) {
+      // Batch count: get current log counts for all agents in one query
+      const agentIds = agentsWithLogs.map((a) => a.id);
+      const { data: countRows } = await supabaseAdmin
         .from("agent_heights_agent_logs")
-        .select("id", { count: "exact", head: true })
-        .eq("agent_id", agent.id)
+        .select("agent_id")
+        .in("agent_id", agentIds)
         .eq("archived", false);
 
-      const existingCount = count ?? 0;
-      if (existingCount === undefined) continue;
-      const newLogs = agentLogs.slice(existingCount);
+      const dbCounts: Record<string, number> = {};
+      for (const row of countRows ?? []) {
+        dbCounts[row.agent_id] = (dbCounts[row.agent_id] ?? 0) + 1;
+      }
 
-      if (newLogs.length > 0) {
-        const logRows = newLogs.map((l) => ({
-          agent_id: agent.id,
-          owner_id: this.userId,
-          ts: l.ts,
-          kind: l.kind,
-          text: l.text,
-          archived: false,
-        }));
-        try {
-          await supabaseAdmin.from("agent_heights_agent_logs").insert(logRows);
-        } catch (err) {
-          console.error(`[db-rel] insert logs for ${agent.id} failed:`, err);
+      // Collect all new logs across agents into a single batch insert
+      const allNewLogs: Array<{ agent_id: string; owner_id: string; ts: number; kind: string; text: string; archived: boolean }> = [];
+      const trimNeeded: Array<{ agentId: string; trimCount: number }> = [];
+
+      for (const agent of agentsWithLogs) {
+        const agentLogs = logs[agent.id] ?? [];
+        const existingCount = dbCounts[agent.id] ?? 0;
+        const newLogs = agentLogs.slice(existingCount);
+
+        if (newLogs.length > 0) {
+          for (const l of newLogs) {
+            allNewLogs.push({
+              agent_id: agent.id,
+              owner_id: this.userId,
+              ts: l.ts,
+              kind: l.kind,
+              text: l.text,
+              archived: false,
+            });
+          }
+        }
+
+        if (existingCount + newLogs.length > LOG_CAP) {
+          trimNeeded.push({
+            agentId: agent.id,
+            trimCount: existingCount + newLogs.length - LOG_CAP,
+          });
         }
       }
 
-      // Trim to LOG_CAP (only non-archived)
-      if (existingCount + newLogs.length > LOG_CAP) {
+      // Single batch insert for all new logs
+      if (allNewLogs.length > 0) {
         try {
-          const { data: oldLogs } = await supabaseAdmin
-            .from("agent_heights_agent_logs")
-            .select("id")
-            .eq("agent_id", agent.id)
-            .eq("archived", false)
-            .order("ts", { ascending: true })
-            .limit(existingCount + newLogs.length - LOG_CAP);
-          if (oldLogs && oldLogs.length > 0) {
-            const idsToDelete = oldLogs.map((r: any) => r.id);
+          await supabaseAdmin.from("agent_heights_agent_logs").insert(allNewLogs);
+        } catch (err) {
+          console.error(`[db-rel] batch insert logs failed (${allNewLogs.length} rows):`, err);
+        }
+      }
+
+      // Batch trim: query oldest logs for agents that need trimming, then batch delete
+      if (trimNeeded.length > 0) {
+        const allIdsToDelete: string[] = [];
+        for (const { agentId, trimCount } of trimNeeded) {
+          try {
+            const { data: oldLogs } = await supabaseAdmin
+              .from("agent_heights_agent_logs")
+              .select("id")
+              .eq("agent_id", agentId)
+              .eq("archived", false)
+              .order("ts", { ascending: true })
+              .limit(trimCount);
+            if (oldLogs && oldLogs.length > 0) {
+              allIdsToDelete.push(...oldLogs.map((r: any) => r.id));
+            }
+          } catch (err) {
+            console.error(`[db-rel] trim query for ${agentId} failed:`, err);
+          }
+        }
+        if (allIdsToDelete.length > 0) {
+          try {
             await supabaseAdmin
               .from("agent_heights_agent_logs")
               .delete()
-              .in("id", idsToDelete);
+              .in("id", allIdsToDelete);
+          } catch (err) {
+            console.error(`[db-rel] batch trim logs failed (${allIdsToDelete.length} ids):`, err);
           }
-        } catch (err) {
-          console.error(`[db-rel] trim logs for ${agent.id} failed:`, err);
         }
       }
     }

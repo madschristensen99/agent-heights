@@ -815,7 +815,7 @@ export class AgentManager {
       const rt = this.agents.get(OFFICE_MANAGER_ID)!;
       if (!rt.info.appearance) {
         rt.info.appearance = { skin: 0, hairStyle: 3, hair: 8, shirt: 9, pants: 6, accessory: 2, accent: 0, beard: 0, eyeColor: 3, headFeature: 0 };
-        this.persist();
+        this.save.setAgents(this.snapshot().agents, this.snapshot().logs);
         this.broadcast({ type: "agent", agent: rt.info });
       }
       return;
@@ -852,7 +852,7 @@ export class AgentManager {
       const rt = this.agents.get(HERMES_ID)!;
       if (!rt.info.appearance) {
         rt.info.appearance = { skin: 0, hairStyle: 9, hair: 3, shirt: 2, pants: 5, accessory: 1, accent: 1, beard: 4, eyeColor: 3, headFeature: 0, bodyType: "fat" };
-        this.persist();
+        this.save.setAgents(this.snapshot().agents, this.snapshot().logs);
         this.broadcast({ type: "agent", agent: rt.info });
       }
       return;
@@ -897,7 +897,7 @@ export class AgentManager {
       const rt = this.agents.get(WIZARD_ID)!;
       if (!rt.info.appearance) {
         rt.info.appearance = { skin: 1, hairStyle: 6, hair: 5, shirt: 5, pants: 3, accessory: 4, accent: 2, beard: 0, eyeColor: 1, headFeature: 1 };
-        this.persist();
+        this.save.setAgents(this.snapshot().agents, this.snapshot().logs);
         this.broadcast({ type: "agent", agent: rt.info });
       }
       return;

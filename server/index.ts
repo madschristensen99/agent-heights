@@ -56,6 +56,7 @@ import { computeEfficiency } from "./efficiency-score.js";
 import { getCurrentSeasonalEvent } from "./seasonal-events.js";
 import { getAllocation, validateAllocations } from "./resource-allocation.js";
 import { computeFulfillment } from "./fulfillment.js";
+import { ideBridge } from "./ide-bridge.js";
 
 // ── User activity persistence (retention system) ─────────────────────────
 
@@ -1287,6 +1288,9 @@ wss.on("connection", async (ws, req) => {
     ws.send(JSON.stringify({ type: "room_occupancy", rooms: occupancy } satisfies ServerMsg));
   }
 
+  // Sync any active IDE bridge sessions
+  ideBridge.syncSessions(sess.user.id, sess.broadcast);
+
   // ── Token refresh timer ──────────────────────────────────────────────
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   let expiryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1405,7 +1409,10 @@ wss.on("connection", async (ws, req) => {
       const MANAGE_ONLY = new Set(["hire", "assign", "assign_new", "assign_all", "stop", "stop_all", "resume_agents", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "get_cdp_wallet", "get_cdp_policy", "set_cdp_policy", "get_cdp_tx_history", "create_cdp_onramp", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
       const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_broadcast_html", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
 
-      if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
+      // IDE bridge messages — account-level, bypass room permission checks
+      if (msg.type === "external_connect" || msg.type === "external_activity" || msg.type === "external_disconnect") {
+        // Fall through to the switch below — just skip permission gates
+      } else if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
         const data = JSON.stringify({ type: "toast", text: accessLevel === "tour" ? "Tour mode — you can look around but not manage agents. Ask an admin for talk access." : "Only room managers can do that." });
         if (ws.readyState === WebSocket.OPEN) ws.send(data);
         return;
@@ -4179,6 +4186,32 @@ wss.on("connection", async (ws, req) => {
           sess.broadcast({ type: "online_players", players });
           break;
         }
+        case "external_connect": {
+          const result = await ideBridge.handleConnect(
+            { tool: msg.tool, sessionId: msg.sessionId, token: msg.token, currentFile: msg.currentFile, language: msg.language, gitBranch: msg.gitBranch },
+            (uid) => tenants.getSessionBroadcast(uid),
+          );
+          if (!result.ok) {
+            ws.send(JSON.stringify({ type: "toast", text: `IDE Bridge: ${result.error}` } satisfies ServerMsg));
+          }
+          break;
+        }
+        case "external_activity": {
+          ideBridge.handleActivity(
+            { sessionId: msg.sessionId, state: msg.state, currentFile: msg.currentFile, language: msg.language, gitBranch: msg.gitBranch, filesChanged: msg.filesChanged, linesAdded: msg.linesAdded, linesRemoved: msg.linesRemoved, events: msg.events },
+            sess.user.id,
+            (uid) => tenants.getSessionBroadcast(uid),
+          );
+          break;
+        }
+        case "external_disconnect": {
+          ideBridge.handleDisconnect(
+            { sessionId: msg.sessionId },
+            sess.user.id,
+            (uid) => tenants.getSessionBroadcast(uid),
+          );
+          break;
+        }
       }
     } catch (err) {
       console.error("[server] error handling message:", err);
@@ -4224,6 +4257,11 @@ wss.on("connection", async (ws, req) => {
       }
     }
     tenants.handleClientDisconnect(sess.user.id);
+
+    // Clean up IDE bridge sessions when the last client disconnects
+    if (sess.clients.size === 0) {
+      ideBridge.cleanupUser(sess.user.id);
+    }
 
     // Persist activity timestamps for retention system
     const activity = sess.manager.getActivityStatus();
@@ -4290,11 +4328,12 @@ server.listen(SERVER_PORT, () => {
   // server restart, without waiting for each user to reconnect.
   void tenants.restoreSessionsAtBoot();
 
-  // Presence heartbeat: every 30s, push updated friends_list to each
+  // Presence heartbeat: every 60s, push updated friends_list to each
   // connected user so online status and room info stay current without
-  // manual refresh.
+  // manual refresh. Skipped when ≤1 user online to avoid unnecessary DB calls.
   setInterval(() => {
     const onlineIds = tenants.getOnlineUserIds();
+    if (onlineIds.size <= 1) return; // nobody else online — skip DB queries
     const roomInfo = tenants.getOnlineUserInfo();
     for (const sess of tenants.values()) {
       if (sess.clients.size === 0) continue;
@@ -4303,7 +4342,7 @@ server.listen(SERVER_PORT, () => {
         sess.broadcast({ type: "friends_list", friends, pending });
       });
     }
-  }, 30_000).unref?.();
+  }, 60_000).unref?.();
 
   // Start agent-originated retention email loop (runs hourly)
   startRetentionLoop((): RetentionManagerEntry[] => {

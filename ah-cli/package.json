@@ -1,0 +1,22 @@
+{
+  "name": "ah-cli",
+  "version": "0.1.0",
+  "description": "Agent Heights CLI bridge — stream external tool activity into your virtual office",
+  "type": "module",
+  "bin": {
+    "ah": "./dist/cli.js",
+    "ah-hook": "./dist/hook-cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.0"
+  }
+}

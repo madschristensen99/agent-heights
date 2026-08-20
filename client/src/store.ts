@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer, FulfillmentStats } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer, FulfillmentStats, ExternalSession, ExternalEvent, ExternalTool } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 import { getReactionsForAchievement, NPC_IDS, checkContextTrigger } from "./ui/agent-reactions";
@@ -489,6 +489,13 @@ export class Store {
   /** Aspiration fulfillment stats from server. */
   fulfillmentStats: FulfillmentStats | null = null;
   fulfillmentListeners: (() => void)[] = [];
+
+  /** Active external IDE/CLI tool sessions (IDE Bridge). */
+  externalSessions = new Map<string, ExternalSession>();
+  /** Fired when external sessions change (add/update/remove). */
+  externalSessionListeners: (() => void)[] = [];
+  /** Fired when an external feed event arrives (for office feed). */
+  externalFeedListeners: ((sessionId: string, tool: ExternalTool, event: ExternalEvent) => void)[] = [];
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -1891,6 +1898,25 @@ export class Store {
       case "fulfillment_stats": {
         this.fulfillmentStats = msg.stats;
         for (const fn of this.fulfillmentListeners) fn();
+        return;
+      }
+      case "external_sessions_sync": {
+        this.externalSessions = new Map(msg.sessions.map((s) => [s.sessionId, s]));
+        for (const fn of this.externalSessionListeners) fn();
+        return;
+      }
+      case "external_session_update": {
+        this.externalSessions.set(msg.session.sessionId, msg.session);
+        for (const fn of this.externalSessionListeners) fn();
+        return;
+      }
+      case "external_session_removed": {
+        this.externalSessions.delete(msg.sessionId);
+        for (const fn of this.externalSessionListeners) fn();
+        return;
+      }
+      case "external_feed_event": {
+        for (const fn of this.externalFeedListeners) fn(msg.sessionId, msg.tool, msg.event);
         return;
       }
     }

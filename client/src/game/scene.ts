@@ -371,6 +371,14 @@ export class OfficeScene extends Phaser.Scene {
   private lastSpeakingCheck = 0;
   private lastHintUpdate = 0;
 
+  // --- IDE Bridge: terminal stations for external CLI tools ---
+  private terminalStations: { container: Phaser.GameObjects.Container; monitor: Phaser.GameObjects.Sprite; glow: Phaser.GameObjects.Arc; toolLabel: Phaser.GameObjects.Text; fileLabel: Phaser.GameObjects.Text; }[] = [];
+  private terminalStationTiles: { x: number; y: number }[] = [
+    { x: 26, y: 6 },
+    { x: 27, y: 6 },
+    { x: 28, y: 6 },
+  ];
+
   // ── Tap-to-walk + tap-to-interact ──
   private playerPath: Tile[] = [];
   private playerTargetPx: { x: number; y: number } | null = null;
@@ -732,6 +740,7 @@ export class OfficeScene extends Phaser.Scene {
     this.chairs = [];
     this.officeManagerMonitor = null;
     this.hermesMonitor = null;
+    this.terminalStations = [];
     this.coffeeUntil = 0;
     this.fridgeUntil = 0;
     this.coolerUntil = 0;
@@ -1501,6 +1510,9 @@ export class OfficeScene extends Phaser.Scene {
             this.monitorGlows.push(glow);
           });
 
+          // IDE Bridge: create terminal stations for external CLI tools
+          this.createTerminalStations();
+
           this.cursors = this.input.keyboard!.createCursorKeys();
           this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,M,SPACE") as OfficeScene["keys"];
           this.input.keyboard!.on("keydown-ESC", () => {
@@ -1665,6 +1677,10 @@ export class OfficeScene extends Phaser.Scene {
                   this.cameras.main.shake(300, 0.008);
                 });
               }
+            });
+            // IDE Bridge: sync terminal stations when external sessions change
+            this.store.externalSessionListeners.push(() => {
+              if (this.ready) this.syncTerminalStations();
             });
           }
           this.ready = true;
@@ -11526,6 +11542,112 @@ export class OfficeScene extends Phaser.Scene {
       if (!workingDesks.has(deskIdx)) {
         overlay.setVisible(false);
       }
+    }
+  }
+
+  // ── IDE Bridge: terminal stations ────────────────────────────────────
+
+  private createTerminalStations(): void {
+    this.terminalStations = [];
+    for (const tile of this.terminalStationTiles) {
+      const px = tile.x * TILE_PX + TILE_PX / 2;
+      const py = tile.y * TILE_PX + TILE_PX / 2;
+      const container = this.add.container(px, py).setDepth(10 + py);
+
+      // Desk surface
+      const desk = this.add.graphics();
+      desk.fillStyle(0x2a2a3a, 0.9);
+      desk.fillRoundedRect(-TILE_PX * 0.45, -TILE_PX * 0.1, TILE_PX * 0.9, TILE_PX * 0.25, 3);
+      desk.lineStyle(1, 0x3a3a4a, 0.6);
+      desk.strokeRoundedRect(-TILE_PX * 0.45, -TILE_PX * 0.1, TILE_PX * 0.9, TILE_PX * 0.25, 3);
+      container.add(desk);
+
+      // Monitor (reuses existing monitor spritesheet)
+      const monitor = this.add.sprite(0, -TILE_PX * 0.35, MONITOR_TEX, "2").setDepth(1);
+      container.add(monitor);
+
+      // Glow
+      const glow = this.add.circle(0, -TILE_PX * 0.3, 32, 0x4af0a8, 0).setDepth(0).setBlendMode(Phaser.BlendModes.ADD);
+      container.add(glow);
+
+      // Tool label (above monitor)
+      const toolLabel = this.add.text(0, -TILE_PX * 0.72, "", {
+        fontSize: "9px",
+        color: "#88ffcc",
+        fontFamily: "monospace",
+      }).setOrigin(0.5, 0.5).setDepth(2);
+      container.add(toolLabel);
+
+      // File label (below monitor, on desk)
+      const fileLabel = this.add.text(0, TILE_PX * 0.02, "", {
+        fontSize: "7px",
+        color: "#aaaacc",
+        fontFamily: "monospace",
+      }).setOrigin(0.5, 0.5).setDepth(2);
+      container.add(fileLabel);
+
+      this.terminalStations.push({ container, monitor, glow, toolLabel, fileLabel });
+    }
+    this.syncTerminalStations();
+  }
+
+  private syncTerminalStations(): void {
+    const sessions = [...this.store.externalSessions.values()];
+    const toolIcons: Record<string, string> = {
+      "claude-code": "Claude",
+      "codex": "Codex",
+      "aider": "Aider",
+      "vscode": "VSCode",
+      "cursor": "Cursor",
+      "windsurf": "Windsurf",
+      "unknown": "Terminal",
+    };
+    const stateColors: Record<string, number> = {
+      active: 0x4af0a8,
+      idle: 0x4a8cd4,
+      error: 0xff4a4a,
+      disconnected: 0x666666,
+    };
+
+    for (let i = 0; i < this.terminalStations.length; i++) {
+      const station = this.terminalStations[i];
+      const session = sessions[i];
+
+      if (!session) {
+        // Empty station — dark monitor, no glow
+        station.monitor.setFrame("2").clearTint();
+        station.glow.setAlpha(0);
+        station.toolLabel.setText("");
+        station.fileLabel.setText("");
+        continue;
+      }
+
+      const color = stateColors[session.state] ?? 0x4af0a8;
+      const toolName = toolIcons[session.tool] ?? "Terminal";
+
+      // Monitor frame: "0" = idle editor, "1" = lit/working, "2" = black
+      if (session.state === "active") {
+        station.monitor.setFrame("1").setTint(color);
+      } else if (session.state === "idle") {
+        station.monitor.setFrame("0").clearTint();
+      } else if (session.state === "error") {
+        station.monitor.setFrame("1").setTint(color);
+      } else {
+        station.monitor.setFrame("2").clearTint();
+      }
+
+      // Glow
+      const pulse = session.state === "active" ? 0.15 + Math.sin(this.time.now * 0.003) * 0.05 : 0;
+      station.glow.setFillStyle(color, pulse);
+
+      // Labels
+      const branchTag = session.gitBranch ? ` [${session.gitBranch}]` : "";
+      station.toolLabel.setText(`${toolName}${branchTag}`);
+      station.toolLabel.setColor(session.state === "error" ? "#ff6a6a" : session.state === "active" ? "#88ffcc" : "#8888aa");
+
+      const fileShort = session.currentFile ? session.currentFile.split("/").pop() : "";
+      const stats = session.filesChanged > 0 ? ` +${session.linesAdded}/-${session.linesRemoved}` : "";
+      station.fileLabel.setText(fileShort ? `${fileShort}${stats}` : "");
     }
   }
 

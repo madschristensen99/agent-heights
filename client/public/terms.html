@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <title>Terms of Service — Agent Heights</title>
 <style>
 :root { --bg: #0d0f1a; --card: #161824; --accent: #58c866; --text: #e0e0e0; --muted: #8a8a9a; --border: #232636; }
@@ -15,10 +16,31 @@ p, li { color: var(--muted); margin-bottom: 0.5rem; }
 ul { padding-left: 1.5rem; margin-bottom: 1rem; }
 a { color: var(--accent); text-decoration: none; }
 .updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; }
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  transition: border-color 0.2s, background 0.2s;
+  margin-bottom: 1.5rem;
+}
+.back-link:hover { border-color: var(--accent); background: rgba(88,200,102,0.08); }
+.back-link svg { width: 16px; height: 16px; }
 </style>
 </head>
 <body>
 <div class="container">
+<a class="back-link" href="/app">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  Back to App
+</a>
 <h1>Terms of Service</h1>
 <p class="updated">Last updated: August 16, 2025</p>
 
