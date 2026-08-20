@@ -38,6 +38,13 @@ export class RelationalPersistence {
   private pendingPlatformCredentials: boolean = false;
   /** Tracks how many logs per agent are already in the DB, to avoid count queries on every flush. */
   private syncedLogCount: Map<string, number> = new Map();
+  /** Per-row dirty tracking — only upsert rows that actually changed. */
+  private dirtyAgentIds: Set<string> = new Set();
+  private agentSnapshot: Map<string, string> = new Map();
+  private dirtyBoardIds: Set<string> = new Set();
+  private boardSnapshot: Map<string, string> = new Map();
+  private dirtyScheduleIds: Set<string> = new Set();
+  private scheduleSnapshot: Map<string, string> = new Map();
 
   constructor(userId: string) {
     this.userId = userId;
@@ -265,6 +272,16 @@ export class RelationalPersistence {
       for (const [agentId, agentLogs] of Object.entries(logs)) {
         this.syncedLogCount.set(agentId, agentLogs.length);
       }
+      // Initialize per-row snapshots so we only upsert changed rows
+      this.agentSnapshot.clear();
+      for (const a of agents) this.agentSnapshot.set(a.id, JSON.stringify(a));
+      this.boardSnapshot.clear();
+      for (const c of board) this.boardSnapshot.set(c.id, JSON.stringify(c));
+      this.scheduleSnapshot.clear();
+      for (const s of schedules) this.scheduleSnapshot.set(s.id, JSON.stringify(s));
+      this.dirtyAgentIds.clear();
+      this.dirtyBoardIds.clear();
+      this.dirtyScheduleIds.clear();
       return this.state;
   }
 
@@ -277,6 +294,13 @@ export class RelationalPersistence {
   setAgents(agents: AgentInfo[], logs: Record<string, LogEntry[]>): void {
     this.state.agents = agents;
     this.state.logs = logs;
+    // Per-row dirty check: compare each agent to its snapshot
+    for (const a of agents) {
+      const serialized = JSON.stringify(a);
+      if (this.agentSnapshot.get(a.id) !== serialized) {
+        this.dirtyAgentIds.add(a.id);
+      }
+    }
     this.pendingAgents = true;
     this.schedule();
   }
@@ -289,12 +313,26 @@ export class RelationalPersistence {
 
   setBoard(board: TaskCard[]): void {
     this.state.board = board;
+    // Per-row dirty check
+    for (const c of board) {
+      const serialized = JSON.stringify(c);
+      if (this.boardSnapshot.get(c.id) !== serialized) {
+        this.dirtyBoardIds.add(c.id);
+      }
+    }
     this.pendingBoard = true;
     this.schedule();
   }
 
   setSchedules(schedules: AgentSchedule[]): void {
     this.state.schedules = schedules;
+    // Per-row dirty check
+    for (const s of schedules) {
+      const serialized = JSON.stringify(s);
+      if (this.scheduleSnapshot.get(s.id) !== serialized) {
+        this.dirtyScheduleIds.add(s.id);
+      }
+    }
     this.pendingSchedules = true;
     this.schedule();
   }
@@ -369,7 +407,7 @@ export class RelationalPersistence {
       }).catch(() => {
         this.flushInFlight = null;
       });
-    }, 3000);
+    }, 8000);
   }
 
   private async flush(): Promise<void> {
@@ -469,8 +507,9 @@ export class RelationalPersistence {
     const agents = this.state.agents;
     const logs = this.state.logs;
 
-    // Upsert all agents
-    const rows = agents.map((a) => {
+    // Only upsert agents that actually changed (per-row dirty tracking)
+    const dirtyAgents = agents.filter((a) => this.dirtyAgentIds.has(a.id));
+    const rows = dirtyAgents.map((a) => {
       const { id, name, title, provider, model, status, task, deskIndex, sprite, appearance, accent, systemPrompt, role, sessionId, tasksDone, mcpServers, ...extra } = a;
       return {
         id,
@@ -498,10 +537,16 @@ export class RelationalPersistence {
     if (rows.length > 0) {
       try {
         await supabaseAdmin.from("agent_heights_agents").upsert(rows);
+        // Update snapshots for successfully upserted rows
+        for (const a of dirtyAgents) {
+          this.agentSnapshot.set(a.id, JSON.stringify(a));
+        }
       } catch (err) {
         console.error("[db-rel] upsert agents failed:", err);
       }
     }
+    // Clear dirty set regardless — if upsert failed, next setAgents will re-detect changes
+    this.dirtyAgentIds.clear();
 
     // Delete agents that no longer exist
     const currentIds = agents.map((a) => a.id);
@@ -558,10 +603,10 @@ export class RelationalPersistence {
         }
       }
 
-      // Single batch insert for all new logs
+      // Single bulk insert via RPC for all new logs (WAL-efficient)
       if (allNewLogs.length > 0) {
         try {
-          await supabaseAdmin.from("agent_heights_agent_logs").insert(allNewLogs);
+          await supabaseAdmin.rpc("bulk_insert_agent_logs", { payload: JSON.stringify(allNewLogs) });
         } catch (err) {
           console.error(`[db-rel] batch insert logs failed (${allNewLogs.length} rows):`, err);
         }
@@ -604,7 +649,9 @@ export class RelationalPersistence {
     if (!this.roomId) return;
     const board = this.state.board ?? [];
 
-    const rows = board.map((c) => ({
+    // Only upsert cards that actually changed
+    const dirtyCards = board.filter((c) => this.dirtyBoardIds.has(c.id));
+    const rows = dirtyCards.map((c) => ({
       id: c.id,
       room_id: this.roomId,
       owner_id: this.userId,
@@ -618,10 +665,14 @@ export class RelationalPersistence {
     if (rows.length > 0) {
       try {
         await supabaseAdmin.from("agent_heights_task_cards").upsert(rows);
+        for (const c of dirtyCards) {
+          this.boardSnapshot.set(c.id, JSON.stringify(c));
+        }
       } catch (err) {
         console.error("[db-rel] upsert board failed:", err);
       }
     }
+    this.dirtyBoardIds.clear();
 
     // Delete cards that no longer exist
     const currentIds = board.map((c) => c.id);
@@ -648,7 +699,9 @@ export class RelationalPersistence {
     if (!this.roomId) return;
     const schedules = this.state.schedules ?? [];
 
-    const rows = schedules.map((s) => ({
+    // Only upsert schedules that actually changed
+    const dirtySchedules = schedules.filter((s) => this.dirtyScheduleIds.has(s.id));
+    const rows = dirtySchedules.map((s) => ({
       id: s.id,
       agent_id: s.agentId,
       owner_id: this.userId,
@@ -669,10 +722,14 @@ export class RelationalPersistence {
     if (rows.length > 0) {
       try {
         await supabaseAdmin.from("agent_heights_schedules").upsert(rows);
+        for (const s of dirtySchedules) {
+          this.scheduleSnapshot.set(s.id, JSON.stringify(s));
+        }
       } catch (err) {
         console.error("[db-rel] upsert schedules failed:", err);
       }
     }
+    this.dirtyScheduleIds.clear();
 
     // Delete schedules that no longer exist
     const currentIds = schedules.map((s) => s.id);

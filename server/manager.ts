@@ -140,7 +140,7 @@ function clearAllMemory(agentId: string): void {
 const MAX_LOG = 500;
 const DONE_LINGER_MS = 6000;
 const TASK_IDLE_TIMEOUT_MS = 90 * 1000; // Abort if no events arrive for 90s (model hung or rate-limited)
-const SCHEDULER_TICK_MS = 30 * 1000;
+const SCHEDULER_TICK_MS = 60 * 1000;
 const MIN_SCHEDULE_INTERVAL_MS = 15 * 60 * 1000;
 const MAX_DUPLICATE_TOOL_CALLS = 3; // Abort after 3 identical tool calls (was 5 — too permissive)
 const MAX_CALLS_PER_TOOL = 10; // Abort after 10 calls to the same tool name (catches varied-input loops)
@@ -454,9 +454,9 @@ export class AgentManager {
   private proactiveUpdateTimer: ReturnType<typeof setInterval> | null = null;
   private static readonly PROACTIVE_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   private soulRefreshTimer: ReturnType<typeof setInterval> | null = null;
-  private static readonly SOUL_REFRESH_MS = 60_000; // 60 seconds
+  private static readonly SOUL_REFRESH_MS = 120_000; // 120 seconds
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
-  private static readonly HEALTH_CHECK_INTERVAL_MS = 60_000; // 60 seconds
+  private static readonly HEALTH_CHECK_INTERVAL_MS = 120_000; // 120 seconds
   private static readonly MAX_TASK_DURATION_MS = 30 * 60 * 1000; // 30 minutes
   private static readonly STALE_REVIEW_MS = 10 * 60 * 1000; // 10 minutes
   private proactiveLastSent = new Map<string, number>(); // key: platform:sender → last sent timestamp
@@ -3573,14 +3573,14 @@ export class AgentManager {
   }
 
   private thinkTimer: ReturnType<typeof setInterval> | null = null;
-  private static readonly THINK_INTERVAL_MS = 30_000;
+  private static readonly THINK_INTERVAL_MS = 60_000;
   private static readonly THINK_COOLDOWN_MS = 60_000;
 
   /** Start the global think loop that gives idle agents autonomous behavior. */
   startThinkLoop(): void {
     if (this.thinkTimer) return;
     this.thinkTimer = setInterval(() => this.tickThinkLoop(), AgentManager.THINK_INTERVAL_MS);
-    console.log("[agent-heights] autonomous think loop started (30s interval)");
+    console.log("[agent-heights] autonomous think loop started (60s interval)");
   }
 
   /** Stop the think loop (e.g. on shutdown). */
@@ -3595,7 +3595,7 @@ export class AgentManager {
   startHealthCheck(): void {
     if (this.healthCheckTimer) return;
     this.healthCheckTimer = setInterval(() => this.tickHealthCheck(), AgentManager.HEALTH_CHECK_INTERVAL_MS);
-    console.log("[agent-heights] health check started (60s interval)");
+    console.log("[agent-heights] health check started (120s interval)");
   }
 
   /** Stop the health check timer. */

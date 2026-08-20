@@ -33,7 +33,7 @@ function dialectNudge(style: DialectStyle, variants: { default: string; street_u
 
 const NUDGE_COOLDOWN_MS = 8 * 60 * 1000; // 8 minutes between nudges
 const MAX_NUDGES_PER_SESSION = 2;
-const EVAL_INTERVAL_MS = 60 * 1000; // evaluate every 60s
+const EVAL_INTERVAL_MS = 120 * 1000; // evaluate every 120s
 
 interface ConciergeState {
   nudgesThisSession: number;

@@ -73,6 +73,7 @@ export async function sendFriendRequest(
     }, { onConflict: "user_id,friend_id" });
 
   if (error) return { ok: false, message: `Failed to send request: ${error.message}` };
+  invalidateFriendsListCache(userId, targetId ?? undefined);
   return { ok: true, message: `Friend request sent to ${targetEmail}.` };
 }
 
@@ -103,6 +104,7 @@ export async function acceptFriendRequest(
     }, { onConflict: "user_id,friend_id" });
 
   if (e2) return { ok: false, message: `Failed to mirror: ${e2.message}` };
+  invalidateFriendsListCache(userId, friendId);
   return { ok: true, message: "Friend request accepted." };
 }
 
@@ -120,6 +122,7 @@ export async function declineFriendRequest(
     .eq("status", "pending");
 
   if (error) return { ok: false, message: `Failed to decline: ${error.message}` };
+  invalidateFriendsListCache(userId, friendId);
   return { ok: true, message: "Friend request declined." };
 }
 
@@ -141,6 +144,7 @@ export async function removeFriend(
     .eq("user_id", friendId)
     .eq("friend_id", userId);
 
+  invalidateFriendsListCache(userId, friendId);
   return { ok: true, message: "Friend removed." };
 }
 
@@ -159,12 +163,36 @@ export async function getAcceptedFriendIds(userId: string): Promise<string[]> {
   }
 }
 
-export async function getFriendsList(
-  userId: string,
-  onlineUserIds: Set<string>,
-  roomInfo: Map<string, { roomId: string | null; name: string; roomName: string; roomType: string; orgId?: string }>,
-): Promise<{ friends: FriendEntry[]; pending: PendingFriendRequest[] }> {
-  if (!isSupabaseConfigured) return { friends: [], pending: [] };
+// ── Friends list cache ───────────────────────────────────────────────────
+// Caches the DB query results (friend IDs + display names) for 60s.
+// Live online/room data is merged on each call from passed-in parameters.
+// Invalidated when friend changes occur (send/accept/decline/remove).
+const friendsListCache = new Map<string, {
+  friendIds: string[];
+  incomingIds: string[];
+  outgoingIds: string[];
+  nameMap: Map<string, string>;
+  expiresAt: number;
+}>();
+const FRIENDS_LIST_CACHE_TTL_MS = 60_000;
+
+/** Invalidate the cached friends list for a user (and their friend's cache). */
+export function invalidateFriendsListCache(userId: string, friendId?: string): void {
+  friendsListCache.delete(userId);
+  if (friendId) friendsListCache.delete(friendId);
+}
+
+/** Fetch friend IDs + display names from DB, with caching. */
+async function getFriendsListData(userId: string): Promise<{
+  friendIds: string[];
+  incomingIds: string[];
+  outgoingIds: string[];
+  nameMap: Map<string, string>;
+}> {
+  const cached = friendsListCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { friendIds: cached.friendIds, incomingIds: cached.incomingIds, outgoingIds: cached.outgoingIds, nameMap: cached.nameMap };
+  }
 
   const [accepted, pendingIncoming, pendingOutgoing] = await Promise.all([
     supabaseAdmin
@@ -193,6 +221,19 @@ export async function getFriendsList(
   const names = await Promise.all(allIds.map((id) => getUserDisplayName(id)));
   const nameMap = new Map<string, string>();
   allIds.forEach((id, i) => nameMap.set(id, names[i]));
+
+  friendsListCache.set(userId, { friendIds, incomingIds, outgoingIds, nameMap, expiresAt: Date.now() + FRIENDS_LIST_CACHE_TTL_MS });
+  return { friendIds, incomingIds, outgoingIds, nameMap };
+}
+
+export async function getFriendsList(
+  userId: string,
+  onlineUserIds: Set<string>,
+  roomInfo: Map<string, { roomId: string | null; name: string; roomName: string; roomType: string; orgId?: string }>,
+): Promise<{ friends: FriendEntry[]; pending: PendingFriendRequest[] }> {
+  if (!isSupabaseConfigured) return { friends: [], pending: [] };
+
+  const { friendIds, incomingIds, outgoingIds, nameMap } = await getFriendsListData(userId);
 
   const friends: FriendEntry[] = friendIds.map((fid) => {
     const online = onlineUserIds.has(fid);

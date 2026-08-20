@@ -27,7 +27,7 @@ import { startLogMaintenance } from "./log-retention.js";
 import { isRedisConfigured, stopRedis, serverId } from "./redis.js";
 import { handleStripeRequest, getUserPaymentStatus, isStripeConfigured } from "./stripe.js";
 import { handleAssetUpgradeRequest, runAssetGenerationJob } from "./asset-upgrade.js";
-import { getUsageSummary } from "./usage.js";
+import { getUsageSummary, flushUsageBuffer } from "./usage.js";
 import {
   getOverviewStats, getUserTimeseries, getRevenueBreakdown, getRevenueHistory,
   getUsageStats, getConversionFunnel, getSubscriptions, getRealtimeStats, getEngagementStats,
@@ -42,14 +42,14 @@ import { ProfileManager } from "./profile.js";
 import { getLeaderboard, getTrophyProfile } from "./leaderboards.js";
 import { renderTrophyPage, renderTrophyNotFound } from "./trophy-room.js";
 import { dismissNudge, trackActivity } from "./concierge.js";
-import { recordSignalByKey, preloadProfile, getCachedProfile, getUnlocks, seedAspirations, getSignalHistory, UNLOCK_THRESHOLDS_EXPORT, ASPIRATION_LABELS, onDominantShift } from "./aspirations.js";
+import { recordSignalByKey, preloadProfile, getCachedProfile, getUnlocks, seedAspirations, getSignalHistory, UNLOCK_THRESHOLDS_EXPORT, ASPIRATION_LABELS, onDominantShift, flushProfileBuffer } from "./aspirations.js";
 import { generateAwayReport } from "./away-report.js";
 import { logAgentHire, logAgentFire, getEntries, updateEntry } from "./experiment-log.js";
 import { getDecorations, placeDecoration, removeDecoration, moveDecoration } from "./office-deco.js";
 import { getSocialState, leaveStickyNote, likeOffice, unlikeOffice, recordVisit } from "./office-social.js";
 import { getProgress, addXp, getMaxAgents } from "./office-progression.js";
 import { getGrowth, clearGrowth } from "./agent-growth.js";
-import { sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getFriendsList, getAcceptedFriendIds } from "./friends.js";
+import { sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getFriendsList, getAcceptedFriendIds, invalidateFriendsListCache } from "./friends.js";
 import { generateChallenge, scoreChallenge } from "./challenges.js";
 import { compareAgents } from "./ab-comparison.js";
 import { computeEfficiency } from "./efficiency-score.js";
@@ -4452,12 +4452,54 @@ server.listen(SERVER_PORT, () => {
   // server restart, without waiting for each user to reconnect.
   void tenants.restoreSessionsAtBoot();
 
-  // Presence heartbeat: every 60s, push updated friends_list to each
-  // connected user so online status and room info stay current without
-  // manual refresh. Skipped when ≤1 user online to avoid unnecessary DB calls.
+  // Presence: Supabase Realtime subscription on heights_cloud_friends.
+  // When friend relationships change, immediately invalidate cache and push
+  // updated friends_list to affected online users. A 5-minute fallback
+  // interval handles online/room status refresh using cached friend data
+  // (no DB queries).
+  function pushFriendsListToUser(userId: string): void {
+    const sess = tenants.get(userId);
+    if (!sess || sess.clients.size === 0) return;
+    const onlineIds = tenants.getOnlineUserIds();
+    const roomInfo = tenants.getOnlineUserInfo();
+    void getFriendsList(userId, onlineIds, roomInfo).then(({ friends, pending }) => {
+      sess.broadcast({ type: "friends_list", friends, pending });
+    });
+  }
+
+  // Realtime: listen for changes on heights_cloud_friends
+  if (isSupabaseConfigured) {
+    supabaseAdmin
+      .channel("friends-presence")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "heights_cloud_friends" },
+        (payload: any) => {
+          const row = payload.new ?? payload.old;
+          if (!row) return;
+          const userId = row.user_id as string;
+          const friendId = row.friend_id as string;
+          // Invalidate cache for both parties
+          invalidateFriendsListCache(userId, friendId);
+          // Push updated lists to both users if online
+          pushFriendsListToUser(userId);
+          pushFriendsListToUser(friendId);
+        },
+      )
+      .subscribe((status: string) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[agent-heights] Realtime subscription on heights_cloud_friends active");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[agent-heights] Realtime subscription error — falling back to polling");
+        }
+      });
+  }
+
+  // Fallback: every 5 minutes, push updated friends_list to all online users.
+  // Uses cached friend data (no DB queries) — only refreshes online/room status.
   setInterval(() => {
     const onlineIds = tenants.getOnlineUserIds();
-    if (onlineIds.size <= 1) return; // nobody else online — skip DB queries
+    if (onlineIds.size <= 1) return;
     const roomInfo = tenants.getOnlineUserInfo();
     for (const sess of tenants.values()) {
       if (sess.clients.size === 0) continue;
@@ -4466,7 +4508,7 @@ server.listen(SERVER_PORT, () => {
         sess.broadcast({ type: "friends_list", friends, pending });
       });
     }
-  }, 120_000).unref?.();
+  }, 5 * 60_000).unref?.();
 
   // Start agent-originated retention email loop (runs hourly)
   startRetentionLoop((): RetentionManagerEntry[] => {
@@ -4504,7 +4546,13 @@ async function shutdown(): Promise<void> {
   }
   await Promise.all(shutdownPrep);
 
-  // 3. Flush all saves to disk/DB (pending tasks are included) — do this
+  // 3. Flush buffered usage records and aspiration profiles to DB so no data is lost
+  await Promise.all([
+    flushUsageBuffer().catch(() => {}),
+    flushProfileBuffer().catch(() => {}),
+  ]);
+
+  // 4. Flush all saves to disk/DB (pending tasks are included) — do this
   //    BEFORE browser cleanup so critical task data is persisted even if
   //    destroyAllBrowsers() is slow and Railway's grace period expires.
   const flushes: Promise<void>[] = [];

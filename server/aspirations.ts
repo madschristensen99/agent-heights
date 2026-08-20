@@ -168,26 +168,51 @@ export async function recordSignal(
   // Update cache
   profileCache.set(userId, { ...profile });
 
-  // Persist all 6 decayed scores to DB (fire-and-forget, non-blocking)
-  if (isSupabaseConfigured) {
-    const update: Record<string, number | string | null> = {
-      warrior_score: profile.warrior,
-      builder_score: profile.builder,
-      explorer_score: profile.explorer,
-      puzzle_solver_score: profile.puzzle_solver,
-      creator_score: profile.creator,
-      strategist_score: profile.strategist,
-      signal_count: profile.signalCount,
-      last_signal_at: new Date(now).toISOString(),
-      dominant_aspiration: profile.dominant,
-      updated_at: new Date(now).toISOString(),
-    };
+  // Mark user as dirty for batch DB flush
+  dirtyProfiles.add(userId);
+  ensureProfileFlushTimer();
+}
 
-    void supabaseAdmin
-      .from("heights_cloud_aspiration_profiles")
-      .upsert({ user_id: userId, ...update }, { onConflict: "user_id" })
-      .then(() => {})
-      .catch((err: unknown) => console.warn(`[aspirations] failed to upsert profile for ${userId}:`, err));
+// ── Batch DB flush for aspiration profiles ───────────────────────────────
+const dirtyProfiles = new Set<string>();
+const PROFILE_FLUSH_INTERVAL_MS = 30_000;
+let profileFlushTimer: ReturnType<typeof setInterval> | null = null;
+
+function ensureProfileFlushTimer(): void {
+  if (profileFlushTimer) return;
+  profileFlushTimer = setInterval(() => void flushProfileBuffer(), PROFILE_FLUSH_INTERVAL_MS);
+  profileFlushTimer.unref?.();
+}
+
+/** Flush all dirty aspiration profiles to DB in a batch. */
+export async function flushProfileBuffer(): Promise<void> {
+  if (dirtyProfiles.size === 0) return;
+  const userIds = [...dirtyProfiles];
+  dirtyProfiles.clear();
+  for (const userId of userIds) {
+    const profile = profileCache.get(userId);
+    if (!profile) continue;
+    try {
+      const now = Date.now();
+      const update: Record<string, number | string | null> = {
+        warrior_score: profile.warrior,
+        builder_score: profile.builder,
+        explorer_score: profile.explorer,
+        puzzle_solver_score: profile.puzzle_solver,
+        creator_score: profile.creator,
+        strategist_score: profile.strategist,
+        signal_count: profile.signalCount,
+        last_signal_at: new Date(profile.lastSignalAt || now).toISOString(),
+        dominant_aspiration: profile.dominant,
+        updated_at: new Date(now).toISOString(),
+      };
+      await supabaseAdmin
+        .from("heights_cloud_aspiration_profiles")
+        .upsert({ user_id: userId, ...update }, { onConflict: "user_id" });
+    } catch (err) {
+      console.warn(`[aspirations] batch flush failed for ${userId}:`, err);
+      dirtyProfiles.add(userId); // re-buffer on failure
+    }
   }
 }
 
@@ -274,27 +299,9 @@ export async function seedAspirations(userId: string, aspirations: string[]): Pr
   // Update cache
   profileCache.set(userId, { ...profile });
 
-  // Persist to DB
-  if (isSupabaseConfigured) {
-    const update: Record<string, number | string | null> = {
-      warrior_score: profile.warrior,
-      builder_score: profile.builder,
-      explorer_score: profile.explorer,
-      puzzle_solver_score: profile.puzzle_solver,
-      creator_score: profile.creator,
-      strategist_score: profile.strategist,
-      signal_count: profile.signalCount,
-      last_signal_at: new Date(profile.lastSignalAt).toISOString(),
-      dominant_aspiration: profile.dominant,
-      updated_at: new Date().toISOString(),
-    };
-
-    void supabaseAdmin
-      .from("heights_cloud_aspiration_profiles")
-      .upsert({ user_id: userId, ...update }, { onConflict: "user_id" })
-      .then(() => {})
-      .catch((err: unknown) => console.warn(`[aspirations] failed to seed profile for ${userId}:`, err));
-  }
+  // Mark dirty for batch DB flush
+  dirtyProfiles.add(userId);
+  ensureProfileFlushTimer();
 }
 
 /**

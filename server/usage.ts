@@ -92,10 +92,55 @@ export interface UsageRecord {
   isChat?: boolean;
 }
 
+// ── Batch insert buffer ──────────────────────────────────────────────────
+// Instead of one INSERT per LLM call, buffer records and flush as a single
+// batch every 30s. This dramatically reduces WAL churn and DB round-trips.
+const usageBuffer: Array<{
+  user_id: string;
+  agent_id: string;
+  agent_name: string;
+  model: string;
+  provider: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  total_cost: number;
+  task: string | null;
+  is_chat: boolean;
+}> = [];
+
+const USAGE_FLUSH_INTERVAL_MS = 30_000;
+let usageFlushTimer: ReturnType<typeof setInterval> | null = null;
+
+function ensureFlushTimer(): void {
+  if (usageFlushTimer) return;
+  usageFlushTimer = setInterval(() => void flushUsageBuffer(), USAGE_FLUSH_INTERVAL_MS);
+  usageFlushTimer.unref?.();
+}
+
+/** Flush all buffered usage records to DB in a single batch INSERT. */
+export async function flushUsageBuffer(): Promise<void> {
+  if (usageBuffer.length === 0) return;
+  const batch = usageBuffer.splice(0);
+  try {
+    const { error } = await supabaseAdmin.from("api_usage_records").insert(batch);
+    if (error) {
+      console.error(`[usage] batch insert failed (${batch.length} rows):`, error.message);
+      // Re-buffer the failed batch so data isn't lost
+      usageBuffer.unshift(...batch);
+    }
+  } catch (err) {
+    console.error(`[usage] batch insert error (${batch.length} rows):`, err);
+    usageBuffer.unshift(...batch);
+  }
+}
+
 /**
  * Record a single LLM API call's token usage to the database.
  * Cost is calculated from the pricing table if not provided.
  * Failures are logged but never thrown — usage tracking must not break agent tasks.
+ * Records are buffered and flushed in batches every 30s to reduce DB load.
  */
 export async function recordUsage(rec: UsageRecord): Promise<void> {
   if (!isSupabaseConfigured) return;
@@ -125,7 +170,8 @@ export async function recordUsage(rec: UsageRecord): Promise<void> {
           rec.cacheWriteTokens ?? 0,
         );
 
-    const { error } = await supabaseAdmin.from("api_usage_records").insert({
+    // Buffer the record for batch insert
+    usageBuffer.push({
       user_id: rec.userId,
       agent_id: rec.agentId,
       agent_name: rec.agentName,
@@ -139,12 +185,12 @@ export async function recordUsage(rec: UsageRecord): Promise<void> {
       task: rec.task?.slice(0, 500) ?? null,
       is_chat: rec.isChat ?? false,
     });
-    if (error) {
-      console.error("[usage] failed to record:", error.message);
-    } else {
-      // Keep in-memory spend cache in sync so concurrent cap checks see this spend
-      incrementSpendCache(rec.userId, totalCost);
-    }
+
+    // Keep in-memory spend cache in sync so concurrent cap checks see this spend
+    incrementSpendCache(rec.userId, totalCost);
+
+    // Ensure the flush timer is running
+    ensureFlushTimer();
   } catch (err) {
     console.error("[usage] recordUsage error:", err);
   }

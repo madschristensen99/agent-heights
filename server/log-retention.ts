@@ -28,37 +28,19 @@ export async function pruneOldLogs(): Promise<number> {
 
 /**
  * For each agent, trim logs to LOG_CAP entries (keep most recent).
+ * Uses a single SQL via RPC function — no N+1 queries.
  */
 export async function trimAllLogs(): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
-    // Get all agents
-    const { data: agents } = await supabaseAdmin
-      .from("agent_heights_agents")
-      .select("id");
-    if (!agents) return;
-
-    for (const agent of agents) {
-      const { count } = await supabaseAdmin
-        .from("agent_heights_agent_logs")
-        .select("id", { count: "exact", head: true })
-        .eq("agent_id", agent.id)
-        .eq("archived", false);
-
-      if ((count ?? 0) > LOG_CAP) {
-        const excess = (count ?? 0) - LOG_CAP;
-        const { data: oldLogs } = await supabaseAdmin
-          .from("agent_heights_agent_logs")
-          .select("id")
-          .eq("agent_id", agent.id)
-          .eq("archived", false)
-          .order("ts", { ascending: true })
-          .limit(excess);
-        if (oldLogs && oldLogs.length > 0) {
-          const ids = oldLogs.map((r: any) => r.id);
-          await supabaseAdmin.from("agent_heights_agent_logs").delete().in("id", ids);
-        }
-      }
+    const { data, error } = await supabaseAdmin.rpc("trim_agent_logs", { cap: LOG_CAP });
+    if (error) {
+      console.error("[db-rel] trimAllLogs RPC failed:", error);
+      return;
+    }
+    const deleted = typeof data === "number" ? data : 0;
+    if (deleted > 0) {
+      console.log(`[db-rel] trimmed ${deleted} excess agent log entries (cap=${LOG_CAP})`);
     }
   } catch (err) {
     console.error("[db-rel] trimAllLogs failed:", err);
