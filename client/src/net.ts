@@ -31,6 +31,10 @@ export class Net {
     this.token = token;
   }
 
+  getToken(): string | null {
+    return this.token;
+  }
+
   setSpectator(value: boolean): void {
     this._spectator = value;
   }

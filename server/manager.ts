@@ -1490,16 +1490,10 @@ export class AgentManager {
       }
     }
     this.save.setPendingTasks(pendingTasks);
-    // If there are active tasks, flush immediately rather than relying on the
-    // 400ms debounce. This ensures pending tasks survive an abrupt SIGKILL or
-    // crash that happens between persist() and the debounced flush.
-    if (Object.keys(pendingTasks).length > 0) {
-      console.log(`[manager] persistPendingTasks: saving ${Object.keys(pendingTasks).length} agent(s) with pending tasks:`, JSON.stringify(Object.fromEntries(Object.entries(pendingTasks).map(([id, ts]) => [id, ts.map(t => t.task.slice(0, 50))]))));
-      const f = this.save.flushNow();
-      if (f && typeof (f as any).then === "function") {
-        void (f as Promise<void>).catch(() => {});
-      }
-    }
+    // Pending tasks are saved via the debounced flush (3s).
+    // Immediate flushNow() was removed — it bypassed the debounce on every
+    // log() and setStatus() call, causing excessive DB writes during active work.
+    // Graceful shutdown still calls flushNow() via prepareForShutdown().
   }
 
   snapshot(): { agents: AgentInfo[]; logs: Record<string, LogEntry[]>; board: TaskCard[] } {
@@ -6242,7 +6236,9 @@ export class AgentManager {
     rt.info.status = status;
     this.updateMood(rt);
     this.session.record("status", { agentId: rt.info.id, agentName: rt.info.name, status });
-    this.persist();
+    // Lightweight persist — just mark agents dirty for debounced flush.
+    const snap = this.snapshot();
+    this.save.setAgents(snap.agents, snap.logs);
     this.broadcast({ type: "agent", agent: rt.info });
     // When an agent becomes idle, try to drain queued mail
     if (wasBusy && status === "idle") {
@@ -6971,7 +6967,10 @@ export class AgentManager {
     rt.logs.push(entry);
     if (rt.logs.length > MAX_LOG) rt.logs.splice(0, rt.logs.length - MAX_LOG);
     this.session.record("log", { agentId: rt.info.id, agentName: rt.info.name, kind, text });
-    this.persist();
+    // Lightweight persist — just mark agents/logs dirty for debounced flush.
+    // Avoids full persist() which rebuilds pendingTasks map on every log entry.
+    const snap = this.snapshot();
+    this.save.setAgents(snap.agents, snap.logs);
     this.broadcast({ type: "log", agentId: rt.info.id, entry });
     // Notify direct subscribers (agent monitor live log)
     const subs = this.logSubscribers.get(rt.info.id);

@@ -1917,6 +1917,7 @@ export class Hud {
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
 
     const sessions = [...this.store.externalSessions.values()];
+    const token = this.net.getToken();
     const wsHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? `ws://${window.location.hostname}:3001`
       : `wss://${window.location.host}`;
@@ -1976,21 +1977,24 @@ export class Hud {
 
         <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;">
           <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;">Connect a Tool</h3>
-          <p style="font-size:0.75rem;color:var(--dim);margin-bottom:0.6rem;">
-            Install the <code style="background:var(--panel);padding:0.1rem 0.3rem;border-radius:3px;">ah-cli</code> package and run one of:
-          </p>
-          <div style="background:var(--panel);border-radius:6px;padding:0.6rem;font-family:monospace;font-size:0.72rem;color:var(--text);margin-bottom:0.6rem;">
-            <div style="margin-bottom:0.3rem;"># Watch a project directory</div>
-            <div style="color:var(--accent);">ah watch --tool claude-code</div>
-            <div style="margin-top:0.5rem;margin-bottom:0.3rem;"># Wrap a CLI command</div>
-            <div style="color:var(--accent);">ah wrap "codex fix-bug.ts"</div>
-            <div style="margin-top:0.5rem;margin-bottom:0.3rem;"># Claude Code hook</div>
-            <div style="color:var(--accent);">ah-hook --after-edit</div>
-          </div>
-          <p style="font-size:0.7rem;color:var(--dim);">
-            Sessions connect to <code style="font-size:0.7rem;">${wsHost}</code> using your auth token.
-            Only metadata is sent — never file contents.
-          </p>
+          ${token ? `
+            <div style="margin-bottom:0.6rem;">
+              <p style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">Your bridge token (click to copy):</p>
+              <div id="ah-token-box" style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:4px;padding:0.4rem 0.6rem;font-family:monospace;font-size:0.7rem;color:var(--text);cursor:pointer;word-break:break-all;user-select:all;">${token.slice(0, 20)}••••••••••••••••</div>
+            </div>
+            <p style="font-size:0.75rem;color:var(--dim);margin-bottom:0.4rem;">Run this in your project directory:</p>
+            <div id="ah-cmd-box" style="background:var(--panel);border-radius:6px;padding:0.6rem;font-family:monospace;font-size:0.72rem;color:var(--text);cursor:pointer;user-select:all;">
+              <div style="color:var(--dim);margin-bottom:0.2rem;"># Install the CLI</div>
+              <div style="color:var(--accent);">cd ah-cli && npm install && npm run build</div>
+              <div style="color:var(--dim);margin-top:0.4rem;margin-bottom:0.2rem;"># Connect Windsurf activity to your office</div>
+              <div style="color:var(--accent);">AH_TOKEN=${token} AH_HOST=${wsHost} node dist/cli.js watch --tool windsurf</div>
+            </div>
+            <p style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;">
+              Only metadata is sent — never file contents. Token is scoped to your account.
+            </p>
+          ` : `
+            <p style="font-size:0.75rem;color:var(--dim);">Sign in to get your bridge token.</p>
+          `}
         </div>
       </div>`;
 
@@ -1998,6 +2002,35 @@ export class Hud {
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay || (e.target as HTMLElement).id === "ide-bridge-close") overlay.remove();
     });
+
+    // Click-to-copy for token
+    const tokenBox = overlay.querySelector("#ah-token-box");
+    if (tokenBox) {
+      tokenBox.addEventListener("click", () => {
+        if (token) {
+          navigator.clipboard.writeText(token).then(() => {
+            const el = tokenBox as HTMLElement;
+            const orig = el.textContent;
+            el.textContent = "✅ Copied!";
+            setTimeout(() => { if (el.isConnected) el.textContent = orig; }, 1500);
+          }).catch(() => {});
+        }
+      });
+    }
+
+    // Click-to-copy for full command
+    const cmdBox = overlay.querySelector("#ah-cmd-box");
+    if (cmdBox && token) {
+      const fullCmd = `AH_TOKEN=${token} AH_HOST=${wsHost} node dist/cli.js watch --tool windsurf`;
+      cmdBox.addEventListener("click", () => {
+        navigator.clipboard.writeText(fullCmd).then(() => {
+          const el = cmdBox as HTMLElement;
+          const orig = el.innerHTML;
+          el.innerHTML = '<div style="color:var(--accent);text-align:center;padding:0.4rem;">✅ Command copied to clipboard!</div>';
+          setTimeout(() => { if (el.isConnected) el.innerHTML = orig; }, 1500);
+        }).catch(() => {});
+      });
+    }
 
     // Auto-refresh on session changes
     const refresh = () => {
