@@ -53,6 +53,23 @@ export class RelationalPersistence {
   async load(): Promise<SaveState | null> {
     if (!isSupabaseConfigured) return null;
     try {
+      const result = await Promise.race([
+        this._loadInner(),
+        new Promise<SaveState | null>((resolve) =>
+          setTimeout(() => {
+            console.warn(`[db-rel] load timed out for user ${this.userId} — returning defaults`);
+            resolve(null);
+          }, 10_000),
+        ),
+      ]);
+      return result;
+    } catch (err) {
+      console.error("[db-rel] load failed:", err);
+      return null;
+    }
+  }
+
+  private async _loadInner(): Promise<SaveState | null> {
       // Get or create room for this user
       let { data: room } = await supabaseAdmin
         .from("agent_heights_rooms")
@@ -71,24 +88,59 @@ export class RelationalPersistence {
       }
       this.roomId = room.id;
 
-      // Load player info
-      const { data: playerRow } = await supabaseAdmin
-        .from("agent_heights_player_info")
-        .select("name, workspace, appearance")
-        .eq("user_id", this.userId)
-        .maybeSingle();
+      // ── Parallel load: all independent queries run concurrently ────────
+      // Only logs depend on agents, so we fetch agents first and then fan
+      // out the log query. Everything else is fully independent.
+      const [
+        playerRes,
+        settingsRes,
+        agentsRes,
+        cardRowsRes,
+        scheduleRowsRes,
+        worldRowRes,
+        mailRowsRes,
+      ] = await Promise.all([
+        supabaseAdmin
+          .from("agent_heights_player_info")
+          .select("name, workspace, appearance")
+          .eq("user_id", this.userId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("agent_heights_game_settings")
+          .select("cline_max_iterations, cline_auto_approve, cline_review_handoff, game_idle_wander, game_theme, railway_enabled, mailbox_platforms")
+          .eq("user_id", this.userId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("agent_heights_agents")
+          .select("*")
+          .eq("owner_id", this.userId),
+        supabaseAdmin
+          .from("agent_heights_task_cards")
+          .select("*")
+          .eq("owner_id", this.userId),
+        supabaseAdmin
+          .from("agent_heights_schedules")
+          .select("*")
+          .eq("owner_id", this.userId),
+        supabaseAdmin
+          .from("agent_heights_world_state")
+          .select("seed, fired_agents, chunk_overrides, pending_tasks, vacationed_agents, office_overrides, platform_credentials")
+          .eq("room_id", this.roomId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("agent_heights_mail_events")
+          .select("platform, direction, sender, text, timestamp, status")
+          .eq("user_id", this.userId)
+          .order("timestamp", { ascending: false })
+          .limit(500),
+      ]);
 
+      const playerRow = playerRes.data;
       const player: PlayerInfo | null = playerRow
         ? { name: playerRow.name, workspace: playerRow.workspace, appearance: playerRow.appearance ?? null }
         : null;
 
-      // Load settings
-      const { data: settingsRow } = await supabaseAdmin
-        .from("agent_heights_game_settings")
-        .select("cline_max_iterations, cline_auto_approve, cline_review_handoff, game_idle_wander, game_theme, railway_enabled, mailbox_platforms")
-        .eq("user_id", this.userId)
-        .maybeSingle();
-
+      const settingsRow = settingsRes.data;
       const settings: GameSettings | undefined = settingsRow
         ? {
             cline: {
@@ -105,13 +157,7 @@ export class RelationalPersistence {
           }
         : undefined;
 
-      // Load agents
-      const { data: agentRows } = await supabaseAdmin
-        .from("agent_heights_agents")
-        .select("*")
-        .eq("owner_id", this.userId);
-
-      const agents: AgentInfo[] = (agentRows ?? []).map((r: any) => ({
+      const agents: AgentInfo[] = (agentsRes.data ?? []).map((r: any) => ({
         id: r.id,
         name: r.name,
         title: r.title,
@@ -131,7 +177,7 @@ export class RelationalPersistence {
         ...(r.extra_fields ?? {}),
       }));
 
-      // Load logs (capped at LOG_CAP per agent)
+      // Load logs (depends on agents) — capped at LOG_CAP per agent
       const logs: Record<string, LogEntry[]> = {};
       if (agents.length > 0) {
         const agentIds = agents.map((a) => a.id);
@@ -151,13 +197,7 @@ export class RelationalPersistence {
         }
       }
 
-      // Load task cards
-      const { data: cardRows } = await supabaseAdmin
-        .from("agent_heights_task_cards")
-        .select("*")
-        .eq("owner_id", this.userId);
-
-      const board: TaskCard[] = (cardRows ?? []).map((r: any) => ({
+      const board: TaskCard[] = (cardRowsRes.data ?? []).map((r: any) => ({
         id: r.id,
         title: r.title,
         description: r.description,
@@ -166,13 +206,7 @@ export class RelationalPersistence {
         createdAt: r.created_at,
       }));
 
-      // Load schedules
-      const { data: scheduleRows } = await supabaseAdmin
-        .from("agent_heights_schedules")
-        .select("*")
-        .eq("owner_id", this.userId);
-
-      const schedules: AgentSchedule[] = (scheduleRows ?? []).map((r: any) => ({
+      const schedules: AgentSchedule[] = (scheduleRowsRes.data ?? []).map((r: any) => ({
         id: r.id,
         agentId: r.agent_id,
         name: r.name,
@@ -188,13 +222,7 @@ export class RelationalPersistence {
         chainTo: r.chain_to ?? null,
       }));
 
-      // Load world state
-      const { data: worldRow } = await supabaseAdmin
-        .from("agent_heights_world_state")
-        .select("seed, fired_agents, chunk_overrides, pending_tasks, vacationed_agents, office_overrides, platform_credentials")
-        .eq("room_id", this.roomId)
-        .maybeSingle();
-
+      const worldRow = worldRowRes.data;
       const world: WorldState = worldRow
         ? { seed: worldRow.seed, firedAgents: worldRow.fired_agents ?? [], vacationedAgents: (worldRow as any).vacationed_agents ?? [], chunkOverrides: worldRow.chunk_overrides ?? {} }
         : { seed: room.seed, firedAgents: [] };
@@ -210,15 +238,7 @@ export class RelationalPersistence {
       }
       console.log(`[db-rel] load: pending_tasks from DB for user ${this.userId}:`, JSON.stringify(Object.fromEntries(Object.entries(pendingTasksMap).map(([id, ts]) => [id, ts.length]))), `(raw: ${JSON.stringify((worldRow as any)?.pending_tasks)?.slice(0, 200)})`);
 
-      // Load mail events (newest 50 per platform)
-      const { data: mailRows } = await supabaseAdmin
-        .from("agent_heights_mail_events")
-        .select("platform, direction, sender, text, timestamp, status")
-        .eq("user_id", this.userId)
-        .order("timestamp", { ascending: false })
-        .limit(500);
-
-      const mailEvents: PlatformEvent[] = (mailRows ?? []).map((r: any) => ({
+      const mailEvents: PlatformEvent[] = (mailRowsRes.data ?? []).map((r: any) => ({
         platform: r.platform,
         direction: r.direction,
         sender: r.sender,
@@ -239,10 +259,6 @@ export class RelationalPersistence {
 
       this.state = { player, agents, logs, settings, board, schedules, world, pendingTasks: pendingTasksMap, mailEvents, platformCredentials };
       return this.state;
-    } catch (err) {
-      console.error("[db-rel] load failed:", err);
-      return null;
-    }
   }
 
   setPlayer(player: PlayerInfo): void {

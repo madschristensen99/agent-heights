@@ -513,9 +513,16 @@ export class Hud {
         document.body.appendChild(modal);
         modal.querySelector("#signout-cancel")!.addEventListener("click", () => modal.remove());
         modal.querySelector("#signout-confirm")!.addEventListener("click", async () => {
-          modal.remove();
+          const confirmBtn = modal.querySelector("#signout-confirm") as HTMLButtonElement;
+          const cancelBtn = modal.querySelector("#signout-cancel") as HTMLButtonElement;
+          confirmBtn.disabled = true;
+          cancelBtn.disabled = true;
+          confirmBtn.textContent = "Signing out…";
+          this.net.disconnect();
           await signOut();
-          location.reload();
+          this.store.reset();
+          document.getElementById("hud")!.style.display = "none";
+          modal.remove();
         });
         modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
       });

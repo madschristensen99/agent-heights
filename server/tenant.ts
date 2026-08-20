@@ -640,10 +640,21 @@ export class TenantManager {
     let save: Persistence;
     let saved: SaveState | null;
 
+    let apiKey: string | null = null;
+    let mcpKeys: Record<string, string> = {};
+
     if (isSupabaseConfigured && user.id !== "dev") {
       const db = new RelationalPersistence(user.id);
       save = db;
-      saved = await db.load();
+      // Run db.load(), getUserApiKey, and getUserMcpKeys in parallel
+      const [dbResult, apiKeyResult, mcpKeysResult] = await Promise.all([
+        db.load(),
+        getUserApiKey(user.id),
+        getUserMcpKeys(user.id),
+      ]);
+      saved = dbResult;
+      apiKey = apiKeyResult;
+      mcpKeys = mcpKeysResult;
     } else {
       const file = new SaveFile(userDir);
       save = file;
@@ -660,8 +671,6 @@ export class TenantManager {
     const session = new SessionLogger(userDir);
     const clients = new Set<WebSocket>();
     const player = saved?.player ?? null;
-    const apiKey = isSupabaseConfigured ? await getUserApiKey(user.id) : null;
-    const mcpKeys = isSupabaseConfigured ? await getUserMcpKeys(user.id) : {};
 
     const sess: UserSession = {
       user,
