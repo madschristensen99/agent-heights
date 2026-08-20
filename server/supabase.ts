@@ -14,12 +14,36 @@ export interface AuthUser {
   email: string | null;
 }
 
+const tokenCache = new Map<string, { user: AuthUser; expiresAt: number }>();
+const TOKEN_CACHE_TTL_MS = 60_000;
+
 export async function verifyToken(token: string): Promise<AuthUser | null> {
   if (!isSupabaseConfigured) return null;
+
+  // Check cache — avoids repeated GoTrue calls for reconnects/page refreshes
+  const cached = tokenCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.user;
+  }
+
   try {
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !data.user) return null;
-    return { id: data.user.id, email: data.user.email ?? null };
+    const result = await Promise.race([
+      supabaseAdmin.auth.getUser(token),
+      new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error("auth timeout") }), 5_000),
+      ),
+    ]);
+    if (result.error || !result.data?.user) return null;
+    const user = { id: result.data.user.id, email: result.data.user.email ?? null };
+    tokenCache.set(token, { user, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
+    // Prune expired entries periodically
+    if (tokenCache.size > 100) {
+      const now = Date.now();
+      for (const [k, v] of tokenCache) {
+        if (v.expiresAt <= now) tokenCache.delete(k);
+      }
+    }
+    return user;
   } catch {
     return null;
   }

@@ -1223,59 +1223,57 @@ wss.on("connection", async (ws, req) => {
   // Send saved outfits
   void sendOutfits(ws, sess);
 
-  // Send achievement progress from DB (so it syncs across devices)
+  // ── Parallel post-connect DB queries ────────────────────────────────
+  // These 3 queries (achievements, payment status, deletion status) were
+  // previously sequential awaited calls that added 3 round-trip latencies
+  // to the WS connection. Now they run concurrently.
   if (isSupabaseConfigured) {
-    try {
-      const { data: achRow } = await supabaseAdmin
-        .from("heights_cloud_achievements")
-        .select("unlocked, stats, sets")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      ws.send(JSON.stringify({
-        type: "achievements_sync",
-        unlocked: achRow?.unlocked ?? [],
-        stats: achRow?.stats ?? {},
-        sets: achRow?.sets ?? {},
-      } satisfies ServerMsg));
-    } catch (err) {
-      console.error("[achievements] failed to load from DB:", err);
-    }
-  }
+    const [achResult, payResult, delResult] = await Promise.all([
+      // Achievements
+      Promise.resolve(
+        supabaseAdmin
+          .from("heights_cloud_achievements")
+          .select("unlocked, stats, sets")
+          .eq("user_id", user.id)
+          .maybeSingle()
+      ).catch(() => ({ data: null, error: null })),
+      // Payment status (only if Stripe is configured)
+      isStripeConfigured
+        ? getUserPaymentStatus(user.id, user.email).catch(() => null)
+        : Promise.resolve(null as null),
+      // Deletion status
+      getDeletionStatus(user.id).catch(() => ({ scheduledDeletionAt: null })),
+    ]);
 
-  // Send payment status so the client can gate UI (subscription + free tier)
-  if (isSupabaseConfigured && isStripeConfigured) {
-    try {
-      const payStatus = await getUserPaymentStatus(user.id, user.email);
+    // Send achievements
+    const achRow = achResult.data;
+    ws.send(JSON.stringify({
+      type: "achievements_sync",
+      unlocked: achRow?.unlocked ?? [],
+      stats: achRow?.stats ?? {},
+      sets: achRow?.sets ?? {},
+    } satisfies ServerMsg));
 
-      // Update the manager with subscription info
-      sess.manager.subscriptionTier = payStatus.subscriptionTier;
-      sess.manager.agentLimit = payStatus.agentLimit + getMaxAgents(sess.user.id) - 3; // office level adds slots beyond base 3
-      sess.manager.entrancePaid = payStatus.entrancePaid;
-
+    // Send payment status
+    if (payResult) {
+      sess.manager.subscriptionTier = payResult.subscriptionTier;
+      sess.manager.agentLimit = payResult.agentLimit + getMaxAgents(sess.user.id) - 3;
+      sess.manager.entrancePaid = payResult.entrancePaid;
       ws.send(JSON.stringify({
         type: "payment_status",
-        entrancePaid: payStatus.entrancePaid,
-        subscriptionActive: payStatus.subscriptionActive,
-        subscriptionStatus: payStatus.subscriptionStatus,
-        subscriptionTier: payStatus.subscriptionTier,
-        agentLimit: payStatus.agentLimit,
-        usageCap: payStatus.usageCap,
-        currentPeriodEnd: payStatus.currentPeriodEnd,
+        entrancePaid: payResult.entrancePaid,
+        subscriptionActive: payResult.subscriptionActive,
+        subscriptionStatus: payResult.subscriptionStatus,
+        subscriptionTier: payResult.subscriptionTier,
+        agentLimit: payResult.agentLimit,
+        usageCap: payResult.usageCap,
+        currentPeriodEnd: payResult.currentPeriodEnd,
       } satisfies ServerMsg));
-    } catch (err) {
-      console.error("[server] failed to get payment status:", err);
     }
-  }
 
-  // Send deletion status if the user has a pending deletion request
-  if (isSupabaseConfigured) {
-    try {
-      const { scheduledDeletionAt } = await getDeletionStatus(user.id);
-      if (scheduledDeletionAt) {
-        ws.send(JSON.stringify({ type: "deletion_scheduled", scheduledDeletionAt } satisfies ServerMsg));
-      }
-    } catch (err) {
-      console.error("[server] failed to get deletion status:", err);
+    // Send deletion status
+    if (delResult?.scheduledDeletionAt) {
+      ws.send(JSON.stringify({ type: "deletion_scheduled", scheduledDeletionAt: delResult.scheduledDeletionAt } satisfies ServerMsg));
     }
   }
 
@@ -4468,7 +4466,7 @@ server.listen(SERVER_PORT, () => {
         sess.broadcast({ type: "friends_list", friends, pending });
       });
     }
-  }, 60_000).unref?.();
+  }, 120_000).unref?.();
 
   // Start agent-originated retention email loop (runs hourly)
   startRetentionLoop((): RetentionManagerEntry[] => {

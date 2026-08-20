@@ -61,7 +61,7 @@ export class RelationalPersistence {
           setTimeout(() => {
             console.warn(`[db-rel] load timed out for user ${this.userId} — returning defaults`);
             resolve(null);
-          }, 10_000),
+          }, 5_000),
         ),
       ]);
       return result;
