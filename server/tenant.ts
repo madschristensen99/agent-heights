@@ -750,7 +750,7 @@ export class TenantManager {
 
     sess.manager = new AgentManager(userDir, sess.broadcast, session, save, saved, apiKey, user.id, () => sess.clients.size > 0);
     sess.manager.onTaskComplete = (agentId, success, durationMin, taskType) => {
-      recordTaskCompletion(agentId, success, durationMin, taskType);
+      recordTaskCompletion(agentId, success, durationMin, taskType, user.id);
       if (success) {
         const xpResult = addXp(user.id, 10);
         if (xpResult.leveledUp) {

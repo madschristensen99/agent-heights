@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { OfficeDecoration, DecorationPlacement } from "../shared/types";
 import { DECORATION_CATALOG } from "../shared/types";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 const decorationStores = new Map<string, OfficeDecoration[]>();
 
@@ -9,8 +10,38 @@ function getStore(userId: string): OfficeDecoration[] {
   if (!store) {
     store = [];
     decorationStores.set(userId, store);
+    // Load from DB
+    if (isSupabaseConfigured) {
+      void supabaseAdmin
+        .from("heights_cloud_office_decorations")
+        .select("decorations")
+        .eq("user_id", userId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.decorations) {
+            const decos = typeof data.decorations === "string" ? JSON.parse(data.decorations) : data.decorations;
+            store!.push(...(decos as OfficeDecoration[]));
+          }
+        })
+        .catch((err: unknown) => console.warn(`[office-deco] failed to load for ${userId}:`, err));
+    }
   }
   return store;
+}
+
+function persistDecorations(userId: string): void {
+  if (!isSupabaseConfigured) return;
+  const store = decorationStores.get(userId);
+  if (!store) return;
+  void supabaseAdmin
+    .from("heights_cloud_office_decorations")
+    .upsert({
+      user_id: userId,
+      decorations: JSON.stringify(store),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" })
+    .then(() => {})
+    .catch((err: unknown) => console.warn(`[office-deco] failed to persist for ${userId}:`, err));
 }
 
 export function getDecorations(userId: string): OfficeDecoration[] {
@@ -45,6 +76,7 @@ export function placeDecoration(userId: string, placement: DecorationPlacement):
   };
 
   store.push(decoration);
+  persistDecorations(userId);
   return decoration;
 }
 
@@ -53,6 +85,7 @@ export function removeDecoration(userId: string, decorationId: string): boolean 
   const idx = store.findIndex((d) => d.id === decorationId);
   if (idx < 0) return false;
   store.splice(idx, 1);
+  persistDecorations(userId);
   return true;
 }
 
@@ -79,6 +112,7 @@ export function moveDecoration(userId: string, decorationId: string, tileX: numb
 
   deco.tileX = tileX;
   deco.tileY = tileY;
+  persistDecorations(userId);
   return deco;
 }
 

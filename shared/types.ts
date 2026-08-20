@@ -1187,7 +1187,9 @@ export type ClientMsg =
   | { type: "friend_decline"; userId: string }
   | { type: "friend_remove"; userId: string }
   | { type: "list_friends" }
-  | { type: "list_online_players" };
+  | { type: "list_online_players" }
+  | { type: "seed_aspirations"; aspirations: string[] }
+  | { type: "request_aspiration_dashboard" };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1351,7 +1353,10 @@ export type ServerMsg =
   | { type: "friend_online"; userId: string; name: string; roomId: string | null; roomName: string }
   | { type: "friend_offline"; userId: string }
   | { type: "online_players"; players: OnlinePlayer[] }
-  | { type: "room_occupancy"; rooms: { roomId: string; name: string; roomType: RoomType; orgId?: string; playerCount: number; players: { userId: string; name: string }[] }[] };
+  | { type: "room_occupancy"; rooms: { roomId: string; name: string; roomType: RoomType; orgId?: string; playerCount: number; players: { userId: string; name: string }[] }[] }
+  | { type: "aspiration_quiz" }
+  | { type: "aspiration_dashboard"; scores: Record<string, number>; dominant: string | null; signalCount: number; history: { key: string; aspiration: string; weight: number; timestamp: number }[]; unlocks: { key: string; track: string; threshold: number; label: string; icon: string; unlocked: boolean; currentScore: number }[] }
+  | { type: "aspiration_shift"; oldDominant: string | null; newDominant: string | null };
 
 // ── Away Report ──────────────────────────────────────────────────────────────
 

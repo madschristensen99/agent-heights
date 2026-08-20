@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { OfficeSocialState, StickyNote, OfficeLike, VisitorEntry } from "../shared/types";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 interface SocialStore {
   likes: OfficeLike[];
@@ -14,8 +15,41 @@ function getStore(officeOwnerId: string): SocialStore {
   if (!store) {
     store = { likes: [], stickyNotes: [], visitors: [] };
     socialStores.set(officeOwnerId, store);
+    // Load from DB
+    if (isSupabaseConfigured) {
+      void supabaseAdmin
+        .from("heights_cloud_office_social")
+        .select("likes, sticky_notes, visitors")
+        .eq("office_owner_id", officeOwnerId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            store!.likes = data.likes ?? [];
+            store!.stickyNotes = data.sticky_notes ?? [];
+            store!.visitors = data.visitors ?? [];
+          }
+        })
+        .catch((err: unknown) => console.warn(`[office-social] failed to load for ${officeOwnerId}:`, err));
+    }
   }
   return store;
+}
+
+function persistSocial(officeOwnerId: string): void {
+  if (!isSupabaseConfigured) return;
+  const store = socialStores.get(officeOwnerId);
+  if (!store) return;
+  void supabaseAdmin
+    .from("heights_cloud_office_social")
+    .upsert({
+      office_owner_id: officeOwnerId,
+      likes: JSON.stringify(store.likes),
+      sticky_notes: JSON.stringify(store.stickyNotes),
+      visitors: JSON.stringify(store.visitors),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "office_owner_id" })
+    .then(() => {})
+    .catch((err: unknown) => console.warn(`[office-social] failed to persist for ${officeOwnerId}:`, err));
 }
 
 export function getSocialState(officeOwnerId: string): OfficeSocialState {
@@ -48,6 +82,7 @@ export function leaveStickyNote(
     createdAt: Date.now(),
   };
   store.stickyNotes.push(note);
+  persistSocial(officeOwnerId);
   return note;
 }
 
@@ -61,6 +96,7 @@ export function likeOffice(officeOwnerId: string, likerId: string, likerName: st
     createdAt: Date.now(),
   };
   store.likes.push(like);
+  persistSocial(officeOwnerId);
   return like;
 }
 
@@ -69,6 +105,7 @@ export function unlikeOffice(officeOwnerId: string, likerId: string): boolean {
   const idx = store.likes.findIndex((l) => l.likerId === likerId);
   if (idx === -1) return false;
   store.likes.splice(idx, 1);
+  persistSocial(officeOwnerId);
   return true;
 }
 
@@ -79,6 +116,7 @@ export function recordVisit(officeOwnerId: string, visitorId: string, visitorNam
   const recent = store.visitors.find((v) => v.visitorId === visitorId && now - v.visitedAt < 3600_000);
   if (recent) {
     recent.visitedAt = now;
+    persistSocial(officeOwnerId);
     return;
   }
   store.visitors.push({
@@ -89,4 +127,5 @@ export function recordVisit(officeOwnerId: string, visitorId: string, visitorNam
     visitedAt: now,
   });
   if (store.visitors.length > 100) store.visitors = store.visitors.slice(-100);
+  persistSocial(officeOwnerId);
 }

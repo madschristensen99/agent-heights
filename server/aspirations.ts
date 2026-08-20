@@ -27,15 +27,6 @@ export interface AspirationProfile {
 
 const ALL_TRACKS: AspirationType[] = ["warrior", "builder", "explorer", "puzzle_solver", "creator", "strategist"];
 
-const SCORE_COLUMN: Record<AspirationType, string> = {
-  warrior: "warrior_score",
-  builder: "builder_score",
-  explorer: "explorer_score",
-  puzzle_solver: "puzzle_solver_score",
-  creator: "creator_score",
-  strategist: "strategist_score",
-};
-
 // Half-life: 7 days. After 7 days, a signal's contribution halves.
 const HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
 const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_MS;
@@ -50,6 +41,86 @@ const DOMINANT_MARGIN = 0.02;
 // In-memory cache for fast lookups (avoids DB round-trip on every nudge eval).
 const profileCache = new Map<string, AspirationProfile>();
 
+// Signal history — per-user list of recent signals (max 50)
+export interface SignalHistoryEntry {
+  key: string;
+  aspiration: AspirationType;
+  weight: number;
+  timestamp: number;
+}
+const signalHistory = new Map<string, SignalHistoryEntry[]>();
+const MAX_HISTORY = 50;
+
+// Callback fired when dominant aspiration changes
+let dominantShiftCallback: ((userId: string, oldDominant: AspirationType | null, newDominant: AspirationType | null) => void) | null = null;
+
+export function onDominantShift(cb: (userId: string, oldDominant: AspirationType | null, newDominant: AspirationType | null) => void): void {
+  dominantShiftCallback = cb;
+}
+
+/** Get recent signal history for a user (for dashboard display). */
+export function getSignalHistory(userId: string): SignalHistoryEntry[] {
+  return signalHistory.get(userId) ?? [];
+}
+
+/** Export unlock thresholds for dashboard progress bars. */
+export const UNLOCK_THRESHOLDS_EXPORT = {
+  pipelineGraph: { track: "builder" as AspirationType, threshold: 0.30, label: "Pipeline Graph", icon: "⚙️" },
+  automationDashboard: { track: "builder" as AspirationType, threshold: 0.40, label: "Automation Dashboard", icon: "📊" },
+  experimentLog: { track: "explorer" as AspirationType, threshold: 0.30, label: "Experiment Log", icon: "🧪" },
+  abComparison: { track: "explorer" as AspirationType, threshold: 0.45, label: "A/B Comparison", icon: "🔬" },
+  decompositionScoring: { track: "puzzle_solver" as AspirationType, threshold: 0.30, label: "Decomposition Scoring", icon: "🧩" },
+  optimizationChallenges: { track: "puzzle_solver" as AspirationType, threshold: 0.45, label: "Optimization Challenges", icon: "🏆" },
+  officeDecoration: { track: "creator" as AspirationType, threshold: 0.30, label: "Office Decoration", icon: "🪑" },
+  socialInteractions: { track: "creator" as AspirationType, threshold: 0.40, label: "Social Interactions", icon: "💬" },
+  officeTechTree: { track: "strategist" as AspirationType, threshold: 0.30, label: "Office Tech Tree", icon: "🌳" },
+  agentGrowth: { track: "strategist" as AspirationType, threshold: 0.40, label: "Agent Growth", icon: "📈" },
+} as const;
+
+/** Human-readable signal labels for dashboard display. */
+export const SIGNAL_LABELS: Record<string, string> = {
+  creature_killed: "Creature defeated",
+  boss_slain: "Boss slain",
+  weapon_collected: "Weapon collected",
+  crown_placed: "Crown placed",
+  speedrun_recorded: "Speedrun recorded",
+  world_explored: "World explored",
+  handoff_created: "Agent handoff created",
+  scheduled_task: "Scheduled task",
+  task_completed_unattended: "Task completed autonomously",
+  multiple_agents_working: "Multiple agents working",
+  pipeline_created: "Pipeline created",
+  agent_rehired_different_config: "Agent rehired with new config",
+  mcp_server_installed: "MCP server installed",
+  new_agent_model_tried: "New model tried",
+  world_generated: "World generated",
+  agent_fired: "Agent fired",
+  manual_subtask_with_deps: "Subtask with dependencies",
+  phase_gate_used: "Phase gate used",
+  task_zero_rework: "Zero-rework task",
+  manual_agent_assignment: "Manual agent assignment",
+  office_theme_changed: "Office theme changed",
+  wardrobe_used: "Wardrobe used",
+  character_customized: "Character customized",
+  trophy_room_shared: "Trophy room viewed",
+  office_visited: "Office visited",
+  org_created: "Organization created",
+  agent_count_grew: "Agent count grew",
+  daily_return_streak: "Daily return",
+  agent_performance_improved: "Agent performance improved",
+  strategic_hire: "Strategic hire",
+};
+
+/** Human-readable aspiration labels. */
+export const ASPIRATION_LABELS: Record<AspirationType, { label: string; icon: string; color: string }> = {
+  warrior: { label: "Warrior", icon: "⚔️", color: "#ef4444" },
+  builder: { label: "Builder", icon: "🔨", color: "#58c866" },
+  explorer: { label: "Explorer", icon: "🧭", color: "#3b82f6" },
+  puzzle_solver: { label: "Puzzle Solver", icon: "🧩", color: "#a855f7" },
+  creator: { label: "Creator", icon: "🎨", color: "#ec4899" },
+  strategist: { label: "Strategist", icon: "♟️", color: "#f59e0b" },
+};
+
 /**
  * Record an aspirational signal for a user.
  * Applies exponential decay to old score, then adds the new weighted signal.
@@ -61,6 +132,7 @@ export async function recordSignal(
 ): Promise<void> {
   const profile = await getProfile(userId);
   const now = Date.now();
+  const prevDominant = profile.dominant;
 
   // Compute actual elapsed time since last signal
   const dt = profile.lastSignalAt > 0 ? now - profile.lastSignalAt : 0;
@@ -78,6 +150,20 @@ export async function recordSignal(
 
   // Recompute dominant
   profile.dominant = computeDominant(profile);
+
+  // Track signal history
+  let history = signalHistory.get(userId);
+  if (!history) {
+    history = [];
+    signalHistory.set(userId, history);
+  }
+  history.push({ key: "", aspiration, weight, timestamp: now });
+  if (history.length > MAX_HISTORY) history.shift();
+
+  // Detect dominant shift
+  if (prevDominant !== profile.dominant && dominantShiftCallback) {
+    dominantShiftCallback(userId, prevDominant, profile.dominant);
+  }
 
   // Update cache
   profileCache.set(userId, { ...profile });
@@ -163,6 +249,52 @@ export async function getProfile(userId: string): Promise<AspirationProfile> {
  */
 export function getCachedProfile(userId: string): AspirationProfile | null {
   return profileCache.get(userId) ?? null;
+}
+
+/**
+ * Seed initial aspiration scores from onboarding quiz.
+ * Called when user selects 1-2 aspirations they resonate with.
+ * Seeds each selected track with 0.15, enough to bias nudges without
+ * immediately setting a dominant.
+ */
+export async function seedAspirations(userId: string, aspirations: string[]): Promise<void> {
+  const profile = await getProfile(userId);
+  const SEED_WEIGHT = 0.15;
+
+  for (const track of aspirations) {
+    if (ALL_TRACKS.includes(track as AspirationType)) {
+      profile[track as AspirationType] = Math.min(1.0, profile[track as AspirationType] + SEED_WEIGHT);
+    }
+  }
+
+  // Don't set dominant yet — let natural signals build on top of the seed
+  profile.signalCount += aspirations.length;
+  profile.lastSignalAt = Date.now();
+
+  // Update cache
+  profileCache.set(userId, { ...profile });
+
+  // Persist to DB
+  if (isSupabaseConfigured) {
+    const update: Record<string, number | string | null> = {
+      warrior_score: profile.warrior,
+      builder_score: profile.builder,
+      explorer_score: profile.explorer,
+      puzzle_solver_score: profile.puzzle_solver,
+      creator_score: profile.creator,
+      strategist_score: profile.strategist,
+      signal_count: profile.signalCount,
+      last_signal_at: new Date(profile.lastSignalAt).toISOString(),
+      dominant_aspiration: profile.dominant,
+      updated_at: new Date().toISOString(),
+    };
+
+    void supabaseAdmin
+      .from("heights_cloud_aspiration_profiles")
+      .upsert({ user_id: userId, ...update }, { onConflict: "user_id" })
+      .then(() => {})
+      .catch((err: unknown) => console.warn(`[aspirations] failed to seed profile for ${userId}:`, err));
+  }
 }
 
 /**
@@ -297,6 +429,11 @@ export async function recordSignalByKey(userId: string, key: SignalKey): Promise
   const aspiration = SIGNAL_ASPIRATION[key];
   const weight = SIGNAL_WEIGHTS[key];
   await recordSignal(userId, aspiration, weight);
+  // Update the last history entry with the signal key
+  const history = signalHistory.get(userId);
+  if (history && history.length > 0) {
+    history[history.length - 1].key = key;
+  }
 }
 
 // ── Aspiration Unlocks ──────────────────────────────────────────────────────

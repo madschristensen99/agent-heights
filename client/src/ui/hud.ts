@@ -572,6 +572,11 @@ export class Hud {
       this.showConciergeNudge();
     });
 
+    // Aspiration onboarding quiz
+    store.aspirationQuizListeners.push(() => {
+      this.showAspirationQuiz();
+    });
+
     // Decomposition stream from Office Manager
     store.decomposingListeners.push(() => {
       this.renderDecomposingPanel();
@@ -6825,6 +6830,141 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     bubble.hidden = true;
     this.store.conciergeNudge = null;
     this.net.send({ type: "dismiss_concierge", nudgeId });
+  }
+
+  private showAspirationQuiz(): void {
+    if (!this.store.aspirationQuiz) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "aspiration-quiz-overlay";
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); display: flex; align-items: center;
+      justify-content: center; z-index: 10000; font-family: inherit;
+    `;
+
+    const panel = document.createElement("div");
+    panel.style.cssText = `
+      background: #1a1d2e; border: 1px solid #2a2d4e; border-radius: 12px;
+      padding: 32px; max-width: 520px; width: 90%; color: #e0e0e0;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    `;
+
+    const QUESTIONS: { question: string; options: { label: string; aspiration: string }[] }[] = [
+      {
+        question: "What excites you most about having AI agents?",
+        options: [
+          { label: "Building automated workflows and pipelines", aspiration: "builder" },
+          { label: "Exploring different models and capabilities", aspiration: "explorer" },
+          { label: "Strategizing and growing a team of agents", aspiration: "strategist" },
+        ],
+      },
+      {
+        question: "When you get a new tool, you want to...",
+        options: [
+          { label: "Customize and personalize everything", aspiration: "creator" },
+          { label: "Solve complex problems and optimize", aspiration: "puzzle_solver" },
+          { label: "Compete and push it to its limits", aspiration: "warrior" },
+        ],
+      },
+      {
+        question: "Your ideal office vibe is...",
+        options: [
+          { label: "A well-oiled machine running on autopilot", aspiration: "builder" },
+          { label: "A creative studio full of experiments", aspiration: "creator" },
+          { label: "A command center with dashboards and metrics", aspiration: "strategist" },
+        ],
+      },
+    ];
+
+    const selected: Set<string> = new Set();
+    let currentQ = 0;
+
+    const renderQuestion = () => {
+      panel.innerHTML = "";
+      const q = QUESTIONS[currentQ];
+
+      const title = document.createElement("h2");
+      title.textContent = "Quick Setup";
+      title.style.cssText = "margin: 0 0 8px 0; font-size: 20px; color: #58c866;";
+      panel.appendChild(title);
+
+      const subtitle = document.createElement("p");
+      subtitle.textContent = `Question ${currentQ + 1} of ${QUESTIONS.length}`;
+      subtitle.style.cssText = "margin: 0 0 20px 0; font-size: 13px; color: #888;";
+      panel.appendChild(subtitle);
+
+      const questionEl = document.createElement("p");
+      questionEl.textContent = q.question;
+      questionEl.style.cssText = "margin: 0 0 16px 0; font-size: 16px; line-height: 1.5;";
+      panel.appendChild(questionEl);
+
+      for (const opt of q.options) {
+        const btn = document.createElement("button");
+        btn.textContent = opt.label;
+        const isSelected = selected.has(opt.aspiration);
+        btn.style.cssText = `
+          display: block; width: 100%; padding: 12px 16px; margin-bottom: 8px;
+          background: ${isSelected ? "#2a3d5e" : "#222538"}; border: 1px solid ${isSelected ? "#58c866" : "#333"};
+          border-radius: 8px; color: #e0e0e0; font-size: 14px; cursor: pointer;
+          text-align: left; transition: all 0.15s; font-family: inherit;
+        `;
+        btn.onmouseenter = () => { if (!isSelected) btn.style.background = "#2a2d4e"; };
+        btn.onmouseleave = () => { if (!isSelected) btn.style.background = "#222538"; };
+        btn.onclick = () => {
+          if (selected.has(opt.aspiration)) {
+            selected.delete(opt.aspiration);
+          } else {
+            selected.add(opt.aspiration);
+          }
+          renderQuestion();
+        };
+        panel.appendChild(btn);
+      }
+
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display: flex; gap: 8px; margin-top: 20px;";
+
+      if (currentQ > 0) {
+        const backBtn = document.createElement("button");
+        backBtn.textContent = "Back";
+        backBtn.style.cssText = `padding: 10px 20px; background: transparent; border: 1px solid #444; border-radius: 8px; color: #aaa; cursor: pointer; font-family: inherit;`;
+        backBtn.onclick = () => { currentQ--; renderQuestion(); };
+        btnRow.appendChild(backBtn);
+      }
+
+      const nextBtn = document.createElement("button");
+      nextBtn.textContent = currentQ < QUESTIONS.length - 1 ? "Next" : "Submit";
+      nextBtn.style.cssText = `padding: 10px 24px; background: #58c866; border: none; border-radius: 8px; color: #0d0f1a; font-weight: 600; cursor: pointer; font-family: inherit; margin-left: auto;`;
+      nextBtn.onclick = () => {
+        if (currentQ < QUESTIONS.length - 1) {
+          currentQ++;
+          renderQuestion();
+        } else {
+          const aspirations = [...selected];
+          if (aspirations.length > 0) {
+            this.net.send({ type: "seed_aspirations", aspirations });
+          }
+          this.store.aspirationQuiz = false;
+          overlay.remove();
+        }
+      };
+      btnRow.appendChild(nextBtn);
+      panel.appendChild(btnRow);
+
+      const skip = document.createElement("button");
+      skip.textContent = "Skip";
+      skip.style.cssText = `margin-top: 12px; background: transparent; border: none; color: #666; cursor: pointer; font-size: 12px; font-family: inherit;`;
+      skip.onclick = () => {
+        this.store.aspirationQuiz = false;
+        overlay.remove();
+      };
+      panel.appendChild(skip);
+    };
+
+    renderQuestion();
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
   }
 
   private handleConciergeAction(actionType: string): void {

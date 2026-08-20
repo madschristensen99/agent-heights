@@ -1,7 +1,9 @@
 import type { AgentGrowth, AgentGrowthPoint } from "../shared/types";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 interface GrowthStore {
   history: AgentGrowthPoint[];
+  loaded: boolean;
 }
 
 const growthStores = new Map<string, GrowthStore>();
@@ -9,16 +11,54 @@ const growthStores = new Map<string, GrowthStore>();
 function getStore(agentId: string): GrowthStore {
   let store = growthStores.get(agentId);
   if (!store) {
-    store = { history: [] };
+    store = { history: [], loaded: false };
     growthStores.set(agentId, store);
+    // Load recent history from DB
+    if (isSupabaseConfigured) {
+      void supabaseAdmin
+        .from("heights_cloud_agent_history")
+        .select("success, duration_min, task_type, created_at")
+        .eq("agent_id", agentId)
+        .order("created_at", { ascending: false })
+        .limit(200)
+        .then(({ data }) => {
+          if (data) {
+            store!.history = data.reverse().map((r) => ({
+              timestamp: new Date(r.created_at).getTime(),
+              success: r.success,
+              durationMin: r.duration_min,
+              taskType: r.task_type,
+            }));
+          }
+          store!.loaded = true;
+        })
+        .catch((err: unknown) => console.warn(`[agent-growth] failed to load for ${agentId}:`, err));
+    } else {
+      store.loaded = true;
+    }
   }
   return store;
 }
 
-export function recordTaskCompletion(agentId: string, success: boolean, durationMin: number, taskType: string): void {
+export function recordTaskCompletion(agentId: string, success: boolean, durationMin: number, taskType: string, userId?: string): void {
   const store = getStore(agentId);
   store.history.push({ timestamp: Date.now(), success, durationMin, taskType });
   if (store.history.length > 200) store.history = store.history.slice(-200);
+
+  // Persist to DB
+  if (isSupabaseConfigured && userId) {
+    void supabaseAdmin
+      .from("heights_cloud_agent_history")
+      .insert({
+        user_id: userId,
+        agent_id: agentId,
+        success,
+        duration_min: durationMin,
+        task_type: taskType,
+      })
+      .then(() => {})
+      .catch((err: unknown) => console.warn(`[agent-growth] failed to persist for ${agentId}:`, err));
+  }
 }
 
 export function getGrowth(agentId: string): AgentGrowth {

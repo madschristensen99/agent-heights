@@ -42,7 +42,7 @@ import { ProfileManager } from "./profile.js";
 import { getLeaderboard, getTrophyProfile } from "./leaderboards.js";
 import { renderTrophyPage, renderTrophyNotFound } from "./trophy-room.js";
 import { dismissNudge, trackActivity } from "./concierge.js";
-import { recordSignalByKey, preloadProfile, getCachedProfile, getUnlocks } from "./aspirations.js";
+import { recordSignalByKey, preloadProfile, getCachedProfile, getUnlocks, seedAspirations, getSignalHistory, UNLOCK_THRESHOLDS_EXPORT, SIGNAL_LABELS, ASPIRATION_LABELS, onDominantShift } from "./aspirations.js";
 import { generateAwayReport } from "./away-report.js";
 import { logAgentHire, logAgentFire, getEntries, updateEntry } from "./experiment-log.js";
 import { getDecorations, placeDecoration, removeDecoration, moveDecoration } from "./office-deco.js";
@@ -1467,6 +1467,13 @@ wss.on("connection", async (ws, req) => {
             if (hiredAgent) {
               const entry = logAgentHire(sess.user.id, hiredAgent);
               ws.send(JSON.stringify({ type: "experiment_entry", entry } satisfies ServerMsg));
+            }
+          }
+          // Check if this is the user's first hire — prompt aspiration quiz
+          {
+            const profile = getCachedProfile(sess.user.id);
+            if (profile && profile.signalCount === 0) {
+              ws.send(JSON.stringify({ type: "aspiration_quiz" } satisfies ServerMsg));
             }
           }
           break;
@@ -3928,6 +3935,10 @@ wss.on("connection", async (ws, req) => {
         }
         case "dismiss_concierge": {
           dismissNudge(sess.user.id, msg.nudgeId);
+          break;
+        }
+        case "seed_aspirations": {
+          void seedAspirations(sess.user.id, msg.aspirations).catch(() => {});
           break;
         }
         case "friend_request": {

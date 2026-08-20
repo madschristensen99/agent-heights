@@ -417,6 +417,10 @@ export class Store {
   /** Aspiration-gated feature unlocks. */
   aspirationUnlocks: AspirationUnlocks | null = null;
 
+  /** Whether to show the aspiration onboarding quiz. */
+  aspirationQuiz: boolean = false;
+  aspirationQuizListeners: (() => void)[] = [];
+
   /** Automation stats from server — for the automation dashboard. */
   automationStats: AutomationStats | null = null;
 
@@ -1727,6 +1731,11 @@ export class Store {
       case "npc_speech": {
         this.npcSpeech = { npcId: msg.npcId, text: msg.text, durationMs: msg.durationMs };
         for (const fn of this.npcSpeechListeners) fn(msg.npcId, msg.text, msg.durationMs);
+        return;
+      }
+      case "aspiration_quiz": {
+        this.aspirationQuiz = true;
+        for (const fn of this.aspirationQuizListeners) fn();
         return;
       }
       case "mcp_auth_required": {

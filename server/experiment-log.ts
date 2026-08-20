@@ -8,9 +8,11 @@
 
 import { randomUUID } from "crypto";
 import type { ExperimentEntry, AgentInfo } from "../shared/types.js";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase.js";
 
 /** Per-user experiment log, keyed by userId. */
 const logs = new Map<string, ExperimentEntry[]>();
+const loadedUsers = new Set<string>();
 
 /** Per-user per-agent snapshot of last-known config, for diffing. */
 interface AgentSnapshot {
@@ -27,7 +29,58 @@ function getLog(userId: string): ExperimentEntry[] {
     log = [];
     logs.set(userId, log);
   }
+  // Load from DB if not yet loaded
+  if (!loadedUsers.has(userId)) {
+    loadedUsers.add(userId);
+    if (isSupabaseConfigured) {
+      void supabaseAdmin
+        .from("heights_cloud_experiment_logs")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .then(({ data }) => {
+          if (data) {
+            const entries = data.map((r) => ({
+              id: r.id,
+              timestamp: new Date(r.created_at).getTime(),
+              userId: r.user_id,
+              type: r.type,
+              agentId: r.agent_id,
+              agentName: r.agent_name,
+              hypothesis: r.hypothesis,
+              setup: r.setup,
+              result: r.result,
+              verdict: r.verdict,
+              notes: r.notes,
+            } as ExperimentEntry));
+            log!.unshift(...entries);
+          }
+        })
+        .catch((err: unknown) => console.warn(`[experiment-log] failed to load for ${userId}:`, err));
+    }
+  }
   return log;
+}
+
+function persistEntry(userId: string, entry: ExperimentEntry): void {
+  if (!isSupabaseConfigured) return;
+  void supabaseAdmin
+    .from("heights_cloud_experiment_logs")
+    .insert({
+      id: entry.id,
+      user_id: userId,
+      type: entry.type,
+      agent_id: entry.agentId,
+      agent_name: entry.agentName,
+      hypothesis: entry.hypothesis,
+      setup: JSON.stringify(entry.setup),
+      result: JSON.stringify(entry.result),
+      verdict: entry.verdict,
+      notes: entry.notes,
+    })
+    .then(() => {})
+    .catch((err: unknown) => console.warn(`[experiment-log] failed to persist entry ${entry.id}:`, err));
 }
 
 function getSnapshots(userId: string): Map<string, AgentSnapshot> {
@@ -64,6 +117,7 @@ export function logAgentHire(
   const log = getLog(userId);
   log.unshift(entry);
   if (log.length > 100) log.length = 100;
+  persistEntry(userId, entry);
 
   // Snapshot the new agent's config
   const snaps = getSnapshots(userId);
@@ -113,6 +167,7 @@ export function logAgentFire(
   const log = getLog(userId);
   log.unshift(entry);
   if (log.length > 100) log.length = 100;
+  persistEntry(userId, entry);
 
   snaps.delete(agent.id);
 
@@ -162,6 +217,7 @@ export function detectConfigChange(
     const log = getLog(userId);
     log.unshift(entry);
     if (log.length > 100) log.length = 100;
+    persistEntry(userId, entry);
 
     snaps.set(agent.id, current);
     return entry;
@@ -189,6 +245,7 @@ export function detectConfigChange(
     const log = getLog(userId);
     log.unshift(entry);
     if (log.length > 100) log.length = 100;
+    persistEntry(userId, entry);
 
     snaps.set(agent.id, current);
     return entry;
@@ -219,6 +276,7 @@ export function detectConfigChange(
     const log = getLog(userId);
     log.unshift(entry);
     if (log.length > 100) log.length = 100;
+    persistEntry(userId, entry);
   }
 
   snaps.set(agent.id, current);
@@ -242,11 +300,35 @@ export function updateEntry(
   if (updates.hypothesis !== undefined) entry.hypothesis = updates.hypothesis;
   if (updates.verdict !== undefined) entry.verdict = updates.verdict as ExperimentEntry["verdict"];
   if (updates.notes !== undefined) entry.notes = updates.notes;
+  // Persist update to DB
+  if (isSupabaseConfigured) {
+    void supabaseAdmin
+      .from("heights_cloud_experiment_logs")
+      .update({
+        hypothesis: entry.hypothesis,
+        verdict: entry.verdict,
+        notes: entry.notes,
+      })
+      .eq("id", entryId)
+      .eq("user_id", userId)
+      .then(() => {})
+      .catch((err: unknown) => console.warn(`[experiment-log] failed to update entry ${entryId}:`, err));
+  }
   return entry;
 }
 
 /** Clear the log for a user (on session end / logout). */
 export function clearLog(userId: string): void {
   logs.delete(userId);
+  loadedUsers.delete(userId);
   snapshots.delete(userId);
+  // Delete from DB
+  if (isSupabaseConfigured) {
+    void supabaseAdmin
+      .from("heights_cloud_experiment_logs")
+      .delete()
+      .eq("user_id", userId)
+      .then(() => {})
+      .catch((err: unknown) => console.warn(`[experiment-log] failed to clear for ${userId}:`, err));
+  }
 }

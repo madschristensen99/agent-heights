@@ -93,6 +93,8 @@ interface RenderJob {
   chunkLightList: LightSource[];
   container: Phaser.GameObjects.Container;
   useAiTextures: boolean;
+  themeGroundMap: Map<number, number>;
+  chunkBiomeFrame: number;
 }
 const MAX_LIGHTS_PER_CHUNK = 8;
 const MAX_HP = 100;
@@ -3458,12 +3460,28 @@ export class WorldLayer {
       ? this.scene.textures.get("world-tiles-theme")
       : this.scene.textures.get("world-tiles");
 
+    // Build ground tile → biome frame index mapping for theme spritesheets
+    const themeGroundMap = new Map<number, number>();
+    const themeBiomes = this.worldTheme?.worldgen?.biomes;
+    const themeBaseGround = this.worldTheme?.worldgen?.baseGround;
+    const isThemeSheet = this.scene.textures.exists("world-tiles-theme");
+    if (isThemeSheet && themeBiomes && themeBaseGround) {
+      for (let i = 0; i < themeBiomes.length; i++) {
+        const groundTile = themeBaseGround[themeBiomes[i]];
+        if (groundTile !== undefined) {
+          themeGroundMap.set(groundTile, i);
+        }
+      }
+    }
+    const chunkBiomeFrame = themeBiomes ? themeBiomes.indexOf(chunk.biome) : -1;
+
     const job: RenderJob = {
       chunk, texKey, canvasTex, ctx, ssTilePx, SS,
       currentRow: 0,
       overlayTextures, edgeTileColors, worldTilesTex,
       ox, oy, chunkLightList, container,
       useAiTextures: this.worldTheme?.assets?.assetTier !== "procedural",
+      themeGroundMap, chunkBiomeFrame,
     };
     this.renderingQueue.push(job);
   }
@@ -3475,6 +3493,16 @@ export class WorldLayer {
     const y = job.currentRow;
 
     const tileToFrame = (tile: number, variant: number): number => {
+      // Theme spritesheet: only 6 biome frames, not 96 tile-type frames
+      if (job.themeGroundMap.size > 0) {
+        // Ground tiles map directly to their biome frame
+        const biomeFrame = job.themeGroundMap.get(tile);
+        if (biomeFrame !== undefined) return biomeFrame;
+        // Non-ground tiles (obstacles) — use chunk's biome ground as base
+        if (job.chunkBiomeFrame >= 0) return job.chunkBiomeFrame;
+        return 0;
+      }
+      // Default spritesheet: tile type + variant frames
       if (tile === TILE.WATER || tile === TILE.LAKE) return 21;
       if (tile === TILE.LAKE_SHORE) return TILE.SAND + variant * WORLD_TILE_FRAMES;
       if (tile >= 22) return TILE.GRASS + variant * WORLD_TILE_FRAMES;
