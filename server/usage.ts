@@ -3,6 +3,80 @@ import { calculateCost } from "./providers/pricing.js";
 import { resolveModel, type ProviderName } from "./providers/api-config.js";
 import { SUBSCRIPTION_TIERS, ENTRY_FEE_USAGE_CREDIT, type SubscriptionTier } from "../shared/types.js";
 
+// ── In-memory spend cache ────────────────────────────────────────────────
+// Prevents race conditions where multiple concurrent tasks all pass the cap
+// check before any of them record their spend. The cache is warmed from DB on
+// first access per user per month, then incremented in real-time as usage is
+// recorded. Falls back to DB query if cache miss.
+const spendCache = new Map<string, { month: string; spend: number; lastSync: number }>();
+const SPEND_CACHE_TTL_MS = 60_000; // Re-sync from DB every 60s
+
+function currentMonthKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${now.getMonth()}`;
+}
+
+/**
+ * Get monthly spend with in-memory caching for fast cap checks.
+ * Returns the cached value if fresh, otherwise queries DB and caches it.
+ */
+export async function getMonthlySpend(userId: string): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+
+  const monthKey = currentMonthKey();
+  const cached = spendCache.get(userId);
+
+  // Return cached value if it's for the current month and fresh enough
+  if (cached && cached.month === monthKey && Date.now() - cached.lastSync < SPEND_CACHE_TTL_MS) {
+    return cached.spend;
+  }
+
+  // Cache miss or stale — query DB
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { data, error } = await supabaseAdmin
+      .from("api_usage_records")
+      .select("total_cost")
+      .eq("user_id", userId)
+      .gte("created_at", startOfMonth.toISOString());
+    if (error || !data) return cached?.spend ?? 0;
+    const dbSpend = data.reduce((sum, row) => sum + Number(row.total_cost ?? 0), 0);
+    spendCache.set(userId, { month: monthKey, spend: dbSpend, lastSync: Date.now() });
+    return dbSpend;
+  } catch (err) {
+    console.error("[usage] getMonthlySpend error:", err);
+    return cached?.spend ?? 0;
+  }
+}
+
+/**
+ * Increment the in-memory spend cache after recording usage.
+ * Call this immediately after recordUsage to keep the cache in sync.
+ */
+export function incrementSpendCache(userId: string, cost: number): void {
+  const monthKey = currentMonthKey();
+  const cached = spendCache.get(userId);
+  if (cached && cached.month === monthKey) {
+    cached.spend += cost;
+  } else {
+    // New month or first entry — will be populated on next getMonthlySpend call
+    spendCache.set(userId, { month: monthKey, spend: cost, lastSync: Date.now() });
+  }
+}
+
+/**
+ * Force a re-sync of the spend cache from DB for a specific user.
+ * Call this when spend may have changed externally (e.g. backfill).
+ */
+export function invalidateSpendCache(userId?: string): void {
+  if (userId) {
+    spendCache.delete(userId);
+  } else {
+    spendCache.clear();
+  }
+}
+
 export interface UsageRecord {
   userId: string;
   agentId: string;
@@ -25,20 +99,37 @@ export interface UsageRecord {
  */
 export async function recordUsage(rec: UsageRecord): Promise<void> {
   if (!isSupabaseConfigured) return;
+
+  // Non-LLM calls (e.g. Circle premium API payments) use the provided cost directly.
+  const isPremiumCall = rec.model.startsWith("circle:");
+
+  // Skip zero-token LLM calls (failed/empty API responses that still fire onUsage).
+  if (!isPremiumCall && rec.inputTokens === 0 && rec.outputTokens === 0) return;
+
   try {
-    const resolvedModel = resolveModel(rec.model, rec.provider as ProviderName);
-    const totalCost = rec.totalCost || calculateCost(
-      resolvedModel,
-      rec.inputTokens,
-      rec.outputTokens,
-      rec.cacheReadTokens ?? 0,
-      rec.cacheWriteTokens ?? 0,
-    );
+    // Always store the resolved model name so pricing lookups are consistent.
+    const resolvedModel = isPremiumCall
+      ? rec.model
+      : resolveModel(rec.model, rec.provider as ProviderName);
+
+    // Always use our pricing table for LLM calls — the SDK's totalCost may use
+    // wrong rates (e.g. pricing claude-sonnet at Claude rates when the call
+    // actually went to DeepSeek).
+    const totalCost = isPremiumCall && rec.totalCost
+      ? rec.totalCost
+      : calculateCost(
+          resolvedModel,
+          rec.inputTokens,
+          rec.outputTokens,
+          rec.cacheReadTokens ?? 0,
+          rec.cacheWriteTokens ?? 0,
+        );
+
     const { error } = await supabaseAdmin.from("api_usage_records").insert({
       user_id: rec.userId,
       agent_id: rec.agentId,
       agent_name: rec.agentName,
-      model: rec.model,
+      model: resolvedModel,
       provider: rec.provider,
       input_tokens: rec.inputTokens,
       output_tokens: rec.outputTokens,
@@ -48,7 +139,12 @@ export async function recordUsage(rec: UsageRecord): Promise<void> {
       task: rec.task?.slice(0, 500) ?? null,
       is_chat: rec.isChat ?? false,
     });
-    if (error) console.error("[usage] failed to record:", error.message);
+    if (error) {
+      console.error("[usage] failed to record:", error.message);
+    } else {
+      // Keep in-memory spend cache in sync so concurrent cap checks see this spend
+      incrementSpendCache(rec.userId, totalCost);
+    }
   } catch (err) {
     console.error("[usage] recordUsage error:", err);
   }
@@ -131,28 +227,6 @@ export async function getUsageSummary(
   } catch (err) {
     console.error("[usage] getUsageSummary error:", err);
     return null;
-  }
-}
-
-/**
- * Get total spend for the current calendar month for a user.
- * Returns 0 if Supabase is not configured or no records exist.
- */
-export async function getMonthlySpend(userId: string): Promise<number> {
-  if (!isSupabaseConfigured) return 0;
-  try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const { data, error } = await supabaseAdmin
-      .from("api_usage_records")
-      .select("total_cost")
-      .eq("user_id", userId)
-      .gte("created_at", startOfMonth.toISOString());
-    if (error || !data) return 0;
-    return data.reduce((sum, row) => sum + Number(row.total_cost ?? 0), 0);
-  } catch (err) {
-    console.error("[usage] getMonthlySpend error:", err);
-    return 0;
   }
 }
 

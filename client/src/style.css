@@ -259,7 +259,7 @@ body.hotbar-visible .hint {
 
 .roster {
   position: absolute;
-  top: 68px;
+  top: 78px;
   left: 12px;
   width: 250px;
   max-height: 36vh;
@@ -437,7 +437,7 @@ body.hotbar-visible .hint {
 
 .detail {
   position: absolute;
-  top: 12px;
+  top: 78px;
   right: 12px;
   width: 370px;
   max-height: calc(100vh - 200px);

@@ -286,7 +286,7 @@ export class Hud {
         <button class="btn mini topbar-btn" id="settings-btn">${ICON.settings} <span>SETTINGS</span></button>
         <button class="btn mini topbar-btn" id="help-btn" title="How to play">${ICON.help} <span>HELP</span></button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
-          <span id="user-email" style="font-size:0.75rem; color:var(--dim); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+          <span id="user-email" style="font-size:0.75rem; color:var(--dim); white-space:nowrap;"></span>
           <button class="btn mini topbar-btn" id="signout-btn" title="Sign out" style="font-size:0.75rem;">${ICON.signout}</button>
         </span>
         <span id="conn" class="conn">●</span>

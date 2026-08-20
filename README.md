@@ -4,7 +4,7 @@ A virtual office where you hire and manage **real AI agents**. Each employee at 
 
 Hire an agent, give it a name, type a task, and watch it walk to its desk and start typing. Speech bubbles and the office feed stream its real tool calls and output in real time.
 
-> 📖 **Deep dive:** see [DOCS.md](docs/DOCS.md) for the full agent architecture — lifecycle, providers, memory system, persistence, and the wire protocol.
+> 📖 **Deep dive:** see [docs/DATABASE.md](docs/DATABASE.md) for querying the Supabase database, and the docs folder for feature-specific architecture guides.
 
 ## How it works
 
@@ -37,7 +37,7 @@ Hire an agent, give it a name, type a task, and watch it walk to its desk and st
 
 - Node.js 20+
 - [pnpm](https://pnpm.io)
-- A `KIMI_KEY` in your environment / `.env`.
+- A `DEEPSEEK_KEY` in your environment / `.env` (see `.env.example` for all variables)
 
 ## Getting started
 
@@ -68,7 +68,10 @@ Then open **http://localhost:5173**. On first launch you'll name yourself and yo
 
 | Variable                | Default | Purpose                                                                                                    |
 | ----------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `KIMI_KEY`              | —       | Auth key for the LLM API (required)                                                                        |
+| `DEEPSEEK_KEY`          | —       | DeepSeek API key (primary LLM provider, required)                                                          |
+| `KIMI_KEY`              | —       | Kimi/Moonshot API key (vision provider, optional)                                                          |
+| `SUPABASE_URL`          | —       | Cloud Supabase URL (enables auth + persistence)                                                            |
+| `SUPABASE_SERVICE_ROLE_KEY` | —   | Supabase service role key (server-side, bypasses RLS)                                                      |
 
 > ⚠️ **Security note:** agents can run shell commands inside their workspace folder. The workspace folder is a *convention* enforced by prompt (`cwd` + instructions), not an OS sandbox. Treat `ag/workspace/` as untrusted output, and disable auto-approve in Settings if you want manual confirmation before each command.
 
@@ -109,6 +112,17 @@ agent-game/
 ### Adding a provider
 
 Providers are pluggable. Implement the `ProviderRunner` signature from `server/providers/types.ts` — an async generator that takes a task plus run context (`cwd`, `model`, `systemPrompt`, `abort`) and yields `TaskEvent`s (`text` | `tool` | `result` | `error`) — then wire it into the runner selection in `server/manager.ts` and add its models to `shared/types.ts`.
+
+## Database
+
+All persistent state lives in a cloud Supabase (Postgres) instance. The project is pre-linked via `supabase link`.
+
+```bash
+# Query the production DB
+npx supabase db query "SELECT COUNT(*) FROM public.api_usage_records" --linked
+```
+
+See [docs/DATABASE.md](docs/DATABASE.md) for the full guide — table reference, common queries, and pitfalls to avoid.
 
 ## Tech stack
 
