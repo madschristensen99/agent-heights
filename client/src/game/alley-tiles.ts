@@ -439,8 +439,9 @@ export function generateAlleyTileset(scene: Phaser.Scene, key = "alley-tileset")
  */
 export function generateAlleyWorldTiles(scene: Phaser.Scene): void {
   const biomes = ["alley", "street", "abandoned", "undercity", "sewer", "hellmouth"];
+  const VARIANTS = 4;
   const frameSize = TILE_PX;
-  const sheetW = frameSize;
+  const sheetW = frameSize * VARIANTS;
   const sheetH = frameSize * biomes.length;
 
   const canvasTex = scene.textures.createCanvas("world-tiles-theme", sheetW, sheetH);
@@ -459,16 +460,38 @@ export function generateAlleyWorldTiles(scene: Phaser.Scene): void {
     drawLavaCrack,         // hellmouth
   ];
 
-  for (let i = 0; i < drawers.length; i++) {
-    ctx.save();
-    ctx.translate(0, i * frameSize);
-    ctx.beginPath();
-    ctx.rect(0, 0, frameSize, frameSize);
-    ctx.clip();
-    drawers[i](ctx, frameSize);
-    ctx.restore();
+  for (let biome = 0; biome < drawers.length; biome++) {
+    for (let v = 0; v < VARIANTS; v++) {
+      ctx.save();
+      ctx.translate(v * frameSize, biome * frameSize);
+      ctx.beginPath();
+      ctx.rect(0, 0, frameSize, frameSize);
+      ctx.clip();
+      drawers[biome](ctx, frameSize);
+      // Variant overlay: subtle tint shift + extra noise speckles for visual variety
+      const tintShift = (v - 1.5) * 6;
+      ctx.fillStyle = `rgba(${tintShift > 0 ? tintShift : 0},${tintShift > 0 ? tintShift : 0},${tintShift > 0 ? tintShift : 0},${0.04})`;
+      ctx.fillRect(0, 0, frameSize, frameSize);
+      if (tintShift < 0) {
+        ctx.fillStyle = `rgba(0,0,0,${Math.abs(tintShift) * 0.0015})`;
+        ctx.fillRect(0, 0, frameSize, frameSize);
+      }
+      for (let n = 0; n < 8 + v * 4; n++) {
+        ctx.fillStyle = `rgba(${20 + Math.random() * 30},${20 + Math.random() * 30},${20 + Math.random() * 30},${0.08 + Math.random() * 0.1})`;
+        ctx.fillRect(Math.random() * frameSize, Math.random() * frameSize, 1, 1);
+      }
+      ctx.restore();
+    }
   }
 
   canvasTex.refresh();
-  console.log(`[alley-tiles] Generated world tiles spritesheet with ${biomes.length} biome frames`);
+
+  // Register individual frames so Phaser's Texture.get(frameIndex) works
+  for (let b = 0; b < biomes.length; b++) {
+    for (let v = 0; v < VARIANTS; v++) {
+      canvasTex.add(b * VARIANTS + v, 0, v * frameSize, b * frameSize, frameSize, frameSize);
+    }
+  }
+
+  console.log(`[alley-tiles] Generated world tiles spritesheet with ${biomes.length} biomes × ${VARIANTS} variants = ${biomes.length * VARIANTS} frames`);
 }

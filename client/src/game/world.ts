@@ -3493,13 +3493,14 @@ export class WorldLayer {
     const y = job.currentRow;
 
     const tileToFrame = (tile: number, variant: number): number => {
-      // Theme spritesheet: only 6 biome frames, not 96 tile-type frames
+      // Theme spritesheet: 24 frames (6 biomes × 4 variants)
       if (job.themeGroundMap.size > 0) {
-        // Ground tiles map directly to their biome frame
+        const THEME_VARIANTS = 4;
+        // Ground tiles map to their biome frame + variant
         const biomeFrame = job.themeGroundMap.get(tile);
-        if (biomeFrame !== undefined) return biomeFrame;
-        // Non-ground tiles (obstacles) — use chunk's biome ground as base
-        if (job.chunkBiomeFrame >= 0) return job.chunkBiomeFrame;
+        if (biomeFrame !== undefined) return biomeFrame * THEME_VARIANTS + (variant % THEME_VARIANTS);
+        // Non-ground tiles (obstacles) — use chunk's biome ground + variant
+        if (job.chunkBiomeFrame >= 0) return job.chunkBiomeFrame * THEME_VARIANTS + (variant % THEME_VARIANTS);
         return 0;
       }
       // Default spritesheet: tile type + variant frames

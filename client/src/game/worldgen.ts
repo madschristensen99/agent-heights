@@ -186,21 +186,21 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
 
       // Decoration density — noise at scale 6 for smaller flower/bush patches
       const decorNoise = valueNoise(worldSeed ^ 0xDEADBEEF, wx, wy, 6);
-      const decorChance = decorationChance(biome);
-      const decorChanceNext = decorationChance(nextBiome);
+      const decorChance = decorationChance(biome, theme);
+      const decorChanceNext = decorationChance(nextBiome, theme);
       const decorThreshold = decorChance * (1 - hostilityFrac) + decorChanceNext * hostilityFrac;
 
       // Use noise value as probability threshold — higher noise = more likely feature
       if (obstacleNoise < obstacleThreshold) {
         tiles[i] = hostilityFrac > 0.5 && rng() < hostilityFrac
-          ? pickObstacle(nextBiome, rng, Math.floor(hostility) + 1)
-          : pickObstacle(biome, rng, hostilityFloor);
+          ? pickObstacle(nextBiome, rng, Math.floor(hostility) + 1, theme)
+          : pickObstacle(biome, rng, hostilityFloor, theme);
       } else if (lavaNoise < hostileThreshold) {
-        tiles[i] = pickHostile(biome, rng, "lava");
+        tiles[i] = pickHostile(biome, rng, "lava", theme);
       } else if (voidNoise < hostileThreshold) {
-        tiles[i] = pickHostile(biome, rng, "void");
+        tiles[i] = pickHostile(biome, rng, "void", theme);
       } else if (decorNoise < decorThreshold) {
-        tiles[i] = pickDecoration(biome, rng);
+        tiles[i] = pickDecoration(biome, rng, theme);
       }
     }
   }
@@ -208,28 +208,28 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
   // near-office flag used by park/fountain/tree placement below
   const nearOffice = (cx >= -1 && cx <= 1 && cy >= 0 && cy <= 1);
 
-  // golf courses — 2 fixed courses at deterministic chunks near the office
-  if (biome === "meadow" && ((cx === -1 && cy === 0) || (cx === -1 && cy === 1))) {
+  // golf courses — 2 fixed courses at deterministic chunks near the office (default world only)
+  if (!theme && biome === "meadow" && ((cx === -1 && cy === 0) || (cx === -1 && cy === 1))) {
     placeGolfCourseNearOffice(tiles, rng, cx, cy);
   }
 
-  // rock formations — walls and ridges that block paths in wasteland/desert
-  if (biome === "wasteland" && rng() < 0.70) {
+  // rock formations — walls and ridges that block paths in wasteland/desert (default world only)
+  if (!theme && biome === "wasteland" && rng() < 0.70) {
     placeRockFormation(tiles, rng);
   }
-  if (biome === "wasteland" && rng() < 0.40) {
+  if (!theme && biome === "wasteland" && rng() < 0.40) {
     placeRockFormation(tiles, rng);
   }
 
   // obstacle clusters — groves of trees, rock piles, ruin fragments in all biomes
   if (rng() < 0.65) {
-    placeObstacleCluster(tiles, biome, rng);
+    placeObstacleCluster(tiles, biome, rng, theme);
   }
   if (rng() < 0.45) {
-    placeObstacleCluster(tiles, biome, rng);
+    placeObstacleCluster(tiles, biome, rng, theme);
   }
   if (rng() < 0.25) {
-    placeObstacleCluster(tiles, biome, rng);
+    placeObstacleCluster(tiles, biome, rng, theme);
   }
 
   // big rocks — multi-tile boulders in outer biomes
@@ -269,35 +269,35 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
     placeBrickTower(tiles, biome, rng);
   }
 
-  // park features in meadow — benches, hedge gardens (reduced rate)
-  if (biome === "meadow" && rng() < (nearOffice ? 0.15 : 0.10)) {
+  // park features in meadow — benches, hedge gardens (default world only)
+  if (!theme && biome === "meadow" && rng() < (nearOffice ? 0.15 : 0.10)) {
     placeParkFeature(tiles, rng);
   }
 
-  // fountains in meadow — decorative water feature right outside the office
-  if (biome === "meadow" && rng() < (nearOffice ? 0.10 : 0.05)) {
+  // fountains in meadow — decorative water feature right outside the office (default world only)
+  if (!theme && biome === "meadow" && rng() < (nearOffice ? 0.10 : 0.05)) {
     placeFountain(tiles, rng);
   }
 
-  // tree clusters near office for a lively feel
-  if (biome === "meadow" && nearOffice && rng() < 0.45) {
+  // tree clusters near office for a lively feel (default world only)
+  if (!theme && biome === "meadow" && nearOffice && rng() < 0.45) {
     placeTreeCluster(tiles, rng);
   }
 
-  // tennis courts — placed 50-75 tiles from the office (chunk dist ~1.5-2.5)
+  // tennis courts — placed 50-75 tiles from the office (default world only)
   const tennisDist = Math.hypot(cx, cy);
-  if ((biome === "meadow" || biome === "forest") && tennisDist >= 1.5 && tennisDist <= 2.5 && rng() < 0.15) {
+  if (!theme && (biome === "meadow" || biome === "forest") && tennisDist >= 1.5 && tennisDist <= 2.5 && rng() < 0.15) {
     placeTennisCourt(tiles, rng);
   }
 
-  // water features — small streams in forest/ruins only (meadow has the big lake)
+  // water features — small streams in forest/ruins only (default world only)
   const hRounded = Math.round(hostility);
-  if ((biome === "forest" || biome === "ruins") && rng() < (hRounded === 1 ? 0.12 : 0.08)) {
+  if (!theme && (biome === "forest" || biome === "ruins") && rng() < (hRounded === 1 ? 0.12 : 0.08)) {
     placeWaterCluster(tiles, rng);
   }
 
-  // big lake — one deterministic multi-chunk lake in the meadow
-  placeBigLake(tiles, cx, cy);
+  // big lake — one deterministic multi-chunk lake in the meadow (default world only)
+  if (!theme) placeBigLake(tiles, cx, cy);
 
   // acid vat clusters — rare, only in ruins/wasteland
   if ((biome === "ruins" || biome === "wasteland") && rng() < 0.08) {
@@ -349,8 +349,8 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
     }
   }
 
-  // Place golf bag near the office door (only in chunk 0,0)
-  if (cx === 0 && cy === 0) {
+  // Place golf bag near the office door (default world only, chunk 0,0)
+  if (!theme && cx === 0 && cy === 0) {
     const bagWX = 12;
     const bagWY = 4;
     const bagX = bagWX - cx * CHUNK_SIZE;
@@ -410,9 +410,11 @@ function thinStoneTiles(tiles: number[], biome: Biome, theme?: WorldTheme | null
 /** Secondary ground tile for visual texture patches within a biome. */
 function groundVariation(biome: Biome, theme?: WorldTheme | null): number {
   if (theme?.worldgen?.baseGround?.[biome] !== undefined) {
-    // For themed worlds, use a different tile from the same biome's obstacles as variation
-    const obstacles = theme.worldgen.obstacles?.[biome];
-    if (obstacles && obstacles.length > 0) return obstacles[0];
+    // For themed worlds, use the base ground tile itself — visual variety
+    // comes from the 4 variant frames selected per-tile at render time.
+    // Using obstacle tiles as ground variation was semantically wrong (made
+    // non-walkable patches). Return base ground so variation patches just
+    // get different texture variants.
     return baseGround(biome, theme);
   }
   switch (biome) {
@@ -426,11 +428,17 @@ function groundVariation(biome: Biome, theme?: WorldTheme | null): number {
   }
 }
 
-function pickObstacle(biome: Biome, rng: () => number, hostility: number): number {
-  // Big trees and big rocks become more common farther from the office
+function pickObstacle(biome: Biome, rng: () => number, hostility: number, theme?: WorldTheme | null): number {
+  // Themed worlds: pick from theme's obstacle list for this biome
+  const themeObstacles = theme?.worldgen?.obstacles?.[biome];
+  if (themeObstacles && themeObstacles.length > 0) {
+    // Bias toward later (rarer) obstacles at higher hostility
+    const idx = Math.floor(rng() * themeObstacles.length);
+    return themeObstacles[idx];
+  }
+  // Default world: biome-specific obstacle selection with hostility scaling
   const bigTreeChance = Math.max(0, (hostility - 1) * 0.15);
   const bigRockChance = Math.max(0, (hostility - 1) * 0.12);
-  // Palm trees near the office (low hostility), mystic trees far out (high hostility)
   const palmChance = hostility < 1.5 ? 0.45 - hostility * 0.25 : 0;
   const mysticChance = hostility >= 2 ? Math.min(0.4, (hostility - 2) * 0.15) : 0;
   switch (biome) {
@@ -460,10 +468,18 @@ function pickObstacle(biome: Biome, rng: () => number, hostility: number): numbe
       if (rng() < mysticChance) return TILE.MYSTIC_TREE;
       if (rng() < bigRockChance * 0.5) return TILE.BIG_ROCK;
       return rng() < 0.5 ? TILE.CRYSTAL : TILE.RUIN;
+    default:
+      return TILE.ROCK;
   }
 }
 
-function pickHostile(biome: Biome, rng: () => number, type: "lava" | "void"): number {
+function pickHostile(biome: Biome, rng: () => number, type: "lava" | "void", theme?: WorldTheme | null): number {
+  // Themed worlds: use theme's hostile tile list for this biome
+  const themeHostiles = theme?.worldgen?.hostileTiles?.[biome];
+  if (themeHostiles && themeHostiles.length > 0) {
+    return themeHostiles[Math.floor(rng() * themeHostiles.length)];
+  }
+  // Default world: biome-specific hostile tiles
   switch (biome) {
     case "void":
       return type === "void" ? TILE.VOID : TILE.LAVA;
@@ -478,7 +494,18 @@ function pickHostile(biome: Biome, rng: () => number, type: "lava" | "void"): nu
   }
 }
 
-function pickDecoration(biome: Biome, rng: () => number): number {
+function pickDecoration(biome: Biome, rng: () => number, theme?: WorldTheme | null): number {
+  // Themed worlds: use theme's decoration list for this biome
+  const themeDecorations = theme?.worldgen?.decorations?.[biome];
+  if (themeDecorations && themeDecorations.length > 0) {
+    return themeDecorations[Math.floor(rng() * themeDecorations.length)];
+  }
+  // Fallback: use theme's obstacle list as decoration substitute
+  const themeObstacles = theme?.worldgen?.obstacles?.[biome];
+  if (themeObstacles && themeObstacles.length > 0) {
+    return themeObstacles[Math.floor(rng() * themeObstacles.length)];
+  }
+  // Default world: biome-specific decorations
   switch (biome) {
     case "meadow":
       return rng() < 0.4 ? TILE.FLOWER : TILE.BUSH;
@@ -492,10 +519,22 @@ function pickDecoration(biome: Biome, rng: () => number): number {
       return rng() < 0.5 ? TILE.CRYSTAL : TILE.ROCK;
     case "infernal":
       return rng() < 0.5 ? TILE.CRYSTAL : TILE.RUIN;
+    default:
+      return TILE.BUSH;
   }
 }
 
-function decorationChance(biome: Biome): number {
+function decorationChance(biome: Biome, theme?: WorldTheme | null): number {
+  // Themed worlds: derive decoration chance from biome index
+  if (theme?.worldgen?.biomes) {
+    const biomes = theme.worldgen.biomes;
+    const biomeIndex = biomes.indexOf(biome);
+    if (biomeIndex >= 0) {
+      // Same descending pattern as default: 0.20 → 0.06
+      return Math.max(0.06, 0.20 - biomeIndex * 0.03);
+    }
+  }
+  // Default world: biome-specific decoration chances
   switch (biome) {
     case "meadow": return 0.20;
     case "forest": return 0.15;
@@ -503,6 +542,7 @@ function decorationChance(biome: Biome): number {
     case "wasteland": return 0.10;
     case "void": return 0.06;
     case "infernal": return 0.06;
+    default: return 0.10;
   }
 }
 
@@ -632,7 +672,7 @@ function placeBigRockCluster(tiles: number[], rng: () => number): void {
 }
 
 /** Place an obstacle cluster — a dense grove/pile of biome-appropriate obstacles. */
-function placeObstacleCluster(tiles: number[], biome: Biome, rng: () => number): void {
+function placeObstacleCluster(tiles: number[], biome: Biome, rng: () => number, theme?: WorldTheme | null): void {
   const cx = 3 + Math.floor(rng() * (CHUNK_SIZE - 6));
   const cy = 3 + Math.floor(rng() * (CHUNK_SIZE - 6));
   const r = 2 + Math.floor(rng() * 3); // radius 2-4
@@ -643,7 +683,7 @@ function placeObstacleCluster(tiles: number[], biome: Biome, rng: () => number):
       if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE) continue;
       const d = Math.hypot(x - cx, y - cy);
       if (d <= r && rng() < density && canOverwrite(tiles, idx(x, y))) {
-        tiles[idx(x, y)] = pickObstacle(biome, rng, 0);
+        tiles[idx(x, y)] = pickObstacle(biome, rng, 0, theme);
       }
     }
   }
