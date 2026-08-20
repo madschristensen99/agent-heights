@@ -1402,7 +1402,7 @@ wss.on("connection", async (ws, req) => {
       }
 
       // Permission tiers: manage > talk > tour > no_access
-      const MANAGE_ONLY = new Set(["hire", "assign", "assign_new", "assign_all", "stop", "stop_all", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "get_cdp_wallet", "get_cdp_policy", "set_cdp_policy", "get_cdp_tx_history", "create_cdp_onramp", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
+      const MANAGE_ONLY = new Set(["hire", "assign", "assign_new", "assign_all", "stop", "stop_all", "resume_agents", "fire", "vacation", "restore", "recruit", "create_card", "assign_card", "move_card", "delete_card", "create_schedule", "update_schedule", "delete_schedule", "set_settings", "set_api_key", "set_mcp_key", "check_mcp_keys", "start_mcp_oauth", "submit_mcp_oauth_code", "get_cdp_wallet", "get_cdp_policy", "set_cdp_policy", "get_cdp_tx_history", "create_cdp_onramp", "clear", "clear_all", "rename", "set_agent_acl", "set_mailbox_platform"]);
       const TALK_OR_ABOVE = new Set(["chat", "agent_view_start", "agent_view_stop", "agent_broadcast_start", "agent_broadcast_stop", "agent_broadcast_html", "agent_fs_list", "agent_fs_read", "agent_fs_write", "agent_fs_delete", "agent_fs_upload", "agent_log_subscribe", "agent_log_unsubscribe", "agent_inject_task", "agent_memory_request"]);
 
       if (MANAGE_ONLY.has(msg.type) && accessLevel !== "manage") {
@@ -1614,6 +1614,9 @@ wss.on("connection", async (ws, req) => {
           break;
         case "stop_all":
           activeManager.stopAll();
+          break;
+        case "resume_agents":
+          activeManager.resumeFromApiPause();
           break;
         case "resolve_gate":
           activeManager.resolveGate(msg.gateId, msg.resolution);

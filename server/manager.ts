@@ -147,6 +147,29 @@ const MAX_MCP_TOOL_CALLS = 20; // Total MCP-originated tool calls per task befor
 const MAX_REWORKS = 3; // Maximum rework cycles before warning the manager
 const MAX_REVIEW_CHAIN_DEPTH = 3; // Auto-approve after this many review cycles on the same card
 const MAX_PENDING_REVIEWS = 5; // Global circuit breaker: stop creating review tasks if this many are already pending
+const MAX_QUEUE_DEPTH = 5; // Maximum queued tasks per agent — prevents unbounded queue growth
+const MAX_CONSECUTIVE_FAILURES = 3; // Stop an agent after this many consecutive task failures
+const API_FAILURE_WINDOW_MS = 60_000; // Window for counting concurrent API failures
+const API_FAILURE_THRESHOLD = 3; // Number of failures within the window to trigger office-wide pause
+const API_PAUSE_COOLDOWN_MS = 5 * 60_000; // Auto-clear the pause after 5 minutes
+const POST_MESSAGE_THROTTLE_MS = 5 * 60_000; // Min interval between onPostMessage task creation per agent
+
+/** Patterns that indicate a fatal API-level failure (not transient — don't retry, don't review). */
+const FATAL_API_PATTERNS = [
+  /insufficient\s*(credit|fund|balance)/i,
+  /payment\s*required/i,
+  /\b402\b/,
+  /billing\s*(issue|required|problem|failed)/i,
+  /quota\s*(exceeded|exhausted|depleted)/i,
+  /api\s*key.*(invalid|revoked|expired|missing)/i,
+  /authentication\s*(failed|error)/i,
+  /unauthorized/i,
+];
+
+/** Check if a failure reason looks like a fatal API-level issue (funding, auth, billing). */
+function isFatalApiFailure(reason: string): boolean {
+  return FATAL_API_PATTERNS.some((p) => p.test(reason));
+}
 
 /** Patterns that indicate a transient (retryable) failure — rate limit, timeout, API hang. */
 const TRANSIENT_FAILURE_PATTERNS = [
@@ -382,6 +405,10 @@ interface AgentRuntime {
   reworkCount: number;
   /** Pending decision gate: blocks the task until the boss resolves it. */
   pendingGate: { id: string; resolve: (answer: string) => void; timer: ReturnType<typeof setTimeout>; options?: string[] } | null;
+  /** Consecutive task failures — after MAX_CONSECUTIVE_FAILURES, the agent stops draining its queue. */
+  consecutiveFailures: number;
+  /** Timestamp of the last onPostMessage task creation (for throttling). */
+  lastPostMessageTaskAt: number;
 }
 
 /** Keyword expansion for TaskCategory values used in skill-based mail routing. */
@@ -471,6 +498,12 @@ export class AgentManager {
   lastPlatformEngagementAt = 0;
   /** Timestamp of last platform notification sent (rate limit). */
   private lastPlatformNotificationAt = 0;
+  /** Office-wide API health: when true, all task starts and queue drains are blocked. */
+  private apiPaused = false;
+  /** Timestamp when the API pause was triggered (for auto-clear cooldown). */
+  private apiPausedAt = 0;
+  /** Recent API failure timestamps (for counting within the window). */
+  private recentApiFailures: number[] = [];
 
   /** Update the API key used for agent tasks (e.g. when user sets a new key). */
   setApiKey(key: string | null): void {
@@ -609,7 +642,7 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null });
+      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -807,7 +840,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("office-manager", OFFICE_MANAGER_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
     this.agents.set(OFFICE_MANAGER_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -844,7 +877,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -889,7 +922,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("wizard", WIZARD_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
     this.agents.set(WIZARD_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -1666,7 +1699,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -1864,6 +1897,22 @@ export class AgentManager {
     const effectiveCardId = cardId ?? this.autoCardFor(agentId, cleanTask, reviewContext ? "review" : "task");
 
     if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
+      if (rt.taskQueue.length >= MAX_QUEUE_DEPTH) {
+        this.log(rt, "status", `Queue full (${MAX_QUEUE_DEPTH}) — dropping task: ${cleanTask.slice(0, 80)}`);
+        this.broadcast({ type: "toast", text: `${rt.info.name}'s queue is full — task dropped.` });
+        if (effectiveCardId) {
+          const card = this.board.get(effectiveCardId);
+          if (card && card.status !== "done") {
+            card.status = "backlog";
+            card.lockedBy = null;
+            card.assignedAgentId = null;
+            card.statusChangedAt = Date.now();
+            this.persistBoard();
+            this.broadcast({ type: "card", card });
+          }
+        }
+        return;
+      }
       const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
       rt.taskQueue.push({
         task: cleanTask,
@@ -1912,6 +1961,22 @@ export class AgentManager {
     const effectiveCardId = this.autoCardFor(agentId, cleanTask, "task");
 
     if (rt.info.status === "thinking" || rt.info.status === "working" || rt.info.status === "done" || rt.info.status === "waiting") {
+      if (rt.taskQueue.length >= MAX_QUEUE_DEPTH) {
+        this.log(rt, "status", `Queue full (${MAX_QUEUE_DEPTH}) — dropping new task: ${cleanTask.slice(0, 80)}`);
+        this.broadcast({ type: "toast", text: `${rt.info.name}'s queue is full — task dropped.` });
+        if (effectiveCardId) {
+          const card = this.board.get(effectiveCardId);
+          if (card && card.status !== "done") {
+            card.status = "backlog";
+            card.lockedBy = null;
+            card.assignedAgentId = null;
+            card.statusChangedAt = Date.now();
+            this.persistBoard();
+            this.broadcast({ type: "card", card });
+          }
+        }
+        return;
+      }
       const target = handoffTo && handoffTo !== agentId ? this.agents.get(handoffTo) : undefined;
       rt.taskQueue.push({
         task: cleanTask,
@@ -1971,6 +2036,12 @@ export class AgentManager {
   private startTask(rt: AgentRuntime, task: string, handoffTo?: string, cardId?: string, isResume = false, scheduleId?: string, reviewContext?: { agentId: string; agentName: string; originalTask: string; cardId?: string | null } | null, notifyOnComplete?: string, waitFor?: string): void {
     const cleanTask = task.trim();
     if (!cleanTask) return;
+    if (this.isApiPaused()) {
+      this.log(rt, "status", `Task start blocked — office is in API-pause state. Task queued for later.`);
+      rt.taskQueue.push({ task: cleanTask, handoffTo: handoffTo ?? null, cardId: cardId ?? null, scheduleId: scheduleId ?? null, reviewContext: reviewContext ?? null, notifyOnComplete: notifyOnComplete ?? null, waitFor: waitFor ?? null, platformContext: null });
+      this.setStatus(rt, "error");
+      return;
+    }
 
     if (rt.doneTimer) clearTimeout(rt.doneTimer);
     rt.doneTimer = null;
@@ -2054,6 +2125,17 @@ export class AgentManager {
   /** Drain the next queued task after the current one finishes. */
   private drainQueue(rt: AgentRuntime): void {
     if (rt.taskQueue.length === 0) return;
+    if (this.isApiPaused()) {
+      this.log(rt, "status", `Queue drain blocked — office is in API-pause state. ${rt.taskQueue.length} task(s) queued.`);
+      this.setStatus(rt, "error");
+      return;
+    }
+    if (rt.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      this.log(rt, "status", `Agent stopped after ${rt.consecutiveFailures} consecutive failures. ${rt.taskQueue.length} task(s) still queued — waiting for user intervention or successful retry.`);
+      this.broadcast({ type: "toast", text: `⚠️ ${rt.info.name} stopped after ${rt.consecutiveFailures} consecutive failures. Check their logs or manually retry.` });
+      this.setStatus(rt, "error");
+      return;
+    }
     const next = rt.taskQueue.shift()!;
     // Update card status from paused/backlog → in_progress
     if (next.cardId) {
@@ -2511,7 +2593,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2561,7 +2643,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -3528,6 +3610,8 @@ export class AgentManager {
     }
 
     // ── Stale review watchdog: escalate review_pending cards older than STALE_REVIEW_MS ──
+    // Skip when office is in API-pause state — creating review tasks during an outage just adds failures.
+    if (this.isApiPaused()) return;
     for (const card of this.board.values()) {
       if (card.status !== "review_pending") continue;
       if (card.assignedAgentId) continue; // someone is already reviewing
@@ -4116,6 +4200,22 @@ export class AgentManager {
           const sender = this.agentByFolder(fromFolder);
           const senderName = sender?.info.name ?? fromFolder;
           const cleanMessage = stripNestedTaskText(message, 500);
+          // Throttle: only create a review task once per POST_MESSAGE_THROTTLE_MS per recipient
+          const now = Date.now();
+          const sinceLast = now - target.lastPostMessageTaskAt;
+          if (sinceLast < POST_MESSAGE_THROTTLE_MS) {
+            // Just append to inbox without creating a task — they'll see it when they check messages
+            const slug = this.slugFor(target);
+            const inboxPath = join(this.cwdFor(slug, target.info.id), "inbox.jsonl");
+            const entry = JSON.stringify({ ts: now, from: senderName, message: cleanMessage }) + "\n";
+            import("node:fs/promises").then(({ appendFile, mkdir }) => {
+              mkdir(dirname(inboxPath), { recursive: true }).then(() =>
+                appendFile(inboxPath, entry, "utf-8").catch(() => {}),
+              );
+            }).catch(() => {});
+            return `Message delivered to ${target.info.name}'s inbox — they're being throttled (too many messages recently). They'll see your message when they check their inbox.`;
+          }
+          target.lastPostMessageTaskAt = now;
           const reviewTask = `${senderName} sent you a message. Review it and respond if needed:\n\n"${cleanMessage}"`;
           if (target.info.status === "thinking" || target.info.status === "working" || target.info.status === "waiting") {
             this.assign(target.info.id, reviewTask);
@@ -4189,9 +4289,26 @@ export class AgentManager {
             outputTokens: usage.outputTokens,
             cacheReadTokens: usage.cacheReadTokens,
             cacheWriteTokens: usage.cacheWriteTokens,
-            totalCost: usage.totalCost,
             task: task.slice(0, 500),
             isChat: false,
+          }).then(() => {
+            // Mid-task cap check: abort if user has exceeded their cap after this usage was recorded
+            if (!this.userId) return;
+            const cap = getUsageCap(this.subscriptionTier, this.entrancePaid);
+            if (cap <= 0) return;
+            void getMonthlySpend(this.userId).then((spend) => {
+              if (spend >= cap) {
+                this.log(rt, "status", `⚠️ Usage cap exceeded mid-task ($${spend.toFixed(2)} / $${cap}). Aborting.`);
+                this.broadcast({
+                  type: "payment_required",
+                  reason: "usage_cap",
+                  message: `You've reached the $${cap.toFixed(2)}/month usage cap ($${spend.toFixed(2)} spent). Upgrade your plan to continue.`,
+                  monthlySpend: spend,
+                  usageCap: cap,
+                });
+                rt.abort?.abort();
+              }
+            });
           });
         },
         requestGate: (question: string, options: string[], freeText = false): Promise<string> => {
@@ -4425,6 +4542,8 @@ export class AgentManager {
           void this.notifyConnectedPlatform(rt, task, finalText);
         }
       } else if (sawError && !abort.signal.aborted) {
+        rt.consecutiveFailures += 1;
+        this.recordApiFailure(firstErrorText);
         if (isManager && isReviewTask) {
           this.handleManagerReviewFailure(rt);
         } else {
@@ -4506,6 +4625,7 @@ export class AgentManager {
           }, DONE_LINGER_MS);
         } else {
           rt.info.tasksDone += 1;
+          rt.consecutiveFailures = 0; // Reset on success
           rt.taskHistory.unshift({ task, success: true, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           this.updateAgentSkillPerformance(rt, task, true, duration);
@@ -4611,6 +4731,8 @@ export class AgentManager {
             if (rt.notifyOnComplete) this.releaseWaitingAgent(rt.notifyOnComplete);
             // Jump to the finally block's retry path (shouldRetry = true)
           } else {
+            rt.consecutiveFailures += 1;
+            this.recordApiFailure(failReason);
             // Notify managers about the failure — unless this is a manager failing a review task,
             // in which case auto-approve the original work to prevent recursive review loops.
             if (isManager && isReviewTask) {
@@ -5205,6 +5327,11 @@ export class AgentManager {
     const managers = [...this.agents.values()].filter(
       (m) => m.info.role === "manager" && m.info.id !== rt.info.id,
     );
+
+    // Find the first idle manager to assign the review task to.
+    // Only ONE manager should review each task — assigning to all idle managers
+    // multiplies review tasks and can cause cascading failures.
+    let reviewAssigned = false;
     for (const mgr of managers) {
       // Post a message to the manager's inbox
       const slug = this.slugFor(mgr);
@@ -5222,8 +5349,9 @@ export class AgentManager {
         );
       }).catch(() => {});
 
-      // If the manager is idle, assign them a task to review the completion report
-      if (mgr.info.status !== "thinking" && mgr.info.status !== "working" && mgr.info.status !== "waiting") {
+      // Assign the review task to the first idle manager only
+      if (!reviewAssigned && mgr.info.status !== "thinking" && mgr.info.status !== "working" && mgr.info.status !== "waiting") {
+        reviewAssigned = true;
         let reviewTask: string;
         if (failed) {
           const transient = isTransientFailure(result);
@@ -5433,9 +5561,26 @@ export class AgentManager {
             outputTokens: usage.outputTokens,
             cacheReadTokens: usage.cacheReadTokens,
             cacheWriteTokens: usage.cacheWriteTokens,
-            totalCost: usage.totalCost,
             task: text.slice(0, 500),
             isChat: true,
+          }).then(() => {
+            // Mid-chat cap check: abort if user has exceeded their cap
+            if (!this.userId) return;
+            const cap = getUsageCap(this.subscriptionTier, this.entrancePaid);
+            if (cap <= 0) return;
+            void getMonthlySpend(this.userId).then((spend) => {
+              if (spend >= cap) {
+                this.log(rt, "status", `⚠️ Usage cap exceeded mid-chat ($${spend.toFixed(2)} / $${cap}). Aborting.`);
+                this.broadcast({
+                  type: "payment_required",
+                  reason: "usage_cap",
+                  message: `You've reached the $${cap.toFixed(2)}/month usage cap ($${spend.toFixed(2)} spent). Upgrade your plan to continue.`,
+                  monthlySpend: spend,
+                  usageCap: cap,
+                });
+                rt.abort?.abort();
+              }
+            });
           });
         },
       });
@@ -6034,6 +6179,62 @@ export class AgentManager {
       this.persistSchedules();
       console.log(`[agent-heights] removed ${orphaned.length} orphaned schedule(s) during tick`);
     }
+  }
+
+  /** Record an API failure and potentially trigger an office-wide pause. */
+  private recordApiFailure(reason: string): void {
+    if (!isFatalApiFailure(reason)) return;
+    const now = Date.now();
+    this.recentApiFailures.push(now);
+    // Prune entries outside the window
+    this.recentApiFailures = this.recentApiFailures.filter((t) => now - t < API_FAILURE_WINDOW_MS);
+    if (this.recentApiFailures.length >= API_FAILURE_THRESHOLD && !this.apiPaused) {
+      this.apiPaused = true;
+      this.apiPausedAt = now;
+      const msg = `⚠️ API issues detected (${this.recentApiFailures.length} failures in ${API_FAILURE_WINDOW_MS / 1000}s). All agents paused. Auto-resuming in ${API_PAUSE_COOLDOWN_MS / 60000}min or when you manually resume.`;
+      this.broadcast({ type: "toast", text: msg });
+      console.error(`[agent-heights] Office-wide API pause triggered: ${this.recentApiFailures.length} failures within ${API_FAILURE_WINDOW_MS}ms`);
+      // Stop all working agents
+      for (const rt of this.agents.values()) {
+        if (rt.info.status === "thinking" || rt.info.status === "working") {
+          if (rt.abort) rt.abort.abort();
+          rt.info.task = null;
+          rt.cardId = null;
+          this.setStatus(rt, "error");
+        }
+      }
+    }
+  }
+
+  /** Check if the office is in an API-paused state, auto-clearing after cooldown. */
+  isApiPaused(): boolean {
+    if (!this.apiPaused) return false;
+    if (Date.now() - this.apiPausedAt > API_PAUSE_COOLDOWN_MS) {
+      this.clearApiPause();
+      return false;
+    }
+    return true;
+  }
+
+  /** Clear the API pause and resume idle agents. */
+  private clearApiPause(): void {
+    if (!this.apiPaused) return;
+    this.apiPaused = false;
+    this.recentApiFailures = [];
+    this.broadcast({ type: "toast", text: "✅ API pause cleared — agents resuming." });
+    console.log("[agent-heights] API pause cleared, agents resuming.");
+    for (const rt of this.agents.values()) {
+      if (rt.info.status === "error" && rt.taskQueue.length > 0) {
+        this.drainQueue(rt);
+      } else if (rt.info.status === "error") {
+        this.setStatus(rt, "idle");
+      }
+    }
+  }
+
+  /** Manually resume from API pause (user-initiated). */
+  resumeFromApiPause(): void {
+    this.clearApiPause();
   }
 
   private setStatus(rt: AgentRuntime, status: AgentStatus): void {

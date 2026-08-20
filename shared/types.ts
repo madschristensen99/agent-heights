@@ -1051,6 +1051,7 @@ export type ClientMsg =
   | { type: "chat"; agentId: string; text: string }
   | { type: "stop"; agentId: string }
   | { type: "stop_all" }
+  | { type: "resume_agents" }
   | { type: "fire"; agentId: string }
   | { type: "vacation"; agentId: string }
   | { type: "restore"; agentId: string }
