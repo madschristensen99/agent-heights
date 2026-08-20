@@ -667,7 +667,7 @@ export class Hud {
     // Live countdown for scheduled tasks
     this.scheduleCountdownTimer = setInterval(() => this.updateScheduleCountdowns(), 1000);
 
-    this.maybeOnboard();
+    store.onInitialData(() => this.maybeOnboard());
   }
 
   private updateScheduleCountdowns(): void {
@@ -1618,6 +1618,7 @@ export class Hud {
   // --------------------------------------------------------------- intro guide
 
   private tourActive = false;
+  private tourCleanup: (() => void) | null = null;
 
   private showIntroGuide(): void {
     if (this.tourActive) return;
@@ -1764,7 +1765,9 @@ export class Hud {
       if (overlay) { overlay.remove(); overlay = null; }
       if (card) { card.remove(); card = null; }
       this.tourActive = false;
+      this.tourCleanup = null;
     };
+    this.tourCleanup = cleanup;
 
     const render = () => {
       const step = steps[current];
@@ -3159,6 +3162,9 @@ export class Hud {
   // ------------------------------------------------------------- hire modal
 
   private openHireModal(): void {
+    if (this.tourCleanup) this.tourCleanup();
+    const onboard = document.getElementById("onboard-modal");
+    if (onboard) onboard.hidden = true;
     if (this.store.accessLevel !== "manage") {
       this.toast(this.store.accessLevel === "tour" ? "Tour mode — ask an admin for manage access to hire agents." : "Go to your office to manage agents.");
       return;
