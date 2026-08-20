@@ -897,9 +897,14 @@ export class TenantManager {
 
     if (isSupabaseConfigured) {
       try {
+        // Only restore users who had agents actively working when the server stopped.
+        // Users with only idle agents don't need boot restoration — their session
+        // is created lazily on WebSocket connect. This avoids spinning up 5+ timers
+        // per user at boot for users who aren't online.
         const { data, error } = await supabaseAdmin
           .from("agent_heights_agents")
-          .select("owner_id");
+          .select("owner_id")
+          .in("status", ["thinking", "working"]);
 
         if (error || !data) {
           console.log("[agent-heights] boot restore: could not query agents table:", error?.message);
@@ -912,7 +917,7 @@ export class TenantManager {
         return;
       }
     } else {
-      // File mode: scan ag/users/*/save.json for users with agents
+      // File mode: scan ag/users/*/save.json for users with active agents
       const usersDir = join(this.rootDir, "ag", "users");
       try {
         const entries = await readdir(usersDir);
@@ -920,8 +925,9 @@ export class TenantManager {
           try {
             const raw = await readFile(join(usersDir, userId, "save.json"), "utf8");
             const parsed = JSON.parse(raw);
-            if (parsed.agents && Array.isArray(parsed.agents) && parsed.agents.length > 0) {
-              userIds.push(userId);
+            if (parsed.agents && Array.isArray(parsed.agents)) {
+              const hasActive = parsed.agents.some((a: any) => a.status === "thinking" || a.status === "working");
+              if (hasActive) userIds.push(userId);
             }
           } catch { /* no save file or invalid — skip */ }
         }
@@ -932,11 +938,11 @@ export class TenantManager {
     }
 
     if (userIds.length === 0) {
-      console.log("[agent-heights] boot restore: no users with agents found");
+      console.log("[agent-heights] boot restore: no users with active agents found — skipping");
       return;
     }
 
-    console.log(`[agent-heights] boot restore: restoring sessions for ${userIds.length} user(s)...`);
+    console.log(`[agent-heights] boot restore: restoring sessions for ${userIds.length} user(s) with active agents...`);
 
     let restored = 0;
     for (const userId of userIds) {

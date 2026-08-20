@@ -58,6 +58,7 @@ import { OfficeState } from "./office-state.js";
 import { registerServer, listServers, getServerConfigs, unregisterServer, loadServers, restartServer } from "./mcp-forge.js";
 import { ProfileManager } from "./profile.js";
 import { sendCreditDepletion } from "./funnel-emails.js";
+import { ideBridge } from "./ide-bridge.js";
 
 /** Build a compact categorized summary of the curated MCP catalog from DB. */
 async function catalogSummary(): Promise<string> {
@@ -2931,6 +2932,26 @@ export class AgentManager {
     this.broadcastGanttUpdate();
   }
 
+  /** Get all card IDs on the board (for branch matching). */
+  getCardIds(): string[] {
+    return [...this.board.keys()];
+  }
+
+  /** Associate a git branch with a task card (sprint board integration).
+   *  Updates the card description with branch info and broadcasts a toast. */
+  linkBranchToCard(cardId: string, gitBranch: string): void {
+    const card = this.board.get(cardId);
+    if (!card) return;
+    // Don't re-link if already associated
+    if (card.description?.includes(`[branch: ${gitBranch}]`)) return;
+    // Append branch tag to description
+    const branchTag = `\n[branch: ${gitBranch}]`;
+    card.description = (card.description ?? "") + branchTag;
+    this.persistBoard();
+    this.broadcast({ type: "card", card });
+    this.broadcast({ type: "toast", text: `🌿 Branch "${gitBranch}" linked to card "${card.title.slice(0, 40)}"` });
+  }
+
   /** Add a card-to-card dependency (this card can't start until the other completes). */
   setCardDependency(cardId: string, dependsOnCardId: string): void {
     const card = this.board.get(cardId);
@@ -3527,6 +3548,7 @@ export class AgentManager {
   /** Periodic tick: send proactive narrated updates to platform users with active tasks. */
   private tickProactiveUpdates(): void {
     if (this.shuttingDown || !this.hermesClient) return;
+    if (!this.isUserConnectedFn()) return;
     const now = Date.now();
 
     for (const rt of this.agents.values()) {
@@ -3587,6 +3609,7 @@ export class AgentManager {
   /** Periodic sweep: detect hung agents (orphaned tasks) and stale review-pending cards. */
   private tickHealthCheck(): void {
     if (this.shuttingDown) return;
+    if (!this.isUserConnectedFn()) return;
     const now = Date.now();
 
     // ── Orphan detection: abort tasks that have run beyond MAX_TASK_DURATION_MS ──
@@ -3733,6 +3756,8 @@ export class AgentManager {
 
   /** One tick of the think loop — check each idle agent for autonomous action. */
   private tickThinkLoop(): void {
+    if (this.shuttingDown) return;
+    if (!this.isUserConnectedFn()) return;
     const now = Date.now();
     for (const rt of this.agents.values()) {
       // Skip the Office Manager (handled separately), busy agents, and agents on cooldown
@@ -3940,6 +3965,7 @@ export class AgentManager {
       `General efficiency: batch related operations into single calls, never repeat the same tool call expecting different results. After making changes, do a single verification pass (read the file back once), then submit. Do not loop on verification.`,
       `=== END API & TOOL BUDGET RULES ===`,
       `IMPORTANT: You must actually DO the work first using your tools (write_files, bash, read_files, etc.) before calling submit_and_exit. Do not just talk about doing the work — use the tools to create files, run commands, etc. After doing the work, read back any files you created to verify they exist and contain what you intended. Only then call submit_and_exit with verified=true and a summary of what you did. Calling submit_and_exit without having done the work is a failure. Do not just reply with text — always use submit_and_exit to complete the task.`,
+      ideBridge.getContextSummary(this.userId),
       rt.info.systemPrompt ? `\n\nYour boss gave you these standing instructions:\n${rt.info.systemPrompt}` : "",
       this.dialectSuffix ? `\n\n=== WORLD DIALECT ===\n${this.dialectSuffix}` : "",
     ].join(" ");
@@ -6134,6 +6160,8 @@ export class AgentManager {
 
   /** Scheduler tick — check all enabled schedules and fire due ones. */
   private tickSchedules(): void {
+    if (this.shuttingDown) return;
+    if (!this.isUserConnectedFn()) return;
     const now = Date.now();
     const orphaned: string[] = [];
     for (const sched of this.schedules.values()) {

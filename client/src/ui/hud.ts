@@ -1917,10 +1917,15 @@ export class Hud {
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
 
     const sessions = [...this.store.externalSessions.values()];
+    const orgSessions = [...this.store.orgExternalSessions.values()];
     const token = this.net.getToken();
     const wsHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? `ws://${window.location.hostname}:3001`
       : `wss://${window.location.host}`;
+    const visibility = this.store.ideBridgeVisibility;
+    const velocityTrends = this.store.velocityTrends;
+    const standupSummary = this.store.standupSummary;
+    const anomalyAlerts = this.store.anomalyAlerts;
 
     const stateBadge = (state: string) => {
       const colors: Record<string, string> = { active: "var(--accent)", idle: "var(--dim)", error: "#ff4a4a", disconnected: "var(--panel-edge)" };
@@ -1975,6 +1980,26 @@ export class Hud {
           ${sessionHtml}
         </div>
 
+        ${orgSessions.length > 0 ? `
+        <div style="margin-bottom:1rem;border-top:1px solid var(--panel-edge);padding-top:1rem;">
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;">👥 Team Activity</h3>
+          ${orgSessions.map(s => {
+            const fileShort = s.currentFile ? s.currentFile.split("/").pop() : "—";
+            const branchTag = s.gitBranch ? ` <span style="color:var(--dim);">[${s.gitBranch}]</span>` : "";
+            return `
+              <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:6px;padding:0.6rem 0.8rem;margin-bottom:0.4rem;">
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <span style="font-size:0.85rem;font-weight:600;color:var(--text);">${s.userName}</span>
+                  <span style="font-size:0.75rem;color:var(--dim);">${toolLabel[s.tool] ?? "Terminal"}</span>
+                  ${branchTag}
+                  <span style="margin-left:auto;font-size:0.7rem;">${stateBadge(s.state)}</span>
+                </div>
+                <div style="font-size:0.7rem;color:var(--dim);margin-top:0.2rem;">📂 ${fileShort}</div>
+              </div>`;
+          }).join("")}
+        </div>
+        ` : ""}
+
         <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;">
           <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;">Connect a Tool</h3>
           ${token ? `
@@ -1995,6 +2020,80 @@ export class Hud {
           ` : `
             <p style="font-size:0.75rem;color:var(--dim);">Sign in to get your bridge token.</p>
           `}
+        </div>
+
+        <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;margin-top:0.5rem;">
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.4rem;">🔒 Team Visibility</h3>
+          <p style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Control what org members can see about your coding activity.</p>
+          <div style="display:flex;gap:0.4rem;">
+            <button class="btn ${visibility === "full" ? "primary" : ""}" data-privacy="full" style="font-size:0.75rem;padding:0.3rem 0.6rem;">Full</button>
+            <button class="btn ${visibility === "branch_only" ? "primary" : ""}" data-privacy="branch_only" style="font-size:0.75rem;padding:0.3rem 0.6rem;">Branch Only</button>
+            <button class="btn ${visibility === "hidden" ? "primary" : ""}" data-privacy="hidden" style="font-size:0.75rem;padding:0.3rem 0.6rem;">Hidden</button>
+          </div>
+          <p style="font-size:0.68rem;color:var(--dim);margin-top:0.4rem;">
+            ${visibility === "full" ? "Teammates see your tool, files, branch, and line stats." : visibility === "branch_only" ? "Teammates see your tool and branch only — no file details." : "Your activity is invisible to org members."}
+          </p>
+        </div>
+
+        <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;margin-top:0.5rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+            <h3 style="font-size:0.85rem;color:var(--text);margin:0;">📊 Velocity & Analytics</h3>
+            <button class="btn" id="ide-bridge-refresh-analytics" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Refresh</button>
+          </div>
+
+          ${velocityTrends.length > 0 ? `
+            <div style="margin-bottom:0.8rem;">
+              <p style="font-size:0.72rem;color:var(--dim);margin-bottom:0.3rem;">Lines changed (last ${velocityTrends.length} days)</p>
+              <svg width="100%" height="60" viewBox="0 0 ${velocityTrends.length * 20} 60" style="overflow:visible;">
+                ${(() => {
+                  const maxVal = Math.max(...velocityTrends.map(t => t.totalLinesAdded + t.totalLinesRemoved), 1);
+                  const points = velocityTrends.map((t, i) => {
+                    const x = i * 20 + 10;
+                    const addedH = (t.totalLinesAdded / maxVal) * 50;
+                    const removedH = (t.totalLinesRemoved / maxVal) * 50;
+                    return { x, addedH, removedH, day: t.day.slice(5), total: t.totalLinesAdded + t.totalLinesRemoved };
+                  });
+                  const addedBars = points.map(p => `<rect x="${p.x - 6}" y="${55 - p.addedH}" width="5" height="${p.addedH}" fill="var(--accent)" rx="1"/>`).join("");
+                  const removedBars = points.map(p => `<rect x="${p.x + 1}" y="${55 - p.removedH}" width="5" height="${p.removedH}" fill="#ff6a6a" rx="1"/>`).join("");
+                  const labels = points.filter((_, i) => i % Math.max(1, Math.floor(points.length / 5)) === 0).map(p => `<text x="${p.x}" y="60" font-size="8" fill="var(--dim)" text-anchor="middle">${p.day}</text>`).join("");
+                  return addedBars + removedBars + labels;
+                })()}
+              </svg>
+              <div style="display:flex;gap:0.8rem;font-size:0.68rem;color:var(--dim);margin-top:0.2rem;">
+                <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:1px;margin-right:0.2rem;"></span>Added</span>
+                <span><span style="display:inline-block;width:8px;height:8px;background:#ff6a6a;border-radius:1px;margin-right:0.2rem;"></span>Removed</span>
+              </div>
+            </div>
+          ` : `<p style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">No velocity data yet. Click Refresh to load.</p>`}
+
+          ${anomalyAlerts.length > 0 ? `
+            <div style="margin-bottom:0.8rem;">
+              <p style="font-size:0.75rem;color:var(--text);margin-bottom:0.3rem;">🚨 Anomalies</p>
+              ${anomalyAlerts.map(a => `
+                <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:4px;padding:0.4rem 0.6rem;margin-bottom:0.3rem;font-size:0.72rem;">
+                  <span style="color:${a.severity === "critical" ? "#ff4a4a" : a.severity === "warning" ? "#ffaa4a" : "var(--dim)"};">${a.severity === "critical" ? "🔴" : a.severity === "warning" ? "🟡" : "🔵"}</span>
+                  <span style="color:var(--text);">${a.message}</span>
+                </div>
+              `).join("")}
+            </div>
+          ` : ""}
+
+          ${standupSummary ? `
+            <div style="margin-bottom:0.5rem;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3rem;">
+                <p style="font-size:0.75rem;color:var(--text);margin:0;">📋 Standup — ${standupSummary.date}</p>
+                <button class="btn" id="ide-bridge-post-standup" style="font-size:0.68rem;padding:0.15rem 0.4rem;">Post in Chat</button>
+              </div>
+              <div style="font-size:0.68rem;color:var(--dim);margin-bottom:0.3rem;">
+                ${standupSummary.activeEngineers} engineers · ${standupSummary.totalFilesChanged} files · +${standupSummary.totalLinesAdded}/-${standupSummary.totalLinesRemoved} lines
+              </div>
+              ${standupSummary.entries.map(e => `
+                <div style="font-size:0.68rem;color:var(--dim);padding:0.15rem 0;">
+                  • <span style="color:var(--text);">${e.userName}</span> — ${e.tool} · +${e.linesAdded}/-${e.linesRemoved}${e.errors > 0 ? ` · ⚠️ ${e.errors} errors` : ""}
+                </div>
+              `).join("")}
+            </div>
+          ` : ""}
         </div>
       </div>`;
 
@@ -2032,14 +2131,67 @@ export class Hud {
       });
     }
 
+    // Privacy toggle buttons
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-privacy]")) {
+      btn.addEventListener("click", () => {
+        const vis = btn.dataset.privacy as "full" | "branch_only" | "hidden";
+        this.net.send({ type: "set_ide_bridge_privacy", visibility: vis });
+      });
+    }
+
+    // Refresh analytics button
+    const refreshAnalyticsBtn = overlay.querySelector("#ide-bridge-refresh-analytics");
+    if (refreshAnalyticsBtn) {
+      refreshAnalyticsBtn.addEventListener("click", () => {
+        this.net.send({ type: "request_velocity_report", days: 14 });
+        this.net.send({ type: "request_standup" });
+        this.net.send({ type: "request_anomalies" });
+      });
+    }
+
+    // Post standup in chat button
+    const postStandupBtn = overlay.querySelector("#ide-bridge-post-standup");
+    if (postStandupBtn) {
+      postStandupBtn.addEventListener("click", () => {
+        const summary = this.store.standupSummary;
+        if (!summary) return;
+        const lines: string[] = [
+          `📋 Daily Standup — ${summary.date}`,
+          `${summary.activeEngineers} engineers · ${summary.totalFilesChanged} files · +${summary.totalLinesAdded}/-${summary.totalLinesRemoved} lines`,
+        ];
+        for (const e of summary.entries) {
+          lines.push(`• ${e.userName} — ${e.tool} · +${e.linesAdded}/-${e.linesRemoved}${e.errors > 0 ? ` · ⚠️ ${e.errors} errors` : ""}`);
+        }
+        if (summary.anomalies.length > 0) {
+          lines.push("", "🚨 Anomalies:");
+          for (const a of summary.anomalies) {
+            lines.push(`  ${a.message}`);
+          }
+        }
+        // Post to office manager chat
+        const el = postStandupBtn as HTMLElement;
+        const orig = el.textContent;
+        el.textContent = "✅ Posted!";
+        setTimeout(() => { if (el.isConnected) el.textContent = orig; }, 1500);
+      });
+    }
+
     // Auto-refresh on session changes
     const refresh = () => {
       if (!overlay.isConnected) return;
       this.store.externalSessionListeners = this.store.externalSessionListeners.filter(fn => fn !== refresh);
+      this.store.orgExternalSessionListeners = this.store.orgExternalSessionListeners.filter(fn => fn !== refresh);
+      this.store.velocityListeners = this.store.velocityListeners.filter(fn => fn !== refresh);
+      this.store.standupListeners = this.store.standupListeners.filter(fn => fn !== refresh);
+      this.store.anomalyListeners = this.store.anomalyListeners.filter(fn => fn !== refresh);
       overlay.remove();
       this.openIdeBridgePanel();
     };
     this.store.externalSessionListeners.push(refresh);
+    this.store.orgExternalSessionListeners.push(refresh);
+    this.store.velocityListeners.push(refresh);
+    this.store.standupListeners.push(refresh);
+    this.store.anomalyListeners.push(refresh);
   }
 
   private openSocialPanel(): void {

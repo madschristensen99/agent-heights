@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer, FulfillmentStats, ExternalSession, ExternalEvent, ExternalTool } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer, FulfillmentStats, ExternalSession, ExternalEvent, ExternalTool, OrgExternalSession, IdeBridgeVisibility, VelocityTrend, StandupSummary, AnomalyAlert } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 import { getReactionsForAchievement, NPC_IDS, checkContextTrigger } from "./ui/agent-reactions";
@@ -497,6 +497,24 @@ export class Store {
   /** Fired when an external feed event arrives (for office feed). */
   externalFeedListeners: ((sessionId: string, tool: ExternalTool, event: ExternalEvent) => void)[] = [];
 
+  /** Org-level external sessions from team members (team monitoring). */
+  orgExternalSessions = new Map<string, OrgExternalSession>();
+  /** Fired when org external sessions change. */
+  orgExternalSessionListeners: (() => void)[] = [];
+  /** Fired when an org feed event arrives (for team activity feed). */
+  orgFeedListeners: ((userId: string, userName: string, sessionId: string, tool: ExternalTool, event: ExternalEvent) => void)[] = [];
+  /** Current IDE bridge privacy visibility setting. */
+  ideBridgeVisibility: "full" | "branch_only" | "hidden" = "full";
+  /** Velocity trends from the DB (for analytics panel). */
+  velocityTrends: VelocityTrend[] = [];
+  velocityListeners: (() => void)[] = [];
+  /** Latest standup summary. */
+  standupSummary: StandupSummary | null = null;
+  standupListeners: (() => void)[] = [];
+  /** Anomaly alerts for the org. */
+  anomalyAlerts: AnomalyAlert[] = [];
+  anomalyListeners: (() => void)[] = [];
+
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
     this.agents.clear();
@@ -556,6 +574,9 @@ export class Store {
     this.platformStates = [];
     this.platformStatesReceived = false;
     this.platformMailboxes.clear();
+    this.externalSessions.clear();
+    this.orgExternalSessions.clear();
+    this.ideBridgeVisibility = "full";
     this.initialDataReady = false;
     this.emit();
   }
@@ -1917,6 +1938,50 @@ export class Store {
       }
       case "external_feed_event": {
         for (const fn of this.externalFeedListeners) fn(msg.sessionId, msg.tool, msg.event);
+        return;
+      }
+      case "org_external_sessions_sync": {
+        this.orgExternalSessions = new Map(msg.sessions.map((s) => [`${s.userId}:${s.sessionId}`, s]));
+        for (const fn of this.orgExternalSessionListeners) fn();
+        return;
+      }
+      case "org_external_session_update": {
+        this.orgExternalSessions.set(`${msg.session.userId}:${msg.session.sessionId}`, msg.session);
+        for (const fn of this.orgExternalSessionListeners) fn();
+        return;
+      }
+      case "org_external_session_removed": {
+        for (const [k] of this.orgExternalSessions) {
+          if (k.endsWith(`:${msg.sessionId}`) && k.startsWith(`${msg.userId}:`)) {
+            this.orgExternalSessions.delete(k);
+            break;
+          }
+        }
+        for (const fn of this.orgExternalSessionListeners) fn();
+        return;
+      }
+      case "org_external_feed_event": {
+        for (const fn of this.orgFeedListeners) fn(msg.userId, msg.userName, msg.sessionId, msg.tool, msg.event);
+        return;
+      }
+      case "ide_bridge_privacy": {
+        this.ideBridgeVisibility = msg.visibility;
+        this.emit();
+        return;
+      }
+      case "velocity_report": {
+        this.velocityTrends = msg.trends;
+        for (const fn of this.velocityListeners) fn();
+        return;
+      }
+      case "standup_summary": {
+        this.standupSummary = msg.summary;
+        for (const fn of this.standupListeners) fn();
+        return;
+      }
+      case "anomaly_alerts": {
+        this.anomalyAlerts = msg.alerts;
+        for (const fn of this.anomalyListeners) fn();
         return;
       }
     }

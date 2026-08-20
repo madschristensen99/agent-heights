@@ -36,6 +36,8 @@ export class RelationalPersistence {
   private pendingWorld: boolean = false;
   private pendingPendingTasks: boolean = false;
   private pendingPlatformCredentials: boolean = false;
+  /** Tracks how many logs per agent are already in the DB, to avoid count queries on every flush. */
+  private syncedLogCount: Map<string, number> = new Map();
 
   constructor(userId: string) {
     this.userId = userId;
@@ -258,6 +260,11 @@ export class RelationalPersistence {
       }
 
       this.state = { player, agents, logs, settings, board, schedules, world, pendingTasks: pendingTasksMap, mailEvents, platformCredentials };
+      // Initialize synced log counts from loaded data — avoids count queries on every flush
+      this.syncedLogCount.clear();
+      for (const [agentId, agentLogs] of Object.entries(logs)) {
+        this.syncedLogCount.set(agentId, agentLogs.length);
+      }
       return this.state;
   }
 
@@ -516,30 +523,16 @@ export class RelationalPersistence {
       }
     }
 
-    // Sync logs — batch approach to minimize DB queries
-    // Instead of 4 queries per agent, do: 1 batch count + 1 batch insert + batch trim
+    // Sync logs — use in-memory syncedLogCount to avoid querying DB counts on every flush
     const agentsWithLogs = agents.filter((a) => (logs[a.id] ?? []).length > 0);
     if (agentsWithLogs.length > 0) {
-      // Batch count: get current log counts for all agents in one query
-      const agentIds = agentsWithLogs.map((a) => a.id);
-      const { data: countRows } = await supabaseAdmin
-        .from("agent_heights_agent_logs")
-        .select("agent_id")
-        .in("agent_id", agentIds)
-        .eq("archived", false);
-
-      const dbCounts: Record<string, number> = {};
-      for (const row of countRows ?? []) {
-        dbCounts[row.agent_id] = (dbCounts[row.agent_id] ?? 0) + 1;
-      }
-
       // Collect all new logs across agents into a single batch insert
       const allNewLogs: Array<{ agent_id: string; owner_id: string; ts: number; kind: string; text: string; archived: boolean }> = [];
       const trimNeeded: Array<{ agentId: string; trimCount: number }> = [];
 
       for (const agent of agentsWithLogs) {
         const agentLogs = logs[agent.id] ?? [];
-        const existingCount = dbCounts[agent.id] ?? 0;
+        const existingCount = this.syncedLogCount.get(agent.id) ?? 0;
         const newLogs = agentLogs.slice(existingCount);
 
         if (newLogs.length > 0) {
@@ -553,12 +546,14 @@ export class RelationalPersistence {
               archived: false,
             });
           }
+          this.syncedLogCount.set(agent.id, existingCount + newLogs.length);
         }
 
-        if (existingCount + newLogs.length > LOG_CAP) {
+        const totalCount = this.syncedLogCount.get(agent.id) ?? agentLogs.length;
+        if (totalCount > LOG_CAP) {
           trimNeeded.push({
             agentId: agent.id,
-            trimCount: existingCount + newLogs.length - LOG_CAP,
+            trimCount: totalCount - LOG_CAP,
           });
         }
       }
@@ -802,6 +797,7 @@ export class RelationalPersistence {
   async clearLogs(agentId: string): Promise<void> {
     if (!isSupabaseConfigured || !this.roomId) return;
     if (this.state.logs) this.state.logs[agentId] = [];
+    this.syncedLogCount.set(agentId, 0);
     try {
       // Soft-delete: archive logs instead of hard-deleting
       await supabaseAdmin

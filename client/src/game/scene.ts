@@ -373,10 +373,17 @@ export class OfficeScene extends Phaser.Scene {
 
   // --- IDE Bridge: terminal stations for external CLI tools ---
   private terminalStations: { container: Phaser.GameObjects.Container; monitor: Phaser.GameObjects.Sprite; glow: Phaser.GameObjects.Arc; toolLabel: Phaser.GameObjects.Text; fileLabel: Phaser.GameObjects.Text; }[] = [];
+  // --- IDE Bridge: wall dashboard for team monitoring ---
+  private wallDashboard: { container: Phaser.GameObjects.Container; titleText: Phaser.GameObjects.Text; bodyText: Phaser.GameObjects.Text; } | null = null;
   private terminalStationTiles: { x: number; y: number }[] = [
     { x: 26, y: 6 },
     { x: 27, y: 6 },
     { x: 28, y: 6 },
+    { x: 26, y: 8 },
+    { x: 27, y: 8 },
+    { x: 28, y: 8 },
+    { x: 26, y: 10 },
+    { x: 27, y: 10 },
   ];
 
   // ── Tap-to-walk + tap-to-interact ──
@@ -741,6 +748,10 @@ export class OfficeScene extends Phaser.Scene {
     this.officeManagerMonitor = null;
     this.hermesMonitor = null;
     this.terminalStations = [];
+    if (this.wallDashboard) {
+      this.wallDashboard.container.destroy();
+      this.wallDashboard = null;
+    }
     this.coffeeUntil = 0;
     this.fridgeUntil = 0;
     this.coolerUntil = 0;
@@ -1512,6 +1523,7 @@ export class OfficeScene extends Phaser.Scene {
 
           // IDE Bridge: create terminal stations for external CLI tools
           this.createTerminalStations();
+          this.createWallDashboard();
 
           this.cursors = this.input.keyboard!.createCursorKeys();
           this.keys = this.input.keyboard!.addKeys("W,A,S,D,E,Q,R,T,M,SPACE") as OfficeScene["keys"];
@@ -1680,7 +1692,11 @@ export class OfficeScene extends Phaser.Scene {
             });
             // IDE Bridge: sync terminal stations when external sessions change
             this.store.externalSessionListeners.push(() => {
-              if (this.ready) this.syncTerminalStations();
+              if (this.ready) { this.syncTerminalStations(); this.syncWallDashboard(); }
+            });
+            // Org-level: also sync when org member sessions change
+            this.store.orgExternalSessionListeners.push(() => {
+              if (this.ready) { this.syncTerminalStations(); this.syncWallDashboard(); }
             });
           }
           this.ready = true;
@@ -11592,7 +11608,18 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private syncTerminalStations(): void {
-    const sessions = [...this.store.externalSessions.values()];
+    // Merge personal sessions (first) with org member sessions
+    const personalSessions = [...this.store.externalSessions.values()].map(s => ({
+      sessionId: s.sessionId, userId: s.userId, tool: s.tool, state: s.state,
+      currentFile: s.currentFile, gitBranch: s.gitBranch, filesChanged: s.filesChanged,
+      linesAdded: s.linesAdded, linesRemoved: s.linesRemoved, userName: "You",
+    }));
+    const orgSessions = [...this.store.orgExternalSessions.values()].map(s => ({
+      sessionId: s.sessionId, userId: s.userId, tool: s.tool, state: s.state,
+      currentFile: s.currentFile, gitBranch: s.gitBranch, filesChanged: s.filesChanged,
+      linesAdded: s.linesAdded, linesRemoved: s.linesRemoved, userName: s.userName,
+    }));
+    const sessions = [...personalSessions, ...orgSessions].slice(0, this.terminalStations.length);
     const toolIcons: Record<string, string> = {
       "claude-code": "Claude",
       "codex": "Codex",
@@ -11642,13 +11669,107 @@ export class OfficeScene extends Phaser.Scene {
 
       // Labels
       const branchTag = session.gitBranch ? ` [${session.gitBranch}]` : "";
-      station.toolLabel.setText(`${toolName}${branchTag}`);
+      const isOrg = session.userName !== "You";
+      const nameTag = isOrg ? `${session.userName} · ` : "";
+      station.toolLabel.setText(`${nameTag}${toolName}${branchTag}`);
       station.toolLabel.setColor(session.state === "error" ? "#ff6a6a" : session.state === "active" ? "#88ffcc" : "#8888aa");
 
       const fileShort = session.currentFile ? session.currentFile.split("/").pop() : "";
       const stats = session.filesChanged > 0 ? ` +${session.linesAdded}/-${session.linesRemoved}` : "";
       station.fileLabel.setText(fileShort ? `${fileShort}${stats}` : "");
     }
+  }
+
+  // ── IDE Bridge: wall dashboard ─────────────────────────────────────
+
+  private createWallDashboard(): void {
+    // Place dashboard on the wall at tile (30, 2) — top-right area
+    const px = 30 * TILE_PX + TILE_PX / 2;
+    const py = 2 * TILE_PX + TILE_PX / 2;
+    const container = this.add.container(px, py).setDepth(20);
+
+    // Dark screen background
+    const bg = this.add.rectangle(0, 0, 180, 120, 0x0a0a14, 0.85)
+      .setStrokeStyle(2, 0x2a2a3e)
+      .setOrigin(0.5, 0.5);
+    container.add(bg);
+
+    // Title
+    const titleText = this.add.text(0, -48, "TEAM DASHBOARD", {
+      fontSize: "11px",
+      fontFamily: "monospace",
+      color: "#4af0a8",
+    }).setOrigin(0.5, 0.5);
+    container.add(titleText);
+
+    // Body text — updated by syncWallDashboard
+    const bodyText = this.add.text(0, 5, "", {
+      fontSize: "9px",
+      fontFamily: "monospace",
+      color: "#aaaacc",
+      align: "left",
+    }).setOrigin(0.5, 0.5);
+    container.add(bodyText);
+
+    this.wallDashboard = { container, titleText, bodyText };
+    this.syncWallDashboard();
+  }
+
+  private syncWallDashboard(): void {
+    if (!this.wallDashboard) return;
+
+    const allSessions = [
+      ...this.store.externalSessions.values(),
+      ...this.store.orgExternalSessions.values(),
+    ];
+    const active = allSessions.filter(s => s.state === "active" || s.state === "idle");
+
+    if (active.length === 0) {
+      this.wallDashboard.bodyText.setText("No active sessions");
+      this.wallDashboard.titleText.setColor("#666688");
+      return;
+    }
+
+    this.wallDashboard.titleText.setColor("#4af0a8");
+
+    // Aggregate stats
+    const totalFiles = active.reduce((sum, s) => sum + (s.filesChanged ?? 0), 0);
+    const totalAdded = active.reduce((sum, s) => sum + (s.linesAdded ?? 0), 0);
+    const totalRemoved = active.reduce((sum, s) => sum + (s.linesRemoved ?? 0), 0);
+    const activeCount = active.filter(s => s.state === "active").length;
+
+    // Unique users
+    const users = new Set(active.map(s => (s as any).userName ?? "You"));
+
+    // Language breakdown
+    const langCounts: Record<string, number> = {};
+    for (const s of active) {
+      if (s.language) langCounts[s.language] = (langCounts[s.language] ?? 0) + 1;
+    }
+    const langEntries = Object.entries(langCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const langStr = langEntries.length > 0
+      ? langEntries.map(([l, c]) => `${l} ${c}`).join("  ")
+      : "";
+
+    // Per-user summary (max 5 lines)
+    const userLines = active.slice(0, 5).map(s => {
+      const name = (s as any).userName ?? "You";
+      const tool = s.tool ?? "?";
+      const file = s.currentFile ? s.currentFile.split("/").pop() : "";
+      const state = s.state === "active" ? "●" : "○";
+      const branch = s.gitBranch ? ` [${s.gitBranch}]` : "";
+      return `${state} ${name} · ${tool}${branch}${file ? ` · ${file}` : ""}`;
+    });
+
+    const lines = [
+      `${activeCount} active · ${users.size} coder${users.size > 1 ? "s" : ""}`,
+      `${totalFiles} files · +${totalAdded}/-${totalRemoved} lines`,
+      langStr,
+      "",
+      ...userLines,
+    ];
+
+    this.wallDashboard.bodyText.setText(lines.join("\n"));
   }
 
   /** Create the DOM-based hotbar UI wired to the inventory system. */

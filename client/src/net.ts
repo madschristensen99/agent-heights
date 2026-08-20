@@ -12,6 +12,10 @@ const SILENT_MSG_TYPES = new Set([
   "fulfillment_stats",
   "external_session_update", "external_session_removed",
   "external_feed_event", "external_sessions_sync",
+  "org_external_sessions_sync", "org_external_session_update",
+  "org_external_session_removed", "org_external_feed_event",
+  "ide_bridge_privacy",
+  "velocity_report", "standup_summary", "anomaly_alerts",
 ]);
 
 export class Net {

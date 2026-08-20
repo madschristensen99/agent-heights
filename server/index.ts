@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize, resolve, relative } from "node:path";
 import { readFile, stat, readdir, writeFile, unlink, mkdir, lstat } from "node:fs/promises";
 import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance, Presenter } from "../shared/types.js";
-import { SERVER_PORT, isValidAppearance, MAX_PRESENTERS, COMMAND_CENTER_ADMINS } from "../shared/types.js";
+import { SERVER_PORT, isValidAppearance, MAX_PRESENTERS, COMMAND_CENTER_ADMINS, OFFICE_MANAGER_ID } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
 import { handleMcpCatalogRequest } from "./mcp-store.js";
@@ -56,7 +56,8 @@ import { computeEfficiency } from "./efficiency-score.js";
 import { getCurrentSeasonalEvent } from "./seasonal-events.js";
 import { getAllocation, validateAllocations } from "./resource-allocation.js";
 import { computeFulfillment } from "./fulfillment.js";
-import { ideBridge } from "./ide-bridge.js";
+import { ideBridge, IdeBridge } from "./ide-bridge.js";
+import { snapshotVelocity, getVelocityTrends, getStandupSummary, detectAnomalies, formatStandupText } from "./velocity.js";
 
 // ── User activity persistence (retention system) ─────────────────────────
 
@@ -341,6 +342,33 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
 
 const tenants = new TenantManager(rootDir);
 const screenshots = new ScreenshotManager();
+
+// Wire IDE bridge with tenant manager for org-level session sharing
+ideBridge.setDependencies({
+  getUserName: (userId: string) => tenants.getPlayerName(userId),
+  getUserEmail: (userId: string) => tenants.get(userId)?.user.email ?? null,
+  getOrgMemberIds: (userId: string) => {
+    const orgs = tenants.getOrgsForUser(userId);
+    const memberIds = new Set<string>();
+    for (const org of orgs) {
+      for (const m of tenants.getOrgMembers(org.id)) {
+        if (!m.userId.startsWith("pending:")) memberIds.add(m.userId);
+      }
+    }
+    return [...memberIds];
+  },
+  getBroadcast: (userId: string) => tenants.getSessionBroadcast(userId),
+  onBranchDetected: (userId: string, gitBranch: string) => {
+    // Sprint board integration: match branch to task card
+    const sess = tenants.get(userId);
+    if (!sess?.manager) return;
+    const cardIds = sess.manager.getCardIds();
+    const matchedCardId = IdeBridge.matchBranchToCardId(gitBranch, cardIds);
+    if (matchedCardId) {
+      sess.manager.linkBranchToCard(matchedCardId, gitBranch);
+    }
+  },
+});
 
 // Notify friends when a user goes offline (after 30s grace period)
 tenants.onUserOffline = (userId: string) => {
@@ -1290,6 +1318,10 @@ wss.on("connection", async (ws, req) => {
 
   // Sync any active IDE bridge sessions
   ideBridge.syncSessions(sess.user.id, sess.broadcast);
+  // Sync org-level sessions (from org members)
+  ideBridge.syncOrgSessions(sess.user.id);
+  // Send current privacy setting
+  sess.broadcast({ type: "ide_bridge_privacy", visibility: ideBridge.getVisibility(sess.user.id) });
 
   // ── Token refresh timer ──────────────────────────────────────────────
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -4212,6 +4244,53 @@ wss.on("connection", async (ws, req) => {
           );
           break;
         }
+        case "set_ide_bridge_privacy": {
+          ideBridge.setVisibility(sess.user.id, msg.visibility);
+          sess.broadcast({ type: "ide_bridge_privacy", visibility: msg.visibility });
+          sess.broadcast({ type: "toast", text: `IDE Bridge visibility set to: ${msg.visibility}` });
+          break;
+        }
+        case "request_velocity_report": {
+          const days = msg.days ?? 14;
+          void getVelocityTrends(sess.user.id, days).then((trends) => {
+            sess.broadcast({ type: "velocity_report", trends });
+          });
+          break;
+        }
+        case "request_standup": {
+          const orgs = tenants.getOrgsForUser(sess.user.id);
+          const memberIds = new Set<string>();
+          for (const org of orgs) {
+            for (const m of tenants.getOrgMembers(org.id)) {
+              if (!m.userId.startsWith("pending:")) memberIds.add(m.userId);
+            }
+          }
+          const memberNames = new Map<string, string>();
+          for (const memberId of memberIds) {
+            memberNames.set(memberId, tenants.getPlayerName(memberId));
+          }
+          void getStandupSummary(sess.user.id, [...memberIds], memberNames).then((summary) => {
+            sess.broadcast({ type: "standup_summary", summary });
+          });
+          break;
+        }
+        case "request_anomalies": {
+          const orgs = tenants.getOrgsForUser(sess.user.id);
+          const memberIds = new Set<string>();
+          for (const org of orgs) {
+            for (const m of tenants.getOrgMembers(org.id)) {
+              if (!m.userId.startsWith("pending:")) memberIds.add(m.userId);
+            }
+          }
+          const memberNames = new Map<string, string>();
+          for (const memberId of memberIds) {
+            memberNames.set(memberId, tenants.getPlayerName(memberId));
+          }
+          void detectAnomalies(sess.user.id, [...memberIds], memberNames).then((alerts) => {
+            sess.broadcast({ type: "anomaly_alerts", alerts });
+          });
+          break;
+        }
       }
     } catch (err) {
       console.error("[server] error handling message:", err);
@@ -4295,6 +4374,53 @@ const browserCleanupInterval = setInterval(() => { void cleanupIdleBrowsers(); }
 const deletionCleanupInterval = setInterval(() => { void processExpiredDeletions(); }, 60 * 60 * 1000);
 // Also run once on startup
 void processExpiredDeletions();
+
+// Velocity tracking: snapshot IDE bridge sessions to DB every 5 minutes
+const velocitySnapshotInterval = setInterval(() => {
+  const snapshots = ideBridge.getSnapshotsForVelocity();
+  if (snapshots.length > 0) void snapshotVelocity(snapshots);
+}, 5 * 60 * 1000);
+
+// Daily standup generation: run at 9am server time, check every hour
+const standupInterval = setInterval(() => {
+  const now = new Date();
+  if (now.getHours() !== 9) return;
+  // Generate standups for all orgs with active sessions
+  for (const userId of tenants.getOnlineUserIds()) {
+    const orgs = tenants.getOrgsForUser(userId);
+    if (orgs.length === 0) continue;
+    const memberIds = new Set<string>();
+    for (const org of orgs) {
+      for (const m of tenants.getOrgMembers(org.id)) {
+        if (!m.userId.startsWith("pending:")) memberIds.add(m.userId);
+      }
+    }
+    if (memberIds.size === 0) continue;
+    const memberNames = new Map<string, string>();
+    for (const memberId of memberIds) {
+      memberNames.set(memberId, tenants.getPlayerName(memberId));
+    }
+    void (async () => {
+      try {
+        const summary = await getStandupSummary(userId, [...memberIds], memberNames);
+        if (summary.entries.length === 0) return;
+        const text = formatStandupText(summary);
+        const broadcast = tenants.getSessionBroadcast(userId);
+        if (broadcast) {
+          broadcast({ type: "standup_summary", summary });
+          broadcast({ type: "toast", text: "📋 Daily standup generated — check the IDE Bridge panel." });
+        }
+        // Post standup in office chat via Office Manager
+        const sess = tenants.get(userId);
+        if (sess?.manager) {
+          sess.manager.chat(OFFICE_MANAGER_ID, `Generate a daily standup summary based on this data and post it conversationally:\n\n${text}`);
+        }
+      } catch (err) {
+        console.error("[velocity] standup generation failed:", err);
+      }
+    })();
+  }
+}, 60 * 60 * 1000);
 
 server.listen(SERVER_PORT, () => {
   console.log(`[agent-heights] server listening on :${SERVER_PORT} (HTTP + WebSocket)`);

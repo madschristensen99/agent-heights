@@ -1069,6 +1069,61 @@ export interface ExternalSession {
   events: ExternalEvent[];
 }
 
+/** External session with user display info — for org/team monitoring. */
+export interface OrgExternalSession extends ExternalSession {
+  userName: string;
+  userEmail: string | null;
+}
+
+/** IDE Bridge privacy visibility levels for org sharing. */
+export type IdeBridgeVisibility = "full" | "branch_only" | "hidden";
+
+// ── Velocity & Analytics ──────────────────────────────────────────────────────
+
+export interface VelocityTrend {
+  day: string;
+  totalLinesAdded: number;
+  totalLinesRemoved: number;
+  totalFilesChanged: number;
+  totalActiveMinutes: number;
+  totalErrors: number;
+  totalSessions: number;
+  tools: string[];
+  branches: string[];
+  languages: string[];
+}
+
+export interface AnomalyAlert {
+  type: "inactive" | "error_spike" | "low_velocity" | "stale_branch";
+  userId: string;
+  userName: string;
+  message: string;
+  severity: "info" | "warning" | "critical";
+  details: Record<string, unknown>;
+}
+
+export interface StandupEntry {
+  userName: string;
+  tool: string;
+  filesChanged: number;
+  linesAdded: number;
+  linesRemoved: number;
+  branches: string[];
+  languages: string[];
+  activeMinutes: number;
+  errors: number;
+}
+
+export interface StandupSummary {
+  date: string;
+  entries: StandupEntry[];
+  totalLinesAdded: number;
+  totalLinesRemoved: number;
+  totalFilesChanged: number;
+  activeEngineers: number;
+  anomalies: AnomalyAlert[];
+}
+
 export type ClientMsg =
   | { type: "auth"; token: string }
   | { type: "setup"; player: PlayerInfo }
@@ -1246,7 +1301,11 @@ export type ClientMsg =
   | { type: "request_fulfillment" }
   | { type: "external_connect"; tool: ExternalTool; sessionId: string; token: string; currentFile?: string; language?: string; gitBranch?: string }
   | { type: "external_activity"; sessionId: string; state: "active" | "idle" | "error"; currentFile?: string; language?: string; gitBranch?: string; filesChanged?: number; linesAdded?: number; linesRemoved?: number; events?: ExternalEvent[] }
-  | { type: "external_disconnect"; sessionId: string };
+  | { type: "external_disconnect"; sessionId: string }
+  | { type: "set_ide_bridge_privacy"; visibility: "full" | "branch_only" | "hidden" }
+  | { type: "request_velocity_report"; days?: number }
+  | { type: "request_standup" }
+  | { type: "request_anomalies" };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1422,7 +1481,15 @@ export type ServerMsg =
   | { type: "external_session_update"; session: ExternalSession }
   | { type: "external_session_removed"; sessionId: string }
   | { type: "external_feed_event"; sessionId: string; tool: ExternalTool; event: ExternalEvent }
-  | { type: "external_sessions_sync"; sessions: ExternalSession[] };
+  | { type: "external_sessions_sync"; sessions: ExternalSession[] }
+  | { type: "org_external_sessions_sync"; sessions: OrgExternalSession[] }
+  | { type: "org_external_session_update"; session: OrgExternalSession }
+  | { type: "org_external_session_removed"; sessionId: string; userId: string }
+  | { type: "org_external_feed_event"; sessionId: string; userId: string; userName: string; tool: ExternalTool; event: ExternalEvent }
+  | { type: "ide_bridge_privacy"; visibility: "full" | "branch_only" | "hidden" }
+  | { type: "velocity_report"; trends: VelocityTrend[] }
+  | { type: "standup_summary"; summary: StandupSummary }
+  | { type: "anomaly_alerts"; alerts: AnomalyAlert[] };
 
 // ── Away Report ──────────────────────────────────────────────────────────────
 
