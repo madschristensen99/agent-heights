@@ -7308,7 +7308,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     const TRACK_META: Record<string, { label: string; icon: string; color: string }> = {
       warrior: { label: "Warrior", icon: "⚔️", color: "#ef4444" },
-      builder: { label: "Builder", icon: "🔨", color: "#58c866" },
+      builder: { label: "Builder", icon: "🔨", color: "var(--green)" },
       explorer: { label: "Explorer", icon: "🧭", color: "#3b82f6" },
       puzzle_solver: { label: "Puzzle Solver", icon: "🧩", color: "#a855f7" },
       creator: { label: "Creator", icon: "🎨", color: "#ec4899" },
@@ -7325,12 +7325,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     // Grid polygons
     const gridPolys = gridLevels.map((level) => {
       const pts = angles.map((a) => `${cx + Math.cos(a) * r * level},${cy + Math.sin(a) * r * level}`).join(" ");
-      return `<polygon points="${pts}" fill="none" stroke="#33364a" stroke-width="1" opacity="${0.3 + level * 0.2}"/>`;
+      return `<polygon points="${pts}" fill="none" stroke="var(--panel-edge)" stroke-width="1" opacity="${0.3 + level * 0.2}"/>`;
     }).join("");
 
     // Axis lines
     const axisLines = angles.map((a) =>
-      `<line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(a) * r}" y2="${cy + Math.sin(a) * r}" stroke="#33364a" stroke-width="1" opacity="0.3"/>`
+      `<line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(a) * r}" y2="${cy + Math.sin(a) * r}" stroke="var(--panel-edge)" stroke-width="1" opacity="0.3"/>`
     ).join("");
 
     // Fulfillment polygon
@@ -7367,10 +7367,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       return `
         <div style="margin-bottom:6px;">
           <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
-            <span style="color:#9aa0b0;">${m.label}</span>
-            <span style="color:#e8eaf0;font-weight:600;">${m.value}</span>
+            <span style="color:var(--dim);">${m.label}</span>
+            <span style="color:var(--text);font-weight:600;">${m.value}</span>
           </div>
-          <div style="height:4px;background:#222538;border-radius:2px;overflow:hidden;">
+          <div style="height:4px;background:var(--panel-edge-soft);border-radius:2px;overflow:hidden;">
             <div style="width:${pct}%;height:100%;background:${dominantMeta.color};border-radius:2px;"></div>
           </div>
         </div>
@@ -7382,16 +7382,16 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const gapsHtml = topGaps.map((g) => {
       const meta = TRACK_META[g.track];
       const gapText = g.gap > 10
-        ? `<span style="color:#58c866;">Living it up! +${g.gap}</span>`
+        ? `<span style="color:var(--green);">Living it up! +${g.gap}</span>`
         : g.gap < -10
-        ? `<span style="color:#f87171;">Unfulfilled ${g.gap}</span>`
-        : `<span style="color:#9aa0b0;">Balanced (${g.gap >= 0 ? "+" : ""}${g.gap})</span>`;
+        ? `<span style="color:var(--red);">Unfulfilled ${g.gap}</span>`
+        : `<span style="color:var(--dim);">Balanced (${g.gap >= 0 ? "+" : ""}${g.gap})</span>`;
       return `
         <div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px;">
           <span>${meta.icon}</span>
-          <span style="color:#ccc;width:90px;">${meta.label}</span>
-          <span style="color:#6b7280;">Det: ${g.detection}%</span>
-          <span style="color:#6b7280;">Ful: ${g.fulfillment}%</span>
+          <span style="color:var(--text);width:90px;">${meta.label}</span>
+          <span style="color:var(--dim);">Det: ${g.detection}%</span>
+          <span style="color:var(--dim);">Ful: ${g.fulfillment}%</span>
           <span style="margin-left:auto;">${gapText}</span>
         </div>
       `;
@@ -7403,8 +7403,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       return `
         <div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:2px;">
           <span style="font-size:14px;">${a.icon}</span>
-          <span style="color:#ccc;">${a.text.replace(/</g, "&lt;")}</span>
-          <span style="color:#555;margin-left:auto;">${time}</span>
+          <span style="color:var(--text);">${a.text.replace(/</g, "&lt;")}</span>
+          <span style="color:var(--dim);margin-left:auto;">${time}</span>
         </div>
       `;
     }).join("");
@@ -7419,13 +7419,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
               <svg width="240" height="240" viewBox="0 0 240 240" style="max-width:100%;">
                 ${gridPolys}
                 ${axisLines}
-                <polygon points="${detectionPts}" fill="rgba(100,100,200,0.1)" stroke="rgba(100,100,200,0.3)" stroke-width="1" stroke-dasharray="3,3"/>
-                <polygon points="${fulfillmentPts}" fill="rgba(88,200,102,0.15)" stroke="#58c866" stroke-width="2"/>
+                <polygon points="${detectionPts}" fill="rgba(91,155,245,0.1)" stroke="rgba(91,155,245,0.3)" stroke-width="1" stroke-dasharray="3,3"/>
+                <polygon points="${fulfillmentPts}" fill="rgba(93,217,127,0.15)" stroke="var(--green)" stroke-width="2"/>
                 ${labels}
               </svg>
-              <div style="text-align:center;font-size:10px;color:#6b7280;margin-top:-4px;">
-                <span style="color:#58c866;">━</span> Fulfillment &nbsp;
-                <span style="color:rgba(100,100,200,0.6);">┄</span> Detection
+              <div style="text-align:center;font-size:10px;color:var(--dim);margin-top:-4px;">
+                <span style="color:var(--green);">━</span> Fulfillment &nbsp;
+                <span style="color:var(--accent);">┄</span> Detection
               </div>
             </div>
 
@@ -7435,7 +7435,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
                 <span style="font-size:20px;">${dominantMeta.icon}</span>
                 <div>
                   <div style="font-size:14px;font-weight:700;color:${dominantMeta.color};">${dominantMeta.label} ${dominantData.badge}</div>
-                  <div style="font-size:11px;color:#9aa0b0;">${dominantData.score}% fulfilled ${trendIcon}</div>
+                  <div style="font-size:11px;color:var(--dim);">${dominantData.score}% fulfilled ${trendIcon}</div>
                 </div>
               </div>
               ${metricsHtml}
@@ -7443,15 +7443,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           </div>
 
           <!-- Gap analysis -->
-          <div style="margin-top:12px;border-top:1px solid #333;padding-top:10px;">
-            <div style="font-size:12px;font-weight:600;color:#e8eaf0;margin-bottom:6px;">📊 Interest vs. Achievement</div>
+          <div style="margin-top:12px;border-top:1px solid var(--panel-edge);padding-top:10px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;">📊 Interest vs. Achievement</div>
             ${gapsHtml}
           </div>
 
           <!-- Activity feed -->
-          <div style="margin-top:12px;border-top:1px solid #333;padding-top:10px;">
-            <div style="font-size:12px;font-weight:600;color:#e8eaf0;margin-bottom:6px;">📜 Recent Aspiration Activity</div>
-            ${feedHtml || '<div style="font-size:11px;color:#666;">No recent activity</div>'}
+          <div style="margin-top:12px;border-top:1px solid var(--panel-edge);padding-top:10px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;">📜 Recent Aspiration Activity</div>
+            ${feedHtml || '<div style="font-size:11px;color:var(--dim);">No recent activity</div>'}
           </div>
 
           <button class="btn" id="req-fulfillment-btn" style="font-size: 11px; padding: 3px 10px; margin-top: 8px;">Refresh Stats</button>
