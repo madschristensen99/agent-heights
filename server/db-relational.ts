@@ -185,6 +185,7 @@ export class RelationalPersistence {
         handoffTo: r.handoff_to ?? null,
         createdAt: r.created_at,
         consecutiveFailures: r.consecutive_failures ?? 0,
+        chainTo: r.chain_to ?? null,
       }));
 
       // Load world state
@@ -648,6 +649,7 @@ export class RelationalPersistence {
       handoff_to: s.handoffTo,
       created_at: s.createdAt,
       consecutive_failures: s.consecutiveFailures ?? 0,
+      chain_to: s.chainTo ?? null,
     }));
 
     if (rows.length > 0) {

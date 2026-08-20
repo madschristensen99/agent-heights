@@ -239,10 +239,18 @@ export class FactionManager {
   private factionB: FactionNPC[] = [];
   private lastSpawnTime = 0;
   private toastShown = false;
+  private minHostility: number;
+  private spawnInterval: number;
+  private capPerSide: number;
+  private territoryGfx: Phaser.GameObjects.Graphics | null = null;
+  private territoryUpdateTimer = 0;
 
   constructor(world: WorldLayer) {
     this.world = world;
     this.conflict = world.worldTheme?.conflict ?? null;
+    this.minHostility = this.conflict?.minHostility ?? FACTION_MIN_HOSTILITY;
+    this.spawnInterval = this.conflict?.spawnInterval ?? FACTION_SPAWN_INTERVAL;
+    this.capPerSide = this.conflict?.capPerSide ?? FACTION_CAP_PER_SIDE;
   }
 
   get hasConflict(): boolean { return this.conflict !== null; }
@@ -254,10 +262,10 @@ export class FactionManager {
   update(dt: number, playerX: number, playerY: number, hostility: number): { hit: boolean; damage: number } | null {
     if (!this.conflict) return null;
 
-    // Spawn faction NPCs in conflict zones (hostility >= 3)
-    if (hostility >= FACTION_MIN_HOSTILITY && this.count < FACTION_CAP_PER_SIDE * 2) {
+    // Spawn faction NPCs in conflict zones (hostility >= minHostility)
+    if (hostility >= this.minHostility && this.count < this.capPerSide * 2) {
       const time = this.world.scene.time.now;
-      if (time - this.lastSpawnTime > FACTION_SPAWN_INTERVAL) {
+      if (time - this.lastSpawnTime > this.spawnInterval) {
         this.lastSpawnTime = time;
         this.spawnNearby(playerX, playerY, hostility);
       }
@@ -278,7 +286,39 @@ export class FactionManager {
     // Clean up dead NPCs after a delay (let death animation play)
     this.cleanupDead();
 
+    // Update territory zone markers periodically
+    this.territoryUpdateTimer -= dt;
+    if (this.territoryUpdateTimer <= 0) {
+      this.territoryUpdateTimer = 500;
+      this.updateTerritoryMarkers();
+    }
+
     return crossfire;
+  }
+
+  /** Draw semi-transparent colored circles on the ground around faction NPC clusters. */
+  private updateTerritoryMarkers(): void {
+    if (!this.conflict) return;
+
+    // Lazily create the graphics object
+    if (!this.territoryGfx) {
+      this.territoryGfx = this.world.scene.add.graphics().setDepth(5);
+    }
+    this.territoryGfx.clear();
+
+    // Draw a colored circle around each living faction NPC
+    const drawTerritory = (npcs: FactionNPC[], color: number) => {
+      for (const npc of npcs) {
+        if (!npc.alive_) continue;
+        this.territoryGfx!.fillStyle(color, 0.08);
+        this.territoryGfx!.fillCircle(npc.container.x, npc.container.y, 80);
+        this.territoryGfx!.lineStyle(2, color, 0.15);
+        this.territoryGfx!.strokeCircle(npc.container.x, npc.container.y, 80);
+      }
+    };
+
+    drawTerritory(this.factionA, this.conflict.factionA.color);
+    drawTerritory(this.factionB, this.conflict.factionB.color);
   }
 
   /** Spawn a pair of faction NPCs near the player — one from each side. */
@@ -292,7 +332,7 @@ export class FactionManager {
     }
 
     // Spawn faction A NPC
-    if (this.factionA.length < FACTION_CAP_PER_SIDE) {
+    if (this.factionA.length < this.capPerSide) {
       const angle = Math.random() * Math.PI * 2;
       const dist = 300 + Math.random() * 200;
       const sx = playerX + Math.cos(angle) * dist;
@@ -304,7 +344,7 @@ export class FactionManager {
     }
 
     // Spawn faction B NPC — on opposite side to create crossfire
-    if (this.factionB.length < FACTION_CAP_PER_SIDE) {
+    if (this.factionB.length < this.capPerSide) {
       const angle = Math.random() * Math.PI * 2;
       const dist = 300 + Math.random() * 200;
       const sx = playerX + Math.cos(angle) * dist;
@@ -360,5 +400,6 @@ export class FactionManager {
     this.factionB = [];
     this.lastSpawnTime = 0;
     this.toastShown = false;
+    this.territoryGfx?.clear();
   }
 }

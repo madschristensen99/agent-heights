@@ -411,6 +411,14 @@ export interface ThemeInteractable {
   interactionType: string;
 }
 
+/** Vehicle type definition for themed worlds. */
+export interface ThemeVehicle {
+  type: "car" | "van" | "truck" | "carriage" | "cart" | "canoe";
+  biomes: string[];
+  cap?: number;
+  speed?: number;
+}
+
 /** World generation overrides for a themed world. */
 export interface ThemeWorldgen {
   biomes: string[];
@@ -419,6 +427,7 @@ export interface ThemeWorldgen {
   decorations?: Record<string, number[]>;
   hostileTiles?: Record<string, number[]>;
   hostilityThresholds: number[];
+  vehicles?: ThemeVehicle[];
 }
 
 /** Tile definition for a themed world. */
@@ -455,6 +464,9 @@ export interface ThemeConflictFaction {
 export interface ThemeConflict {
   factionA: ThemeConflictFaction;
   factionB: ThemeConflictFaction;
+  minHostility?: number;
+  spawnInterval?: number;
+  capPerSide?: number;
 }
 
 /** Asset fidelity tier — procedural (free) or AI-generated (paid upgrade). */
@@ -590,6 +602,10 @@ export const TILE = {
   CABIN_DOOR: 50,
   CABIN_WINDOW: 51,
   CABIN_ROOF: 52,
+  BLDG_WALL: 53,
+  BLDG_ROOF: 54,
+  BLDG_WINDOW: 55,
+  BLDG_CORNER: 56,
 } as const;
 
 /** Number of base frames in the world-tiles spritesheet (one per tile type, including 3 water animation frames). */
@@ -794,6 +810,8 @@ export interface AgentSchedule {
   createdAt: number;
   /** Consecutive failed runs — used for exponential backoff. Reset on success. */
   consecutiveFailures?: number;
+  /** Next schedule ID to fire when this schedule's task completes successfully. */
+  chainTo?: string | null;
 }
 
 export interface SchedulePreset {
@@ -1158,8 +1176,13 @@ export type ClientMsg =
   | { type: "save_outfit"; name: string; appearance: CharAppearance }
   | { type: "delete_outfit"; id: string }
   | { type: "create_schedule"; agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }
+  | { type: "create_schedule_chain"; chainName: string; steps: { agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }[] }
+  | { type: "link_schedule_chain"; scheduleId: string; chainTo: string }
   | { type: "update_schedule"; scheduleId: string; enabled?: boolean; name?: string; task?: string; cronExpression?: string }
   | { type: "delete_schedule"; scheduleId: string }
+  | { type: "request_ab_comparison"; agentAId: string; agentBId: string }
+  | { type: "request_efficiency_score" }
+  | { type: "allocate_resources"; allocations: { agentId: string; budget: number }[] }
   | { type: "rename"; agentId: string; name: string }
   | { type: "spectator_join" }
   | { type: "spectator_chat"; fromName: string; text: string }
@@ -1189,7 +1212,8 @@ export type ClientMsg =
   | { type: "list_friends" }
   | { type: "list_online_players" }
   | { type: "seed_aspirations"; aspirations: string[] }
-  | { type: "request_aspiration_dashboard" };
+  | { type: "request_aspiration_dashboard" }
+  | { type: "request_fulfillment" };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1356,7 +1380,12 @@ export type ServerMsg =
   | { type: "room_occupancy"; rooms: { roomId: string; name: string; roomType: RoomType; orgId?: string; playerCount: number; players: { userId: string; name: string }[] }[] }
   | { type: "aspiration_quiz" }
   | { type: "aspiration_dashboard"; scores: Record<string, number>; dominant: string | null; signalCount: number; history: { key: string; aspiration: string; weight: number; timestamp: number }[]; unlocks: { key: string; track: string; threshold: number; label: string; icon: string; unlocked: boolean; currentScore: number }[] }
-  | { type: "aspiration_shift"; oldDominant: string | null; newDominant: string | null };
+  | { type: "aspiration_shift"; oldDominant: string | null; newDominant: string | null }
+  | { type: "ab_comparison"; agentA: { id: string; name: string; model: string; tasksDone: number; successRate: number; avgDurationMin: number; tasks: { task: string; success: boolean; durationMs: number; ts: number }[] }; agentB: { id: string; name: string; model: string; tasksDone: number; successRate: number; avgDurationMin: number; tasks: { task: string; success: boolean; durationMs: number; ts: number }[] }; verdict: string }
+  | { type: "efficiency_score"; throughput: number; successRate: number; autonomyRate: number; chainCount: number; badge: string; badgeColor: string; suggestions: string[] }
+  | { type: "resource_allocation"; totalBudget: number; allocations: { agentId: string; agentName: string; budget: number; utilization: number }[] }
+  | { type: "seasonal_event"; eventName: string; theme: string; icon: string; description: string; decorations: { type: string; x: number; y: number; sprite: string }[] }
+  | { type: "fulfillment_stats"; stats: FulfillmentStats };
 
 // ── Away Report ──────────────────────────────────────────────────────────────
 
@@ -1532,6 +1561,29 @@ export interface AgentGrowth {
   specialty: string | null;
   trend: "improving" | "stagnating" | "declining";
   recentHistory: AgentGrowthPoint[];
+}
+
+// ── Aspiration Fulfillment Stats ─────────────────────────────────────────────
+
+export interface TrackFulfillment {
+  score: number;
+  metrics: { label: string; value: string; raw: number; max: number }[];
+  trend: "improving" | "stagnating" | "declining";
+  badge: string;
+}
+
+export interface FulfillmentStats {
+  warrior: TrackFulfillment;
+  builder: TrackFulfillment;
+  explorer: TrackFulfillment;
+  puzzle_solver: TrackFulfillment;
+  creator: TrackFulfillment;
+  strategist: TrackFulfillment;
+  dominant: string | null;
+  dominantFulfillment: number;
+  detectionScores: { warrior: number; builder: number; explorer: number; puzzle_solver: number; creator: number; strategist: number };
+  gaps: { track: string; detection: number; fulfillment: number; gap: number }[];
+  activityFeed: { ts: number; track: string; icon: string; text: string }[];
 }
 
 // ── Aspiration Unlocks ───────────────────────────────────────────────────────

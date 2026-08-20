@@ -8,6 +8,8 @@ const SILENT_MSG_TYPES = new Set([
   "achievements_sync", "achievements_saved",
   "friends_list", "friend_online", "friend_offline",
   "online_players", "room_occupancy",
+  "ab_comparison", "efficiency_score", "resource_allocation", "seasonal_event",
+  "fulfillment_stats",
 ]);
 
 export class Net {

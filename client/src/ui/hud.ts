@@ -33,7 +33,7 @@ try { const old = localStorage.getItem(OLD_PLAYER_KEY); if (old && !localStorage
 /** In-game styled confirmation modal — replaces browser confirm() to preserve immersion. */
 function inlineConfirm(title: string, message: string, confirmLabel: string, onConfirm: () => void): void {
   const modal = document.createElement("div");
-  modal.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
   modal.innerHTML = `
     <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;max-width:360px;width:90vw;text-align:center;font-family:var(--font-body);box-shadow:var(--shadow-lg);">
       <h3 style="margin:0 0 0.5rem;font-size:1.05rem;color:var(--text);">${title}</h3>
@@ -202,9 +202,16 @@ const ICON = {
   micOff: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v5a3 3 0 0 0 5.12 2.12"/><path d="M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><path d="M12 18v4"/><path d="M8 22h8"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`,
   speakerOn: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
   speakerOff: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
-  concierge: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#58c866" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1a7 7 0 0 1 14 0v1"/><path d="M9 8h6"/><path d="M12 4v8"/><circle cx="12" cy="8" r="1" fill="#58c866"/></svg>`,
+  concierge: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1a7 7 0 0 1 14 0v1"/><path d="M9 8h6"/><path d="M12 4v8"/><circle cx="12" cy="8" r="1" fill="var(--green)"/></svg>`,
   close: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8"/><path d="M11 3l-8 8"/></svg>`,
   trophy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 4H4v3a3 3 0 0 0 3 3"/><path d="M17 4h3v3a3 3 0 0 1-3 3"/></svg>`,
+  market: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
+  rooms: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M14 12h.01"/><path d="M10 12h.01"/></svg>`,
+  social: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  worlds: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+  settings: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  help: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>`,
+  signout: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>`,
 };
 
 export class Hud {
@@ -265,20 +272,21 @@ export class Hud {
       <div class="topbar">
         <span class="logo">AGENT&nbsp;HEIGHTS</span>
         <span id="workspace-name"></span>
-        <button class="btn mini" id="marketplace-btn">🛒 MARKET</button>
-        <button class="btn mini" id="rooms-btn">🚪 ROOMS</button>
-        <button class="btn mini" id="social-btn">👥 SOCIAL</button>
-        <button class="btn mini" id="worlds-btn">🌀 WORLDS</button>
-        <button class="btn mini" id="voice-btn" title="Toggle microphone">${ICON.micOff}</button>
-        <button class="btn mini" id="speaker-btn" title="Toggle speaker (mute/unmute incoming audio)">${ICON.speakerOn}</button>
-        <button class="btn mini" id="settings-btn">⚙ SETTINGS</button>
-        <button class="btn mini" id="help-btn" title="How to play">? HELP</button>
+        <button class="btn mini topbar-btn" id="marketplace-btn">${ICON.market} <span>MARKET</span></button>
+        <button class="btn mini topbar-btn" id="rooms-btn">${ICON.rooms} <span>ROOMS</span></button>
+        <button class="btn mini topbar-btn" id="social-btn">${ICON.social} <span>SOCIAL</span></button>
+        <button class="btn mini topbar-btn" id="worlds-btn">${ICON.worlds} <span>WORLDS</span></button>
+        <button class="btn mini topbar-btn" id="voice-btn" title="Toggle microphone">${ICON.micOff}</button>
+        <button class="btn mini topbar-btn" id="speaker-btn" title="Toggle speaker (mute/unmute incoming audio)">${ICON.speakerOn}</button>
+        <button class="btn mini topbar-btn" id="settings-btn">${ICON.settings} <span>SETTINGS</span></button>
+        <button class="btn mini topbar-btn" id="help-btn" title="How to play">${ICON.help} <span>HELP</span></button>
         <span id="user-menu" style="display:none; margin-left:auto; align-items:center; gap:0.5rem;">
-          <span id="user-email" style="font-size:0.75rem; color:#888; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
-          <button class="btn mini" id="signout-btn" title="Sign out" style="font-size:0.75rem;">⏻</button>
+          <span id="user-email" style="font-size:0.75rem; color:var(--dim); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+          <button class="btn mini topbar-btn" id="signout-btn" title="Sign out" style="font-size:0.75rem;">${ICON.signout}</button>
         </span>
         <span id="conn" class="conn">●</span>
       </div>
+      <div id="seasonal-banner" style="display:none;"></div>
       <div class="stats-bar" id="stats-bar"></div>
       <div class="panel roster" id="roster"></div>
       <div class="panel feed" id="feed">
@@ -434,7 +442,7 @@ export class Hud {
           <button class="mobile-action-btn" id="ma-teleport" title="Teleport">Q</button>
         </div>
       </div>
-      <div id="server-restart-overlay" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(42,56,72,0.4); align-items:center; justify-content:center; flex-direction:column; gap:1rem; backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
+      <div id="server-restart-overlay" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; flex-direction:column; gap:1rem; backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
         <div style="font-size:1.5rem; font-weight:bold; color:var(--text); font-family:var(--font-body); display:flex; align-items:center; gap:0.6rem;">
           <svg width="28" height="28" viewBox="0 0 48 48" style="animation: restart-spin 1.2s linear infinite;" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M38.8 18.6a16 16 0 1 0 1.2 6.4"/>
@@ -486,7 +494,7 @@ export class Hud {
       const signoutBtn = document.getElementById("signout-btn")!;
       signoutBtn.addEventListener("click", () => {
         const modal = document.createElement("div");
-        modal.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+        modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
         modal.innerHTML = `
           <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;max-width:340px;width:90vw;text-align:center;box-shadow:var(--shadow-lg);font-family:var(--font-body);">
             <h3 style="margin:0 0 0.5rem;font-size:1.1rem;color:var(--text);">Sign out of your office?</h3>
@@ -575,6 +583,33 @@ export class Hud {
     // Aspiration onboarding quiz
     store.aspirationQuizListeners.push(() => {
       this.showAspirationQuiz();
+    });
+
+    // Aspiration dashboard data updates — re-render if tab is active
+    store.aspirationDashboardListeners.push(() => {
+      if (this._achTab === "aspiration") {
+        this.renderAchievements();
+      }
+    });
+
+    // A/B comparison result — re-render experiment view if active
+    store.abComparisonListeners.push(() => {
+      if (this.experimentView) this.renderExperimentView(document.getElementById("experiment-view")!);
+    });
+
+    // Efficiency score — re-render dashboard if active
+    store.efficiencyScoreListeners.push(() => {
+      if (this.dashboardView) this.renderAutomationDashboard(document.getElementById("dashboard-view")!);
+    });
+
+    // Resource allocation — re-render if dashboard is active
+    store.resourceAllocationListeners.push(() => {
+      if (this.dashboardView) this.renderAutomationDashboard(document.getElementById("dashboard-view")!);
+    });
+
+    // Fulfillment stats — re-render dashboard if active
+    store.fulfillmentListeners.push(() => {
+      if (this.dashboardView) this.renderAutomationDashboard(document.getElementById("dashboard-view")!);
     });
 
     // Decomposition stream from Office Manager
@@ -929,7 +964,7 @@ export class Hud {
       voice.start().then(() => {
         if (this.voiceBtn) {
           this.voiceBtn.innerHTML = ICON.micOn;
-          this.voiceBtn.style.color = "#4caf50";
+          this.voiceBtn.style.color = "var(--green)";
         }
         const maVoice = document.getElementById("ma-voice");
         if (maVoice) { maVoice.innerHTML = ICON.micOn; maVoice.classList.add("primary"); }
@@ -954,7 +989,7 @@ export class Hud {
     voice.setOutputMuted(newMuted);
     if (this.speakerBtn) {
       this.speakerBtn.innerHTML = newMuted ? ICON.speakerOff : ICON.speakerOn;
-      this.speakerBtn.style.color = newMuted ? "#f44336" : "";
+      this.speakerBtn.style.color = newMuted ? "var(--red)" : "";
     }
   }
 
@@ -987,7 +1022,7 @@ export class Hud {
       : `<li>Open ${browserName} settings → Privacy → Microphone</li><li>Allow microphone access for this site</li><li>Refresh this page and click the 🎤 button again</li>`;
 
     const modal = document.createElement("div");
-    modal.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
     modal.innerHTML = `
       <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:90vw;color:var(--text);box-shadow:var(--shadow-lg);font-family:var(--font-body);">
         <h3 style="margin:0 0 0.5rem;font-size:1.1rem;color:var(--red);">${title}</h3>
@@ -1585,12 +1620,12 @@ export class Hud {
 
     const steps: TourStep[] = [
       {
-        icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "#58c866"),
+        icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "var(--green)"),
         title: "Welcome to Agent Heights",
         body: "You're the boss of a virtual office full of <strong>real AI agents</strong>. Each employee at a desk is a live AI that reads, writes, and runs code. Your job: hire them, give them tasks, and watch them work. Let's take a quick tour.",
       },
       {
-        icon: svgIcon('<path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>', "#8b7355"),
+        icon: svgIcon('<path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>', "var(--amber)"),
         title: "Hire Your First Agent",
         body: "Click <strong>+ HIRE AGENT</strong> to create a custom agent from scratch — pick a name, role, and personality. Or browse the <strong>MARKET</strong> for pre-built agents with specialized skills.",
         targetId: "hire-btn",
@@ -1602,19 +1637,19 @@ export class Hud {
         targetId: "marketplace-btn",
       },
       {
-        icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', "#e87de8"),
+        icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', "var(--accent)"),
         title: "Your Office Manager",
         body: "The <strong>Office Manager</strong> runs the day-to-day — she can hire agents, reorganize desks, and manage your office layout. Click her desk to interact.",
         cameraTarget: "officeManager",
       },
       {
-        icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "#58c866"),
+        icon: svgIcon('<path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>', "var(--green)"),
         title: "Meet Hermes",
         body: "The agent at the front desk is <strong>Hermes</strong> — your office concierge. Hermes can relay messages to other agents, manage your calendar, and connect to external platforms like Slack, Discord, and Telegram. Click Hermes to start a conversation anytime.",
         cameraTarget: "hermes",
       },
       {
-        icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', "#53b86b"),
+        icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', "var(--green)"),
         title: "Office Feed",
         body: "The <strong>Office Feed</strong> streams real-time activity from all your agents — tool calls, output, and status changes. Type a task here to assign it to everyone at once.",
         targetId: "feed",
@@ -1858,7 +1893,7 @@ export class Hud {
 
   private openSocialPanel(): void {
     const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
     overlay.id = "social-overlay";
 
     const onlineFriends = this.store.friends.filter(f => f.online);
@@ -2054,7 +2089,7 @@ export class Hud {
 
   private openRoomsPanel(): void {
     const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;inset:0;background:rgba(42,56,72,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
     overlay.id = "rooms-overlay";
 
     const players = Array.from(this.store.roomPlayers.values());
@@ -2816,9 +2851,9 @@ export class Hud {
 
     modal.hidden = false;
     const subNotice = this.store.subscriptionActive ? "" : `
-      <div style="margin-bottom:0.8rem;padding:0.6rem 0.8rem;border-radius:8px;background:rgba(229,93,93,0.15);border:1px solid rgba(229,93,93,0.3);color:#e05d5d;font-size:0.82rem;line-height:1.3;">
+      <div style="margin-bottom:0.8rem;padding:0.6rem 0.8rem;border-radius:8px;background:rgba(240,101,101,0.15);border:1px solid rgba(240,101,101,0.3);color:var(--red);font-size:0.82rem;line-height:1.3;">
         <strong>Subscription required.</strong> Pay a $0.99 one-time entry fee to hire agents and run tasks. Subscribe for more agents and higher usage caps.
-        <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:#58c866;color:#0d0d0d;font-size:0.8rem;font-weight:700;cursor:pointer;">Get started →</button>
+        <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:var(--green);color:var(--bg);font-size:0.8rem;font-weight:700;cursor:pointer;">Get started →</button>
       </div>`;
 
     const traitSliders = ([
@@ -3290,6 +3325,29 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     });
   }
 
+  private updateSeasonalBanner(): void {
+    const banner = document.getElementById("seasonal-banner");
+    if (!banner) return;
+    const event = this.store.seasonalEvent;
+    if (!event) {
+      banner.style.display = "none";
+      return;
+    }
+    banner.style.display = "flex";
+    banner.style.alignItems = "center";
+    banner.style.gap = "8px";
+    banner.style.padding = "4px 12px";
+    banner.style.background = "linear-gradient(90deg, #1a1d2e, #2a1d3e)";
+    banner.style.borderBottom = "1px solid #33364a";
+    banner.style.fontSize = "12px";
+    banner.style.color = "#e8eaf0";
+    banner.innerHTML = `
+      <span style="font-size:18px;">${event.icon}</span>
+      <span style="font-weight:600;">${event.eventName}</span>
+      <span style="color:#9aa0b0;">${event.description.replace(/</g, "&lt;")}</span>
+    `;
+  }
+
   private render(): void {
     document.getElementById("workspace-name")!.textContent = this.store.player
       ? `${this.store.player.workspace} · boss: ${this.store.player.name}`
@@ -3297,6 +3355,9 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const connEl = document.getElementById("conn")!;
     connEl.classList.toggle("ok", this.store.connected);
     connEl.classList.toggle("updating", this.store.serverRestarting);
+
+    // Seasonal event banner
+    this.updateSeasonalBanner();
 
     // Show/hide the server restarting overlay
     const overlay = document.getElementById("server-restart-overlay");
@@ -3363,12 +3424,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       <div style="text-align: center; animation: elegant-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
         <div style="font-size: 72px; margin-bottom: 12px;">${emoji}</div>
         <div style="font-size: 32px; font-weight: 900; color: ${color}; text-shadow: 0 0 20px ${color}66; margin-bottom: 8px;">ELEGANT SOLUTION</div>
-        <div style="font-size: 18px; color: #e8eaf0; margin-bottom: 16px;">${tierLabel} TIER</div>
-        <div style="font-size: 14px; color: #9aa0b0; max-width: 400px; margin: 0 auto;">
+        <div style="font-size: 18px; color: var(--text); margin-bottom: 16px;">${tierLabel} TIER</div>
+        <div style="font-size: 14px; color: var(--dim); max-width: 400px; margin: 0 auto;">
           ${s.subtaskCount} subtasks · 0 rework · ${s.maxParallel} parallel paths · ${s.longestPath}-deep chain
         </div>
         <div style="font-size: 48px; font-weight: 900; color: ${color}; margin-top: 16px;">${s.grade}</div>
-        <div style="font-size: 14px; color: #6b7280; margin-top: 8px;">${s.summary}</div>
+        <div style="font-size: 14px; color: var(--dim); margin-top: 8px;">${s.summary}</div>
       </div>
     `;
     document.body.appendChild(overlay);
@@ -3407,22 +3468,22 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     card.id = "breakthrough-card";
     card.style.cssText = `
       position: fixed; bottom: 20px; right: 20px; z-index: 9999;
-      background: linear-gradient(135deg, #1a1d2e 0%, #2a2d4e 100%);
-      border: 2px solid #4ade80; border-radius: 12px; padding: 16px 20px;
+      background: linear-gradient(135deg, var(--panel) 0%, var(--panel-soft) 100%);
+      border: 2px solid var(--green); border-radius: 12px; padding: 16px 20px;
       max-width: 360px; box-shadow: 0 8px 32px rgba(74, 222, 128, 0.3);
       animation: elegant-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-      font-family: var(--font, sans-serif);
+      font-family: var(--font-body, sans-serif);
     `;
     card.innerHTML = `
       <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
         <span style="font-size: 28px;">${icon}</span>
         <div>
-          <div style="font-size: 16px; font-weight: 800; color: #4ade80; text-shadow: 0 0 12px rgba(74, 222, 128, 0.4);">BREAKTHROUGH!</div>
-          <div style="font-size: 12px; color: #9aa0b0;">${bt.agentName}</div>
+          <div style="font-size: 16px; font-weight: 800; color: var(--green); text-shadow: 0 0 12px rgba(74, 222, 128, 0.4);">BREAKTHROUGH!</div>
+          <div style="font-size: 12px; color: var(--dim);">${bt.agentName}</div>
         </div>
-        <button style="margin-left: auto; background: none; border: none; color: #6b7280; cursor: pointer; font-size: 16px;" onclick="this.parentElement.parentElement.remove()">✕</button>
+        <button style="margin-left: auto; background: none; border: none; color: var(--dim); cursor: pointer; font-size: 16px;" onclick="this.parentElement.parentElement.remove()">✕</button>
       </div>
-      <div style="font-size: 13px; color: #e8eaf0; line-height: 1.5;">${bt.description}</div>
+      <div style="font-size: 13px; color: var(--text); line-height: 1.5;">${bt.description}</div>
     `;
     document.body.appendChild(card);
 
@@ -5121,6 +5182,74 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
       pipelineView.innerHTML = "";
       pipelineView.appendChild(createPipelineGraph(this.store));
+      // Add chain creation UI
+      const chainDiv = document.createElement("div");
+      chainDiv.style.marginTop = "16px";
+      chainDiv.style.padding = "12px";
+      chainDiv.style.background = "var(--card-bg, #1e2130)";
+      chainDiv.style.border = "1px solid var(--border, #33364a)";
+      chainDiv.style.borderRadius = "8px";
+      const agents = [...this.store.agents.values()].filter(
+        (a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard",
+      );
+      const agentOptions = agents.map((a) => `<option value="${a.id}">${a.name.replace(/</g, "&lt;")}</option>`).join("");
+      chainDiv.innerHTML = `
+        <div style="font-size:14px;font-weight:700;color:var(--text,#e8eaf0);margin-bottom:8px;">🔗 Compound Schedule Chain</div>
+        <div style="font-size:11px;color:#9aa0b0;margin-bottom:8px;">Create a multi-step pipeline where each schedule triggers the next on completion. Only the first step fires on cron; the rest auto-trigger.</div>
+        <input id="chain-name" placeholder="Chain name (e.g. Daily Report Pipeline)" style="width:100%;font-size:12px;padding:4px 8px;margin-bottom:8px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;" />
+        <div id="chain-steps" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn" id="chain-add-step" style="font-size:11px;padding:4px 10px;">+ Add Step</button>
+          <button class="btn primary" id="chain-create" style="font-size:11px;padding:4px 10px;margin-left:auto;">Create Chain</button>
+        </div>
+      `;
+      pipelineView.appendChild(chainDiv);
+
+      // Chain step builder
+      let stepCount = 0;
+      const stepsContainer = chainDiv.querySelector("#chain-steps") as HTMLElement;
+      const addStep = () => {
+        stepCount++;
+        const stepDiv = document.createElement("div");
+        stepDiv.style.cssText = "display:grid;grid-template-columns:30px 1fr 1fr 1fr;gap:4px;align-items:center;";
+        stepDiv.innerHTML = `
+          <span style="font-size:11px;color:#6b7280;">${stepCount}.</span>
+          <select class="chain-step-agent" style="font-size:11px;padding:3px 6px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;">
+            <option value="">Agent…</option>
+            ${agentOptions}
+          </select>
+          <input class="chain-step-task" placeholder="Task…" style="font-size:11px;padding:3px 6px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;" />
+          <select class="chain-step-cron" style="font-size:11px;padding:3px 6px;background:var(--card-bg,#1e2130);color:var(--text,#e8eaf0);border:1px solid var(--border,#33364a);border-radius:4px;">
+            <option value="0 * * * *">Hourly</option>
+            <option value="0 9 * * *">Daily 9am</option>
+            <option value="0 9 * * 1">Weekly Mon</option>
+            <option value="*/15 * * * *">Every 15min</option>
+            <option value="*/30 * * * *">Every 30min</option>
+            <option value="0 */6 * * *">Every 6h</option>
+          </select>
+        `;
+        stepsContainer.appendChild(stepDiv);
+      };
+      // Start with 2 steps
+      addStep();
+      addStep();
+      chainDiv.querySelector("#chain-add-step")!.addEventListener("click", (e) => { e.preventDefault(); addStep(); });
+      chainDiv.querySelector("#chain-create")!.addEventListener("click", (e) => {
+        e.preventDefault();
+        const name = (chainDiv.querySelector("#chain-name") as HTMLInputElement).value.trim();
+        if (!name) return;
+        const stepEls = stepsContainer.querySelectorAll(":scope > div");
+        const steps: { agentId: string; name: string; task: string; cronExpression: string }[] = [];
+        stepEls.forEach((el, i) => {
+          const agentId = (el.querySelector(".chain-step-agent") as HTMLSelectElement).value;
+          const task = (el.querySelector(".chain-step-task") as HTMLInputElement).value.trim();
+          const cron = (el.querySelector(".chain-step-cron") as HTMLSelectElement).value;
+          if (agentId && task) steps.push({ agentId, name: `Step ${i + 1}`, task, cronExpression: cron });
+        });
+        if (steps.length < 2) return;
+        this.net.send({ type: "create_schedule_chain", chainName: name, steps });
+      });
+
       return;
     } else if (this.dashboardView && dashboardUnlocked) {
       boardColumns.hidden = true;
@@ -5140,6 +5269,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       if (decorationToggle) decorationToggle.textContent = "🪑 Decorate";
       if (techTreeToggle) techTreeToggle.textContent = "🌳 Tech Tree";
       this.renderAutomationDashboard(dashboardView);
+      this.wireDashboardButtons();
       return;
     } else if (this.decomposeView && decomposeUnlocked) {
       boardColumns.hidden = true;
@@ -5315,7 +5445,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       const agent = c.assignedAgentId ? this.store.agents.get(c.assignedAgentId) : null;
       const statusDot = agent ? ` <span class="dot ${agent.status}"></span>` : "";
       const assignee = assigned
-        ? `<span class="card-assignee" style="color:${agent?.accent ?? "#9aa0b0"}">${esc(assigned)}${statusDot}</span>`
+        ? `<span class="card-assignee" style="color:${agent?.accent ?? 'var(--dim)'}">${esc(assigned)}${statusDot}</span>`
         : `<span class="card-unassigned">unassigned</span>`;
 
       const agentOptions =
@@ -5337,8 +5467,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
       const typeIcon: Record<string, string> = { task: "📋", chat: "💬", review: "🔍", goal: "🎯" };
       const typeBadge = c.type ? `<span class="card-type-badge">${typeIcon[c.type] ?? "📋"}</span>` : "";
-      const catColors: Record<string, string> = { frontend: "#61dafb", backend: "#68a063", devops: "#326ce5", data: "#ff6b6b", writing: "#f9ca24", research: "#a78bfa", crypto: "#f7931a", general: "#9aa0b0" };
-      const catBadge = c.category ? `<span class="card-cat-badge" style="color:${catColors[c.category] ?? "#9aa0b0"}">${esc(c.category)}</span>` : "";
+      const catColors: Record<string, string> = { frontend: "#61dafb", backend: "#68a063", devops: "#326ce5", data: "var(--red)", writing: "var(--yellow)", research: "var(--purple)", crypto: "#f7931a", general: "var(--dim)" };
+      const catBadge = c.category ? `<span class="card-cat-badge" style="color:${catColors[c.category] ?? 'var(--dim)'}">${esc(c.category)}</span>` : "";
       const progressBar = (c.type === "goal" && c.progress != null && c.progress > 0)
         ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${c.progress}%"></div></div>`
         : "";
@@ -5742,12 +5872,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     html += `<button class="ach-tab${activeTab === "achievements" ? " active" : ""}" id="ach-tab-achievements">Achievements</button>`;
     html += `<button class="ach-tab${activeTab === "stats" ? " active" : ""}" id="ach-tab-stats">Combat Record</button>`;
     html += `<button class="ach-tab${activeTab === "leaderboards" ? " active" : ""}" id="ach-tab-leaderboards">Leaderboards</button>`;
+    html += `<button class="ach-tab${activeTab === "aspiration" ? " active" : ""}" id="ach-tab-aspiration">⭐ Aspiration</button>`;
     html += `</div>`;
     html += `</div>`;
     if (activeTab === "stats") {
       html += this.renderStatsTab();
     } else if (activeTab === "leaderboards") {
       html += this.renderLeaderboardsTab();
+    } else if (activeTab === "aspiration") {
+      html += this.renderAspirationTab();
     } else {
       // Aspiration-aware "Recommended for You" section
       const dominant = this.store.aspirationProfile?.dominant ?? null;
@@ -5813,15 +5946,222 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       this._achTab = "leaderboards";
       this.renderAchievements();
     });
+    document.getElementById("ach-tab-aspiration")?.addEventListener("click", () => {
+      this._achTab = "aspiration";
+      this.net.send({ type: "request_aspiration_dashboard" });
+      this.renderAchievements();
+    });
+    // If aspiration tab is active, request dashboard data and listen for updates
+    if (this._achTab === "aspiration") {
+      this.net.send({ type: "request_aspiration_dashboard" });
+    }
   }
 
-  private _achTab: "achievements" | "stats" | "leaderboards" = "achievements";
+  private _achTab: "achievements" | "stats" | "leaderboards" | "aspiration" = "achievements";
 
   private formatSpeedrun(ms: number): string {
     if (!ms || ms <= 0) return "—";
     const m = Math.floor(ms / 60000);
     const s = Math.floor((ms % 60000) / 1000);
     return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  private renderAspirationTab(): string {
+    const TRACKS = [
+      { key: "warrior", label: "Warrior", icon: "⚔️", color: "#ef4444" },
+      { key: "builder", label: "Builder", icon: "🔨", color: "var(--green)" },
+      { key: "explorer", label: "Explorer", icon: "🧭", color: "#3b82f6" },
+      { key: "puzzle_solver", label: "Puzzle Solver", icon: "🧩", color: "#a855f7" },
+      { key: "creator", label: "Creator", icon: "🎨", color: "#ec4899" },
+      { key: "strategist", label: "Strategist", icon: "♟️", color: "#f59e0b" },
+    ];
+
+    const SIGNAL_LABELS: Record<string, string> = {
+      creature_killed: "Creature defeated", boss_slain: "Boss slain", weapon_collected: "Weapon collected",
+      crown_placed: "Crown placed", speedrun_recorded: "Speedrun recorded", world_explored: "World explored",
+      handoff_created: "Agent handoff created", scheduled_task: "Scheduled task",
+      task_completed_unattended: "Task completed autonomously", multiple_agents_working: "Multiple agents working",
+      pipeline_created: "Pipeline created", agent_rehired_different_config: "Agent rehired with new config",
+      mcp_server_installed: "MCP server installed", new_agent_model_tried: "New model tried",
+      world_generated: "World generated", agent_fired: "Agent fired",
+      manual_subtask_with_deps: "Subtask with dependencies", phase_gate_used: "Phase gate used",
+      task_zero_rework: "Zero-rework task", manual_agent_assignment: "Manual agent assignment",
+      office_theme_changed: "Office theme changed", wardrobe_used: "Wardrobe used",
+      character_customized: "Character customized", trophy_room_shared: "Trophy room viewed",
+      office_visited: "Office visited", org_created: "Organization created",
+      agent_count_grew: "Agent count grew", daily_return_streak: "Daily return",
+      agent_performance_improved: "Agent performance improved", strategic_hire: "Strategic hire",
+    };
+
+    const dash = this.store.aspirationDashboard;
+    if (!dash) {
+      return `<div style="text-align:center;padding:40px;color:#888;">Loading aspiration data…</div>`;
+    }
+
+    const scores = TRACKS.map((t) => dash.scores[t.key] ?? 0);
+    const dominant = dash.dominant;
+    const dominantInfo = TRACKS.find((t) => t.key === dominant);
+
+    let html = `<div style="padding:16px;max-height:70vh;overflow-y:auto;">`;
+
+    // ── Header with dominant aspiration ──
+    html += `<div style="text-align:center;margin-bottom:20px;">`;
+    if (dominantInfo) {
+      html += `<div style="font-size:28px;margin-bottom:4px;">${dominantInfo.icon}</div>`;
+      html += `<div style="font-size:18px;font-weight:600;color:${dominantInfo.color};">Dominant: ${dominantInfo.label}</div>`;
+      html += `<div style="font-size:13px;color:#888;margin-top:4px;">${dash.signalCount} signals recorded</div>`;
+    } else {
+      html += `<div style="font-size:16px;color:#888;">No dominant aspiration yet</div>`;
+      html += `<div style="font-size:13px;color:#666;margin-top:4px;">Keep playing — your profile emerges after ~5 signals</div>`;
+    }
+    html += `</div>`;
+
+    // ── Radar Chart (canvas) ──
+    html += `<div style="display:flex;justify-content:center;margin-bottom:24px;">`;
+    html += `<canvas id="aspiration-radar" width="280" height="280" style="background:#111322;border-radius:12px;"></canvas>`;
+    html += `</div>`;
+
+    // ── Score bars ──
+    html += `<div style="margin-bottom:24px;">`;
+    for (const t of TRACKS) {
+      const score = dash.scores[t.key] ?? 0;
+      const pct = Math.round(score * 100);
+      const isDominant = t.key === dominant;
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">`;
+      html += `<span style="font-size:16px;width:24px;">${t.icon}</span>`;
+      html += `<span style="font-size:13px;width:100px;color:var(--text);">${t.label}</span>`;
+      html += `<div style="flex:1;height:8px;background:var(--panel-edge-soft);border-radius:4px;overflow:hidden;">`;
+      html += `<div style="width:${pct}%;height:100%;background:${t.color};border-radius:4px;transition:width 0.3s;"></div>`;
+      html += `</div>`;
+      html += `<span style="font-size:12px;width:36px;text-align:right;color:${isDominant ? t.color : "var(--dim)"};font-weight:${isDominant ? "600" : "400"};">${pct}%</span>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+
+    // ── Unlock Progress ──
+    html += `<div style="margin-bottom:24px;">`;
+    html += `<div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px;">🔓 Feature Unlocks</div>`;
+    for (const u of dash.unlocks) {
+      const trackInfo = TRACKS.find((t) => t.key === u.track);
+      const color = trackInfo?.color ?? "var(--dim)";
+      const pct = Math.min(100, Math.round((u.currentScore / u.threshold) * 100));
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 12px;background:var(--panel);border-radius:8px;border:1px solid ${u.unlocked ? color : "var(--panel-edge)"};">`;
+      html += `<span style="font-size:18px;">${u.icon}</span>`;
+      html += `<div style="flex:1;">`;
+      html += `<div style="font-size:13px;color:${u.unlocked ? color : "var(--dim)"};font-weight:${u.unlocked ? "600" : "400"};">${u.label}</div>`;
+      html += `<div style="height:6px;background:var(--panel-edge-soft);border-radius:3px;overflow:hidden;margin-top:4px;">`;
+      html += `<div style="width:${pct}%;height:100%;background:${u.unlocked ? color : "var(--panel-edge)"};border-radius:3px;"></div>`;
+      html += `</div>`;
+      html += `</div>`;
+      html += `<span style="font-size:11px;color:${u.unlocked ? color : "var(--dim)"};width:50px;text-align:right;">${u.unlocked ? "✓ Unlocked" : `${pct}%`}</span>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+
+    // ── Signal History ──
+    html += `<div>`;
+    html += `<div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px;">📡 Recent Signals</div>`;
+    if (dash.history.length === 0) {
+      html += `<div style="text-align:center;color:var(--dim);padding:16px;font-size:13px;">No signals yet — your actions will appear here</div>`;
+    } else {
+      const recent = dash.history.slice(-20).reverse();
+      for (const h of recent) {
+        const trackInfo = TRACKS.find((t) => t.key === h.aspiration);
+        const label = SIGNAL_LABELS[h.key] ?? h.aspiration;
+        const time = new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;margin-bottom:4px;background:var(--panel);border-radius:6px;">`;
+        html += `<span style="font-size:14px;">${trackInfo?.icon ?? "•"}</span>`;
+        html += `<span style="flex:1;font-size:12px;color:var(--text);">${label}</span>`;
+        html += `<span style="font-size:11px;color:var(--dim);">${time}</span>`;
+        html += `</div>`;
+      }
+    }
+    html += `</div>`;
+
+    html += `</div>`;
+
+    // Schedule radar chart drawing after DOM update
+    requestAnimationFrame(() => this.drawRadarChart("aspiration-radar", scores, TRACKS));
+
+    return html;
+  }
+
+  private drawRadarChart(canvasId: string, scores: number[], tracks: { key: string; label: string; color: string }[]): void {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const radius = Math.min(cx, cy) - 40;
+    const n = scores.length;
+    const angleStep = (Math.PI * 2) / n;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw grid rings (0.25, 0.5, 0.75, 1.0)
+    for (let ring = 1; ring <= 4; ring++) {
+      const r = (radius * ring) / 4;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = ring === 4 ? "var(--panel-edge)" : "var(--panel-edge-soft)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Draw axis lines and labels
+    for (let i = 0; i < n; i++) {
+      const angle = angleStep * i - Math.PI / 2;
+      const x = cx + radius * Math.cos(angle);
+      const y = cy + radius * Math.sin(angle);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = "var(--panel-edge-soft)";
+      const labelX = cx + (radius + 20) * Math.cos(angle);
+      const labelY = cy + (radius + 20) * Math.sin(angle);
+      ctx.fillStyle = tracks[i].color;
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(tracks[i].label, labelX, labelY);
+    }
+
+    // Draw data polygon
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const angle = angleStep * i - Math.PI / 2;
+      const r = radius * Math.min(1, scores[i]);
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "rgba(93, 217, 127, 0.15)";
+    ctx.fill();
+    ctx.strokeStyle = "var(--green)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw data points
+    for (let i = 0; i < n; i++) {
+      const angle = angleStep * i - Math.PI / 2;
+      const r = radius * Math.min(1, scores[i]);
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = tracks[i].color;
+      ctx.fill();
+    }
   }
 
   private renderStatsTab(): string {
@@ -5996,6 +6336,56 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     panel.innerHTML = `<div class="decomposing-header">📋 Office Manager is planning...</div><pre class="decomposing-text">${displayText.replace(/</g, "&lt;")}</pre>`;
   }
 
+  private renderABComparison(agents: { id: string; name: string }[]): string {
+    const options = agents.map((a) => `<option value="${a.id}">${a.name.replace(/</g, "&lt;")}</option>`).join("");
+    const result = this.store.abComparison;
+
+    let resultHtml = "";
+    if (result) {
+      const a = result.agentA;
+      const b = result.agentB;
+      const aSuccess = Math.round(a.successRate * 100);
+      const bSuccess = Math.round(b.successRate * 100);
+      const aDur = a.avgDurationMin.toFixed(1);
+      const bDur = b.avgDurationMin.toFixed(1);
+
+      resultHtml = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+          <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:8px;padding:10px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">${a.name.replace(/</g, "&lt;")}</div>
+            <div style="font-size:11px;color:var(--dim);">Model: ${a.model.replace(/</g, "&lt;")}</div>
+            <div style="font-size:11px;color:var(--dim);">Tasks: ${a.tasksDone} · Success: ${aSuccess}% · Avg: ${aDur}min</div>
+          </div>
+          <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:8px;padding:10px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">${b.name.replace(/</g, "&lt;")}</div>
+            <div style="font-size:11px;color:var(--dim);">Model: ${b.model.replace(/</g, "&lt;")}</div>
+            <div style="font-size:11px;color:var(--dim);">Tasks: ${b.tasksDone} · Success: ${bSuccess}% · Avg: ${bDur}min</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600;">📊 ${result.verdict.replace(/</g, "&lt;")}</div>
+      `;
+    }
+
+    return `
+      <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">⚖️ A/B Agent Comparison</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+          <select id="ab-agent-a" style="font-size:12px;padding:4px 8px;background:var(--panel);color:var(--text);border:1px solid var(--panel-edge);border-radius:4px;flex:1;">
+            <option value="">Select agent A…</option>
+            ${options}
+          </select>
+          <span style="font-size:14px;color:var(--dim);">vs</span>
+          <select id="ab-agent-b" style="font-size:12px;padding:4px 8px;background:var(--panel);color:var(--text);border:1px solid var(--panel-edge);border-radius:4px;flex:1;">
+            <option value="">Select agent B…</option>
+            ${options}
+          </select>
+          <button class="btn" id="ab-compare-btn" style="font-size:12px;padding:4px 12px;">Compare</button>
+        </div>
+        ${resultHtml}
+      </div>
+    `;
+  }
+
   private renderExperimentView(container: HTMLElement): void {
     const entries = this.store.experimentLog;
     const typeIcons: Record<string, string> = {
@@ -6066,13 +6456,32 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       `;
     }).join("");
 
+    const agents = [...this.store.agents.values()].filter(
+      (a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard",
+    );
+    const abUnlocked = this.store.aspirationUnlocks?.abComparison ?? false;
+    const abHtml = abUnlocked && agents.length >= 2 ? this.renderABComparison(agents) : "";
+
     container.innerHTML = `
       <div style="margin-bottom: 12px;">
         <div style="font-size: 16px; font-weight: 700; color: var(--text, #e8eaf0);">🧪 Experiment Log</div>
         <div style="font-size: 12px; color: #9aa0b0; margin-top: 2px;">${entries.length} experiment${entries.length === 1 ? "" : "s"} logged. Every hire, fire, and config change is a data point.</div>
       </div>
+      ${abHtml}
       ${entriesHtml}
     `;
+
+    // Wire A/B comparison button
+    const abBtn = document.getElementById("ab-compare-btn");
+    if (abBtn) {
+      abBtn.addEventListener("click", () => {
+        const selA = document.getElementById("ab-agent-a") as HTMLSelectElement;
+        const selB = document.getElementById("ab-agent-b") as HTMLSelectElement;
+        if (selA && selB && selA.value && selB.value && selA.value !== selB.value) {
+          this.net.send({ type: "request_ab_comparison", agentAId: selA.value, agentBId: selB.value });
+        }
+      });
+    }
 
     // Wire verdict selects
     container.querySelectorAll<HTMLSelectElement>(".exp-verdict-select").forEach((sel) => {
@@ -6545,7 +6954,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     // Score display if available
     if (scoreData) {
       const s = scoreData.score;
-      const gradeColor = s.grade === "S" ? "#ffd700" : s.grade === "A" ? "#58c866" : s.grade === "B" ? "#3a8cd4" : s.grade === "C" ? "#f0ad4e" : "#e74c3c";
+      const gradeColor = s.grade === "S" ? "#ffd700" : s.grade === "A" ? "var(--green)" : s.grade === "B" ? "var(--accent)" : s.grade === "C" ? "var(--amber)" : "var(--red)";
       html += `
         <div class="dash-section" style="border-color: ${gradeColor}; border-width: 2px;">
           <div class="dash-section-title" style="display: flex; justify-content: space-between; align-items: center;">
@@ -6624,15 +7033,15 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         // Show existing score if present
         if (goal.decompositionScore) {
           const s = goal.decompositionScore;
-          const gradeColor = s.grade === "S" ? "#ffd700" : s.grade === "A" ? "#58c866" : s.grade === "B" ? "#3a8cd4" : s.grade === "C" ? "#f0ad4e" : "#e74c3c";
-          html += `<div style="margin-top: 8px; padding: 8px; background: rgba(20,22,30,0.4); border-radius: 4px; text-align: center;"><span style="font-size: 24px; font-weight: 900; color: ${gradeColor};">${s.grade}</span> <span style="color: #9aa0b0; font-size: 12px;">${s.overall}/100 — ${s.summary}</span></div>`;
+          const gradeColor = s.grade === "S" ? "#ffd700" : s.grade === "A" ? "var(--green)" : s.grade === "B" ? "var(--accent)" : s.grade === "C" ? "var(--amber)" : "var(--red)";
+          html += `<div style="margin-top: 8px; padding: 8px; background: rgba(20,22,30,0.4); border-radius: 4px; text-align: center;"><span style="font-size: 24px; font-weight: 900; color: ${gradeColor};">${s.grade}</span> <span style="color: var(--dim); font-size: 12px;">${s.overall}/100 — ${s.summary}</span></div>`;
         }
 
         html += `</div>`;
       }
       html += `</div>`;
     } else {
-      html += `<div class="dash-section"><div class="dash-section-body" style="text-align: center; color: #6b7280;">No goals yet. Create one above to start decomposing.</div></div>`;
+      html += `<div class="dash-section"><div class="dash-section-body" style="text-align: center; color: var(--dim);">No goals yet. Create one above to start decomposing.</div></div>`;
     }
 
     container.innerHTML = html;
@@ -6686,7 +7095,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
   private renderAutomationDashboard(container: HTMLElement): void {
     const stats = this.store.automationStats;
     if (!stats) {
-      container.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #6b7280; font-size: 14px;">Loading automation stats…</div>`;
+      container.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--dim); font-size: 14px;">Loading automation stats…</div>`;
       return;
     }
 
@@ -6695,8 +7104,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     const automationPct = Math.round(stats.automationRate * 100);
     const avgMin = stats.avgCompletionMin.toFixed(1);
 
-    const successColor = successPct >= 80 ? "#58c866" : successPct >= 50 ? "#f0ad4e" : "#e74c3c";
-    const idleColor = idlePct <= 30 ? "#58c866" : idlePct <= 60 ? "#f0ad4e" : "#e74c3c";
+    const successColor = successPct >= 80 ? "var(--green)" : successPct >= 50 ? "var(--amber)" : "var(--red)";
+    const idleColor = idlePct <= 30 ? "var(--green)" : idlePct <= 60 ? "var(--amber)" : "var(--red)";
 
     container.innerHTML = `
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
@@ -6748,6 +7157,304 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             : `No tasks completed in the last hour. Your team is ${idlePct >= 80 ? "mostly idle" : "partially active"}.`}
           ${stats.pipelineDepth > 0 ? ` Pipeline depth: <b>${stats.pipelineDepth}</b> stage${stats.pipelineDepth === 1 ? "" : "s"}.` : ""}
           ${automationPct > 50 ? " Automation is running smoothly." : " Consider setting up schedules to increase automation."}
+        </div>
+      </div>
+
+      ${this.renderEfficiencyBadge()}
+      ${this.renderResourceAllocation()}
+      ${this.renderFulfillmentSection()}
+    `;
+  }
+
+  private renderEfficiencyBadge(): string {
+    const score = this.store.efficiencyScore;
+    if (!score) {
+      return `<div class="dash-section">
+        <div class="dash-section-title">🏅 Pipeline Efficiency</div>
+        <div class="dash-section-body">
+          <button class="btn" id="req-efficiency-btn" style="font-size: 12px; padding: 4px 12px;">Calculate Efficiency Score</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="dash-section">
+      <div class="dash-section-title">🏅 Pipeline Efficiency</div>
+      <div class="dash-section-body">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+          <span style="font-size:24px;">${score.badge}</span>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:${score.badgeColor};">${score.badge}</div>
+            <div style="font-size:11px;color:#9aa0b0;">Throughput: ${score.throughput}/hr · Success: ${Math.round(score.successRate * 100)}% · Autonomy: ${Math.round(score.autonomyRate * 100)}% · Chains: ${score.chainCount}</div>
+          </div>
+        </div>
+        ${score.suggestions.map((s) => `<div style="font-size:11px;color:#9aa0b0;margin-bottom:2px;">• ${s.replace(/</g, "&lt;")}</div>`).join("")}
+        <button class="btn" id="req-efficiency-btn" style="font-size: 11px; padding: 3px 10px; margin-top: 6px;">Recalculate</button>
+      </div>
+    </div>`;
+  }
+
+  private renderResourceAllocation(): string {
+    const alloc = this.store.resourceAllocation;
+    const agents = [...this.store.agents.values()].filter(
+      (a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard",
+    );
+    if (agents.length === 0) return "";
+
+    if (!alloc) {
+      return `<div class="dash-section">
+        <div class="dash-section-title">💰 Resource Allocation</div>
+        <div class="dash-section-body">
+          <div style="font-size:12px;color:#9aa0b0;margin-bottom:8px;">Distribute your budget across agents. Total: 100 points.</div>
+          ${agents.map((a) => `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="font-size:12px;width:100px;color:#ccc;">${a.name}</span>
+              <input type="range" min="0" max="100" value="${Math.floor(100 / agents.length)}" class="alloc-slider" data-agent-id="${a.id}" style="flex:1;" />
+              <span class="alloc-value" data-agent-id="${a.id}" style="font-size:11px;width:30px;text-align:right;color:#9aa0b0;">${Math.floor(100 / agents.length)}</span>
+            </div>
+          `).join("")}
+          <div style="font-size:11px;color:#6b7280;margin-top:4px;">Total: <span id="alloc-total">${Math.floor(100 / agents.length) * agents.length}</span> / 100</div>
+          <button class="btn" id="alloc-submit-btn" style="font-size: 12px; padding: 4px 12px; margin-top: 6px;">Allocate Resources</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="dash-section">
+      <div class="dash-section-title">💰 Resource Allocation</div>
+      <div class="dash-section-body">
+        <div style="font-size:12px;color:#9aa0b0;margin-bottom:8px;">Budget: ${alloc.totalBudget} points across ${alloc.allocations.length} agents.</div>
+        ${alloc.allocations.map((a) => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:12px;width:100px;color:#ccc;">${a.agentName}</span>
+            <div style="flex:1;height:8px;background:#222538;border-radius:4px;overflow:hidden;">
+              <div style="width:${a.budget}%;height:100%;background:#f59e0b;border-radius:4px;"></div>
+            </div>
+            <span style="font-size:11px;width:30px;text-align:right;color:#f59e0b;">${a.budget}</span>
+            <span style="font-size:10px;width:40px;text-align:right;color:#6b7280;">${Math.round(a.utilization * 100)}% util</span>
+          </div>
+        `).join("")}
+        <button class="btn" id="alloc-reset-btn" style="font-size: 11px; padding: 3px 10px; margin-top: 6px;">Reallocate</button>
+      </div>
+    </div>`;
+  }
+
+  private wireDashboardButtons(): void {
+    // Efficiency score button
+    const effBtn = document.getElementById("req-efficiency-btn");
+    if (effBtn) {
+      effBtn.addEventListener("click", () => {
+        this.net.send({ type: "request_efficiency_score" });
+      });
+    }
+
+    // Fulfillment stats button
+    const fulBtn = document.getElementById("req-fulfillment-btn");
+    if (fulBtn) {
+      fulBtn.addEventListener("click", () => {
+        this.net.send({ type: "request_fulfillment" });
+      });
+    }
+
+    // Resource allocation sliders
+    const sliders = document.querySelectorAll(".alloc-slider");
+    if (sliders.length > 0) {
+      sliders.forEach((slider) => {
+        slider.addEventListener("input", () => {
+          const el = slider as HTMLInputElement;
+          const agentId = el.dataset.agentId;
+          const valueEl = document.querySelector(`.alloc-value[data-agent-id="${agentId}"]`);
+          if (valueEl) valueEl.textContent = el.value;
+          // Update total
+          let total = 0;
+          document.querySelectorAll(".alloc-slider").forEach((s) => {
+            total += parseInt((s as HTMLInputElement).value, 10);
+          });
+          const totalEl = document.getElementById("alloc-total");
+          if (totalEl) totalEl.textContent = String(total);
+        });
+      });
+
+      const submitBtn = document.getElementById("alloc-submit-btn");
+      if (submitBtn) {
+        submitBtn.addEventListener("click", () => {
+          const allocations: { agentId: string; budget: number }[] = [];
+          document.querySelectorAll(".alloc-slider").forEach((s) => {
+            const el = s as HTMLInputElement;
+            allocations.push({ agentId: el.dataset.agentId!, budget: parseInt(el.value, 10) });
+          });
+          this.net.send({ type: "allocate_resources", allocations });
+        });
+      }
+    }
+
+    // Resource allocation reset button
+    const resetBtn = document.getElementById("alloc-reset-btn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        this.store.resourceAllocation = null;
+        this.renderAutomationDashboard(document.getElementById("dashboard-view")!);
+        this.wireDashboardButtons();
+      });
+    }
+  }
+
+  private renderFulfillmentSection(): string {
+    const fs = this.store.fulfillmentStats;
+    if (!fs) {
+      return `<div class="dash-section">
+        <div class="dash-section-title">🎯 Aspiration Fulfillment</div>
+        <div class="dash-section-body">
+          <button class="btn" id="req-fulfillment-btn" style="font-size: 12px; padding: 4px 12px;">Load Fulfillment Stats</button>
+        </div>
+      </div>`;
+    }
+
+    const TRACK_META: Record<string, { label: string; icon: string; color: string }> = {
+      warrior: { label: "Warrior", icon: "⚔️", color: "#ef4444" },
+      builder: { label: "Builder", icon: "🔨", color: "#58c866" },
+      explorer: { label: "Explorer", icon: "🧭", color: "#3b82f6" },
+      puzzle_solver: { label: "Puzzle Solver", icon: "🧩", color: "#a855f7" },
+      creator: { label: "Creator", icon: "🎨", color: "#ec4899" },
+      strategist: { label: "Strategist", icon: "♟️", color: "#f59e0b" },
+    };
+
+    const tracks = ["warrior", "builder", "explorer", "puzzle_solver", "creator", "strategist"] as const;
+
+    // Radar chart SVG
+    const cx = 120, cy = 120, r = 90;
+    const angles = tracks.map((_, i) => (Math.PI * 2 * i) / tracks.length - Math.PI / 2);
+    const gridLevels = [0.25, 0.5, 0.75, 1.0];
+
+    // Grid polygons
+    const gridPolys = gridLevels.map((level) => {
+      const pts = angles.map((a) => `${cx + Math.cos(a) * r * level},${cy + Math.sin(a) * r * level}`).join(" ");
+      return `<polygon points="${pts}" fill="none" stroke="#33364a" stroke-width="1" opacity="${0.3 + level * 0.2}"/>`;
+    }).join("");
+
+    // Axis lines
+    const axisLines = angles.map((a) =>
+      `<line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(a) * r}" y2="${cy + Math.sin(a) * r}" stroke="#33364a" stroke-width="1" opacity="0.3"/>`
+    ).join("");
+
+    // Fulfillment polygon
+    const fulfillmentPts = tracks.map((track, i) => {
+      const score = fs[track].score / 100;
+      const a = angles[i];
+      return `${cx + Math.cos(a) * r * score},${cy + Math.sin(a) * r * score}`;
+    }).join(" ");
+
+    // Detection polygon (lighter overlay)
+    const detectionPts = tracks.map((track, i) => {
+      const score = (fs.detectionScores[track] ?? 0) * 100 / 100;
+      const a = angles[i];
+      return `${cx + Math.cos(a) * r * score},${cy + Math.sin(a) * r * score}`;
+    }).join(" ");
+
+    // Labels
+    const labels = tracks.map((track, i) => {
+      const a = angles[i];
+      const lx = cx + Math.cos(a) * (r + 18);
+      const ly = cy + Math.sin(a) * (r + 18);
+      const meta = TRACK_META[track];
+      return `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="${meta.color}">${meta.icon}</text>`;
+    }).join("");
+
+    // Dominant track deep dive
+    const dominantTrack = fs.dominant ?? "builder";
+    const dominantMeta = TRACK_META[dominantTrack];
+    const dominantData = fs[dominantTrack as keyof typeof fs] as { score: number; metrics: { label: string; value: string; raw: number; max: number }[]; trend: string; badge: string };
+    const trendIcon = dominantData.trend === "improving" ? "📈" : dominantData.trend === "declining" ? "📉" : "➡️";
+
+    const metricsHtml = dominantData.metrics.map((m) => {
+      const pct = m.max > 0 ? Math.min(100, (m.raw / m.max) * 100) : 0;
+      return `
+        <div style="margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
+            <span style="color:#9aa0b0;">${m.label}</span>
+            <span style="color:#e8eaf0;font-weight:600;">${m.value}</span>
+          </div>
+          <div style="height:4px;background:#222538;border-radius:2px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${dominantMeta.color};border-radius:2px;"></div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // Gap analysis
+    const topGaps = fs.gaps.slice(0, 3);
+    const gapsHtml = topGaps.map((g) => {
+      const meta = TRACK_META[g.track];
+      const gapText = g.gap > 10
+        ? `<span style="color:#58c866;">Living it up! +${g.gap}</span>`
+        : g.gap < -10
+        ? `<span style="color:#f87171;">Unfulfilled ${g.gap}</span>`
+        : `<span style="color:#9aa0b0;">Balanced (${g.gap >= 0 ? "+" : ""}${g.gap})</span>`;
+      return `
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px;">
+          <span>${meta.icon}</span>
+          <span style="color:#ccc;width:90px;">${meta.label}</span>
+          <span style="color:#6b7280;">Det: ${g.detection}%</span>
+          <span style="color:#6b7280;">Ful: ${g.fulfillment}%</span>
+          <span style="margin-left:auto;">${gapText}</span>
+        </div>
+      `;
+    }).join("");
+
+    // Activity feed
+    const feedHtml = fs.activityFeed.slice(0, 10).map((a) => {
+      const time = new Date(a.ts).toLocaleDateString([], { month: "short", day: "numeric" });
+      return `
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:2px;">
+          <span style="font-size:14px;">${a.icon}</span>
+          <span style="color:#ccc;">${a.text.replace(/</g, "&lt;")}</span>
+          <span style="color:#555;margin-left:auto;">${time}</span>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="dash-section">
+        <div class="dash-section-title">🎯 Aspiration Fulfillment</div>
+        <div class="dash-section-body">
+          <div style="display:grid;grid-template-columns:260px 1fr;gap:16px;">
+            <!-- Radar chart -->
+            <div>
+              <svg width="240" height="240" viewBox="0 0 240 240" style="max-width:100%;">
+                ${gridPolys}
+                ${axisLines}
+                <polygon points="${detectionPts}" fill="rgba(100,100,200,0.1)" stroke="rgba(100,100,200,0.3)" stroke-width="1" stroke-dasharray="3,3"/>
+                <polygon points="${fulfillmentPts}" fill="rgba(88,200,102,0.15)" stroke="#58c866" stroke-width="2"/>
+                ${labels}
+              </svg>
+              <div style="text-align:center;font-size:10px;color:#6b7280;margin-top:-4px;">
+                <span style="color:#58c866;">━</span> Fulfillment &nbsp;
+                <span style="color:rgba(100,100,200,0.6);">┄</span> Detection
+              </div>
+            </div>
+
+            <!-- Dominant track deep dive -->
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-size:20px;">${dominantMeta.icon}</span>
+                <div>
+                  <div style="font-size:14px;font-weight:700;color:${dominantMeta.color};">${dominantMeta.label} ${dominantData.badge}</div>
+                  <div style="font-size:11px;color:#9aa0b0;">${dominantData.score}% fulfilled ${trendIcon}</div>
+                </div>
+              </div>
+              ${metricsHtml}
+            </div>
+          </div>
+
+          <!-- Gap analysis -->
+          <div style="margin-top:12px;border-top:1px solid #333;padding-top:10px;">
+            <div style="font-size:12px;font-weight:600;color:#e8eaf0;margin-bottom:6px;">📊 Interest vs. Achievement</div>
+            ${gapsHtml}
+          </div>
+
+          <!-- Activity feed -->
+          <div style="margin-top:12px;border-top:1px solid #333;padding-top:10px;">
+            <div style="font-size:12px;font-weight:600;color:#e8eaf0;margin-bottom:6px;">📜 Recent Aspiration Activity</div>
+            ${feedHtml || '<div style="font-size:11px;color:#666;">No recent activity</div>'}
+          </div>
+
+          <button class="btn" id="req-fulfillment-btn" style="font-size: 11px; padding: 3px 10px; margin-top: 8px;">Refresh Stats</button>
         </div>
       </div>
     `;
@@ -6886,12 +7593,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
       const title = document.createElement("h2");
       title.textContent = "Quick Setup";
-      title.style.cssText = "margin: 0 0 8px 0; font-size: 20px; color: #58c866;";
+      title.style.cssText = "margin: 0 0 8px 0; font-size: 20px; color: var(--green);";
       panel.appendChild(title);
 
       const subtitle = document.createElement("p");
       subtitle.textContent = `Question ${currentQ + 1} of ${QUESTIONS.length}`;
-      subtitle.style.cssText = "margin: 0 0 20px 0; font-size: 13px; color: #888;";
+      subtitle.style.cssText = "margin: 0 0 20px 0; font-size: 13px; color: var(--dim);";
       panel.appendChild(subtitle);
 
       const questionEl = document.createElement("p");
@@ -6905,12 +7612,12 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         const isSelected = selected.has(opt.aspiration);
         btn.style.cssText = `
           display: block; width: 100%; padding: 12px 16px; margin-bottom: 8px;
-          background: ${isSelected ? "#2a3d5e" : "#222538"}; border: 1px solid ${isSelected ? "#58c866" : "#333"};
-          border-radius: 8px; color: #e0e0e0; font-size: 14px; cursor: pointer;
+          background: ${isSelected ? "rgba(93,217,127,0.12)" : "var(--panel-soft)"}; border: 1px solid ${isSelected ? "var(--green)" : "var(--panel-edge)"};
+          border-radius: 8px; color: var(--text); font-size: 14px; cursor: pointer;
           text-align: left; transition: all 0.15s; font-family: inherit;
         `;
-        btn.onmouseenter = () => { if (!isSelected) btn.style.background = "#2a2d4e"; };
-        btn.onmouseleave = () => { if (!isSelected) btn.style.background = "#222538"; };
+        btn.onmouseenter = () => { if (!isSelected) btn.style.background = "var(--panel)" };
+        btn.onmouseleave = () => { if (!isSelected) btn.style.background = "var(--panel-soft)" };
         btn.onclick = () => {
           if (selected.has(opt.aspiration)) {
             selected.delete(opt.aspiration);
@@ -6928,14 +7635,14 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
       if (currentQ > 0) {
         const backBtn = document.createElement("button");
         backBtn.textContent = "Back";
-        backBtn.style.cssText = `padding: 10px 20px; background: transparent; border: 1px solid #444; border-radius: 8px; color: #aaa; cursor: pointer; font-family: inherit;`;
+        backBtn.style.cssText = `padding: 10px 20px; background: transparent; border: 1px solid var(--panel-edge); border-radius: 8px; color: var(--dim); cursor: pointer; font-family: inherit;`;
         backBtn.onclick = () => { currentQ--; renderQuestion(); };
         btnRow.appendChild(backBtn);
       }
 
       const nextBtn = document.createElement("button");
       nextBtn.textContent = currentQ < QUESTIONS.length - 1 ? "Next" : "Submit";
-      nextBtn.style.cssText = `padding: 10px 24px; background: #58c866; border: none; border-radius: 8px; color: #0d0f1a; font-weight: 600; cursor: pointer; font-family: inherit; margin-left: auto;`;
+      nextBtn.style.cssText = `padding: 10px 24px; background: var(--green); border: none; border-radius: 8px; color: var(--bg); font-weight: 600; cursor: pointer; font-family: inherit; margin-left: auto;`;
       nextBtn.onclick = () => {
         if (currentQ < QUESTIONS.length - 1) {
           currentQ++;

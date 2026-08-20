@@ -101,6 +101,7 @@ const MAX_HP = 100;
 const CREATURE_CAP = 30;
 const FRIENDLY_CAP = 12;
 const SLUG_CAP = 15;
+const VEHICLE_CAP = 6;
 const STONE_INTERVAL = 2500;
 const BEAST_SPAWN_INTERVAL = 8000; // check for legendary beast spawns
 
@@ -823,6 +824,260 @@ class Creature {
     if (this.nemesisId && this.hasHitPlayer) {
       this.world.nemesis?.recordSurvival(this.nemesisId);
     }
+    this.container.destroy();
+  }
+}
+
+/** Procedural vehicle sprite generator — draws car/van/truck/carriage/cart/canoe. */
+function generateVehicleTexture(scene: Phaser.Scene, type: string, key: string): void {
+  if (scene.textures.exists(key)) return;
+  const W = 64, H = 64;
+  const canvasTex = scene.textures.createCanvas(key, W, H);
+  if (!canvasTex) return;
+  const ctx = canvasTex.getContext();
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+
+  if (type === "car") {
+    // rusty sedan body
+    ctx.fillStyle = "#5a5a5e";
+    ctx.fillRect(cx - 22, cy - 12, 44, 24);
+    ctx.fillStyle = "#4a4a4e";
+    ctx.fillRect(cx - 16, cy - 10, 32, 20);
+    // windows
+    ctx.fillStyle = "rgba(120,140,160,0.5)";
+    ctx.fillRect(cx - 14, cy - 8, 12, 8);
+    ctx.fillRect(cx + 2, cy - 8, 12, 8);
+    // wheels
+    ctx.fillStyle = "#1a1a1e";
+    ctx.beginPath(); ctx.arc(cx - 14, cy + 12, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 14, cy + 12, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 14, cy - 12, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 14, cy - 12, 5, 0, Math.PI * 2); ctx.fill();
+    // rust streaks
+    ctx.fillStyle = "rgba(139,69,19,0.3)";
+    ctx.fillRect(cx - 20, cy + 2, 8, 2);
+    ctx.fillRect(cx + 10, cy - 4, 6, 2);
+  } else if (type === "van") {
+    // boxy van
+    ctx.fillStyle = "#3a4a3a";
+    ctx.fillRect(cx - 20, cy - 14, 40, 28);
+    ctx.fillStyle = "#2a3a2a";
+    ctx.fillRect(cx - 16, cy - 12, 32, 24);
+    // windshield
+    ctx.fillStyle = "rgba(100,120,100,0.5)";
+    ctx.fillRect(cx - 14, cy - 10, 28, 8);
+    // wheels
+    ctx.fillStyle = "#1a1a1e";
+    ctx.beginPath(); ctx.arc(cx - 12, cy + 14, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 12, cy + 14, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 12, cy - 14, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 12, cy - 14, 5, 0, Math.PI * 2); ctx.fill();
+  } else if (type === "truck") {
+    // pickup truck
+    ctx.fillStyle = "#4a3a2a";
+    ctx.fillRect(cx - 24, cy - 10, 20, 20); // cab
+    ctx.fillRect(cx - 4, cy - 12, 28, 24); // bed
+    ctx.fillStyle = "rgba(100,90,70,0.4)";
+    ctx.fillRect(cx - 22, cy - 8, 16, 8);
+    ctx.fillStyle = "#1a1a1e";
+    ctx.beginPath(); ctx.arc(cx - 16, cy + 12, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 16, cy + 12, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 16, cy - 12, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 16, cy - 12, 5, 0, Math.PI * 2); ctx.fill();
+  } else if (type === "carriage") {
+    // horse-drawn carriage
+    ctx.fillStyle = "#6a4a2a";
+    ctx.fillRect(cx - 18, cy - 10, 36, 20);
+    ctx.fillStyle = "#5a3a1a";
+    ctx.fillRect(cx - 16, cy - 8, 32, 16);
+    // roof
+    ctx.fillStyle = "#4a2a1a";
+    ctx.fillRect(cx - 20, cy - 14, 40, 6);
+    // wheels (spoked)
+    ctx.strokeStyle = "#2a1a0a";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx - 12, cy + 12, 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx - 12, cy - 12, 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx + 12, cy - 12, 6, 0, Math.PI * 2); ctx.stroke();
+  } else if (type === "cart") {
+    // golf cart
+    ctx.fillStyle = "#2a8a4a";
+    ctx.fillRect(cx - 18, cy - 10, 36, 20);
+    ctx.fillStyle = "rgba(150,200,170,0.4)";
+    ctx.fillRect(cx - 14, cy - 8, 28, 8);
+    ctx.fillStyle = "#1a1a1e";
+    ctx.beginPath(); ctx.arc(cx - 12, cy + 12, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 12, cy - 12, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 12, cy - 12, 4, 0, Math.PI * 2); ctx.fill();
+  } else if (type === "canoe") {
+    // outrigger canoe
+    ctx.strokeStyle = "#8a6a3a";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx - 24, cy);
+    ctx.quadraticCurveTo(cx, cy - 10, cx + 24, cy);
+    ctx.quadraticCurveTo(cx, cy + 10, cx - 24, cy);
+    ctx.stroke();
+    // outrigger
+    ctx.strokeStyle = "#6a4a2a";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 16, cy + 8); ctx.lineTo(cx - 16, cy + 16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 16, cy + 8); ctx.lineTo(cx + 16, cy + 16); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy + 18, 10, 0, Math.PI); ctx.stroke();
+  }
+
+  canvasTex.refresh();
+}
+
+/** A drivable vehicle entity — patrols roads, can be hijacked by the player. */
+class Vehicle {
+  container: Phaser.GameObjects.Container;
+  private sprite: Phaser.GameObjects.Image;
+  private shadow: Phaser.GameObjects.Ellipse;
+  private world: WorldLayer;
+  private speed: number;
+  private alive = true;
+  private dir: number; // 0=right, 1=down, 2=left, 3=up
+  private dirTimer = 0;
+  private stopped = false;
+  private stopTimer = 0;
+  vehicleType: string;
+  hijacked = false;
+  private hijackCooldown = 0;
+
+  get alive_(): boolean { return this.alive; }
+
+  constructor(world: WorldLayer, x: number, y: number, type: string, speed: number) {
+    this.world = world;
+    this.vehicleType = type;
+    this.speed = speed;
+    this.dir = Math.floor(Math.random() * 4);
+    const scene = world.scene;
+
+    const texKey = `vehicle-${type}`;
+    generateVehicleTexture(scene, type, texKey);
+
+    this.shadow = scene.add.ellipse(0, 4, 50, 18, 0x000000, 0.2);
+    this.sprite = scene.add.image(0, 0, texKey).setOrigin(0.5, 0.5);
+    this.container = scene.add.container(x, y, [this.shadow, this.sprite]).setDepth(22 + y);
+
+    // initial rotation to face direction
+    this.updateSpriteRotation();
+  }
+
+  private updateSpriteRotation(): void {
+    const rotations = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+    this.sprite.setRotation(rotations[this.dir]);
+  }
+
+  update(dt: number, playerX: number, playerY: number): { runOver: boolean; x: number; y: number } | null {
+    if (!this.alive) return null;
+
+    if (this.hijacked) {
+      // Player is driving — movement handled by scene's input system
+      // Just update depth
+      this.container.setDepth(22 + this.container.y);
+      return null;
+    }
+
+    // Tick down hijack cooldown
+    if (this.hijackCooldown > 0) this.hijackCooldown -= dt;
+
+    // Patrol AI: drive in straight lines, occasionally turn
+    this.dirTimer += dt;
+    if (this.dirTimer > 3000 + Math.random() * 4000) {
+      this.dirTimer = 0;
+      // Random turn: left, right, or reverse
+      const turn = Math.random() < 0.5 ? 1 : -1;
+      this.dir = (this.dir + turn + 4) % 4;
+      this.updateSpriteRotation();
+    }
+
+    // Occasional stops
+    if (this.stopped) {
+      this.stopTimer -= dt;
+      if (this.stopTimer <= 0) {
+        this.stopped = false;
+      }
+      return null;
+    }
+
+    if (Math.random() < 0.002) {
+      this.stopped = true;
+      this.stopTimer = 500 + Math.random() * 1500;
+      return null;
+    }
+
+    // Move in current direction
+    const step = this.speed * (dt / 1000);
+    const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+    const [dx, dy] = dirs[this.dir];
+    const nx = this.container.x + dx * step;
+    const ny = this.container.y + dy * step;
+    const { tx, ty } = this.world.pixelToTile(nx, ny);
+
+    if (this.world.isCreatureWalkable(tx, ty)) {
+      this.container.setPosition(nx, ny);
+      this.container.setDepth(22 + ny);
+    } else {
+      // Hit an obstacle — turn
+      this.dir = (this.dir + (Math.random() < 0.5 ? 1 : -1) + 4) % 4;
+      this.updateSpriteRotation();
+    }
+
+    // Check for creature collisions (run over)
+    return { runOver: true, x: this.container.x, y: this.container.y };
+  }
+
+  /** Check if player is near enough to hijack. */
+  canHijack(playerX: number, playerY: number): boolean {
+    if (this.hijacked || !this.alive || this.hijackCooldown > 0) return false;
+    const d = Math.hypot(playerX - this.container.x, playerY - this.container.y);
+    return d < 50;
+  }
+
+  hijack(): void {
+    this.hijacked = true;
+    this.stopped = false;
+    this.stopTimer = 0;
+  }
+
+  exit(): void {
+    this.hijacked = false;
+    this.stopped = true;
+    this.stopTimer = 1000;
+    this.hijackCooldown = 2000; // 2s cooldown before can re-hijack
+    // Pick a new random direction
+    this.dir = Math.floor(Math.random() * 4);
+    this.updateSpriteRotation();
+  }
+
+  /** Drive the vehicle when hijacked — called from scene input. */
+  drive(dx: number, dy: number, dt: number): void {
+    if (!this.hijacked || !this.alive) return;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.01) return;
+    const ndx = dx / len;
+    const ndy = dy / len;
+    const step = this.speed * 1.8 * (dt / 1000); // 1.8x speed boost when driving
+    const nx = this.container.x + ndx * step;
+    const ny = this.container.y + ndy * step;
+    const { tx, ty } = this.world.pixelToTile(nx, ny);
+    if (this.world.isCreatureWalkable(tx, ty)) {
+      this.container.setPosition(nx, ny);
+      this.container.setDepth(22 + ny);
+      // Update rotation to face movement direction
+      const angle = Math.atan2(ndy, ndx);
+      this.sprite.setRotation(angle);
+    }
+  }
+
+  destroy(): void {
+    this.alive = false;
     this.container.destroy();
   }
 }
@@ -2419,6 +2674,9 @@ export class WorldLayer {
   private lastSlugSpawnTime = 0;
   private lastDogSpawnTime = 0;
   private lastLeprechaunSpawnTime = 0;
+  private lastVehicleSpawnTime = 0;
+  vehicles: Vehicle[] = [];
+  hijackedVehicle: Vehicle | null = null;
 
   // --- inventory ---
   inventory = new Inventory();
@@ -3421,6 +3679,10 @@ export class WorldLayer {
       [TILE.CABIN_DOOR]: "cabin-door",
       [TILE.CABIN_WINDOW]: "cabin-window",
       [TILE.CABIN_ROOF]: "cabin-roof",
+      [TILE.BLDG_WALL]: "bldg-wall",
+      [TILE.BLDG_ROOF]: "bldg-roof",
+      [TILE.BLDG_WINDOW]: "bldg-window",
+      [TILE.BLDG_CORNER]: "bldg-corner",
       [TILE.LAKE_SHORE]: "lake-shore",
     };
 
@@ -4133,6 +4395,29 @@ export class WorldLayer {
         }
       }
 
+      // --- spawn vehicles for themed worlds ---
+      if (this.vehicles.length < VEHICLE_CAP && time - this.lastVehicleSpawnTime > 3000 + Math.random() * 4000) {
+        this.lastVehicleSpawnTime = time;
+        const vehicleConfigs = this.worldTheme?.worldgen?.vehicles;
+        if (vehicleConfigs && vehicleConfigs.length > 0) {
+          // Pick a random vehicle config
+          const config = vehicleConfigs[Math.floor(Math.random() * vehicleConfigs.length)];
+          // Check cap per type
+          const typeCount = this.vehicles.filter((v) => v.vehicleType === config.type).length;
+          const typeCap = config.cap ?? 3;
+          if (typeCount < typeCap) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 300 + Math.random() * 400;
+            const sx = playerX + Math.cos(angle) * dist;
+            const sy = playerY + Math.sin(angle) * dist;
+            const { tx, ty } = this.pixelToTile(sx, sy);
+            if (this.isCreatureWalkable(tx, ty)) {
+              this.vehicles.push(new Vehicle(this, sx, sy, config.type, config.speed ?? 100));
+            }
+          }
+        }
+      }
+
       // --- spawn dog near the big lake — friendly fetch companion ---
       const lakePxX = BIG_LAKE_WT_X * TILE_PX + TILE_PX / 2 + this.offset.x;
       const lakePxY = BIG_LAKE_WT_Y * TILE_PX + TILE_PX / 2 + this.offset.y;
@@ -4257,6 +4542,9 @@ export class WorldLayer {
       this.slugs = [];
       for (const dg of this.dogs) dg.destroy();
       this.dogs = [];
+      for (const v of this.vehicles) v.destroy();
+      this.vehicles = [];
+      this.hijackedVehicle = null;
       for (const fb of this.fetchBalls) fb.destroy();
       this.fetchBalls = [];
       for (const lep of this.leprechauns) lep.destroy();
@@ -4351,6 +4639,59 @@ export class WorldLayer {
       if (sld > 900) sl.destroy();
     }
     this.slugs = this.slugs.filter((sl) => sl.alive_);
+
+    // --- update vehicles ---
+    let hijackTarget: Vehicle | null = null;
+    let hijackDist = Infinity;
+    for (const v of this.vehicles) {
+      const runOver = v.update(dt, playerX, playerY);
+      // Run over creatures when driving
+      if (runOver && v.hijacked) {
+        for (const c of this.creatures) {
+          if (!c.alive_) continue;
+          const cd = Math.hypot(runOver.x - c.container.x, runOver.y - c.container.y);
+          if (cd < 40) {
+            c.destroy();
+            this.vfx.sparkBurst(c.container.x, c.container.y, 0xff3333, 12, 80);
+          }
+        }
+      }
+      // Despawn far vehicles (but not the one being driven)
+      if (!v.hijacked) {
+        const vd = Math.hypot(playerX - v.container.x, playerY - v.container.y);
+        if (vd > 1200) v.destroy();
+        // Check for hijack proximity
+        if (v.canHijack(playerX, playerY)) {
+          if (vd < hijackDist) {
+            hijackDist = vd;
+            hijackTarget = v;
+          }
+        }
+      }
+    }
+    this.vehicles = this.vehicles.filter((v) => v.alive_);
+
+    // --- hijack interaction ---
+    if (this.hijackedVehicle) {
+      // Exit vehicle on E press
+      if (ePressed) {
+        this.hijackedVehicle.exit();
+        this.hijackedVehicle = null;
+      }
+    } else if (hijackTarget && ePressed) {
+      hijackTarget.hijack();
+      this.hijackedVehicle = hijackTarget;
+    }
+
+    // Show hijack hint
+    if (!this.hijackedVehicle && hijackTarget) {
+      this.captureHint
+        .setText(isTouchDevice() ? "TAP Hijack" : "E: Hijack")
+        .setPosition(hijackTarget.container.x, hijackTarget.container.y - 45)
+        .setVisible(true);
+    } else if (!captureTarget) {
+      this.captureHint.setVisible(false);
+    }
 
     // --- update fetch balls ---
     for (const fb of this.fetchBalls) {
@@ -6553,6 +6894,9 @@ export class WorldLayer {
       this.slugs = [];
       for (const dg of this.dogs) dg.destroy();
       this.dogs = [];
+      for (const v of this.vehicles) v.destroy();
+      this.vehicles = [];
+      this.hijackedVehicle = null;
       for (const fb of this.fetchBalls) fb.destroy();
       this.fetchBalls = [];
       for (const lep of this.leprechauns) lep.destroy();
@@ -6628,6 +6972,7 @@ export class WorldLayer {
     for (const f of this.friendlies) f.destroy();
     for (const sl of this.slugs) sl.destroy();
     for (const dg of this.dogs) dg.destroy();
+    for (const v of this.vehicles) v.destroy();
     for (const fb of this.fetchBalls) fb.destroy();
     for (const lep of this.leprechauns) lep.destroy();
     if (this.wife) this.wife.destroy();

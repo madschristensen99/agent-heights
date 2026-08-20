@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer, FulfillmentStats } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 import { getReactionsForAchievement, NPC_IDS, checkContextTrigger } from "./ui/agent-reactions";
@@ -421,6 +421,10 @@ export class Store {
   aspirationQuiz: boolean = false;
   aspirationQuizListeners: (() => void)[] = [];
 
+  /** Aspiration dashboard data from server. */
+  aspirationDashboard: { scores: Record<string, number>; dominant: string | null; signalCount: number; history: { key: string; aspiration: string; weight: number; timestamp: number }[]; unlocks: { key: string; track: string; threshold: number; label: string; icon: string; unlocked: boolean; currentScore: number }[] } | null = null;
+  aspirationDashboardListeners: (() => void)[] = [];
+
   /** Automation stats from server — for the automation dashboard. */
   automationStats: AutomationStats | null = null;
 
@@ -466,6 +470,25 @@ export class Store {
 
   /** Platform mailbox state: platform -> { flagUp, pendingCount, lastMessage, assignedAgentId } */
   platformMailboxes = new Map<string, { flagUp: boolean; pendingCount: number; lastMessage: string; assignedAgentId: string | null }>();
+
+  /** A/B comparison result from server. */
+  abComparison: { agentA: { id: string; name: string; model: string; tasksDone: number; successRate: number; avgDurationMin: number; tasks: { task: string; success: boolean; durationMs: number; ts: number }[] }; agentB: { id: string; name: string; model: string; tasksDone: number; successRate: number; avgDurationMin: number; tasks: { task: string; success: boolean; durationMs: number; ts: number }[] }; verdict: string } | null = null;
+  abComparisonListeners: (() => void)[] = [];
+
+  /** Efficiency score from server. */
+  efficiencyScore: { throughput: number; successRate: number; autonomyRate: number; chainCount: number; badge: string; badgeColor: string; suggestions: string[] } | null = null;
+  efficiencyScoreListeners: (() => void)[] = [];
+
+  /** Resource allocation from server. */
+  resourceAllocation: { totalBudget: number; allocations: { agentId: string; agentName: string; budget: number; utilization: number }[] } | null = null;
+  resourceAllocationListeners: (() => void)[] = [];
+
+  /** Seasonal event from server. */
+  seasonalEvent: { eventName: string; theme: string; icon: string; description: string; decorations: { type: string; x: number; y: number; sprite: string }[] } | null = null;
+
+  /** Aspiration fulfillment stats from server. */
+  fulfillmentStats: FulfillmentStats | null = null;
+  fulfillmentListeners: (() => void)[] = [];
 
   /** Clear all user-specific state — called when switching accounts. */
   reset(): void {
@@ -1738,6 +1761,19 @@ export class Store {
         for (const fn of this.aspirationQuizListeners) fn();
         return;
       }
+      case "aspiration_dashboard": {
+        this.aspirationDashboard = { scores: msg.scores, dominant: msg.dominant, signalCount: msg.signalCount, history: msg.history, unlocks: msg.unlocks };
+        for (const fn of this.aspirationDashboardListeners) fn();
+        return;
+      }
+      case "aspiration_shift": {
+        // Update the aspiration profile's dominant in-place
+        if (this.aspirationProfile) {
+          this.aspirationProfile = { ...this.aspirationProfile, dominant: msg.newDominant };
+        }
+        // The toast is already sent by the server, just update state
+        return;
+      }
       case "mcp_auth_required": {
         this.toast(`${msg.agentName} needs authorization for ${msg.servers.length} service(s).`);
         this.select(msg.agentId);
@@ -1830,6 +1866,31 @@ export class Store {
       case "agent_growth": {
         this.agentGrowthData.set(msg.agentId, msg.growth);
         this.emit();
+        return;
+      }
+      case "ab_comparison": {
+        this.abComparison = { agentA: msg.agentA, agentB: msg.agentB, verdict: msg.verdict };
+        for (const fn of this.abComparisonListeners) fn();
+        return;
+      }
+      case "efficiency_score": {
+        this.efficiencyScore = { throughput: msg.throughput, successRate: msg.successRate, autonomyRate: msg.autonomyRate, chainCount: msg.chainCount, badge: msg.badge, badgeColor: msg.badgeColor, suggestions: msg.suggestions };
+        for (const fn of this.efficiencyScoreListeners) fn();
+        return;
+      }
+      case "resource_allocation": {
+        this.resourceAllocation = { totalBudget: msg.totalBudget, allocations: msg.allocations };
+        for (const fn of this.resourceAllocationListeners) fn();
+        return;
+      }
+      case "seasonal_event": {
+        this.seasonalEvent = { eventName: msg.eventName, theme: msg.theme, icon: msg.icon, description: msg.description, decorations: msg.decorations };
+        this.emit();
+        return;
+      }
+      case "fulfillment_stats": {
+        this.fulfillmentStats = msg.stats;
+        for (const fn of this.fulfillmentListeners) fn();
         return;
       }
     }

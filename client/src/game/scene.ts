@@ -4745,7 +4745,17 @@ export class OfficeScene extends Phaser.Scene {
         "Want me to break down a goal? I'm good at making big problems into small ones.",
         "Just let me know if you need anything, boss. I'll be at my desk.",
       ];
-      const lines = dialect ? (dialectLines[dialect]?.[aspirationKey] ?? baseLines) : baseLines;
+      // Portal-style wit lines — mixed in 30% of the time
+      const witLines = [
+        "I've calculated three ways to optimize your workflow. You won't like any of them.",
+        "The agents are working. I'm supervising. Very intensely. From this chair.",
+        "Did you know 87% of meetings could be emails? The other 13% are about why the emails weren't read.",
+        "I'd offer you coffee, but last time you tried to give it to an agent. They don't drink coffee. They ARE the coffee.",
+        "I've run the numbers on your office. They're... numbers. I find that reassuring.",
+      ];
+      let lines = dialect ? (dialectLines[dialect]?.[aspirationKey] ?? baseLines) : baseLines;
+      // 30% chance to use a wit line instead
+      if (Math.random() < 0.3) lines = witLines;
       checkNpc(OFFICE_MANAGER_ID, this.officeManager.container, lines);
     }
 
@@ -9314,6 +9324,26 @@ export class OfficeScene extends Phaser.Scene {
       const len = Math.hypot(vx, vy);
       vx /= len;
       vy /= len;
+    }
+
+    // --- Hijacked vehicle driving ---
+    if (this.world.hijackedVehicle) {
+      const hv = this.world.hijackedVehicle;
+      // Hide player sprite, follow vehicle
+      this.player.setVisible(false);
+      this.playerLabel.setVisible(false);
+      // Drive the vehicle using input velocity
+      hv.drive(vx, vy, dt);
+      // Snap player position to vehicle for camera/minimap
+      this.player.x = hv.container.x;
+      this.player.y = hv.container.y;
+      // Skip normal movement — vehicle handles it
+      this.playerVx = 0;
+      this.playerVy = 0;
+      return;
+    } else {
+      this.player.setVisible(true);
+      this.playerLabel.setVisible(true);
     }
 
     // Smooth acceleration/deceleration toward target velocity (framerate-independent)

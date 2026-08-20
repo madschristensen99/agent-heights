@@ -5741,6 +5741,89 @@ export class AgentManager {
     return [...this.schedules.values()].filter((s) => s.agentId === agentId);
   }
 
+  /** Create a compound schedule chain — multiple schedules linked so output of one feeds into the next. */
+  createScheduleChain(chainName: string, steps: { agentId: string; name: string; task: string; cronExpression: string; handoffTo?: string }[]): string {
+    if (steps.length < 2) return "A chain needs at least 2 steps.";
+    if (steps.length > 10) return "A chain can have at most 10 steps.";
+
+    const createdIds: string[] = [];
+    const now = Date.now();
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const rt = this.agents.get(step.agentId);
+      if (!rt) return `Agent "${step.agentId}" not found at step ${i + 1}.`;
+
+      const cleanName = `${chainName} → ${step.name.trim().slice(0, 80) || `Step ${i + 1}`}`;
+      const cleanTask = step.task.trim().slice(0, 4000);
+      if (!cleanTask) return `Step ${i + 1} task can't be empty.`;
+
+      const cleanCron = step.cronExpression.trim();
+      const cronCheck = validateCron(cleanCron);
+      if (!cronCheck.valid) return `Step ${i + 1}: ${cronCheck.error}`;
+
+      const nextRun = nextCronRun(cleanCron);
+      if (nextRun === null) return `Step ${i + 1}: Invalid cron expression.`;
+
+      // Only the first step fires on cron; the rest are triggered by chain
+      const isFirst = i === 0;
+      const sched: AgentSchedule = {
+        id: randomUUID().slice(0, 8),
+        agentId: step.agentId,
+        name: cleanName,
+        task: cleanTask,
+        cronExpression: cleanCron,
+        enabled: isFirst,
+        lastRunAt: null,
+        nextRunAt: isFirst ? nextRun : Number.MAX_SAFE_INTEGER,
+        runCount: 0,
+        handoffTo: step.handoffTo?.trim() || null,
+        createdAt: now,
+        consecutiveFailures: 0,
+        chainTo: null,
+      };
+      this.schedules.set(sched.id, sched);
+      createdIds.push(sched.id);
+      this.broadcast({ type: "schedule", schedule: sched });
+      this.log(rt, "status", `Chain step ${i + 1}/${steps.length}: "${cleanName}"`);
+    }
+
+    // Link the chain
+    for (let i = 0; i < createdIds.length - 1; i++) {
+      const sched = this.schedules.get(createdIds[i])!;
+      sched.chainTo = createdIds[i + 1];
+      this.broadcast({ type: "schedule", schedule: sched });
+    }
+
+    this.persistSchedules();
+    this.broadcast({ type: "toast", text: `Chain "${chainName}" created with ${steps.length} steps.` });
+    return `Chain "${chainName}" created with ${steps.length} steps. First step fires on cron; the rest trigger automatically.`;
+  }
+
+  /** Link an existing schedule to fire another schedule after it completes. */
+  linkScheduleChain(scheduleId: string, chainTo: string): string {
+    const sched = this.schedules.get(scheduleId);
+    const target = this.schedules.get(chainTo);
+    if (!sched) return "Schedule not found.";
+    if (!target) return "Target schedule not found.";
+    if (scheduleId === chainTo) return "Cannot link a schedule to itself.";
+
+    sched.chainTo = chainTo;
+    // If target is not the first in a chain, disable its cron (it'll be chain-triggered)
+    if (target.enabled && target.nextRunAt !== Number.MAX_SAFE_INTEGER) {
+      // Check if any other schedule chains to this one
+      const isChained = [...this.schedules.values()].some(s => s.chainTo === chainTo);
+      if (isChained) {
+        target.enabled = false;
+        target.nextRunAt = Number.MAX_SAFE_INTEGER;
+      }
+    }
+    this.persistSchedules();
+    this.broadcast({ type: "schedule", schedule: sched });
+    this.broadcast({ type: "schedule", schedule: target });
+    return `Linked "${sched.name}" → "${target.name}".`;
+  }
+
   updateSchedule(scheduleId: string, updates: { enabled?: boolean; name?: string; task?: string; cronExpression?: string }): string {
     const sched = this.schedules.get(scheduleId);
     if (!sched) return "Schedule not found.";
@@ -5813,6 +5896,27 @@ export class AgentManager {
         sched.consecutiveFailures = 0;
         this.persistSchedules();
         this.broadcast({ type: "schedule", schedule: sched });
+      }
+      // Compound schedule chain — fire the next schedule in the chain
+      if (sched.chainTo) {
+        const nextSched = this.schedules.get(sched.chainTo);
+        if (nextSched && nextSched.enabled) {
+          const nextRt = this.agents.get(nextSched.agentId);
+          if (nextRt && nextRt.info.status === "idle") {
+            nextSched.lastRunAt = Date.now();
+            nextSched.runCount++;
+            this.persistSchedules();
+            this.broadcast({ type: "schedule", schedule: nextSched });
+            this.log(nextRt, "status", `Chain triggered: "${nextSched.name}" (from "${sched.name}")`);
+            this.assign(nextSched.agentId, nextSched.task, nextSched.handoffTo ?? undefined, undefined, nextSched.id);
+          } else {
+            // Agent busy — schedule for 60s later
+            nextSched.nextRunAt = Date.now() + 60_000;
+            this.persistSchedules();
+            this.broadcast({ type: "schedule", schedule: nextSched });
+            this.log(rt, "status", `Chain target "${nextSched.name}" agent busy — will retry in 1 min.`);
+          }
+        }
       }
       return;
     }

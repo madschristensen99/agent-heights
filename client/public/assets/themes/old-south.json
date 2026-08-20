@@ -99,6 +99,9 @@
       7,
       11,
       18
+    ],
+    "vehicles": [
+      { "type": "carriage", "biomes": ["garden", "cotton_field"], "cap": 2, "speed": 80 }
     ]
   },
   "interactables": {},
@@ -133,7 +136,10 @@
       "name": "Confederacy",
       "color": 9211020,
       "spriteKey": "faction-confederate"
-    }
+    },
+    "minHostility": 2,
+    "spawnInterval": 5000,
+    "capPerSide": 5
   },
   "sky": {
     "gradientStops": [

@@ -42,7 +42,7 @@ import { ProfileManager } from "./profile.js";
 import { getLeaderboard, getTrophyProfile } from "./leaderboards.js";
 import { renderTrophyPage, renderTrophyNotFound } from "./trophy-room.js";
 import { dismissNudge, trackActivity } from "./concierge.js";
-import { recordSignalByKey, preloadProfile, getCachedProfile, getUnlocks, seedAspirations, getSignalHistory, UNLOCK_THRESHOLDS_EXPORT, SIGNAL_LABELS, ASPIRATION_LABELS, onDominantShift } from "./aspirations.js";
+import { recordSignalByKey, preloadProfile, getCachedProfile, getUnlocks, seedAspirations, getSignalHistory, UNLOCK_THRESHOLDS_EXPORT, ASPIRATION_LABELS, onDominantShift } from "./aspirations.js";
 import { generateAwayReport } from "./away-report.js";
 import { logAgentHire, logAgentFire, getEntries, updateEntry } from "./experiment-log.js";
 import { getDecorations, placeDecoration, removeDecoration, moveDecoration } from "./office-deco.js";
@@ -51,6 +51,11 @@ import { getProgress, addXp, getMaxAgents } from "./office-progression.js";
 import { getGrowth, clearGrowth } from "./agent-growth.js";
 import { sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getFriendsList, getAcceptedFriendIds } from "./friends.js";
 import { generateChallenge, scoreChallenge } from "./challenges.js";
+import { compareAgents } from "./ab-comparison.js";
+import { computeEfficiency } from "./efficiency-score.js";
+import { getCurrentSeasonalEvent } from "./seasonal-events.js";
+import { getAllocation, validateAllocations } from "./resource-allocation.js";
+import { computeFulfillment } from "./fulfillment.js";
 
 // ── User activity persistence (retention system) ─────────────────────────
 
@@ -345,6 +350,19 @@ tenants.onUserOffline = (userId: string) => {
     }
   }).catch(() => {});
 };
+
+// Aspiration dominant shift detection — notify user when their dominant aspiration changes
+onDominantShift((userId, oldDominant, newDominant) => {
+  const fb = tenants.getSessionBroadcast(userId);
+  if (!fb) return;
+  if (newDominant && oldDominant !== newDominant) {
+    const label = ASPIRATION_LABELS[newDominant as keyof typeof ASPIRATION_LABELS];
+    if (label) {
+      fb({ type: "toast", text: `${label.icon} Your dominant aspiration shifted to ${label.label}!` });
+    }
+    fb({ type: "aspiration_shift", oldDominant, newDominant });
+  }
+});
 
 // ── HTTP + WebSocket server ───────────────────────────────────────────────
 
@@ -1162,6 +1180,17 @@ wss.on("connection", async (ws, req) => {
   // Tell the client whether they have an API key set
   ws.send(JSON.stringify({ type: "api_key_status", hasKey: sess.apiKey != null } satisfies ServerMsg));
 
+  // Send current seasonal event
+  const seasonalEvent = getCurrentSeasonalEvent();
+  ws.send(JSON.stringify({
+    type: "seasonal_event",
+    eventName: seasonalEvent.eventName,
+    theme: seasonalEvent.theme,
+    icon: seasonalEvent.icon,
+    description: seasonalEvent.description,
+    decorations: seasonalEvent.decorations,
+  } satisfies ServerMsg));
+
   // Send saved outfits
   void sendOutfits(ws, sess);
 
@@ -1776,12 +1805,101 @@ wss.on("connection", async (ws, req) => {
             ws.send(JSON.stringify({ type: "toast", text: `Office reached Level ${progress.level}!` } satisfies ServerMsg));
           }
           break;
+        case "create_schedule_chain": {
+          const chainResult = activeManager.createScheduleChain(msg.chainName, msg.steps);
+          ws.send(JSON.stringify({ type: "toast", text: chainResult } satisfies ServerMsg));
+          void recordSignalByKey(sess.user.id, "pipeline_created");
+          void recordSignalByKey(sess.user.id, "scheduled_task");
+          break;
+        }
+        case "link_schedule_chain": {
+          const linkResult = activeManager.linkScheduleChain(msg.scheduleId, msg.chainTo);
+          ws.send(JSON.stringify({ type: "toast", text: linkResult } satisfies ServerMsg));
+          void recordSignalByKey(sess.user.id, "pipeline_created");
+          break;
+        }
         case "update_schedule":
           activeManager.updateSchedule(msg.scheduleId, { enabled: msg.enabled, name: msg.name, task: msg.task, cronExpression: msg.cronExpression });
           break;
         case "delete_schedule":
           activeManager.deleteSchedule(msg.scheduleId);
           break;
+        case "request_ab_comparison": {
+          const snap = activeManager.snapshot();
+          const agentA = snap.agents.find((a) => a.id === msg.agentAId);
+          const agentB = snap.agents.find((a) => a.id === msg.agentBId);
+          if (!agentA || !agentB) {
+            ws.send(JSON.stringify({ type: "toast", text: "Select two different agents to compare." } satisfies ServerMsg));
+            break;
+          }
+          // Get task history from manager — we need to access the internal runtime
+          // Use the public snapshot + getAgentGrowth for task history
+          const growthA = getGrowth(msg.agentAId);
+          const growthB = getGrowth(msg.agentBId);
+          const result = compareAgents(
+            { info: agentA, taskHistory: growthA.recentHistory.map((h) => ({ task: h.taskType, success: h.success, durationMs: h.durationMin * 60000, ts: h.timestamp })) },
+            { info: agentB, taskHistory: growthB.recentHistory.map((h) => ({ task: h.taskType, success: h.success, durationMs: h.durationMin * 60000, ts: h.timestamp })) },
+          );
+          ws.send(JSON.stringify({
+            type: "ab_comparison",
+            agentA: result.agentA,
+            agentB: result.agentB,
+            verdict: result.verdict,
+          } satisfies ServerMsg));
+          break;
+        }
+        case "request_efficiency_score": {
+          const snap = activeManager.snapshot();
+          const schedules = activeManager.snapshotSchedules();
+          const allAgents = snap.agents.filter((a) => a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard");
+          const totalTasks = allAgents.reduce((sum, a) => sum + a.tasksDone, 0);
+          const scheduledTasks = schedules.reduce((sum: number, s) => sum + s.runCount, 0);
+          // Gather recent task history from all agents
+          const allHistory: { success: boolean; durationMs: number; ts: number; taskType: string }[] = [];
+          for (const a of allAgents) {
+            const g = getGrowth(a.id);
+            for (const h of g.recentHistory) {
+              allHistory.push({ success: h.success, durationMs: h.durationMin * 60000, ts: h.timestamp, taskType: h.taskType });
+            }
+          }
+          const result = computeEfficiency(schedules, allHistory, totalTasks, scheduledTasks);
+          ws.send(JSON.stringify({
+            type: "efficiency_score",
+            throughput: result.throughput,
+            successRate: result.successRate,
+            autonomyRate: result.autonomyRate,
+            chainCount: result.chainCount,
+            badge: result.badge,
+            badgeColor: result.badgeColor,
+            suggestions: result.suggestions,
+          } satisfies ServerMsg));
+          break;
+        }
+        case "allocate_resources": {
+          const snap = activeManager.snapshot();
+          const error = validateAllocations(snap.agents, msg.allocations);
+          if (error) {
+            ws.send(JSON.stringify({ type: "toast", text: error } satisfies ServerMsg));
+            break;
+          }
+          // Store allocations (in-memory for now)
+          const allocMap = new Map<string, number>();
+          for (const a of msg.allocations) allocMap.set(a.agentId, a.budget);
+          const utilMap = new Map<string, number>();
+          for (const a of snap.agents) {
+            if (a.id !== "office-manager" && a.id !== "hermes" && a.id !== "wizard") {
+              utilMap.set(a.id, a.tasksDone > 0 ? Math.min(1, a.tasksDone / 50) : 0);
+            }
+          }
+          const result = getAllocation(snap.agents, allocMap, utilMap);
+          ws.send(JSON.stringify({
+            type: "resource_allocation",
+            totalBudget: result.totalBudget,
+            allocations: result.allocations,
+          } satisfies ServerMsg));
+          void recordSignalByKey(sess.user.id, "agent_count_grew");
+          break;
+        }
         case "recruit":
           await activeManager.recruit(msg.firedAgentId);
           void recordSignalByKey(sess.user.id, "agent_rehired_different_config");
@@ -3939,6 +4057,59 @@ wss.on("connection", async (ws, req) => {
         }
         case "seed_aspirations": {
           void seedAspirations(sess.user.id, msg.aspirations).catch(() => {});
+          break;
+        }
+        case "request_aspiration_dashboard": {
+          const profile = getCachedProfile(sess.user.id);
+          if (!profile) {
+            ws.send(JSON.stringify({
+              type: "aspiration_dashboard",
+              scores: {},
+              dominant: null,
+              signalCount: 0,
+              history: [],
+              unlocks: [],
+            } satisfies ServerMsg));
+            break;
+          }
+          const history = getSignalHistory(sess.user.id);
+          const unlocks = Object.entries(UNLOCK_THRESHOLDS_EXPORT).map(([key, config]) => ({
+            key,
+            track: config.track,
+            threshold: config.threshold,
+            label: config.label,
+            icon: config.icon,
+            unlocked: profile[config.track] >= config.threshold,
+            currentScore: profile[config.track],
+          }));
+          ws.send(JSON.stringify({
+            type: "aspiration_dashboard",
+            scores: {
+              warrior: profile.warrior,
+              builder: profile.builder,
+              explorer: profile.explorer,
+              puzzle_solver: profile.puzzle_solver,
+              creator: profile.creator,
+              strategist: profile.strategist,
+            },
+            dominant: profile.dominant,
+            signalCount: profile.signalCount,
+            history: history.map((h) => ({
+              key: h.key,
+              aspiration: h.aspiration,
+              weight: h.weight,
+              timestamp: h.timestamp,
+            })),
+            unlocks,
+          } satisfies ServerMsg));
+          break;
+        }
+        case "request_fulfillment": {
+          const snap = activeManager.snapshot();
+          const schedules = activeManager.snapshotSchedules();
+          const totalTasksDone = snap.agents.reduce((sum, a) => sum + (a.tasksDone ?? 0), 0);
+          const stats = computeFulfillment(sess.user.id, snap.agents, schedules, totalTasksDone);
+          ws.send(JSON.stringify({ type: "fulfillment_stats", stats } satisfies ServerMsg));
           break;
         }
         case "friend_request": {

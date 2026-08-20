@@ -61,7 +61,11 @@ function valueNoise(worldSeed: number, wx: number, wy: number, scale: number): n
  *   meadow  →  forest  →  ruins  →  wasteland  →  void  →  infernal
  *   peaceful ............................................ hostile
  */
-export type Biome = "meadow" | "forest" | "ruins" | "wasteland" | "void" | "infernal";
+export type Biome =
+  | "meadow" | "forest" | "ruins" | "wasteland" | "void" | "infernal"
+  | "alley" | "street" | "abandoned" | "undercity" | "sewer" | "hellmouth"
+  | "beach" | "jungle" | "volcanic_ridge" | "lava_tubes" | "underwater_cave" | "volcano_summit"
+  | "garden" | "cotton_field" | "pine_forest" | "bayou" | "battlefield";
 
 /** Hostility level 0–5+, scales with distance from origin. Never hits a wall — always playable.
  *  Returns fractional values near biome boundaries to enable smooth transitions.
@@ -111,6 +115,7 @@ const PROTECTED_TILES = new Set<number>([
   TILE.LAKE, TILE.LAKE_SHORE,
   TILE.GOLF_BAG, TILE.DRIVER, TILE.IRON_CLUB, TILE.WEDGE, TILE.PUTTER,
   TILE.TENNIS_COURT, TILE.TENNIS_WALL, TILE.TENNIS_RACKET, TILE.TENNIS_BALL, TILE.TENNIS_NET,
+  TILE.BLDG_WALL, TILE.BLDG_ROOF, TILE.BLDG_WINDOW, TILE.BLDG_CORNER,
 ]);
 
 /** Check if a tile can be safely overwritten by a feature. */
@@ -294,6 +299,11 @@ export function generateChunk(worldSeed: number, cx: number, cy: number, theme?:
   const hRounded = Math.round(hostility);
   if (!theme && (biome === "forest" || biome === "ruins") && rng() < (hRounded === 1 ? 0.12 : 0.08)) {
     placeWaterCluster(tiles, rng);
+  }
+
+  // --- theme-specific features ---
+  if (theme) {
+    placeThemeFeatures(tiles, biome, rng, theme, hostility);
   }
 
   // big lake — one deterministic multi-chunk lake in the meadow (default world only)
@@ -1300,6 +1310,349 @@ function placeStructure(tiles: number[], biome: Biome, rng: () => number): void 
   const doorX = ox + Math.floor(w / 2);
   tiles[idx(doorX, oy + h - 1)] = baseGround(biome);
   tiles[idx(doorX, oy)] = baseGround(biome);
+}
+
+/** Place theme-specific features based on the world's theme ID and biome. */
+function placeThemeFeatures(tiles: number[], biome: Biome, rng: () => number, theme: WorldTheme, hostility: number): void {
+  const themeId = theme.id;
+
+  if (themeId === "erics-alley") {
+    placeAlleyFeatures(tiles, biome, rng, theme, hostility);
+  } else if (themeId === "hawaii") {
+    placeHawaiiFeatures(tiles, biome, rng, theme, hostility);
+  } else if (themeId === "old-south") {
+    placeSouthFeatures(tiles, biome, rng, theme, hostility);
+  }
+}
+
+/** Erics Alley features: dumpster clusters, cardboard shanties, graffiti walls, manhole covers, massive buildings. */
+function placeAlleyFeatures(tiles: number[], biome: Biome, rng: () => number, theme: WorldTheme, _hostility: number): void {
+  const obstacles = theme.worldgen?.obstacles?.[biome] ?? [];
+
+  // Massive unenterable buildings — the defining feature of Erics Alley
+  // Spawn in most biomes with varying probability
+  const buildingChance =
+    biome === "street" ? 0.45 :
+    biome === "alley" ? 0.35 :
+    biome === "abandoned" ? 0.25 :
+    biome === "undercity" ? 0.30 :
+    biome === "sewer" ? 0.10 :
+    biome === "hellmouth" ? 0.15 : 0;
+  if (buildingChance > 0 && rng() < buildingChance) {
+    placeAlleyBuilding(tiles, rng);
+  }
+
+  if (obstacles.length === 0) return;
+
+  // Dumpster clusters in "alley" biome — 2-4 obstacles packed tightly
+  if (biome === "alley" && rng() < 0.35) {
+    const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    const count = 2 + Math.floor(rng() * 3);
+    for (let i = 0; i < count; i++) {
+      const dx = cx + Math.floor(rng() * 3 - 1);
+      const dy = cy + Math.floor(rng() * 3 - 1);
+      if (dx >= 0 && dx < CHUNK_SIZE && dy >= 0 && dy < CHUNK_SIZE && canOverwrite(tiles, idx(dx, dy))) {
+        tiles[idx(dx, dy)] = obstacles[Math.floor(rng() * obstacles.length)];
+      }
+    }
+  }
+
+  // Cardboard shanties in "abandoned" biome — 3x3 clusters of obstacles
+  if (biome === "abandoned" && rng() < 0.25) {
+    const cx = 2 + Math.floor(rng() * (CHUNK_SIZE - 5));
+    const cy = 2 + Math.floor(rng() * (CHUNK_SIZE - 5));
+    for (let dy = 0; dy < 3; dy++) {
+      for (let dx = 0; dx < 3; dx++) {
+        if (rng() < 0.6 && canOverwrite(tiles, idx(cx + dx, cy + dy))) {
+          tiles[idx(cx + dx, cy + dy)] = obstacles[Math.floor(rng() * obstacles.length)];
+        }
+      }
+    }
+  }
+
+  // Graffiti walls in "street" biome — line of obstacles with occasional gaps
+  if (biome === "street" && rng() < 0.20) {
+    const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    const len = 6 + Math.floor(rng() * 8);
+    const horiz = rng() < 0.5;
+    for (let i = 0; i < len; i++) {
+      const x = horiz ? 2 + i : cx_var(tiles, rng);
+      const y = horiz ? cy : 2 + i;
+      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE && rng() < 0.7 && canOverwrite(tiles, idx(x, y))) {
+        tiles[idx(x, y)] = obstacles[Math.floor(rng() * obstacles.length)];
+      }
+    }
+  }
+
+  // Manhole covers in "sewer" biome — single decorative tiles
+  if (biome === "sewer" && rng() < 0.15) {
+    const count = 1 + Math.floor(rng() * 3);
+    for (let i = 0; i < count; i++) {
+      const x = Math.floor(rng() * CHUNK_SIZE);
+      const y = Math.floor(rng() * CHUNK_SIZE);
+      if (canOverwrite(tiles, idx(x, y))) {
+        tiles[idx(x, y)] = obstacles[Math.floor(rng() * obstacles.length)];
+      }
+    }
+  }
+}
+
+/** Helper for random x offset in graffiti walls. */
+function cx_var(_tiles: number[], rng: () => number): number {
+  return 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+}
+
+/**
+ * Place a massive, unenterable procedurally generated building.
+ * Buildings vary in size (8-16 tiles wide, 6-14 tall), shape (rectangular, L-shaped, stepped),
+ * and have detailed facades: corner pillars, window grids, roof, and sometimes fire escapes.
+ * The entire interior is solid wall tiles — no walking through.
+ */
+function placeAlleyBuilding(tiles: number[], rng: () => number): void {
+  // Building dimensions — large and varied
+  const w = 8 + Math.floor(rng() * 9);  // 8-16 wide
+  const h = 6 + Math.floor(rng() * 9);  // 6-14 tall
+  const ox = 1 + Math.floor(rng() * Math.max(1, CHUNK_SIZE - w - 2));
+  const oy = 1 + Math.floor(rng() * Math.max(1, CHUNK_SIZE - h - 2));
+
+  // Building shape type
+  const shapeType = Math.floor(rng() * 4); // 0=rect, 1=L-shape, 2=stepped, 3=with courtyard gap
+
+  // Determine which tiles are part of the building footprint
+  const isFootprint = (lx: number, ly: number): boolean => {
+    if (lx < 0 || lx >= w || ly < 0 || ly >= h) return false;
+    switch (shapeType) {
+      case 1: // L-shape — cut top-right corner
+        return !(lx >= w * 0.6 && ly < h * 0.4);
+      case 2: // Stepped — cut top-left and bottom-right corners
+        return !((lx < w * 0.3 && ly < h * 0.3) || (lx >= w * 0.7 && ly >= h * 0.7));
+      case 3: // Courtyard gap — small hole in center
+        return !(lx >= w * 0.35 && lx < w * 0.65 && ly >= h * 0.35 && ly < h * 0.65);
+      default: // Rectangle
+        return true;
+    }
+  };
+
+  // Fill the entire footprint with wall tiles (solid, unenterable)
+  for (let ly = 0; ly < h; ly++) {
+    for (let lx = 0; lx < w; lx++) {
+      if (!isFootprint(lx, ly)) continue;
+      const tx = ox + lx;
+      const ty = oy + ly;
+      if (tx >= 0 && tx < CHUNK_SIZE && ty >= 0 && ty < CHUNK_SIZE) {
+        tiles[idx(tx, ty)] = TILE.BLDG_WALL;
+      }
+    }
+  }
+
+  // Corners — reinforced concrete pillars at building corners
+  const corners: [number, number][] = [];
+  // Find actual corners of the footprint
+  for (const [lx, ly] of [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]] as [number, number][]) {
+    if (isFootprint(lx, ly)) corners.push([ox + lx, oy + ly]);
+  }
+  for (const [cx, cy] of corners) {
+    if (cx >= 0 && cx < CHUNK_SIZE && cy >= 0 && cy < CHUNK_SIZE) {
+      tiles[idx(cx, cy)] = TILE.BLDG_CORNER;
+    }
+  }
+
+  // Windows — grid pattern on walls, but skip edges and corners
+  const windowSpacingX = 2 + Math.floor(rng() * 2); // every 2-3 tiles
+  const windowSpacingY = 2 + Math.floor(rng() * 2);
+  const windowOffsetX = 1 + Math.floor(rng() * 2);
+  const windowOffsetY = 1 + Math.floor(rng() * 2);
+  for (let ly = windowOffsetY; ly < h - 1; ly += windowSpacingY) {
+    for (let lx = windowOffsetX; lx < w - 1; lx += windowSpacingX) {
+      if (!isFootprint(lx, ly)) continue;
+      // Skip if adjacent to a corner
+      const isNearCorner = corners.some(([cx, cy]) => Math.abs(ox + lx - cx) <= 1 && Math.abs(oy + ly - cy) <= 1);
+      if (isNearCorner) continue;
+      // Only place windows on perimeter tiles (edge of footprint)
+      const onEdge = !isFootprint(lx - 1, ly) || !isFootprint(lx + 1, ly) ||
+                     !isFootprint(lx, ly - 1) || !isFootprint(lx, ly + 1);
+      if (!onEdge) continue;
+      // Random chance to skip a window ( variation)
+      if (rng() < 0.3) continue;
+      const tx = ox + lx;
+      const ty = oy + ly;
+      if (tx >= 0 && tx < CHUNK_SIZE && ty >= 0 && ty < CHUNK_SIZE) {
+        tiles[idx(tx, ty)] = TILE.BLDG_WINDOW;
+      }
+    }
+  }
+
+  // Roof — top row of the footprint gets roof tiles
+  for (let lx = 0; lx < w; lx++) {
+    if (!isFootprint(lx, 0)) continue;
+    // Only if the tile above is NOT part of the building (it's the top edge)
+    const tx = ox + lx;
+    const ty = oy;
+    if (tx >= 0 && tx < CHUNK_SIZE && ty >= 0 && ty < CHUNK_SIZE) {
+      // Keep corners as corners, replace top-edge walls with roof
+      if (tiles[idx(tx, ty)] === TILE.BLDG_WALL) {
+        tiles[idx(tx, ty)] = TILE.BLDG_ROOF;
+      }
+    }
+  }
+
+  // Sometimes add a rooftop detail — replace some roof tiles with AC/vent variants
+  if (rng() < 0.5) {
+    const acCount = 1 + Math.floor(rng() * 3);
+    for (let i = 0; i < acCount; i++) {
+      const lx = 1 + Math.floor(rng() * (w - 2));
+      if (!isFootprint(lx, 0)) continue;
+      const tx = ox + lx;
+      const ty = oy;
+      if (tx >= 0 && tx < CHUNK_SIZE && ty >= 0 && ty < CHUNK_SIZE) {
+        if (tiles[idx(tx, ty)] === TILE.BLDG_ROOF) {
+          tiles[idx(tx, ty)] = TILE.BLDG_CORNER; // reuse corner texture as rooftop unit
+        }
+      }
+    }
+  }
+}
+
+/** Hawaii features: tiki torches, lava streams, coconut groves, tidal pools. */
+function placeHawaiiFeatures(tiles: number[], biome: Biome, rng: () => number, theme: WorldTheme, _hostility: number): void {
+  const obstacles = theme.worldgen?.obstacles?.[biome] ?? [];
+  if (obstacles.length === 0) return;
+
+  // Coconut groves in "jungle" biome — clusters of palm-like obstacles
+  if (biome === "jungle" && rng() < 0.30) {
+    const cx = 3 + Math.floor(rng() * (CHUNK_SIZE - 6));
+    const cy = 3 + Math.floor(rng() * (CHUNK_SIZE - 6));
+    const r = 2 + Math.floor(rng() * 2);
+    for (let y = cy - r; y <= cy + r; y++) {
+      for (let x = cx - r; x <= cx + r; x++) {
+        if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+          const d = Math.hypot(x - cx, y - cy);
+          if (d <= r && rng() < 0.45 && canOverwrite(tiles, idx(x, y))) {
+            tiles[idx(x, y)] = obstacles[Math.floor(rng() * obstacles.length)];
+          }
+        }
+      }
+    }
+  }
+
+  // Lava streams in "volcanic_ridge" and "lava_tubes" — winding lines of hostile tiles
+  const hostileTiles = theme.worldgen?.hostileTiles?.[biome];
+  if (hostileTiles && hostileTiles.length > 0 && (biome === "volcanic_ridge" || biome === "lava_tubes") && rng() < 0.30) {
+    let x = Math.floor(rng() * CHUNK_SIZE);
+    let y = Math.floor(rng() * CHUNK_SIZE);
+    const len = 8 + Math.floor(rng() * 12);
+    let dir = Math.floor(rng() * 4);
+    for (let i = 0; i < len; i++) {
+      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE && canOverwrite(tiles, idx(x, y))) {
+        tiles[idx(x, y)] = hostileTiles[Math.floor(rng() * hostileTiles.length)];
+      }
+      // Wander
+      if (rng() < 0.3) dir = Math.floor(rng() * 4);
+      if (dir === 0) y--;
+      else if (dir === 1) x++;
+      else if (dir === 2) y++;
+      else x--;
+    }
+  }
+
+  // Tidal pools in "beach" biome — small water clusters
+  if (biome === "beach" && rng() < 0.20) {
+    const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    const r = 1 + Math.floor(rng() * 2);
+    for (let y = cy - r; y <= cy + r; y++) {
+      for (let x = cx - r; x <= cx + r; x++) {
+        if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+          const d = Math.hypot(x - cx, y - cy);
+          if (d <= r && rng() < 0.5 && canOverwrite(tiles, idx(x, y))) {
+            tiles[idx(x, y)] = TILE.WATER;
+          }
+        }
+      }
+    }
+  }
+
+  // Tiki torches — single obstacle tiles lining paths in "beach" biome
+  if (biome === "beach" && rng() < 0.12) {
+    const count = 2 + Math.floor(rng() * 4);
+    for (let i = 0; i < count; i++) {
+      const x = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
+      const y = 2 + Math.floor(rng() * (CHUNK_SIZE - 4));
+      if (canOverwrite(tiles, idx(x, y))) {
+        tiles[idx(x, y)] = obstacles[Math.floor(rng() * obstacles.length)];
+      }
+    }
+  }
+}
+
+/** Old South features: cotton field rows, plantation houses, bayou bridges. */
+function placeSouthFeatures(tiles: number[], biome: Biome, rng: () => number, theme: WorldTheme, _hostility: number): void {
+  const obstacles = theme.worldgen?.obstacles?.[biome] ?? [];
+  if (obstacles.length === 0) return;
+
+  // Cotton field rows in "cotton_field" biome — organized parallel lines of obstacles
+  if (biome === "cotton_field" && rng() < 0.40) {
+    const rowSpacing = 3 + Math.floor(rng() * 2);
+    const horizontal = rng() < 0.5;
+    for (let row = 2; row < CHUNK_SIZE - 2; row += rowSpacing) {
+      for (let i = 0; i < CHUNK_SIZE; i += 2) {
+        const x = horizontal ? i : row;
+        const y = horizontal ? row : i;
+        if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE && rng() < 0.5 && canOverwrite(tiles, idx(x, y))) {
+          tiles[idx(x, y)] = obstacles[Math.floor(rng() * obstacles.length)];
+        }
+      }
+    }
+  }
+
+  // Plantation houses in "garden" biome — 4x4 structures with walls
+  if (biome === "garden" && rng() < 0.15) {
+    const size = 4 + Math.floor(rng() * 2);
+    const ox = 2 + Math.floor(rng() * (CHUNK_SIZE - size - 4));
+    const oy = 2 + Math.floor(rng() * (CHUNK_SIZE - size - 4));
+    for (let x = ox; x < ox + size; x++) {
+      if (canOverwrite(tiles, idx(x, oy))) tiles[idx(x, oy)] = obstacles[0];
+      if (canOverwrite(tiles, idx(x, oy + size - 1))) tiles[idx(x, oy + size - 1)] = obstacles[0];
+    }
+    for (let y = oy; y < oy + size; y++) {
+      if (canOverwrite(tiles, idx(ox, y))) tiles[idx(ox, y)] = obstacles[0];
+      if (canOverwrite(tiles, idx(ox + size - 1, y))) tiles[idx(ox + size - 1, y)] = obstacles[0];
+    }
+    // Door gap
+    const doorX = ox + Math.floor(size / 2);
+    tiles[idx(doorX, oy + size - 1)] = baseGround(biome, theme);
+  }
+
+  // Bayou bridges in "bayou" biome — lines of walkable tiles over water
+  if (biome === "bayou" && rng() < 0.25) {
+    const len = 8 + Math.floor(rng() * 8);
+    const horiz = rng() < 0.5;
+    const start = 2 + Math.floor(rng() * (CHUNK_SIZE - len - 4));
+    const fixed = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    for (let i = 0; i < len; i++) {
+      const x = horiz ? start + i : fixed;
+      const y = horiz ? fixed : start + i;
+      if (x >= 0 && x < CHUNK_SIZE && y >= 0 && y < CHUNK_SIZE) {
+        tiles[idx(x, y)] = baseGround(biome, theme);
+      }
+    }
+  }
+
+  // Battlefield trenches in "battlefield" biome — cross patterns of obstacles
+  if (biome === "battlefield" && rng() < 0.20) {
+    const cx = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    const cy = 4 + Math.floor(rng() * (CHUNK_SIZE - 8));
+    const armLen = 3 + Math.floor(rng() * 3);
+    for (let i = -armLen; i <= armLen; i++) {
+      if (cx + i >= 0 && cx + i < CHUNK_SIZE && canOverwrite(tiles, idx(cx + i, cy))) {
+        tiles[idx(cx + i, cy)] = obstacles[Math.floor(rng() * obstacles.length)];
+      }
+      if (cy + i >= 0 && cy + i < CHUNK_SIZE && canOverwrite(tiles, idx(cx, cy + i))) {
+        tiles[idx(cx, cy + i)] = obstacles[Math.floor(rng() * obstacles.length)];
+      }
+    }
+  }
 }
 
 /** Place a tennis court — rectangular hard court with walls, net, racket, and ball. */

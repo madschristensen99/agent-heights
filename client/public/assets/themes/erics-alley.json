@@ -96,6 +96,10 @@
       7,
       11,
       18
+    ],
+    "vehicles": [
+      { "type": "car", "biomes": ["street"], "cap": 3, "speed": 120 },
+      { "type": "van", "biomes": ["alley"], "cap": 2, "speed": 90 }
     ]
   },
   "interactables": {
@@ -156,7 +160,10 @@
       "name": "Concrete Kings",
       "color": 7368816,
       "spriteKey": "faction-kings"
-    }
+    },
+    "minHostility": 1,
+    "spawnInterval": 3000,
+    "capPerSide": 8
   },
   "assets": {
     "tilesetPath": "assets/tilesets/erics-alley.png",

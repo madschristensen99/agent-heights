@@ -3810,6 +3810,178 @@ function drawCabinRoof(ctx: CanvasRenderingContext2D, size: number): void {
 }
 
 // ============================================================
+// URBAN BUILDING TILES — large unenterable structures for themed worlds
+// ============================================================
+
+/** Draw an urban building wall tile — weathered concrete with brick lower section. */
+function drawBldgWall(ctx: CanvasRenderingContext2D, size: number): void {
+  // upper concrete section
+  ctx.fillStyle = rgba(0x6a6a6a, 1);
+  ctx.fillRect(0, 0, size, size);
+  // concrete texture — subtle noise blocks
+  ctx.fillStyle = rgba(0x5a5a5a, 0.4);
+  for (let i = 0; i < 8; i++) {
+    const bx = (i * 13) % size;
+    const by = (i * 7) % size;
+    ctx.fillRect(bx, by, 3, 3);
+  }
+  ctx.fillStyle = rgba(0x7a7a7a, 0.3);
+  for (let i = 0; i < 6; i++) {
+    const bx = (i * 17 + 5) % size;
+    const by = (i * 11 + 3) % size;
+    ctx.fillRect(bx, by, 2, 2);
+  }
+  // lower brick section — bottom 30%
+  const brickH = size * 0.3;
+  ctx.fillStyle = rgba(0x8b4513, 1);
+  ctx.fillRect(0, size - brickH, size, brickH);
+  // brick mortar lines
+  ctx.strokeStyle = rgba(0x5a3010, 0.8);
+  ctx.lineWidth = 1;
+  const mortarSpacing = brickH / 3;
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, size - brickH + i * mortarSpacing);
+    ctx.lineTo(size, size - brickH + i * mortarSpacing);
+    ctx.stroke();
+  }
+  // vertical brick mortar — offset rows
+  for (let row = 0; row < 3; row++) {
+    const y = size - brickH + row * mortarSpacing;
+    const offset = row % 2 === 0 ? 0 : size / 8;
+    for (let x = offset; x < size; x += size / 4) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + mortarSpacing);
+      ctx.stroke();
+    }
+  }
+  // grime streaks from top
+  ctx.strokeStyle = rgba(0x3a3a3a, 0.3);
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    const x = (i * 19 + 8) % size;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + 2, size - brickH);
+    ctx.stroke();
+  }
+}
+
+/** Draw an urban building roof tile — flat tar roof with AC unit and vents. */
+function drawBldgRoof(ctx: CanvasRenderingContext2D, size: number): void {
+  // base tar roof
+  ctx.fillStyle = rgba(0x2a2a2a, 1);
+  ctx.fillRect(0, 0, size, size);
+  // gravel texture
+  ctx.fillStyle = rgba(0x3a3a3a, 0.5);
+  for (let i = 0; i < 12; i++) {
+    const bx = (i * 11 + 3) % size;
+    const by = (i * 17 + 5) % size;
+    ctx.fillRect(bx, by, 2, 2);
+  }
+  ctx.fillStyle = rgba(0x1a1a1a, 0.4);
+  for (let i = 0; i < 8; i++) {
+    const bx = (i * 23 + 7) % size;
+    const by = (i * 13 + 11) % size;
+    ctx.fillRect(bx, by, 1, 1);
+  }
+  // AC unit — small square in corner
+  const acSize = size * 0.25;
+  ctx.fillStyle = rgba(0x8a8a8a, 0.8);
+  ctx.fillRect(2, 2, acSize, acSize * 0.7);
+  ctx.strokeStyle = rgba(0x5a5a5a, 0.8);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(2, 2, acSize, acSize * 0.7);
+  // vent pipe — small circle
+  ctx.fillStyle = rgba(0x6a6a6a, 0.7);
+  ctx.beginPath();
+  ctx.arc(size - 8, size - 8, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = rgba(0x4a4a4a, 0.6);
+  ctx.stroke();
+  // roof edge
+  ctx.strokeStyle = rgba(0x4a4a4a, 0.5);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(size, 0);
+  ctx.stroke();
+}
+
+/** Draw an urban building window tile — dark glass with reflection, no light inside. */
+function drawBldgWindow(ctx: CanvasRenderingContext2D, size: number): void {
+  // wall background
+  drawBldgWall(ctx, size);
+  // window — dark glass, no warm glow (unenterable building)
+  const ww = size * 0.5;
+  const wh = size * 0.4;
+  const wx = (size - ww) / 2;
+  const wy = size * 0.25;
+  // dark glass
+  ctx.fillStyle = rgba(0x1a1a2a, 0.9);
+  ctx.fillRect(wx, wy, ww, wh);
+  // reflection streak
+  ctx.fillStyle = rgba(0x4a4a6a, 0.3);
+  ctx.beginPath();
+  ctx.moveTo(wx, wy);
+  ctx.lineTo(wx + ww * 0.4, wy);
+  ctx.lineTo(wx + ww * 0.1, wy + wh);
+  ctx.lineTo(wx, wy + wh);
+  ctx.closePath();
+  ctx.fill();
+  // window frame — metal
+  ctx.strokeStyle = rgba(0x3a3a3a, 1);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(wx, wy, ww, wh);
+  // mullions
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(wx + ww / 2, wy);
+  ctx.lineTo(wx + ww / 2, wy + wh);
+  ctx.moveTo(wx, wy + wh / 2);
+  ctx.lineTo(wx + ww, wy + wh / 2);
+  ctx.stroke();
+  // sill
+  ctx.fillStyle = rgba(0x5a5a5a, 0.8);
+  ctx.fillRect(wx - 2, wy + wh, ww + 4, 2);
+}
+
+/** Draw an urban building corner tile — reinforced concrete pillar. */
+function drawBldgCorner(ctx: CanvasRenderingContext2D, size: number): void {
+  // base concrete
+  ctx.fillStyle = rgba(0x5a5a5a, 1);
+  ctx.fillRect(0, 0, size, size);
+  // reinforcement lines — vertical rebar pattern
+  ctx.strokeStyle = rgba(0x4a4a4a, 0.8);
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * size / 4, 0);
+    ctx.lineTo(i * size / 4, size);
+    ctx.stroke();
+  }
+  // horizontal ties
+  ctx.strokeStyle = rgba(0x6a6a6a, 0.5);
+  for (let i = 1; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, i * size / 5);
+    ctx.lineTo(size, i * size / 5);
+    ctx.stroke();
+  }
+  // corner highlight — lighter edge
+  ctx.strokeStyle = rgba(0x7a7a7a, 0.6);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, size);
+  ctx.stroke();
+  // grime at bottom
+  ctx.fillStyle = rgba(0x3a3a3a, 0.4);
+  ctx.fillRect(0, size - size * 0.2, size, size * 0.2);
+}
+
+// ============================================================
 // WIFE NPC — cabin companion sprite
 // ============================================================
 
@@ -4499,6 +4671,7 @@ const ALL_PROC_KEYS = [
   "golf-club", "golf-ball", "axe", "net",
   "big-tree", "big-rock", "palm-tree", "mystic-tree", "tee-box", "leprechaun", "leprechaun-npc", "fountain-sheet",
   "cabin-wall", "cabin-door", "cabin-window", "cabin-roof",
+  "bldg-wall", "bldg-roof", "bldg-window", "bldg-corner",
   "lake-shore", "campfire", "void-rift",
   "wife-npc",
   "tennis-court", "tennis-wall", "tennis-racket", "tennis-ball", "tennis-net",
@@ -4870,6 +5043,27 @@ export function getTextureGenerationSteps(scene: Phaser.Scene, force = false): A
       if (!tex.exists("cabin-roof")) {
         const ct = createCanvasTexture(tex, "cabin-roof", 64, 64);
         drawCabinRoof(ct.getContext(), 64);
+        ct.refresh();
+      }
+      // urban building tiles — wall, roof, window, corner
+      if (!tex.exists("bldg-wall")) {
+        const ct = createCanvasTexture(tex, "bldg-wall", 64, 64);
+        drawBldgWall(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("bldg-roof")) {
+        const ct = createCanvasTexture(tex, "bldg-roof", 64, 64);
+        drawBldgRoof(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("bldg-window")) {
+        const ct = createCanvasTexture(tex, "bldg-window", 64, 64);
+        drawBldgWindow(ct.getContext(), 64);
+        ct.refresh();
+      }
+      if (!tex.exists("bldg-corner")) {
+        const ct = createCanvasTexture(tex, "bldg-corner", 64, 64);
+        drawBldgCorner(ct.getContext(), 64);
         ct.refresh();
       }
       // lake shore tile

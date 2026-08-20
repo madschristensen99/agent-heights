@@ -92,6 +92,10 @@
       7,
       11,
       18
+    ],
+    "vehicles": [
+      { "type": "cart", "biomes": ["beach"], "cap": 2, "speed": 100 },
+      { "type": "canoe", "biomes": ["beach"], "cap": 2, "speed": 70 }
     ]
   },
   "interactables": {},
@@ -126,7 +130,10 @@
       "name": "Turtle Tribe",
       "color": 26624,
       "spriteKey": "faction-turtle"
-    }
+    },
+    "minHostility": 2,
+    "spawnInterval": 4000,
+    "capPerSide": 6
   },
   "sky": {
     "gradientStops": [
