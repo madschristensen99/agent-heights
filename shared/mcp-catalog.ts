@@ -159,6 +159,21 @@ export const SECURITY_NOTES: Record<string, { riskLevel: RiskLevel; securityNote
     securityNote: "OAuth grants read-only access to your Google Contacts, profile, and directory. No write access. Contact information is sensitive — restrict with ACLs in shared rooms.",
     dataAccess: "Read your Google profile, contacts, and organization directory.",
   },
+  "Zillapi": {
+    riskLevel: "medium",
+    securityNote: "API key grants access to Zillow-sourced property data. Treat zk_ keys like passwords — never commit them to a repo. Free tier includes 100 credits.",
+    dataAccess: "Look up US property data including prices, Zestimates, photos, tax history, school ratings, and listing details.",
+  },
+  "StayingAPI": {
+    riskLevel: "low",
+    securityNote: "All tools are read-only (annotated readOnlyHint). No booking, cancellation, or write capabilities. OAuth 2.1 with PKCE — no static keys. 300 free credits.",
+    dataAccess: "Search accommodations, check availability, compare prices, and read reviews across Booking.com, Airbnb, Vrbo, and Google Hotels.",
+  },
+  "Nomad Stays": {
+    riskLevel: "low",
+    securityNote: "Read-only public data. No authentication required. No write or booking capabilities.",
+    dataAccess: "Search digital nomad accommodations by location, lifestyle, budget, amenities, WiFi speed, and availability.",
+  },
 };
 
 /** Look up security metadata for a server by name, falling back to the SECURITY_NOTES map. */
@@ -204,7 +219,10 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Google Slides Agent: Presentation agent — read and update slide decks via Google Slides MCP (OAuth).
 - Google Calendar Agent: Scheduling agent — list, search, create, update, and delete events via Google Calendar MCP (OAuth). Suggests meeting times based on free/busy.
 - Google Chat Agent: Messaging agent — read and send messages in Google Chat spaces via Google Chat MCP (OAuth).
-- Google Contacts Agent: Contacts agent — look up contacts, profile info, and directory via Google People API MCP (OAuth).`;
+- Google Contacts Agent: Contacts agent — look up contacts, profile info, and directory via Google People API MCP (OAuth).
+- Zillapi Property Analyst: Real estate agent — look up US properties, Zestimates, listings, and 300+ fields per home via Zillapi MCP. Requires API key (free: 100 credits, no card). Pairs with finance agents for mortgage planning.
+- StayingAPI Accommodation Scout: Travel agent — search stays across Booking.com, Airbnb, Vrbo & Google Hotels in one unified schema. OAuth, 300 free credits. Read-only — search, compare prices, check availability.
+- Nomad Stays Explorer: Housing agent — search digital nomad accommodations worldwide by lifestyle, budget, amenities, WiFi speed. No auth needed. 76 tools for finding remote-work-friendly housing.`;
 
 
 /** Convert a catalog entry to an MCPServerConfig for agent assignment. */

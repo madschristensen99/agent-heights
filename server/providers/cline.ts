@@ -282,6 +282,7 @@ export async function makeTools(cwd: string, opts?: {
   onBroadcastHtml?: (filePath: string) => void;
   model?: string;
   requestGate?: (question: string, options: string[], freeText?: boolean) => Promise<string>;
+  proposeAction?: (title: string, description: string, category: string, severity: "low" | "medium" | "high") => string;
 }): Promise<AgentTool<any, any>[]> {
   const safe = (p: string) => {
     const resolved = resolve(cwd, p);
@@ -789,7 +790,44 @@ export async function makeTools(cwd: string, opts?: {
     },
   };
 
-  const baseWithMessaging = [...baseWithShared, postMessageTool, readMessagesTool, waitForReplyTool, askManagerTool];
+  const proposeActionTool: AgentTool<any, any> = {
+    name: "propose_action",
+    description:
+      "Propose an improvement to the office based on your observations and experience. " +
+      "This creates a task card on the board that you or a colleague can pick up. " +
+      "Use this during self-reflection or when you notice something that could be better. " +
+      "Be specific: 'Add retry logic to bash tool calls' is good; 'improve error handling' is not.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short title for the improvement (max 100 chars)" },
+        description: { type: "string", description: "Detailed description of the improvement and why it's needed" },
+        category: { type: "string", description: "Category: tooling, process, workflow, skill_gap, or other" },
+        severity: { type: "string", enum: ["low", "medium", "high"], description: "How impactful this improvement would be" },
+      },
+      required: ["title", "description", "category", "severity"],
+    },
+    async execute(input: any) {
+      if (!opts?.proposeAction) {
+        return "Unable to create improvement proposals right now.";
+      }
+      const title = String(input.title ?? "").trim().slice(0, 100);
+      const description = String(input.description ?? "").trim();
+      const category = String(input.category ?? "general").trim();
+      const severity = (String(input.severity ?? "low").trim() as "low" | "medium" | "high");
+      if (!title || !description) {
+        return "Title and description are required.";
+      }
+      try {
+        const cardId = opts.proposeAction(title, description, category, severity);
+        return `Improvement proposal created on the board: "${title}" (card ID: ${cardId}). The boss or a colleague can pick it up.`;
+      } catch (err) {
+        return `Failed to create proposal: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  };
+
+  const baseWithMessaging = [...baseWithShared, postMessageTool, readMessagesTool, waitForReplyTool, askManagerTool, proposeActionTool];
 
   // ── Task board tools (world awareness) ─────────────────────────────
   const boardTools: AgentTool<any, any>[] = [];
@@ -1472,6 +1510,7 @@ export const runCline: ProviderRunner = async function* (task, ctx) {
         wizardBranch: ctx.wizardBranch,
         onBroadcastHtml: ctx.onBroadcastHtml,
         requestGate: ctx.requestGate,
+        proposeAction: ctx.proposeAction,
       });
       const maxIter = isChat
         ? (wizardChatTools.length > 0 ? 10

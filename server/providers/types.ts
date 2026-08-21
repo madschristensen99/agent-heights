@@ -101,6 +101,8 @@ export interface RunContext {
   onBroadcastHtml?: (filePath: string) => void;
   /** Ask the boss (user) a blocking question. Returns the user's answer. Resolves with a default after timeout. */
   requestGate?: (question: string, options: string[], freeText?: boolean) => Promise<string>;
+  /** Agent proposes an improvement — creates a task card on the board. Returns the card ID. */
+  proposeAction?: (title: string, description: string, category: string, severity: "low" | "medium" | "high") => string;
 }
 
 export type ProviderRunner = (

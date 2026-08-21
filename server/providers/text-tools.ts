@@ -236,6 +236,7 @@ export const runTextTools: ProviderRunner = async function* (task, ctx) {
       updateSelfSchedule: ctx.updateSelfSchedule,
       deleteSelfSchedule: ctx.deleteSelfSchedule,
       requestGate: ctx.requestGate,
+      proposeAction: ctx.proposeAction,
     });
 
     // Build system prompt with tool descriptions

@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer, FulfillmentStats, ExternalSession, ExternalEvent, ExternalTool, OrgExternalSession, IdeBridgeVisibility, VelocityTrend, StandupSummary, AnomalyAlert } from "../../shared/types";
+import type { AgentInfo, AgentSchedule, CharAppearance, FiredAgent, GameSettings, LogEntry, PlayerInfo, PlayerPresence, RailwayData, ServerMsg, TaskCard, MCPServerConfig, ClientMsg, RoomType, RoomAccessLevel, Organization, OrgMember, SavedOutfit, PlatformEvent, PlatformConnectionState, VacationedAgent, SubscriptionTier, WorldDeployment, OfficeMCPServer, AssetUpgradeStatus, Presenter, LeaderboardEntry, LeaderboardCategory, TrophyProfile, AspirationProfile, AspirationUnlocks, AwayReport, AutomationStats, DecompositionScore, ExperimentEntry, OfficeDecoration, OfficeSocialState, OfficeLevelInfo, AgentGrowth, Challenge, ChallengeResult, FriendEntry, PendingFriendRequest, OnlinePlayer, FulfillmentStats, ExternalSession, ExternalEvent, ExternalTool, OrgExternalSession, IdeBridgeVisibility, VelocityTrend, StandupSummary, AnomalyAlert, OfficeInviteEntry } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { achievements } from "./game/achievements";
 import { getReactionsForAchievement, NPC_IDS, checkContextTrigger } from "./ui/agent-reactions";
@@ -328,6 +328,11 @@ export class Store {
   /** Room occupancy map: roomId → { playerCount, players[] }. */
   roomOccupancy: Map<string, { playerCount: number; players: { userId: string; name: string }[] }> = new Map();
 
+  /** Pending office invites sent by this user. */
+  officeInvites: OfficeInviteEntry[] = [];
+  /** Info about a claimed invite (inviter + room to join). */
+  claimedInvite: { inviterId: string; inviterName: string; roomId: string } | null = null;
+
   /** True if the current room is an organization room (uses the agentHeights theme). */
   get isOrgRoom(): boolean {
     if (!this.roomId) return false;
@@ -549,6 +554,8 @@ export class Store {
     this.pendingFriendRequests = [];
     this.onlinePlayers = [];
     this.roomOccupancy.clear();
+    this.officeInvites = [];
+    this.claimedInvite = null;
     this.hasApiKey = false;
     this.subscriptionActive = true;
     this.subscriptionStatus = "none";
@@ -1600,6 +1607,20 @@ export class Store {
         for (const r of msg.rooms) {
           this.roomOccupancy.set(r.roomId, { playerCount: r.playerCount, players: r.players });
         }
+        break;
+      }
+      case "office_invites": {
+        this.officeInvites = msg.invites;
+        break;
+      }
+      case "invite_claimed": {
+        this.claimedInvite = { inviterId: msg.inviterId, inviterName: msg.inviterName, roomId: msg.roomId };
+        for (const fn of this.toastListeners) fn(`You've been invited to ${msg.inviterName}'s office! Click to visit.`);
+        break;
+      }
+      case "invite_friend_joined": {
+        for (const fn of this.toastListeners) fn(`${msg.inviteeName} accepted your invite!`);
+        this.sendFn?.({ type: "list_friends" });
         break;
       }
       case "emote": {

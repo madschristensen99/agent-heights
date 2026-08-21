@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize, resolve, relative } from "node:path";
 import { readFile, stat, readdir, writeFile, unlink, mkdir, lstat } from "node:fs/promises";
-import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance, Presenter } from "../shared/types.js";
+import type { ClientMsg, ServerMsg, SavedOutfit, CharAppearance, Presenter, OfficeInviteEntry } from "../shared/types.js";
 import { SERVER_PORT, isValidAppearance, MAX_PRESENTERS, COMMAND_CENTER_ADMINS, OFFICE_MANAGER_ID } from "../shared/types.js";
 import { isSupabaseConfigured, verifyToken, getTokenExpiry, type AuthUser, supabaseAdmin } from "./supabase.js";
 import { handleMarketplaceRequest } from "./marketplace.js";
@@ -58,8 +58,21 @@ import { getAllocation, validateAllocations } from "./resource-allocation.js";
 import { computeFulfillment } from "./fulfillment.js";
 import { ideBridge, IdeBridge } from "./ide-bridge.js";
 import { snapshotVelocity, getVelocityTrends, getStandupSummary, detectAnomalies, formatStandupText } from "./velocity.js";
+import { createInvite, claimInvite, getPendingInvites, revokeInvite } from "./office-invites.js";
 
 // ── User activity persistence (retention system) ─────────────────────────
+
+/** Map a DB invite row to the OfficeInviteEntry wire format. */
+function mapInviteEntry(r: any): OfficeInviteEntry {
+  return {
+    id: r.id,
+    inviteeEmail: r.inviteeEmail,
+    status: r.status,
+    createdAt: r.createdAt,
+    claimedAt: r.claimedAt,
+    claimedByName: null,
+  };
+}
 
 async function persistUserActivity(userId: string, lastActiveAt: number, lastPlatformEngagementAt: number): Promise<void> {
   if (!isSupabaseConfigured) return;
@@ -4214,6 +4227,68 @@ wss.on("connection", async (ws, req) => {
         case "list_online_players": {
           const players = tenants.getOnlineUsers();
           sess.broadcast({ type: "online_players", players });
+          break;
+        }
+        case "invite_friend": {
+          if (!sess.privateOfficeId) {
+            sess.broadcast({ type: "toast", text: "No office found to invite to." });
+            break;
+          }
+          const result = await createInvite(sess.user.id, sess.user.email ?? "", msg.email, sess.privateOfficeId);
+          sess.broadcast({ type: "toast", text: result.message });
+          if (result.ok) {
+            const invites = await getPendingInvites(sess.user.id);
+            sess.broadcast({ type: "office_invites", invites: invites.map(mapInviteEntry) });
+          }
+          break;
+        }
+        case "claim_invite": {
+          const result = await claimInvite(sess.user.id, sess.user.email ?? "", msg.token);
+          if (!result.ok) {
+            console.log(`[office-invites] claim failed for ${sess.user.id}: ${result.message}`);
+            break;
+          }
+          // Auto-friend: add both directions as accepted
+          if (result.inviterId) {
+            const now = new Date().toISOString();
+            await supabaseAdmin.from("heights_cloud_friends").upsert({
+              user_id: sess.user.id, friend_id: result.inviterId, status: "accepted", accepted_at: now,
+            }, { onConflict: "user_id,friend_id" });
+            await supabaseAdmin.from("heights_cloud_friends").upsert({
+              user_id: result.inviterId, friend_id: sess.user.id, status: "accepted", accepted_at: now,
+            }, { onConflict: "user_id,friend_id" });
+            invalidateFriendsListCache(sess.user.id, result.inviterId);
+          }
+          // Auto-invite to the inviter's room with talk access
+          if (result.inviterId && result.roomId) {
+            tenants.inviteUser(result.roomId, sess.user.id, "talk");
+            // Notify inviter if online
+            const inviterSess = tenants.get(result.inviterId);
+            if (inviterSess) {
+              const inviteeName = tenants.getPlayerName(sess.user.id);
+              inviterSess.broadcast({ type: "invite_friend_joined", inviteeEmail: sess.user.email ?? "", inviteeName });
+              inviterSess.broadcast({ type: "toast", text: `${inviteeName} just accepted your invite and is ready to visit!` });
+            }
+          }
+          // Tell the invitee which room to join
+          if (result.inviterId && result.roomId) {
+            const inviterName = tenants.getPlayerName(result.inviterId);
+            sess.broadcast({ type: "invite_claimed", inviterId: result.inviterId, inviterName, roomId: result.roomId });
+          }
+          break;
+        }
+        case "list_pending_invites": {
+          const invites = await getPendingInvites(sess.user.id);
+          sess.broadcast({ type: "office_invites", invites: invites.map(mapInviteEntry) });
+          break;
+        }
+        case "revoke_invite": {
+          const result = await revokeInvite(sess.user.id, msg.inviteId);
+          sess.broadcast({ type: "toast", text: result.message });
+          if (result.ok) {
+            const invites = await getPendingInvites(sess.user.id);
+            sess.broadcast({ type: "office_invites", invites: invites.map(mapInviteEntry) });
+          }
           break;
         }
         case "external_connect": {

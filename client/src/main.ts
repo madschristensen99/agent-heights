@@ -57,8 +57,16 @@ if (isSpectator) {
 const _params = new URLSearchParams(window.location.search);
 const _paymentResult = _params.get("payment");
 const _upgradeDeployment = _params.get("deployment");
+const _inviteToken = _params.get("invite");
 if (_paymentResult) {
   history.replaceState({}, "", window.location.pathname);
+}
+if (_inviteToken) {
+  localStorage.setItem("agent-heights-invite", _inviteToken);
+  const _cleanUrl = _paymentResult
+    ? window.location.pathname
+    : window.location.pathname + window.location.search.replace(/[?&]invite=[^&]*/, "").replace(/^[?&]/, "");
+  history.replaceState({}, "", _cleanUrl || window.location.pathname);
 }
 
 // Start auth early — runs in parallel with Phaser init and asset downloads
@@ -146,6 +154,14 @@ if (isSpectator) {
       if (!connected) { net.connect(); connected = true; }
       // Check payment status after login
       void refreshPaymentStatus();
+      // Claim office invite if we have a token (from ?invite=... redirect)
+      const _storedInvite = localStorage.getItem("agent-heights-invite");
+      if (_storedInvite) {
+        localStorage.removeItem("agent-heights-invite");
+        setTimeout(() => {
+          store.sendFn?.({ type: "claim_invite", token: _storedInvite });
+        }, 2000);
+      }
     } else {
       // Auth is enabled but no session — show login overlay, don't connect
       authOverlay.show();

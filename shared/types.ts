@@ -251,6 +251,8 @@ export interface AgentInfo {
   capabilities?: string[];
   /** Per-skill performance metrics for capability gap analysis and estimation. */
   performanceBySkill?: Record<string, SkillPerformance>;
+  /** Agent's experiential journal — observations, insights, and experiences that persist across tasks. */
+  journal?: { ts: number; type: string; text: string; context?: Record<string, unknown> }[];
 }
 
 /** A premium API service from Circle's x402 marketplace. */
@@ -646,7 +648,7 @@ export interface PendingTask {
   waitFor?: string | null;
 }
 
-export type CardType = "task" | "chat" | "review" | "goal";
+export type CardType = "task" | "chat" | "review" | "goal" | "improvement";
 
 export interface TaskCard {
   id: string;
@@ -926,6 +928,17 @@ export interface OnlinePlayer {
   roomType: RoomType | null;
   orgId?: string;
 }
+
+/** An office invite entry for display in the invites list. */
+export interface OfficeInviteEntry {
+  id: string;
+  inviteeEmail: string;
+  status: "pending" | "claimed" | "expired";
+  createdAt: string;
+  claimedAt: string | null;
+  claimedByName: string | null;
+}
+
 export const COMMAND_CENTER_ADMINS = [
   "remseechannel@gmail.com",
   "madschristensen99@icloud.com",
@@ -1305,7 +1318,11 @@ export type ClientMsg =
   | { type: "set_ide_bridge_privacy"; visibility: "full" | "branch_only" | "hidden" }
   | { type: "request_velocity_report"; days?: number }
   | { type: "request_standup" }
-  | { type: "request_anomalies" };
+  | { type: "request_anomalies" }
+  | { type: "invite_friend"; email: string }
+  | { type: "claim_invite"; token: string }
+  | { type: "list_pending_invites" }
+  | { type: "revoke_invite"; inviteId: string };
 
 export type ServerMsg =
   | { type: "auth_required" }
@@ -1489,7 +1506,10 @@ export type ServerMsg =
   | { type: "ide_bridge_privacy"; visibility: "full" | "branch_only" | "hidden" }
   | { type: "velocity_report"; trends: VelocityTrend[] }
   | { type: "standup_summary"; summary: StandupSummary }
-  | { type: "anomaly_alerts"; alerts: AnomalyAlert[] };
+  | { type: "anomaly_alerts"; alerts: AnomalyAlert[] }
+  | { type: "office_invites"; invites: OfficeInviteEntry[] }
+  | { type: "invite_claimed"; inviterId: string; inviterName: string; roomId: string }
+  | { type: "invite_friend_joined"; inviteeEmail: string; inviteeName: string };
 
 // ── Away Report ──────────────────────────────────────────────────────────────
 

@@ -59,6 +59,7 @@ import { registerServer, listServers, getServerConfigs, unregisterServer, loadSe
 import { ProfileManager } from "./profile.js";
 import { sendCreditDepletion } from "./funnel-emails.js";
 import { ideBridge } from "./ide-bridge.js";
+import { getGrowth } from "./agent-growth.js";
 
 /** Build a compact categorized summary of the curated MCP catalog from DB. */
 async function catalogSummary(): Promise<string> {
@@ -365,6 +366,15 @@ interface TaskHistoryEntry {
   durationMs: number;
 }
 
+/** A journal entry recording an agent's observation, insight, or experience.
+ *  This persists across tasks and survives freshStart — it's the agent's lived memory. */
+interface JournalEntry {
+  ts: number;
+  type: "observation" | "insight" | "frustration" | "success" | "social" | "self_reflection";
+  text: string;
+  context?: { taskId?: string; colleagueId?: string; boardState?: string };
+}
+
 interface AgentRuntime {
   info: AgentInfo;
   logs: LogEntry[];
@@ -410,6 +420,14 @@ interface AgentRuntime {
   consecutiveFailures: number;
   /** Timestamp of the last onPostMessage task creation (for throttling). */
   lastPostMessageTaskAt: number;
+  /** The agent's experiential journal — persists across tasks and freshStarts. */
+  journal: JournalEntry[];
+  /** Hash of the board state last seen by this agent — for detecting changes. */
+  lastBoardSeen: string;
+  /** Timestamp of last journal entry — for rate-limiting. */
+  lastJournalAt: number;
+  /** Timestamp of last self-reflection — for rate-limiting reflections. */
+  lastReflectionAt: number;
 }
 
 /** Keyword expansion for TaskCategory values used in skill-based mail routing. */
@@ -643,7 +661,36 @@ export class AgentManager {
           text: "Server restarted — the task that was running got interrupted.",
         });
       }
-      this.agents.set(info.id, { info, logs, abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 });
+      this.agents.set(info.id, { 
+        info, 
+        logs, 
+        abort: null, 
+        doneTimer: null, 
+        handoffTo: null, 
+        cardId: null, 
+        taskQueue: [], 
+        nextThinkAt: 0, 
+        thinkCooldownUntil: 0, 
+        taskHistory: [], 
+        taskStartedAt: 0, 
+        scheduleId: null, 
+        reviewContext: null, 
+        platformContext: null, 
+        waitingFor: null, 
+        notifyOnComplete: null, 
+        waitFor: null, 
+        freshStart: false, 
+        memorySummary: null, 
+        retryAttempted: false, 
+        reworkCount: 0, 
+        pendingGate: null, 
+        consecutiveFailures: 0, 
+        lastPostMessageTaskAt: 0,
+        journal: (info.journal ?? []) as JournalEntry[],
+        lastBoardSeen: "",
+        lastJournalAt: 0,
+        lastReflectionAt: 0,
+      });
     }
     if (this.agents.size > 0) {
       console.log(`[agent-heights] restored ${this.agents.size} agent(s) from save`);
@@ -841,7 +888,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("office-manager", OFFICE_MANAGER_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0, journal: [], lastBoardSeen: "", lastJournalAt: 0, lastReflectionAt: 0 };
     this.agents.set(OFFICE_MANAGER_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -878,7 +925,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("hermes", HERMES_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0, journal: [], lastBoardSeen: "", lastJournalAt: 0, lastReflectionAt: 0 };
     this.agents.set(HERMES_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -923,7 +970,7 @@ export class AgentManager {
       mood: "content",
     };
     mkdirSync(this.cwdFor("wizard", WIZARD_ID), { recursive: true });
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0, journal: [], lastBoardSeen: "", lastJournalAt: 0, lastReflectionAt: 0 };
     this.agents.set(WIZARD_ID, rt);
     this.persist();
     this.broadcast({ type: "agent", agent: info });
@@ -1694,7 +1741,7 @@ export class AgentManager {
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || info.id;
     mkdirSync(this.cwdFor(slug, info.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0, journal: [], lastBoardSeen: "", lastJournalAt: 0, lastReflectionAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("hire", { agent: info });
     this.persist();
@@ -2588,7 +2635,7 @@ export class AgentManager {
     const slug = va.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || va.id;
     mkdirSync(this.cwdFor(slug, va.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0, journal: [], lastBoardSeen: "", lastJournalAt: 0, lastReflectionAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("restore", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -2638,7 +2685,7 @@ export class AgentManager {
     const slug = fa.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fa.id;
     mkdirSync(this.cwdFor(slug, fa.id), { recursive: true });
 
-    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0 };
+    const rt: AgentRuntime = { info, logs: [], abort: null, doneTimer: null, handoffTo: null, cardId: null, taskQueue: [], nextThinkAt: 0, thinkCooldownUntil: 0, taskHistory: [], taskStartedAt: 0, scheduleId: null, reviewContext: null, platformContext: null, waitingFor: null, notifyOnComplete: null, waitFor: null, freshStart: false, memorySummary: null, retryAttempted: false, reworkCount: 0, pendingGate: null, consecutiveFailures: 0, lastPostMessageTaskAt: 0, journal: [], lastBoardSeen: "", lastJournalAt: 0, lastReflectionAt: 0 };
     this.agents.set(info.id, rt);
     this.session.record("recruit", { agentId: info.id, agentName: info.name });
     this.persist();
@@ -3798,10 +3845,9 @@ export class AgentManager {
     });
   }
 
-  /** An idle agent decides what to do autonomously. */
+  /** An idle agent observes its world and decides what to do autonomously. */
   private autonomousThink(rt: AgentRuntime): void {
     const p = rt.info.personality ?? DEFAULT_PERSONALITY;
-    // Update mood
     this.updateMood(rt);
 
     // 0. Auto-claim: idle agents pick up unassigned backlog cards matching their skills
@@ -3825,7 +3871,7 @@ export class AgentManager {
       if (claimable.length > 0) {
         const card = claimable[0];
         if (card.revertedAt && Date.now() - card.revertedAt < 30_000) {
-          // 30s cooldown after a failed attempt — skip to emotes
+          // 30s cooldown after a failed attempt — skip to observation
         } else {
           this.log(rt, "status", `Picked up card: "${card.title.slice(0, 60)}"`);
           this.assignCard(card.id, rt.info.id);
@@ -3845,32 +3891,207 @@ export class AgentManager {
       if (errorAgents.length > 0 && Math.random() < 0.5) {
         const errAgent = errorAgents[0];
         this.log(rt, "status", `Noticed ${errAgent.info.name} is in error state — keeping an eye on it.`);
+        this.recordJournal(rt, "observation", `${errAgent.info.name} is stuck in error state.`);
         this.broadcast({ type: "emote", agentId: rt.info.id, emote: "🔍" });
         return;
       }
       if (errorCards.length > 2 && Math.random() < 0.3) {
         this.log(rt, "status", `${errorCards.length} cards stuck in backlog — office might need attention.`);
+        this.recordJournal(rt, "observation", `${errorCards.length} cards piling up in backlog.`);
         this.broadcast({ type: "emote", agentId: rt.info.id, emote: "📊" });
         return;
       }
     }
 
-    // 2. Curious agents: show a thinking emote
-    if (p.openness > 0.6 && Math.random() < 0.3) {
+    // 2. Observe the world — detect board changes since last tick
+    this.observeWorld(rt, p);
+
+    // 3. Self-reflection — agents with enough history occasionally reflect on their performance
+    if (rt.taskHistory.length >= 3 && rt.info.role !== "manager" && rt.info.id !== HERMES_ID && rt.info.id !== WIZARD_ID) {
+      const now = Date.now();
+      const reflectionCooldown = 30 * 60 * 1000; // 30 min between reflections
+      if (now - rt.lastReflectionAt > reflectionCooldown) {
+        // Reflection chance scales with failures, declining trend, and openness
+        let reflectionChance = 0.05 + p.openness * 0.05;
+        if (rt.consecutiveFailures >= 2) reflectionChance += 0.15;
+        const growth = getGrowth(rt.info.id);
+        if (growth.trend === "declining") reflectionChance += 0.1;
+        if (growth.successRate < 0.5 && growth.totalTasks >= 3) reflectionChance += 0.1;
+
+        if (Math.random() < reflectionChance) {
+          this.triggerSelfReflection(rt, growth);
+          return;
+        }
+      }
+    }
+
+    // 4. Personality-driven emotes (fallback — but now informed by journal)
+    if (p.openness > 0.6 && Math.random() < 0.2) {
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💡" });
-      return;
-    }
-
-    // 3. Bored agents: show a bored emote
-    if (rt.info.mood === "bored" && Math.random() < 0.3) {
+    } else if (rt.info.mood === "bored" && Math.random() < 0.2) {
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: "💤" });
-      return;
-    }
-
-    // 4. Default: occasional idle emote
-    if (Math.random() < 0.15) {
+    } else if (rt.info.mood === "frustrated" && Math.random() < 0.2) {
+      this.broadcast({ type: "emote", agentId: rt.info.id, emote: "😤" });
+    } else if (Math.random() < 0.1) {
       const emotes = ["💭", "☕", "📝"];
       this.broadcast({ type: "emote", agentId: rt.info.id, emote: pick(emotes) });
+    }
+  }
+
+  /** Create a compact hash of the board state for change detection. */
+  private boardSnapshot(): string {
+    const cards = [...this.board.values()]
+      .map(c => `${c.id}:${c.status}:${c.assignedAgentId ?? "?"}`)
+      .sort()
+      .join("|");
+    return cards;
+  }
+
+  /** Observe the world: detect board changes, colleague states, and record journal entries. */
+  private observeWorld(rt: AgentRuntime, p: PersonalityTraits): void {
+    const now = Date.now();
+    const journalCooldown = 60 * 1000; // Min 1 min between observation journal entries
+    if (now - rt.lastJournalAt < journalCooldown) return;
+
+    // Detect board changes
+    const currentBoard = this.boardSnapshot();
+    if (rt.lastBoardSeen && rt.lastBoardSeen !== currentBoard) {
+      const oldCards = new Map<string, string[]>(rt.lastBoardSeen.split("|").filter(Boolean).map(s => { const parts = s.split(":"); return [parts[0] ?? "", parts] as [string, string[]]; }));
+      const newCards = new Map<string, string[]>(currentBoard.split("|").filter(Boolean).map(s => { const parts = s.split(":"); return [parts[0] ?? "", parts] as [string, string[]]; }));
+      const newCardIds = [...newCards.keys()].filter(id => !oldCards.has(id));
+      const completedIds = [...newCards.entries()].filter(([id, parts]) => { const old = oldCards.get(id); return old && old[2] !== "done" && parts[2] === "done"; }).map(([id]) => id);
+
+      if (newCardIds.length > 0) {
+        const newCard = this.board.get(newCardIds[0]);
+        if (newCard) {
+          this.recordJournal(rt, "observation", `New task appeared on the board: "${newCard.title.slice(0, 80)}"`);
+        }
+      }
+      if (completedIds.length > 0) {
+        const doneCard = this.board.get(completedIds[0]);
+        if (doneCard) {
+          const doneBy = doneCard.assignedAgentId ? this.agents.get(doneCard.assignedAgentId)?.info.name ?? "someone" : "someone";
+          this.recordJournal(rt, "observation", `${doneBy} completed: "${doneCard.title.slice(0, 80)}"`);
+        }
+      }
+    }
+    rt.lastBoardSeen = currentBoard;
+
+    // Notice struggling colleagues
+    const struggling = [...this.agents.values()].filter(
+      a => a.info.id !== rt.info.id && a.info.id !== OFFICE_MANAGER_ID && a.info.id !== WIZARD_ID &&
+        (a.info.status === "error" || a.consecutiveFailures >= 2),
+    );
+    if (struggling.length > 0 && p.agreeableness > 0.5 && Math.random() < 0.3) {
+      const colleague = struggling[0];
+      this.recordJournal(rt, "social", `${colleague.info.name} seems to be struggling — they've had ${colleague.consecutiveFailures} failures in a row.`);
+    }
+
+    // Notice idle colleagues when there's work to do
+    const idleColleagues = [...this.agents.values()].filter(
+      a => a.info.id !== rt.info.id && a.info.status === "idle" && a.info.role !== "manager",
+    );
+    const backlogCount = [...this.board.values()].filter(c => c.status === "backlog" && !c.assignedAgentId).length;
+    if (backlogCount > 0 && idleColleagues.length > 2 && Math.random() < 0.2) {
+      this.recordJournal(rt, "observation", `${backlogCount} tasks in backlog with ${idleColleagues.length} colleagues idle — office could be more productive.`);
+    }
+
+    // Self-awareness: notice own performance trends
+    if (rt.taskHistory.length >= 3) {
+      const recentFailures = rt.taskHistory.slice(0, 3).filter(h => !h.success).length;
+      if (recentFailures >= 2 && rt.info.mood === "frustrated") {
+        this.recordJournal(rt, "frustration", `I've failed ${recentFailures} of my last 3 tasks. I might need a different approach or help from a colleague.`);
+      } else if (rt.taskHistory[0]?.success && rt.taskHistory.slice(0, 3).every(h => h.success)) {
+        this.recordJournal(rt, "success", `Completed my last ${Math.min(3, rt.taskHistory.length)} tasks successfully — feeling confident.`);
+      }
+    }
+  }
+
+  /** Record a journal entry for an agent. Caps at 50 entries, newest first. */
+  private recordJournal(rt: AgentRuntime, type: JournalEntry["type"], text: string, context?: JournalEntry["context"]): void {
+    rt.journal.unshift({ ts: Date.now(), type, text, context });
+    if (rt.journal.length > 50) rt.journal.length = 50;
+    rt.lastJournalAt = Date.now();
+    // Sync to info so it persists via snapshot()
+    rt.info.journal = rt.journal;
+  }
+
+  /** Trigger a self-reflection task for an agent — they analyze their own performance and propose improvements. */
+  private triggerSelfReflection(rt: AgentRuntime, growth: { successRate: number; trend: string; totalTasks: number; specialty: string | null }): void {
+    rt.lastReflectionAt = Date.now();
+
+    const recentTasks = rt.taskHistory.slice(0, 5).map(h =>
+      `  ${h.success ? "✓" : "✗"} ${h.task.slice(0, 100)} (${(h.durationMs / 1000).toFixed(0)}s)`,
+    ).join("\n");
+
+    const reflectionTask = `SELF-REFLECTION — Review your recent performance and propose one concrete improvement.
+
+Your stats:
+- Success rate: ${(growth.successRate * 100).toFixed(0)}% over ${growth.totalTasks} tasks
+- Trend: ${growth.trend}
+- Consecutive failures: ${rt.consecutiveFailures}
+- Specialty: ${growth.specialty ?? "none yet"}
+
+Recent tasks:
+${recentTasks}
+
+Think about what's working, what's not, and what would help you be more effective. If you identify a concrete improvement (a tool you need, a process change, a new approach), use the propose_action tool to suggest it. If everything is going well, just submit a brief reflection.
+
+Use propose_action with a clear title, description, and category (e.g. "tooling", "process", "workflow", "skill_gap"). Be specific — "I need better error handling" is not helpful; "Add retry logic to bash tool calls when exit code is non-zero" is.`;
+
+    this.recordJournal(rt, "self_reflection", `Triggered self-reflection. Success rate: ${(growth.successRate * 100).toFixed(0)}%, trend: ${growth.trend}.`);
+    this.log(rt, "status", `Self-reflecting on recent performance (${(growth.successRate * 100).toFixed(0)}% success rate, ${growth.trend}).`);
+
+    // Assign as a fresh-start task so the agent starts with a clean conversation
+    const cardId = this.autoCardFor(rt.info.id, reflectionTask, "improvement");
+    const card = this.board.get(cardId);
+    if (card) {
+      card.type = "improvement";
+      this.persistBoard();
+      this.broadcast({ type: "card", card });
+    }
+    rt.freshStart = true;
+    rt.memorySummary = this.buildMemorySummary(rt);
+    clearAllMemory(rt.info.id);
+    void this.save.clearMessages(rt.info.id);
+    rt.info.sessionId = null;
+    this.startTask(rt, reflectionTask, undefined, cardId, false);
+  }
+
+  /** Evolve agent personality and skills based on task outcomes. */
+  private evolvePersonality(rt: AgentRuntime, success: boolean): void {
+    if (!rt.info.personality) return;
+    const p = { ...rt.info.personality };
+    const nudge = (trait: keyof PersonalityTraits, delta: number) => {
+      p[trait] = Math.max(0.1, Math.min(0.9, p[trait]! + delta));
+    };
+
+    if (success) {
+      // Success boosts conscientiousness slightly, reduces neuroticism
+      nudge("conscientiousness", 0.01);
+      nudge("neuroticism", -0.01);
+      // High openness agents learn more from success
+      if (p.openness > 0.6) nudge("openness", 0.005);
+    } else {
+      // Failure increases neuroticism slightly, may reduce openness
+      nudge("neuroticism", 0.01);
+      if (p.openness > 0.5) nudge("openness", -0.005);
+      // But failures can also build resilience (conscientiousness)
+      if (rt.consecutiveFailures < 3) nudge("conscientiousness", 0.005);
+    }
+
+    rt.info.personality = p;
+
+    // Skill evolution: after 3+ successes in a category, add it to skills if not present
+    if (success && rt.info.performanceBySkill) {
+      for (const [category, perf] of Object.entries(rt.info.performanceBySkill)) {
+        if (perf.tasks >= 3 && perf.successRate >= 0.7) {
+          if (!rt.info.skills?.includes(category as TaskCategory)) {
+            rt.info.skills = [...(rt.info.skills ?? []), category as TaskCategory];
+            this.recordJournal(rt, "insight", `I've gotten good at ${category} tasks (${perf.tasks} completed, ${(perf.successRate * 100).toFixed(0)}% success) — adding it to my skills.`);
+          }
+        }
+      }
     }
   }
 
@@ -4119,6 +4340,18 @@ export class AgentManager {
     // without carrying the full prior conversation.
     if (rt.freshStart && rt.memorySummary) {
       systemPrompt = `${systemPrompt}\n\n${rt.memorySummary}`;
+    }
+    // Inject the agent's experiential journal — their lived observations and insights
+    // that persist across tasks and fresh starts. This is what makes the agent "reside"
+    // in the world rather than waking up with no memory of their experiences.
+    if (rt.journal.length > 0) {
+      const recentJournal = rt.journal.slice(0, 15);
+      const journalText = recentJournal.map(j => {
+        const age = Math.round((Date.now() - j.ts) / 60000);
+        const ageStr = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.round(age / 60)}h ago` : `${Math.round(age / 1440)}d ago`;
+        return `  [${ageStr}] (${j.type}) ${j.text}`;
+      }).join("\n");
+      systemPrompt = `${systemPrompt}\n\n=== YOUR RECENT OBSERVATIONS AND EXPERIENCES ===\nThese are your lived experiences from working in this office. Use them for context — they represent what you've noticed, learned, and felt.\n${journalText}\n=== END OBSERVATIONS ===`;
     }
     const isManager = rt.info.role === "manager";
 
@@ -4380,6 +4613,29 @@ export class AgentManager {
             rt.pendingGate = { id: gateId, resolve, timer, options };
           });
         },
+        proposeAction: (title: string, description: string, category: string, severity: "low" | "medium" | "high"): string => {
+          // Create an improvement card on the board
+          const cardId = randomUUID();
+          const card: TaskCard = {
+            id: cardId,
+            title: `💡 ${title}`,
+            description: `Proposed by ${rt.info.name} [${severity} priority]: ${description}`,
+            status: "backlog",
+            assignedAgentId: null,
+            createdAt: Date.now(),
+            type: "improvement",
+            category: category as TaskCategory,
+          };
+          this.board.set(cardId, card);
+          this.persistBoard();
+          this.broadcast({ type: "card", card });
+          this.broadcastGanttUpdate();
+          this.log(rt, "status", `Proposed improvement: "${title}" [${severity}]`);
+          this.recordJournal(rt, "insight", `Proposed improvement: "${title}" — ${description.slice(0, 100)}`);
+          this.logEvent("improvement_proposed", `${rt.info.name} proposed: "${title}" [${severity}]`);
+          this.broadcast({ type: "toast", text: `${rt.info.name} proposed an improvement: "${title}"` });
+          return cardId;
+        },
       });
 
       // Track tool calls to detect redundant loops and budget exhaustion
@@ -4627,6 +4883,8 @@ export class AgentManager {
           rt.taskHistory.unshift({ task, success: false, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           this.updateAgentSkillPerformance(rt, task, false, duration);
+          this.evolvePersonality(rt, false);
+          this.recordJournal(rt, "frustration", `Failed task: "${task.slice(0, 100)}" — ${firstErrorText?.slice(0, 100) ?? "unknown error"}`);
           if (this.onTaskComplete) this.onTaskComplete(rt.info.id, false, duration / 60000, rt.cardId ? "card" : "general");
           // Auto-record task failure in the office state graph
           this.officeState.addNode("task", task.slice(0, 200), rt.info.id, rt.info.name, "failed");
@@ -4649,6 +4907,8 @@ export class AgentManager {
           rt.taskHistory.unshift({ task, success: true, ts: Date.now(), durationMs: duration });
           if (rt.taskHistory.length > 20) rt.taskHistory.pop();
           this.updateAgentSkillPerformance(rt, task, true, duration);
+          this.evolvePersonality(rt, true);
+          this.recordJournal(rt, "success", `Completed task: "${task.slice(0, 100)}" in ${(duration / 1000).toFixed(0)}s`);
           if (this.onTaskComplete) this.onTaskComplete(rt.info.id, true, duration / 60000, rt.cardId ? "card" : "general");
           // Breakthrough detection
           this.checkBreakthrough(rt, task, duration);

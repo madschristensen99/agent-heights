@@ -478,6 +478,7 @@ export class Hud {
     document.getElementById("social-btn")!.addEventListener("click", () => {
       this.net.send({ type: "list_friends" });
       this.net.send({ type: "list_online_players" });
+      this.net.send({ type: "list_pending_invites" });
       this.openSocialPanel();
     });
     document.getElementById("ide-bridge-btn")!.addEventListener("click", () => {
@@ -2282,6 +2283,33 @@ export class Hud {
           </div>
         </div>
 
+        <div style="margin-bottom:1rem;border-top:1px solid var(--panel-edge-soft);padding-top:1rem;">
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">INVITE FRIENDS TO YOUR OFFICE</div>
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;">
+            <input id="invite-email-input" placeholder="Friend's email…" style="flex:1;padding:0.5rem;background:var(--panel-soft);border:1px solid var(--panel-edge);border-radius:var(--radius-sm);color:var(--text);font-size:0.85rem;font-family:var(--font-body);" />
+            <button class="btn primary" id="invite-send-btn" style="font-size:0.8rem;">INVITE</button>
+          </div>
+          <p style="font-size:0.7rem;color:var(--dim);margin:0 0 0.5rem 0;">They'll get an email to visit your office. If they sign up, they can walk around and chat with your agents.</p>
+          ${this.store.officeInvites.length > 0 ? `
+            <div style="max-height:150px;overflow-y:auto;">
+              ${this.store.officeInvites.map(inv => `
+                <div style="display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;">
+                  <span style="font-size:0.8rem;color:var(--text);flex:1;">${inv.inviteeEmail}</span>
+                  <span style="font-size:0.65rem;color:${inv.status === 'claimed' ? 'var(--accent)' : 'var(--dim)'};">${inv.status === 'claimed' ? '✓ Joined' : inv.status === 'expired' ? 'Expired' : 'Pending'}</span>
+                  ${inv.status === 'pending' ? `<button class="btn" data-revoke-invite="${inv.id}" style="font-size:0.65rem;padding:0.15rem 0.4rem;color:var(--dim);">Revoke</button>` : ''}
+                </div>
+              `).join("")}
+            </div>
+          ` : ''}
+        </div>
+
+        ${this.store.claimedInvite ? `
+        <div style="margin-bottom:1rem;border:1px solid var(--accent);border-radius:var(--radius-sm);padding:0.75rem;background:rgba(88,200,102,0.08);">
+          <div style="font-size:0.85rem;color:var(--text);margin-bottom:0.3rem;">You've been invited to ${this.store.claimedInvite.inviterName}'s office!</div>
+          <button class="btn primary" id="visit-inviter-office" style="font-size:0.8rem;">Visit Office</button>
+        </div>
+        ` : ""}
+
         ${incomingReqs.length > 0 ? `
         <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
           <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">FRIEND REQUESTS (${incomingReqs.length})</div>
@@ -2345,6 +2373,44 @@ export class Hud {
         this.rerenderSocialPanel(overlay);
       }, 500);
     });
+
+    // Send office invite
+    const inviteSendBtn = document.getElementById("invite-send-btn");
+    if (inviteSendBtn) {
+      inviteSendBtn.addEventListener("click", () => {
+        const input = document.getElementById("invite-email-input") as HTMLInputElement;
+        const email = input.value.trim();
+        if (!email) return;
+        this.net.send({ type: "invite_friend", email });
+        input.value = "";
+        setTimeout(() => {
+          this.net.send({ type: "list_pending_invites" });
+          this.rerenderSocialPanel(overlay);
+        }, 500);
+      });
+    }
+
+    // Revoke invite
+    for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-revoke-invite]")) {
+      btn.addEventListener("click", () => {
+        this.net.send({ type: "revoke_invite", inviteId: btn.dataset.revokeInvite! });
+        setTimeout(() => {
+          this.net.send({ type: "list_pending_invites" });
+          this.rerenderSocialPanel(overlay);
+        }, 500);
+      });
+    }
+
+    // Visit inviter's office
+    const visitBtn = document.getElementById("visit-inviter-office");
+    if (visitBtn) {
+      visitBtn.addEventListener("click", () => {
+        if (this.store.claimedInvite) {
+          this.net.send({ type: "switch_room", roomId: this.store.claimedInvite.roomId });
+          close();
+        }
+      });
+    }
 
     // Accept friend
     for (const btn of overlay.querySelectorAll<HTMLButtonElement>("button[data-accept-friend]")) {

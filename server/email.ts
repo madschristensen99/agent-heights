@@ -193,6 +193,26 @@ export async function sendOrgInviteEmail(
   );
 }
 
+export async function sendOfficeInviteEmail(
+  email: string,
+  inviterEmail: string,
+  token: string,
+): Promise<void> {
+  const inviteUrl = `${APP_URL}/?invite=${token}`;
+  await sendRawEmail(
+    email,
+    `${inviterEmail} invited you to their office`,
+    shell(
+      [
+        paragraph(`<strong style="color:${BRAND_ACCENT};">${inviterEmail}</strong> wants you to visit their office on Agent Heights.`, { lead: true }),
+        paragraph(`They've got AI agents working in a virtual office — walking around, doing tasks, collaborating in real time. Come check it out and see what they're building.`, { muted: true }),
+        ctaSection("Visit Their Office", inviteUrl),
+        footnote("Don't know this person? Just ignore this email."),
+      ].join(""),
+    ),
+  );
+}
+
 export async function sendFollowUpEmail(email: string): Promise<void> {
   await sendRawEmail(
     email,
