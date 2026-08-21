@@ -6185,10 +6185,8 @@ export class OfficeScene extends Phaser.Scene {
         if (this.pendingHeliAgents.length > 0) {
           this.syncPendingHeliAgents(exitX, exitY);
         }
-        if (this.heliAgent && sprite.active) {
-          this.heliAgent.setDepth(10 + exitY);
-          sprite.play(`${agentKey}-idle-down`);
-        }
+        this.heliAgent?.destroy();
+        this.heliAgent = null;
         // Van drives away
         this.vanDriveAway();
       },
@@ -6342,10 +6340,8 @@ export class OfficeScene extends Phaser.Scene {
         if (this.pendingHeliAgents.length > 0) {
           this.syncPendingHeliAgents(exitX, exitY);
         }
-        if (this.heliAgent && sprite.active) {
-          this.heliAgent.setDepth(10 + exitY);
-          sprite.play(`${agentKey}-idle-down`);
-        }
+        this.heliAgent?.destroy();
+        this.heliAgent = null;
         // Canoe paddles away
         if (this.heliContainer) {
           this.tweens.add({
@@ -6517,10 +6513,8 @@ export class OfficeScene extends Phaser.Scene {
         if (this.pendingHeliAgents.length > 0) {
           this.syncPendingHeliAgents(exitX, exitY);
         }
-        if (this.heliAgent && sprite.active) {
-          this.heliAgent.setDepth(10 + exitY);
-          sprite.play(`${agentKey}-idle-down`);
-        }
+        this.heliAgent?.destroy();
+        this.heliAgent = null;
         // Carriage trots away
         if (this.heliContainer) {
           this.tweens.add({
@@ -6638,12 +6632,8 @@ export class OfficeScene extends Phaser.Scene {
         if (this.pendingHeliAgents.length > 0) {
           this.syncPendingHeliAgents(exitX, exitY);
         }
-        if (this.heliAgent && sprite.active) {
-          this.heliAgent.setPosition(exitX, exitY);
-          this.heliAgent.setVisible(true);
-          this.heliAgent.setDepth(10 + exitY);
-          sprite.play(`${agentKey}-idle-down`);
-        }
+        this.heliAgent?.destroy();
+        this.heliAgent = null;
         // remove elevator visual
         this.time.delayedCall(600, () => {
           elev.destroy();
