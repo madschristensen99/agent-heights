@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useDashboard } from "../lib/store";
 import { Folder, File, ChevronRight, ArrowLeft, RefreshCw } from "lucide-react";
+import { IconArrowLeft } from "./Icons";
 
 interface FileBrowserProps {
   agentId: string;
@@ -91,7 +92,7 @@ export function FileBrowser({ agentId, onBack }: FileBrowserProps) {
                 onClick={() => setViewingFile(null)}
                 className="text-sm text-muted hover:text-accent"
               >
-                ← Back to listing
+                <IconArrowLeft size={12} className="inline-block" /> Back to listing
               </button>
               <span className="text-sm text-gray-300 font-mono">{viewingFile}</span>
             </div>

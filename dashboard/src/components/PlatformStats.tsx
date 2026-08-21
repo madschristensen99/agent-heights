@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { DollarSign, Users, Activity, TrendingUp, Zap, RefreshCw, TrendingDown, Wallet } from "lucide-react";
+import { IconArrowRight } from "./Icons";
 import { adminApi } from "../lib/admin-api";
 import type {
   OverviewStats, UserTimeseries, RevenueData, UsageStats,
@@ -342,8 +343,8 @@ export function PlatformStats() {
             })}
             {conversion && (
               <div className="pt-2 border-t border-border text-xs text-muted space-y-1">
-                <div>Entrance → Subscription: <span className="text-text">{fmtPct(conversion.subscriptionConversionPct)}</span></div>
-                <div>Overall (Registered → Subscribed): <span className="text-text">{fmtPct(conversion.overallConversionPct)}</span></div>
+                <div>Entrance <IconArrowRight size={10} className="inline-block" /> Subscription: <span className="text-text">{fmtPct(conversion.subscriptionConversionPct)}</span></div>
+                <div>Overall (Registered <IconArrowRight size={10} className="inline-block" /> Subscribed): <span className="text-text">{fmtPct(conversion.overallConversionPct)}</span></div>
               </div>
             )}
           </div>

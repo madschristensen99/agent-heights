@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useDashboard } from "../lib/store";
 import type { MarketplaceAgent } from "../../shared/marketplace";
 import { Search, Download, ExternalLink, Tag } from "lucide-react";
+import { IconLightning } from "./Icons";
 
 export function MarketplaceView() {
   const { send } = useDashboard();
@@ -123,7 +124,7 @@ export function MarketplaceView() {
                       : `$${minPrice.toFixed(4)}–$${maxPrice.toFixed(4)}/call`;
                     return (
                       <div className="mt-2 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                        <div className="text-xs text-purple-400 font-medium mb-1">⚡ {priceLabel}</div>
+                        <div className="text-xs text-purple-400 font-medium mb-1 flex items-center gap-1"><IconLightning size={12} className="inline-block" /> {priceLabel}</div>
                         <div className="flex flex-wrap gap-1">
                           {services.slice(0, 4).map((s, i) => (
                             <span key={i} className="text-xs text-purple-300/70 bg-purple-500/10 px-1.5 py-0.5 rounded">

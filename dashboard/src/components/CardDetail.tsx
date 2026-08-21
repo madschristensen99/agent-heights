@@ -3,6 +3,7 @@ import { useDashboard } from "../lib/store";
 import type { TaskCard, TaskPhase, CardStatus, CompletionCriterion, DecompositionScore } from "../../shared/types";
 // CompletionCriterion is used via card.completionCriteria which is typed from TaskCard
 import { X, Trash2, Plus, Link2, Unlink, Calendar, Clock, GitBranch, Award, ChevronRight } from "lucide-react";
+import { IconCheck, IconCircle, MedalIcon } from "./Icons";
 
 const PHASES: TaskPhase[] = ["requirements", "design", "implementation", "verification", "done"];
 
@@ -260,7 +261,7 @@ export function CardDetail({ cardId, onClose }: CardDetailProps) {
                       onClick={() => handleToggleCriterion(cr)}
                       className={`text-sm ${cr.checked ? "text-green-400" : "text-muted hover:text-gray-300"}`}
                     >
-                      {cr.checked ? "✓" : "○"}
+                      {cr.checked ? <IconCheck size={14} className="inline-block" /> : <IconCircle size={14} className="inline-block" />}
                     </button>
                     <span className={`text-sm flex-1 ${cr.checked ? "text-green-400 line-through opacity-70" : "text-gray-300"}`}>
                       {cr.text}
@@ -404,7 +405,7 @@ export function CardDetail({ cardId, onClose }: CardDetailProps) {
                     </div>
                     {elegant && (
                       <span className="text-lg">
-                        {elegant.tier === "gold" ? "🥇" : elegant.tier === "silver" ? "🥈" : "🥉"}
+                        <MedalIcon tier={elegant.tier} size={18} className="inline-block" />
                       </span>
                     )}
                   </div>

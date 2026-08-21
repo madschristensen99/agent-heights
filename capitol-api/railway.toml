@@ -1,0 +1,11 @@
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/api/status"
+healthcheckTimeout = 300
+
+[env]
+PORT = "3000"
+YEARS_START = "2025"
+YEARS_END = "2026"
+CACHE_REFRESH_HOURS = "6"
+FETCH_DELAY_MS = "500"

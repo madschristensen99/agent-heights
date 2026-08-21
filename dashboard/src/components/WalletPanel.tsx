@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useDashboard } from "../lib/store";
 import { Wallet, RefreshCw, ArrowLeft, ExternalLink, Shield, History } from "lucide-react";
+import { IconStar, IconCheck, IconCross } from "./Icons";
 
 interface WalletPanelProps {
   agentId: string;
@@ -75,7 +76,7 @@ export function WalletPanel({ agentId, onBack }: WalletPanelProps) {
         {hasCrossmint && (
           <WalletSection
             title="Crossmint Smart Wallet"
-            icon="✦"
+            icon={<IconStar size={14} className="inline-block text-blue-400" />}
             color="text-blue-400"
             walletData={data?.crossmint_wallet_status as Record<string, unknown> | undefined}
             policyData={data?.crossmint_policy_status as Record<string, unknown> | undefined}
@@ -97,7 +98,7 @@ export function WalletPanel({ agentId, onBack }: WalletPanelProps) {
 
 interface WalletSectionProps {
   title: string;
-  icon: string;
+  icon: React.ReactNode;
   color: string;
   walletData?: Record<string, unknown>;
   policyData?: Record<string, unknown>;
@@ -198,7 +199,7 @@ function WalletSection({ title, icon, color, walletData, policyData, txData, onR
               return (
                 <div key={i} className="text-xs text-gray-400 bg-bg-input rounded px-2 py-1.5 truncate">
                   {t.signature ? String(t.signature).slice(0, 20) + "..." : t.memo ? String(t.memo) : `TX ${i + 1}`}
-                  {t.err != null && <span className={t.err ? "text-status-error" : "text-status-done"}> {t.err ? "✗" : "✓"}</span>}
+                  {t.err != null && <span className={t.err ? "text-status-error" : "text-status-done"}> {t.err ? <IconCross size={12} className="inline-block text-status-error" /> : <IconCheck size={12} className="inline-block text-status-done" />}</span>}
                 </div>
               );
             })}

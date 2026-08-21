@@ -1,4 +1,5 @@
 import { LayoutGrid, Users, KanbanSquare, Settings, Power, Clock, Store, Server, Skull, BarChart3, GitBranch, TrendingUp } from "lucide-react";
+import { IconArrowLeft } from "./Icons";
 import { COMMAND_CENTER_ADMINS } from "@shared/types";
 
 export type View = "fleet" | "agent" | "board" | "gantt" | "vmodel" | "settings" | "schedules" | "marketplace" | "mcp" | "fired" | "files" | "memory" | "wallet" | "stats";
@@ -77,7 +78,7 @@ export function Sidebar({ view, onViewChange, agentCount, boardCount, scheduleCo
           href="/"
           className="block text-xs text-muted hover:text-accent transition-colors"
         >
-          ← Back to Game
+          <IconArrowLeft size={12} className="inline-block" /> Back to Game
         </a>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useDashboard } from "../lib/store";
 import type { TaskCard, CardStatus } from "../../shared/types";
 import { Plus, Trash2, User, Search, Target, ChevronDown, ChevronRight, Link2 } from "lucide-react";
+import { IconDiamond, IconArrowTurnDown } from "./Icons";
 
 const COLUMNS: { status: CardStatus; label: string; color: string }[] = [
   { status: "backlog", label: "Backlog", color: "border-l-muted" },
@@ -362,8 +363,8 @@ function CardItem({
               {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
             </button>
           )}
-          {isGoal && <span className="text-amber-400 text-xs">◆</span>}
-          {isSubtask && <span className="text-muted text-[10px]">↳</span>}
+          {isGoal && <IconDiamond size={12} className="inline-block text-amber-400" />}
+          {isSubtask && <IconArrowTurnDown size={10} className="inline-block text-muted" />}
           <span className="truncate">{card.title}</span>
           {card.category && card.category !== "general" && (
             <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-muted bg-bg-input px-1.5 py-0.5 rounded">

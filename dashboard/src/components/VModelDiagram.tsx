@@ -1,6 +1,7 @@
 import { useDashboard } from "../lib/store";
 import type { TaskCard, TaskPhase } from "../../shared/types";
 import { GitBranch, ChevronRight, AlertTriangle } from "lucide-react";
+import { IconCheck, IconCross, IconBlocked, IconArrowRight, IconArrowUpDown, IconTriangleUp, IconCircle } from "./Icons";
 
 const PHASES: TaskPhase[] = ["requirements", "design", "implementation", "verification", "done"];
 
@@ -38,7 +39,7 @@ export function VModelDiagram({ onSelectCard }: VModelDiagramProps) {
     const phase = c.phase ?? "implementation";
     const style = PHASE_STYLES[phase] ?? PHASE_STYLES.implementation;
     const isGoal = c.type === "goal";
-    const gateIcon = c.status === "done" ? "✓" : c.status === "review_pending" ? "⊘" : "→";
+    const gateIcon = c.status === "done" ? <IconCheck size={14} className="inline-block" /> : c.status === "review_pending" ? <IconBlocked size={14} className="inline-block" /> : <IconArrowRight size={14} className="inline-block" />;
     const gateColor = c.status === "done" ? "text-green-400" : c.status === "review_pending" ? "text-red-400" : "text-muted";
     const score = decompositionScores.get(c.id) ?? c.decompositionScore;
     const cardPhaseGates = phaseGates.filter((g) => g.cardId === c.id);
@@ -68,7 +69,7 @@ export function VModelDiagram({ onSelectCard }: VModelDiagramProps) {
                 className={`text-[10px] ${lastGate.approved ? "text-green-400" : "text-red-400"}`}
                 title={`Gate ${lastGate.approved ? "approved" : "blocked"} by ${lastGate.reviewerName}`}
               >
-                {lastGate.approved ? "✓" : "✗"}
+                {lastGate.approved ? <IconCheck size={12} className="inline-block" /> : <IconCross size={12} className="inline-block" />}
               </span>
             )}
             <span className={`text-sm font-bold ${gateColor}`}>{gateIcon}</span>
@@ -82,7 +83,7 @@ export function VModelDiagram({ onSelectCard }: VModelDiagramProps) {
           <div className="mt-1.5 space-y-0.5">
             {c.completionCriteria.slice(0, 3).map((cr) => (
               <div key={cr.id} className={`text-[10px] ${cr.checked ? "text-green-400 line-through opacity-70" : "text-gray-300"}`}>
-                {cr.checked ? "✓" : "○"} {cr.text}
+                {cr.checked ? <IconCheck size={10} className="inline-block" /> : <IconCircle size={10} className="inline-block" />} {cr.text}
               </div>
             ))}
             {c.completionCriteria.length > 3 && (
@@ -132,8 +133,8 @@ export function VModelDiagram({ onSelectCard }: VModelDiagramProps) {
         <h2 className="text-xl font-semibold text-gray-200">V-Model Lifecycle</h2>
         <div className="flex-1" />
         <div className="flex items-center gap-3 text-xs">
-          <span className="flex items-center gap-1 text-green-400"><span>✓</span> Gate Passed</span>
-          <span className="flex items-center gap-1 text-red-400"><span>⊘</span> Gate Blocked</span>
+          <span className="flex items-center gap-1 text-green-400"><IconCheck size={12} className="inline-block" /> Gate Passed</span>
+          <span className="flex items-center gap-1 text-red-400"><IconBlocked size={12} className="inline-block" /> Gate Blocked</span>
           {capabilityGaps.length > 0 && (
             <span className="flex items-center gap-1 text-yellow-400">
               <AlertTriangle size={12} /> {capabilityGaps.length} Gap{capabilityGaps.length > 1 ? "s" : ""}
@@ -182,12 +183,12 @@ export function VModelDiagram({ onSelectCard }: VModelDiagramProps) {
           <div className="flex-1 flex flex-col items-center gap-0">
             <PhaseColumn phase="done" label="Done" />
             <div className="w-px h-5 bg-border" />
-            <div className="text-[10px] text-muted -mt-2">▲</div>
+            <div className="text-[10px] text-muted -mt-2"><IconTriangleUp size={10} className="inline-block" /></div>
             <PhaseColumn phase="verification" label="Verification" />
             <div className="w-px h-5 bg-border" />
-            <div className="text-[10px] text-muted -mt-2">▲</div>
+            <div className="text-[10px] text-muted -mt-2"><IconTriangleUp size={10} className="inline-block" /></div>
             <div className="w-full max-w-md rounded-lg border-2 border-border p-3 opacity-30">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted">↕ Implementation</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted"><IconArrowUpDown size={12} className="inline-block" /> Implementation</h3>
             </div>
           </div>
         </div>

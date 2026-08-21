@@ -1,5 +1,6 @@
 import type { Net } from "../net";
 import type { FeedItem, PendingInvite, Store } from "../store";
+import { icon as svgIcon } from "./icons";
 import type { AgentRole, CardStatus, LogEntry, OfficeTheme, Provider, TaskCard, TaskPhase, CharAppearance, MCPServerConfig, PersonalityTraits, AgentInfo, LeaderboardCategory, LeaderboardEntry, DecorationCategory, ChallengeResult } from "../../../shared/types";
 import { AGENT_MODELS, OFFICE_THEMES, OFFICE_MANAGER_ID, HERMES_ID, WIZARD_ID, SCHEDULE_PRESETS,
   SKIN_TONES, HAIR_STYLES, HAIR_COLORS, SHIRT_COLORS, PANTS_COLORS, ACCESSORIES,
@@ -94,10 +95,10 @@ class CharBuilder {
       const swatch = isColor ? `<span class="builder-swatch" style="background:${val}"></span>` : "";
       return `
         <div class="builder-row" data-part="${part.key}">
-          <button class="builder-arrow" data-dir="-1">◀</button>
+          <button class="builder-arrow" data-dir="-1">${svgIcon('arrowLeft')}</button>
           <span class="builder-label">${part.label}</span>
           <span class="builder-value">${swatch}<span class="builder-value-text">${isColor ? "" : val}</span></span>
-          <button class="builder-arrow" data-dir="1">▶</button>
+          <button class="builder-arrow" data-dir="1">${svgIcon('arrowRight')}</button>
         </div>`;
     }).join("");
 
@@ -106,7 +107,7 @@ class CharBuilder {
         <div class="builder-preview-wrap">
           <div class="sprite-preview builder-preview" id="${p}-preview"></div>
         </div>
-        <button class="builder-randomize" id="${p}-randomize">🎲 RANDOMIZE</button>
+        <button class="builder-randomize" id="${p}-randomize">${svgIcon('dice')} RANDOMIZE</button>
         <div class="builder-controls">
           ${rows}
         </div>
@@ -303,13 +304,13 @@ export class Hud {
         </div>
         <div class="logs feed-logs" id="feed-logs"></div>
         <textarea id="all-task" rows="2" placeholder="Task for the whole office…"></textarea>
-        <button class="btn primary" id="all-assign">ASSIGN TO ALL ▶</button>
+        <button class="btn primary" id="all-assign">ASSIGN TO ALL ${svgIcon('arrowRight')}</button>
       </div>
       <button class="btn hire-btn" id="hire-btn">+ HIRE AGENT</button>
       <div class="panel detail" id="detail" hidden>
         <div class="panel-title" id="d-titlebar">
           <span id="d-title"></span>
-          <button class="x" id="d-close">✕</button>
+          <button class="x" id="d-close">${svgIcon('close')}</button>
         </div>
         <div class="meta" id="d-meta"></div>
         <div class="task" id="d-task" hidden></div>
@@ -336,8 +337,8 @@ export class Hud {
           <button class="btn" id="d-say">SAY</button>
         </div>
         <div class="row">
-          <button class="btn primary" id="d-assign-new" title="Start a fresh conversation — agent keeps a summary of prior work">NEW TASK ▶</button>
-          <button class="btn" id="d-assign" title="Continue the existing conversation — agent remembers everything">CONTINUE ▶</button>
+          <button class="btn primary" id="d-assign-new" title="Start a fresh conversation — agent keeps a summary of prior work">NEW TASK ${svgIcon('arrowRight')}</button>
+          <button class="btn" id="d-assign" title="Continue the existing conversation — agent remembers everything">CONTINUE ${svgIcon('arrowRight')}</button>
           <button class="btn" id="d-stop">STOP</button>
           <button class="btn" id="d-clear">CLEAR</button>
           <button class="btn" id="d-vacation">VACATION</button>
@@ -363,15 +364,15 @@ export class Hud {
         <div class="panel-title" id="board-titlebar">
           <span>TASK BOARD</span>
           <div style="display: flex; gap: 6px; align-items: center;">
-            <button class="btn" id="pipeline-toggle" hidden style="font-size: 11px; padding: 2px 8px;">⚙ Pipeline</button>
-            <button class="btn" id="dashboard-toggle" hidden style="font-size: 11px; padding: 2px 8px;">📊 Dashboard</button>
-            <button class="btn" id="decompose-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🧩 Decompose</button>
-            <button class="btn" id="experiment-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🧪 Log</button>
-            <button class="btn" id="decoration-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🪑 Decorate</button>
-            <button class="btn" id="techtree-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🌳 Tech Tree</button>
-            <button class="btn" id="social-toggle" hidden style="font-size: 11px; padding: 2px 8px;">💬 Social</button>
-            <button class="btn" id="challenge-toggle" hidden style="font-size: 11px; padding: 2px 8px;">🏆 Challenge</button>
-            <button class="x" id="board-close">✕</button>
+            <button class="btn" id="pipeline-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('pipeline')} Pipeline</button>
+            <button class="btn" id="dashboard-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('dashboard')} Dashboard</button>
+            <button class="btn" id="decompose-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('puzzle')} Decompose</button>
+            <button class="btn" id="experiment-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('flask')} Log</button>
+            <button class="btn" id="decoration-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('chair')} Decorate</button>
+            <button class="btn" id="techtree-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('tree')} Tech Tree</button>
+            <button class="btn" id="social-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('chat')} Social</button>
+            <button class="btn" id="challenge-toggle" hidden style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">${svgIcon('challenge')} Challenge</button>
+            <button class="x" id="board-close">${svgIcon('close')}</button>
           </div>
         </div>
         <div class="board-columns" id="board-columns"></div>
@@ -392,7 +393,7 @@ export class Hud {
       <div class="gantt-panel" id="gantt-panel" hidden>
         <div class="panel-title" id="gantt-titlebar">
           <span>GANTT CHART</span>
-          <button class="x" id="gantt-close">✕</button>
+          <button class="x" id="gantt-close">${svgIcon('close')}</button>
         </div>
         <div class="gantt-legend">
           <span class="gantt-leg phase-requirements">Requirements</span>
@@ -408,7 +409,7 @@ export class Hud {
       <div class="vmodel-panel" id="vmodel-panel" hidden>
         <div class="panel-title" id="vmodel-titlebar">
           <span>V-MODEL LIFECYCLE</span>
-          <button class="x" id="vmodel-close">✕</button>
+          <button class="x" id="vmodel-close">${svgIcon('close')}</button>
         </div>
         <div class="vmodel-legend">
           <span class="vmodel-leg phase-requirements">Requirements</span>
@@ -416,8 +417,8 @@ export class Hud {
           <span class="vmodel-leg phase-implementation">Implementation</span>
           <span class="vmodel-leg phase-verification">Verification</span>
           <span class="vmodel-leg phase-done">Done</span>
-          <span class="vmodel-leg vmodel-gate-passed">✓ Gate Passed</span>
-          <span class="vmodel-leg vmodel-gate-blocked">⊘ Gate Blocked</span>
+          <span class="vmodel-leg vmodel-gate-passed">${svgIcon('check')} Gate Passed</span>
+          <span class="vmodel-leg vmodel-gate-blocked">${svgIcon('blocked')} Gate Blocked</span>
         </div>
         <div class="vmodel-diagram" id="vmodel-diagram"></div>
       </div>
@@ -436,11 +437,11 @@ export class Hud {
       <div class="hint touch">Tap an agent to talk · Tap objects to interact · Pinch to zoom · 2-finger drag to pan</div>
       <div class="mobile-panel-backdrop" id="mobile-backdrop"></div>
       <div class="mobile-panel-toggles">
-        <button class="mpt-btn" id="mpt-roster" title="Roster">👥</button>
-        <button class="mpt-btn" id="mpt-feed" title="Feed">💬</button>
-        <button class="mpt-btn" id="mpt-hire" title="Hire">➕</button>
-        <button class="mpt-btn" id="mpt-board" title="Board">📋</button>
-        <button class="mpt-btn" id="mpt-recenter" title="Recenter camera">🎯</button>
+        <button class="mpt-btn" id="mpt-roster" title="Roster">${svgIcon('users')}</button>
+        <button class="mpt-btn" id="mpt-feed" title="Feed">${svgIcon('chat')}</button>
+        <button class="mpt-btn" id="mpt-hire" title="Hire">${svgIcon('plus')}</button>
+        <button class="mpt-btn" id="mpt-board" title="Board">${svgIcon('clipboard')}</button>
+        <button class="mpt-btn" id="mpt-recenter" title="Recenter camera">${svgIcon('target')}</button>
       </div>
       <div class="touch-controls">
         <div class="mobile-actions">
@@ -649,10 +650,10 @@ export class Hud {
     // Platform connection nudges
     store.platformNudgeListeners.push((kind, agentName) => {
       if (kind === "first_hire") {
-        this.toast(`Want ${agentName} to ping you on Slack or Telegram when tasks are done? Connect a platform in settings →`);
+        this.toast(`Want ${agentName} to ping you on Slack or Telegram when tasks are done? Connect a platform in settings.`);
         setTimeout(() => this.showIntentModal(), 2000);
       } else {
-        this.toast(`${agentName} finished their first task! Want notifications on your phone? Connect Telegram in settings →`);
+        this.toast(`${agentName} finished their first task! Want notifications on your phone? Connect Telegram in settings.`);
       }
     });
 
@@ -1036,8 +1037,8 @@ export class Hud {
     const steps = isNotFound
       ? "<li>Plug in a microphone or headset</li><li>Check your OS sound settings to ensure the mic is enabled</li><li>Refresh the page and try again</li>"
       : settingsUrl
-      ? `<li>Copy the settings URL below and paste it in a new tab</li><li>Find this site in the "Block" list and change it to "Allow"</li><li>Refresh this page and click the 🎤 button again</li>`
-      : `<li>Open ${browserName} settings → Privacy → Microphone</li><li>Allow microphone access for this site</li><li>Refresh this page and click the 🎤 button again</li>`;
+      ? `<li>Copy the settings URL below and paste it in a new tab</li><li>Find this site in the "Block" list and change it to "Allow"</li><li>Refresh this page and click the ${svgIcon('mic')} button again</li>`
+      : `<li>Open ${browserName} settings, then Privacy, then Microphone</li><li>Allow microphone access for this site</li><li>Refresh this page and click the ${svgIcon('mic')} button again</li>`;
 
     const modal = document.createElement("div");
     modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
@@ -1325,7 +1326,7 @@ export class Hud {
             ${builder.html()}
           </div>
         </div>
-        <button class="btn primary" id="ob-go">CLOCK IN ▶</button>
+        <button class="btn primary" id="ob-go">CLOCK IN ${svgIcon('arrowRight')}</button>
       </div>
     `;
     builder.mount();
@@ -1375,7 +1376,7 @@ export class Hud {
         <div id="ob-prompt-results" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
         <div id="ob-prompt-actions" style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
           <button class="btn" id="ob-prompt-skip" style="flex: 1;">SKIP</button>
-          <button class="btn primary" id="ob-prompt-go" style="flex: 1;">FIND AGENTS ▶</button>
+          <button class="btn primary" id="ob-prompt-go" style="flex: 1;">FIND AGENTS ${svgIcon('arrowRight')}</button>
         </div>
       </div>
     `;
@@ -1425,7 +1426,7 @@ export class Hud {
       if (resolved) return;
 
       goBtn.disabled = false;
-      goBtn.textContent = "FIND AGENTS ▶";
+      goBtn.innerHTML = `FIND AGENTS ${svgIcon('arrowRight')}`;
       statusEl.textContent = "";
 
       if (recommendations.length === 0) {
@@ -1435,7 +1436,7 @@ export class Hud {
         const doneBtn = document.createElement("button");
         doneBtn.className = "btn primary";
         doneBtn.style.cssText = "width: 100%; margin-top: 0.5rem;";
-        doneBtn.textContent = "ENTER OFFICE ▶";
+        doneBtn.innerHTML = `ENTER OFFICE ${svgIcon('arrowRight')}`;
         doneBtn.addEventListener("click", finish);
         resultsEl.appendChild(doneBtn);
         return;
@@ -1448,7 +1449,7 @@ export class Hud {
       const autoHireAllBtn = document.createElement("button");
       autoHireAllBtn.className = "btn primary";
       autoHireAllBtn.style.cssText = "width:100%;margin-bottom:0.5rem;padding:0.6rem;font-size:0.85rem;";
-      autoHireAllBtn.textContent = `🚁 HIRE ALL ${recommendations.length} AGENT${recommendations.length > 1 ? "S" : ""}`;
+      autoHireAllBtn.innerHTML = `${svgIcon('helicopter')} HIRE ALL ${recommendations.length} AGENT${recommendations.length > 1 ? "S" : ""}`;
       autoHireAllBtn.addEventListener("click", async () => {
         autoHireAllBtn.disabled = true;
         autoHireAllBtn.textContent = "Hiring all…";
@@ -1462,7 +1463,7 @@ export class Hud {
             hired++;
           } catch { /* skip failures */ }
         }
-        autoHireAllBtn.textContent = `Hired ${hired}/${recommendations.length}! 🚁`;
+        autoHireAllBtn.innerHTML = `Hired ${hired}/${recommendations.length}! ${svgIcon('helicopter')}`;
         autoHireAllBtn.style.background = "var(--green)";
         autoHireAllBtn.style.color = "#fff";
         autoHireAllBtn.style.borderColor = "var(--green)";
@@ -1512,7 +1513,7 @@ export class Hud {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const agent = await res.json() as MarketplaceAgent;
             this.hireFromMarketplace(agent);
-            hireBtn.textContent = "Hired! 🚁";
+            hireBtn.innerHTML = `Hired! ${svgIcon('helicopter')}`;
             hireBtn.style.background = "var(--green)";
             hireBtn.style.color = "#fff";
             hireBtn.style.borderColor = "var(--green)";
@@ -1535,7 +1536,7 @@ export class Hud {
       const againBtn = document.createElement("button");
       againBtn.className = "btn";
       againBtn.style.cssText = "flex:1;";
-      againBtn.textContent = "↻ SEARCH AGAIN";
+      againBtn.innerHTML = `${svgIcon('refresh')} SEARCH AGAIN`;
       againBtn.addEventListener("click", () => {
         resultsEl.innerHTML = "";
         statusEl.textContent = "";
@@ -1550,7 +1551,7 @@ export class Hud {
         const goBtn2 = document.createElement("button");
         goBtn2.className = "btn primary";
         goBtn2.style.cssText = "flex:1;";
-        goBtn2.textContent = "FIND AGENTS ▶";
+        goBtn2.innerHTML = `FIND AGENTS ${svgIcon('arrowRight')}`;
         goBtn2.addEventListener("click", submit);
         actionsEl.appendChild(skipBtn2);
         actionsEl.appendChild(goBtn2);
@@ -1559,7 +1560,7 @@ export class Hud {
       const enterBtn = document.createElement("button");
       enterBtn.className = "btn primary";
       enterBtn.style.cssText = "flex:1;";
-      enterBtn.textContent = "ENTER OFFICE ▶";
+      enterBtn.innerHTML = `ENTER OFFICE ${svgIcon('arrowRight')}`;
       enterBtn.addEventListener("click", finish);
 
       actionsEl.appendChild(againBtn);
@@ -1591,11 +1592,11 @@ export class Hud {
         <h1 style="font-size: 1.2rem;">What are you trying to do?</h1>
         <p class="sub" style="margin-bottom: 1rem;">You've got your first agent. Tell us your goal so we can help you get there faster.</p>
         <div id="intent-options" style="display: flex; flex-direction: column; gap: 0.5rem;">
-          <button class="btn intent-opt" data-intent="research" style="text-align: left; padding: 0.75rem 1rem;">🔬 Research &amp; Analysis</button>
-          <button class="btn intent-opt" data-intent="coding" style="text-align: left; padding: 0.75rem 1rem;">💻 Software Development</button>
-          <button class="btn intent-opt" data-intent="marketing" style="text-align: left; padding: 0.75rem 1rem;">📣 Marketing &amp; Content</button>
-          <button class="btn intent-opt" data-intent="finance" style="text-align: left; padding: 0.75rem 1rem;">💰 Finance &amp; Data</button>
-          <button class="btn intent-opt" data-intent="general" style="text-align: left; padding: 0.75rem 1rem;">🤔 Just exploring</button>
+          <button class="btn intent-opt" data-intent="research" style="text-align: left; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 6px;">${svgIcon('microscope')} Research &amp; Analysis</button>
+          <button class="btn intent-opt" data-intent="coding" style="text-align: left; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 6px;">${svgIcon('laptop')} Software Development</button>
+          <button class="btn intent-opt" data-intent="marketing" style="text-align: left; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 6px;">${svgIcon('megaphone')} Marketing &amp; Content</button>
+          <button class="btn intent-opt" data-intent="finance" style="text-align: left; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 6px;">${svgIcon('dollar')} Finance &amp; Data</button>
+          <button class="btn intent-opt" data-intent="general" style="text-align: left; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 6px;">${svgIcon('question')} Just exploring</button>
         </div>
         <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
           <button class="btn" id="intent-skip" style="flex: 1;">SKIP</button>
@@ -1791,7 +1792,7 @@ export class Hud {
           </div>
           <div class="intro-actions">
             <span></span>
-            <button class="btn primary" id="intro-next">NEXT ▶</button>
+            <button class="btn primary" id="intro-next">NEXT ${svgIcon('arrowRight')}</button>
           </div>
           <button class="intro-skip" id="intro-skip">Skip tour</button>
         `;
@@ -1841,10 +1842,10 @@ export class Hud {
             ${steps.map((_, i) => `<span class="tour-dot${i === current ? " active" : ""}"></span>`).join("")}
           </div>
           <div class="tour-btns">
-            ${current > 0 ? '<button class="btn" id="tour-back">◀</button>' : ""}
+            ${current > 0 ? `<button class="btn" id="tour-back">${svgIcon('arrowLeft')}</button>` : ""}
             ${current < steps.length - 1
-              ? '<button class="btn primary" id="tour-next">NEXT ▶</button>'
-              : '<button class="btn primary" id="tour-done">LET\'S GO ▶</button>'}
+              ? `<button class="btn primary" id="tour-next">NEXT ${svgIcon('arrowRight')}</button>`
+              : `<button class="btn primary" id="tour-done">LET'S GO ${svgIcon('arrowRight')}</button>`}
           </div>
         </div>
         <button class="tour-skip" id="tour-skip">Skip tour</button>
@@ -1948,9 +1949,9 @@ export class Hud {
           const branchTag = s.gitBranch ? ` <span style="color:var(--dim);">[${s.gitBranch}]</span>` : "";
           const recentEvents = s.events.slice(-5).map(e => {
             const icons: Record<string, string> = {
-              file_edit: "✏️", file_save: "💾", git_commit: "📦", git_branch: "🌿",
-              test_run: "🧪", test_result: e.success ? "✅" : "❌", command: "⚙️",
-              ai_completion: "🤖", ai_chat: "💬", session_start: "▶️", session_end: "⏹️", error: "⚠️",
+              file_edit: svgIcon('edit'), file_save: svgIcon('save'), git_commit: svgIcon('package'), git_branch: svgIcon('branch'),
+              test_run: svgIcon('flask'), test_result: e.success ? svgIcon('check') : svgIcon('cross'), command: svgIcon('gear'),
+              ai_completion: svgIcon('robot'), ai_chat: svgIcon('chat'), session_start: svgIcon('play'), session_end: svgIcon('stop'), error: svgIcon('warning'),
             };
             const time = new Date(e.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
             return `<div style="font-size:0.7rem;color:var(--dim);padding:0.1rem 0;">${icons[e.type] ?? "•"} ${time} ${e.type}${e.file ? ` ${e.file.split("/").pop()}` : ""}${e.message ? ` — ${e.message.slice(0, 60)}` : ""}</div>`;
@@ -1962,7 +1963,7 @@ export class Hud {
                 ${branchTag}
                 <span style="margin-left:auto;font-size:0.75rem;">${stateBadge(s.state)}</span>
               </div>
-              <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">📂 ${fileShort}</div>
+              <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.3rem;">${svgIcon('folder')} ${fileShort}</div>
               <div style="font-size:0.7rem;color:var(--dim);margin-bottom:0.4rem;">
                 ${s.filesChanged} files · +${s.linesAdded} / -${s.linesRemoved} lines
               </div>
@@ -1975,8 +1976,8 @@ export class Hud {
     overlay.innerHTML = `
       <div style="background:var(--bg);border:1px solid var(--panel-edge);border-radius:10px;padding:1.5rem;width:min(520px,90vw);max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-          <h2 style="margin:0;font-size:1.1rem;color:var(--text);">🖥️ IDE Bridge</h2>
-          <button class="btn" id="ide-bridge-close" style="font-size:0.75rem;padding:0.2rem 0.5rem;">✕</button>
+          <h2 style="margin:0;font-size:1.1rem;color:var(--text);display:flex;align-items:center;gap:6px;">${svgIcon('monitor')} IDE Bridge</h2>
+          <button class="btn" id="ide-bridge-close" style="font-size:0.75rem;padding:0.2rem 0.5rem;">${svgIcon('close')}</button>
         </div>
 
         <div style="margin-bottom:1rem;">
@@ -1986,7 +1987,7 @@ export class Hud {
 
         ${orgSessions.length > 0 ? `
         <div style="margin-bottom:1rem;border-top:1px solid var(--panel-edge);padding-top:1rem;">
-          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;">👥 Team Activity</h3>
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;display:flex;align-items:center;gap:4px;">${svgIcon('users')} Team Activity</h3>
           ${orgSessions.map(s => {
             const fileShort = s.currentFile ? s.currentFile.split("/").pop() : "—";
             const branchTag = s.gitBranch ? ` <span style="color:var(--dim);">[${s.gitBranch}]</span>` : "";
@@ -1998,7 +1999,7 @@ export class Hud {
                   ${branchTag}
                   <span style="margin-left:auto;font-size:0.7rem;">${stateBadge(s.state)}</span>
                 </div>
-                <div style="font-size:0.7rem;color:var(--dim);margin-top:0.2rem;">📂 ${fileShort}</div>
+                <div style="font-size:0.7rem;color:var(--dim);margin-top:0.2rem;">${svgIcon('folder')} ${fileShort}</div>
               </div>`;
           }).join("")}
         </div>
@@ -2027,7 +2028,7 @@ export class Hud {
         </div>
 
         <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;margin-top:0.5rem;">
-          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.4rem;">🔒 Team Visibility</h3>
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.4rem;display:flex;align-items:center;gap:4px;">${svgIcon('lock')} Team Visibility</h3>
           <p style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Control what org members can see about your coding activity.</p>
           <div style="display:flex;gap:0.4rem;">
             <button class="btn ${visibility === "full" ? "primary" : ""}" data-privacy="full" style="font-size:0.75rem;padding:0.3rem 0.6rem;">Full</button>
@@ -2040,7 +2041,7 @@ export class Hud {
         </div>
 
         <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;margin-top:0.5rem;">
-          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.4rem;">🖥️ Office Display</h3>
+          <h3 style="font-size:0.85rem;color:var(--text);margin-bottom:0.4rem;display:flex;align-items:center;gap:4px;">${svgIcon('monitor')} Office Display</h3>
           <p style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Show terminal stations in your office for connected tools.</p>
           <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.78rem;color:var(--text);">
             <input type="checkbox" id="ide-bridge-show-stations" ${this.store.showTerminalStations ? "checked" : ""} style="cursor:pointer;" />
@@ -2050,7 +2051,7 @@ export class Hud {
 
         <div style="border-top:1px solid var(--panel-edge);padding-top:1rem;margin-top:0.5rem;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
-            <h3 style="font-size:0.85rem;color:var(--text);margin:0;">📊 Velocity & Analytics</h3>
+            <h3 style="font-size:0.85rem;color:var(--text);margin:0;display:flex;align-items:center;gap:4px;">${svgIcon('dashboard')} Velocity &amp; Analytics</h3>
             <button class="btn" id="ide-bridge-refresh-analytics" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Refresh</button>
           </div>
 
@@ -2081,10 +2082,10 @@ export class Hud {
 
           ${anomalyAlerts.length > 0 ? `
             <div style="margin-bottom:0.8rem;">
-              <p style="font-size:0.75rem;color:var(--text);margin-bottom:0.3rem;">🚨 Anomalies</p>
+              <p style="font-size:0.75rem;color:var(--text);margin-bottom:0.3rem;display:flex;align-items:center;gap:4px;">${svgIcon('warning')} Anomalies</p>
               ${anomalyAlerts.map(a => `
                 <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:4px;padding:0.4rem 0.6rem;margin-bottom:0.3rem;font-size:0.72rem;">
-                  <span style="color:${a.severity === "critical" ? "#ff4a4a" : a.severity === "warning" ? "#ffaa4a" : "var(--dim)"};">${a.severity === "critical" ? "🔴" : a.severity === "warning" ? "🟡" : "🔵"}</span>
+                  <span style="color:${a.severity === "critical" ? "#ff4a4a" : a.severity === "warning" ? "#ffaa4a" : "var(--dim)"};">${a.severity === "critical" ? svgIcon('cross') : a.severity === "warning" ? svgIcon('warning') : svgIcon('circle')}</span>
                   <span style="color:var(--text);">${a.message}</span>
                 </div>
               `).join("")}
@@ -2094,7 +2095,7 @@ export class Hud {
           ${standupSummary ? `
             <div style="margin-bottom:0.5rem;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3rem;">
-                <p style="font-size:0.75rem;color:var(--text);margin:0;">📋 Standup — ${standupSummary.date}</p>
+                <p style="font-size:0.75rem;color:var(--text);margin:0;display:flex;align-items:center;gap:4px;">${svgIcon('clipboard')} Standup — ${standupSummary.date}</p>
                 <button class="btn" id="ide-bridge-post-standup" style="font-size:0.68rem;padding:0.15rem 0.4rem;">Post in Chat</button>
               </div>
               <div style="font-size:0.68rem;color:var(--dim);margin-bottom:0.3rem;">
@@ -2102,7 +2103,7 @@ export class Hud {
               </div>
               ${standupSummary.entries.map(e => `
                 <div style="font-size:0.68rem;color:var(--dim);padding:0.15rem 0;">
-                  • <span style="color:var(--text);">${e.userName}</span> — ${e.tool} · +${e.linesAdded}/-${e.linesRemoved}${e.errors > 0 ? ` · ⚠️ ${e.errors} errors` : ""}
+                  • <span style="color:var(--text);">${e.userName}</span> — ${e.tool} · +${e.linesAdded}/-${e.linesRemoved}${e.errors > 0 ? ` · ${svgIcon('warning')} ${e.errors} errors` : ""}
                 </div>
               `).join("")}
             </div>
@@ -2123,7 +2124,7 @@ export class Hud {
           navigator.clipboard.writeText(token).then(() => {
             const el = tokenBox as HTMLElement;
             const orig = el.textContent;
-            el.textContent = "✅ Copied!";
+            el.textContent = "Copied!";
             setTimeout(() => { if (el.isConnected) el.textContent = orig; }, 1500);
           }).catch(() => {});
         }
@@ -2138,7 +2139,7 @@ export class Hud {
         navigator.clipboard.writeText(fullCmd).then(() => {
           const el = cmdBox as HTMLElement;
           const orig = el.innerHTML;
-          el.innerHTML = '<div style="color:var(--accent);text-align:center;padding:0.4rem;">✅ Command copied to clipboard!</div>';
+          el.innerHTML = '<div style="color:var(--accent);text-align:center;padding:0.4rem;">Command copied to clipboard!</div>';
           setTimeout(() => { if (el.isConnected) el.innerHTML = orig; }, 1500);
         }).catch(() => {});
       });
@@ -2177,14 +2178,14 @@ export class Hud {
         const summary = this.store.standupSummary;
         if (!summary) return;
         const lines: string[] = [
-          `📋 Daily Standup — ${summary.date}`,
+          `Daily Standup — ${summary.date}`,
           `${summary.activeEngineers} engineers · ${summary.totalFilesChanged} files · +${summary.totalLinesAdded}/-${summary.totalLinesRemoved} lines`,
         ];
         for (const e of summary.entries) {
-          lines.push(`• ${e.userName} — ${e.tool} · +${e.linesAdded}/-${e.linesRemoved}${e.errors > 0 ? ` · ⚠️ ${e.errors} errors` : ""}`);
+          lines.push(`• ${e.userName} — ${e.tool} · +${e.linesAdded}/-${e.linesRemoved}${e.errors > 0 ? ` · ${e.errors} errors` : ""}`);
         }
         if (summary.anomalies.length > 0) {
-          lines.push("", "🚨 Anomalies:");
+          lines.push("", "Anomalies:");
           for (const a of summary.anomalies) {
             lines.push(`  ${a.message}`);
           }
@@ -2192,7 +2193,7 @@ export class Hud {
         // Post to office manager chat
         const el = postStandupBtn as HTMLElement;
         const orig = el.textContent;
-        el.textContent = "✅ Posted!";
+        el.textContent = "Posted!";
         setTimeout(() => { if (el.isConnected) el.textContent = orig; }, 1500);
       });
     }
@@ -2231,7 +2232,7 @@ export class Hud {
         <span style="font-size:0.85rem;color:var(--text);flex:1;">${f.name}</span>
         ${f.online && f.roomName ? `<span style="font-size:0.7rem;color:var(--dim);">in ${f.roomName}</span>` : ''}
         ${f.online && f.roomId ? `<button class="btn" data-join-room="${f.roomId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;">Join</button>` : ''}
-        <button class="btn" data-remove-friend="${f.userId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;color:var(--dim);">✕</button>
+        <button class="btn" data-remove-friend="${f.userId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;color:var(--dim);">${svgIcon('close')}</button>
       </div>`;
 
     const reqHtml = (r: typeof incomingReqs[0], incoming: boolean) => `
@@ -2263,7 +2264,7 @@ export class Hud {
         return `
           <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
             <span style="font-size:0.85rem;color:var(--text);flex:1;">${r.name}</span>
-            <span style="font-size:0.7rem;color:${count > 0 ? 'var(--accent)' : 'var(--dim)'};">${count > 0 ? `🟢 ${count} player${count !== 1 ? 's' : ''}` : '⚫ Empty'}</span>
+            <span style="font-size:0.7rem;color:${count > 0 ? 'var(--accent)' : 'var(--dim)'};display:inline-flex;align-items:center;gap:3px;">${count > 0 ? `${svgIcon('circle')} ${count} player${count !== 1 ? 's' : ''}` : `${svgIcon('circleDot')} Empty`}</span>
             ${!isCurrent ? `<button class="btn" data-join-room="${r.roomId}" style="font-size:0.65rem;padding:0.15rem 0.4rem;">Join</button>` : '<span style="font-size:0.65rem;color:var(--dim);">Here</span>'}
           </div>`;
       }).join("");
@@ -2271,8 +2272,8 @@ export class Hud {
     overlay.innerHTML = `
       <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;width:500px;max-width:90vw;color:var(--text);font-family:var(--font-body);max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-          <h2 style="margin:0;font-size:1.1rem;color:var(--text);">👥 Social</h2>
-          <button class="x" id="social-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
+          <h2 style="margin:0;font-size:1.1rem;color:var(--text);display:flex;align-items:center;gap:6px;">${svgIcon('users')} Social</h2>
+          <button class="x" id="social-close" style="background:none;border:none;color:var(--dim);cursor:pointer;">${svgIcon('close')}</button>
         </div>
 
         <div style="margin-bottom:1rem;">
@@ -2295,7 +2296,7 @@ export class Hud {
               ${this.store.officeInvites.map(inv => `
                 <div style="display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;">
                   <span style="font-size:0.8rem;color:var(--text);flex:1;">${inv.inviteeEmail}</span>
-                  <span style="font-size:0.65rem;color:${inv.status === 'claimed' ? 'var(--accent)' : 'var(--dim)'};">${inv.status === 'claimed' ? '✓ Joined' : inv.status === 'expired' ? 'Expired' : 'Pending'}</span>
+                  <span style="font-size:0.65rem;color:${inv.status === 'claimed' ? 'var(--accent)' : 'var(--dim)'};">${inv.status === 'claimed' ? `${svgIcon('check')} Joined` : inv.status === 'expired' ? 'Expired' : 'Pending'}</span>
                   ${inv.status === 'pending' ? `<button class="btn" data-revoke-invite="${inv.id}" style="font-size:0.65rem;padding:0.15rem 0.4rem;color:var(--dim);">Revoke</button>` : ''}
                 </div>
               `).join("")}
@@ -2341,7 +2342,7 @@ export class Hud {
         <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
             <div style="font-size:0.75rem;color:var(--dim);">ONLINE PLAYERS (${this.store.onlinePlayers.length})</div>
-            <button class="btn" id="online-refresh-btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;">↻</button>
+            <button class="btn" id="online-refresh-btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;">${svgIcon('refresh')}</button>
           </div>
           ${this.store.onlinePlayers.length <= 1 ? '<p style="color:var(--dim);font-size:0.8rem;">No other players online.</p>' : onlinePlayerHtml}
         </div>
@@ -2502,8 +2503,8 @@ export class Hud {
     overlay.innerHTML = `
       <div style="background:var(--panel);border:1px solid var(--panel-edge);border-radius:var(--radius-lg);padding:1.5rem;width:480px;max-width:90vw;color:var(--text);font-family:var(--font-body);max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-          <h2 style="margin:0;font-size:1.1rem;color:var(--text);">🚪 Rooms</h2>
-          <button class="x" id="rooms-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
+          <h2 style="margin:0;font-size:1.1rem;color:var(--text);display:flex;align-items:center;gap:6px;">${svgIcon('door')} Rooms</h2>
+          <button class="x" id="rooms-close" style="background:none;border:none;color:var(--dim);cursor:pointer;">${svgIcon('close')}</button>
         </div>
 
         <div style="margin-bottom:1rem;">
@@ -2517,21 +2518,21 @@ export class Hud {
         <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
           <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;">SWITCH ROOM</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">🌐 COMMAND CENTER</button>
-            <button class="btn ${isInOffice ? 'primary' : ''}" id="room-office-btn" style="font-size:0.8rem;${isInOffice ? 'opacity:0.6;pointer-events:none;' : ''}">🏠 MY OFFICE</button>
+            <button class="btn ${isHq2 ? 'primary' : ''}" id="room-hq2-btn" style="font-size:0.8rem;display:inline-flex;align-items:center;gap:4px;${isHq2 ? 'opacity:0.6;pointer-events:none;' : ''}">${svgIcon('globe')} COMMAND CENTER</button>
+            <button class="btn ${isInOffice ? 'primary' : ''}" id="room-office-btn" style="font-size:0.8rem;display:inline-flex;align-items:center;gap:4px;${isInOffice ? 'opacity:0.6;pointer-events:none;' : ''}">${svgIcon('home')} MY OFFICE</button>
           </div>
         </div>
 
         ${orgRooms.length > 0 ? `
         <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
-          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;">🏢 ORGANIZATION ROOMS</div>
+          <div style="font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;display:flex;align-items:center;gap:4px;">${svgIcon('building')} ORGANIZATION ROOMS</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             ${orgRooms.map(r => {
               const isCurrent = this.store.roomId === r.roomId;
               const occ = this.store.roomOccupancy.get(r.roomId);
               const count = occ?.playerCount ?? 0;
               const badge = count > 0 ? ` <span style="font-size:0.65rem;color:var(--accent);">(${count})</span>` : '';
-              return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">🏢 ${r.name}${badge}</button>`;
+              return `<button class="btn ${isCurrent ? 'primary' : ''}" data-room-id="${r.roomId}" style="font-size:0.8rem;display:inline-flex;align-items:center;gap:4px;${isCurrent ? 'opacity:0.6;pointer-events:none;' : ''}">${svgIcon('building')} ${r.name}${badge}</button>`;
             }).join("")}
           </div>
         </div>
@@ -2560,7 +2561,7 @@ export class Hud {
         <div style="border-top:1px solid var(--panel-edge-soft);padding-top:1rem;margin-bottom:1rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
             <div style="font-size:0.75rem;color:var(--dim);">ORGANIZATIONS</div>
-            <button class="btn" id="org-refresh-btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;">↻</button>
+            <button class="btn" id="org-refresh-btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;">${svgIcon('refresh')}</button>
           </div>
           <div id="orgs-container" style="display:flex;flex-direction:column;gap:0.4rem;">
             ${this.store.orgsList.length === 0 ? '<p style="color:var(--dim);font-size:0.8rem;">No organizations yet.</p>' : this.store.orgsList.map(o => `
@@ -2730,8 +2731,8 @@ export class Hud {
     overlay.innerHTML = `
       <div style="background:var(--panel);border-radius:12px;padding:1.5rem;width:400px;max-width:90vw;color:var(--text);font-family:'M Plus Rounded 1c',sans-serif;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-          <h2 style="margin:0;font-size:1rem;">🏢 Create Organization</h2>
-          <button class="x" id="org-create-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
+          <h2 style="margin:0;font-size:1rem;display:flex;align-items:center;gap:6px;">${svgIcon('building')} Create Organization</h2>
+          <button class="x" id="org-create-close" style="background:none;border:none;color:var(--dim);cursor:pointer;">${svgIcon('close')}</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:0.6rem;">
           <div>
@@ -2778,8 +2779,8 @@ export class Hud {
     overlay.innerHTML = `
       <div style="background:var(--panel);border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;color:var(--text);font-family:'M Plus Rounded 1c',sans-serif;max-height:80vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-          <h2 style="margin:0;font-size:1rem;">👥 Organization Members</h2>
-          <button class="x" id="org-members-close" style="background:none;border:none;color:var(--dim);font-size:1.2rem;cursor:pointer;">✕</button>
+          <h2 style="margin:0;font-size:1rem;display:flex;align-items:center;gap:6px;">${svgIcon('users')} Organization Members</h2>
+          <button class="x" id="org-members-close" style="background:none;border:none;color:var(--dim);cursor:pointer;">${svgIcon('close')}</button>
         </div>
         <div id="org-members-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1rem;">
           ${members.length === 0 ? '<p style="color:var(--dim);font-size:0.8rem;">No members yet.</p>' : members.map(m => `
@@ -2836,7 +2837,7 @@ export class Hud {
 
     overlay.innerHTML = `
       <div style="background:var(--panel);border-radius:12px;padding:1.5rem;width:380px;max-width:90vw;color:var(--text);font-family:'M Plus Rounded 1c',sans-serif;text-align:center;">
-        <div style="font-size:2rem;margin-bottom:0.5rem;">📨</div>
+        <div style="margin-bottom:0.5rem;">${svgIcon('mailOpen')}</div>
         <h2 style="margin:0 0 0.5rem;font-size:1rem;">Room Invitation</h2>
         <p style="margin:0 0 1rem;font-size:0.9rem;color:var(--dim);">
           <strong>${invite.fromName}</strong> invited you to join<br/>
@@ -2916,7 +2917,7 @@ export class Hud {
           <div class="sec">API KEY</div>
           <p style="font-size:0.8rem;color:var(--dim);margin-bottom:0.5rem;">Bring your own key — your agents will use it instead of the server's shared key.</p>
           <div id="api-key-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.hasApiKey ? "var(--green)" : "var(--red)"};">
-            ${this.store.hasApiKey ? "✓ You have a personal API key set." : "⚠ No personal API key — using the server's shared key."}
+            ${this.store.hasApiKey ? `${svgIcon('check')} You have a personal API key set.` : `${svgIcon('warning')} No personal API key — using the server's shared key.`}
           </div>
           <label>API KEY
             <input id="s-api-key" type="password" placeholder="sk-..." autocomplete="off"
@@ -2939,7 +2940,7 @@ export class Hud {
           <div class="sec">SUBSCRIPTION</div>
           <div id="sub-status" style="font-size:0.85rem;margin-bottom:0.5rem;color:${this.store.subscriptionActive ? "var(--green)" : "var(--red)"};">
             ${this.store.subscriptionActive
-              ? `✓ ${this.store.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === this.store.subscriptionTier)?.name : "Active"} — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"} available.`
+              ? `${svgIcon('check')} ${this.store.subscriptionTier ? SUBSCRIPTION_TIER_LIST.find(t => t.id === this.store.subscriptionTier)?.name : "Active"} — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"} available.`
               : `Free plan — ${this.store.agentLimit} agent${this.store.agentLimit === 1 ? "" : "s"}, no task execution. Upgrade to run tasks.`}
           </div>
           ${this.store.subscriptionActive
@@ -2956,16 +2957,16 @@ export class Hud {
             <button class="btn" id="s-feed">${this.feedCollapsed ? "OPEN" : "CLOSE"} OFFICE FEED</button>
           </div>
           <div class="row">
-            <button class="btn" id="s-board">📋 TASK BOARD</button>
-            <button class="btn" id="s-gantt">📊 GANTT CHART</button>
-            <button class="btn" id="s-vmodel">🔬 V-MODEL</button>
+            <button class="btn" id="s-board" style="display:inline-flex;align-items:center;gap:4px;">${svgIcon('clipboard')} TASK BOARD</button>
+            <button class="btn" id="s-gantt" style="display:inline-flex;align-items:center;gap:4px;">${svgIcon('chart')} GANTT CHART</button>
+            <button class="btn" id="s-vmodel" style="display:inline-flex;align-items:center;gap:4px;">${svgIcon('microscope')} V-MODEL</button>
           </div>
           <div class="row">
-            <button class="btn" id="s-quick-cline">⚡ INSTANT AGENT</button>
+            <button class="btn" id="s-quick-cline" style="display:inline-flex;align-items:center;gap:4px;">${svgIcon('lightning')} INSTANT AGENT</button>
           </div>
           <div class="sec">KEYBOARD</div>
           <div class="controls">
-            <div><kbd>W A S D</kbd> / <kbd>←↑↓→</kbd><span>move around the office</span></div>
+            <div><kbd>W A S D</kbd> / <kbd>Arrows</kbd><span>move around the office</span></div>
             <div><kbd>E</kbd><span>talk to a nearby agent</span></div>
             <div><kbd>CLICK</kbd><span>select an agent (opens detail panel)</span></div>
             <div><kbd>H</kbd><span>hire an agent</span></div>
@@ -2976,21 +2977,7 @@ export class Hud {
             <div><kbd>,</kbd><span>open settings</span></div>
             <div><kbd>P</kbd><span>show FPS overlay</span></div>
             <div><kbd>ESC</kbd><span>close panels &amp; modals</span></div>
-            <div><kbd>⌘/CTRL</kbd>+<kbd>ENTER</kbd><span>start a new task (fresh conversation)</span></div>
-          </div>
-        </div>
-        <div class="tabpanel" data-panel="data" hidden>
-          <div class="row">
-            <button class="btn" id="s-export">⬇ EXPORT CHATS & LOGS</button>
-          </div>
-          <div class="row">
-            <button class="btn danger" id="s-clear-all">🧹 CLEAR ALL CHATS & MEMORY</button>
-          </div>
-          <div class="row">
-            <button class="btn danger" id="s-reset">RESET PROFILE</button>
-          </div>
-          <div id="s-deletion-warning" hidden style="margin-top:1rem;padding:0.75rem;border:1px solid var(--red);border-radius:0.5rem;background:rgba(220,38,38,0.08);">
-            <div style="font-size:0.85rem;color:var(--red);margin-bottom:0.5rem;">⚠ Your account is scheduled for deletion on <span id="s-deletion-date"></span>.</div>
+            <div style="font-size:0.85rem;color:var(--red);margin-bottom:0.5rem;display:flex;align-items:center;gap:4px;">${svgIcon('warning')} Your account is scheduled for deletion on <span id="s-deletion-date"></span>.</div>
             <div style="font-size:0.78rem;color:var(--dim);margin-bottom:0.75rem;">All agents are stopped. Your data will be permanently erased after this date. Sign in anytime before then to cancel.</div>
             <button class="btn" id="s-cancel-deletion">CANCEL DELETION</button>
           </div>
@@ -3002,12 +2989,12 @@ export class Hud {
           <div id="s-delete-account-section" style="margin-top:1rem;border-top:1px solid var(--panel-edge);padding-top:1rem;">
             <div class="sec" style="color:var(--red);">DANGER ZONE</div>
             <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem;">Permanently delete your account and all associated data. A 30-day grace period applies — you can cancel by signing back in.</p>
-            <button class="btn danger" id="s-delete-account">🗑 DELETE ACCOUNT</button>
+            <button class="btn danger" id="s-delete-account" style="display:inline-flex;align-items:center;gap:4px;">${svgIcon('trash')} DELETE ACCOUNT</button>
           </div>
         </div>
         <div class="row footer">
           <button class="btn" id="s-cancel">CANCEL</button>
-          <button class="btn primary" id="s-save">SAVE ▶</button>
+          <button class="btn primary" id="s-save">SAVE ${svgIcon('arrowRight')}</button>
         </div>
       </div>
     `;
@@ -3245,7 +3232,7 @@ export class Hud {
     const subNotice = this.store.subscriptionActive ? "" : `
       <div style="margin-bottom:0.8rem;padding:0.6rem 0.8rem;border-radius:8px;background:rgba(240,101,101,0.15);border:1px solid rgba(240,101,101,0.3);color:var(--red);font-size:0.82rem;line-height:1.3;">
         <strong>Subscription required.</strong> Pay a $0.99 one-time entry fee to hire agents and run tasks. Subscribe for more agents and higher usage caps.
-        <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:var(--green);color:var(--bg);font-size:0.8rem;font-weight:700;cursor:pointer;">Get started →</button>
+        <button id="h-subscribe" style="margin-top:0.4rem;display:block;padding:0.4rem 0.8rem;border-radius:6px;border:none;background:var(--green);color:var(--bg);font-size:0.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">Get started ${svgIcon('arrowRight')}</button>
       </div>`;
 
     const traitSliders = ([
@@ -3273,7 +3260,7 @@ export class Hud {
           <div class="hire-appearance">
             ${builder.html()}
             <div class="hire-outfit-actions">
-              ${this.store.wardrobeEditable ? `<button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;">💾 SAVE OUTFIT</button>` : ""}
+              ${this.store.wardrobeEditable ? `<button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;display:inline-flex;align-items:center;gap:4px;">${svgIcon('save')} SAVE OUTFIT</button>` : ""}
               <select class="outfit-select" id="h-load-outfit">
                 <option value="">Load outfit…</option>
                 ${this.store.outfits.map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}
@@ -3303,7 +3290,7 @@ export class Hud {
             <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:var(--dim);">PERSONALITY</div>
             <div id="h-traits" style="padding:0.4rem 0;">
               ${traitSliders}
-              <button class="btn" id="h-rand-personality" style="font-size:0.75rem;padding:0.3rem 0.6rem;margin-top:0.3rem;">🎲 RANDOMIZE</button>
+              <button class="btn" id="h-rand-personality" style="font-size:0.75rem;padding:0.3rem 0.6rem;margin-top:0.3rem;display:inline-flex;align-items:center;gap:4px;">${svgIcon('dice')} RANDOMIZE</button>
             </div>
             <div class="sec" style="margin-top:0.3rem;font-size:0.8rem;color:var(--dim);">ACCESS</div>
             <div style="padding:0.3rem 0;">
@@ -3320,7 +3307,7 @@ export class Hud {
         </div>
         <div class="row">
           <button class="btn" id="h-cancel">CANCEL</button>
-          <button class="btn primary" id="h-ok">HIRE ▶</button>
+          <button class="btn primary" id="h-ok" style="display:inline-flex;align-items:center;gap:4px;">HIRE ${svgIcon('arrowRight')}</button>
         </div>
       </div>
     `;
@@ -3348,7 +3335,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     if (hSaveOutfit) {
       const actionsDiv = hSaveOutfit.parentElement!;
       const restoreButton = () => {
-        actionsDiv.innerHTML = `<button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;">💾 SAVE OUTFIT</button><select class="outfit-select" id="h-load-outfit"><option value="">Load outfit…</option>${this.store.outfits.map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}</select>`;
+        actionsDiv.innerHTML = `<button class="btn" id="h-save-outfit" style="font-size:0.7rem;padding:0.3rem 0.5rem;display:inline-flex;align-items:center;gap:4px;">${svgIcon('save')} SAVE OUTFIT</button><select class="outfit-select" id="h-load-outfit"><option value="">Load outfit…</option>${this.store.outfits.map((o) => `<option value="${o.id}">${o.name}</option>`).join("")}</select>`;
         document.getElementById("h-save-outfit")!.addEventListener("click", outfitSaveClick);
         document.getElementById("h-load-outfit")!.addEventListener("change", (e) => {
           const id = (e.target as HTMLSelectElement).value;
@@ -3359,7 +3346,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         });
       };
       const outfitSaveClick = () => {
-        actionsDiv.innerHTML = `<input type="text" id="h-outfit-name" placeholder="Outfit name…" maxlength="24" style="font-size:0.7rem;padding:0.3rem 0.5rem;width:100px;" /><button class="btn" id="h-outfit-confirm" style="font-size:0.7rem;padding:0.3rem 0.5rem;">✓</button><button class="btn" id="h-outfit-cancel" style="font-size:0.7rem;padding:0.3rem 0.5rem;">✕</button>`;
+        actionsDiv.innerHTML = `<input type="text" id="h-outfit-name" placeholder="Outfit name…" maxlength="24" style="font-size:0.7rem;padding:0.3rem 0.5rem;width:100px;" /><button class="btn" id="h-outfit-confirm" style="font-size:0.7rem;padding:0.3rem 0.5rem;">${svgIcon('check')}</button><button class="btn" id="h-outfit-cancel" style="font-size:0.7rem;padding:0.3rem 0.5rem;">${svgIcon('close')}</button>`;
         const input = document.getElementById("h-outfit-name") as HTMLInputElement;
         input.focus();
         const submit = () => {
@@ -3515,7 +3502,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
 
     modal.innerHTML = `
       <div class="modal hire-modal" style="max-width:680px;">
-        <h2>⚗️ FUSE AGENTS</h2>
+        <h2 style="display:flex;align-items:center;gap:6px;">${svgIcon('fuse')} FUSE AGENTS</h2>
         <p style="color:var(--dim);font-size:0.82rem;margin-bottom:0.8rem;">
           Merge two agents into one. Their MCP servers, wallets, and personalities are combined.
           Both originals are fired. The fused agent starts with a clean slate.
@@ -3546,13 +3533,13 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
             </div>
             <div class="sec" style="font-size:0.8rem;color:var(--dim);margin-top:0.3rem;">WALLETS</div>
             <div id="f-wallets" style="padding:0.3rem 0;font-size:0.78rem;color:var(--text);">
-              ${((agentA.cdpSolana || firstOther.cdpSolana) ? "🔵 Solana (CDP) " : "")}${((agentA.crossmintWallet || firstOther.crossmintWallet) ? "🟢 Crossmint " : "")}${(!agentA.cdpSolana && !firstOther.cdpSolana && !agentA.crossmintWallet && !firstOther.crossmintWallet) ? "<span style='color:var(--dim);'>None</span>" : ""}
+              ${((agentA.cdpSolana || firstOther.cdpSolana) ? `${svgIcon('circleBlue')} Solana (CDP) ` : "")}${((agentA.crossmintWallet || firstOther.crossmintWallet) ? `${svgIcon('circleGreen')} Crossmint ` : "")}${(!agentA.cdpSolana && !firstOther.cdpSolana && !agentA.crossmintWallet && !firstOther.crossmintWallet) ? "<span style='color:var(--dim);'>None</span>" : ""}
             </div>
           </div>
         </div>
         <div class="row">
           <button class="btn" id="f-cancel">CANCEL</button>
-          <button class="btn primary" id="f-ok">⚗️ FUSE ▶</button>
+          <button class="btn primary" id="f-ok" style="display:inline-flex;align-items:center;gap:4px;">${svgIcon('fuse')} FUSE ${svgIcon('arrowRight')}</button>
         </div>
       </div>
     `;
@@ -3573,8 +3560,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         valSpan.textContent = String(Math.round(p[key] * 100));
       }
       document.getElementById("f-wallets")!.innerHTML =
-        ((a.cdpSolana || b.cdpSolana) ? "🔵 Solana (CDP) " : "") +
-        ((a.crossmintWallet || b.crossmintWallet) ? "🟢 Crossmint " : "") ||
+        ((a.cdpSolana || b.cdpSolana) ? `${svgIcon('circleBlue')} Solana (CDP) ` : "") +
+        ((a.crossmintWallet || b.crossmintWallet) ? `${svgIcon('circleGreen')} Crossmint ` : "") ||
         "<span style='color:var(--dim);'>None</span>";
     };
 
@@ -3796,7 +3783,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     this.lastElegantGoalId = es.goalCardId;
 
     const tier = es.tier;
-    const emoji = tier === "gold" ? "🥇" : tier === "silver" ? "🥈" : "🥉";
+    const emoji = tier === "gold" ? svgIcon('badgeGold') : tier === "silver" ? svgIcon('badgeSilver') : svgIcon('badgeBronze');
     const tierLabel = tier === "gold" ? "GOLD" : tier === "silver" ? "SILVER" : "BRONZE";
     const color = tier === "gold" ? "#ffd700" : tier === "silver" ? "#c0c0c0" : "#cd7f32";
     const s = es.score;
@@ -3847,11 +3834,11 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
     this.lastBreakthroughId = bt.agentId;
 
     const triggerIcons: Record<string, string> = {
-      high_success_rate: "🎯",
-      fast_completion: "⚡",
-      faster_than_peers: "🚀",
+      high_success_rate: svgIcon('target'),
+      fast_completion: svgIcon('lightning'),
+      faster_than_peers: svgIcon('rocket'),
     };
-    const icon = triggerIcons[bt.trigger] ?? "🔬";
+    const icon = triggerIcons[bt.trigger] ?? svgIcon('microscope');
 
     // Create celebration card (non-blocking, bottom-right)
     let card = document.getElementById("breakthrough-card");
@@ -3873,7 +3860,7 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           <div style="font-size: 16px; font-weight: 800; color: var(--green); text-shadow: 0 0 12px rgba(74, 222, 128, 0.4);">BREAKTHROUGH!</div>
           <div style="font-size: 12px; color: var(--dim);">${bt.agentName}</div>
         </div>
-        <button style="margin-left: auto; background: none; border: none; color: var(--dim); cursor: pointer; font-size: 16px;" onclick="this.parentElement.parentElement.remove()">✕</button>
+        <button style="margin-left: auto; background: none; border: none; color: var(--dim); cursor: pointer; font-size: 16px;" onclick="this.parentElement.parentElement.remove()">${svgIcon('close')}</button>
       </div>
       <div style="font-size: 13px; color: var(--text); line-height: 1.5;">${bt.description}</div>
     `;
@@ -3905,10 +3892,10 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
         banner.id = "tour-banner";
         banner.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:500;padding:0.8rem 1.2rem;border-radius:10px;background:var(--panel);border:1px solid var(--accent);color:var(--text);font-size:0.9rem;text-align:center;backdrop-filter:blur(4px);box-shadow:0 4px 16px rgba(0,0,0,0.12);display:flex;align-items:center;gap:10px;";
         const text = document.createElement("span");
-        text.innerHTML = "🎬 <strong>Tour Mode</strong> — You can look around but not interact.<br>Ask an admin for talk access to chat with agents.";
+        text.innerHTML = `${svgIcon('film')} <strong>Tour Mode</strong> — You can look around but not interact.<br>Ask an admin for talk access to chat with agents.`;
         banner.appendChild(text);
         const closeBtn = document.createElement("button");
-        closeBtn.textContent = "✕";
+        closeBtn.innerHTML = svgIcon('close');
         closeBtn.style.cssText = "flex-shrink:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dim);background:var(--panel-soft);color:var(--dim);cursor:pointer;font-size:13px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;";
         closeBtn.title = "Dismiss";
         closeBtn.addEventListener("click", () => {

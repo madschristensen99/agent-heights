@@ -1,5 +1,6 @@
 import { useDashboard } from "../lib/store";
 import { Settings as SettingsIcon, Zap } from "lucide-react";
+import { IconArrowRight } from "./Icons";
 
 export function Settings() {
   const { settings, send, player } = useDashboard();
@@ -130,7 +131,7 @@ export function Settings() {
               href="/"
               className="block w-full text-center px-4 py-2.5 rounded-lg bg-bg-input border border-border text-sm text-gray-300 hover:border-accent hover:text-accent transition-colors"
             >
-              Open Game Interface →
+              Open Game Interface <IconArrowRight size={12} className="inline-block" />
             </a>
           </div>
         </section>
