@@ -1,7 +1,16 @@
 import type { AgentTool } from "@cline/sdk";
 import { CdpClient } from "@coinbase/cdp-sdk";
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
-import { LAMPORTS_PER_SOL, Connection, PublicKey } from "@solana/web3.js";
+import {
+  LAMPORTS_PER_SOL,
+  Connection,
+  PublicKey,
+  VersionedTransaction,
+  TransactionMessage,
+  Keypair,
+} from "@solana/web3.js";
+import bs58 from "bs58";
+import { PUMP_SDK } from "@nirholas/pump-sdk";
 
 /**
  * CDP Solana provider — gives agents a programmatically-provisioned Solana wallet
@@ -51,6 +60,76 @@ function getRpcUrl(): string {
   const net = getNetwork();
   if (net === "solana") return "https://api.mainnet-beta.solana.com";
   return "https://api.devnet.solana.com";
+}
+
+/** OKX DEX aggregator quote — returns expected output amount for a Solana swap.
+ * OKX chain ID for Solana is 501. Uses the public API (no auth required for quotes). */
+async function getOkxQuote(
+  inputMint: string,
+  outputMint: string,
+  rawAmount: string,
+  slippageBps: number,
+  userAddress: string,
+): Promise<{ toTokenAmount: string; priceImpactPercentage: string; routerList: any[] } | null> {
+  try {
+    const params = new URLSearchParams({
+      chainId: "501",
+      amount: rawAmount,
+      fromTokenAddress: inputMint === "So11111111111111111111111111111111111111112"
+        ? "11111111111111111111111111111111"
+        : inputMint,
+      toTokenAddress: outputMint,
+      slippage: String(slippageBps / 100),
+      userWalletAddress: userAddress,
+    });
+    const res = await fetch(`https://web3.okx.com/api/v5/dex/aggregator/quote?${params}`);
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    if (data.code !== "0" || !data.data?.[0]) return null;
+    const q = data.data[0];
+    return {
+      toTokenAmount: q.toTokenAmount,
+      priceImpactPercentage: q.priceImpactPercentage ?? "0",
+      routerList: q.dexRouterList ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** OKX DEX aggregator swap — returns a base58-encoded serialized transaction ready to sign. */
+async function getOkxSwapTx(
+  inputMint: string,
+  outputMint: string,
+  rawAmount: string,
+  slippageBps: number,
+  userAddress: string,
+): Promise<{ txData: string; toTokenAmount: string; priceImpactPercentage: string } | null> {
+  try {
+    const params = new URLSearchParams({
+      chainId: "501",
+      amount: rawAmount,
+      fromTokenAddress: inputMint === "So11111111111111111111111111111111111111112"
+        ? "11111111111111111111111111111111"
+        : inputMint,
+      toTokenAddress: outputMint,
+      slippage: String(slippageBps / 100),
+      userWalletAddress: userAddress,
+    });
+    const res = await fetch(`https://web3.okx.com/api/v5/dex/aggregator/swap?${params}`);
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    if (data.code !== "0" || !data.data?.[0]) return null;
+    const s = data.data[0];
+    if (!s.tx?.data) return null;
+    return {
+      txData: s.tx.data,
+      toTokenAmount: s.toTokenAmount,
+      priceImpactPercentage: s.priceImpactPercentage ?? "0",
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Cache of account objects per agentId, so we don't re-create wallets on every tool call. */
@@ -781,9 +860,9 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
   const jupiterSwapTool: AgentTool<any, any> = {
     name: "solana_jupiter_swap",
     description:
-      "Swap tokens on Solana using Jupiter's Ultra API (DEX aggregator + RFQ for best pricing). " +
+      "Swap tokens on Solana using Jupiter or OKX DEX aggregator. " +
       "Provide input token mint, output token mint, and amount in human-readable units. " +
-      "The swap is signed with your CDP wallet and executed via Jupiter's relay for MEV protection. " +
+      "The swap is signed with your CDP wallet. Jupiter uses relay for MEV protection; OKX returns a tx that's signed and broadcast via RPC. " +
       "Common mints: SOL=So11111111111111111111111111111111111111112, USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v. " +
       "Use solana_jupiter_search to look up mint addresses and decimals for any token. " +
       `Network: ${network}.`,
@@ -811,6 +890,11 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
           description: "Slippage tolerance in basis points (e.g. 50 for 0.5%). Default: 100 (1%)",
           default: 100,
         },
+        dex: {
+          type: "string",
+          description: 'DEX aggregator to use: "jupiter" (default), "okx", or "auto" (fetch both quotes, pick best output). Default: "jupiter"',
+          default: "jupiter",
+        },
       },
       required: ["inputMint", "outputMint", "amount"],
     },
@@ -818,6 +902,7 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
       try {
         const account = await getAgentAccount(agentId);
         const slippageBps = input.slippageBps ?? 100;
+        const dexChoice = input.dex ?? "jupiter";
         const isSol = input.inputMint === "So11111111111111111111111111111111111111112";
 
         // Determine input token decimals
@@ -851,6 +936,100 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
 
         const rawAmount = String(Math.floor(input.amount * Math.pow(10, decimals)));
 
+        // For "auto" mode: fetch both quotes, pick the one with better output
+        if (dexChoice === "auto") {
+          const [jupOrder, okxQuote] = await Promise.all([
+            (async () => {
+              try {
+                const orderUrl = new URL("https://lite-api.jup.ag/ultra/v1/order");
+                orderUrl.searchParams.set("inputMint", input.inputMint);
+                orderUrl.searchParams.set("outputMint", input.outputMint);
+                orderUrl.searchParams.set("amount", rawAmount);
+                orderUrl.searchParams.set("taker", account.address);
+                orderUrl.searchParams.set("slippageBps", String(slippageBps));
+                const res = await fetch(orderUrl.toString(), { headers: { "Content-Type": "application/json" } });
+                if (!res.ok) return null;
+                return await res.json() as any;
+              } catch { return null; }
+            })(),
+            getOkxQuote(input.inputMint, input.outputMint, rawAmount, slippageBps, account.address),
+          ]);
+
+          const jupOut = jupOrder?.outAmount ? BigInt(jupOrder.outAmount) : 0n;
+          const okxOut = okxQuote?.toTokenAmount ? BigInt(okxQuote.toTokenAmount) : 0n;
+
+          if (jupOut === 0n && okxOut === 0n) {
+            return `Both Jupiter and OKX returned no quotes. Try specifying dex: "jupiter" or dex: "okx" directly.`;
+          }
+
+          // Pick the better quote
+          const useJupiter = jupOut >= okxOut;
+          const winner = useJupiter ? "Jupiter" : "OKX";
+          const winnerOut = useJupiter ? jupOut : okxOut;
+          const loserOut = useJupiter ? okxOut : jupOut;
+          const savings = loserOut > 0n ? ((winnerOut - loserOut) * 10000n / loserOut).toString() : "0";
+
+          if (useJupiter && jupOrder?.transaction) {
+            // Execute via Jupiter relay
+            const signResult = await account.signTransaction({ transaction: jupOrder.transaction });
+            const signedTx = (signResult as any).signedTransaction ?? (signResult as any).signature;
+            const execRes = await fetch("https://lite-api.jup.ag/ultra/v1/execute", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ signedTransaction: signedTx, requestId: jupOrder.requestId }),
+            });
+            if (!execRes.ok) {
+              const errText = await execRes.text();
+              return `Jupiter execute failed (${execRes.status}): ${errText}\nThe swap was signed but may not have landed.`;
+            }
+            const execResult = await execRes.json() as any;
+            const txSig = execResult.transactionId ?? execResult.signature ?? "unknown";
+            const explorerUrl = `https://explorer.solana.com/tx/${txSig}` + (network.includes("devnet") ? `?cluster=devnet` : "");
+            return `Auto-routed via ${winner} (${Number(savings)/100}% better)\n` +
+              `Input: ${input.amount} ${isSol ? "SOL" : input.inputMint.slice(0, 8)}...\n` +
+              `Output: ${execResult.outputAmountResult ?? jupOrder.outAmount}\n` +
+              `Transaction: ${txSig}\nExplorer: ${explorerUrl}`;
+          } else if (!useJupiter) {
+            // Execute via OKX
+            const okxSwap = await getOkxSwapTx(input.inputMint, input.outputMint, rawAmount, slippageBps, account.address);
+            if (!okxSwap?.txData) return `OKX quote succeeded but swap tx fetch failed. Try dex: "okx" directly.`;
+            const okxTxBytes = bs58.decode(okxSwap.txData);
+            const okxBase64 = Buffer.from(okxTxBytes).toString("base64");
+            const signResult = await account.signTransaction({ transaction: okxBase64 });
+            const signedTx = (signResult as any).signedTransaction ?? (signResult as any).signature;
+            const conn = new Connection(getRpcUrl(), "confirmed");
+            const sig = await conn.sendRawTransaction(Buffer.from(signedTx, "base64"));
+            await conn.confirmTransaction(sig, "confirmed");
+            const explorerUrl = `https://explorer.solana.com/tx/${sig}` + (network.includes("devnet") ? `?cluster=devnet` : "");
+            return `Auto-routed via ${winner} (${Number(savings)/100}% better)\n` +
+              `Input: ${input.amount} ${isSol ? "SOL" : input.inputMint.slice(0, 8)}...\n` +
+              `Output: ${okxSwap.toTokenAmount}\n` +
+              `Transaction: ${sig}\nExplorer: ${explorerUrl}`;
+          }
+          return `Auto-routing failed — no executable quote from either DEX.`;
+        }
+
+        // OKX-only path
+        if (dexChoice === "okx") {
+          const okxSwap = await getOkxSwapTx(input.inputMint, input.outputMint, rawAmount, slippageBps, account.address);
+          if (!okxSwap?.txData) return `OKX swap request failed. The pair may not be supported on OKX DEX. Try dex: "jupiter".`;
+          const okxTxBytes = bs58.decode(okxSwap.txData);
+          const okxBase64 = Buffer.from(okxTxBytes).toString("base64");
+          const signResult = await account.signTransaction({ transaction: okxBase64 });
+          const signedTx = (signResult as any).signedTransaction ?? (signResult as any).signature;
+          const conn = new Connection(getRpcUrl(), "confirmed");
+          const sig = await conn.sendRawTransaction(Buffer.from(signedTx, "base64"));
+          await conn.confirmTransaction(sig, "confirmed");
+          const explorerUrl = `https://explorer.solana.com/tx/${sig}` + (network.includes("devnet") ? `?cluster=devnet` : "");
+          return `Swap via OKX DEX!\n` +
+            `Input: ${input.amount} ${isSol ? "SOL" : input.inputMint.slice(0, 8)}...\n` +
+            `Output: ${okxSwap.toTokenAmount}\n` +
+            `Price impact: ${okxSwap.priceImpactPercentage}%\n` +
+            `Slippage: ${slippageBps / 100}%\n` +
+            `Transaction: ${sig}\nExplorer: ${explorerUrl}`;
+        }
+
+        // Jupiter path (default)
         // Step 1: Get swap order from Jupiter Ultra API
         const orderUrl = new URL("https://lite-api.jup.ag/ultra/v1/order");
         orderUrl.searchParams.set("inputMint", input.inputMint);
@@ -909,8 +1088,7 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
           `Output: ${outputAmountResult} (raw: ${outputAmountResult})\n` +
           `Price impact: ${priceImpact}\n` +
           `Slippage: ${slippageBps / 100}%\n` +
-          `Transaction: ${txSig}\n` +
-          `Explorer: ${explorerUrl}`;
+          `Transaction: ${txSig}\nExplorer: ${explorerUrl}`;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return `Jupiter swap failed: ${msg}`;
@@ -1170,6 +1348,714 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
     },
   };
 
+  const checkTxStatusTool: AgentTool<any, any> = {
+    name: "solana_check_tx_status",
+    description:
+      "Check the status of a Solana transaction by its signature. " +
+      "Returns confirmation status, block time, fee, and token balance changes if available. " +
+      "Use this after a swap or transfer to verify it landed on-chain.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        signature: {
+          type: "string",
+          description: "Transaction signature to check",
+        },
+      },
+      required: ["signature"],
+    },
+    async execute(input: any) {
+      try {
+        const conn = new Connection(getRpcUrl(), "confirmed");
+        const tx = await conn.getTransaction(input.signature, {
+          maxSupportedTransactionVersion: 0,
+        });
+        if (!tx) {
+          return `Transaction ${input.signature} not found. It may not have been confirmed yet, or the signature is invalid.`;
+        }
+        const status = tx.meta?.err ? "FAILED" : "SUCCESS";
+        const blockTime = tx.blockTime ? new Date(tx.blockTime * 1000).toISOString() : "unknown";
+        const fee = tx.meta?.fee ? `${tx.meta.fee / LAMPORTS_PER_SOL} SOL` : "unknown";
+        const slot = tx.slot ?? "unknown";
+        const explorerUrl = `https://explorer.solana.com/tx/${input.signature}` +
+          (network.includes("devnet") ? `?cluster=devnet` : "");
+        const lines = [
+          `Transaction: ${input.signature}`,
+          `Status: ${status}`,
+          `Block time: ${blockTime}`,
+          `Slot: ${slot}`,
+          `Fee: ${fee}`,
+          `Explorer: ${explorerUrl}`,
+        ];
+        if (tx.meta?.preTokenBalances && tx.meta?.postTokenBalances) {
+          lines.push("Token balance changes:");
+          for (const post of tx.meta.postTokenBalances) {
+            const pre = tx.meta.preTokenBalances.find((p: any) => p.accountIndex === post.accountIndex);
+            const preAmount = pre ? Number(pre.uiTokenAmount.amount) : 0;
+            const postAmount = Number(post.uiTokenAmount.amount);
+            const diff = postAmount - preAmount;
+            if (diff !== 0) {
+              lines.push(`  ${post.mint.slice(0, 8)}...: ${diff > 0 ? "+" : ""}${diff}`);
+            }
+          }
+        }
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Failed to check tx status: ${msg}`;
+      }
+    },
+  };
+
+  const launchTokenTool: AgentTool<any, any> = {
+    name: "solana_launch_token",
+    description:
+      "Launch a new SPL token on pump.fun bonding curve. The token is instantly tradeable. " +
+      "Your CDP wallet becomes the token creator and receives creator fees from trading. " +
+      "ALWAYS confirm the token name, symbol, and description with the user before launching. " +
+      `Network: ${network}. Mainnet recommended for real launches.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Token name (e.g. 'My Awesome Token')",
+        },
+        symbol: {
+          type: "string",
+          description: "Token ticker symbol (e.g. 'AWESOME', max 10 chars)",
+        },
+        description: {
+          type: "string",
+          description: "Token description shown on pump.fun",
+        },
+        imageUrl: {
+          type: "string",
+          description: "URL to token logo image (square PNG/SVG recommended, 512x512). Host on imgur, IPFS, or any public URL.",
+        },
+        website: {
+          type: "string",
+          description: "Optional project website URL",
+        },
+        twitter: {
+          type: "string",
+          description: "Optional Twitter/X profile link",
+        },
+        telegram: {
+          type: "string",
+          description: "Optional Telegram group link",
+        },
+        initialBuySol: {
+          type: "number",
+          description: "Optional initial SOL amount to buy as the creator (e.g. 0.01). Default: 0 (no initial buy)",
+          default: 0,
+        },
+      },
+      required: ["name", "symbol", "description"],
+    },
+    async execute(input: any) {
+      try {
+        if (network.includes("devnet")) {
+          return `Token launch is recommended on mainnet only. Current network: ${network}. ` +
+            `Switch CDP_SOLANA_NETWORK to "solana" for real launches.`;
+        }
+        const account = await getAgentAccount(agentId);
+        const conn = new Connection(getRpcUrl(), "confirmed");
+
+        // Build metadata URI (pump.fun expects an off-chain JSON metadata URI)
+        // We construct a minimal metadata object and host it as a data URI fallback
+        const metadata = {
+          name: input.name,
+          symbol: input.symbol,
+          description: input.description,
+          image: input.imageUrl ?? "",
+          website: input.website ?? "",
+          twitter: input.twitter ?? "",
+          telegram: input.telegram ?? "",
+        };
+
+        // For the URI, pump.fun requires a publicly accessible URL.
+        // If no imageUrl provided, we use a placeholder metadata URI.
+        const uri = input.imageUrl
+          ? `data:application/json,${encodeURIComponent(JSON.stringify(metadata))}`
+          : `data:application/json,${encodeURIComponent(JSON.stringify(metadata))}`;
+
+        // Generate a new mint keypair for the token
+        const mintKeypair = Keypair.generate();
+
+        // Build the create instruction using pump SDK
+        const createIx = await PUMP_SDK.createV2Instruction({
+          mint: mintKeypair.publicKey,
+          name: input.name,
+          symbol: input.symbol,
+          uri,
+          creator: new PublicKey(account.address),
+          user: new PublicKey(account.address),
+          mayhemMode: false,
+          cashback: false,
+        });
+
+        // Get latest blockhash
+        const { blockhash } = await conn.getLatestBlockhash("confirmed");
+
+        // Build versioned transaction
+        const message = new TransactionMessage({
+          payerKey: new PublicKey(account.address),
+          recentBlockhash: blockhash,
+          instructions: [createIx],
+        }).compileToV0Message();
+
+        const tx = new VersionedTransaction(message);
+
+        // Sign with mint keypair locally
+        tx.sign([mintKeypair]);
+
+        // Sign with CDP wallet (the payer/creator)
+        const serializedTx = Buffer.from(tx.serialize()).toString("base64");
+        const signResult = await account.signTransaction({ transaction: serializedTx });
+        const signedTx = (signResult as any).signedTransaction ?? (signResult as any).signature;
+
+        // Broadcast
+        const sig = await conn.sendRawTransaction(Buffer.from(signedTx, "base64"));
+        await conn.confirmTransaction(sig, "confirmed");
+
+        const explorerUrl = `https://explorer.solana.com/tx/${sig}`;
+        const pumpUrl = `https://pump.fun/${mintKeypair.publicKey.toBase58()}`;
+        const mintExplorer = `https://explorer.solana.com/address/${mintKeypair.publicKey.toBase58()}`;
+
+        return `Token launched successfully!\n` +
+          `Name: ${input.name}\n` +
+          `Symbol: ${input.symbol}\n` +
+          `Mint address: ${mintKeypair.publicKey.toBase58()}\n` +
+          `Pump.fun page: ${pumpUrl}\n` +
+          `Transaction: ${sig}\n` +
+          `Explorer (tx): ${explorerUrl}\n` +
+          `Explorer (token): ${mintExplorer}\n` +
+          `You are the token creator. Trading fees will be distributed to your wallet.`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Token launch failed: ${msg}`;
+      }
+    },
+  };
+
+  const portfolioTool: AgentTool<any, any> = {
+    name: "solana_portfolio",
+    description:
+      "Get a portfolio overview for your wallet. Returns token allocations (percentage of portfolio), " +
+      "USD values where available, and a rebalancing suggestion if any token dominates. " +
+      "Use this to give the user a snapshot of their holdings.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        includeHistory: {
+          type: "boolean",
+          description: "If true, include 24h P&L estimate (requires balance history). Default: false",
+          default: false,
+        },
+      },
+    },
+    async execute(input: any) {
+      try {
+        const data = await getAgentBalances(agentId);
+        if (!data || data.balances.length === 0) {
+          const account = await getAgentAccount(agentId);
+          return `Wallet ${account.address} has no token balances. The wallet may need to be funded.`;
+        }
+
+        // Calculate total USD value
+        let totalUsd = 0;
+        const holdings = data.balances.map((b) => {
+          const usd = b.usdValue ? parseFloat(b.usdValue) : 0;
+          totalUsd += usd;
+          return { ...b, usdValue: usd };
+        });
+
+        // Sort by USD value descending
+        holdings.sort((a, b) => (b.usdValue ?? 0) - (a.usdValue ?? 0));
+
+        const lines = [`Portfolio for ${data.address}:`];
+        if (totalUsd > 0) {
+          lines.push(`Total estimated value: $${totalUsd.toFixed(2)}\n`);
+        }
+
+        for (const h of holdings) {
+          const usdStr = h.usdValue > 0 ? ` ($${h.usdValue.toFixed(2)})` : "";
+          const pct = totalUsd > 0 ? ` — ${((h.usdValue / totalUsd) * 100).toFixed(1)}%` : "";
+          lines.push(`${h.symbol}: ${h.amount}${usdStr}${pct}`);
+        }
+
+        // Rebalancing suggestion
+        if (totalUsd > 0) {
+          const dominant = holdings[0];
+          const dominantPct = (dominant.usdValue / totalUsd) * 100;
+          if (dominantPct > 60) {
+            lines.push(`\nRebalancing suggestion: ${dominant.symbol} is ${dominantPct.toFixed(1)}% of your portfolio. ` +
+              `Consider diversifying by swapping some ${dominant.symbol} for other tokens.`);
+          } else if (holdings.length === 1) {
+            lines.push(`\nDiversification suggestion: You only hold ${dominant.symbol}. ` +
+              `Consider acquiring other tokens to spread risk.`);
+          } else {
+            lines.push(`\nPortfolio looks diversified across ${holdings.length} tokens.`);
+          }
+        }
+
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Portfolio analysis failed: ${msg}`;
+      }
+    },
+  };
+
+  const priceFeedTool: AgentTool<any, any> = {
+    name: "solana_price_feed",
+    description:
+      "Get current price and 24h change for any Solana token. " +
+      "Uses Jupiter's price API. Returns price in USD and 24h price change percentage. " +
+      "Common mints: SOL=So11111111111111111111111111111111111111112, USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v. " +
+      "Use solana_jupiter_search to find mint addresses for other tokens.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mint: {
+          type: "string",
+          description: "Token mint address (e.g. So11111111111111111111111111111111111111112 for SOL)",
+        },
+      },
+      required: ["mint"],
+    },
+    async execute(input: any) {
+      try {
+        const url = new URL("https://lite-api.jup.ag/ultra/v1/price");
+        url.searchParams.set("mint", input.mint);
+        const res = await fetch(url.toString());
+        if (!res.ok) {
+          const errText = await res.text();
+          return `Price fetch failed (${res.status}): ${errText}`;
+        }
+        const data = await res.json() as any;
+        const price = data.price ?? data.data?.price ?? "unknown";
+        const change24h = data.priceChange24h ?? data.data?.priceChange24h;
+        const lines = [`Price for ${input.mint.slice(0, 12)}...`];
+        lines.push(`USD: $${typeof price === "number" ? price.toFixed(6) : price}`);
+        if (change24h !== undefined) {
+          lines.push(`24h change: ${change24h}%`);
+        }
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Price feed failed: ${msg}`;
+      }
+    },
+  };
+
+  const ohlcvTool: AgentTool<any, any> = {
+    name: "solana_ohlcv",
+    description:
+      "Get candlestick (OHLCV) data for a Solana token. Returns open, high, low, close, volume for each candle. " +
+      "Useful for technical analysis, charting, and trend detection. " +
+      "Powered by Birdeye API (free tier).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mint: {
+          type: "string",
+          description: "Token mint address",
+        },
+        resolution: {
+          type: "string",
+          description: 'Candle resolution: "1m", "5m", "15m", "1h", "4h", "1d". Default: "1h"',
+          default: "1h",
+        },
+        count: {
+          type: "number",
+          description: "Number of candles to return (max 100). Default: 24",
+          default: 24,
+        },
+      },
+      required: ["mint"],
+    },
+    async execute(input: any) {
+      try {
+        const resolution = input.resolution ?? "1h";
+        const count = Math.min(input.count ?? 24, 100);
+        const url = new URL("https://public-api.birdeye.so/defi/ohlcv");
+        url.searchParams.set("address", input.mint);
+        url.searchParams.set("type", resolution);
+        url.searchParams.set("limit", String(count));
+        const res = await fetch(url.toString(), {
+          headers: { "x-chain": "solana" },
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return `OHLCV fetch failed (${res.status}): ${errText}. Birdeye free tier may be rate-limited.`;
+        }
+        const data = await res.json() as any;
+        const candles = data.data ?? [];
+        if (candles.length === 0) return `No OHLCV data found for ${input.mint}.`;
+        const lines = [`OHLCV for ${input.mint.slice(0, 12)}... (${resolution}, last ${candles.length} candles):`];
+        for (const c of candles.slice(-10)) {
+          const time = c.unixTime ? new Date(c.unixTime * 1000).toISOString().slice(0, 16) : "?";
+          lines.push(`  ${time} O:${c.o} H:${c.h} L:${c.l} C:${c.c} V:${c.v}`);
+        }
+        if (candles.length > 10) lines.push(`  ... (${candles.length - 10} more candles)`);
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `OHLCV fetch failed: ${msg}`;
+      }
+    },
+  };
+
+  const topHoldersTool: AgentTool<any, any> = {
+    name: "solana_top_holders",
+    description:
+      "Get the top token holders and concentration risk for a Solana token. " +
+      "Returns top 10 holders with their balance and percentage of total supply. " +
+      "High concentration (top holder >20%) is a risk signal. " +
+      "Use this alongside solana_jupiter_shield before investing in unknown tokens.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mint: {
+          type: "string",
+          description: "Token mint address",
+        },
+      },
+      required: ["mint"],
+    },
+    async execute(input: any) {
+      try {
+        const conn = new Connection(getRpcUrl(), "confirmed");
+        const mint = new PublicKey(input.mint);
+        const largestAccounts = await conn.getTokenLargestAccounts(mint);
+        const supply = await conn.getTokenSupply(mint);
+        const totalSupply = Number(supply.value.amount);
+        if (totalSupply === 0) return `Token ${input.mint} has zero supply or does not exist.`;
+        const lines = [`Top holders for ${input.mint.slice(0, 12)}...:`];
+        const holders = largestAccounts.value.slice(0, 10);
+        for (let i = 0; i < holders.length; i++) {
+          const h = holders[i];
+          const amount = Number(h.amount);
+          const pct = ((amount / totalSupply) * 100).toFixed(2);
+          const addr = h.address.toBase58().slice(0, 8) + "...";
+          lines.push(`  ${i + 1}. ${addr} — ${pct}% (${h.amount})`);
+        }
+        const topPct = parseFloat(((Number(holders[0]?.amount ?? 0) / totalSupply) * 100).toFixed(2));
+        if (topPct > 20) {
+          lines.push(`\nRisk warning: Top holder owns ${topPct}% of supply. High concentration risk.`);
+        } else if (topPct > 10) {
+          lines.push(`\nCaution: Top holder owns ${topPct}% of supply. Moderate concentration.`);
+        } else {
+          lines.push(`\nHolder distribution looks healthy (top holder: ${topPct}%).`);
+        }
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Top holders check failed: ${msg}`;
+      }
+    },
+  };
+
+  const liquidityCheckTool: AgentTool<any, any> = {
+    name: "solana_liquidity_check",
+    description:
+      "Check pool liquidity for a Solana token across DEXs. " +
+      "Returns available liquidity in USD, which indicates how easily the token can be bought/sold without large price impact. " +
+      "Low liquidity (<$10k) means high slippage risk.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mint: {
+          type: "string",
+          description: "Token mint address",
+        },
+      },
+      required: ["mint"],
+    },
+    async execute(input: any) {
+      try {
+        const url = new URL("https://lite-api.jup.ag/ultra/v1/labels/liquidity");
+        url.searchParams.set("mint", input.mint);
+        const res = await fetch(url.toString());
+        if (!res.ok) {
+          return `Liquidity check failed (${res.status}). The token may not be listed on any DEX.`;
+        }
+        const data = await res.json() as any;
+        const liquidity = data.liquidity ?? data.usdLiquidity ?? data.data?.liquidity;
+        if (!liquidity) return `No liquidity data found for ${input.mint}.`;
+        const usdLiq = typeof liquidity === "number" ? liquidity : parseFloat(liquidity);
+        const lines = [`Liquidity for ${input.mint.slice(0, 12)}...:`];
+        lines.push(`USD liquidity: $${usdLiq.toLocaleString()}`);
+        if (usdLiq < 10000) {
+          lines.push(`Risk: LOW LIQUIDITY. Swaps will have high price impact and slippage.`);
+        } else if (usdLiq < 100000) {
+          lines.push(`Caution: Moderate liquidity. Large swaps may have noticeable price impact.`);
+        } else {
+          lines.push(`Liquidity is healthy. Swaps should have minimal price impact for normal sizes.`);
+        }
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Liquidity check failed: ${msg}`;
+      }
+    },
+  };
+
+  const newTokensTool: AgentTool<any, any> = {
+    name: "solana_new_tokens",
+    description:
+      "Discover recently launched tokens on pump.fun. Returns the newest tokens with their mint address, " +
+      "symbol, age, market cap, and volume. Use this to find new trading opportunities. " +
+      "ALWAYS run solana_jupiter_shield and solana_top_holders on any token before considering a trade.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "Number of tokens to return (max 20). Default: 10",
+          default: 10,
+        },
+      },
+    },
+    async execute(input: any) {
+      try {
+        const limit = Math.min(input.limit ?? 10, 20);
+        const res = await fetch(`https://pumpapi.fun/api/pumps?limit=${limit}&sort=new`);
+        if (!res.ok) {
+          return `New tokens fetch failed (${res.status}). pump.fun API may be unavailable.`;
+        }
+        const data = await res.json() as any;
+        const tokens = Array.isArray(data) ? data : (data.pumps ?? data.data ?? []);
+        if (tokens.length === 0) return `No new tokens found.`;
+        const lines = [`Recent pump.fun token launches (newest first):`];
+        for (const t of tokens.slice(0, limit)) {
+          const symbol = t.symbol ?? t.ticker ?? "?";
+          const mint = t.mint ?? t.mintAddress ?? "?";
+          const mcap = t.marketCap ?? t.usd_market_cap ?? "?";
+          const volume = t.volume ?? t.usd_volume ?? "?";
+          const age = t.createdTimestamp ? `${Math.round((Date.now() - t.createdTimestamp * 1000) / 60000)}m ago` : "?";
+          lines.push(`  ${symbol} — mint: ${mint.slice(0, 12)}... — mcap: $${mcap} — vol: $${volume} — ${age}`);
+        }
+        lines.push(`\nBefore trading any of these, run solana_jupiter_shield and solana_top_holders to check for risks.`);
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `New tokens fetch failed: ${msg}`;
+      }
+    },
+  };
+
+  const marketNewsTool: AgentTool<any, any> = {
+    name: "solana_market_news",
+    description:
+      "Get latest crypto and Solana market news. Returns recent headlines from crypto news sources. " +
+      "Use this to provide context for trading decisions. The agent can analyze sentiment from the headlines.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          description: 'News category: "crypto" (default), "solana", "defi", "nft"',
+          default: "crypto",
+        },
+        limit: {
+          type: "number",
+          description: "Number of headlines to return (max 20). Default: 10",
+          default: 10,
+        },
+      },
+    },
+    async execute(input: any) {
+      try {
+        const limit = Math.min(input.limit ?? 10, 20);
+        const category = input.category ?? "crypto";
+        const url = new URL("https://min-api.cryptocompare.com/data/v2/news/");
+        url.searchParams.set("lang", "EN");
+        if (category === "solana") url.searchParams.set("categories", "SOL|SOLANA");
+        else if (category === "defi") url.searchParams.set("categories", "DEFI");
+        else if (category === "nft") url.searchParams.set("categories", "NFT");
+        const res = await fetch(url.toString());
+        if (!res.ok) return `News fetch failed (${res.status}).`;
+        const data = await res.json() as any;
+        const articles = data.Data ?? [];
+        if (articles.length === 0) return `No news found for category: ${category}.`;
+        const lines = [`Latest ${category} news:`];
+        for (const a of articles.slice(0, limit)) {
+          const title = a.title ?? a.body ?? "?";
+          const source = a.source_info?.name ?? a.source ?? "?";
+          const time = a.published_on ? new Date(a.published_on * 1000).toISOString().slice(0, 16) : "?";
+          lines.push(`  [${source}] ${time}: ${title}`);
+        }
+        lines.push(`\nAnalyze these headlines for market sentiment before making trading decisions.`);
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Market news fetch failed: ${msg}`;
+      }
+    },
+  };
+
+  const arbitrageScanTool: AgentTool<any, any> = {
+    name: "solana_arbitrage_scan",
+    description:
+      "Scan for arbitrage opportunities between Jupiter and OKX DEX aggregators. " +
+      "Fetches quotes from both DEXs for the same token pair and reports price differences. " +
+      "Read-only — does not execute any trades. The agent should present opportunities to the user for manual decision.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        inputMint: {
+          type: "string",
+          description: "Input token mint address (e.g. So11111111111111111111111111111111111111112 for SOL)",
+        },
+        outputMint: {
+          type: "string",
+          description: "Output token mint address",
+        },
+        amount: {
+          type: "number",
+          description: "Amount to check in human-readable units (e.g. 1 for 1 SOL)",
+        },
+        inputDecimals: {
+          type: "number",
+          description: "Decimals of input token (SOL=9, USDC=6). If omitted, auto-detected.",
+        },
+      },
+      required: ["inputMint", "outputMint", "amount"],
+    },
+    async execute(input: any) {
+      try {
+        const account = await getAgentAccount(agentId);
+        const isSol = input.inputMint === "So11111111111111111111111111111111111111112";
+        let decimals: number;
+        if (input.inputDecimals !== undefined) {
+          decimals = input.inputDecimals;
+        } else if (isSol) {
+          decimals = 9;
+        } else {
+          return `Please provide inputDecimals for token ${input.inputMint}. Use solana_jupiter_search to look it up.`;
+        }
+        const rawAmount = String(Math.floor(input.amount * Math.pow(10, decimals)));
+
+        const [jupOrder, okxQuote] = await Promise.all([
+          (async () => {
+            try {
+              const orderUrl = new URL("https://lite-api.jup.ag/ultra/v1/order");
+              orderUrl.searchParams.set("inputMint", input.inputMint);
+              orderUrl.searchParams.set("outputMint", input.outputMint);
+              orderUrl.searchParams.set("amount", rawAmount);
+              orderUrl.searchParams.set("slippageBps", "100");
+              const res = await fetch(orderUrl.toString());
+              if (!res.ok) return null;
+              return await res.json() as any;
+            } catch { return null; }
+          })(),
+          getOkxQuote(input.inputMint, input.outputMint, rawAmount, 100, account.address),
+        ]);
+
+        const jupOut = jupOrder?.outAmount ? BigInt(jupOrder.outAmount) : null;
+        const okxOut = okxQuote?.toTokenAmount ? BigInt(okxQuote.toTokenAmount) : null;
+
+        if (jupOut === null && okxOut === null) {
+          return `No quotes from either DEX for this pair.`;
+        }
+
+        const lines = [`Arbitrage scan for ${input.amount} ${isSol ? "SOL" : input.inputMint.slice(0, 8)}... → ${input.outputMint.slice(0, 8)}...:`];
+        if (jupOut !== null) lines.push(`Jupiter output: ${jupOut.toString()}`);
+        if (okxOut !== null) lines.push(`OKX output: ${okxOut.toString()}`);
+
+        if (jupOut !== null && okxOut !== null && jupOut > 0n && okxOut > 0n) {
+          const diff = jupOut > okxOut ? jupOut - okxOut : okxOut - jupOut;
+          const pct = (Number(diff) * 10000 / Number(jupOut > okxOut ? okxOut : jupOut) / 100).toFixed(2);
+          const better = jupOut > okxOut ? "Jupiter" : "OKX";
+          lines.push(`Better DEX: ${better} (${pct}% more output)`);
+          if (parseFloat(pct) > 1) {
+            lines.push(`Potential arbitrage opportunity! Buy on ${jupOut > okxOut ? "OKX" : "Jupiter"}, sell on ${better}.`);
+          } else {
+            lines.push(`Price difference is minimal (<1%). No significant arbitrage opportunity.`);
+          }
+        }
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Arbitrage scan failed: ${msg}`;
+      }
+    },
+  };
+
+  const batchTransferTool: AgentTool<any, any> = {
+    name: "solana_batch_transfer",
+    description:
+      "Transfer SOL or SPL tokens to multiple recipients in a single call. " +
+      "Useful for airdrops, payroll, or multi-party payments. " +
+      "Always confirm the total amount and all recipient addresses with the user before calling. " +
+      `Network: ${network}.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        recipients: {
+          type: "array",
+          description: "Array of { address, amount } objects",
+          items: {
+            type: "object",
+            properties: {
+              address: { type: "string", description: "Recipient wallet address" },
+              amount: { type: "number", description: "Amount to transfer (human-readable)" },
+            },
+          },
+        },
+        token: {
+          type: "string",
+          description: 'Token to transfer: "sol" for native SOL, or SPL token mint address. Default: "sol"',
+          default: "sol",
+        },
+        decimals: {
+          type: "number",
+          description: "Token decimals (SOL=9, USDC=6). If omitted, auto-detected for SOL.",
+        },
+      },
+      required: ["recipients"],
+    },
+    async execute(input: any) {
+      try {
+        const account = await getAgentAccount(agentId);
+        const token = input.token ?? "sol";
+        const recipients = input.recipients as { address: string; amount: number }[];
+        if (!recipients || recipients.length === 0) {
+          return `No recipients provided.`;
+        }
+        if (recipients.length > 20) {
+          return `Too many recipients (${recipients.length}). Maximum 20 per batch.`;
+        }
+        const decimals = token === "sol" ? 9 : (input.decimals ?? 6);
+        const results: string[] = [];
+        let successCount = 0;
+        for (const r of recipients) {
+          try {
+            const rawAmount = BigInt(Math.floor(r.amount * Math.pow(10, decimals)));
+            const { signature } = await account.transfer({
+              to: r.address,
+              amount: rawAmount,
+              token,
+              network: network as any,
+            });
+            results.push(`  ${r.address.slice(0, 8)}... — ${r.amount} ${token === "sol" ? "SOL" : token.slice(0, 8)} — tx: ${signature.slice(0, 12)}...`);
+            successCount++;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            results.push(`  ${r.address.slice(0, 8)}... — FAILED: ${msg}`);
+          }
+        }
+        return `Batch transfer complete: ${successCount}/${recipients.length} successful\n${results.join("\n")}`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Batch transfer failed: ${msg}`;
+      }
+    },
+  };
+
   return [
     getWalletTool,
     getBalanceTool,
@@ -1183,5 +2069,16 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
     jupiterQuoteTool,
     jupiterShieldTool,
     getTxHistoryTool,
+    checkTxStatusTool,
+    launchTokenTool,
+    portfolioTool,
+    priceFeedTool,
+    ohlcvTool,
+    topHoldersTool,
+    liquidityCheckTool,
+    newTokensTool,
+    marketNewsTool,
+    arbitrageScanTool,
+    batchTransferTool,
   ];
 }

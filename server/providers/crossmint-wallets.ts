@@ -364,6 +364,109 @@ export async function transferAgentTokens(
   }
 }
 
+/** Submit a raw transaction through Crossmint's wallet API.
+ * For EVM: provides tx data, to address, and value.
+ * For Solana: provides base64-encoded transaction. */
+async function submitCrossmintTransaction(
+  agentId: string,
+  txData: string,
+  chainType: "solana" | "evm",
+  to?: string,
+  value?: string,
+): Promise<{ id: string; status: string } | null> {
+  if (!isCrossmintConfigured()) return null;
+  try {
+    const apiKey = getApiKey()!;
+    const baseUrl = getBaseUrl();
+    const chain = getDefaultChain();
+    const wallet = await getOrCreateAgentWallet(agentId, chain);
+    if (!wallet) return null;
+    const signerAddress = getSignerAddress();
+    const walletLocator = wallet.address;
+
+    // Create the transaction
+    const body: any = {
+      signer: `server:${signerAddress}`,
+    };
+    if (chainType === "evm") {
+      body.data = txData;
+      body.to = to;
+      body.value = value ?? "0";
+    } else {
+      body.transaction = txData;
+    }
+
+    const createRes = await fetch(
+      `${baseUrl}/${API_VERSION}/wallets/${walletLocator}/transactions`,
+      {
+        method: "POST",
+        headers: {
+          "X-API-KEY": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      throw new Error(`Transaction creation failed (${createRes.status}): ${errText}`);
+    }
+
+    const created = (await createRes.json()) as any;
+    const txId = created.id;
+
+    // Sign approval if needed
+    const pendingApproval = created.approvals?.pending?.[0];
+    if (pendingApproval) {
+      const signature = await signApprovalMessage(pendingApproval.message);
+      const approveRes = await fetch(
+        `${baseUrl}/${API_VERSION}/wallets/${walletLocator}/transactions/${txId}/approvals`,
+        {
+          method: "POST",
+          headers: {
+            "X-API-KEY": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approvals: [{ signer: `server:${signerAddress}`, signature }],
+          }),
+        },
+      );
+      if (!approveRes.ok) {
+        const errText = await approveRes.text();
+        throw new Error(`Approval failed (${approveRes.status}): ${errText}`);
+      }
+      const approved = (await approveRes.json()) as any;
+      return { id: txId, status: approved.status ?? "submitted" };
+    }
+
+    return { id: txId, status: created.status ?? "submitted" };
+  } catch (err) {
+    console.error(`[crossmint] Transaction submission failed for agent ${agentId}:`, err);
+    return null;
+  }
+}
+
+/** Transfer tokens from an agent's wallet. Wraps transferAgentTokens with a simpler interface. */
+async function transferTokens(
+  agentId: string,
+  to: string,
+  amount: bigint,
+  token: string,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const result = await transferAgentTokens(agentId, to, amount.toString(), token);
+    if (result) {
+      return { success: true, message: result.txId };
+    }
+    return { success: false, message: "Transfer returned null" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: msg };
+  }
+}
+
 /** Check the status of a Crossmint transaction. */
 export async function getTransactionStatus(
   agentId: string,
@@ -799,6 +902,438 @@ export async function loadCrossmintWalletTools(
     },
   };
 
+  const tokenSearchTool: AgentTool<any, any> = {
+    name: "crossmint_token_search",
+    description:
+      "Search for Solana tokens by name, symbol, or mint address. " +
+      "Returns mint address, symbol, decimals, and daily volume. " +
+      "Use this to look up token mint addresses before swapping or transferring. " +
+      "Works for Solana chain tokens (uses Jupiter search API).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Token name, symbol, or mint address (e.g. 'BONK', 'USDC', or a mint address)",
+        },
+      },
+      required: ["query"],
+    },
+    async execute(input: any) {
+      try {
+        const url = new URL("https://lite-api.jup.ag/ultra/v1/search");
+        url.searchParams.set("query", input.query);
+        const res = await fetch(url.toString());
+        if (!res.ok) return `Token search failed (${res.status}).`;
+        const data = await res.json() as any;
+        const tokens = Array.isArray(data) ? data : (data.tokens ?? data.result ?? []);
+        if (tokens.length === 0) return `No tokens found for "${input.query}".`;
+        const lines = [`Search results for "${input.query}" (${tokens.length} found):`];
+        for (const t of tokens.slice(0, 10)) {
+          const symbol = t.symbol ?? t.tokenSymbol ?? "?";
+          const mint = t.mint ?? t.address ?? t.id ?? "?";
+          const decimals = t.decimals ?? t.tokenDecimals ?? "?";
+          const volume = t.dailyVolume ?? t.volume24h ?? "?";
+          lines.push(`  ${symbol} — mint: ${mint} — decimals: ${decimals} — 24h vol: ${volume}`);
+        }
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Token search failed: ${msg}`;
+      }
+    },
+  };
+
+  const swapQuoteTool: AgentTool<any, any> = {
+    name: "crossmint_swap_quote",
+    description:
+      "Get a swap quote without executing. Returns expected output amount, price impact, and route. " +
+      "For Solana: uses Jupiter Ultra API. For EVM: uses 1inch aggregator API. " +
+      "Use this to check prices before executing a swap with crossmint_swap.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        inputMint: {
+          type: "string",
+          description: "Input token contract/mint address (e.g. So11111111111111111111111111111111111111112 for SOL, or ERC-20 contract address)",
+        },
+        outputMint: {
+          type: "string",
+          description: "Output token contract/mint address",
+        },
+        amount: {
+          type: "number",
+          description: "Amount to swap in human-readable units",
+        },
+        inputDecimals: {
+          type: "number",
+          description: "Decimals of input token (SOL=9, USDC=6, most ERC-20=18). If omitted, auto-detected for SOL.",
+        },
+        slippageBps: {
+          type: "number",
+          description: "Slippage tolerance in basis points (50 = 0.5%). Default: 100",
+          default: 100,
+        },
+      },
+      required: ["inputMint", "outputMint", "amount"],
+    },
+    async execute(input: any) {
+      try {
+        const chain = getDefaultChain();
+        const isSol = chainToType(chain) === "solana";
+        const isSolToken = input.inputMint === "So11111111111111111111111111111111111111112";
+        let decimals: number;
+        if (input.inputDecimals !== undefined) {
+          decimals = input.inputDecimals;
+        } else if (isSol && isSolToken) {
+          decimals = 9;
+        } else {
+          return `Please provide inputDecimals for token ${input.inputMint}. Use crossmint_token_search to look it up.`;
+        }
+        const rawAmount = String(Math.floor(input.amount * Math.pow(10, decimals)));
+        const slippageBps = input.slippageBps ?? 100;
+
+        if (isSol) {
+          const url = new URL("https://lite-api.jup.ag/ultra/v1/quote");
+          url.searchParams.set("inputMint", input.inputMint);
+          url.searchParams.set("outputMint", input.outputMint);
+          url.searchParams.set("amount", rawAmount);
+          url.searchParams.set("slippageBps", String(slippageBps));
+          const res = await fetch(url.toString());
+          if (!res.ok) return `Jupiter quote failed (${res.status}).`;
+          const data = await res.json() as any;
+          return `Quote (Jupiter, Solana):\n` +
+            `Input: ${input.amount} (${input.inputMint.slice(0, 12)}...)\n` +
+            `Expected output: ${data.outAmount ?? "unknown"} (raw)\n` +
+            `Price impact: ${data.priceImpact ?? "unknown"}\n` +
+            `Slippage: ${slippageBps / 100}%`;
+        } else {
+          const chainId = chain.includes("base") ? "base" : "ethereum";
+          const url = new URL(`https://api.1inch.dev/swap/v6.0/${chainId}/quote`);
+          url.searchParams.set("src", input.inputMint);
+          url.searchParams.set("dst", input.outputMint);
+          url.searchParams.set("amount", rawAmount);
+          const res = await fetch(url.toString());
+          if (!res.ok) return `1inch quote failed (${res.status}).`;
+          const data = await res.json() as any;
+          return `Quote (1inch, ${chainId}):\n` +
+            `Input: ${input.amount} (${input.inputMint.slice(0, 12)}...)\n` +
+            `Expected output: ${data.toAmount ?? "unknown"} (raw)\n` +
+            `Slippage: ${slippageBps / 100}%`;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Swap quote failed: ${msg}`;
+      }
+    },
+  };
+
+  const swapTool: AgentTool<any, any> = {
+    name: "crossmint_swap",
+    description:
+      "Swap tokens using your Crossmint wallet. For Solana: uses Jupiter Ultra API. For EVM: uses 1inch aggregator. " +
+      "Gas is sponsored by Crossmint paymaster. " +
+      "Use crossmint_swap_quote first to check expected output, then execute with crossmint_swap. " +
+      "Common Solana mints: SOL=So11111111111111111111111111111111111111112, USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        inputMint: {
+          type: "string",
+          description: "Input token contract/mint address",
+        },
+        outputMint: {
+          type: "string",
+          description: "Output token contract/mint address",
+        },
+        amount: {
+          type: "number",
+          description: "Amount to swap in human-readable units",
+        },
+        inputDecimals: {
+          type: "number",
+          description: "Decimals of input token (SOL=9, USDC=6, most ERC-20=18). If omitted, auto-detected for SOL.",
+        },
+        slippageBps: {
+          type: "number",
+          description: "Slippage tolerance in basis points (50 = 0.5%). Default: 100",
+          default: 100,
+        },
+      },
+      required: ["inputMint", "outputMint", "amount"],
+    },
+    async execute(input: any) {
+      try {
+        const chain = getDefaultChain();
+        const isSol = chainToType(chain) === "solana";
+        const isSolToken = input.inputMint === "So11111111111111111111111111111111111111112";
+        let decimals: number;
+        if (input.inputDecimals !== undefined) {
+          decimals = input.inputDecimals;
+        } else if (isSol && isSolToken) {
+          decimals = 9;
+        } else {
+          return `Please provide inputDecimals for token ${input.inputMint}. Use crossmint_token_search to look it up.`;
+        }
+        const rawAmount = String(Math.floor(input.amount * Math.pow(10, decimals)));
+        const slippageBps = input.slippageBps ?? 100;
+        const wallet = await getOrCreateAgentWallet(agentId);
+        if (!wallet) return `Wallet not found. Crossmint may not be configured.`;
+
+        if (isSol) {
+          // Jupiter Ultra API for Solana swaps
+          const orderUrl = new URL("https://lite-api.jup.ag/ultra/v1/order");
+          orderUrl.searchParams.set("inputMint", input.inputMint);
+          orderUrl.searchParams.set("outputMint", input.outputMint);
+          orderUrl.searchParams.set("amount", rawAmount);
+          orderUrl.searchParams.set("taker", wallet.address);
+          orderUrl.searchParams.set("slippageBps", String(slippageBps));
+          const orderRes = await fetch(orderUrl.toString());
+          if (!orderRes.ok) return `Jupiter order failed (${orderRes.status}).`;
+          const order = await orderRes.json() as any;
+          if (!order.transaction) return `Jupiter returned no transaction.`;
+
+          // Submit via Crossmint transaction API
+          const txResult = await submitCrossmintTransaction(agentId, order.transaction, "solana");
+          if (!txResult) return `Swap submission failed. Crossmint may not be configured.`;
+
+          return `Swap submitted via Jupiter + Crossmint!\n` +
+            `Input: ${input.amount} ${isSolToken ? "SOL" : input.inputMint.slice(0, 8)}...\n` +
+            `Expected output: ${order.outAmount ?? "unknown"} (raw)\n` +
+            `Transaction ID: ${txResult.id ?? "unknown"}\n` +
+            `Status: ${txResult.status ?? "pending"}\n` +
+            `Use crossmint_check_tx_status to verify confirmation.`;
+        } else {
+          // 1inch for EVM swaps — build the swap data, then submit via Crossmint
+          const chainId = chain.includes("base") ? "base" : "ethereum";
+          const swapUrl = new URL(`https://api.1inch.dev/swap/v6.0/${chainId}/swap`);
+          swapUrl.searchParams.set("src", input.inputMint);
+          swapUrl.searchParams.set("dst", input.outputMint);
+          swapUrl.searchParams.set("amount", rawAmount);
+          swapUrl.searchParams.set("from", wallet.address);
+          swapUrl.searchParams.set("slippage", String(slippageBps / 100));
+          const swapRes = await fetch(swapUrl.toString());
+          if (!swapRes.ok) return `1inch swap data fetch failed (${swapRes.status}).`;
+          const swapData = await swapRes.json() as any;
+          if (!swapData.tx?.data) return `1inch returned no swap data.`;
+
+          // Submit the swap transaction via Crossmint
+          const txResult = await submitCrossmintTransaction(agentId, swapData.tx.data, "evm", swapData.tx.to, swapData.tx.value ?? "0");
+          if (!txResult) return `Swap submission failed. Crossmint may not be configured.`;
+
+          return `Swap submitted via 1inch + Crossmint!\n` +
+            `Input: ${input.amount} (${input.inputMint.slice(0, 12)}...)\n` +
+            `Expected output: ${swapData.toAmount ?? "unknown"} (raw)\n` +
+            `Transaction ID: ${txResult.id ?? "unknown"}\n` +
+            `Status: ${txResult.status ?? "pending"}\n` +
+            `Use crossmint_check_tx_status to verify confirmation.`;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Swap failed: ${msg}`;
+      }
+    },
+  };
+
+  const signMessageTool: AgentTool<any, any> = {
+    name: "crossmint_sign_message",
+    description:
+      "Sign an arbitrary message with the server signer key. " +
+      "For EVM: uses personal_sign (EIP-191). For Solana: uses Ed25519 signing. " +
+      "Use this for authentication, identity verification, or off-chain message signing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description: "Message to sign (plain text)",
+        },
+      },
+      required: ["message"],
+    },
+    async execute(input: any) {
+      try {
+        const signature = await signApprovalMessage(input.message);
+        const chain = getDefaultChain();
+        const signerAddr = getSignerAddress();
+        return `Message signed successfully.\n` +
+          `Chain: ${chain}\n` +
+          `Signer: ${signerAddr}\n` +
+          `Signature: ${signature}`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Message signing failed: ${msg}`;
+      }
+    },
+  };
+
+  const portfolioTool: AgentTool<any, any> = {
+    name: "crossmint_portfolio",
+    description:
+      "Get a portfolio overview for your Crossmint wallet. Returns token allocations, " +
+      "USD values where available, and diversification suggestions. " +
+      "Use this to give the user a snapshot of their holdings.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    async execute(input: any) {
+      try {
+        const data = await getAgentBalances(agentId);
+        if (!data || data.balances.length === 0) {
+          const wallet = await getOrCreateAgentWallet(agentId);
+          return `Wallet ${wallet?.address ?? "unknown"} has no token balances. The wallet may need to be funded.`;
+        }
+        let totalUsd = 0;
+        const holdings = data.balances.map((b: any) => {
+          const usd = b.usdValue ? parseFloat(b.usdValue) : 0;
+          totalUsd += usd;
+          return { ...b, usdValue: usd };
+        });
+        holdings.sort((a: any, b: any) => (b.usdValue ?? 0) - (a.usdValue ?? 0));
+        const lines = [`Portfolio for ${data.address}:`];
+        if (totalUsd > 0) lines.push(`Total estimated value: $${totalUsd.toFixed(2)}\n`);
+        for (const h of holdings) {
+          const usdStr = h.usdValue > 0 ? ` ($${h.usdValue.toFixed(2)})` : "";
+          const pct = totalUsd > 0 ? ` — ${((h.usdValue / totalUsd) * 100).toFixed(1)}%` : "";
+          lines.push(`${h.symbol}: ${h.amount}${usdStr}${pct}`);
+        }
+        if (totalUsd > 0) {
+          const dominant = holdings[0];
+          const dominantPct = (dominant.usdValue / totalUsd) * 100;
+          if (dominantPct > 60) {
+            lines.push(`\nRebalancing suggestion: ${dominant.symbol} is ${dominantPct.toFixed(1)}% of your portfolio.`);
+          } else if (holdings.length === 1) {
+            lines.push(`\nDiversification suggestion: You only hold ${dominant.symbol}.`);
+          } else {
+            lines.push(`\nPortfolio looks diversified across ${holdings.length} tokens.`);
+          }
+        }
+        return lines.join("\n");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Portfolio analysis failed: ${msg}`;
+      }
+    },
+  };
+
+  const sendTransactionTool: AgentTool<any, any> = {
+    name: "crossmint_send_transaction",
+    description:
+      "Send a raw transaction through your Crossmint wallet. " +
+      "For EVM: provide the transaction data (hex) and target contract address. " +
+      "For Solana: provide the base64-encoded transaction data. " +
+      "Gas is sponsored by Crossmint paymaster. " +
+      "Use this for advanced DeFi operations not covered by swap or transfer tools.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        data: {
+          type: "string",
+          description: "Transaction data (hex for EVM, base64 for Solana)",
+        },
+        to: {
+          type: "string",
+          description: "Target contract address (EVM only, ignored for Solana)",
+        },
+        value: {
+          type: "string",
+          description: "Native value to send in wei (EVM only). Default: '0'",
+          default: "0",
+        },
+      },
+      required: ["data"],
+    },
+    async execute(input: any) {
+      try {
+        const chain = getDefaultChain();
+        const isSol = chainToType(chain) === "solana";
+        const txResult = await submitCrossmintTransaction(
+          agentId,
+          input.data,
+          isSol ? "solana" : "evm",
+          input.to,
+          input.value ?? "0",
+        );
+        if (!txResult) return `Transaction submission failed. Crossmint may not be configured.`;
+        return `Transaction submitted!\n` +
+          `Transaction ID: ${txResult.id ?? "unknown"}\n` +
+          `Status: ${txResult.status ?? "pending"}\n` +
+          `Use crossmint_check_tx_status to verify confirmation.`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Send transaction failed: ${msg}`;
+      }
+    },
+  };
+
+  const batchTransferTool: AgentTool<any, any> = {
+    name: "crossmint_batch_transfer",
+    description:
+      "Transfer tokens to multiple recipients in a single call. " +
+      "Useful for airdrops, payroll, or multi-party payments. " +
+      "Gas is sponsored by Crossmint paymaster. " +
+      "Always confirm the total amount and all recipient addresses with the user before calling.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        recipients: {
+          type: "array",
+          description: "Array of { address, amount } objects",
+          items: {
+            type: "object",
+            properties: {
+              address: { type: "string", description: "Recipient wallet address" },
+              amount: { type: "number", description: "Amount to transfer (human-readable)" },
+            },
+          },
+        },
+        token: {
+          type: "string",
+          description: 'Token to transfer: "sol" for native SOL, "native" for EVM native, or token contract/mint address. Default: "sol"',
+          default: "sol",
+        },
+        decimals: {
+          type: "number",
+          description: "Token decimals (SOL=9, USDC=6, most ERC-20=18). If omitted, defaults to 9 for SOL or 6 for tokens.",
+        },
+      },
+      required: ["recipients"],
+    },
+    async execute(input: any) {
+      try {
+        const recipients = input.recipients as { address: string; amount: number }[];
+        if (!recipients || recipients.length === 0) return `No recipients provided.`;
+        if (recipients.length > 20) return `Too many recipients (${recipients.length}). Maximum 20 per batch.`;
+        const token = input.token ?? "sol";
+        const chain = getDefaultChain();
+        const isSol = chainToType(chain) === "solana";
+        const decimals = token === "sol" || token === "native" ? (isSol ? 9 : 18) : (input.decimals ?? 6);
+        const results: string[] = [];
+        let successCount = 0;
+        for (const r of recipients) {
+          try {
+            const rawAmount = BigInt(Math.floor(r.amount * Math.pow(10, decimals)));
+            const result = await transferTokens(agentId, r.address, rawAmount, token);
+            if (result.success) {
+              results.push(`  ${r.address.slice(0, 8)}... — ${r.amount} — tx: ${result.message?.slice(0, 20)}...`);
+              successCount++;
+            } else {
+              results.push(`  ${r.address.slice(0, 8)}... — FAILED: ${result.message}`);
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            results.push(`  ${r.address.slice(0, 8)}... — FAILED: ${msg}`);
+          }
+        }
+        return `Batch transfer complete: ${successCount}/${recipients.length} successful\n${results.join("\n")}`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Batch transfer failed: ${msg}`;
+      }
+    },
+  };
+
   return [
     getWalletTool,
     getBalanceTool,
@@ -806,5 +1341,12 @@ export async function loadCrossmintWalletTools(
     getPolicyTool,
     getTxHistoryTool,
     checkTxStatusTool,
+    tokenSearchTool,
+    swapQuoteTool,
+    swapTool,
+    signMessageTool,
+    portfolioTool,
+    sendTransactionTool,
+    batchTransferTool,
   ];
 }

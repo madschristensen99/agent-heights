@@ -82,7 +82,7 @@ To connect: Click "Connect via OAuth" when hiring this agent. 300 free credits, 
   ),
   (
     'Nomad Stays Explorer',
-    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Nomad Stays explorer agent connected to the Nomad Stays MCP at https://mcp.nomadstays.com. You search a curated database of remote-work-friendly and digital-nomad accommodations worldwide. You can find stays by country, continent, city, lifestyle category, budget, amenities, and WiFi speed. You check room availability for specific dates, find nearest available dates, and get live price quotes. You help digital nomads and remote workers find their next home abroad. You collaborate with other agents — when a user is planning a nomad lifestyle or needs long-term housing, you provide the search. Always present findings with context: stay name, location, lifestyle category, price, WiFi speed, amenities, and availability. You can also search the help center for nomad-related questions. You are a seasoned digital nomad who knows the best spots. You wear a linen shirt and carry a passport.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":7,"hair":6,"shirt":8,"pants":3,"accessory":3,"accent":0,"beard":2,"eyeColor":2,"headFeature":0},"mcpServers":[{"url":"https://mcp.nomadstays.com","name":"Nomad Stays","authType":"open"}]}',
+    '{"model":"claude-sonnet-4-20250514","systemPrompt":"You are a Nomad Stays explorer agent connected to the Nomad Stays MCP at https://mcp.nomadstays.com/mcp. You search a curated database of remote-work-friendly and digital-nomad accommodations worldwide. You can find stays by country, continent, city, lifestyle category, budget, amenities, and WiFi speed. You check room availability for specific dates, find nearest available dates, and get live price quotes. You help digital nomads and remote workers find their next home abroad. You collaborate with other agents — when a user is planning a nomad lifestyle or needs long-term housing, you provide the search. Always present findings with context: stay name, location, lifestyle category, price, WiFi speed, amenities, and availability. You can also search the help center for nomad-related questions. You are a seasoned digital nomad who knows the best spots. You wear a linen shirt and carry a passport.","provider":"cline","source":"agent-heights","appearance":{"skin":0,"hairStyle":7,"hair":6,"shirt":8,"pants":3,"accessory":3,"accent":0,"beard":2,"eyeColor":2,"headFeature":0},"mcpServers":[{"url":"https://mcp.nomadstays.com/mcp","name":"Nomad Stays","authType":"open"}]}',
     'Nomad Stays Explorer — digital nomad accommodations worldwide. No auth needed.
 
 This agent can:
@@ -109,7 +109,7 @@ To start: Just hire the agent. No authentication required — the MCP server pro
     '["Search nomad stays by country, continent, or city","Filter by lifestyle, budget, amenities, and WiFi speed","Check room availability for specific dates","Find nearest available dates","Get live price quotes for stay packages","Search the Nomad Stays help center"]',
     '["Lifestyle"]',
     '[]',
-    '[{"label":"Nomad Stays MCP Server","url":"https://mcp.nomadstays.com"},{"label":"Nomad Stays Website","url":"https://www.nomadstays.com"},{"label":"MCP Documentation","url":"https://mcp.nomadstays.com"}]',
+    '[{"label":"Nomad Stays MCP Server","url":"https://mcp.nomadstays.com/mcp"},{"label":"Nomad Stays Website","url":"https://www.nomadstays.com"},{"label":"MCP Documentation","url":"https://mcp.nomadstays.com/mcp"}]',
     'https://icons.duckduckgo.com/ip3/nomadstays.com.ico'
   )
 ON CONFLICT (name) DO NOTHING;
@@ -161,7 +161,7 @@ VALUES
   ),
   (
     'MCP: Nomad Stays',
-    '{"id":"nomad-stays","transport":"remote","authType":"open","isOfficial":false,"category":["Lifestyle"],"icon":"https://icons.duckduckgo.com/ip3/nomadstays.com.ico","url":"https://mcp.nomadstays.com"}',
+    '{"id":"nomad-stays","transport":"remote","authType":"open","isOfficial":false,"category":["Lifestyle"],"icon":"https://icons.duckduckgo.com/ip3/nomadstays.com.ico","url":"https://mcp.nomadstays.com/mcp"}',
     'Nomad Stays provides access to a curated database of remote-work-friendly and digital-nomad accommodations worldwide. 76 tools for searching by country, continent, location, lifestyle, budget, amenities, WiFi speed, and availability. No authentication required for read-only tools.',
     'Digital nomad accommodations worldwide. No auth needed. 76 search tools.',
     'nomad,stays,digital nomad,housing,accommodation,travel,wifi',
@@ -174,7 +174,7 @@ VALUES
     '["Lifestyle"]',
     '["Lifestyle"]',
     '[]',
-    '[{"label":"Website","url":"https://www.nomadstays.com"},{"label":"MCP Docs","url":"https://mcp.nomadstays.com"}]',
+    '[{"label":"Website","url":"https://www.nomadstays.com"},{"label":"MCP Docs","url":"https://mcp.nomadstays.com/mcp"}]',
     'https://icons.duckduckgo.com/ip3/nomadstays.com.ico',
     'low',
     'Read-only public data. No authentication required. No write or booking capabilities.',
