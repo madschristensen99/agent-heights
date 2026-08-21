@@ -5959,10 +5959,8 @@ export class OfficeScene extends Phaser.Scene {
     // etc.) endHelicopter() may never fire. This guarantees the sound stops.
     this.heliSafetyTimer?.remove();
     this.heliSafetyTimer = this.time.delayedCall(15000, () => {
-      if (this.heliSound) {
-        console.warn("[heli-debug] safety timeout reached — forcing endHelicopter");
-        this.endHelicopter();
-      }
+      console.warn("[heli-debug] safety timeout reached — forcing endHelicopter");
+      this.endHelicopter();
     });
 
     // Send the hire WS message immediately so the agent appears in the
@@ -6731,6 +6729,7 @@ export class OfficeScene extends Phaser.Scene {
    *  syncAgents (when the real NPC arrives) or from heliTakeoff's
    *  delayed call (fallback if the server is slow to confirm). */
   private endHelicopter(): void {
+    if (!this.heliActive) return;
     this.heliAgent?.destroy();
     this.heliAgent = null;
     this.heliElevatorGfx?.destroy();
@@ -9100,7 +9099,9 @@ export class OfficeScene extends Phaser.Scene {
         // in the sidebar and interactable — they just shouldn't appear in
         // the office until the animation completes.
         if (this.heliActive) {
-          this.pendingHeliAgents.push(id);
+          if (!this.pendingHeliAgents.includes(id)) {
+            this.pendingHeliAgents.push(id);
+          }
           continue;
         }
         // Generate custom texture if agent has an appearance
