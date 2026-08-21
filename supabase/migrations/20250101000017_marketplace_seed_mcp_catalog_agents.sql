@@ -4090,7 +4090,7 @@ This agent can:
 
 To connect: Click "Connect via OAuth" when hiring this agent.',
     'Fever Event Discovery agent — Discover live entertainment events worldwide (OAuth)',
-    'fever-event-discovery,fever event discovery,mcp,AI & ML',
+    'fever-event-discovery,fever event discovery,mcp,Lifestyle',
     true,
     null,
     null,
@@ -4098,7 +4098,7 @@ To connect: Click "Connect via OAuth" when hiring this agent.',
     'agent',
     'approved',
     '["Access Fever Event Discovery data and capabilities via MCP","Automate Fever Event Discovery workflows from conversation"]',
-    '["AI & ML"]',
+    '["Lifestyle"]',
     '["Fever Event Discovery account (OAuth connection required)"]',
     '[{"label":"Fever Event Discovery MCP Server","url":"https://data-search.apigw.feverup.com/mcp"}]',
     'https://icons.duckduckgo.com/ip3/feverup.com.ico'

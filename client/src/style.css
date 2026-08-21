@@ -583,7 +583,10 @@ body.hotbar-visible .hint {
   max-height: 240px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  flex-shrink: 0;
+}
+
+.detail #d-growth-section {
   flex-shrink: 0;
 }
 

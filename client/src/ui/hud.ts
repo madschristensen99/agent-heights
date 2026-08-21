@@ -7188,8 +7188,8 @@ document.getElementById("h-cancel")!.addEventListener("click", () => (modal.hidd
           <div><span style="color:var(--dim);font-size:10px;">Avg Time</span><br><span style="font-size:14px;font-weight:600;">${growth.avgCompletionMin.toFixed(1)}m</span></div>
           <div><span style="color:var(--dim);font-size:10px;">Trend</span><br><span style="font-size:14px;color:${trendColor};">${trendIcon}</span></div>
         </div>
-        ${growth.specialty ? `<div style="font-size:11px;color:var(--dim);margin-bottom:6px;">Specialty: <span style="color:var(--accent);">${growth.specialty}</span></div>` : ""}
-        <svg width="120" height="35" style="display:block;">
+        ${growth.specialty ? `<div style="font-size:11px;color:var(--dim);margin-bottom:6px;">Specialty: <span style="color:var(--accent);">${growth.specialty.charAt(0).toUpperCase() + growth.specialty.slice(1)}</span></div>` : ""}
+        <svg width="120" height="35" style="display:block;max-width:100%;">
           <polyline points="${sparkPoints}" fill="none" stroke="${trendColor}" stroke-width="1.5" />
         </svg>
       </div>
