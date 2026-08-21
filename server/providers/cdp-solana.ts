@@ -8,9 +8,9 @@ import {
   VersionedTransaction,
   TransactionMessage,
   Keypair,
+  SystemProgram,
 } from "@solana/web3.js";
 import bs58 from "bs58";
-import { PUMP_SDK } from "@nirholas/pump-sdk";
 
 /**
  * CDP Solana provider — gives agents a programmatically-provisioned Solana wallet
@@ -1483,17 +1483,57 @@ export async function loadCdpSolanaTools(agentId: string): Promise<AgentTool<any
         // Generate a new mint keypair for the token
         const mintKeypair = Keypair.generate();
 
-        // Build the create instruction using pump SDK
-        const createIx = await PUMP_SDK.createV2Instruction({
-          mint: mintKeypair.publicKey,
-          name: input.name,
-          symbol: input.symbol,
-          uri,
-          creator: new PublicKey(account.address),
-          user: new PublicKey(account.address),
-          mayhemMode: false,
-          cashback: false,
-        });
+        // Build the pump.fun create instruction manually (no SDK needed).
+        // pump.fun program: 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P
+        const PUMP_PROGRAM_ID = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+        const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+        // Derive PDAs
+        const [globalPda] = PublicKey.findProgramAddressSync([Buffer.from("global")], PUMP_PROGRAM_ID);
+        const [bondingCurvePda] = PublicKey.findProgramAddressSync([mintKeypair.publicKey.toBuffer()], PUMP_PROGRAM_ID);
+        const [associatedBondingCurve] = PublicKey.findProgramAddressSync(
+          [bondingCurvePda.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKeypair.publicKey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        );
+        const [associatedUser] = PublicKey.findProgramAddressSync(
+          [new PublicKey(account.address).toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKeypair.publicKey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        );
+
+        // Encode strings with 4-byte LE length prefix
+        const encodeStr = (s: string): Buffer => {
+          const buf = Buffer.from(s, "utf8");
+          const len = Buffer.alloc(4);
+          len.writeUInt32LE(buf.length, 0);
+          return Buffer.concat([len, buf]);
+        };
+
+        // Create instruction data: discriminator(0) + name + symbol + uri
+        const data = Buffer.concat([
+          Buffer.from([0]),
+          encodeStr(input.name),
+          encodeStr(input.symbol),
+          encodeStr(uri),
+        ]);
+
+        const userPubkey = new PublicKey(account.address);
+        const createIx = {
+          programId: PUMP_PROGRAM_ID,
+          keys: [
+            { pubkey: globalPda, isSigner: false, isWritable: true },
+            { pubkey: mintKeypair.publicKey, isSigner: true, isWritable: true },
+            { pubkey: bondingCurvePda, isSigner: false, isWritable: true },
+            { pubkey: associatedBondingCurve, isSigner: false, isWritable: true },
+            { pubkey: associatedUser, isSigner: false, isWritable: true },
+            { pubkey: userPubkey, isSigner: true, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: true },
+            { pubkey: new PublicKey("SysvarRent111111111111111111111111111111111"), isSigner: false, isWritable: false },
+          ],
+          data,
+        };
 
         // Get latest blockhash
         const { blockhash } = await conn.getLatestBlockhash("confirmed");
