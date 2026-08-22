@@ -1,25 +1,45 @@
 /**
  * Congress Trades MCP Server (stdio transport)
  *
- * A standalone MCP server that proxies tool calls to a self-hosted
- * capitol-api instance (https://github.com/crnicholson/capitol-api).
- * capitol-api fetches and parses US House PTR filings from
- * disclosures-clerk.house.gov — free, no API key needed.
+ * Fetches congressional stock trade data from CongressInvests.com
+ * free API (100 req/day, no API key required). Covers both House
+ * and Senate PTR filings from official government sources.
  *
  * Spawned by StdioMCPClient with:
  *   command: "npx"
  *   args: ["tsx", "server/providers/congress-trades-mcp.ts"]
- *   env: { CAPITOL_API_URL: "https://your-capitol-api.up.railway.app" }
  *
  * Tools exposed:
  *   - get_recent_trades       — most recently filed trades
  *   - get_trades_by_ticker    — filter by stock ticker
  *   - get_trades_by_politician — filter by politician name
- *   - get_trades_by_party     — filter by party
+ *   - get_trades_by_type      — filter by buy/sell
  *   - get_buy_momentum        — tickers where politicians are net buyers
  */
 
-const API_URL = process.env.CAPITOL_API_URL || "http://localhost:3000";
+const API_BASE = "https://congressinvests.com";
+
+interface CongressInvestsTrade {
+  member: string;
+  chamber: string;
+  trade_type: string;
+  amount: string;
+  tx_date: string;
+  disclosed: string;
+  asset: string;
+  ticker: string;
+  link: string;
+}
+
+interface CongressInvestsResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+  trades: CongressInvestsTrade[];
+  data_current: boolean;
+  last_updated: string;
+}
 
 // ── JSON-RPC helpers ────────────────────────────────────────────────────
 
@@ -51,20 +71,38 @@ function respondError(id: number, code: number, message: string): void {
 
 // ── HTTP helper ─────────────────────────────────────────────────────────
 
-async function fetchJson(path: string): Promise<string> {
-  const url = `${API_URL}${path}`;
+async function fetchTrades(path: string): Promise<CongressInvestsResponse> {
+  const url = `${API_BASE}${path}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(30_000),
+      headers: { Accept: "application/json" },
+    });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`capitol-api returned ${res.status}: ${body.slice(0, 500)}`);
+      throw new Error(`CongressInvests API returned ${res.status}: ${body.slice(0, 500)}`);
     }
-    const data = await res.json();
-    return JSON.stringify(data, null, 2);
+    return await res.json() as CongressInvestsResponse;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to fetch from capitol-api (${url}): ${msg}`);
+    throw new Error(`Failed to fetch from CongressInvests (${url}): ${msg}`);
   }
+}
+
+function formatTrades(data: CongressInvestsResponse): string {
+  const summary = `Found ${data.total} trades (showing ${data.trades.length}). Data last updated: ${data.last_updated}\n`;
+  const rows = data.trades.map((t) => ({
+    member: t.member,
+    chamber: t.chamber,
+    ticker: t.ticker,
+    type: t.trade_type,
+    amount: t.amount.replace(/\n/g, " "),
+    trade_date: t.tx_date,
+    disclosed: t.disclosed,
+    asset: t.asset.slice(0, 80),
+    link: t.link,
+  }));
+  return summary + JSON.stringify(rows, null, 2);
 }
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -84,7 +122,7 @@ const TOOLS: ToolDef[] = [
   {
     name: "get_recent_trades",
     description:
-      "Get the most recently filed congressional stock trades from US House PTR filings. Returns trades sorted by filing date (newest first). Each trade includes politician name, party, state, ticker, transaction type (buy/sell), amount range, trade date, filing date, and PDF link.",
+      "Get the most recently filed congressional stock trades (House + Senate). Returns trades sorted by filing date (newest first). Each trade includes politician name, chamber, ticker, transaction type (buy/sell), amount range, trade date, disclosure date, and link to original filing.",
     inputSchema: {
       type: "object",
       properties: {
@@ -96,13 +134,14 @@ const TOOLS: ToolDef[] = [
     },
     handler: async (args) => {
       const count = Math.min(Number(args.count) || 25, 100);
-      return fetchJson(`/api/trades?recent=${count}`);
+      const data = await fetchTrades(`/trades?limit=${count}`);
+      return formatTrades(data);
     },
   },
   {
     name: "get_trades_by_ticker",
     description:
-      "Get all congressional trades for a specific stock ticker. Filter by transaction category (buy/sell) and date range. Returns politician name, party, transaction details, and filing metadata.",
+      "Get all congressional trades for a specific stock ticker (House + Senate). Returns politician name, chamber, transaction type, amount range, dates, and filing link.",
     inputSchema: {
       type: "object",
       properties: {
@@ -110,18 +149,10 @@ const TOOLS: ToolDef[] = [
           type: "string",
           description: "Stock ticker symbol (e.g. AAPL, TSLA, NVDA)",
         },
-        category: {
+        chamber: {
           type: "string",
-          description: "Filter by transaction category",
-          enum: ["buy", "sell", "exchange", "gift"],
-        },
-        from: {
-          type: "string",
-          description: "Trade date lower bound (ISO format: YYYY-MM-DD)",
-        },
-        to: {
-          type: "string",
-          description: "Trade date upper bound (ISO format: YYYY-MM-DD)",
+          description: "Filter by chamber",
+          enum: ["House", "Senate"],
         },
         limit: {
           type: "integer",
@@ -131,30 +162,24 @@ const TOOLS: ToolDef[] = [
       required: ["ticker"],
     },
     handler: async (args) => {
-      const params = new URLSearchParams();
-      params.set("ticker", String(args.ticker).toUpperCase());
-      if (args.category) params.set("category", String(args.category));
-      if (args.from) params.set("from", String(args.from));
-      if (args.to) params.set("to", String(args.to));
-      params.set("limit", String(args.limit || 50));
-      return fetchJson(`/api/trades?${params}`);
+      const ticker = String(args.ticker).toUpperCase();
+      const limit = Math.min(Number(args.limit) || 50, 500);
+      let path = `/trades/${ticker}?limit=${limit}`;
+      if (args.chamber) path += `&chamber=${args.chamber}`;
+      const data = await fetchTrades(path);
+      return formatTrades(data);
     },
   },
   {
     name: "get_trades_by_politician",
     description:
-      "Get all trades by a specific politician (partial name match). Returns their full trade history with ticker, transaction type, amount range, dates, and party affiliation.",
+      "Get all trades by a specific politician (partial name match). Fetches all recent trades and filters client-side by member name. Returns their trade history with ticker, transaction type, amount range, dates, and chamber.",
     inputSchema: {
       type: "object",
       properties: {
         name: {
           type: "string",
           description: "Politician name (partial match, e.g. 'Pelosi', 'Nancy Pelosi')",
-        },
-        category: {
-          type: "string",
-          description: "Filter by transaction category",
-          enum: ["buy", "sell", "exchange", "gift"],
         },
         limit: {
           type: "integer",
@@ -164,61 +189,64 @@ const TOOLS: ToolDef[] = [
       required: ["name"],
     },
     handler: async (args) => {
-      const params = new URLSearchParams();
-      params.set("person", String(args.name));
-      if (args.category) params.set("category", String(args.category));
-      params.set("limit", String(args.limit || 50));
-      return fetchJson(`/api/trades?${params}`);
+      const name = String(args.name).toLowerCase();
+      const limit = Math.min(Number(args.limit) || 50, 200);
+      const data = await fetchTrades(`/trades?limit=500`);
+      const filtered = data.trades.filter((t) => t.member.toLowerCase().includes(name));
+      const result: CongressInvestsResponse = {
+        ...data,
+        total: filtered.length,
+        trades: filtered.slice(0, limit),
+      };
+      return formatTrades(result);
     },
   },
   {
-    name: "get_trades_by_party",
+    name: "get_trades_by_type",
     description:
-      "Get congressional trades filtered by political party. Compare Democrat vs Republican trading activity. Returns all trades for the specified party with full details.",
+      "Get congressional trades filtered by buy/sell transaction type. Use to compare buying vs selling activity. Returns all trades of the specified type with full details.",
     inputSchema: {
       type: "object",
       properties: {
-        party: {
+        type: {
           type: "string",
-          description: "Political party (partial match)",
-          enum: ["Democrat", "Republican"],
-        },
-        category: {
-          type: "string",
-          description: "Filter by transaction category (buy/sell)",
+          description: "Transaction type",
           enum: ["buy", "sell"],
         },
         ticker: {
           type: "string",
-          description: "Optional: filter to a specific ticker within this party",
+          description: "Optional: filter to a specific ticker",
         },
         limit: {
           type: "integer",
           description: "Max results to return (default 50)",
         },
       },
-      required: ["party"],
+      required: ["type"],
     },
     handler: async (args) => {
-      const params = new URLSearchParams();
-      params.set("party", String(args.party));
-      if (args.category) params.set("category", String(args.category));
-      if (args.ticker) params.set("ticker", String(args.ticker).toUpperCase());
-      params.set("limit", String(args.limit || 50));
-      return fetchJson(`/api/trades?${params}`);
+      const type = String(args.type);
+      const limit = Math.min(Number(args.limit) || 50, 200);
+      if (args.ticker) {
+        const ticker = String(args.ticker).toUpperCase();
+        const data = await fetchTrades(`/trades/${ticker}?limit=500`);
+        const filtered = data.trades.filter((t) => t.trade_type === type);
+        const result: CongressInvestsResponse = { ...data, total: filtered.length, trades: filtered.slice(0, limit) };
+        return formatTrades(result);
+      }
+      const data = await fetchTrades(`/trades?limit=500`);
+      const filtered = data.trades.filter((t) => t.trade_type === type);
+      const result: CongressInvestsResponse = { ...data, total: filtered.length, trades: filtered.slice(0, limit) };
+      return formatTrades(result);
     },
   },
   {
     name: "get_buy_momentum",
     description:
-      "Identify stocks with strong politician buy momentum — where US House members are net buyers. Returns recent buy trades sorted by date. Use this to spot consensus picks and follow-the-leader patterns. Pair with wallet agents for execution.",
+      "Identify stocks with strong politician buy momentum — where members of Congress are net buyers. Returns recent buy trades sorted by date. Use this to spot consensus picks and follow-the-leader patterns. Pair with wallet agents for execution.",
     inputSchema: {
       type: "object",
       properties: {
-        days: {
-          type: "integer",
-          description: "Look back N days for trades (default 90)",
-        },
         limit: {
           type: "integer",
           description: "Max results to return (default 50)",
@@ -226,16 +254,11 @@ const TOOLS: ToolDef[] = [
       },
     },
     handler: async (args) => {
-      const days = Number(args.days) || 90;
-      const limit = String(args.limit || 50);
-      const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-      const params = new URLSearchParams();
-      params.set("category", "buy");
-      params.set("from", from);
-      params.set("sort", "date");
-      params.set("order", "desc");
-      params.set("limit", limit);
-      return fetchJson(`/api/trades?${params}`);
+      const limit = Math.min(Number(args.limit) || 50, 200);
+      const data = await fetchTrades(`/trades?limit=500`);
+      const buys = data.trades.filter((t) => t.trade_type === "buy");
+      const result: CongressInvestsResponse = { ...data, total: buys.length, trades: buys.slice(0, limit) };
+      return formatTrades(result);
     },
   },
 ];
@@ -318,4 +341,4 @@ async function handleRequest(req: JsonRpcRequest): Promise<void> {
   }
 }
 
-console.error("[congress-trades-mcp] started, API URL:", API_URL);
+console.error("[congress-trades-mcp] started, using CongressInvests.com free API");

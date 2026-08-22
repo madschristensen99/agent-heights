@@ -116,8 +116,8 @@ export const SECURITY_NOTES: Record<string, { riskLevel: RiskLevel; securityNote
   },
   "Congress Trades": {
     riskLevel: "low",
-    securityNote: "Read-only public data from US House PTR filings (disclosures-clerk.house.gov). No credentials required. No write or financial access. Data sourced from self-hosted capitol-api instance.",
-    dataAccess: "Reads publicly available congressional trade filings — politician names, tickers, transaction types, amount ranges, trade dates, and filing dates.",
+    securityNote: "Read-only public data from US House + Senate PTR filings via CongressInvests.com free API. No credentials required. No write or financial access.",
+    dataAccess: "Reads publicly available congressional trade filings — politician names, tickers, transaction types, amount ranges, trade dates, and disclosure dates.",
   },
   "Gmail": {
     riskLevel: "medium",
@@ -211,7 +211,7 @@ export const CURATED_AGENTS_SUMMARY = `### Curated Marketplace Agents (hire via 
 - Google Maps Scraper: Data agent — search Google Maps for businesses, retrieve reviews and photos, structure results for prospecting and market analysis via gmapsextractor.com MCP. Requires Google Maps Scraper API key.
 - Crossmint Wallet Agent: Solana wallet agent — auto-provisioned smart wallet with sponsored gas. Check balances, transfer tokens, review tx history via Crossmint. No setup needed — wallet created on hire.
 - Hostinger Agent: Infrastructure agent — deploy and manage websites, VPS, domains, DNS, email marketing, billing, ecommerce, and WordPress via Hostinger MCP. Requires Hostinger API token (generate at hPanel → Account → API).
-- Congress Trades Analyst: Research agent — track US politician stock trades, buy momentum, and party-specific trading patterns via self-hosted capitol-api (House PTR filings). No auth needed. Pairs with wallet agents for "follow the politicians" strategies.
+- Congress Trades Analyst: Research agent — track US politician stock trades (House + Senate), buy momentum, and trading patterns via CongressInvests free API. No auth needed. Pairs with wallet agents for "follow the politicians" strategies.
 - Gmail Agent: Email agent — search, read, and draft emails via Google Workspace Gmail MCP (OAuth). Creates drafts for review, manages labels.
 - Google Drive Agent: File agent — search, read, download, create, and copy files via Google Drive MCP (OAuth).
 - Google Docs Agent: Document agent — read and update Google Docs via Google Docs MCP (OAuth).
