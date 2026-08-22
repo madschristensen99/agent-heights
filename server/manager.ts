@@ -2488,10 +2488,23 @@ export class AgentManager {
     rt.waitFor = null;
     // Clean up any pending handoff gated for review
     this.pendingHandoffs.delete(agentId);
-    if (rt.cardId) {
-      this.revertCard(rt.cardId);
-      rt.cardId = null;
+    // Revert the active card and clean up ALL board cards assigned to this agent
+    // (in_progress, paused, review_pending) so they don't get orphaned
+    for (const card of this.board.values()) {
+      if (card.assignedAgentId === agentId) {
+        if (card.status === "in_progress" || card.status === "paused" || card.status === "review_pending") {
+          card.status = "backlog";
+        }
+        card.assignedAgentId = null;
+        card.lockedBy = null;
+        card.revertedAt = Date.now();
+        card.statusChangedAt = Date.now();
+        this.persistBoard();
+        this.broadcast({ type: "card", card });
+      }
     }
+    this.broadcastGanttUpdate();
+    rt.cardId = null;
 
     const slug = this.slugFor(rt);
     const agentDir = this.cwdFor(slug, agentId);
@@ -2551,10 +2564,13 @@ export class AgentManager {
     // Clean up any board cards still assigned to this agent
     for (const card of this.board.values()) {
       if (card.assignedAgentId === agentId) {
-        if (card.status === "in_progress") {
+        if (card.status === "in_progress" || card.status === "paused" || card.status === "review_pending") {
           card.status = "backlog";
         }
         card.assignedAgentId = null;
+        card.lockedBy = null;
+        card.revertedAt = Date.now();
+        card.statusChangedAt = Date.now();
         this.persistBoard();
         this.broadcast({ type: "card", card });
       }
