@@ -18,7 +18,8 @@
  *   - get_buy_momentum       — net buy signals from recent filings
  */
 
-// adm-zip uses export = which doesn't play nice with ESM TS — use require
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip");
 
 const CLERK_BASE = "https://disclosures-clerk.house.gov";
