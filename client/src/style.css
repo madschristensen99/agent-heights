@@ -451,6 +451,7 @@ body.hotbar-visible .hint {
 
 .detail .x {
   margin-left: auto;
+  position: relative;
   background: var(--panel-soft);
   border: 1px solid var(--panel-edge-soft);
   color: var(--dim);
@@ -478,8 +479,10 @@ body.hotbar-visible .hint {
 }
 
 .detail .x svg {
-  display: block;
-  margin: auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .meta {
